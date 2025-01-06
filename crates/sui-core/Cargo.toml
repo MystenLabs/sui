@@ -76,7 +76,6 @@ sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true
 sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
-sui-move-build.workspace = true
 sui-network.workspace = true
 sui-protocol-config.workspace = true
 sui-transaction-checks.workspace = true
@@ -87,6 +86,7 @@ sui-types.workspace = true
 nonempty.workspace = true
 
 [dev-dependencies]
+sui-move-build.workspace = true
 clap.workspace = true
 criterion.workspace = true
 expect-test.workspace = true

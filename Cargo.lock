@@ -13187,6 +13187,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-keys",
+ "sui-move-build",
  "sui-pg-db",
  "sui-sdk",
  "sui-swarm",
