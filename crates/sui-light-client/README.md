@@ -20,15 +20,17 @@ The light client requires a config file and a directory to cache checkpoints, an
 
 ## Setup
 
-The config file for the light client takes a URL for a full node, a directory (that must exist) and within the directory to name of the genesis blob for the Sui network. 
+The config file for the light client takes a URL for a full node, a directory to store checkpoint summaries (that must exist) and within the directory to name of the genesis blob for the Sui network. 
 
 ```
-full_node_url: "http://ord-mnt-rpcbig-06.mainnet.sui.io:9000"
+full_node_url: "https://fullnode.mainnet.sui.io:443"
 checkpoint_summary_dir: "checkpoints_dir"
 genesis_filename: "genesis.blob"
+object_store_url: "https://checkpoints.mainnet.sui.io"
+graphql_url: "https://sui-mainnet.mystenlabs.com/graphql"
 ```
 
-The genesis blob for the Sui mainnet can be found here: https://github.com/MystenLabs/sui-genesis/blob/main/mainnet/genesis.blob
+The genesis blob for the Sui mainnet can be found here: https://github.com/MystenLabs/sui-genesis/blob/main/mainnet/genesis.blob. Download and place it inside the checkpoint summary directory.
 
 ## Sync 
 
@@ -55,8 +57,7 @@ Where the base58 encoding of the transaction ID is specified. If the transaction
 To check an object provide its ID in the following way:
 
 ```
-$ sui-light-client --config light_client.yaml object -o 0xc646887891adfc0540ec271fd0203603fb4c841a119ec1e00c469441
-abfc7078
+$ sui-light-client --config light_client.yaml object -o 0xa514c85e1844189a54f4bfabc0928cbcac2137b928bef61adade84bbb486fd1f
 ```
 
 The object ID is represented in Hex as displayed in explorers. If the object exists in the latest state it is printed out in JSON, otherwise an error is printed. 
