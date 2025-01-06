@@ -35,7 +35,8 @@ use super::{Handler, PrunerConfig};
 ///
 /// The task will shutdown if the `cancel` token is signalled. If the `config` is `None`, the task
 /// will shutdown immediately.
-pub(super) fn pruner<H: Handler + 'static>(
+pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
+    handler: Arc<H>,
     config: Option<PrunerConfig>,
     db: Db,
     metrics: Arc<IndexerMetrics>,
@@ -135,7 +136,7 @@ pub(super) fn pruner<H: Handler + 'static>(
                     break;
                 };
 
-                let affected = match H::prune(from, to_exclusive, &mut conn).await {
+                let affected = match handler.prune(from, to_exclusive, &mut conn).await {
                     Ok(affected) => {
                         guard.stop_and_record();
                         watermark.pruner_hi = to_exclusive as i64;

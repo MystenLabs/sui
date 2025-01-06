@@ -134,8 +134,6 @@ pub struct PipelineLayer {
 
     // Concurrent pipelines with a lagged consistent pruner which is also a concurrent pipeline.
     // Use concurrent layer for the pruner pipelines so that they could override checkpoint lag if needed.
-    pub obj_info: Option<CommitterLayer>,
-    pub obj_info_pruner: Option<ConcurrentLayer>,
     pub coin_balance_buckets: Option<CommitterLayer>,
     pub coin_balance_buckets_pruner: Option<ConcurrentLayer>,
 
@@ -150,6 +148,7 @@ pub struct PipelineLayer {
     pub kv_objects: Option<ConcurrentLayer>,
     pub kv_protocol_configs: Option<ConcurrentLayer>,
     pub kv_transactions: Option<ConcurrentLayer>,
+    pub obj_info: Option<ConcurrentLayer>,
     pub obj_versions: Option<ConcurrentLayer>,
     pub tx_affected_addresses: Option<ConcurrentLayer>,
     pub tx_affected_objects: Option<ConcurrentLayer>,
@@ -270,8 +269,6 @@ impl PipelineLayer {
         PipelineLayer {
             sum_displays: Some(Default::default()),
             sum_packages: Some(Default::default()),
-            obj_info: Some(Default::default()),
-            obj_info_pruner: Some(Default::default()),
             coin_balance_buckets: Some(Default::default()),
             coin_balance_buckets_pruner: Some(Default::default()),
             cp_sequence_numbers: Some(Default::default()),
@@ -284,6 +281,7 @@ impl PipelineLayer {
             kv_objects: Some(Default::default()),
             kv_protocol_configs: Some(Default::default()),
             kv_transactions: Some(Default::default()),
+            obj_info: Some(Default::default()),
             obj_versions: Some(Default::default()),
             tx_affected_addresses: Some(Default::default()),
             tx_affected_objects: Some(Default::default()),
@@ -405,8 +403,6 @@ impl Merge for PipelineLayer {
         PipelineLayer {
             sum_displays: self.sum_displays.merge(other.sum_displays),
             sum_packages: self.sum_packages.merge(other.sum_packages),
-            obj_info: self.obj_info.merge(other.obj_info),
-            obj_info_pruner: self.obj_info_pruner.merge(other.obj_info_pruner),
             coin_balance_buckets: self.coin_balance_buckets.merge(other.coin_balance_buckets),
             coin_balance_buckets_pruner: self
                 .coin_balance_buckets_pruner
@@ -421,6 +417,7 @@ impl Merge for PipelineLayer {
             kv_objects: self.kv_objects.merge(other.kv_objects),
             kv_protocol_configs: self.kv_protocol_configs.merge(other.kv_protocol_configs),
             kv_transactions: self.kv_transactions.merge(other.kv_transactions),
+            obj_info: self.obj_info.merge(other.obj_info),
             obj_versions: self.obj_versions.merge(other.obj_versions),
             tx_affected_addresses: self
                 .tx_affected_addresses

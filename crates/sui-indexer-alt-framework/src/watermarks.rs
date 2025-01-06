@@ -101,6 +101,17 @@ impl<'p> CommitterWatermark<'p> {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(pipeline: &'p str, checkpoint_hi_inclusive: u64) -> Self {
+        CommitterWatermark {
+            pipeline: pipeline.into(),
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
+            tx_hi: 0,
+            timestamp_ms_hi_inclusive: 0,
+        }
+    }
+
     /// The consensus timestamp associated with this checkpoint.
     pub(crate) fn timestamp(&self) -> DateTime<Utc> {
         DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive).unwrap_or_default()
@@ -185,6 +196,16 @@ impl PrunerWatermark<'static> {
 }
 
 impl<'p> PrunerWatermark<'p> {
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(pipeline: &'p str, pruner_hi: u64) -> Self {
+        PrunerWatermark {
+            pipeline: pipeline.into(),
+            wait_for: 0,
+            reader_lo: 0,
+            pruner_hi: pruner_hi as i64,
+        }
+    }
+
     /// How long to wait before the pruner can act on this information, or `None`, if there is no
     /// need to wait.
     pub(crate) fn wait_for(&self) -> Option<Duration> {
