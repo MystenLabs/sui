@@ -4295,8 +4295,8 @@ fn parse_use_decl(
     }
     let end_loc = context.tokens.previous_end_loc();
     let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
-    check_no_doc_comment(context, loc, "'use' declarations", doc);
     Ok(UseDecl {
+        doc,
         attributes,
         loc,
         use_,
@@ -4674,7 +4674,6 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                     }
                 }
             };
-            context.tokens.advance_doc_comment();
             res
         }
     }

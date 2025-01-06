@@ -1817,6 +1817,7 @@ fn explicit_use_fun(
     e: E::ExplicitUseFun,
 ) -> Option<(N::TypeName, Name, N::UseFun)> {
     let E::ExplicitUseFun {
+        doc,
         loc,
         attributes,
         is_public,
@@ -1894,6 +1895,7 @@ fn explicit_use_fun(
     let tn = sp(ty.loc, tn_);
     let target_function = m_f_opt?;
     let use_fun = N::UseFun {
+        doc,
         loc,
         attributes,
         is_public,

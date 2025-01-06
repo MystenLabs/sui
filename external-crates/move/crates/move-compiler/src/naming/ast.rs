@@ -66,6 +66,7 @@ pub enum UseFunKind {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct UseFun {
+    pub doc: DocComment,
     pub loc: Loc,
     pub attributes: Attributes,
     pub is_public: Option<Loc>,
@@ -1088,6 +1089,7 @@ impl AstDebug for Neighbor_ {
 impl AstDebug for UseFun {
     fn ast_debug(&self, w: &mut AstWriter) {
         let UseFun {
+            doc,
             loc: _,
             attributes,
             is_public,
@@ -1096,6 +1098,7 @@ impl AstDebug for UseFun {
             kind,
             used,
         } = self;
+        doc.ast_debug(w);
         attributes.ast_debug(w);
         w.new_line();
         if is_public.is_some() {

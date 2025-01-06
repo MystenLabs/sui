@@ -1582,6 +1582,7 @@ fn use_(
     u: P::UseDecl,
 ) {
     let P::UseDecl {
+        doc,
         use_: u,
         loc,
         attributes,
@@ -1624,6 +1625,7 @@ fn use_(
                 }
             };
             let explicit = ParserExplicitUseFun {
+                doc,
                 loc,
                 attributes,
                 is_public,
@@ -1791,6 +1793,7 @@ fn explicit_use_fun(
     pexplicit: ParserExplicitUseFun,
 ) -> Option<E::ExplicitUseFun> {
     let ParserExplicitUseFun {
+        doc,
         loc,
         attributes,
         is_public,
@@ -1827,6 +1830,7 @@ fn explicit_use_fun(
         "Found a 'use fun' as a macro"
     );
     Some(E::ExplicitUseFun {
+        doc,
         loc,
         attributes,
         is_public,

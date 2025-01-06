@@ -154,6 +154,7 @@ pub enum ModuleUse {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UseDecl {
+    pub doc: DocComment,
     pub loc: Loc,
     pub attributes: Vec<Attributes>,
     pub use_: Use,
@@ -1564,10 +1565,12 @@ impl AstDebug for ModuleMember {
 impl AstDebug for UseDecl {
     fn ast_debug(&self, w: &mut AstWriter) {
         let UseDecl {
+            doc,
             attributes,
             loc: _,
             use_,
         } = self;
+        doc.ast_debug(w);
         attributes.ast_debug(w);
         use_.ast_debug(w);
     }

@@ -276,13 +276,7 @@ impl<'input> Lexer<'input> {
     fn trim_whitespace_and_comments(
         &mut self,
         offset: usize,
-    ) -> Result<(&'input str, bool), Box<Diagnostic>> {
-        self.trim_whitespace_and_comments_impl(offset)
-    }
-
-    fn trim_whitespace_and_comments_impl(
-        &mut self,
-        offset: usize,
+        track_doc_comments: bool,
     ) -> Result<(&'input str, bool), Box<Diagnostic>> {
         let mut trimmed_preceding_eol;
         let mut text = &self.text[offset..];
@@ -300,10 +294,12 @@ impl<'input> Lexer<'input> {
 
             if text.starts_with("/*") {
                 in_doc_comment = false;
-                self.advance_doc_comment();
+                if track_doc_comments {
+                    self.advance_doc_comment();
+                }
                 // Continue the loop immediately after the multi-line comment.
                 // There may be whitespace or another comment following this one.
-                text = self.parse_block_comment(get_offset(text))?;
+                text = self.parse_block_comment(get_offset(text), track_doc_comments)?;
                 continue;
             } else if text.starts_with("//") {
                 let start = get_offset(text);
@@ -311,7 +307,7 @@ impl<'input> Lexer<'input> {
                 text = text.trim_start_matches(|c: char| c != '\n');
 
                 // If this was a documentation comment, record it in our map.
-                if is_doc {
+                if is_doc && track_doc_comments {
                     if !in_doc_comment {
                         in_doc_comment = true;
                         self.advance_doc_comment();
@@ -323,7 +319,9 @@ impl<'input> Lexer<'input> {
                     self.append_current_doc_comment(start, end, comment);
                 } else {
                     in_doc_comment = false;
-                    self.advance_doc_comment();
+                    if track_doc_comments {
+                        self.advance_doc_comment();
+                    }
                 }
                 // Continue the loop on the following line, which may contain leading
                 // whitespace or comments of its own.
@@ -334,7 +332,11 @@ impl<'input> Lexer<'input> {
         Ok((text, trimmed_preceding_eol))
     }
 
-    fn parse_block_comment(&mut self, offset: usize) -> Result<&'input str, Box<Diagnostic>> {
+    fn parse_block_comment(
+        &mut self,
+        offset: usize,
+        track_doc_comments: bool,
+    ) -> Result<&'input str, Box<Diagnostic>> {
         struct CommentEntry {
             start: usize,
             is_doc_comment: bool,
@@ -380,12 +382,12 @@ impl<'input> Lexer<'input> {
                     let end = get_offset(text);
                     // If the comment was not empty -- fuzzy ot handle `/**/`, which triggers the
                     // doc comment check but is not actually a doc comment.
-                    if comment.start + 3 < end && comment.is_doc_comment {
-                        self.append_current_doc_comment(
+                    if track_doc_comments && comment.is_doc_comment && comment.start + 3 < end {
+                        dbg!(self.append_current_doc_comment(
                             comment.start,
                             end,
                             &self.text[(comment.start + 3)..end],
-                        );
+                        ));
                     }
                     text = &text[2..];
                 }
@@ -414,7 +416,6 @@ impl<'input> Lexer<'input> {
         if let Some(c) = self.current_doc_comment.take() {
             self.unmatched_doc_comments.push(c)
         }
-        self.current_doc_comment = None;
     }
 
     fn append_current_doc_comment(&mut self, start: usize, end: usize, comment: &str) {
@@ -450,7 +451,8 @@ impl<'input> Lexer<'input> {
     // Look ahead to the next token after the current one and return it, and its starting offset,
     // without advancing the state of the lexer.
     pub fn lookahead(&mut self) -> Result<Tok, Box<Diagnostic>> {
-        let (text, _) = self.trim_whitespace_and_comments(self.cur_end)?;
+        let (text, _) =
+            self.trim_whitespace_and_comments(self.cur_end, /* track doc comments */ false)?;
         let next_start = self.text.len() - text.len();
         let (result, _) = find_token(
             /* panic_mode */ false,
@@ -466,7 +468,8 @@ impl<'input> Lexer<'input> {
     // Look ahead to the next two tokens after the current one and return them without advancing
     // the state of the lexer.
     pub fn lookahead2(&mut self) -> Result<(Tok, Tok), Box<Diagnostic>> {
-        let (text, _) = self.trim_whitespace_and_comments(self.cur_end)?;
+        let (text, _) =
+            self.trim_whitespace_and_comments(self.cur_end, /* track doc comments */ false)?;
         let offset = self.text.len() - text.len();
         let (result, length) = find_token(
             /* panic_mode */ false,
@@ -476,7 +479,8 @@ impl<'input> Lexer<'input> {
             offset,
         );
         let first = result.map_err(|diag_opt| diag_opt.unwrap())?;
-        let (text2, _) = self.trim_whitespace_and_comments(offset + length)?;
+        let (text2, _) = self
+            .trim_whitespace_and_comments(offset + length, /* track doc comments */ false)?;
         let offset2 = self.text.len() - text2.len();
         let (result2, _) = find_token(
             /* panic_mode */ false,
@@ -523,7 +527,7 @@ impl<'input> Lexer<'input> {
             let mut cur_end = self.cur_end;
             // loop until the next text snippet which may contain a valid token is found)
             let (text, trimmed_preceding_eol) = loop {
-                match self.trim_whitespace_and_comments(cur_end) {
+                match self.trim_whitespace_and_comments(cur_end, /* track doc comments */ true) {
                     Ok(t) => break t,
                     Err(diag) => {
                         // only report the first diag encountered

@@ -339,6 +339,7 @@ impl<'env> Context<'env> {
             let unused = methods.iter().filter(|(_, _, uf)| !uf.used);
             for (_, method, use_fun) in unused {
                 let N::UseFun {
+                    doc: _,
                     loc,
                     kind,
                     attributes: _,

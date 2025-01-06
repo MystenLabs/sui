@@ -32,6 +32,7 @@ pub struct Program {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExplicitUseFun {
+    pub doc: DocComment,
     pub loc: Loc,
     pub attributes: Attributes,
     pub is_public: Option<Loc>,
@@ -992,6 +993,7 @@ impl AstDebug for Program {
 impl AstDebug for ExplicitUseFun {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Self {
+            doc,
             loc: _,
             attributes,
             is_public,
@@ -999,6 +1001,7 @@ impl AstDebug for ExplicitUseFun {
             ty,
             method,
         } = self;
+        doc.ast_debug(w);
         attributes.ast_debug(w);
         w.new_line();
         if is_public.is_some() {
