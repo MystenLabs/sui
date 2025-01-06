@@ -64,6 +64,9 @@ pub trait Handler: Processor<Value: FieldCount> {
     /// checkpoints.
     /// If this is false, when the pipeline starts, it will process all checkpoints from the
     /// committer watermark.
+    // TODO: There are two issues with this:
+    // 1. There is no static guarantee that this flag is set correctly when the pruner needs processed values.
+    // 2. The name is a bit abstract.
     const PRUNING_REQUIRES_PROCESSED_VALUES: bool = false;
 
     /// Take a chunk of values and commit them to the database, returning the number of rows
