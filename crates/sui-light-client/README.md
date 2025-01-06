@@ -43,6 +43,8 @@ Where `light_client.yaml` is the config file above.
 
 This command will download all end-of-epoch checkpoints, and check them for validity. They will be cached within the checkpoint summary directory for use by future invocations.
 
+Internally, sync works in two steps. It first downloads the end-of-epoch checkpoint numbers into the `checkpoints.yaml` file (which needs to be present in the checkpoint summaries directory). Next, it downloads the corresponding checkpoint summaries.
+
 ## Check Transaction
 
 To check a transaction was executed, as well as the events it emitted do:
