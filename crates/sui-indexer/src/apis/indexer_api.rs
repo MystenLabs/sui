@@ -3,9 +3,8 @@
 
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
-use jsonrpsee::types::SubscriptionEmptyError;
-use jsonrpsee::types::SubscriptionResult;
-use jsonrpsee::{RpcModule, SubscriptionSink};
+use jsonrpsee::core::SubscriptionResult;
+use jsonrpsee::{PendingSubscriptionSink, RpcModule};
 use tap::TapFallible;
 
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError};
@@ -67,7 +66,7 @@ impl IndexerApi {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 tracing::error!("Error joining object read futures.");
-                jsonrpsee::core::Error::Custom(format!("Error joining object read futures. {}", e))
+                crate::errors::IndexerError::from(e)
             })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
@@ -119,9 +118,11 @@ impl IndexerApi {
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e: tokio::task::JoinError| anyhow::anyhow!(e))?
+            .map_err(|e: tokio::task::JoinError| anyhow::anyhow!(e))
+            .map_err(IndexerError::from)?
             .into_iter()
-            .collect::<Result<Vec<_>, anyhow::Error>>()?;
+            .collect::<Result<Vec<_>, anyhow::Error>>()
+            .map_err(IndexerError::from)?;
 
         Ok(Page {
             data,
@@ -168,8 +169,7 @@ impl IndexerApiServer for IndexerApi {
                 limit + 1,
                 descending_order.unwrap_or(false),
             )
-            .await
-            .map_err(|e: IndexerError| anyhow::anyhow!(e))?;
+            .await?;
 
         let has_next_page = results.len() > limit;
         results.truncate(limit);
@@ -254,7 +254,9 @@ impl IndexerApiServer for IndexerApi {
             | sui_types::object::ObjectRead::Deleted(_) => {}
             sui_types::object::ObjectRead::Exists(object_ref, o, layout) => {
                 return Ok(SuiObjectResponse::new_with_data(
-                    (object_ref, o, layout, options, None).try_into()?,
+                    (object_ref, o, layout, options, None)
+                        .try_into()
+                        .map_err(IndexerError::from)?,
                 ));
             }
         }
@@ -274,7 +276,9 @@ impl IndexerApiServer for IndexerApi {
             | sui_types::object::ObjectRead::Deleted(_) => {}
             sui_types::object::ObjectRead::Exists(object_ref, o, layout) => {
                 return Ok(SuiObjectResponse::new_with_data(
-                    (object_ref, o, layout, options, None).try_into()?,
+                    (object_ref, o, layout, options, None)
+                        .try_into()
+                        .map_err(IndexerError::from)?,
                 ));
             }
         }
@@ -284,16 +288,20 @@ impl IndexerApiServer for IndexerApi {
         ))
     }
 
-    fn subscribe_event(&self, _sink: SubscriptionSink, _filter: EventFilter) -> SubscriptionResult {
-        Err(SubscriptionEmptyError)
+    fn subscribe_event(
+        &self,
+        _sink: PendingSubscriptionSink,
+        _filter: EventFilter,
+    ) -> SubscriptionResult {
+        Err("disabled".into())
     }
 
     fn subscribe_transaction(
         &self,
-        _sink: SubscriptionSink,
+        _sink: PendingSubscriptionSink,
         _filter: TransactionFilter,
     ) -> SubscriptionResult {
-        Err(SubscriptionEmptyError)
+        Err("disabled".into())
     }
 
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
