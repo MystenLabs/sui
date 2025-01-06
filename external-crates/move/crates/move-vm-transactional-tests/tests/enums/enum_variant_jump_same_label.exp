@@ -12,6 +12,7 @@ enum EnumWithThreeVariants<Ty0> {
 }
 
 public call_success<Ty0>(Arg0: Ty0): Ty0 {
+L1:	loc0: EnumWithThreeVariants<Ty0>
 B0:
 	0: MoveLoc[0](Arg0: Ty0)
 	1: PackVariantGeneric(VariantInstantiationHandleIndex(0))
@@ -42,6 +43,7 @@ B0:
 }
 
 f<Ty0>(Arg0: EnumWithThreeVariants<Ty0>): Ty0 {
+L1:	loc0: Ty0
 B0:
 	0: ImmBorrowLoc[0](Arg0: EnumWithThreeVariants<Ty0>)
 	1: VariantSwitch(VariantJumpTableIndex(0))
