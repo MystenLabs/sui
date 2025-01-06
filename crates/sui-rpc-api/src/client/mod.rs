@@ -163,7 +163,7 @@ impl Client {
         version: Option<u64>,
     ) -> Result<Object> {
         let request = crate::proto::node::GetObjectRequest {
-            object_id: Some(sui_sdk_types::types::ObjectId::from(object_id).into()),
+            object_id: Some(sui_sdk_types::ObjectId::from(object_id).into()),
             version,
             options: Some(crate::proto::node::GetObjectOptions {
                 object: Some(false),
@@ -185,11 +185,9 @@ impl Client {
         let signatures = transaction
             .inner()
             .tx_signatures
-            .clone()
-            .into_iter()
-            .map(sui_sdk_types::types::UserSignature::try_from)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| Status::from_error(e.into()))?;
+            .iter()
+            .map(|signature| signature.as_ref().to_vec().into())
+            .collect();
 
         let request = crate::proto::node::ExecuteTransactionRequest {
             transaction: None,
@@ -197,7 +195,8 @@ impl Client {
                 crate::proto::types::Bcs::serialize(&transaction.inner().intent_message.value)
                     .map_err(|e| Status::from_error(e.into()))?,
             ),
-            signatures: signatures.into_iter().map(Into::into).collect(),
+            signatures: None,
+            signatures_bytes: Some(crate::proto::node::UserSignaturesBytes { signatures }),
 
             options: Some(crate::proto::node::ExecuteTransactionOptions {
                 effects: Some(false),
@@ -225,7 +224,7 @@ pub struct TransactionExecutionResponse {
 
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
-    pub balance_changes: Option<Vec<sui_sdk_types::types::BalanceChange>>,
+    pub balance_changes: Option<Vec<sui_sdk_types::BalanceChange>>,
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from the bcs fields in `GetCheckpointResponse`
@@ -239,7 +238,7 @@ fn certified_checkpoint_summary_try_from_proto(
         .map_err(TryFromProtoError::from_error)?;
 
     let signature = sui_types::crypto::AuthorityStrongQuorumSignInfo::from(
-        sui_sdk_types::types::ValidatorAggregatedSignature::try_from(
+        sui_sdk_types::ValidatorAggregatedSignature::try_from(
             signature
                 .as_ref()
                 .ok_or_else(|| TryFromProtoError::missing("signature"))?,

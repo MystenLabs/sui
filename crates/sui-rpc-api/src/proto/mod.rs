@@ -52,12 +52,6 @@ impl From<std::num::TryFromIntError> for TryFromProtoError {
     }
 }
 
-impl From<std::str::Utf8Error> for TryFromProtoError {
-    fn from(value: std::str::Utf8Error) -> Self {
-        Self::from_error(value)
-    }
-}
-
 impl From<std::array::TryFromSliceError> for TryFromProtoError {
     fn from(value: std::array::TryFromSliceError) -> Self {
         Self::from_error(value)

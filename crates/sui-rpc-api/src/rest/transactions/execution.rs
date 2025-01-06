@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{ApiEndpoint, RouteHandler};
 use crate::response::Bcs;
-use crate::rest::openapi::{
-    ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
-};
 use crate::types::ExecuteTransactionOptions;
 use crate::types::ExecuteTransactionResponse;
 use crate::{Result, RpcService};
 use axum::extract::{Query, State};
 use axum::Json;
-use schemars::JsonSchema;
 use std::net::SocketAddr;
-use sui_sdk_types::types::{
+use sui_sdk_types::{
     BalanceChange, Object, SignedTransaction, Transaction, TransactionEffects, TransactionEvents,
 };
 
@@ -25,24 +22,6 @@ impl ApiEndpoint<RpcService> for ExecuteTransaction {
 
     fn path(&self) -> &'static str {
         "/transactions"
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Transactions")
-            .operation_id("ExecuteTransaction")
-            .query_parameters::<ExecuteTransactionOptions>(generator)
-            .request_body(RequestBodyBuilder::new().bcs_content().build())
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<ExecuteTransactionResponse>(generator)
-                    .build(),
-            )
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {
@@ -78,24 +57,6 @@ impl ApiEndpoint<RpcService> for SimulateTransaction {
         "/transactions/simulate"
     }
 
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Transactions")
-            .operation_id("SimulateTransaction")
-            .query_parameters::<SimulateTransactionQueryParameters>(generator)
-            .request_body(RequestBodyBuilder::new().bcs_content().build())
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<TransactionSimulationResponse>(generator)
-                    .build(),
-            )
-            .build()
-    }
-
     fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), simulate_transaction)
     }
@@ -113,7 +74,7 @@ async fn simulate_transaction(
 }
 
 /// Response type for the transaction simulation endpoint
-#[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct TransactionSimulationResponse {
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
@@ -123,21 +84,18 @@ pub struct TransactionSimulationResponse {
 }
 
 /// Query parameters for the simulate transaction endpoint
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize, JsonSchema)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct SimulateTransactionQueryParameters {
     /// Request `BalanceChanges` be included in the Response.
     #[serde(default)]
     #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
-    #[schemars(with = "bool")]
     pub balance_changes: bool,
     /// Request input `Object`s be included in the Response.
     #[serde(default)]
     #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
-    #[schemars(with = "bool")]
     pub input_objects: bool,
     /// Request output `Object`s be included in the Response.
     #[serde(default)]
     #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
-    #[schemars(with = "bool")]
     pub output_objects: bool,
 }

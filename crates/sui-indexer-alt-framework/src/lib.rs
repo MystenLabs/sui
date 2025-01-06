@@ -23,6 +23,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use watermarks::CommitterWatermark;
 
+pub mod handlers;
 pub mod ingestion;
 pub(crate) mod metrics;
 pub mod pipeline;
@@ -135,7 +136,7 @@ impl Indexer {
             metrics_address,
         } = indexer_args;
 
-        let db = Db::new(db_args)
+        let db = Db::for_write(db_args)
             .await
             .context("Failed to connect to database")?;
 

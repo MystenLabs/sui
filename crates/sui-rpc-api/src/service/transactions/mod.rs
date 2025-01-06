@@ -5,7 +5,7 @@ use crate::types::GetTransactionOptions;
 use crate::types::TransactionResponse;
 use crate::Result;
 use crate::RpcService;
-use sui_sdk_types::types::TransactionDigest;
+use sui_sdk_types::TransactionDigest;
 use tap::Pipe;
 
 mod execution;
@@ -42,11 +42,19 @@ impl RpcService {
             .flatten()
             .transpose()?;
 
+        let signatures_bytes = options.include_signatures_bytes().then(|| {
+            signatures
+                .iter()
+                .map(|signature| signature.to_bytes())
+                .collect()
+        });
+
         TransactionResponse {
             digest,
             transaction: options.include_transaction().then_some(transaction),
             transaction_bcs,
             signatures: options.include_signatures().then_some(signatures),
+            signatures_bytes,
             effects: options.include_effects().then_some(effects),
             effects_bcs,
             events: options.include_events().then_some(events).flatten(),

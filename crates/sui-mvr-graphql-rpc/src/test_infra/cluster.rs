@@ -32,7 +32,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 const VALIDATOR_COUNT: usize = 4;
-const EPOCH_DURATION_MS: u64 = 10000;
+/// Set default epoch duration to 300s. This high value is to turn the TestCluster into a lockstep
+/// network of sorts. Tests should call `trigger_reconfiguration` to advance the network's epoch.
+const EPOCH_DURATION_MS: u64 = 300_000;
 
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;

@@ -46,17 +46,10 @@ pub struct IndexerConfig {
     pub extra: toml::Table,
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct ConsistencyConfig {
-    /// How often to check whether write-ahead logs related to the consistent range can be
-    /// pruned.
-    pub consistent_pruning_interval_ms: u64,
-
-    /// How long to wait before honouring reader low watermarks.
-    pub pruner_delay_ms: u64,
-
     /// Number of checkpoints to delay indexing summary tables for.
-    pub consistent_range: Option<u64>,
+    pub consistent_range: u64,
 }
 
 // Configuration layers apply overrides over a base configuration. When reading configs from a
@@ -81,8 +74,6 @@ pub struct IngestionLayer {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct ConsistencyLayer {
-    consistent_pruning_interval_ms: Option<u64>,
-    pruner_delay_ms: Option<u64>,
     consistent_range: Option<u64>,
 
     #[serde(flatten)]
@@ -137,13 +128,7 @@ pub struct PrunerLayer {
 #[derive(Clone, Default, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct PipelineLayer {
-    // Consistent pipelines (a sequential pipeline with a write-ahead log)
-    pub sum_coin_balances: Option<CommitterLayer>,
-    pub wal_coin_balances: Option<CommitterLayer>,
-    pub sum_obj_types: Option<CommitterLayer>,
-    pub wal_obj_types: Option<CommitterLayer>,
-
-    // Sequential pipelines without a write-ahead log
+    // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
     pub sum_packages: Option<SequentialLayer>,
 
@@ -155,6 +140,7 @@ pub struct PipelineLayer {
     pub coin_balance_buckets_pruner: Option<ConcurrentLayer>,
 
     // All concurrent pipelines
+    pub cp_sequence_numbers: Option<ConcurrentLayer>,
     pub ev_emit_mod: Option<ConcurrentLayer>,
     pub ev_struct_inst: Option<ConcurrentLayer>,
     pub kv_checkpoints: Option<ConcurrentLayer>,
@@ -214,11 +200,7 @@ impl ConsistencyLayer {
     pub fn finish(self, base: ConsistencyConfig) -> ConsistencyConfig {
         check_extra("consistency", self.extra);
         ConsistencyConfig {
-            consistent_pruning_interval_ms: self
-                .consistent_pruning_interval_ms
-                .unwrap_or(base.consistent_pruning_interval_ms),
-            pruner_delay_ms: self.pruner_delay_ms.unwrap_or(base.pruner_delay_ms),
-            consistent_range: self.consistent_range.or(base.consistent_range),
+            consistent_range: self.consistent_range.unwrap_or(base.consistent_range),
         }
     }
 }
@@ -286,16 +268,13 @@ impl PipelineLayer {
     /// configure.
     pub fn example() -> Self {
         PipelineLayer {
-            sum_coin_balances: Some(Default::default()),
-            wal_coin_balances: Some(Default::default()),
-            sum_obj_types: Some(Default::default()),
-            wal_obj_types: Some(Default::default()),
             sum_displays: Some(Default::default()),
             sum_packages: Some(Default::default()),
             obj_info: Some(Default::default()),
             obj_info_pruner: Some(Default::default()),
             coin_balance_buckets: Some(Default::default()),
             coin_balance_buckets_pruner: Some(Default::default()),
+            cp_sequence_numbers: Some(Default::default()),
             ev_emit_mod: Some(Default::default()),
             ev_struct_inst: Some(Default::default()),
             kv_checkpoints: Some(Default::default()),
@@ -355,10 +334,6 @@ impl Merge for ConsistencyLayer {
         check_extra("consistency", self.extra);
         check_extra("consistency", other.extra);
         ConsistencyLayer {
-            consistent_pruning_interval_ms: other
-                .consistent_pruning_interval_ms
-                .or(self.consistent_pruning_interval_ms),
-            pruner_delay_ms: other.pruner_delay_ms.or(self.pruner_delay_ms),
             consistent_range: other.consistent_range.or(self.consistent_range),
             extra: Default::default(),
         }
@@ -428,10 +403,6 @@ impl Merge for PipelineLayer {
         check_extra("pipeline", self.extra);
         check_extra("pipeline", other.extra);
         PipelineLayer {
-            sum_coin_balances: self.sum_coin_balances.merge(other.sum_coin_balances),
-            wal_coin_balances: self.wal_coin_balances.merge(other.wal_coin_balances),
-            sum_obj_types: self.sum_obj_types.merge(other.sum_obj_types),
-            wal_obj_types: self.wal_obj_types.merge(other.wal_obj_types),
             sum_displays: self.sum_displays.merge(other.sum_displays),
             sum_packages: self.sum_packages.merge(other.sum_packages),
             obj_info: self.obj_info.merge(other.obj_info),
@@ -440,6 +411,7 @@ impl Merge for PipelineLayer {
             coin_balance_buckets_pruner: self
                 .coin_balance_buckets_pruner
                 .merge(other.coin_balance_buckets_pruner),
+            cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers),
             ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod),
             ev_struct_inst: self.ev_struct_inst.merge(other.ev_struct_inst),
             kv_checkpoints: self.kv_checkpoints.merge(other.kv_checkpoints),
@@ -473,16 +445,6 @@ impl<T: Merge> Merge for Option<T> {
     }
 }
 
-impl Default for ConsistencyConfig {
-    fn default() -> Self {
-        Self {
-            consistent_pruning_interval_ms: 300_000,
-            pruner_delay_ms: 120_000,
-            consistent_range: None,
-        }
-    }
-}
-
 impl From<IngestionConfig> for IngestionLayer {
     fn from(config: IngestionConfig) -> Self {
         Self {
@@ -497,9 +459,7 @@ impl From<IngestionConfig> for IngestionLayer {
 impl From<ConsistencyConfig> for ConsistencyLayer {
     fn from(config: ConsistencyConfig) -> Self {
         Self {
-            consistent_pruning_interval_ms: Some(config.consistent_pruning_interval_ms),
-            pruner_delay_ms: Some(config.pruner_delay_ms),
-            consistent_range: config.consistent_range,
+            consistent_range: Some(config.consistent_range),
             extra: Default::default(),
         }
     }
@@ -579,15 +539,11 @@ mod tests {
     #[test]
     fn merge_simple() {
         let this = ConsistencyLayer {
-            consistent_pruning_interval_ms: None,
-            pruner_delay_ms: Some(2000),
             consistent_range: Some(3000),
             extra: Default::default(),
         };
 
         let that = ConsistencyLayer {
-            consistent_pruning_interval_ms: Some(1000),
-            pruner_delay_ms: None,
             consistent_range: Some(4000),
             extra: Default::default(),
         };
@@ -598,8 +554,6 @@ mod tests {
         assert_matches!(
             this_then_that,
             ConsistencyLayer {
-                consistent_pruning_interval_ms: Some(1000),
-                pruner_delay_ms: Some(2000),
                 consistent_range: Some(4000),
                 extra: _,
             }
@@ -608,8 +562,6 @@ mod tests {
         assert_matches!(
             that_then_this,
             ConsistencyLayer {
-                consistent_pruning_interval_ms: Some(1000),
-                pruner_delay_ms: Some(2000),
                 consistent_range: Some(3000),
                 extra: _,
             }
@@ -619,13 +571,6 @@ mod tests {
     #[test]
     fn merge_recursive() {
         let this = PipelineLayer {
-            sum_coin_balances: None,
-            sum_obj_types: Some(CommitterLayer {
-                write_concurrency: Some(5),
-                collect_interval_ms: Some(500),
-                watermark_interval_ms: None,
-                extra: Default::default(),
-            }),
             sum_displays: Some(SequentialLayer {
                 committer: Some(CommitterLayer {
                     write_concurrency: Some(10),
@@ -636,17 +581,20 @@ mod tests {
                 checkpoint_lag: Some(100),
                 extra: Default::default(),
             }),
+            sum_packages: None,
+            ev_emit_mod: Some(ConcurrentLayer {
+                committer: Some(CommitterLayer {
+                    write_concurrency: Some(5),
+                    collect_interval_ms: Some(500),
+                    watermark_interval_ms: None,
+                    extra: Default::default(),
+                }),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 
         let that = PipelineLayer {
-            sum_coin_balances: Some(CommitterLayer {
-                write_concurrency: Some(10),
-                collect_interval_ms: None,
-                watermark_interval_ms: Some(1000),
-                extra: Default::default(),
-            }),
-            sum_obj_types: None,
             sum_displays: Some(SequentialLayer {
                 committer: Some(CommitterLayer {
                     write_concurrency: Some(5),
@@ -657,6 +605,16 @@ mod tests {
                 checkpoint_lag: Some(200),
                 extra: Default::default(),
             }),
+            sum_packages: Some(SequentialLayer {
+                committer: Some(CommitterLayer {
+                    write_concurrency: Some(10),
+                    collect_interval_ms: None,
+                    watermark_interval_ms: Some(1000),
+                    extra: Default::default(),
+                }),
+                ..Default::default()
+            }),
+            ev_emit_mod: None,
             ..Default::default()
         };
 
@@ -666,18 +624,6 @@ mod tests {
         assert_matches!(
             this_then_that,
             PipelineLayer {
-                sum_coin_balances: Some(CommitterLayer {
-                    write_concurrency: Some(10),
-                    collect_interval_ms: None,
-                    watermark_interval_ms: Some(1000),
-                    extra: _,
-                }),
-                sum_obj_types: Some(CommitterLayer {
-                    write_concurrency: Some(5),
-                    collect_interval_ms: Some(500),
-                    watermark_interval_ms: None,
-                    extra: _,
-                }),
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(5),
@@ -688,6 +634,27 @@ mod tests {
                     checkpoint_lag: Some(200),
                     extra: _,
                 }),
+                sum_packages: Some(SequentialLayer {
+                    committer: Some(CommitterLayer {
+                        write_concurrency: Some(10),
+                        collect_interval_ms: None,
+                        watermark_interval_ms: Some(1000),
+                        extra: _,
+                    }),
+                    checkpoint_lag: None,
+                    extra: _,
+                }),
+                ev_emit_mod: Some(ConcurrentLayer {
+                    committer: Some(CommitterLayer {
+                        write_concurrency: Some(5),
+                        collect_interval_ms: Some(500),
+                        watermark_interval_ms: None,
+                        extra: _,
+                    }),
+                    pruner: None,
+                    checkpoint_lag: None,
+                    extra: _,
+                }),
                 ..
             },
         );
@@ -695,18 +662,6 @@ mod tests {
         assert_matches!(
             that_then_this,
             PipelineLayer {
-                sum_coin_balances: Some(CommitterLayer {
-                    write_concurrency: Some(10),
-                    collect_interval_ms: None,
-                    watermark_interval_ms: Some(1000),
-                    extra: _,
-                }),
-                sum_obj_types: Some(CommitterLayer {
-                    write_concurrency: Some(5),
-                    collect_interval_ms: Some(500),
-                    watermark_interval_ms: None,
-                    extra: _,
-                }),
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(10),
@@ -715,6 +670,27 @@ mod tests {
                         extra: _,
                     }),
                     checkpoint_lag: Some(100),
+                    extra: _,
+                }),
+                sum_packages: Some(SequentialLayer {
+                    committer: Some(CommitterLayer {
+                        write_concurrency: Some(10),
+                        collect_interval_ms: None,
+                        watermark_interval_ms: Some(1000),
+                        extra: _,
+                    }),
+                    checkpoint_lag: None,
+                    extra: _,
+                }),
+                ev_emit_mod: Some(ConcurrentLayer {
+                    committer: Some(CommitterLayer {
+                        write_concurrency: Some(5),
+                        collect_interval_ms: Some(500),
+                        watermark_interval_ms: None,
+                        extra: _,
+                    }),
+                    pruner: None,
+                    checkpoint_lag: None,
                     extra: _,
                 }),
                 ..

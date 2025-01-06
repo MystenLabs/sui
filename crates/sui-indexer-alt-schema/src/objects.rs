@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context;
 use diesel::{
     backend::Backend, deserialize, expression::AsExpression, prelude::*, serialize,
     sql_types::SmallInt, FromSqlRow,
 };
-use sui_field_count::FieldCount;
-use sui_types::base_types::ObjectID;
 
-use crate::schema::{
-    coin_balance_buckets, kv_objects, obj_info, obj_versions, sum_coin_balances, sum_obj_types,
-    wal_coin_balances, wal_obj_types,
-};
+use sui_field_count::FieldCount;
+use sui_types::object::{Object, Owner};
+
+use crate::schema::{coin_balance_buckets, kv_objects, obj_info, obj_versions};
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
+#[diesel(treat_none_as_default_value = false)]
 pub struct StoredObject {
     pub object_id: Vec<u8>,
     pub object_version: i64,
@@ -28,17 +28,6 @@ pub struct StoredObjVersion {
     pub object_version: i64,
     pub object_digest: Vec<u8>,
     pub cp_sequence_number: i64,
-}
-
-/// An insert/update or deletion of an object record, keyed on a particular Object ID and version.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct StoredObjectUpdate<T> {
-    pub object_id: ObjectID,
-    pub object_version: u64,
-    pub cp_sequence_number: u64,
-    /// `None` means the object was deleted or wrapped at this version, `Some(x)` means it was
-    /// changed to `x`.
-    pub update: Option<T>,
 }
 
 #[derive(AsExpression, FromSqlRow, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -60,55 +49,8 @@ pub enum StoredCoinOwnerKind {
 }
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
-#[diesel(table_name = sum_coin_balances, primary_key(object_id))]
-pub struct StoredSumCoinBalance {
-    pub object_id: Vec<u8>,
-    pub object_version: i64,
-    pub owner_id: Vec<u8>,
-    pub coin_type: Vec<u8>,
-    pub coin_balance: i64,
-}
-
-#[derive(Insertable, Debug, Clone, FieldCount)]
-#[diesel(table_name = sum_obj_types, primary_key(object_id))]
-pub struct StoredSumObjType {
-    pub object_id: Vec<u8>,
-    pub object_version: i64,
-    pub owner_kind: StoredOwnerKind,
-    pub owner_id: Option<Vec<u8>>,
-    pub package: Option<Vec<u8>>,
-    pub module: Option<String>,
-    pub name: Option<String>,
-    pub instantiation: Option<Vec<u8>>,
-}
-
-#[derive(Insertable, Debug, Clone)]
-#[diesel(table_name = wal_coin_balances, primary_key(object_id, object_version))]
-pub struct StoredWalCoinBalance {
-    pub object_id: Vec<u8>,
-    pub object_version: i64,
-    pub owner_id: Option<Vec<u8>>,
-    pub coin_type: Option<Vec<u8>>,
-    pub coin_balance: Option<i64>,
-    pub cp_sequence_number: i64,
-}
-
-#[derive(Insertable, Debug, Clone)]
-#[diesel(table_name = wal_obj_types, primary_key(object_id, object_version))]
-pub struct StoredWalObjType {
-    pub object_id: Vec<u8>,
-    pub object_version: i64,
-    pub owner_kind: Option<StoredOwnerKind>,
-    pub owner_id: Option<Vec<u8>>,
-    pub package: Option<Vec<u8>>,
-    pub module: Option<String>,
-    pub name: Option<String>,
-    pub instantiation: Option<Vec<u8>>,
-    pub cp_sequence_number: i64,
-}
-
-#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = obj_info, primary_key(object_id, cp_sequence_number))]
+#[diesel(treat_none_as_default_value = false)]
 pub struct StoredObjInfo {
     pub object_id: Vec<u8>,
     pub cp_sequence_number: i64,
@@ -122,6 +64,7 @@ pub struct StoredObjInfo {
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = coin_balance_buckets, primary_key(object_id, cp_sequence_number))]
+#[diesel(treat_none_as_default_value = false)]
 pub struct StoredCoinBalanceBucket {
     pub object_id: Vec<u8>,
     pub cp_sequence_number: i64,
@@ -131,11 +74,41 @@ pub struct StoredCoinBalanceBucket {
     pub coin_balance_bucket: Option<i16>,
 }
 
-/// StoredObjectUpdate is a wrapper type, we want to count the fields of the inner type.
-impl<T: FieldCount> FieldCount for StoredObjectUpdate<T> {
-    // Add one here for cp_sequence_number field, because StoredObjectUpdate is used for
-    // wal_* handlers, where the actual type to commit has an additional field besides fields of T.
-    const FIELD_COUNT: usize = T::FIELD_COUNT.saturating_add(1);
+impl StoredObjInfo {
+    pub fn from_object(object: &Object, cp_sequence_number: i64) -> anyhow::Result<Self> {
+        let type_ = object.type_();
+        Ok(Self {
+            object_id: object.id().to_vec(),
+            cp_sequence_number,
+            owner_kind: Some(match object.owner() {
+                Owner::AddressOwner(_) => StoredOwnerKind::Address,
+                Owner::ObjectOwner(_) => StoredOwnerKind::Object,
+                Owner::Shared { .. } => StoredOwnerKind::Shared,
+                Owner::Immutable => StoredOwnerKind::Immutable,
+                Owner::ConsensusV2 { .. } => todo!(),
+            }),
+
+            owner_id: match object.owner() {
+                Owner::AddressOwner(a) => Some(a.to_vec()),
+                Owner::ObjectOwner(o) => Some(o.to_vec()),
+                Owner::Shared { .. } | Owner::Immutable { .. } => None,
+                Owner::ConsensusV2 { .. } => todo!(),
+            },
+
+            package: type_.map(|t| t.address().to_vec()),
+            module: type_.map(|t| t.module().to_string()),
+            name: type_.map(|t| t.name().to_string()),
+            instantiation: type_
+                .map(|t| bcs::to_bytes(&t.type_params()))
+                .transpose()
+                .with_context(|| {
+                    format!(
+                        "Failed to serialize type parameters for {}",
+                        object.id().to_canonical_display(/* with_prefix */ true),
+                    )
+                })?,
+        })
+    }
 }
 
 impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredOwnerKind

@@ -135,7 +135,7 @@ impl Linearizer {
                         .filter(|ancestor| {
                             // We skip the block if we already committed it or we reached a
                             // round that we already committed.
-                            // TODO: for Fast Path we need to ammend the recursion rule here and allow us to commit blocks all the way up to the `gc_round`.
+                            // TODO: for Fast Path we need to amend the recursion rule here and allow us to commit blocks all the way up to the `gc_round`.
                             // Some additional work will be needed to make sure that we keep the uncommitted blocks up to the `gc_round` across commits.
                             !committed.contains(ancestor)
                                 && last_committed_rounds[ancestor.author] < ancestor.round

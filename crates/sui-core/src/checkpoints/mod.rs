@@ -31,7 +31,6 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
-use chrono::Utc;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -40,7 +39,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Weak;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::StakeUnit;
@@ -2011,7 +2010,7 @@ async fn diagnose_split_brain(
         checkpoint_seq = local_summary.sequence_number,
         "Running split brain diagnostics..."
     );
-    let time = Utc::now();
+    let time = SystemTime::now();
     // collect one random disagreeing validator per differing digest
     let digest_to_validator = all_unique_values
         .iter()
@@ -2163,7 +2162,8 @@ async fn diagnose_split_brain(
 
     let header = format!(
         "Checkpoint Fork Dump - Authority {local_validator:?}: \n\
-        Datetime: {time}",
+        Datetime: {:?}",
+        time
     );
     let fork_logs_text = format!("{header}\n\n{diff_patches}\n\n");
     let path = tempfile::tempdir()

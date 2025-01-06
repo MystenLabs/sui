@@ -62,9 +62,13 @@ pub trait Handler: Processor<Value: FieldCount> {
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>)
         -> anyhow::Result<usize>;
 
-    /// Clean up data between checkpoints `_from` and `_to` (inclusive) in the database, returning
+    /// Clean up data between checkpoints `_from` and `_to_exclusive` (exclusive) in the database, returning
     /// the number of rows affected. This function is optional, and defaults to not pruning at all.
-    async fn prune(_from: u64, _to: u64, _conn: &mut db::Connection<'_>) -> anyhow::Result<usize> {
+    async fn prune(
+        _from: u64,
+        _to_exclusive: u64,
+        _conn: &mut db::Connection<'_>,
+    ) -> anyhow::Result<usize> {
         Ok(0)
     }
 }
@@ -257,9 +261,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 }
 
 const fn max_chunk_rows<H: Handler>() -> usize {
-    // Handle division by zero
     if H::Value::FIELD_COUNT == 0 {
-        return 0;
+        i16::MAX as usize
+    } else {
+        i16::MAX as usize / H::Value::FIELD_COUNT
     }
-    i16::MAX as usize / H::Value::FIELD_COUNT
 }

@@ -63,8 +63,6 @@ pub struct NodeConfig {
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
 
-    #[serde(default)]
-    pub enable_experimental_rest_api: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc: Option<sui_rpc_api::Config>,
 
@@ -393,7 +391,7 @@ impl ExecutionCacheConfig {
                 ExecutionCacheConfig::WritebackCache {
                     backpressure_threshold,
                     ..
-                } => backpressure_threshold.unwrap_or(10000),
+                } => backpressure_threshold.unwrap_or(100_000),
             })
     }
 
@@ -489,6 +487,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Threedos".to_string(),
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
         "Arden".to_string(),
+        "FanTV".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
@@ -635,6 +634,10 @@ impl NodeConfig {
 
     pub fn jsonrpc_server_type(&self) -> ServerType {
         self.jsonrpc_server_type.unwrap_or(ServerType::Http)
+    }
+
+    pub fn rpc(&self) -> Option<&sui_rpc_api::Config> {
+        self.rpc.as_ref()
     }
 }
 

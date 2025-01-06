@@ -18,3 +18,4 @@ for table in objects transactions checkpoints checkpoints_by_digest watermark; d
     "${command[@]}" setgcpolicy $table sui maxversions=1
   )
 done
+"${command[@]}" setgcpolicy watermark sui maxage=2d

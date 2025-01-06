@@ -219,6 +219,10 @@ pub(super) fn committer<H: Handler + 'static>(
 
                     let Ok(mut conn) = db.connect().await else {
                         warn!(pipeline = H::NAME, "Failed to get connection for DB");
+                        metrics
+                            .total_committer_batches_failed
+                            .with_label_values(&[H::NAME])
+                            .inc();
                         continue;
                     };
 
@@ -250,6 +254,11 @@ pub(super) fn committer<H: Handler + 'static>(
                                 pending = pending_rows,
                                 "Error writing batch: {e}",
                             );
+
+                            metrics
+                                .total_committer_batches_failed
+                                .with_label_values(&[H::NAME])
+                                .inc();
 
                             attempt += 1;
                             continue;

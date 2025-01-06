@@ -6,8 +6,10 @@
 mod upgrade_compatibility_tests;
 
 use anyhow::{anyhow, Context, Error};
+use regex::Regex;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use move_binary_format::compatibility::InclusionCheck;
@@ -15,11 +17,12 @@ use move_binary_format::file_format::{
     AbilitySet, DatatypeTyParameter, EnumDefinitionIndex, FunctionDefinitionIndex,
     StructDefinitionIndex, TableIndex,
 };
+use move_binary_format::normalized::Type;
 use move_binary_format::{
     compatibility::Compatibility,
     compatibility_mode::CompatibilityMode,
     file_format::Visibility,
-    normalized::{Enum, Function, Module, Struct},
+    normalized::{Enum, Field, Function, Module, Struct, Type, Variant},
     CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceName;
@@ -36,7 +39,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
 };
-use move_ir_types::location::Loc;
+use move_ir_types::location::{ByteIndex, Loc};
 use move_package::compilation::compiled_package::CompiledUnitWithSource;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move_build::CompiledPackage;
@@ -454,6 +457,7 @@ upgrade_codes!(
         FieldMismatch: { msg: "field mismatch" },
         TypeParamMismatch: { msg: "type parameter mismatch" },
         ModuleMismatch: { msg: "module incompatible" },
+        ModuleMissing: { msg: "module missing" },
     ],
     Enums: [
         VariantMismatch: { msg: "variant mismatch" },
@@ -469,6 +473,7 @@ pub(crate) async fn check_compatibility(
     client: &SuiClient,
     package_id: ObjectID,
     new_package: CompiledPackage,
+    package_path: PathBuf,
     upgrade_policy: u8,
     protocol_config: ProtocolConfig,
 ) -> Result<(), Error> {
@@ -499,12 +504,13 @@ pub(crate) async fn check_compatibility(
     let policy =
         UpgradePolicy::try_from(upgrade_policy).map_err(|_| anyhow!("Invalid upgrade policy"))?;
 
-    compare_packages(existing_modules, new_package, policy)
+    compare_packages(existing_modules, new_package, package_path, policy)
 }
 
 fn compare_packages(
     existing_modules: Vec<CompiledModule>,
-    new_package: CompiledPackage,
+    mut new_package: CompiledPackage,
+    package_path: PathBuf,
     policy: UpgradePolicy,
 ) -> Result<(), Error> {
     let new_modules_map: HashMap<Identifier, CompiledModule> = new_package
@@ -572,15 +578,30 @@ fn compare_packages(
         return Ok(());
     }
 
-    let mut files: FilesSourceText = HashMap::new();
-    let mut file_set = HashSet::new();
-
     let mut diags = Diagnostics::new();
-    let mut missing_modules: Vec<String> = vec![];
+
+    // add move toml
+    let move_toml_path = package_path.join("Move.toml");
+    let move_toml_contents = Arc::from(
+        fs::read_to_string(&move_toml_path)
+            .context("Unable to read Move.toml")?
+            .to_string(),
+    );
+    let move_toml_hash = FileHash::new(&move_toml_contents);
+
+    new_package.package.file_map.add(
+        FileHash::new(&move_toml_contents),
+        FileName::from(move_toml_path.to_string_lossy()),
+        Arc::clone(&move_toml_contents),
+    );
 
     for (name, err) in errors {
-        if let UpgradeCompatibilityModeError::ModuleMissing { name } = &err {
-            missing_modules.push(name.to_string());
+        if let UpgradeCompatibilityModeError::ModuleMissing { name, .. } = &err {
+            diags.extend(missing_module_diag(
+                name,
+                &move_toml_hash,
+                &move_toml_contents,
+            )?);
             continue;
         }
 
@@ -588,24 +609,6 @@ fn compare_packages(
             .package
             .get_module_by_name_from_root(name.as_str())
             .context("Unable to get module")?;
-
-        if !file_set.contains(&compiled_unit_with_source.source_path) {
-            let file_contents: Arc<str> =
-                fs::read_to_string(&compiled_unit_with_source.source_path)
-                    .context("Unable to read source file")?
-                    .into();
-            let file_hash = FileHash::new(&file_contents);
-
-            files.insert(
-                file_hash,
-                (
-                    FileName::from(compiled_unit_with_source.source_path.to_string_lossy()),
-                    file_contents,
-                ),
-            );
-
-            file_set.insert(&compiled_unit_with_source.source_path);
-        }
 
         diags.extend(diag_from_error(
             &err,
@@ -616,23 +619,15 @@ fn compare_packages(
 
     // use colors but inline
     Err(anyhow!(
-        "{}{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
+        "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
         Its upgrade policy is set to '{}'.",
         if !diags.is_empty() {
             String::from_utf8(report_diagnostics_to_buffer(
-                &files.into(),
+                &new_package.package.file_map,
                 diags,
                 use_colors()
             ))
             .context("Unable to convert buffer to string")?
-        } else {
-            "".to_string()
-        },
-        if !missing_modules.is_empty() {
-            format!(
-                "The following modules are missing from the new package: {}\n",
-                format_list(missing_modules.iter().map(|m| format!("'{m}'")), None)
-            )
         } else {
             "".to_string()
         },
@@ -813,6 +808,39 @@ fn module_compatibility_error_diag(
     Ok(diags)
 }
 
+fn missing_module_diag(
+    module_name: &Identifier,
+    move_toml_hash: &FileHash,
+    move_toml_contents: &Arc<str>,
+) -> Result<Diagnostics, Error> {
+    const PACKAGE_TABLE: &str = "[package]";
+    let mut diags = Diagnostics::new();
+
+    let start: usize = move_toml_contents.find(PACKAGE_TABLE).unwrap_or_default();
+    // default to the end of the package table definition
+    // get the third newline after the start of the package table declaration if it exists
+    let end = move_toml_contents[start..]
+        .match_indices('\n')
+        .take(3)
+        .last()
+        .map(|(idx, _)| start + idx)
+        .unwrap_or(start + PACKAGE_TABLE.len());
+
+    let loc = Loc::new(move_toml_hash.clone(), start as ByteIndex, end as ByteIndex);
+
+    diags.add(Diagnostic::new(
+        Declarations::ModuleMissing,
+        (loc, format!("Package is missing module '{module_name}'",)),
+        Vec::<(Loc, String)>::new(),
+        vec![
+            "Modules which are part package cannot be removed during an upgrade.".to_string(),
+            format!("add missing module '{module_name}' back to the package."),
+        ],
+    ));
+
+    Ok(diags)
+}
+
 /// Return a diagnostic for a missing definition.
 fn missing_definition_diag(
     declaration_kind: &str,
@@ -895,6 +923,36 @@ fn function_lost_public(
     Ok(diags)
 }
 
+fn format_param(
+    param: &Type,
+    type_params: Vec<SourceName>,
+    secondary: &mut Vec<(Loc, String)>,
+) -> Result<String, Error> {
+    Ok(match param {
+        Type::TypeParameter(t) => {
+            let type_param = type_params
+                .get(*t as usize)
+                .context("Unable to get type param location")?;
+
+            secondary.push((
+                type_param.1,
+                format!("Type parameter '{}' is defined here", &type_param.0),
+            ));
+            type_param.0.to_string()
+        }
+        Type::Vector(t) => {
+            format!("vector<{}>", format_param(t, type_params, secondary)?)
+        }
+        Type::MutableReference(t) => {
+            format!("&mut {}", format_param(t, type_params, secondary)?)
+        }
+        Type::Reference(t) => {
+            format!("&{}", format_param(t, type_params, secondary)?)
+        }
+        _ => format!("{}", param),
+    })
+}
+
 /// Return a diagnostic for a function signature mismatch.
 /// start by checking the lengths of the parameters and returns and return a diagnostic if they are different
 /// if the lengths are the same check each parameter piece wise and return a diagnostic for each mismatch
@@ -961,13 +1019,25 @@ fn function_signature_mismatch_diag(
                     .context("Unable to get parameter location")?
                     .1;
 
+                let mut secondary = Vec::new();
+
+                let old_param = format_param(
+                    old_param,
+                    func_sourcemap.type_parameters.clone(),
+                    &mut secondary,
+                )?;
+                let new_param = format_param(
+                    new_param,
+                    func_sourcemap.type_parameters.clone(),
+                    &mut Vec::new(),
+                )?;
+
+                let label = format!("Unexpected parameter '{new_param}', expected '{old_param}'");
+
                 diags.add(Diagnostic::new(
                     Functions_::SignatureMismatch,
-                    (
-                        param_loc,
-                        format!("Unexpected parameter {new_param}, expected {old_param}"),
-                    ),
-                    Vec::<(Loc, String)>::new(),
+                    (param_loc, label),
+                    secondary,
                     vec![
                         "Functions are part of a module's public interface \
                         and cannot be changed during an upgrade."
@@ -1117,23 +1187,31 @@ fn function_signature_mismatch_diag(
                 .context("Unable to get return location")?;
 
             if old_return != new_return {
+                let mut secondary = Vec::new();
+
+                let old_return = format_param(
+                    old_return,
+                    func_sourcemap.type_parameters.clone(),
+                    &mut secondary,
+                )?;
+                let new_return = format_param(
+                    new_return,
+                    func_sourcemap.type_parameters.clone(),
+                    &mut Vec::new(),
+                )?;
+
+                let label = if new_function.return_.len() == 1 {
+                    format!("Unexpected return type '{new_return}', expected '{old_return}'")
+                } else {
+                    format!(
+                        "Unexpected return type '{new_return}' at position {i}, expected '{old_return}'"
+                    )
+                };
+
                 diags.add(Diagnostic::new(
                     Functions_::SignatureMismatch,
-                    (
-                        *return_,
-                        if new_function.return_.len() == 1 {
-                            format!(
-                                "Unexpected return type {new_return}, \
-                                expected {old_return}"
-                            )
-                        } else {
-                            format!(
-                                "Unexpected return type {new_return} at \
-                                position {i}, expected {old_return}"
-                            )
-                        },
-                    ),
-                    Vec::<(Loc, String)>::new(),
+                    (*return_, label),
+                    secondary,
                     vec![
                         "Functions are part of a module's public interface \
                         and cannot be changed during an upgrade."
@@ -1196,6 +1274,7 @@ fn function_entry_mismatch(
     Ok(diags)
 }
 
+/// Return a label string for an ability mismatch.
 fn ability_mismatch_label(
     old_abilities: AbilitySet,
     new_abilities: AbilitySet,
@@ -1301,9 +1380,62 @@ fn struct_ability_mismatch_diag(
     Ok(diags)
 }
 
+/// Return a diagnostic for an ability mismatch. returns (full version, name, type)
+fn field_to_string(field: &Field) -> (String, String, String) {
+    let mut field_full = format!("'{}: {}'", field.name, field.type_);
+    let mut field_name = format!("'{}'", field.name);
+    let field_type = format!("'{}'", field.type_);
+
+    if let Some(pos_num) = Regex::new(r"^pos(\d)+$")
+        .ok()
+        .and_then(|r| r.captures(field.name.as_str()))
+        .and_then(|c| c.get(1))
+        .and_then(|m| m.as_str().parse::<u64>().ok())
+    {
+        field_name = format!("at position {}", pos_num);
+        field_full = format!("{} {}", field_type, field_name);
+    }
+
+    (field_full, field_name, field_type)
+}
+
+/// returns a message for the given field
+fn field_mismatch_message(old_field: &Field, new_field: &Field) -> (Declarations, String) {
+    let (old_field_full, old_field_name, old_field_type) = field_to_string(old_field);
+    let (new_field_full, new_field_name, new_field_type) = field_to_string(new_field);
+
+    match (
+        old_field.name != new_field.name,
+        old_field.type_ != new_field.type_,
+    ) {
+        (true, true) => (
+            Declarations::FieldMismatch,
+            format!(
+                "Mismatched field {}, expected {}.",
+                new_field_full, old_field_full
+            ),
+        ),
+        (true, false) => (
+            Declarations::FieldMismatch,
+            format!(
+                "Mismatched field name {}, expected {}.",
+                new_field_name, old_field_name
+            ),
+        ),
+        (false, true) => (
+            Declarations::TypeMismatch,
+            format!(
+                "Mismatched field type {}, expected {}.",
+                new_field_type, old_field_type
+            ),
+        ),
+        (false, false) => unreachable!("Fields should not be the same"),
+    }
+}
+
 /// Return a diagnostic for a field mismatch
-/// start by checking the lengths of the fields and return a diagnostic if they are different
-/// if the lengths are the same check each field piece wise and return a diagnostic for each mismatch
+/// Start by checking the lengths of the fields and return a diagnostic if they are different.
+/// If the lengths are the same check each field piece wise and return a diagnostic for each mismatch.
 fn struct_field_mismatch_diag(
     struct_name: &Identifier,
     old_struct: &Struct,
@@ -1326,15 +1458,27 @@ fn struct_field_mismatch_diag(
 
     let def_loc = struct_sourcemap.definition_location;
 
-    if old_struct.fields.len() != new_struct.fields.len() {
+    let old_fields: Vec<&Field> = old_struct
+        .fields
+        .iter()
+        .filter(|f| f.name != Identifier::new("dummy_field").unwrap() && f.type_ != Type::Bool)
+        .collect();
+
+    let new_fields: Vec<&Field> = new_struct
+        .fields
+        .iter()
+        .filter(|f| f.name != Identifier::new("dummy_field").unwrap() && f.type_ != Type::Bool)
+        .collect();
+
+    if old_fields.len() != new_fields.len() {
         diags.add(Diagnostic::new(
             Declarations::TypeMismatch,
             (
                 def_loc,
                 format!(
                     "Incorrect number of fields: expected {}, found {}",
-                    old_struct.fields.len(),
-                    new_struct.fields.len()
+                    old_fields.len(),
+                    new_fields.len()
                 ),
             ),
             Vec::<(Loc, String)>::new(),
@@ -1345,50 +1489,19 @@ fn struct_field_mismatch_diag(
                 format!(
                     "Restore the original struct's {} \
                     for struct '{struct_name}' including the ordering.",
-                    singular_or_plural(old_struct.fields.len(), "field", "fields")
+                    singular_or_plural(old_fields.len(), "field", "fields")
                 ),
             ],
         ));
-    } else if old_struct.fields != new_struct.fields {
-        for (i, (old_field, new_field)) in old_struct
-            .fields
-            .iter()
-            .zip(new_struct.fields.iter())
-            .enumerate()
-        {
+    } else if old_fields != new_fields {
+        for (i, (old_field, new_field)) in old_fields.iter().zip(new_fields.iter()).enumerate() {
             if old_field != new_field {
                 let field_loc = struct_sourcemap
                     .fields
                     .get(i)
                     .context("Unable to get field location")?;
 
-                let (code, label) = match (
-                    old_field.name != new_field.name,
-                    old_field.type_ != new_field.type_,
-                ) {
-                    (true, true) => (
-                        Declarations::FieldMismatch,
-                        format!(
-                            "Mismatched field '{}: {}' expected '{}: {}'.",
-                            new_field.name, new_field.type_, old_field.name, old_field.type_
-                        ),
-                    ),
-                    (true, false) => (
-                        Declarations::FieldMismatch,
-                        format!(
-                            "Mismatched field name '{}', expected '{}'.",
-                            new_field.name, old_field.name
-                        ),
-                    ),
-                    (false, true) => (
-                        Declarations::TypeMismatch,
-                        format!(
-                            "Mismatched field type '{}', expected '{}'.",
-                            new_field.type_, old_field.type_
-                        ),
-                    ),
-                    (false, false) => unreachable!("Fields should not be the same"),
-                };
+                let (code, label) = field_mismatch_message(old_field, new_field);
 
                 diags.add(Diagnostic::new(
                     code,
@@ -1401,7 +1514,7 @@ fn struct_field_mismatch_diag(
                         format!(
                             "Restore the original struct's {} for \
                             struct '{struct_name}' including the ordering.",
-                            singular_or_plural(old_struct.fields.len(), "field", "fields")
+                            singular_or_plural(old_fields.len(), "field", "fields")
                         ),
                     ],
                 ));
@@ -1509,6 +1622,66 @@ fn enum_ability_mismatch_diag(
     Ok(diags)
 }
 
+/// Returns the error code and label for mismatched, missing, or unexpected variant
+fn enum_variant_field_error(
+    old_variant: &Variant,
+    new_variant: &Variant,
+    variant_loc: Loc,
+    def_loc: Loc,
+) -> (DiagnosticInfo, Vec<String>) {
+    if old_variant.fields.len() != new_variant.fields.len() {
+        return (
+            Declarations::FieldMismatch.into(),
+            vec![format!(
+                "Mismatched variant field count, expected {}, found {}.",
+                old_variant.fields.len(),
+                new_variant.fields.len()
+            )],
+        );
+    }
+
+    match (
+        old_variant.name != new_variant.name,
+        old_variant.fields != new_variant.fields,
+    ) {
+        (true, true) => (
+            Enums::VariantMismatch.into(),
+            vec![format!(
+                "Mismatched variant '{}', expected '{}'.",
+                new_variant.name, old_variant.name
+            )],
+        ),
+        (true, false) => (
+            Enums::VariantMismatch.into(),
+            vec![format!(
+                "Mismatched variant name '{}', expected '{}'.",
+                new_variant.name, old_variant.name
+            )],
+        ),
+        (false, true) => {
+            let mut errors: Vec<String> = vec![];
+
+            for (i, (old_field, new_field)) in old_variant
+                .fields
+                .iter()
+                .zip(new_variant.fields.iter())
+                .enumerate()
+            {
+                if old_field != new_field {
+                    errors.push(format!(
+                        "Mismatched field {}, expected {}.",
+                        field_to_string(old_field).0,
+                        field_to_string(new_field).2
+                    ));
+                }
+            }
+
+            (Declarations::FieldMismatch.into(), errors)
+        }
+        (false, false) => unreachable!("Variants should not be the same"),
+    }
+}
+
 /// Return a diagnostic for a type parameter mismatch
 /// start by checking the lengths of the type parameters and return a diagnostic if they are different
 /// if the lengths are the same check each type parameter piece wise and return a diagnostic for each mismatch
@@ -1548,65 +1721,26 @@ fn enum_variant_mismatch_diag(
                 .0
                  .1;
 
-            let (code, label): (DiagnosticInfo, String) = match (
-                old_variant.name != new_variant.name,
-                old_variant.fields != new_variant.fields,
-            ) {
-                (true, true) => (
-                    Enums::VariantMismatch.into(),
-                    format!(
-                        "Mismatched variant '{}', expected '{}'.",
-                        new_variant.name, old_variant.name
-                    ),
-                ),
-                (true, false) => (
-                    Enums::VariantMismatch.into(),
-                    format!(
-                        "Mismatched variant name '{}', expected '{}'.",
-                        new_variant.name, old_variant.name
-                    ),
-                ),
-                (false, true) => {
-                    let new_variant_fields = new_variant
-                        .fields
-                        .iter()
-                        .map(|f| format!("{:?}", f))
-                        .collect::<Vec<_>>()
-                        .join(", ");
+            let (code, labels) =
+                enum_variant_field_error(old_variant, new_variant, variant_loc, def_loc);
 
-                    let old_variant_fields = old_variant
-                        .fields
-                        .iter()
-                        .map(|f| format!("{:?}", f))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-
-                    (
-                        Declarations::FieldMismatch.into(),
-                        format!(
-                            "Mismatched variant field '{}', expected '{}'.",
-                            new_variant_fields, old_variant_fields
-                        ),
-                    )
-                }
-                (false, false) => unreachable!("Variants should not be the same"),
-            };
-
-            diags.add(Diagnostic::new(
-                code,
-                (variant_loc, label),
-                vec![(def_loc, "Enum definition".to_string())],
-                vec![
-                    "Enums are part of a module's public interface \
+            for label in labels {
+                diags.add(Diagnostic::new(
+                    code.clone(),
+                    (variant_loc, label),
+                    vec![(def_loc, "Enum definition".to_string())],
+                    vec![
+                        "Enums are part of a module's public interface \
                     and cannot be changed during an upgrade."
-                        .to_string(),
-                    format!(
-                        "Restore the original enum's {} for \
+                            .to_string(),
+                        format!(
+                            "Restore the original enum's {} for \
                         enum '{enum_name}' including the ordering.",
-                        singular_or_plural(old_enum.variants.len(), "variant", "variants")
-                    ),
-                ],
-            ));
+                            singular_or_plural(old_enum.variants.len(), "variant", "variants")
+                        ),
+                    ],
+                ));
+            }
         }
     }
 
@@ -1850,6 +1984,7 @@ fn type_parameter_diag(
     Ok(diags)
 }
 
+/// Return a diagnostic for a type parameter constrant mismatch
 fn type_param_constraint_labels(
     old_constraints: AbilitySet,
     new_constraints: AbilitySet,
@@ -1877,6 +2012,7 @@ fn type_param_constraint_labels(
     ))
 }
 
+/// Return a diagnostic for a type parameter phantom mismatch
 fn type_param_phantom_labels(old_phantom: bool, new_phantom: bool) -> Option<(String, String)> {
     if old_phantom == new_phantom {
         return None;
@@ -1895,6 +2031,7 @@ fn type_param_phantom_labels(old_phantom: bool, new_phantom: bool) -> Option<(St
     })
 }
 
+/// Format a list of items into a human-readable string.
 fn format_list(
     items: impl IntoIterator<Item = impl std::fmt::Display>,
     noun_singular_plural: Option<(&str, &str)>,
@@ -1921,6 +2058,7 @@ fn format_list(
     }
 }
 
+/// Return a string with the singular or plural form of a word.
 fn singular_or_plural(n: usize, singular: &str, plural: &str) -> String {
     if n == 1 {
         singular.to_string()

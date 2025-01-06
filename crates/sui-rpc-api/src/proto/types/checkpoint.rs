@@ -5,9 +5,9 @@ use tap::Pipe;
 // CheckpointSummary
 //
 
-impl From<sui_sdk_types::types::CheckpointSummary> for super::CheckpointSummary {
+impl From<sui_sdk_types::CheckpointSummary> for super::CheckpointSummary {
     fn from(
-        sui_sdk_types::types::CheckpointSummary {
+        sui_sdk_types::CheckpointSummary {
             epoch,
             sequence_number,
             network_total_transactions,
@@ -18,7 +18,7 @@ impl From<sui_sdk_types::types::CheckpointSummary> for super::CheckpointSummary 
             checkpoint_commitments,
             end_of_epoch_data,
             version_specific_data,
-        }: sui_sdk_types::types::CheckpointSummary,
+        }: sui_sdk_types::CheckpointSummary,
     ) -> Self {
         Self {
             epoch: Some(epoch),
@@ -35,7 +35,7 @@ impl From<sui_sdk_types::types::CheckpointSummary> for super::CheckpointSummary 
     }
 }
 
-impl TryFrom<&super::CheckpointSummary> for sui_sdk_types::types::CheckpointSummary {
+impl TryFrom<&super::CheckpointSummary> for sui_sdk_types::CheckpointSummary {
     type Error = TryFromProtoError;
 
     fn try_from(
@@ -107,14 +107,14 @@ impl TryFrom<&super::CheckpointSummary> for sui_sdk_types::types::CheckpointSumm
 // GasCostSummary
 //
 
-impl From<sui_sdk_types::types::GasCostSummary> for super::GasCostSummary {
+impl From<sui_sdk_types::GasCostSummary> for super::GasCostSummary {
     fn from(
-        sui_sdk_types::types::GasCostSummary {
+        sui_sdk_types::GasCostSummary {
             computation_cost,
             storage_cost,
             storage_rebate,
             non_refundable_storage_fee,
-        }: sui_sdk_types::types::GasCostSummary,
+        }: sui_sdk_types::GasCostSummary,
     ) -> Self {
         Self {
             computation_cost: Some(computation_cost),
@@ -125,7 +125,7 @@ impl From<sui_sdk_types::types::GasCostSummary> for super::GasCostSummary {
     }
 }
 
-impl TryFrom<&super::GasCostSummary> for sui_sdk_types::types::GasCostSummary {
+impl TryFrom<&super::GasCostSummary> for sui_sdk_types::GasCostSummary {
     type Error = TryFromProtoError;
 
     fn try_from(
@@ -157,10 +157,10 @@ impl TryFrom<&super::GasCostSummary> for sui_sdk_types::types::GasCostSummary {
 // CheckpointCommitment
 //
 
-impl From<sui_sdk_types::types::CheckpointCommitment> for super::CheckpointCommitment {
-    fn from(value: sui_sdk_types::types::CheckpointCommitment) -> Self {
+impl From<sui_sdk_types::CheckpointCommitment> for super::CheckpointCommitment {
+    fn from(value: sui_sdk_types::CheckpointCommitment) -> Self {
         let commitment = match value {
-            sui_sdk_types::types::CheckpointCommitment::EcmhLiveObjectSet { digest } => {
+            sui_sdk_types::CheckpointCommitment::EcmhLiveObjectSet { digest } => {
                 super::checkpoint_commitment::Commitment::EcmhLiveObjectSet(digest.into())
             }
         };
@@ -171,7 +171,7 @@ impl From<sui_sdk_types::types::CheckpointCommitment> for super::CheckpointCommi
     }
 }
 
-impl TryFrom<&super::CheckpointCommitment> for sui_sdk_types::types::CheckpointCommitment {
+impl TryFrom<&super::CheckpointCommitment> for sui_sdk_types::CheckpointCommitment {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::CheckpointCommitment) -> Result<Self, Self::Error> {
@@ -194,13 +194,13 @@ impl TryFrom<&super::CheckpointCommitment> for sui_sdk_types::types::CheckpointC
 // EndOfEpochData
 //
 
-impl From<sui_sdk_types::types::EndOfEpochData> for super::EndOfEpochData {
+impl From<sui_sdk_types::EndOfEpochData> for super::EndOfEpochData {
     fn from(
-        sui_sdk_types::types::EndOfEpochData {
+        sui_sdk_types::EndOfEpochData {
             next_epoch_committee,
             next_epoch_protocol_version,
             epoch_commitments,
-        }: sui_sdk_types::types::EndOfEpochData,
+        }: sui_sdk_types::EndOfEpochData,
     ) -> Self {
         Self {
             next_epoch_committee: next_epoch_committee.into_iter().map(Into::into).collect(),
@@ -210,7 +210,7 @@ impl From<sui_sdk_types::types::EndOfEpochData> for super::EndOfEpochData {
     }
 }
 
-impl TryFrom<&super::EndOfEpochData> for sui_sdk_types::types::EndOfEpochData {
+impl TryFrom<&super::EndOfEpochData> for sui_sdk_types::EndOfEpochData {
     type Error = TryFromProtoError;
 
     fn try_from(
@@ -241,8 +241,8 @@ impl TryFrom<&super::EndOfEpochData> for sui_sdk_types::types::EndOfEpochData {
 // CheckpointedTransactionInfo
 //
 
-impl From<sui_sdk_types::types::CheckpointTransactionInfo> for super::CheckpointedTransactionInfo {
-    fn from(value: sui_sdk_types::types::CheckpointTransactionInfo) -> Self {
+impl From<sui_sdk_types::CheckpointTransactionInfo> for super::CheckpointedTransactionInfo {
+    fn from(value: sui_sdk_types::CheckpointTransactionInfo) -> Self {
         Self {
             transaction: Some(value.transaction.into()),
             effects: Some(value.effects.into()),
@@ -251,9 +251,7 @@ impl From<sui_sdk_types::types::CheckpointTransactionInfo> for super::Checkpoint
     }
 }
 
-impl TryFrom<&super::CheckpointedTransactionInfo>
-    for sui_sdk_types::types::CheckpointTransactionInfo
-{
+impl TryFrom<&super::CheckpointedTransactionInfo> for sui_sdk_types::CheckpointTransactionInfo {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::CheckpointedTransactionInfo) -> Result<Self, Self::Error> {
@@ -287,8 +285,8 @@ impl TryFrom<&super::CheckpointedTransactionInfo>
 // CheckpointContents
 //
 
-impl From<sui_sdk_types::types::CheckpointContents> for super::CheckpointContents {
-    fn from(value: sui_sdk_types::types::CheckpointContents) -> Self {
+impl From<sui_sdk_types::CheckpointContents> for super::CheckpointContents {
+    fn from(value: sui_sdk_types::CheckpointContents) -> Self {
         let contents = super::checkpoint_contents::Contents::V1(super::checkpoint_contents::V1 {
             transactions: value.into_v1().into_iter().map(Into::into).collect(),
         });
@@ -299,7 +297,7 @@ impl From<sui_sdk_types::types::CheckpointContents> for super::CheckpointContent
     }
 }
 
-impl TryFrom<&super::CheckpointContents> for sui_sdk_types::types::CheckpointContents {
+impl TryFrom<&super::CheckpointContents> for sui_sdk_types::CheckpointContents {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::CheckpointContents) -> Result<Self, Self::Error> {

@@ -204,7 +204,7 @@ message GasCostSummary {
 // Move {{{
 
 message Identifier {
-  optional bytes identifier = 1;
+  optional string identifier = 1;
 }
 
 message StructTag {
@@ -482,19 +482,19 @@ message ActiveJwk {
 }
 
 message JwkId {
-  optional bytes iss = 1;
-  optional bytes kid = 2;
+  optional string iss = 1;
+  optional string kid = 2;
 }
 
 message Jwk {
   // Key type parameter, <https://datatracker.ietf.org/doc/html/rfc7517#section-4.1>
-  optional bytes kty = 1;
+  optional string kty = 1;
   // RSA public exponent, <https://datatracker.ietf.org/doc/html/rfc7517#section-9.3>
-  optional bytes e = 2;
+  optional string e = 2;
   // RSA modulus, <https://datatracker.ietf.org/doc/html/rfc7517#section-9.3>
-  optional bytes n = 3;
+  optional string n = 3;
   // Algorithm parameter, <https://datatracker.ietf.org/doc/html/rfc7517#section-4.4>
-  optional bytes alg = 4;
+  optional string alg = 4;
 }
 
 message EndOfEpochTransaction {
@@ -925,7 +925,7 @@ message SimpleSignature {
 }
 
 message ZkLoginPublicIdentifier {
-  optional bytes iss = 1;
+  optional string iss = 1;
   optional Bn254FieldElement address_seed = 2;
 }
 
@@ -973,7 +973,7 @@ message ZkLoginAuthenticator {
 message ZkLoginInputs {
   optional ZkLoginProof proof_points = 1;
   optional ZkLoginClaim iss_base64_details = 2;
-  optional bytes header_base64 = 3;
+  optional string header_base64 = 3;
   optional Bn254FieldElement address_seed = 4;
 }
 
@@ -984,7 +984,7 @@ message ZkLoginProof {
 }
 
 message ZkLoginClaim {
-  optional bytes value = 1;
+  optional string value = 1;
   optional uint32 index_mod_4 = 2;
 }
 
@@ -1011,7 +1011,7 @@ message Bn254FieldElement {
 
 message PasskeyAuthenticator {
   optional bytes authenticator_data = 1;
-  optional bytes client_data_json = 2;
+  optional string client_data_json = 2;
   optional SimpleSignature signature = 3;
 }
 

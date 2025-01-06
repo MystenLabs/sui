@@ -4,8 +4,8 @@ use super::TryFromProtoError;
 // Event
 //
 
-impl From<sui_sdk_types::types::Event> for super::Event {
-    fn from(value: sui_sdk_types::types::Event) -> Self {
+impl From<sui_sdk_types::Event> for super::Event {
+    fn from(value: sui_sdk_types::Event) -> Self {
         Self {
             package_id: Some(value.package_id.into()),
             module: Some(value.module.into()),
@@ -16,7 +16,7 @@ impl From<sui_sdk_types::types::Event> for super::Event {
     }
 }
 
-impl TryFrom<&super::Event> for sui_sdk_types::types::Event {
+impl TryFrom<&super::Event> for sui_sdk_types::Event {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Event) -> Result<Self, Self::Error> {
@@ -64,15 +64,15 @@ impl TryFrom<&super::Event> for sui_sdk_types::types::Event {
 // TransactionEvents
 //
 
-impl From<sui_sdk_types::types::TransactionEvents> for super::TransactionEvents {
-    fn from(value: sui_sdk_types::types::TransactionEvents) -> Self {
+impl From<sui_sdk_types::TransactionEvents> for super::TransactionEvents {
+    fn from(value: sui_sdk_types::TransactionEvents) -> Self {
         Self {
             events: value.0.into_iter().map(Into::into).collect(),
         }
     }
 }
 
-impl TryFrom<&super::TransactionEvents> for sui_sdk_types::types::TransactionEvents {
+impl TryFrom<&super::TransactionEvents> for sui_sdk_types::TransactionEvents {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::TransactionEvents) -> Result<Self, Self::Error> {

@@ -18,15 +18,15 @@ mod transaction_convert;
 // Address
 //
 
-impl From<sui_sdk_types::types::Address> for Address {
-    fn from(value: sui_sdk_types::types::Address) -> Self {
+impl From<sui_sdk_types::Address> for Address {
+    fn from(value: sui_sdk_types::Address) -> Self {
         Self {
             address: Some(value.as_bytes().to_vec().into()),
         }
     }
 }
 
-impl TryFrom<&Address> for sui_sdk_types::types::Address {
+impl TryFrom<&Address> for sui_sdk_types::Address {
     type Error = TryFromProtoError;
 
     fn try_from(Address { address }: &Address) -> Result<Self, Self::Error> {
@@ -44,15 +44,15 @@ impl TryFrom<&Address> for sui_sdk_types::types::Address {
 // ObjectId
 //
 
-impl From<sui_sdk_types::types::ObjectId> for ObjectId {
-    fn from(value: sui_sdk_types::types::ObjectId) -> Self {
+impl From<sui_sdk_types::ObjectId> for ObjectId {
+    fn from(value: sui_sdk_types::ObjectId) -> Self {
         Self {
             object_id: Some(value.as_bytes().to_vec().into()),
         }
     }
 }
 
-impl TryFrom<&ObjectId> for sui_sdk_types::types::ObjectId {
+impl TryFrom<&ObjectId> for sui_sdk_types::ObjectId {
     type Error = TryFromProtoError;
 
     fn try_from(ObjectId { object_id }: &ObjectId) -> Result<Self, Self::Error> {
@@ -70,15 +70,15 @@ impl TryFrom<&ObjectId> for sui_sdk_types::types::ObjectId {
 // Digest
 //
 
-impl From<sui_sdk_types::types::Digest> for Digest {
-    fn from(value: sui_sdk_types::types::Digest) -> Self {
+impl From<sui_sdk_types::Digest> for Digest {
+    fn from(value: sui_sdk_types::Digest) -> Self {
         Self {
             digest: Some(value.as_bytes().to_vec().into()),
         }
     }
 }
 
-impl TryFrom<&Digest> for sui_sdk_types::types::Digest {
+impl TryFrom<&Digest> for sui_sdk_types::Digest {
     type Error = TryFromProtoError;
 
     fn try_from(Digest { digest }: &Digest) -> Result<Self, Self::Error> {
@@ -94,17 +94,17 @@ impl TryFrom<&Digest> for sui_sdk_types::types::Digest {
 
 macro_rules! impl_digest_proto {
     ($t:ident) => {
-        impl From<sui_sdk_types::types::$t> for Digest {
-            fn from(value: sui_sdk_types::types::$t) -> Self {
-                sui_sdk_types::types::Digest::from(value).into()
+        impl From<sui_sdk_types::$t> for Digest {
+            fn from(value: sui_sdk_types::$t) -> Self {
+                sui_sdk_types::Digest::from(value).into()
             }
         }
 
-        impl TryFrom<&Digest> for sui_sdk_types::types::$t {
+        impl TryFrom<&Digest> for sui_sdk_types::$t {
             type Error = TryFromProtoError;
 
             fn try_from(digest: &Digest) -> Result<Self, Self::Error> {
-                sui_sdk_types::types::Digest::try_from(digest).map(Into::into)
+                sui_sdk_types::Digest::try_from(digest).map(Into::into)
             }
         }
     };

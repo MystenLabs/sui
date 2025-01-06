@@ -311,6 +311,8 @@ impl<'a> TestAuthorityBuilder<'a> {
         config.authority_overload_config = authority_overload_config;
         config.authority_store_pruning_config = pruning_config;
 
+        let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
+
         let state = AuthorityState::new(
             name,
             secret,
@@ -329,6 +331,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             usize::MAX,
             ArchiveReaderBalancer::default(),
             None,
+            chain_identifier,
         )
         .await;
 
