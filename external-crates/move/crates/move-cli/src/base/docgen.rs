@@ -61,13 +61,7 @@ pub struct Docgen {
 impl Docgen {
     /// Calling the Docgen
     pub fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
-        // let model = config.move_model_for_package(
-        //     &reroot_path(path).unwrap(),
-        //     ModelConfig {
-        //         all_files_as_targets: false,
-        //         target_filter: None,
-        //     },
-        // )?;
+        let model = config.move_model_for_package(&reroot_path(path).unwrap())?;
 
         // let mut options = DocgenOptions::default();
 

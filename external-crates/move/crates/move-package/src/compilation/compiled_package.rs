@@ -137,9 +137,9 @@ pub struct DependencyInfo<'a> {
 }
 
 pub(crate) struct BuildResult<T> {
-    root_package_name: Symbol,
-    immediate_dependencies: Vec<Symbol>,
-    result: T,
+    pub(crate) root_package_name: Symbol,
+    pub(crate) immediate_dependencies: Vec<Symbol>,
+    pub(crate) result: T,
 }
 
 impl OnDiskCompiledPackage {
@@ -442,7 +442,7 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        mut compiler_driver: impl FnMut(Compiler) -> Result<T>,
+        compiler_driver: impl FnOnce(Compiler) -> Result<T>,
     ) -> Result<BuildResult<T>> {
         let immediate_dependencies = transitive_dependencies
             .iter()
@@ -537,7 +537,7 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        mut compiler_driver: impl FnMut(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
+        compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
         let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
         let BuildResult {
