@@ -832,7 +832,7 @@ macro_rules! diag {
 
 pub const ICE_BUG_REPORT_MESSAGE: &str =
     "The Move compiler has encountered an internal compiler error.\n \
-    Please report this this issue to the Mysten Labs Move language team,\n \
+    Please report this issue to the Mysten Labs Move language team,\n \
     including this error and any relevant code, to the Mysten Labs issue tracker\n \
     at : https://github.com/MystenLabs/sui/issues";
 

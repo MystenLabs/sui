@@ -72,11 +72,29 @@ pub struct Program {
     pub lib_definitions: Vec<PackageDefinition>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExternalTargetKind {
+    Library,
+    SkippedSource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Specifies a source target or dependency
+pub enum TargetKind {
+    /// A source module. If is_root_package is false, some warnings might be suppressed.
+    /// Bytecode/CompiledModules will be generated for any Source target
+    Source { is_root_package: bool },
+    /// A dependency only used for linking.
+    /// No bytecode or CompiledModules are generated
+    External(ExternalTargetKind),
+}
+
 #[derive(Debug, Clone)]
 pub struct PackageDefinition {
     pub package: Option<Symbol>,
     pub named_address_map: NamedAddressMapIndex,
     pub def: Definition,
+    pub target_kind: TargetKind,
 }
 
 #[derive(Debug, Clone)]
@@ -1347,6 +1365,7 @@ fn ast_debug_package_definition(
         package,
         named_address_map,
         def,
+        target_kind: _,
     } = pkg;
     match package {
         Some(n) => w.writeln(format!("package: {}", n)),
@@ -1354,6 +1373,20 @@ fn ast_debug_package_definition(
     }
     named_address_maps.get(*named_address_map).ast_debug(w);
     def.ast_debug(w);
+}
+
+impl AstDebug for TargetKind {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.writeln(match self {
+            TargetKind::Source {
+                is_root_package: true,
+            } => "root module".to_string(),
+            TargetKind::Source {
+                is_root_package: false,
+            } => "dependency module".to_string(),
+            TargetKind::External(k) => format!("external module {:?}", k),
+        });
+    }
 }
 
 impl AstDebug for NamedAddressMap {

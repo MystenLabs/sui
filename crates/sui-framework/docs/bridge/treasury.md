@@ -435,7 +435,7 @@ title: Module `0xb::treasury`
     <b>assert</b>!(<a href="../sui-framework/coin.md#0x2_coin_total_supply">coin::total_supply</a>(&tc) == 0, <a href="treasury.md#0xb_treasury_ETokenSupplyNonZero">ETokenSupplyNonZero</a>);
     <b>let</b> <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a> = <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;();
     <b>let</b> address_bytes = <a href="../sui-framework/hex.md#0x2_hex_decode">hex::decode</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>)));
-    <b>let</b> coin_address = address::from_bytes(address_bytes);
+    <b>let</b> coin_address = <a href="../sui-framework/address.md#0x2_address_from_bytes">address::from_bytes</a>(address_bytes);
     // Make sure upgrade cap is for the Coin <a href="../sui-framework/package.md#0x2_package">package</a>
     // FIXME: add test
     <b>assert</b>!(

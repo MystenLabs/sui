@@ -66,6 +66,7 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 				timestampMs: new Date(event.timestamp).getTime().toString(),
 				transactionModule: `${event.sendingModule?.package.address}::${event.sendingModule?.name}`,
 				type: toShortTypeString(event.contents.type?.repr)!,
+				bcsEncoding: 'base64',
 			})) ?? [],
 		rawTransaction: options?.showRawInput ? mapRawTransaction(transactionBlock) : undefined,
 		...(options?.showInput

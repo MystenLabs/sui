@@ -391,7 +391,7 @@ macro_rules! declare_events {
                 // Unwrap safe: we inited above
                 $(
                     if &event.type_ == $variant.get().unwrap() {
-                        let event_struct: $event_struct = bcs::from_bytes(&event.bcs).map_err(|e| BridgeError::InternalError(format!("Failed to deserialize event to {}: {:?}", stringify!($event_struct), e)))?;
+                        let event_struct: $event_struct = bcs::from_bytes(event.bcs.bytes()).map_err(|e| BridgeError::InternalError(format!("Failed to deserialize event to {}: {:?}", stringify!($event_struct), e)))?;
                         return Ok(Some(SuiBridgeEvent::$variant(event_struct.try_into()?)));
                     }
                 )*
@@ -443,6 +443,7 @@ pub mod tests {
     use crate::types::BridgeAction;
     use crate::types::SuiToEthBridgeAction;
     use ethers::types::Address as EthAddress;
+    use sui_json_rpc_types::BcsEvent;
     use sui_json_rpc_types::SuiEvent;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
@@ -484,7 +485,7 @@ pub mod tests {
         });
         let event = SuiEvent {
             type_: SuiToEthTokenBridgeV1.get().unwrap().clone(),
-            bcs: bcs::to_bytes(&emitted_event).unwrap(),
+            bcs: BcsEvent::new(bcs::to_bytes(&emitted_event).unwrap()),
             id: EventID {
                 tx_digest,
                 event_seq: event_idx as u64,

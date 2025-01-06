@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 70;
+const MAX_PROTOCOL_VERSION: u64 = 71;
 
 // Record history of protocol version allocations here:
 //
@@ -203,6 +203,7 @@ const MAX_PROTOCOL_VERSION: u64 = 70;
 //             Add new gas model version to update charging of native functions.
 //             Add std::uq64_64 module to Move stdlib.
 //             Improve gas/wall time efficiency of some Move stdlib vector functions
+// Version 71: [SIP-45] Enable consensus amplification.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1286,9 +1287,15 @@ pub struct ProtocolConfig {
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
 
-    /// If >0, congestion control will allow up to one transaction per object to exceed
-    /// the configured maximum accumulated cost by the given amount.
+    /// If >0, congestion control will allow the configured maximum accumulated cost per object
+    /// to be exceeded by at most the given amount. Only one limit-exceeding transaction per
+    /// object will be allowed, unless bursting is configured below.
     max_txn_cost_overage_per_object_in_commit: Option<u64>,
+
+    /// If >0, congestion control will allow transactions in total cost equaling the
+    /// configured amount to exceed the configured maximum accumulated cost per object.
+    /// As above, up to one transaction per object exceeding the burst limit will be allowed.
+    allowed_txn_cost_overage_burst_per_object_in_commit: Option<u64>,
 
     /// Minimum interval of commit timestamps between consecutive checkpoints.
     min_checkpoint_interval_ms: Option<u64>,
@@ -1327,6 +1334,10 @@ pub struct ProtocolConfig {
     /// Adds an absolute cap on the maximum transaction cost when using TotalGasBudgetWithCap at
     /// the given multiple of the per-commit budget.
     gas_budget_based_txn_cost_absolute_cap_commit_count: Option<u64>,
+
+    /// SIP-45: K in the formula `amplification_factor = max(0, gas_price / reference_gas_price - K)`.
+    /// This is the threshold for activating consensus amplification.
+    sip_45_consensus_amplification_threshold: Option<u64>,
 }
 
 // feature flags
@@ -2226,6 +2237,8 @@ impl ProtocolConfig {
 
             max_txn_cost_overage_per_object_in_commit: None,
 
+            allowed_txn_cost_overage_burst_per_object_in_commit: None,
+
             min_checkpoint_interval_ms: None,
 
             checkpoint_summary_version_specific_data: None,
@@ -2243,6 +2256,8 @@ impl ProtocolConfig {
             gas_budget_based_txn_cost_cap_factor: None,
 
             gas_budget_based_txn_cost_absolute_cap_commit_count: None,
+
+            sip_45_consensus_amplification_threshold: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3075,6 +3090,12 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_uncompressed_g1_sum_max_terms = Some(1200);
 
                     cfg.validator_validate_metadata_cost_base = Some(20000);
+                }
+                71 => {
+                    cfg.sip_45_consensus_amplification_threshold = Some(5);
+
+                    // Enable bursts for congestion control. (10x the per-commit budget)
+                    cfg.allowed_txn_cost_overage_burst_per_object_in_commit = Some(185_000_000);
                 }
                 // Use this template when making changes:
                 //

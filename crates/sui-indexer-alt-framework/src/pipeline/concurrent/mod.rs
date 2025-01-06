@@ -5,15 +5,12 @@ use std::{sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use sui_field_count::FieldCount;
+use sui_pg_db::{self as db, Db};
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
-use crate::{
-    db::{self, Db},
-    metrics::IndexerMetrics,
-    watermarks::CommitterWatermark,
-};
+use crate::{metrics::IndexerMetrics, watermarks::CommitterWatermark};
 
 use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
 
@@ -65,9 +62,13 @@ pub trait Handler: Processor<Value: FieldCount> {
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>)
         -> anyhow::Result<usize>;
 
-    /// Clean up data between checkpoints `_from` and `_to` (inclusive) in the database, returning
+    /// Clean up data between checkpoints `_from` and `_to_exclusive` (exclusive) in the database, returning
     /// the number of rows affected. This function is optional, and defaults to not pruning at all.
-    async fn prune(_from: u64, _to: u64, _conn: &mut db::Connection<'_>) -> anyhow::Result<usize> {
+    async fn prune(
+        _from: u64,
+        _to_exclusive: u64,
+        _conn: &mut db::Connection<'_>,
+    ) -> anyhow::Result<usize> {
         Ok(0)
     }
 }
@@ -106,7 +107,10 @@ pub struct PrunerConfig {
 
 /// Values ready to be written to the database. This is an internal type used to communicate
 /// between the collector and the committer parts of the pipeline.
-struct Batched<H: Handler> {
+///
+/// Values inside each batch may or may not be from the same checkpoint. Values in the same
+/// checkpoint can also be split across multiple batches.
+struct BatchedRows<H: Handler> {
     /// The rows to write
     values: Vec<H::Value>,
     /// Proportions of all the watermarks that are represented in this chunk
@@ -123,7 +127,7 @@ impl PrunerConfig {
     }
 }
 
-impl<H: Handler> Batched<H> {
+impl<H: Handler> BatchedRows<H> {
     fn new() -> Self {
         Self {
             values: vec![],
@@ -257,5 +261,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 }
 
 const fn max_chunk_rows<H: Handler>() -> usize {
-    i16::MAX as usize / H::Value::FIELD_COUNT
+    if H::Value::FIELD_COUNT == 0 {
+        i16::MAX as usize
+    } else {
+        i16::MAX as usize / H::Value::FIELD_COUNT
+    }
 }

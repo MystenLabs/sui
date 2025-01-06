@@ -1,0 +1,6 @@
+{
+	"private": true,
+	"import": "../../dist/esm/keypairs/passkey/index.js",
+	"main": "../../dist/cjs/keypairs/passkey/index.js",
+	"sideEffects": false
+}

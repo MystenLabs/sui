@@ -13,7 +13,7 @@ use crate::execution_cache::build_execution_cache;
 use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::rest_index::RestIndexStore;
+use crate::rpc_index::RpcIndexStore;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
@@ -42,6 +42,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::transaction::VerifiedTransaction;
 
+use super::backpressure::BackpressureManager;
 use super::epoch_start_configuration::EpochFlag;
 
 #[derive(Default, Clone)]
@@ -229,11 +230,16 @@ impl<'a> TestAuthorityBuilder<'a> {
         .unwrap();
         let expensive_safety_checks = self.expensive_safety_checks.unwrap_or_default();
 
+        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+        let backpressure_manager =
+            BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
+
         let cache_traits = build_execution_cache(
             &Default::default(),
             &epoch_start_configuration,
             &registry,
             &authority_store,
+            backpressure_manager.clone(),
         );
 
         let epoch_store = AuthorityPerEpochStore::new(
@@ -256,7 +262,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
         ));
 
-        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
         if self.insert_genesis_checkpoint {
             checkpoint_store.insert_genesis_checkpoint(
                 genesis.checkpoint(),
@@ -277,11 +282,11 @@ impl<'a> TestAuthorityBuilder<'a> {
                 &authority_store,
             )))
         };
-        let rest_index = if self.disable_indexer {
+        let rpc_index = if self.disable_indexer {
             None
         } else {
-            Some(Arc::new(RestIndexStore::new(
-                path.join("rest_index"),
+            Some(Arc::new(RpcIndexStore::new(
+                &path,
                 &authority_store,
                 &checkpoint_store,
                 &epoch_store,
@@ -306,6 +311,8 @@ impl<'a> TestAuthorityBuilder<'a> {
         config.authority_overload_config = authority_overload_config;
         config.authority_store_pruning_config = pruning_config;
 
+        let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
+
         let state = AuthorityState::new(
             name,
             secret,
@@ -315,7 +322,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             epoch_store.clone(),
             committee_store,
             index_store,
-            rest_index,
+            rpc_index,
             checkpoint_store,
             &registry,
             genesis.objects(),
@@ -324,6 +331,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             usize::MAX,
             ArchiveReaderBalancer::default(),
             None,
+            chain_identifier,
         )
         .await;
 

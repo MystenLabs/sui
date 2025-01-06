@@ -59,7 +59,7 @@ spec:
         - name: RUST_BACKTRACE
           value: "1"
         - name: RUST_LOG
-          value: info,sui_core=debug,sui_network=debug,narwhal=info,consensus=debug,jsonrpsee=error
+          value: info,sui_core=debug,sui_network=debug,consensus=debug,jsonrpsee=error
         image: x
         imagePullPolicy: Always
         name: sui-node

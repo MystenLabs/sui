@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { SuiGraphQLClient } from '../../src/graphql';
-import { graphql } from '../../src/graphql/schemas/2024.4';
+import { graphql } from '../../src/graphql/schemas/latest';
 
 const queries = {
 	getFirstTransactionBlock: graphql(`

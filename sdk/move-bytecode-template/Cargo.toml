@@ -1,7 +1,7 @@
 [package]
 name = "move-bytecode-template"
 description = "WASM variant of the move-binary-format which allows bytecode templates"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 repository = "https://github.com/mystenlabs/sui.git"

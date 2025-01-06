@@ -37,7 +37,6 @@ export function useShowScamWarning({
 
 	return {
 		data,
-		isOpen: !!data?.block.enabled && !isError,
 		isPending,
 		isError,
 	};

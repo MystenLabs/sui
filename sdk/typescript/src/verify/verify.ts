@@ -7,17 +7,28 @@ import type { PublicKey, SignatureFlag, SignatureScheme } from '../cryptography/
 import { parseSerializedSignature, SIGNATURE_FLAG_TO_SCHEME } from '../cryptography/index.js';
 import type { SuiGraphQLClient } from '../graphql/client.js';
 import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
+import { PasskeyPublicKey } from '../keypairs/passkey/publickey.js';
 import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 // eslint-disable-next-line import/no-cycle
 import { MultiSigPublicKey } from '../multisig/publickey.js';
 import { ZkLoginPublicIdentifier } from '../zklogin/publickey.js';
 
-export async function verifySignature(bytes: Uint8Array, signature: string): Promise<PublicKey> {
+export async function verifySignature(
+	bytes: Uint8Array,
+	signature: string,
+	options?: {
+		address?: string;
+	},
+): Promise<PublicKey> {
 	const parsedSignature = parseSignature(signature);
 
 	if (!(await parsedSignature.publicKey.verify(bytes, parsedSignature.serializedSignature))) {
 		throw new Error(`Signature is not valid for the provided data`);
+	}
+
+	if (options?.address && !parsedSignature.publicKey.verifyAddress(options.address)) {
+		throw new Error(`Signature is not valid for the provided address`);
 	}
 
 	return parsedSignature.publicKey;
@@ -26,7 +37,7 @@ export async function verifySignature(bytes: Uint8Array, signature: string): Pro
 export async function verifyPersonalMessageSignature(
 	message: Uint8Array,
 	signature: string,
-	options: { client?: SuiGraphQLClient } = {},
+	options: { client?: SuiGraphQLClient; address?: string } = {},
 ): Promise<PublicKey> {
 	const parsedSignature = parseSignature(signature, options);
 
@@ -39,13 +50,17 @@ export async function verifyPersonalMessageSignature(
 		throw new Error(`Signature is not valid for the provided message`);
 	}
 
+	if (options?.address && !parsedSignature.publicKey.verifyAddress(options.address)) {
+		throw new Error(`Signature is not valid for the provided address`);
+	}
+
 	return parsedSignature.publicKey;
 }
 
 export async function verifyTransactionSignature(
 	transaction: Uint8Array,
 	signature: string,
-	options: { client?: SuiGraphQLClient } = {},
+	options: { client?: SuiGraphQLClient; address?: string } = {},
 ): Promise<PublicKey> {
 	const parsedSignature = parseSignature(signature, options);
 
@@ -56,6 +71,10 @@ export async function verifyTransactionSignature(
 		))
 	) {
 		throw new Error(`Signature is not valid for the provided Transaction`);
+	}
+
+	if (options?.address && !parsedSignature.publicKey.verifyAddress(options.address)) {
+		throw new Error(`Signature is not valid for the provided address`);
 	}
 
 	return parsedSignature.publicKey;
@@ -98,6 +117,8 @@ export function publicKeyFromRawBytes(
 			return new MultiSigPublicKey(bytes);
 		case 'ZkLogin':
 			return new ZkLoginPublicIdentifier(bytes, options);
+		case 'Passkey':
+			return new PasskeyPublicKey(bytes);
 		default:
 			throw new Error(`Unsupported signature scheme ${signatureScheme}`);
 	}

@@ -1094,7 +1094,7 @@ async fn test_dry_run_dev_inspect_max_gas_version() {
     let gas_object = Object::with_id_owner_version_for_testing(
         gas_object_id,
         SequenceNumber::from_u64(SequenceNumber::MAX.value() - 1),
-        sender,
+        Owner::AddressOwner(sender),
     );
     let gas_object_ref = gas_object.compute_object_reference();
     validator.insert_genesis_object(gas_object.clone()).await;
@@ -5736,6 +5736,7 @@ async fn test_consensus_handler_per_object_congestion_control(
     }
     protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(1000); // Set to a large number so that we don't hit this limit.
     protocol_config.set_max_txn_cost_overage_per_object_in_commit_for_testing(0);
+    protocol_config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(0);
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)
@@ -5949,8 +5950,16 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     let gas_objects = create_gas_objects(3, sender);
     let gas_objects_cancelled_txn = create_gas_objects(1, sender);
     let owned_objects_cancelled_txn = vec![
-        Object::with_id_owner_version_for_testing(ObjectID::random(), 1.into(), sender),
-        Object::with_id_owner_version_for_testing(ObjectID::random(), 2.into(), sender),
+        Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            1.into(),
+            Owner::AddressOwner(sender),
+        ),
+        Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            2.into(),
+            Owner::AddressOwner(sender),
+        ),
     ];
 
     // Create the cluster with controlled per object congestion control and cancellation.
@@ -5965,6 +5974,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(100_000_000);
     protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(2);
     protocol_config.set_max_txn_cost_overage_per_object_in_commit_for_testing(0);
+    protocol_config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(0);
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)

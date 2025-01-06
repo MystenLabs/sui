@@ -40,6 +40,7 @@ use crate::{
             AuthorityPerEpochStore, ConsensusStats, ConsensusStatsAPI, ExecutionIndices,
             ExecutionIndicesWithStats,
         },
+        backpressure::{BackpressureManager, BackpressureSubscriber},
         epoch_start_configuration::EpochStartConfigTrait,
         AuthorityMetrics, AuthorityState,
     },
@@ -57,6 +58,7 @@ pub struct ConsensusHandlerInitializer {
     epoch_store: Arc<AuthorityPerEpochStore>,
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
+    backpressure_manager: Arc<BackpressureManager>,
 }
 
 impl ConsensusHandlerInitializer {
@@ -66,6 +68,7 @@ impl ConsensusHandlerInitializer {
         epoch_store: Arc<AuthorityPerEpochStore>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
+        backpressure_manager: Arc<BackpressureManager>,
     ) -> Self {
         Self {
             state,
@@ -73,6 +76,7 @@ impl ConsensusHandlerInitializer {
             epoch_store,
             low_scoring_authorities,
             throughput_calculator,
+            backpressure_manager,
         }
     }
 
@@ -81,6 +85,7 @@ impl ConsensusHandlerInitializer {
         state: Arc<AuthorityState>,
         checkpoint_service: Arc<CheckpointService>,
     ) -> Self {
+        let backpressure_manager = BackpressureManager::new_for_tests();
         Self {
             state: state.clone(),
             checkpoint_service,
@@ -90,6 +95,7 @@ impl ConsensusHandlerInitializer {
                 None,
                 state.metrics.clone(),
             )),
+            backpressure_manager,
         }
     }
 
@@ -106,11 +112,16 @@ impl ConsensusHandlerInitializer {
             consensus_committee,
             self.state.metrics.clone(),
             self.throughput_calculator.clone(),
+            self.backpressure_manager.subscribe(),
         )
     }
 
     pub(crate) fn metrics(&self) -> &Arc<AuthorityMetrics> {
         &self.state.metrics
+    }
+
+    pub(crate) fn backpressure_subscriber(&self) -> BackpressureSubscriber {
+        self.backpressure_manager.subscribe()
     }
 }
 
@@ -138,6 +149,8 @@ pub struct ConsensusHandler<C> {
     transaction_manager_sender: TransactionManagerSender,
     /// Using the throughput calculator to record the current consensus throughput
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
+
+    backpressure_subscriber: BackpressureSubscriber,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -152,6 +165,7 @@ impl<C> ConsensusHandler<C> {
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
+        backpressure_subscriber: BackpressureSubscriber,
     ) -> Self {
         // Recover last_consensus_stats so it is consistent across validators.
         let mut last_consensus_stats = epoch_store
@@ -174,6 +188,7 @@ impl<C> ConsensusHandler<C> {
             processed_cache: LruCache::new(NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap()),
             transaction_manager_sender,
             throughput_calculator,
+            backpressure_subscriber,
         }
     }
 
@@ -190,6 +205,12 @@ impl<C> ConsensusHandler<C> {
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
+        // This may block until one of two conditions happens:
+        // - Number of uncommitted transactions in the writeback cache goes below the
+        //   backpressure threshold.
+        // - The highest executed checkpoint catches up to the highest certified checkpoint.
+        self.backpressure_subscriber.await_no_backpressure().await;
+
         let _scope = monitored_scope("ConsensusCommitHandler::handle_consensus_commit");
 
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
@@ -857,6 +878,8 @@ pub(crate) struct ConsensusTransactionHandler {
     epoch_store: Arc<AuthorityPerEpochStore>,
     /// Enqueues transactions to the transaction manager via a separate task.
     transaction_manager_sender: TransactionManagerSender,
+    /// Backpressure subscriber to wait for backpressure to be resolved.
+    backpressure_subscriber: BackpressureSubscriber,
     /// Metrics for consensus transaction handling.
     metrics: Arc<AuthorityMetrics>,
 }
@@ -865,12 +888,14 @@ impl ConsensusTransactionHandler {
     pub fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
         transaction_manager_sender: TransactionManagerSender,
+        backpressure_subscriber: BackpressureSubscriber,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         Self {
             enabled: epoch_store.protocol_config().mysticeti_fastpath(),
             epoch_store,
             transaction_manager_sender,
+            backpressure_subscriber,
             metrics,
         }
     }
@@ -879,10 +904,13 @@ impl ConsensusTransactionHandler {
         self.enabled
     }
 
+    #[instrument(level = "debug", skip_all)]
     pub async fn handle_consensus_transactions(
         &self,
         blocks_and_rejected_transactions: Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
     ) {
+        self.backpressure_subscriber.await_no_backpressure().await;
+
         let _scope = monitored_scope("ConsensusTransactionHandler::handle_consensus_transactions");
 
         let parsed_transactions = blocks_and_rejected_transactions
@@ -961,6 +989,7 @@ mod tests {
     use consensus_core::{
         BlockAPI, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction, VerifiedBlock,
     };
+    use futures::pin_mut;
     use prometheus::Registry;
     use sui_protocol_config::ConsensusTransactionOrdering;
     use sui_types::{
@@ -991,7 +1020,7 @@ mod tests {
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_consensus_commit_handler() {
         // GIVEN
         // 1 account keypair
@@ -1030,6 +1059,7 @@ mod tests {
 
         let throughput_calculator = ConsensusThroughputCalculator::new(None, metrics.clone());
 
+        let backpressure_manager = BackpressureManager::new_for_tests();
         let mut consensus_handler = ConsensusHandler::new(
             epoch_store,
             Arc::new(CheckpointServiceNoop {}),
@@ -1039,6 +1069,7 @@ mod tests {
             consensus_committee.clone(),
             metrics,
             Arc::new(throughput_calculator),
+            backpressure_manager.subscribe(),
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -1113,10 +1144,29 @@ mod tests {
             vec![],
         );
 
+        // Test that the consensus handler respects backpressure.
+        backpressure_manager.set_backpressure(true);
+        // Default watermarks are 0,0 which will suppress the backpressure.
+        backpressure_manager.update_highest_certified_checkpoint(1);
+
         // AND process the consensus commit once
-        consensus_handler
-            .handle_consensus_commit(committed_sub_dag.clone())
-            .await;
+        {
+            let waiter = consensus_handler.handle_consensus_commit(committed_sub_dag.clone());
+            pin_mut!(waiter);
+
+            // waiter should not complete within 5 seconds
+            tokio::time::timeout(std::time::Duration::from_secs(5), &mut waiter)
+                .await
+                .unwrap_err();
+
+            // lift backpressure
+            backpressure_manager.set_backpressure(false);
+
+            // waiter completes now.
+            tokio::time::timeout(std::time::Duration::from_secs(100), waiter)
+                .await
+                .unwrap();
+        }
 
         // THEN check the consensus stats
         let num_blocks = blocks.len();
@@ -1217,9 +1267,12 @@ mod tests {
             state.transaction_manager().clone(),
             epoch_store.clone(),
         );
+
+        let backpressure_manager = BackpressureManager::new_for_tests();
         let transaction_handler = ConsensusTransactionHandler::new(
             epoch_store,
             transaction_manager_sender,
+            backpressure_manager.subscribe(),
             state.metrics.clone(),
         );
 

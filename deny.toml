@@ -43,6 +43,8 @@ ignore = [
     "RUSTSEC-2024-0384",
     # allow unmaintained derivative crate used in transitive dependencies (ark-*)
     "RUSTSEC-2024-0388",
+    # allow outdated 'idna' until passkey-client crate is able to update
+    "RUSTSEC-2024-0421",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -75,6 +77,7 @@ allow = [
     "Unlicense",
     "BSL-1.0",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
     #"Apache-2.0 WITH LLVM-exception",
 ]
 # The confidence threshold for detecting a license from license text.

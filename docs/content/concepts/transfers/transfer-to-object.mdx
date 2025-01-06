@@ -33,10 +33,10 @@ If the object being transferred has the `key` ability only, then:
 // b and c are objects
 
 // Transfers the object `b` to the address 0xADD
-sui::transfer::public_transfer(b, @0xADD);
+transfer::public_transfer(b, @0xADD);
 
 // Transfers the object `c` to the object with object ID 0x0B
-sui::transfer::public_transfer(c, @0x0B);
+transfer::public_transfer(c, @0x0B);
 ```
 
 Transferring an object to an object ID results in the same result as if you transferred the object to an address - the object's owner is the 32-byte address or object ID provided. Additionally, because there is no difference in the result of the object transfer, you can use existing RPC methods such as `getOwnedObjects` on the 32-byte ID. If the ID represents an address, then the method returns the objects owned by that address. If the ID is an object ID, then the method returns the objects the object ID owns (transferred objects).
@@ -67,48 +67,48 @@ Transferring an object to an object ID results in the same result as if you tran
 
 After an object `c` has been sent to another object `p`, `p` must then receive `c` to do anything with it. To receive the object `c`, a `Receiving(o: ObjectRef)` argument type for programmable transaction blocks (PTBs) is used that takes an object reference containing the to-be-received object's `ObjectID`, `Version`, and `Digest` (just as owned object arguments for PTBs do). However, `Receiving` PTB arguments are not passed as an owned value or mutable reference within the transaction.
 
-To explain further, look at the core of the receiving interface in Move, which is defined in the `sui::transfer` module in the Sui framework:
+To explain further, look at the core of the receiving interface in Move, which is defined in the `transfer` module in the Sui framework:
 
 ```move
-module sui::transfer {
-    /// Represents the ability to receive an object of type `T`. Cannot be stored.
-    struct Receiving<phantom T: key> has drop { ... }
+module sui::transfer;
 
-    /// Given mutable (i.e., locked) access to the `parent` and a `Receiving`
-    /// object referencing an object owned by `parent` use the `Receiving` ticket
-    /// and return the corresponding object.
-    ///
-    /// This function has custom rules that the Sui Move bytecode verifier enforces to ensure
-    /// that `T` is an object defined in the module where `receive` is invoked. Use
-    /// `public_receive` to receive an object with `store` outside of its defining module.
-    ///
-    /// NB: &mut UID here allows the defining module of the parent type to
-    /// define custom access/permission policies around receiving objects sent
-    /// to objects of a type that it defines. You can see this more in the examples.
-    public native fun receive<T: key>(parent: &mut UID, object: Receiving<T>): T;
+/// Represents the ability to receive an object of type `T`. Cannot be stored.
+public struct Receiving<phantom T: key> has drop { ... }
 
-    /// Given mutable (locked) access to the `parent` and a `Receiving` argument
-    /// referencing an object of type `T` owned by `parent` use the `object`
-    /// argument to receive and return the referenced owned object of type `T`.
-    /// The object `T` must have `store` to be received by this function, and
-    /// this can be called outside of the module that defines `T`.
-    public native fun public_receive<T: key + store>(parent: &mut UID, object: Receiving<T>): T;
+/// Given mutable (i.e., locked) access to the `parent` and a `Receiving`
+/// object referencing an object owned by `parent` use the `Receiving` ticket
+/// and return the corresponding object.
+///
+/// This function has custom rules that the Sui Move bytecode verifier enforces to ensure
+/// that `T` is an object defined in the module where `receive` is invoked. Use
+/// `public_receive` to receive an object with `store` outside of its defining module.
+///
+/// NB: &mut UID here allows the defining module of the parent type to
+/// define custom access/permission policies around receiving objects sent
+/// to objects of a type that it defines. You can see this more in the examples.
+public native fun receive<T: key>(parent: &mut UID, object: Receiving<T>): T;
 
-    ...
-}
+/// Given mutable (locked) access to the `parent` and a `Receiving` argument
+/// referencing an object of type `T` owned by `parent` use the `object`
+/// argument to receive and return the referenced owned object of type `T`.
+/// The object `T` must have `store` to be received by this function, and
+/// this can be called outside of the module that defines `T`.
+public native fun public_receive<T: key + store>(parent: &mut UID, object: Receiving<T>): T;
+
+...
 ```
 
-Each Receiving argument referring to a sent object of type `T` in a PTB results in exactly one argument with a Move type of `sui::transfer::Receiving<T>`. You can then use this argument to receive the sent object of type `T` with the `sui::transfer::receive` function.
+Each Receiving argument referring to a sent object of type `T` in a PTB results in exactly one argument with a Move type of `sui::transfer::Receiving<T>`. You can then use this argument to receive the sent object of type `T` with the `transfer::receive` function.
 
-When you call the `sui::transfer::receive` function, you must pass a mutable reference to the parent object's `UID`. You can't get a mutable reference to the `UID` of an object, though, unless the defining module of the object exposes it. Consequently, the module that defines the type of the parent object that is receiving the child object defines access control policies and other restrictions on receiving objects that are sent to it. See the [authorization example](#receive-shared-example) for a demonstration of this pattern. The fact that the passed-in `UID` actually owns the object referenced by the `Receiving` parameter is dynamically checked and enforced. This allows access to objects that have been sent to, for example, dynamic fields where the ownership chain can only be established dynamically.
+When you call the `transfer::receive` function, you must pass a mutable reference to the parent object's `UID`. You can't get a mutable reference to the `UID` of an object, though, unless the defining module of the object exposes it. Consequently, the module that defines the type of the parent object that is receiving the child object defines access control policies and other restrictions on receiving objects that are sent to it. See the [authorization example](#receive-shared-example) for a demonstration of this pattern. The fact that the passed-in `UID` actually owns the object referenced by the `Receiving` parameter is dynamically checked and enforced. This allows access to objects that have been sent to, for example, dynamic fields where the ownership chain can only be established dynamically.
 
 Because `sui::transfer::Receiving` has only the `drop` ability, the existence of a `Receiving<T>` argument represents the ability, but not the obligation to receive the object of type `T` specified by the object reference in the PTB `Receiving` argument during that transaction. You can use some, none, or all `Receiving` arguments in a PTB without issue. Any object that corresponds to a `Receiving` argument remains untouched (in particular, its object reference remain the same) unless it is received.
 
 ## Custom receiving rules
 
-Just like with [custom transfer policies](./custom-rules.mdx), Sui allows for the definition of custom receivership rules for `key`-only objects. In particular, you can use the `sui::transfer::receive` function only on objects defined in the same module as the call to `sui::transfer::receive`--just like you can use the `sui::transfer::transfer` function only on objects defined in the module where it's being used.
+Just like with [custom transfer policies](./custom-rules.mdx), Sui allows for the definition of custom receivership rules for `key`-only objects. In particular, you can use the `transfer::receive` function only on objects defined in the same module as the call to `transfer::receive`--just like you can use the `transfer::transfer` function only on objects defined in the module where it's being used.
 
-Similarly for objects that also have the `store` ability, anyone can use the `sui::transfer::public_receive` function to receive them--just like `sui::transfer::public_transfer` can transfer any objects that have the `store` ability on them.
+Similarly for objects that also have the `store` ability, anyone can use the `transfer::public_receive` function to receive them--just like `transfer::public_transfer` can transfer any objects that have the `store` ability on them.
 
 This coupled with the fact that the parent object can always define custom rules around receivership means that you must consider the following matrix of permissions around receiving objects and the abilities of the object being sent based on the child object's abilities:
 
@@ -175,40 +175,43 @@ The following examples demonstrate receiving previously sent objects.
 
 Generally, if you want to allow receiving sent objects from shared objects that are defined in the module, add dynamic authorization checks; otherwise, anyone could receive sent objects. In this example, a shared object (`SharedObject`) holds a counter that anyone can increment, but only the address `0xB0B` can receive objects from the shared object.
 
-Because the `receive_object` function is generic over the object being received, it can only receive objects that are both `key` and `store`. `receive_object` must also use the `sui::transfer::public_receive` function to receive the object and not `sui::transfer::receive` because you can only use `receive` on objects defined in the current module.
+Because the `receive_object` function is generic over the object being received, it can only receive objects that are both `key` and `store`. `receive_object` must also use the `transfer::public_receive` function to receive the object and not `transfer::receive` because you can only use `receive` on objects defined in the current module.
 
 ```move
-module examples::shared_object_auth {
-    use sui::transfer::{Self, Receiving};
-    use sui::object;
-    use sui::tx_context::{Self, TxContext};
-    const EAccessDenied: u64 = 0;
-    const AuthorizedReceiverAddr: address = @0xB0B;
+module examples::shared_object_auth;
 
-    struct SharedObject has key {
-        id: object::UID,
-        counter: u64,
-    }
+use transfer::Receiving;
 
-    public fun create(ctx: &mut TxContext) {
-        let s = SharedObject {
-            id: object::new(ctx),
-            counter: 0,
-        };
-        transfer::share_object(s);
-    }
+const EAccessDenied: u64 = 0;
+const AuthorizedReceiverAddr: address = @0xB0B;
 
-    /// Anyone can increment the counter in the shared object.
-    public fun increment(obj: &mut SharedObject) {
-        obj.counter = obj.counter + 1;
-    }
+public struct SharedObject has key {
+    id: UID,
+    counter: u64,
+}
 
-    /// Objects can only be received from the `SharedObject` by the
-    /// `AuthorizedReceiverAddr` otherwise the transaction aborts.
-    public fun receive_object<T: key + store>(obj: &mut SharedObject, sent: Receiving<T>, ctx: &TxContext): T {
-        assert!(tx_context::sender(ctx) == AuthorizedReceiverAddr, EAccessDenied);
-        transfer::public_receive(&mut obj.id, sent)
-    }
+public fun create(ctx: &mut TxContext) {
+    let s = SharedObject {
+        id: object::new(ctx),
+        counter: 0,
+    };
+    transfer::share_object(s);
+}
+
+/// Anyone can increment the counter in the shared object.
+public fun increment(obj: &mut SharedObject) {
+    obj.counter = obj.counter + 1;
+}
+
+/// Objects can only be received from the `SharedObject` by the
+/// `AuthorizedReceiverAddr` otherwise the transaction aborts.
+public fun receive_object<T: key + store>(
+    obj: &mut SharedObject,
+    sent: Receiving<T>,
+    ctx: &TxContext
+): T {
+    assert!(ctx.sender() == AuthorizedReceiverAddr, EAccessDenied);
+    transfer::public_receive(&mut obj.id, sent)
 }
 ```
 
@@ -219,63 +222,61 @@ This example defines a basic account-type model where an `Account` object holds 
 Importantly, the address that coins are to be sent with this `Account` object remains the same regardless of whether the `Account` object is transferred, wrapped (for example, in an escrow account), or moved into a dynamic field. In particular, there is a stable ID for a given `Account` object across the object's lifecycle, regardless of any ownership changes.
 
 ```move
-module examples::account {
-    use sui::transfer::{Self, Receiving};
-    use sui::coin::{Self, Coin};
-    use sui::object;
-    use sui::dynamic_field as df;
-    use sui::tx_context::TxContext;
+module examples::account;
 
-    const EBalanceDONE: u64 = 1;
+use sui::dynamic_field as df;
+use sui::coin::{Self, Coin};
+use transfer::Receiving;
 
-    /// Account object that `Coin`s can be sent to. Balances of different types
-    /// are held as dynamic fields indexed by the `Coin` type's `type_name`.
-    struct Account has key {
-        id: object::UID,
-    }
+const EBalanceDONE: u64 = 1;
 
-    /// Dynamic field key representing a balance of a particular coin type.
-    struct AccountBalance<phantom T> has copy, drop, store { }
+/// Account object that `Coin`s can be sent to. Balances of different types
+/// are held as dynamic fields indexed by the `Coin` type's `type_name`.
+public struct Account has key {
+    id: UID,
+}
 
-    /// This function will receive a coin sent to the `Account` object and then
-    /// join it to the balance for each coin type.
-    /// Dynamic fields are used to index the balances by their coin type.
-    public fun accept_payment<T>(account: &mut Account, sent: Receiving<Coin<T>>) {
-        // Receive the coin that was sent to the `account` object
-        // Since `Coin` is not defined in this module, and since it has the `store`
-        // ability we receive the coin object using the `transfer::public_receive` function.
-        let coin = transfer::public_receive(&mut account.id, sent);
-        let account_balance_type = AccountBalance<T>{};
-        let account_uid = &mut account.id;
+/// Dynamic field key representing a balance of a particular coin type.
+public struct AccountBalance<phantom T> has copy, drop, store { }
 
-        // Check if a balance of that coin type already exists.
-        // If it does then merge the coin we just received into it,
-        // otherwise create new balance.
-        if (df::exists_(account_uid, account_balance_type)) {
-            let balance: &mut Coin<T> = df::borrow_mut(account_uid, account_balance_type);
-            coin::join(balance, coin);
-        } else {
-            df::add(account_uid, account_balance_type, coin);
-        }
-    }
+/// This function will receive a coin sent to the `Account` object and then
+/// join it to the balance for each coin type.
+/// Dynamic fields are used to index the balances by their coin type.
+public fun accept_payment<T>(account: &mut Account, sent: Receiving<Coin<T>>) {
+    // Receive the coin that was sent to the `account` object
+    // Since `Coin` is not defined in this module, and since it has the `store`
+    // ability we receive the coin object using the `transfer::public_receive` function.
+    let coin = transfer::public_receive(&mut account.id, sent);
+    let account_balance_type = AccountBalance<T>{};
+    let account_uid = &mut account.id;
 
-    /// Withdraw `amount` of coins of type `T` from `account`.
-    public fun withdraw<T>(account: &mut Account, amount: u64, ctx: &mut TxContext): Coin<T> {
-        let account_balance_type = AccountBalance<T>{};
-        let account_uid = &mut account.id;
-        // Make sure what we are withdrawing exists
-        assert!(df::exists_(account_uid, account_balance_type), EBalanceDONE);
+    // Check if a balance of that coin type already exists.
+    // If it does then merge the coin we just received into it,
+    // otherwise create new balance.
+    if (df::exists_(account_uid, account_balance_type)) {
         let balance: &mut Coin<T> = df::borrow_mut(account_uid, account_balance_type);
-        coin::split(balance, amount, ctx)
+        balance.join(coin);
+    } else {
+        df::add(account_uid, account_balance_type, coin);
     }
+}
 
-    /// Can transfer this account to a different address
-    /// (e.g., to an object or address).
-    public fun transfer_account(account: Account, to: address, _ctx: &mut TxContext) {
-        // Perform some authorization checks here and if they pass then transfer the account
-        // ...
-        transfer::transfer(account, to);
-    }
+/// Withdraw `amount` of coins of type `T` from `account`.
+public fun withdraw<T>(account: &mut Account, amount: u64, ctx: &mut TxContext): Coin<T> {
+    let account_balance_type = AccountBalance<T>{};
+    let account_uid = &mut account.id;
+    // Make sure what we are withdrawing exists
+    assert!(df::exists_(account_uid, account_balance_type), EBalanceDONE);
+    let balance: &mut Coin<T> = df::borrow_mut(account_uid, account_balance_type);
+    balance.split(amount, ctx)
+}
+
+/// Can transfer this account to a different address
+/// (e.g., to an object or address).
+public fun transfer_account(account: Account, to: address, _ctx: &mut TxContext) {
+    // Perform some authorization checks here and if they pass then transfer the account
+    // ...
+    transfer::transfer(account, to);
 }
 ```
 
@@ -286,52 +287,51 @@ The ability to control the rules about how and when an object can be received, a
 You can implement a simple version of this with the following module where the `get_object` function receives the soul-bound object and creates a receipt that must be destroyed in the transaction in order for it to execute successfully. However, in order to destroy the receipt, the object that was received must be transferred back to the object it was received from in the transaction using the `return_object` function.
 
 ```move
-module examples::soul_bound {
-    use sui::transfer::{Self, Receiving};
-    use sui::object::{Self, UID, ID};
+module examples::soul_bound;
 
-    /// This object has `key` only  -- if this had `store` we would not be
-    /// able to ensure it is bound to whatever address we sent it to
-    struct SoulBound has key {
-        id: UID,
-    }
+use transfer::{Self, Receiving};
 
-    /// A non-store, non-drop, non-copy struct. When you receive a `SoulBound`
-    /// object, we'll also give you one of these. In order to successfully
-    /// execute the transaction you need to destroy this `ReturnReceipt` and
-    /// the only way to do that is to transfer it back to the same object you
-    /// received it from in the transaction using the `return_object` function.
-    struct ReturnReceipt {
-        // The object ID of the object that needs to be returned.
-        // This field is required to prevent swapping of soul bound objects if
-        // multiple are present in the same transaction.
-        object_id: ID,
-        // The address (object ID) it needs to be returned to.
-        return_to: address,
-    }
+/// Tried to return the wrong object.
+const EWrongObject: u64 = 0;
 
-    /// Tried to return the wrong object.
-    const EWrongObject: u64 = 0;
+/// This object has `key` only  -- if this had `store` we would not be
+/// able to ensure it is bound to whatever address we sent it to
+public struct SoulBound has key {
+    id: UID,
+}
 
-    /// Takes the object UID that owns the `SoulBound` object and a `SoulBound`
-    /// receiving ticket. It then receives the `SoulBound` object and returns a
-    /// `ReturnReceipt` that must be destroyed in the transaction by calling `return_object`.
-    public fun get_object(parent: &mut UID, soul_bound_ticket: Receiving<SoulBound>): (SoulBound, ReturnReceipt) {
-        let soul_bound = transfer::receive(parent, soul_bound_ticket);
-        let return_receipt = ReturnReceipt {
-            return_to: object::uid_to_address(parent),
-            object_id: object::id(&soul_bound),
-        };
-        (soul_bound, return_receipt)
-    }
+/// A non-store, non-drop, non-copy struct. When you receive a `SoulBound`
+/// object, we'll also give you one of these. In order to successfully
+/// execute the transaction you need to destroy this `ReturnReceipt` and
+/// the only way to do that is to transfer it back to the same object you
+/// received it from in the transaction using the `return_object` function.
+public struct ReturnReceipt {
+    /// The object ID of the object that needs to be returned.
+    /// This field is required to prevent swapping of soul bound objects if
+    /// multiple are present in the same transaction.
+    object_id: ID,
+    /// The address (object ID) it needs to be returned to.
+    return_to: address,
+}
 
-    /// Given a `SoulBound` object and a return receipt returns it to the
-    /// object it was received from. Verifies that the `receipt`
-    /// is for the given `soul_bound` object before returning it.
-    public fun return_object(soul_bound: SoulBound, receipt: ReturnReceipt) {
-        let ReturnReceipt { return_to, object_id }  = receipt;
-        assert!(object::id(&soul_bound) == object_id, EWrongObject);
-        sui::transfer::transfer(soul_bound, return_to);
-    }
+/// Takes the object UID that owns the `SoulBound` object and a `SoulBound`
+/// receiving ticket. It then receives the `SoulBound` object and returns a
+/// `ReturnReceipt` that must be destroyed in the transaction by calling `return_object`.
+public fun get_object(parent: &mut UID, soul_bound_ticket: Receiving<SoulBound>): (SoulBound, ReturnReceipt) {
+    let soul_bound = transfer::receive(parent, soul_bound_ticket);
+    let return_receipt = ReturnReceipt {
+        return_to: parent.to_address(),
+        object_id: object::id(&soul_bound),
+    };
+    (soul_bound, return_receipt)
+}
+
+/// Given a `SoulBound` object and a return receipt returns it to the
+/// object it was received from. Verifies that the `receipt`
+/// is for the given `soul_bound` object before returning it.
+public fun return_object(soul_bound: SoulBound, receipt: ReturnReceipt) {
+    let ReturnReceipt { return_to, object_id }  = receipt;
+    assert!(object::id(&soul_bound) == object_id, EWrongObject);
+    transfer::transfer(soul_bound, return_to);
 }
 ```

@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use sui_pg_db::Db;
 use tokio::{
     task::JoinHandle,
     time::{interval, MissedTickBehavior},
@@ -11,20 +12,23 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    db::Db, metrics::IndexerMetrics, pipeline::LOUD_WATERMARK_UPDATE_INTERVAL,
+    metrics::IndexerMetrics,
+    pipeline::logging::{LoggerWatermark, WatermarkLogger},
     watermarks::PrunerWatermark,
 };
 
 use super::{Handler, PrunerConfig};
 
 /// The pruner task is responsible for deleting old data from the database. It will periodically
-/// check the `watermarks` table to see if there is any data that should be pruned -- between
-/// `pruner_hi` (inclusive), and `reader_lo` (exclusive).
+/// check the `watermarks` table to see if there is any data that should be pruned between the
+/// `pruner_hi` (inclusive), and `reader_lo` (exclusive) checkpoints. This task will also provide a
+/// mapping of the pruned checkpoints to their corresponding epoch and tx, which the handler can
+/// then use to delete the corresponding data from the database.
 ///
 /// To ensure that the pruner does not interfere with reads that are still in flight, it respects
 /// the watermark's `pruner_timestamp`, which records the time that `reader_lo` was last updated.
-/// The task will not prune data until at least `config.delay()` has passed since
-/// `pruner_timestamp` to give in-flight reads time to land.
+/// The task will not prune data until at least `config.delay()` has passed since `pruner_timestamp`
+/// to give in-flight reads time to land.
 ///
 /// The task regularly traces its progress, outputting at a higher log level every
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
@@ -51,7 +55,7 @@ pub(super) fn pruner<H: Handler + 'static>(
 
         // The pruner task will periodically output a log message at a higher log level to
         // demonstrate that it is making progress.
-        let mut next_loud_watermark_update = 0;
+        let mut logger = WatermarkLogger::new("pruner", LoggerWatermark::default());
 
         'outer: loop {
             // (1) Get the latest pruning bounds from the database.
@@ -107,7 +111,7 @@ pub(super) fn pruner<H: Handler + 'static>(
 
             // (3) Prune chunk by chunk to avoid the task waiting on a long-running database
             // transaction, between tests for cancellation.
-            while !watermark.is_empty() {
+            while let Some((from, to_exclusive)) = watermark.next_chunk(config.max_chunk_size) {
                 if cancel.is_cancelled() {
                     info!(pipeline = H::NAME, "Shutdown received");
                     break 'outer;
@@ -131,11 +135,10 @@ pub(super) fn pruner<H: Handler + 'static>(
                     break;
                 };
 
-                let (from, to) = watermark.next_chunk(config.max_chunk_size);
-                let affected = match H::prune(from, to, &mut conn).await {
+                let affected = match H::prune(from, to_exclusive, &mut conn).await {
                     Ok(affected) => {
                         guard.stop_and_record();
-                        watermark.pruner_hi = to as i64;
+                        watermark.pruner_hi = to_exclusive as i64;
                         affected
                     }
 
@@ -186,37 +189,16 @@ pub(super) fn pruner<H: Handler + 'static>(
                     )
                 }
 
-                Ok(updated) => {
+                Ok(true) => {
                     let elapsed = guard.stop_and_record();
+                    logger.log::<H>(&watermark, elapsed);
 
-                    if updated {
-                        metrics
-                            .watermark_pruner_hi_in_db
-                            .with_label_values(&[H::NAME])
-                            .set(watermark.pruner_hi);
-                    }
-
-                    if watermark.pruner_hi > next_loud_watermark_update {
-                        next_loud_watermark_update =
-                            watermark.pruner_hi + LOUD_WATERMARK_UPDATE_INTERVAL;
-
-                        info!(
-                            pipeline = H::NAME,
-                            pruner_hi = watermark.pruner_hi,
-                            updated,
-                            elapsed_ms = elapsed * 1000.0,
-                            "Watermark"
-                        );
-                    } else {
-                        debug!(
-                            pipeline = H::NAME,
-                            pruner_hi = watermark.pruner_hi,
-                            updated,
-                            elapsed_ms = elapsed * 1000.0,
-                            "Watermark"
-                        );
-                    }
+                    metrics
+                        .watermark_pruner_hi_in_db
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.pruner_hi);
                 }
+                Ok(false) => {}
             }
         }
 

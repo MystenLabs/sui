@@ -55,6 +55,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 
 use self::metrics::CheckpointExecutorMetrics;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::backpressure::BackpressureManager;
 use crate::authority::AuthorityState;
 use crate::checkpoints::checkpoint_executor::data_ingestion_handler::{
     load_checkpoint_data, store_checkpoint_locally,
@@ -68,9 +69,6 @@ use crate::{
 
 mod data_ingestion_handler;
 pub mod metrics;
-
-#[cfg(test)]
-pub(crate) mod tests;
 
 type CheckpointExecutionBuffer = FuturesOrdered<
     JoinHandle<(
@@ -146,6 +144,7 @@ pub struct CheckpointExecutor {
     transaction_cache_reader: Arc<dyn TransactionCacheRead>,
     tx_manager: Arc<TransactionManager>,
     accumulator: Arc<StateAccumulator>,
+    backpressure_manager: Arc<BackpressureManager>,
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
 }
@@ -156,6 +155,7 @@ impl CheckpointExecutor {
         checkpoint_store: Arc<CheckpointStore>,
         state: Arc<AuthorityState>,
         accumulator: Arc<StateAccumulator>,
+        backpressure_manager: Arc<BackpressureManager>,
         config: CheckpointExecutorConfig,
         metrics: Arc<CheckpointExecutorMetrics>,
     ) -> Self {
@@ -167,6 +167,7 @@ impl CheckpointExecutor {
             transaction_cache_reader: state.get_transaction_cache_reader().clone(),
             tx_manager: state.transaction_manager().clone(),
             accumulator,
+            backpressure_manager,
             config,
             metrics,
         }
@@ -183,6 +184,7 @@ impl CheckpointExecutor {
             checkpoint_store,
             state,
             accumulator,
+            BackpressureManager::new_for_tests(),
             Default::default(),
             CheckpointExecutorMetrics::new_for_tests(),
         )
@@ -305,6 +307,7 @@ impl CheckpointExecutor {
                     let _process_scope = mysten_metrics::monitored_scope("ProcessExecutedCheckpoint");
 
                     self.process_executed_checkpoint(&epoch_store, &checkpoint, checkpoint_acc, &tx_digests).await;
+                    self.backpressure_manager.update_highest_executed_checkpoint(*checkpoint.sequence_number());
                     highest_executed = Some(checkpoint.clone());
 
                     // Estimate TPS every 10k transactions or 30 sec
@@ -333,6 +336,9 @@ impl CheckpointExecutor {
                             "Received checkpoint summary from state sync"
                         );
                         checkpoint.report_checkpoint_age(&self.metrics.checkpoint_contents_age, &self.metrics.checkpoint_contents_age_ms);
+                        // Note: checkpoints arrive in increasing order by sequence number, but they are not
+                        // necessarily consecutive.
+                        self.backpressure_manager.update_highest_certified_checkpoint(*checkpoint.sequence_number());
                     },
                     Err(RecvError::Lagged(num_skipped)) => {
                         debug!(
@@ -1309,7 +1315,7 @@ async fn finalize_checkpoint(
     let checkpoint_acc =
         accumulator.accumulate_checkpoint(effects, checkpoint.sequence_number, epoch_store)?;
 
-    if data_ingestion_dir.is_some() || state.rest_index.is_some() {
+    if data_ingestion_dir.is_some() || state.rpc_index.is_some() {
         let checkpoint_data = load_checkpoint_data(
             checkpoint,
             object_cache_reader,
@@ -1320,12 +1326,12 @@ async fn finalize_checkpoint(
 
         // TODO(bmwill) discuss with team a better location for this indexing so that it isn't on
         // the critical path and the writes to the DB are done in checkpoint order
-        if let Some(rest_index) = &state.rest_index {
+        if let Some(rpc_index) = &state.rpc_index {
             let mut layout_resolver = epoch_store.executor().type_layout_resolver(Box::new(
                 PackageStoreWithFallback::new(state.get_backing_package_store(), &checkpoint_data),
             ));
 
-            rest_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut())?;
+            rpc_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut())?;
         }
 
         if let Some(path) = data_ingestion_dir {

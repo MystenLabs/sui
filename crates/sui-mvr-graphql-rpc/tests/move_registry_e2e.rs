@@ -15,7 +15,7 @@ use sui_mvr_graphql_rpc::{
         wait_for_graphql_checkpoint_catchup, wait_for_graphql_server, NetworkCluster,
     },
 };
-use sui_pg_temp_db::get_available_port;
+use sui_pg_db::temp::get_available_port;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::ObjectDigest,

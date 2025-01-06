@@ -25,6 +25,7 @@ mod test {
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
     use sui_config::node::AuthorityOverloadConfig;
+    use sui_config::ExecutionCacheConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
@@ -475,7 +476,8 @@ mod test {
         let max_deferral_rounds;
         let cap_factor_denominator;
         let absolute_cap_factor;
-        let allow_overage_factor;
+        let mut allow_overage_factor = 0;
+        let mut burst_limit_factor = 0;
         let separate_randomness_budget;
         {
             let mut rng = thread_rng();
@@ -493,13 +495,14 @@ mod test {
             } else {
                 rng.gen_range(1000..10000) // Large deferral round (testing liveness)
             };
-            allow_overage_factor = if rng.gen_bool(0.5) {
-                0
-            } else {
-                rng.gen_range(1..100)
-            };
+            if rng.gen_bool(0.5) {
+                allow_overage_factor = rng.gen_range(1..100);
+            }
             cap_factor_denominator = rng.gen_range(1..100);
             absolute_cap_factor = rng.gen_range(2..50);
+            if allow_overage_factor > 1 && rng.gen_bool(0.5) {
+                burst_limit_factor = rng.gen_range(1..allow_overage_factor);
+            }
             separate_randomness_budget = rng.gen_bool(0.5);
         }
 
@@ -507,7 +510,9 @@ mod test {
             "test_simulated_load_shared_object_congestion_control setup.
              mode: {mode:?}, checkpoint_budget_factor: {checkpoint_budget_factor:?},
              max_deferral_rounds: {max_deferral_rounds:?},
-             txn_count_limit: {txn_count_limit:?}, allow_overage_factor: {allow_overage_factor:?},
+             txn_count_limit: {txn_count_limit:?},
+             allow_overage_factor: {allow_overage_factor:?},
+             burst_limit_factor: {burst_limit_factor:?},
              cap_factor_denominator: {cap_factor_denominator:?},
              absolute_cap_factor: {absolute_cap_factor:?},
              separate_randomness_budget: {separate_randomness_budget:?}",
@@ -543,6 +548,9 @@ mod test {
             config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
                 allow_overage_factor * total_gas_limit,
             );
+            config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
+                burst_limit_factor * total_gas_limit,
+            );
             if separate_randomness_budget {
                 config
                 .set_max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_for_testing(
@@ -572,17 +580,20 @@ mod test {
             // Use shared_counter_max_tip to make transactions to have different gas prices.
             simulated_load_config.use_shared_counter_max_tip = rng.gen_bool(0.25);
             simulated_load_config.shared_counter_max_tip = rng.gen_range(1..=1000);
+
+            // Always enable the randomized tx workload in this test.
+            simulated_load_config.randomized_transaction_weight = 1;
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
-        test_simulated_load_with_test_config(test_cluster, 50, simulated_load_config, None, None)
+        test_simulated_load_with_test_config(test_cluster, 180, simulated_load_config, None, None)
             .await;
     }
 
     // Tests cluster defense against failing transaction floods Traffic Control
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_expected_failure_traffic_control() {
-        // TODO: can we get away with significatly increasing this?
+        // TODO: can we get away with significantly increasing this?
         let target_qps = get_var("SIM_STRESS_TEST_QPS", 10);
         let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
 
@@ -651,7 +662,7 @@ mod test {
     async fn test_data_ingestion_pipeline() {
         let path = nondeterministic!(TempDir::new().unwrap()).into_path();
         let test_cluster = Arc::new(
-            init_test_cluster_builder(4, 1000)
+            init_test_cluster_builder(4, 5000)
                 .with_data_ingestion_dir(path.clone())
                 .build()
                 .await,
@@ -879,6 +890,54 @@ mod test {
         test_simulated_load(test_cluster, 60).await
     }
 
+    #[sim_test(config = "test_config()")]
+    async fn test_backpressure() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let mut cache_config: ExecutionCacheConfig = Default::default();
+        // make sure we don't halt even with absurdly low backpressure threshold
+        // To validate this, change backpressure::Watermarks::is_backpressure_suppressed() to
+        // always return false and verify the test fails.
+        match &mut cache_config {
+            ExecutionCacheConfig::WritebackCache {
+                backpressure_threshold,
+                backpressure_threshold_for_rpc,
+                ..
+            } => {
+                *backpressure_threshold = Some(1);
+                // for the tests to pass we still need to be able to submit transactions
+                // during backpressure.
+                *backpressure_threshold_for_rpc = Some(10000);
+            }
+            _ => panic!(),
+        }
+
+        let test_cluster = init_test_cluster_builder(4, 10000)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                // Disable system overload checks for the test - during tests with crashes,
+                // it is possible for overload protection to trigger due to validators
+                // having queued certs which are missing dependencies.
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                max_txn_age_in_queue: Duration::from_secs(10000),
+                max_transaction_manager_queue_length: 10000,
+                max_transaction_manager_per_object_queue_length: 10000,
+                ..Default::default()
+            })
+            .with_execution_cache_config(cache_config)
+            .with_submit_delay_step_override_millis(3000)
+            .build()
+            .await
+            .into();
+
+        tokio::time::timeout(
+            Duration::from_secs(120),
+            test_simulated_load(test_cluster, 60),
+        )
+        .await
+        .expect("test_backpressure timed out");
+    }
+
     fn handle_bool_failpoint(
         eligible_nodes: &HashSet<sui_simulator::task::NodeId>, // only given eligible nodes may fail
         probability: f64,
@@ -947,6 +1006,7 @@ mod test {
         shared_deletion_weight: u32,
         shared_counter_hotness_factor: u32,
         randomness_weight: u32,
+        randomized_transaction_weight: u32,
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
@@ -965,6 +1025,7 @@ mod test {
                 shared_deletion_weight: 1,
                 shared_counter_hotness_factor: 50,
                 randomness_weight: 1,
+                randomized_transaction_weight: 0,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
@@ -1023,7 +1084,7 @@ mod test {
 
         // The default test parameters are somewhat conservative in order to keep the running time
         // of the test reasonable in CI.
-        let target_qps = target_qps.unwrap_or(get_var("SIM_STRESS_TEST_QPS", 10));
+        let target_qps = target_qps.unwrap_or(get_var("SIM_STRESS_TEST_QPS", 20));
         let num_workers = num_workers.unwrap_or(get_var("SIM_STRESS_TEST_WORKERS", 10));
         let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
         let batch_payment_size = get_var("SIM_BATCH_PAYMENT_SIZE", 15);
@@ -1053,6 +1114,7 @@ mod test {
             randomness: config.randomness_weight,
             adversarial: adversarial_weight,
             expected_failure: config.expected_failure_weight,
+            randomized_transaction: config.randomized_transaction_weight,
         };
 
         let workload_config = WorkloadConfig {

@@ -12,12 +12,9 @@ It has 9 decimals, and the smallest unit (10^-9) is called "mist".
 -  [Function `transfer`](#0x2_sui_transfer)
 
 
-<pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
-<b>use</b> <a href="../sui-framework/balance.md#0x2_balance">0x2::balance</a>;
+<pre><code><b>use</b> <a href="../sui-framework/balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="../sui-framework/coin.md#0x2_coin">0x2::coin</a>;
-<b>use</b> <a href="../sui-framework/transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
-<b>use</b> <a href="../sui-framework/url.md#0x2_url">0x2::url</a>;
 </code></pre>
 
 
@@ -60,7 +57,7 @@ Name of the coin
 Sender is not @0x0 the system address.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_ENotSystemAddress">ENotSystemAddress</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
+<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_ENotSystemAddress">ENotSystemAddress</a>: u64 = 1;
 </code></pre>
 
 
@@ -69,7 +66,7 @@ Sender is not @0x0 the system address.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_EAlreadyMinted">EAlreadyMinted</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
+<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_EAlreadyMinted">EAlreadyMinted</a>: u64 = 0;
 </code></pre>
 
 
@@ -80,7 +77,7 @@ The amount of Mist per Sui token based on the fact that mist is
 10^-9 of a Sui token
 
 
-<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_MIST_PER_SUI">MIST_PER_SUI</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1000000000;
+<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_MIST_PER_SUI">MIST_PER_SUI</a>: u64 = 1000000000;
 </code></pre>
 
 
@@ -90,7 +87,7 @@ The amount of Mist per Sui token based on the fact that mist is
 The total supply of Sui denominated in Mist (10 Billion * 10^9)
 
 
-<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 10000000000000000000;
+<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>: u64 = 10000000000000000000;
 </code></pre>
 
 
@@ -100,7 +97,7 @@ The total supply of Sui denominated in Mist (10 Billion * 10^9)
 The total supply of Sui denominated in whole Sui tokens (10 Billion)
 
 
-<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_TOTAL_SUPPLY_SUI">TOTAL_SUPPLY_SUI</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 10000000000;
+<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_TOTAL_SUPPLY_SUI">TOTAL_SUPPLY_SUI</a>: u64 = 10000000000;
 </code></pre>
 
 
