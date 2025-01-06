@@ -83,9 +83,12 @@ impl RpcService {
 
         let grpc_router = {
             grpc::Services::new()
-                .add_service(crate::proto::node::node_server::NodeServer::new(
-                    self.clone(),
-                ))
+                .add_service(
+                    crate::proto::node::node_server::NodeServer::new(self.clone())
+                        // Set a max message size of 10MB as some checkpoints
+                        // can be quite large.
+                        .max_decoding_message_size(10 * 1024 * 1024),
+                )
                 .into_router()
         };
 
