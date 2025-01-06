@@ -1,0 +1,65 @@
+`---
+title: Sui Move Prover
+
+---
+
+The Sui Move Prover is a tool for verifying the correctness of Move smart contracts on the Sui blockchain. It is based on the Boogie verification engine and the Z3 SMT solver.
+
+## The `prover` module
+
+The `prover` module is a spec-only module that provides the building blocks for writing specifications.
+
+### Function `requires`
+
+The `requires` function is used to specify the conditions which are assumed to hold on the arguments of the function.
+
+```move
+requires(shares_in.value() <= pool.shares.supply_value());
+```
+
+### Function `ensures`
+
+The `ensures` function is used to specify the conditions which must hold as an effect of the function call.
+
+```move
+ensures(new_shares.mul(old_balance).lte(old_shares.mul(new_balance)));
+```
+
+### Function `asserts`
+
+The `asserts` function is used to specify conditions that must always hold.
+
+```move
+asserts(shares_in.value() <= pool.shares.supply_value());
+```
+
+### Macro `old`
+
+The `old` macro is used to refer to the state of an object before the function call.
+
+```move
+let old_pool = old!(pool);
+```
+
+## Attributes
+
+### `#[spec]` of a function
+
+The `spec` attribute is used to specify that a function is a specification.
+
+When the `spec` attribute is on a function called `<function_name>_spec`, the Move Prover will use the specification instead of the original function when verifying other functions that call `<function_name>`.
+
+In this case the spec function must:
+
+1. have the same name as the original function, but with `_spec` appended -- if this is not the case, the spec will only be used for checking a scenario (see below)
+2. have the same signature as the original function
+3. call the original function -- the value returned by the spec is usually the value returned by the original function, but this is not required
+
+### `#[spec]` as a spec of a scenario
+
+The `#[spec]` attribute can be used to specify a scenario that can be checked by the Move Prover. In this case there are no restrictions on the name and signature of the spec function.
+
+### `#[spec(verify)]`
+
+The `#[spec(verify)]` attribute is used to specify that a function is a specification that should be verified by the Move Prover.
+We envision using other attributes in the future to indicate other ways of checking a scenario, like fuzzing.
