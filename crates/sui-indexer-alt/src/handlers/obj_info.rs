@@ -91,6 +91,8 @@ impl Processor for ObjInfo {
 
 #[async_trait::async_trait]
 impl Handler for ObjInfo {
+    const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
+
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
         let stored = values
             .iter()
