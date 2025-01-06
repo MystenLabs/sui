@@ -21,17 +21,17 @@ chrono.workspace = true
 tap.workspace = true
 bcs.workspace = true
 
-sui-config = { path = "../sui-config" }
-sui-json-rpc-types = { path = "../sui-json-rpc-types" }
-sui-sdk = { path = "../sui-sdk" }
-sui-types = { path = "../sui-types" }
-mysten-metrics = { path = "../mysten-metrics" }
+sui-config.workspace = true
+sui-json-rpc-types.workspace = true
+sui-sdk.workspace = true
+sui-types.workspace = true
+mysten-metrics.workspace = true
 telemetry-subscribers.workspace = true
 
 [dev-dependencies]
-sui-keys = { path = "../sui-keys" }
-sui-move-build = { path = "../sui-move-build" }
-shared-crypto = { path = "../shared-crypto" }
+sui-keys.workspace = true
+sui-move-build.workspace = true
+shared-crypto.workspace = true
 bcs = "0.1.5"
 rand = "0.8.5"
 dirs = "4.0.0"

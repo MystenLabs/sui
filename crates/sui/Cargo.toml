@@ -54,7 +54,7 @@ url.workspace = true
 sui-config.workspace = true
 sui-bridge.workspace = true
 sui-cluster-test.workspace = true
-sui-execution = { path = "../../sui-execution" }
+sui-execution.workspace = true
 sui-faucet.workspace = true
 sui-swarm-config.workspace = true
 sui-graphql-rpc.workspace = true
