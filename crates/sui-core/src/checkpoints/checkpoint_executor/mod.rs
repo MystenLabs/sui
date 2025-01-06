@@ -588,13 +588,13 @@ impl CheckpointExecutor {
 
         if change_epoch_tx.contains_shared_object() {
             epoch_store
-                .acquire_shared_locks_from_effects(
+                .acquire_shared_version_assignments_from_effects(
                     &change_epoch_tx,
                     &change_epoch_fx,
                     self.object_cache_reader.as_ref(),
                 )
                 .await
-                .expect("Acquiring shared locks for change_epoch tx cannot fail");
+                .expect("Acquiring shared version assignments for change_epoch tx cannot fail");
         }
 
         self.tx_manager.enqueue_with_expected_effects_digest(
@@ -1237,7 +1237,7 @@ async fn execute_transactions(
     for (tx, _) in &executable_txns {
         if tx.contains_shared_object() {
             epoch_store
-                .acquire_shared_locks_from_effects(
+                .acquire_shared_version_assignments_from_effects(
                     tx,
                     digest_to_effects.get(tx.digest()).unwrap(),
                     object_cache_reader,

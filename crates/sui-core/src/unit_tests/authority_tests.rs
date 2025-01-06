@@ -44,7 +44,6 @@ use sui_types::messages_consensus::{
 use sui_types::object::Data;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
-use sui_types::storage::GetSharedLocks;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::utils::{
@@ -4582,9 +4581,9 @@ async fn test_shared_object_transaction_ok() {
     // Verify shared locks are now set for the transaction.
     let shared_object_version = authority
         .epoch_store_for_testing()
-        .get_shared_locks(&certificate.key())
-        .expect("Reading shared locks should not fail")
-        .expect("Locks should be set")
+        .get_assigned_shared_object_versions(&certificate.key())
+        .expect("Reading shared version assignments should not fail")
+        .expect("Versions should be set")
         .into_iter()
         .find_map(|((object_id, initial_shared_version), version)| {
             if object_id == shared_object_id
@@ -4595,7 +4594,7 @@ async fn test_shared_object_transaction_ok() {
                 None
             }
         })
-        .expect("Shared object must be locked");
+        .expect("Shared object must be assigned a version");
     assert_eq!(shared_object_version, OBJECT_START_VERSION);
 
     // Finally (Re-)execute the contract should succeed.
@@ -4700,9 +4699,9 @@ async fn test_consensus_commit_prologue_generation() {
     let get_assigned_version = |txn_key: &TransactionKey| -> SequenceNumber {
         authority_state
             .epoch_store_for_testing()
-            .get_shared_locks(txn_key)
+            .get_assigned_shared_object_versions(txn_key)
             .unwrap()
-            .expect("locks should be set")
+            .expect("versions should be set")
             .iter()
             .filter_map(|((id, initial_shared_version), seq)| {
                 if id == &SUI_CLOCK_OBJECT_ID
@@ -4808,7 +4807,7 @@ async fn test_consensus_message_processed() {
         } else {
             let epoch_store = authority2.epoch_store_for_testing();
             epoch_store
-                .acquire_shared_locks_from_effects(
+                .acquire_shared_version_assignments_from_effects(
                     &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
                     &effects1,
                     authority2.get_object_cache_reader().as_ref(),
@@ -6071,9 +6070,9 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // Check cancelled transaction shared locks.
     let shared_object_version = authority
         .epoch_store_for_testing()
-        .get_shared_locks(&cancelled_txn.key())
-        .expect("Reading shared locks should not fail")
-        .expect("locks should be set")
+        .get_assigned_shared_object_versions(&cancelled_txn.key())
+        .expect("Reading shared version assignments should not fail")
+        .expect("Versions should be set")
         .into_iter()
         .collect::<HashMap<_, _>>();
     assert_eq!(
@@ -6102,7 +6101,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     let input_loader = TransactionInputLoader::new(authority.get_object_cache_reader().clone());
     let input_objects = input_loader
         .read_objects_for_execution(
-            authority.epoch_store_for_testing().as_ref(),
+            &authority.epoch_store_for_testing(),
             &cancelled_txn.key(),
             &CertLockGuard::dummy_for_tests(),
             &cancelled_txn
