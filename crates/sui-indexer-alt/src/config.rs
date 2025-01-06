@@ -132,12 +132,8 @@ pub struct PipelineLayer {
     pub sum_displays: Option<SequentialLayer>,
     pub sum_packages: Option<SequentialLayer>,
 
-    // Concurrent pipelines with a lagged consistent pruner which is also a concurrent pipeline.
-    // Use concurrent layer for the pruner pipelines so that they could override checkpoint lag if needed.
-    pub coin_balance_buckets: Option<CommitterLayer>,
-    pub coin_balance_buckets_pruner: Option<ConcurrentLayer>,
-
     // All concurrent pipelines
+    pub coin_balance_buckets: Option<ConcurrentLayer>,
     pub cp_sequence_numbers: Option<ConcurrentLayer>,
     pub ev_emit_mod: Option<ConcurrentLayer>,
     pub ev_struct_inst: Option<ConcurrentLayer>,
@@ -270,7 +266,6 @@ impl PipelineLayer {
             sum_displays: Some(Default::default()),
             sum_packages: Some(Default::default()),
             coin_balance_buckets: Some(Default::default()),
-            coin_balance_buckets_pruner: Some(Default::default()),
             cp_sequence_numbers: Some(Default::default()),
             ev_emit_mod: Some(Default::default()),
             ev_struct_inst: Some(Default::default()),
@@ -404,9 +399,6 @@ impl Merge for PipelineLayer {
             sum_displays: self.sum_displays.merge(other.sum_displays),
             sum_packages: self.sum_packages.merge(other.sum_packages),
             coin_balance_buckets: self.coin_balance_buckets.merge(other.coin_balance_buckets),
-            coin_balance_buckets_pruner: self
-                .coin_balance_buckets_pruner
-                .merge(other.coin_balance_buckets_pruner),
             cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers),
             ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod),
             ev_struct_inst: self.ev_struct_inst.merge(other.ev_struct_inst),

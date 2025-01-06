@@ -5,7 +5,6 @@ use anyhow::Context;
 use bootstrap::bootstrap;
 use config::{ConsistencyConfig, IndexerConfig, PipelineLayer};
 use handlers::coin_balance_buckets::CoinBalanceBuckets;
-use handlers::coin_balance_buckets_pruner::CoinBalanceBucketsPruner;
 use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
@@ -59,7 +58,6 @@ pub async fn start_indexer(
         sum_displays,
         sum_packages,
         coin_balance_buckets,
-        coin_balance_buckets_pruner,
         cp_sequence_numbers,
         ev_emit_mod,
         ev_struct_inst,
@@ -190,12 +188,8 @@ pub async fn start_indexer(
     add_sequential!(SumDisplays, sum_displays);
     add_sequential!(SumPackages, sum_packages);
 
-    add_consistent!(
-        CoinBalanceBuckets, coin_balance_buckets;
-        CoinBalanceBucketsPruner, coin_balance_buckets_pruner
-    );
-
     // Unpruned concurrent pipelines
+    add_concurrent!(CoinBalanceBuckets::default(), coin_balance_buckets);
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);

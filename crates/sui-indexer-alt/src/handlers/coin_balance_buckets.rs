@@ -4,6 +4,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{anyhow, bail, Result};
+use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
 use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
@@ -19,12 +20,17 @@ use sui_types::{
     TypeTag,
 };
 
+use crate::consistent_pruning::PruningLookupTable;
+
 /// This handler is used to track the balance buckets of address-owned coins.
 /// The balance bucket is calculated using log10 of the coin balance.
 /// Whenever a coin object's presence, owner or balance bucket changes,
 /// we will insert a new row into the `coin_balance_buckets` table.
 /// A Delete record will be inserted when a coin object is no longer present or no longer owned by an address.
-pub(crate) struct CoinBalanceBuckets;
+#[derive(Default)]
+pub(crate) struct CoinBalanceBuckets {
+    pruning_lookup_table: Arc<PruningLookupTable>,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ProcessedCoinBalanceBucket {
@@ -140,6 +146,8 @@ impl Processor for CoinBalanceBuckets {
 
 #[async_trait::async_trait]
 impl Handler for CoinBalanceBuckets {
+    const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
+
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
         let values = values
             .iter()
@@ -150,6 +158,46 @@ impl Handler for CoinBalanceBuckets {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    // TODO: Add tests for this function.
+    async fn prune(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut db::Connection<'_>,
+    ) -> anyhow::Result<usize> {
+        use sui_indexer_alt_schema::schema::coin_balance_buckets::dsl;
+
+        let to_prune = self.pruning_lookup_table.take(from, to_exclusive)?;
+
+        // For each (object_id, cp_sequence_number_exclusive), delete all entries with
+        // cp_sequence_number less than cp_sequence_number_exclusive that match the object_id.
+
+        let values = to_prune
+            .iter()
+            .map(|(object_id, seq_number)| {
+                let object_id_hex = hex::encode(object_id);
+                format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, seq_number)
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        let query = format!(
+            "
+            WITH to_prune_data (object_id, cp_sequence_number_exclusive) AS (
+                VALUES {}
+            )
+            DELETE FROM coin_balance_buckets
+            USING to_prune_data
+            WHERE coin_balance_buckets.{:?} = to_prune_data.object_id
+              AND coin_balance_buckets.{:?} < to_prune_data.cp_sequence_number_exclusive
+            ",
+            values,
+            dsl::object_id,
+            dsl::cp_sequence_number,
+        );
+        let rows_deleted = sql_query(query).execute(conn).await?;
+        Ok(rows_deleted)
     }
 }
 
