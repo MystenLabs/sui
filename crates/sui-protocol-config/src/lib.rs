@@ -1726,13 +1726,10 @@ impl ProtocolConfig {
             .consensus_round_prober_probe_accepted_rounds
     }
 
-<<<<<<< HEAD
     pub fn native_charging_v2(&self) -> bool {
         self.feature_flags.native_charging_v2
     }
-            
-=======
->>>>>>> 9ccb9dfad2 ([fix] after rebase)
+
     pub fn consensus_linearize_subdag_v2(&self) -> bool {
         let res = self.feature_flags.consensus_linearize_subdag_v2;
         assert!(
