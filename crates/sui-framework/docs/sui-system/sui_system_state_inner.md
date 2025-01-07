@@ -335,7 +335,7 @@ The top-level object containing all information of the Sui system.
  Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
  This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
  It can be reset once we are able to successfully execute advance_epoch.
- The rest of the fields starting with <code>safe_mode_</code> are accmulated during safe mode
+ The rest of the fields starting with <code>safe_mode_</code> are accumulated during safe mode
  when advance_epoch_safe_mode is executed. They will eventually be processed once we
  are out of safe mode.
 </dd>
@@ -467,7 +467,7 @@ Uses SystemParametersV2 as the parameters.
  Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
  This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
  It can be reset once we are able to successfully execute advance_epoch.
- The rest of the fields starting with <code>safe_mode_</code> are accmulated during safe mode
+ The rest of the fields starting with <code>safe_mode_</code> are accumulated during safe mode
  when advance_epoch_safe_mode is executed. They will eventually be processed once we
  are out of safe mode.
 </dd>
@@ -911,7 +911,7 @@ This function will be called only once in genesis.
 
 ## Function `request_add_validator_candidate`
 
-Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
+Can be called by anyone who wishes to become a validator candidate and starts accruing delegated
 stakes in their staking pool. Once they have at least <code>MIN_VALIDATOR_JOINING_STAKE</code> amount of stake they
 can call <code>request_add_validator</code> to officially become an active validator at the next epoch.
 Aborts if the caller is already a pending or active validator, or a validator candidate.

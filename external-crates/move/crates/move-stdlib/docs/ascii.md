@@ -494,7 +494,7 @@ Returns <code><b>false</b></code> otherwise.
 
 ## Function `is_printable_char`
 
-Returns <code><b>true</b></code> if <code>byte</code> is an printable ASCII character.
+Returns <code><b>true</b></code> if <code>byte</code> is a printable ASCII character.
 Returns <code><b>false</b></code> otherwise.
 
 
