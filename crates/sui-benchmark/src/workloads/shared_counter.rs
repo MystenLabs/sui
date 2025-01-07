@@ -58,11 +58,7 @@ impl Payload for SharedCounterTestPayload {
             .state
             .borrow()
             .reference_gas_price;
-        let gas_price_increment = if self.max_tip_amount == 0 {
-            0
-        } else {
-            rand::thread_rng().gen_range(0..self.max_tip_amount)
-        };
+        let gas_price_increment = rand::thread_rng().gen_range(0..(9999 - rgp));
         let gas_price = rgp + gas_price_increment;
         TestTransactionBuilder::new(self.gas.1, self.gas.0, gas_price)
             .call_counter_increment(
