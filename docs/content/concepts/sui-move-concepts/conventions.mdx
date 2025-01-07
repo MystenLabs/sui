@@ -3,23 +3,7 @@ title: Move Conventions
 description: Recommended Move 2024 best practices for Sui development.
 ---
 
-
 This guide outlines recommended conventions and best practices for writing Move smart contracts on Sui. Following these guidelines helps create more maintainable, secure, and composable code that aligns with ecosystem standards.
-
-## Who is this for?
-
-This guide is intended for:
-- Move developers building on Sui
-- Teams establishing coding standards
-- Anyone reviewing or maintaining Move codebases
-
-## How to use this guide
-
-The conventions are organized into several key areas:
-- **Organization principles:** How to structure your packages, modules, and code
-- **Naming Conventions**: Standard conventions for naming different components
-- **Code Structure**: Best practices and patterns for writing clean, maintainable code
-- **Documentation**: How to document your code effectively
 
 While these conventions are recommendations rather than strict rules, they represent patterns that have proven effective across many Sui projects. They help create consistency across the ecosystem and make code easier to understand and maintain.
 
@@ -147,8 +131,6 @@ const E_INVALID_NAME: u64 = 0;
 ```
 
 ### Structs
-
-To account for future features, declare structs with the `public` modifier. 
 
 Always declare struct abilities in this order: `key`, `copy`, `drop`, `store`. 
 
@@ -418,7 +400,7 @@ public fun set(account: &mut Account, _: &Admin, new_name: String) {
 
 ## Documentation
 
-There is nothing more pleasant than a well-written and well-documented codebase. If some support the idea that clean code is self-documenting, well-documented code is self-explanatory.
+There is nothing more pleasant than a well-written and well-documented codebase. While some argue that clean code is self-documenting, well-documented code is self-explanatory.
 
 ### Comments
 
