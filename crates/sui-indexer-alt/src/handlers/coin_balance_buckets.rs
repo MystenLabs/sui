@@ -353,6 +353,7 @@ mod tests {
 
     #[test]
     fn test_process_coin_balance_buckets_new_sui_coin() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         builder = builder
             .start_transaction(0)
@@ -360,7 +361,7 @@ mod tests {
             .create_sui_object(1, 100)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 2);
         assert!(values.iter().any(|v| matches!(
             v.change,
@@ -382,6 +383,7 @@ mod tests {
 
     #[test]
     fn test_process_coin_balance_buckets_new_other_coin() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         let coin_type = TypeTag::from_str("0x0::a::b").unwrap();
         builder = builder
@@ -389,7 +391,7 @@ mod tests {
             .create_coin_object(0, 0, 10, coin_type.clone())
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(
             &values[0].change,
@@ -404,13 +406,14 @@ mod tests {
 
     #[test]
     fn test_process_coin_balance_buckets_balance_change() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         builder = builder
             .start_transaction(0)
             .create_sui_object(0, 10010)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(
             values[0].change,
@@ -429,7 +432,7 @@ mod tests {
             .transfer_coin_balance(0, 1, 1, 10)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(
             values[0].change,
@@ -448,7 +451,7 @@ mod tests {
             .transfer_coin_balance(0, 2, 1, 1)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 2);
         assert!(values.iter().any(|v| v.change
             == CoinBalanceBucketChangeKind::Insert {
@@ -468,6 +471,7 @@ mod tests {
 
     #[test]
     fn test_process_coin_balance_buckets_coin_deleted() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         builder = builder
             .start_transaction(0)
@@ -480,13 +484,14 @@ mod tests {
             .delete_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
     }
 
     #[test]
     fn test_process_coin_balance_buckets_owner_change() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         builder = builder
             .start_transaction(0)
@@ -499,7 +504,7 @@ mod tests {
             .transfer_object(0, 1)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(
             values[0].change,
@@ -514,6 +519,7 @@ mod tests {
 
     #[test]
     fn test_process_coin_balance_buckets_object_owned() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         builder = builder
             .start_transaction(0)
@@ -528,7 +534,7 @@ mod tests {
             .change_object_owner(0, Owner::ObjectOwner(dbg_addr(1)))
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
     }
