@@ -5,7 +5,7 @@
 use crate::{
     compilation::{
         build_plan::BuildPlan,
-        compiled_package::{BuildResult, CompiledPackage},
+        compiled_package::{BuildResult, CompiledPackage, CompiledUnitWithSource},
     },
     resolution::resolution_graph::ResolvedGraph,
 };
@@ -30,7 +30,15 @@ pub fn build<W: Write>(
         compiler
     })?;
     let program_info = program_info_hook.take_typing_info();
-    let root_named_address_map = resolved_package.resolved_table.clone();
+    let root_named_address_map = compiled_package
+        .compiled_package_info
+        .address_alias_instantiation
+        .clone();
+    let all_compiled_units = compiled_package
+        .all_compiled_units_with_source()
+        .cloned()
+        .map(|CompiledUnitWithSource { unit, source_path }| (source_path, unit))
+        .collect();
     source_model::Model::new(
         file_map,
         root_named_address_map,

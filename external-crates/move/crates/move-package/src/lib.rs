@@ -173,7 +173,7 @@ impl BuildConfig {
     pub fn compile_package<W: Write>(self, path: &Path, writer: &mut W) -> Result<CompiledPackage> {
         let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
-        BuildPlan::create(resolved_graph)?.compile(writer)
+        BuildPlan::create(resolved_graph)?.compile(writer, |compiler| compiler)
     }
 
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
@@ -196,7 +196,7 @@ impl BuildConfig {
         // } else {
         //     build_plan.compile(writer)
         // }
-        build_plan.compile(writer)
+        build_plan.compile(writer, |compiler| compiler)
     }
 
     /// Compile the package at `path` or the containing Move package. Do not exit process on warning
@@ -208,7 +208,7 @@ impl BuildConfig {
     ) -> Result<CompiledPackage> {
         let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
-        BuildPlan::create(resolved_graph)?.compile_no_exit(writer)
+        BuildPlan::create(resolved_graph)?.compile_no_exit(writer, |compiler| compiler)
     }
 
     /// Compile the package at `path` or the containing Move package. Exit process on warning or

@@ -3,6 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -10,7 +11,7 @@ use crate::compiled_model::{self, BinaryModel, ModuleId, QualifiedMemberId, TMod
 use move_binary_format::file_format::{self};
 use move_compiler::{
     self,
-    compiled_unit::AnnotatedCompiledUnit,
+    compiled_unit::CompiledUnit,
     expansion::ast::{self as E, ModuleIdent_},
     naming::ast as N,
     shared::{
@@ -119,35 +120,38 @@ impl Model {
         files: MappedFiles,
         root_named_address_map: BTreeMap<Symbol, AccountAddress>,
         info: Arc<TypingProgramInfo>,
-        compiled_units_vec: Vec<AnnotatedCompiledUnit>,
+        compiled_units_vec: Vec<(/* file */ PathBuf, CompiledUnit)>,
     ) -> anyhow::Result<Self> {
         let mut compiled_units = BTreeMap::new();
-        for unit in compiled_units_vec {
+        for (fname, unit) in compiled_units_vec {
             let package_name = unit.package_name();
-            let loc = *unit.loc();
-            let addr = unit.named_module.address.into_inner();
-            let name = unit.named_module.name;
+            let addr = unit.address.into_inner();
+            let name = unit.name;
             let package = compiled_units.entry(addr).or_insert_with(BTreeMap::new);
-            if let Some(prev) = package.insert(name, unit) {
+            if let Some((prev_f, prev)) = package.insert(name, (fname.clone(), unit)) {
                 anyhow::bail!(
                     "Duplicate module {}::{}. \n\
                     One in package {} in file {}. \n\
                     And one in package {} in file {}",
-                    prev.named_module.address,
-                    prev.named_module.name,
+                    prev.address,
+                    prev.name,
                     prev.package_name()
                         .as_ref()
                         .map(|s| s.as_str())
                         .unwrap_or("UNKNOWN"),
-                    files.filename(&prev.loc().file_hash()),
+                    prev_f.display(),
                     package_name
                         .as_ref()
                         .map(|s| s.as_str())
                         .unwrap_or("UNKNOWN"),
-                    files.filename(&loc.file_hash()),
+                    fname.display(),
                 );
             }
         }
+        let compiled_units = compiled_units
+            .into_iter()
+            .map(|(addr, units)| (addr, units.into_iter().map(|(n, (_f, u))| (n, u)).collect()))
+            .collect::<BTreeMap<_, _>>();
         let root_named_address_reverse_map = root_named_address_map
             .iter()
             .map(|(n, a)| (*a, *n))
@@ -167,7 +171,7 @@ impl Model {
             .collect();
         let compiled_modules = compiled_units
             .into_iter()
-            .flat_map(|(_addr, units)| units.into_iter().map(|(_, unit)| unit.named_module.module))
+            .flat_map(|(_addr, units)| units.into_iter().map(|(_, unit)| unit.module))
             .collect();
         let compiled_model = BinaryModel::new(compiled_modules);
         let model = Self {
@@ -621,7 +625,7 @@ impl PackageData {
         addr: AccountAddress,
         ident_map: &BTreeMap<ModuleId, E::ModuleIdent>,
         info: &TypingProgramInfo,
-        units: &BTreeMap<Symbol, AnnotatedCompiledUnit>,
+        units: &BTreeMap<Symbol, CompiledUnit>,
     ) -> Self {
         let modules = units
             .iter()
@@ -638,22 +642,14 @@ impl PackageData {
 }
 
 impl ModuleData {
-    fn new(
-        _id: ModuleId,
-        ident: E::ModuleIdent,
-        info: &ModuleInfo,
-        unit: &AnnotatedCompiledUnit,
-    ) -> Self {
+    fn new(_id: ModuleId, ident: E::ModuleIdent, info: &ModuleInfo, unit: &CompiledUnit) -> Self {
         let structs = info
             .structs
             .iter()
             .map(|(_loc, name, _sinfo)| {
                 let name = *name;
-                let (_idx, _struct_def) = unit
-                    .named_module
-                    .module
-                    .find_struct_def_by_name(name.as_str())
-                    .unwrap();
+                let (_idx, _struct_def) =
+                    unit.module.find_struct_def_by_name(name.as_str()).unwrap();
                 let struct_ = StructData::new();
                 (name, struct_)
             })
@@ -663,12 +659,8 @@ impl ModuleData {
             .iter()
             .map(|(_loc, name, _einfo)| {
                 let name = *name;
-                let (_idx, enum_def) = unit
-                    .named_module
-                    .module
-                    .find_enum_def_by_name(name.as_str())
-                    .unwrap();
-                let enum_ = EnumData::new(&unit.named_module.module, enum_def);
+                let (_idx, enum_def) = unit.module.find_enum_def_by_name(name.as_str()).unwrap();
+                let enum_ = EnumData::new(&unit.module, enum_def);
                 (name, enum_)
             })
             .collect();
@@ -678,7 +670,6 @@ impl ModuleData {
             .map(|(_loc, name, _finfo)| {
                 let name = *name;
                 let (_idx, _function_def) = unit
-                    .named_module
                     .module
                     .find_function_def_by_name(name.as_str())
                     .unwrap();
