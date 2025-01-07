@@ -6,10 +6,7 @@
 
 use core::panic;
 use fastcrypto::encoding::Base64;
-use jsonrpsee::{
-    core::{client::ClientT, RpcResult},
-    rpc_params,
-};
+use jsonrpsee::{core::client::ClientT, rpc_params};
 use std::fs::File;
 use std::num::NonZeroUsize;
 use std::time::Duration;
@@ -201,7 +198,7 @@ async fn test_fullnode_traffic_control_dry_run() -> Result<(), anyhow::Error> {
 
     // it should take no more than 4 requests to be added to the blocklist
     for _ in 0..txn_count {
-        let response: RpcResult<SuiTransactionBlockResponse> = jsonrpc_client
+        let response: Result<SuiTransactionBlockResponse, _> = jsonrpc_client
             .request("sui_getTransactionBlock", rpc_params![*tx_digest])
             .await;
         assert!(
@@ -307,7 +304,7 @@ async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Erro
 
     // it should take no more than 4 requests to be added to the blocklist
     for _ in 0..txn_count {
-        let response: RpcResult<SuiTransactionBlockResponse> = jsonrpc_client
+        let response: Result<SuiTransactionBlockResponse, _> = jsonrpc_client
             .request("sui_getTransactionBlock", rpc_params![*tx_digest])
             .await;
         if let Err(err) = response {
@@ -362,7 +359,7 @@ async fn test_fullnode_traffic_control_error_blocked() -> Result<(), anyhow::Err
             SuiTransactionBlockResponseOptions::new(),
             ExecuteTransactionRequestType::WaitForLocalExecution
         ];
-        let response: RpcResult<SuiTransactionBlockResponse> = jsonrpc_client
+        let response: Result<SuiTransactionBlockResponse, _> = jsonrpc_client
             .request("sui_executeTransactionBlock", params.clone())
             .await;
         if let Err(err) = response {
@@ -517,7 +514,7 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
     assert!(confirmed_local_execution.unwrap());
 
     for _ in 0..txn_count {
-        let response: RpcResult<SuiTransactionBlockResponse> = jsonrpc_client
+        let response: Result<SuiTransactionBlockResponse, _> = jsonrpc_client
             .request("sui_getTransactionBlock", rpc_params![*tx_digest])
             .await;
         assert!(response.is_ok(), "Expected request to succeed");
@@ -845,7 +842,7 @@ async fn assert_validator_traffic_control_dry_run(
 
     // it should take no more than 4 requests to be added to the blocklist
     for _ in 0..txn_count {
-        let response: RpcResult<SuiTransactionBlockResponse> = jsonrpc_client
+        let response: Result<SuiTransactionBlockResponse, _> = jsonrpc_client
             .request("sui_getTransactionBlock", rpc_params![*tx_digest])
             .await;
         assert!(

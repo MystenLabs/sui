@@ -8,7 +8,7 @@ use sui_storage::http_key_value_store::*;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::base_types::ObjectID;
-use sui_types::digests::{CheckpointDigest, TransactionDigest, TransactionEventsDigest};
+use sui_types::digests::{CheckpointDigest, TransactionDigest};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 #[derive(Parser)]
@@ -83,21 +83,6 @@ impl Command {
                             for (digest, fx) in digests.iter().zip(fx.iter()) {
                                 println!("fetched fx: {:?} {:?}", digest, fx);
                             }
-                        }
-                    }
-
-                    "events" => {
-                        let digests: Vec<_> = digest
-                            .into_iter()
-                            .map(|digest| {
-                                TransactionEventsDigest::from_str(&digest)
-                                    .expect("invalid events digest")
-                            })
-                            .collect();
-
-                        let tx = kv.multi_get_events(&digests).await.unwrap();
-                        for (digest, ev) in digests.iter().zip(tx.iter()) {
-                            println!("fetched events: {:?} {:?}", digest, ev);
                         }
                     }
 

@@ -22,11 +22,14 @@ use sui_macros::{fail_point_async, fail_point_if};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     authenticator_state::ActiveJwk,
-    base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest},
+    base_types::{
+        AuthorityName, ConsensusObjectSequenceKey, EpochId, SequenceNumber, TransactionDigest,
+    },
     digests::ConsensusCommitDigest,
     executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
     messages_consensus::{
-        AuthorityIndex, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+        AuthorityIndex, ConsensusDeterminedVersionAssignments, ConsensusTransaction,
+        ConsensusTransactionKey, ConsensusTransactionKind,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
@@ -842,14 +845,14 @@ impl ConsensusCommitInfo {
     fn consensus_commit_prologue_v3_transaction(
         &self,
         epoch: u64,
-        cancelled_txn_version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
+        consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
     ) -> VerifiedExecutableTransaction {
         let transaction = VerifiedTransaction::new_consensus_commit_prologue_v3(
             epoch,
             self.round,
             self.timestamp,
             self.consensus_commit_digest,
-            cancelled_txn_version_assignment,
+            consensus_determined_version_assignments,
         );
         VerifiedExecutableTransaction::new_system(transaction, epoch)
     }
@@ -858,10 +861,33 @@ impl ConsensusCommitInfo {
         &self,
         epoch: u64,
         protocol_config: &ProtocolConfig,
-        cancelled_txn_version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
+        cancelled_txn_version_assignment: Vec<(
+            TransactionDigest,
+            Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+        )>,
     ) -> VerifiedExecutableTransaction {
-        if protocol_config.record_consensus_determined_version_assignments_in_prologue() {
-            self.consensus_commit_prologue_v3_transaction(epoch, cancelled_txn_version_assignment)
+        if protocol_config.record_consensus_determined_version_assignments_in_prologue_v2() {
+            self.consensus_commit_prologue_v3_transaction(
+                epoch,
+                ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(
+                    cancelled_txn_version_assignment,
+                ),
+            )
+        } else if protocol_config.record_consensus_determined_version_assignments_in_prologue() {
+            self.consensus_commit_prologue_v3_transaction(
+                epoch,
+                ConsensusDeterminedVersionAssignments::CancelledTransactions(
+                    cancelled_txn_version_assignment
+                        .into_iter()
+                        .map(|(tx_digest, versions)| {
+                            (
+                                tx_digest,
+                                versions.into_iter().map(|(id, v)| (id.0, v)).collect(),
+                            )
+                        })
+                        .collect(),
+                ),
+            )
         } else if protocol_config.include_consensus_digest_in_prologue() {
             self.consensus_commit_prologue_v2_transaction(epoch)
         } else {
@@ -993,7 +1019,7 @@ mod tests {
     use prometheus::Registry;
     use sui_protocol_config::ConsensusTransactionOrdering;
     use sui_types::{
-        base_types::{random_object_ref, AuthorityName, SuiAddress},
+        base_types::{random_object_ref, AuthorityName, ObjectID, SuiAddress},
         committee::Committee,
         crypto::deterministic_random_account_key,
         messages_consensus::{

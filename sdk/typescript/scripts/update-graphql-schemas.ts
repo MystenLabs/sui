@@ -45,6 +45,31 @@ for (const release of result) {
 }
 
 for (const { minorVersion, schema } of releasesByVersion.values()) {
+	await addSchemaVersion(minorVersion, schema);
+}
+
+await addSchemaVersion(
+	'latest',
+	'https://raw.githubusercontent.com/MystenLabs/sui/refs/heads/mainnet/crates/sui-graphql-rpc/schema.graphql',
+);
+
+await addExportsToPackageJson([...releasesByVersion.keys(), 'latest']);
+
+async function addExportsToPackageJson(versions: string[]) {
+	const packageJsonPath = resolve(import.meta.url.slice(5), '../../package.json');
+	const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
+
+	for (const version of versions) {
+		packageJson.exports[`./graphql/schemas/${version}`] = {
+			import: `./dist/esm/graphql/schemas/${version}/index.js`,
+			require: `./dist/cjs/graphql/schemas/${version}/index.js`,
+		};
+	}
+
+	await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, '\t')}\n`);
+}
+
+async function addSchemaVersion(versionName: string, schema: string) {
 	const res = await fetch(schema);
 
 	if (!res.ok) {
@@ -54,7 +79,7 @@ for (const { minorVersion, schema } of releasesByVersion.values()) {
 
 	const filePath = resolve(
 		import.meta.url.slice(5),
-		`../../src/graphql/generated/${minorVersion}/schema.graphql`,
+		`../../src/graphql/generated/${versionName}/schema.graphql`,
 	);
 
 	await mkdir(resolve(filePath, '..'), { recursive: true });
@@ -69,7 +94,7 @@ for (const { minorVersion, schema } of releasesByVersion.values()) {
             {
                 "name": "@0no-co/graphqlsp",
                 "schema": "./schema.graphql",
-                "tadaOutputLocation": "src/graphql/generated/${minorVersion}/tada-env.d.ts"
+                "tadaOutputLocation": "src/graphql/generated/${versionName}/tada-env.d.ts"
             }
         ]
     }
@@ -81,16 +106,16 @@ for (const { minorVersion, schema } of releasesByVersion.values()) {
 		stdio: 'inherit',
 	});
 
-	await mkdir(resolve(filePath, '../../../schemas', minorVersion), { recursive: true });
+	await mkdir(resolve(filePath, '../../../schemas', versionName), { recursive: true });
 	await writeFile(
-		resolve(filePath, `../../../schemas/${minorVersion}/index.ts`),
+		resolve(filePath, `../../../schemas/${versionName}/index.ts`),
 		`
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { initGraphQLTada } from 'gql.tada';
 
-import type { introspection } from '../../generated/${minorVersion}/tada-env.js';
+import type { introspection } from '../../generated/${versionName}/tada-env.js';
 import type { CustomScalars } from '../../types.js';
 
 export * from '../../types.js';
@@ -104,20 +129,4 @@ export const graphql = initGraphQLTada<{
 }>();
 `.trimStart(),
 	);
-}
-
-await addExportsToPackageJson(Array.from(releasesByVersion.keys()));
-
-async function addExportsToPackageJson(versions: string[]) {
-	const packageJsonPath = resolve(import.meta.url.slice(5), '../../package.json');
-	const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
-
-	for (const version of versions) {
-		packageJson.exports[`./graphql/schemas/${version}`] = {
-			import: `./dist/esm/graphql/schemas/${version}/index.js`,
-			require: `./dist/cjs/graphql/schemas/${version}/index.js`,
-		};
-	}
-
-	await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, '\t')}\n`);
 }

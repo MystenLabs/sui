@@ -6,7 +6,6 @@ use bootstrap::bootstrap;
 use config::{ConsistencyConfig, IndexerConfig, PipelineLayer};
 use handlers::coin_balance_buckets::CoinBalanceBuckets;
 use handlers::coin_balance_buckets_pruner::CoinBalanceBucketsPruner;
-use handlers::obj_info_pruner::ObjInfoPruner;
 use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
@@ -16,6 +15,7 @@ use handlers::{
     tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
     tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
 };
+use sui_indexer_alt_framework::handlers::cp_sequence_numbers::CpSequenceNumbers;
 use sui_indexer_alt_framework::ingestion::{ClientArgs, IngestionConfig};
 use sui_indexer_alt_framework::pipeline::{
     concurrent::{ConcurrentConfig, PrunerConfig},
@@ -28,12 +28,12 @@ use sui_pg_db::DbArgs;
 use tokio_util::sync::CancellationToken;
 
 pub mod args;
-pub(crate) mod bootstrap;
-pub mod config;
-pub(crate) mod handlers;
-
 #[cfg(feature = "benchmark")]
 pub mod benchmark;
+pub(crate) mod bootstrap;
+pub mod config;
+pub(crate) mod consistent_pruning;
+pub(crate) mod handlers;
 
 pub async fn start_indexer(
     db_args: DbArgs,
@@ -58,10 +58,9 @@ pub async fn start_indexer(
     let PipelineLayer {
         sum_displays,
         sum_packages,
-        obj_info,
-        obj_info_pruner,
         coin_balance_buckets,
         coin_balance_buckets_pruner,
+        cp_sequence_numbers,
         ev_emit_mod,
         ev_struct_inst,
         kv_checkpoints,
@@ -71,6 +70,7 @@ pub async fn start_indexer(
         kv_objects,
         kv_protocol_configs,
         kv_transactions,
+        obj_info,
         obj_versions,
         tx_affected_addresses,
         tx_affected_objects,
@@ -191,16 +191,12 @@ pub async fn start_indexer(
     add_sequential!(SumPackages, sum_packages);
 
     add_consistent!(
-        ObjInfo, obj_info;
-        ObjInfoPruner, obj_info_pruner
-    );
-
-    add_consistent!(
         CoinBalanceBuckets, coin_balance_buckets;
         CoinBalanceBucketsPruner, coin_balance_buckets_pruner
     );
 
     // Unpruned concurrent pipelines
+    add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);
     add_concurrent!(KvCheckpoints, kv_checkpoints);
@@ -208,6 +204,7 @@ pub async fn start_indexer(
     add_concurrent!(KvEpochStarts, kv_epoch_starts);
     add_concurrent!(KvObjects, kv_objects);
     add_concurrent!(KvTransactions, kv_transactions);
+    add_concurrent!(ObjInfo::default(), obj_info);
     add_concurrent!(ObjVersions, obj_versions);
     add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);

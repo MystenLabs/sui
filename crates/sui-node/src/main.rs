@@ -149,11 +149,7 @@ fn main() {
     let node_once_cell_clone = node_once_cell.clone();
     runtimes.metrics.spawn(async move {
         let node = node_once_cell_clone.get().await;
-        let chain_identifier = match node.state().get_chain_identifier() {
-            Some(chain_identifier) => chain_identifier.to_string(),
-            None => "unknown".to_string(),
-        };
-
+        let chain_identifier = node.state().get_chain_identifier().to_string();
         info!("Sui chain identifier: {chain_identifier}");
         prometheus_registry
             .register(mysten_metrics::uptime_metric(

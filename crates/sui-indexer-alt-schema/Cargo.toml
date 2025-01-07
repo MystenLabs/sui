@@ -11,6 +11,7 @@ anyhow.workspace = true
 diesel = {workspace = true, features = ["postgres_backend", "chrono"]}
 diesel_migrations.workspace = true
 serde.workspace = true
+bcs.workspace = true
 
 sui-field-count.workspace = true
 sui-protocol-config.workspace = true

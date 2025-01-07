@@ -52,12 +52,11 @@ INTERESTING_DIRECTORIES = [
 NOTE_ORDER = [
     "Protocol",
     "Nodes (Validators and Full nodes)",
-    "Indexer",
+    "gRPC",
     "JSON-RPC",
     "GraphQL",
     "CLI",
     "Rust SDK",
-    "REST API",
 ]
 
 

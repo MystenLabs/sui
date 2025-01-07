@@ -101,6 +101,17 @@ impl<'p> CommitterWatermark<'p> {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(pipeline: &'p str, checkpoint_hi_inclusive: u64) -> Self {
+        CommitterWatermark {
+            pipeline: pipeline.into(),
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
+            tx_hi: 0,
+            timestamp_ms_hi_inclusive: 0,
+        }
+    }
+
     /// The consensus timestamp associated with this checkpoint.
     pub(crate) fn timestamp(&self) -> DateTime<Utc> {
         DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive).unwrap_or_default()
@@ -185,22 +196,33 @@ impl PrunerWatermark<'static> {
 }
 
 impl<'p> PrunerWatermark<'p> {
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(pipeline: &'p str, pruner_hi: u64) -> Self {
+        PrunerWatermark {
+            pipeline: pipeline.into(),
+            wait_for: 0,
+            reader_lo: 0,
+            pruner_hi: pruner_hi as i64,
+        }
+    }
+
     /// How long to wait before the pruner can act on this information, or `None`, if there is no
     /// need to wait.
     pub(crate) fn wait_for(&self) -> Option<Duration> {
         (self.wait_for > 0).then(|| Duration::from_millis(self.wait_for as u64))
     }
 
-    /// Whether the pruner has any work left to do on the range in this watermark.
-    pub(crate) fn is_empty(&self) -> bool {
-        self.pruner_hi >= self.reader_lo
-    }
+    /// The next chunk of checkpoints that the pruner should work on, to advance the watermark.
+    /// If no more checkpoints to prune, returns `None`.
+    /// Otherwise, returns a tuple (from, to_exclusive) where `from` is inclusive and `to_exclusive` is exclusive.
+    pub(crate) fn next_chunk(&mut self, size: u64) -> Option<(u64, u64)> {
+        if self.pruner_hi >= self.reader_lo {
+            return None;
+        }
 
-    /// The next chunk that the pruner should work on, to advance the watermark.
-    pub(crate) fn next_chunk(&mut self, size: u64) -> (u64, u64) {
         let from = self.pruner_hi as u64;
-        let to = (from + size).min(self.reader_lo as u64);
-        (from, to)
+        let to_exclusive = (from + size).min(self.reader_lo as u64);
+        Some((from, to_exclusive))
     }
 
     /// Update the pruner high watermark (only) for an existing watermark row, as long as this

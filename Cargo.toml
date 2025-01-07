@@ -115,9 +115,12 @@ members = [
     "crates/sui-graphql-rpc",
     "crates/sui-graphql-rpc-client",
     "crates/sui-graphql-rpc-headers",
+    "crates/sui-http",
     "crates/sui-indexer",
     "crates/sui-indexer-alt",
     "crates/sui-indexer-alt-framework",
+    "crates/sui-indexer-alt-jsonrpc",
+    "crates/sui-indexer-alt-restorer",
     "crates/sui-indexer-alt-schema",
     "crates/sui-indexer-builder",
     "crates/sui-json",
@@ -134,7 +137,6 @@ members = [
     "crates/sui-move-build",
     "crates/sui-move-lsp",
     "crates/sui-mvr-graphql-rpc",
-    "crates/sui-mvr-indexer",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",
@@ -203,7 +205,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.40.0"
+version = "1.41.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -372,13 +374,7 @@ integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
 itertools = "0.13.0"
 jemalloc-ctl = "^0.5"
-jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
-    "server",
-    "macros",
-    "ws-client",
-    "http-client",
-    "jsonrpsee-core",
-] }
+jsonrpsee = { version = "0.24.7", features = ["server", "macros", "ws-client", "http-client", "jsonrpsee-core"] }
 json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
 leb128 = "0.2.5"
 lru = "0.10"
@@ -391,8 +387,8 @@ moka = { version = "0.12", default-features = false, features = [
     "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9c6636c399d5c60a1759f1670b1c07b3d408799a", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9c6636c399d5c60a1759f1670b1c07b3d408799a", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "2a170f4cd81c5cd10f5e4a5e810068f3045f41b6", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "2a170f4cd81c5cd10f5e4a5e810068f3045f41b6", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
@@ -417,8 +413,8 @@ prometheus-http-query = { version = "0.8", default-features = false, features = 
     "rustls-tls",
 ] }
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
-proptest = "1.1.0"
-proptest-derive = "0.3.0"
+proptest = "1.6.0"
+proptest-derive = "0.5"
 prost = "0.13"
 prost-build = "0.13"
 prost-types = "0.13.1"
@@ -598,7 +594,8 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f769
 
 # core-types with json format for REST api
 # sui-sdk-types = { version = "0.0.1", features = ["hash", "serde", "schemars"] }
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "24c34933c421319e9aa1c48b3b7108c756e1422f", features = ["hash", "serde", "schemars"] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cb174b66714ea643e4b78bbfadb3f9c17e635460", features = ["hash", "serde"] }
+sui-sdk-transaction-builder = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cb174b66714ea643e4b78bbfadb3f9c17e635460", package = "sui-transaction-builder" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -639,8 +636,11 @@ sui-graphql-rpc = { path = "crates/sui-graphql-rpc" }
 sui-graphql-rpc-client = { path = "crates/sui-graphql-rpc-client" }
 sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
+sui-http = { path = "crates/sui-http" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework" }
+sui-indexer-alt-jsonrpc = { path = "crates/sui-indexer-alt-jsonrpc" }
+sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }
 sui-json = { path = "crates/sui-json" }
@@ -655,7 +655,6 @@ sui-move = { path = "crates/sui-move" }
 sui-move-build = { path = "crates/sui-move-build" }
 sui-move-lsp = { path = "crates/sui-move-lsp" }
 sui-mvr-graphql-rpc = { path = "crates/sui-mvr-graphql-rpc" }
-sui-mvr-indexer = { path = "crates/sui-mvr-indexer" }
 sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }
 sui-open-rpc = { path = "crates/sui-open-rpc" }

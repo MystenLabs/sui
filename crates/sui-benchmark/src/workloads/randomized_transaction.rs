@@ -14,6 +14,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use rand::Rng;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
@@ -406,6 +407,10 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
         system_state_observer: Arc<SystemStateObserver>,
     ) {
+        // We observed that randomness may need a few seconds until DKG completion, and this may
+        // causing randomness transaction fail with `TooOldTransactionPendingOnObject` error.
+        // Therefore, wait a few seconds at the beginning to give DKG some time.
+        tokio::time::sleep(Duration::from_secs(5)).await;
         if self.basics_package_id.is_some() {
             return;
         }

@@ -79,9 +79,7 @@ impl RpcService {
     pub async fn into_router(self) -> axum::Router {
         let metrics = self.metrics.clone();
 
-        let rest_router = build_rest_router(self.clone());
-
-        let grpc_router = {
+        let mut router = {
             let node_service = crate::proto::node::node_server::NodeServer::new(self.clone());
 
             let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
@@ -117,8 +115,16 @@ impl RpcService {
                 .into_router()
         };
 
-        rest_router
-            .merge(grpc_router)
+        if self.config.enable_experimental_rest_api() {
+            router = router.merge(build_rest_router(self.clone()));
+        }
+
+        let health_endpoint = axum::Router::new()
+            .route("/health", axum::routing::get(rest::health::health))
+            .with_state(self.clone());
+
+        router
+            .merge(health_endpoint)
             .layer(axum::middleware::map_response_with_state(
                 self,
                 response::append_info_headers,
@@ -142,7 +148,7 @@ impl RpcService {
     }
 }
 
-#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Direction {
     Ascending,

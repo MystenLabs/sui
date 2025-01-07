@@ -2899,7 +2899,9 @@ input ObjectFilter {
 	"""
 	objectIds: [SuiAddress!]
 	"""
-	Filter for live or potentially historical objects by their ID and version.
+	Filter for live objects by their ID and version. NOTE:  this input filter has been
+	deprecated in favor of `multiGetObjects` query as it does not make sense to query for live
+	objects by their versions. This filter will be removed with v1.42.0 release.
 	"""
 	objectKeys: [ObjectKey!]
 }
@@ -3325,6 +3327,10 @@ type Query {
 	"""
 	transactionBlock(digest: String!): TransactionBlock
 	"""
+	Fetch a list of objects by their IDs and versions.
+	"""
+	multiGetObjects(keys: [ObjectKey!]!): [Object!]!
+	"""
 	The coin objects that exist in the network.
 	
 	The type field is a string of the inner type of the coin by which to filter (e.g.
@@ -3598,6 +3604,10 @@ type ServiceConfig {
 	Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
 	"""
 	maxTransactionIds: Int!
+	"""
+	Maximum number of keys that can be passed to a `multiGetObjects` query.
+	"""
+	maxMultiGetObjectsKeys: Int!
 	"""
 	Maximum number of candidates to scan when gathering a page of results.
 	"""

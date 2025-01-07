@@ -883,7 +883,7 @@ allows for specific addresses to have their coins frozen. When an address is add
 deny list, it is immediately unable to interact with the currency's coin as input objects.
 Additionally at the start of the next epoch, they will be unable to receive the currency's
 coin.
-The <code>allow_global_pause</code> flag enables an additional API that will cause all addresses to be
+The <code>allow_global_pause</code> flag enables an additional API that will cause all addresses to
 be denied. Note however, that this doesn't affect per-address entries of the deny list and
 will not change the result of the "contains" APIs.
 

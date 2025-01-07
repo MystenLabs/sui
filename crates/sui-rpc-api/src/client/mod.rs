@@ -136,6 +136,7 @@ impl Client {
 
         let (metadata, response, _extentions) = self
             .raw_client()
+            .max_decoding_message_size(64 * 1024 * 1024)
             .get_full_checkpoint(request)
             .await?
             .into_parts();
@@ -163,7 +164,7 @@ impl Client {
         version: Option<u64>,
     ) -> Result<Object> {
         let request = crate::proto::node::GetObjectRequest {
-            object_id: Some(sui_sdk_types::types::ObjectId::from(object_id).into()),
+            object_id: Some(sui_sdk_types::ObjectId::from(object_id).into()),
             version,
             options: Some(crate::proto::node::GetObjectOptions {
                 object: Some(false),
@@ -224,7 +225,7 @@ pub struct TransactionExecutionResponse {
 
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
-    pub balance_changes: Option<Vec<sui_sdk_types::types::BalanceChange>>,
+    pub balance_changes: Option<Vec<sui_sdk_types::BalanceChange>>,
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from the bcs fields in `GetCheckpointResponse`
@@ -238,7 +239,7 @@ fn certified_checkpoint_summary_try_from_proto(
         .map_err(TryFromProtoError::from_error)?;
 
     let signature = sui_types::crypto::AuthorityStrongQuorumSignInfo::from(
-        sui_sdk_types::types::ValidatorAggregatedSignature::try_from(
+        sui_sdk_types::ValidatorAggregatedSignature::try_from(
             signature
                 .as_ref()
                 .ok_or_else(|| TryFromProtoError::missing("signature"))?,

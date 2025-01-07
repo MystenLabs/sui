@@ -241,7 +241,7 @@ public fun create_currency<T: drop>(
 /// deny list, it is immediately unable to interact with the currency's coin as input objects.
 /// Additionally at the start of the next epoch, they will be unable to receive the currency's
 /// coin.
-/// The `allow_global_pause` flag enables an additional API that will cause all addresses to be
+/// The `allow_global_pause` flag enables an additional API that will cause all addresses to
 /// be denied. Note however, that this doesn't affect per-address entries of the deny list and
 /// will not change the result of the "contains" APIs.
 public fun create_regulated_currency_v2<T: drop>(

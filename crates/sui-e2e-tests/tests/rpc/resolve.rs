@@ -8,10 +8,10 @@ use sui_rpc_api::client::reqwest::StatusCode;
 use sui_rpc_api::client::sdk::Client as RestClient;
 use sui_rpc_api::rest::transactions::ResolveTransactionQueryParameters;
 use sui_rpc_api::Client;
-use sui_sdk_types::types::unresolved;
-use sui_sdk_types::types::Argument;
-use sui_sdk_types::types::Command;
-use sui_sdk_types::types::TransactionExpiration;
+use sui_sdk_transaction_builder::unresolved;
+use sui_sdk_types::Argument;
+use sui_sdk_types::Command;
+use sui_sdk_types::TransactionExpiration;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use test_cluster::TestClusterBuilder;
@@ -40,12 +40,10 @@ async fn resolve_transaction_simple_transfer() {
                     ..Default::default()
                 },
             ],
-            commands: vec![Command::TransferObjects(
-                sui_sdk_types::types::TransferObjects {
-                    objects: vec![Argument::Input(0)],
-                    address: Argument::Input(1),
-                },
-            )],
+            commands: vec![Command::TransferObjects(sui_sdk_types::TransferObjects {
+                objects: vec![Argument::Input(0)],
+                address: Argument::Input(1),
+            })],
         },
         sender: sender.into(),
         gas_payment: None,
@@ -104,12 +102,10 @@ async fn resolve_transaction_transfer_with_sponsor() {
                     ..Default::default()
                 },
             ],
-            commands: vec![Command::TransferObjects(
-                sui_sdk_types::types::TransferObjects {
-                    objects: vec![Argument::Input(0)],
-                    address: Argument::Input(1),
-                },
-            )],
+            commands: vec![Command::TransferObjects(sui_sdk_types::TransferObjects {
+                objects: vec![Argument::Input(0)],
+                address: Argument::Input(1),
+            })],
         },
         sender: sender.into(),
         gas_payment: Some(unresolved::GasPayment {
@@ -179,7 +175,7 @@ async fn resolve_transaction_borrowed_shared_object() {
                 object_id: Some("0x6".parse().unwrap()),
                 ..Default::default()
             }],
-            commands: vec![Command::MoveCall(sui_sdk_types::types::MoveCall {
+            commands: vec![Command::MoveCall(sui_sdk_types::MoveCall {
                 package: "0x2".parse().unwrap(),
                 module: "clock".parse().unwrap(),
                 function: "timestamp_ms".parse().unwrap(),
@@ -252,7 +248,7 @@ async fn resolve_transaction_mutable_shared_object() {
                     ..Default::default()
                 },
             ],
-            commands: vec![Command::MoveCall(sui_sdk_types::types::MoveCall {
+            commands: vec![Command::MoveCall(sui_sdk_types::MoveCall {
                 package: "0x3".parse().unwrap(),
                 module: "sui_system".parse().unwrap(),
                 function: "request_add_stake".parse().unwrap(),
@@ -305,7 +301,7 @@ async fn resolve_transaction_insufficient_gas() {
                 object_id: Some("0x6".parse().unwrap()),
                 ..Default::default()
             }],
-            commands: vec![Command::MoveCall(sui_sdk_types::types::MoveCall {
+            commands: vec![Command::MoveCall(sui_sdk_types::MoveCall {
                 package: "0x2".parse().unwrap(),
                 module: "clock".parse().unwrap(),
                 function: "timestamp_ms".parse().unwrap(),

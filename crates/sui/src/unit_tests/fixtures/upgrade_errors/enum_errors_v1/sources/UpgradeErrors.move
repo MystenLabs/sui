@@ -10,11 +10,11 @@ module upgrades::upgrades {
         A,
     }
 
-    public enum EnumRemoveAbility has copy, drop {
+    public enum EnumRemoveAbility has copy, drop { // remove drop
         A,
     }
 
-    public enum EnumAddAndRemoveAbility has copy, drop {
+    public enum EnumAddAndRemoveAbility has copy, drop { // change drop to store
         A,
     }
 
@@ -45,6 +45,7 @@ module upgrades::upgrades {
         C, // to be removed
     }
 
+    // with types
     public enum EnumAddAbilityWithTypes has copy { // add drop
         A { a: u8 },
     }
@@ -72,6 +73,39 @@ module upgrades::upgrades {
         A { a: u8 },
         B { b: u8 }, // to be changed to C
         // D { d: u8 }, to be added
+    }
+
+    public enum EnumChangeAndRemoveVariantWithPositionalTypes {
+        A(u8),
+        B(u8), // to be changed to C
+        C(u8), // to be removed
+    }
+
+    public enum EnumChangePositionalType {
+        A, // add u8
+        B(u8), // to be changed to u16
+        C(u8, u8), // remove u8
+        D(u8) // remove last u8
+    }
+
+    public struct ChangeFieldA {
+        a: u32,
+    }
+
+    public struct ChangeFieldB {
+        b: u32,
+    }
+
+    public enum EnumWithPositionalChanged {
+        A(ChangeFieldA), // change to ChangeFieldB
+    }
+
+    public enum EnumWithNamedChanged {
+        A {
+            x: ChangeFieldA,
+            y: ChangeFieldA,
+            z: ChangeFieldA, // change to ChangeFieldB
+        },
     }
 }
 

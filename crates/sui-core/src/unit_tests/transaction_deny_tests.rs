@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_test_utils::{
+use crate::authority::auth_unit_test_utils::{
     publish_package_on_single_authority, upgrade_package_on_single_authority,
 };
 use crate::authority::test_authority_builder::TestAuthorityBuilder;

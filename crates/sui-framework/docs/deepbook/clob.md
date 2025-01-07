@@ -1641,11 +1641,11 @@ Place a market order to the order book.
     // We first retrieve the PriceLevel <b>with</b> the lowest price by calling min_leaf on the asks Critbit Tree.
     // We then match the market order by iterating through open orders on that price level in ascending order of the order id.
     // Open orders that are being filled are removed from the order book.
-    // We stop the iteration untill all quantities are filled.
+    // We stop the iteration until all quantities are filled.
     // If the total quantity of open orders at the lowest price level is not large enough <b>to</b> fully fill the market order,
     // we <b>move</b> on <b>to</b> the next price level by calling next_leaf on the asks Critbit Tree and repeat the same procedure.
     // Continue iterating over the price levels in ascending order until the market order is completely filled.
-    // If ther market order cannot be completely filled even after consuming all the open ask orders,
+    // If the market order cannot be completely filled even after consuming all the open ask orders,
     // the unfilled quantity will be cancelled.
     // Market ask order follows similar procedure.
     // The difference is that market ask order is matched against the open bid orders.

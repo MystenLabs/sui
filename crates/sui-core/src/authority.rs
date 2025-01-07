@@ -13,7 +13,6 @@ use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use async_trait::async_trait;
 use authority_per_epoch_store::CertLockGuard;
-use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::hash::MultisetHash;
@@ -38,6 +37,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -56,7 +57,7 @@ use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transaction_executor::SimulateTransactionResult;
-use tap::{TapFallible, TapOptional};
+use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::task::JoinHandle;
@@ -70,7 +71,6 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use crate::jsonrpc_index::IndexStore;
 use crate::jsonrpc_index::{CoinInfo, ObjectIndexChanges};
 use mysten_common::debug_fatal;
-use once_cell::sync::OnceCell;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::genesis::Genesis;
@@ -199,6 +199,10 @@ mod batch_verification_tests;
 #[path = "unit_tests/coin_deny_list_tests.rs"]
 mod coin_deny_list_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/auth_unit_test_utils.rs"]
+pub mod auth_unit_test_utils;
+
 pub mod authority_test_utils;
 
 pub mod authority_per_epoch_store;
@@ -215,8 +219,6 @@ pub mod transaction_deferral;
 
 pub(crate) mod authority_store;
 pub mod backpressure;
-
-pub static CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -820,6 +822,9 @@ pub struct AuthorityState {
     pub overload_info: AuthorityOverloadInfo,
 
     pub validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
+
+    /// The chain identifier is derived from the digest of the genesis checkpoint.
+    chain_identifier: ChainIdentifier,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1260,7 +1265,7 @@ impl AuthorityState {
             .start_timer();
         let input_objects = &certificate.data().transaction_data().input_objects()?;
         self.input_loader.read_objects_for_execution(
-            epoch_store.as_ref(),
+            epoch_store,
             &certificate.key(),
             tx_lock,
             input_objects,
@@ -2667,8 +2672,11 @@ impl AuthorityState {
     }
 
     pub fn unixtime_now_ms() -> u64 {
-        let ts_ms = Utc::now().timestamp_millis();
-        u64::try_from(ts_ms).expect("Travelling in time machine")
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis();
+        u64::try_from(now).expect("Travelling in time machine")
     }
 
     // TODO(fastpath): update this handler for Mysticeti fastpath.
@@ -2854,6 +2862,7 @@ impl AuthorityState {
         indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
         validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
+        chain_identifier: ChainIdentifier,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -2910,6 +2919,7 @@ impl AuthorityState {
             config,
             overload_info: AuthorityOverloadInfo::default(),
             validator_tx_finalizer,
+            chain_identifier,
         });
 
         // Start a task to execute ready certificates.
@@ -3470,19 +3480,8 @@ impl AuthorityState {
     }
 
     /// Chain Identifier is the digest of the genesis checkpoint.
-    pub fn get_chain_identifier(&self) -> Option<ChainIdentifier> {
-        if let Some(digest) = CHAIN_IDENTIFIER.get() {
-            return Some(*digest);
-        }
-
-        let checkpoint = self
-            .get_checkpoint_by_sequence_number(0)
-            .tap_err(|e| error!("Failed to get genesis checkpoint: {:?}", e))
-            .ok()?
-            .tap_none(|| error!("Genesis checkpoint is missing from DB"))?;
-        // It's ok if the value is already set due to data races.
-        let _ = CHAIN_IDENTIFIER.set(ChainIdentifier::from(*checkpoint.digest()));
-        Some(ChainIdentifier::from(*checkpoint.digest()))
+    pub fn get_chain_identifier(&self) -> ChainIdentifier {
+        self.chain_identifier
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -4114,16 +4113,19 @@ impl AuthorityState {
         }
 
         // get the unique set of digests from the event_keys
-        let event_digests = event_keys
+        let transaction_digests = event_keys
             .iter()
-            .map(|(digest, _, _, _)| *digest)
+            .map(|(_, digest, _, _)| *digest)
             .collect::<HashSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
 
-        let events = kv_store.multi_get_events(&event_digests).await?;
+        let events = kv_store
+            .multi_get_events_by_tx_digests(&transaction_digests)
+            .await?;
 
-        let events_map: HashMap<_, _> = event_digests.iter().zip(events.into_iter()).collect();
+        let events_map: HashMap<_, _> =
+            transaction_digests.iter().zip(events.into_iter()).collect();
 
         let stored_events = event_keys
             .into_iter()
@@ -4131,7 +4133,7 @@ impl AuthorityState {
                 (
                     k,
                     events_map
-                        .get(&k.0)
+                        .get(&k.1)
                         .expect("fetched digest is missing")
                         .clone()
                         .and_then(|e| e.data.get(k.2).cloned()),
@@ -5308,12 +5310,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         &self,
         transactions: &[TransactionDigest],
         effects: &[TransactionDigest],
-        events: &[TransactionEventsDigest],
-    ) -> SuiResult<(
-        Vec<Option<Transaction>>,
-        Vec<Option<TransactionEffects>>,
-        Vec<Option<TransactionEvents>>,
-    )> {
+    ) -> SuiResult<(Vec<Option<Transaction>>, Vec<Option<TransactionEffects>>)> {
         let txns = if !transactions.is_empty() {
             self.get_transaction_cache_reader()
                 .multi_get_transaction_blocks(transactions)
@@ -5331,13 +5328,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             vec![]
         };
 
-        let evts = if !events.is_empty() {
-            self.get_transaction_cache_reader().multi_get_events(events)
-        } else {
-            vec![]
-        };
-
-        Ok((txns, fx, evts))
+        Ok((txns, fx))
     }
 
     #[instrument(skip(self))]

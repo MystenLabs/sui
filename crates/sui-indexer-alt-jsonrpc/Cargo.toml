@@ -1,0 +1,29 @@
+[package]
+name = "sui-indexer-alt-jsonrpc"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[[bin]]
+name = "sui-indexer-alt-jsonrpc"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+clap.workspace = true
+diesel = { workspace = true, features = ["chrono"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+jsonrpsee = { workspace = true, features = ["macros", "server"] }
+telemetry-subscribers.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+sui-indexer-alt-schema.workspace = true
+sui-pg-db.workspace = true
+sui-types.workspace = true

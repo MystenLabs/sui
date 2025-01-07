@@ -539,6 +539,17 @@ impl Owner {
         }
     }
 
+    // Returns initial_shared_version for Shared objects, and start_version for ConsensusV2 objects.
+    pub fn start_version(&self) -> Option<SequenceNumber> {
+        match self {
+            Self::Shared {
+                initial_shared_version,
+            } => Some(*initial_shared_version),
+            Self::ConsensusV2 { start_version, .. } => Some(*start_version),
+            Self::Immutable | Self::AddressOwner(_) | Self::ObjectOwner(_) => None,
+        }
+    }
+
     pub fn is_immutable(&self) -> bool {
         matches!(self, Owner::Immutable)
     }
@@ -1079,7 +1090,7 @@ impl Object {
     pub fn with_id_owner_version_for_testing(
         id: ObjectID,
         version: SequenceNumber,
-        owner: SuiAddress,
+        owner: Owner,
     ) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_().into(),
@@ -1088,7 +1099,7 @@ impl Object {
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         ObjectInner {
-            owner: Owner::AddressOwner(owner),
+            owner,
             data,
             previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,

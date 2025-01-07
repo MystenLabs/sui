@@ -92,7 +92,7 @@ export interface JwtPayload {
 
 ## User salt management
 
-zkLogin uses the user salt to compute the zkLogin Sui address (see [definition](#address-definition)). The salt must be a 16-byte value or a integer smaller than `2n**128n`. There are several options for the application to maintain the user salt:
+zkLogin uses the user salt to compute the zkLogin Sui address (see [definition](../../../concepts/cryptography/zklogin.mdx#address-definition)). The salt must be a 16-byte value or a integer smaller than `2n**128n`. There are several options for the application to maintain the user salt:
 
 1. Client side:
    - Option 1: Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
