@@ -1,6 +1,5 @@
 packages:
   - 'sdk/**'
-  - 'apps/**'
   - 'dapps/**'
   - 'examples/**'
   - 'external-crates/move/tooling/prettier-move'
@@ -8,7 +7,6 @@ packages:
   - '!**/.next/**'
   - '!sdk/create-dapp/templates'
   - '!sdk/typescript/scripts'
-  - '!sdk/typescript/transactions'
   - '!sdk/typescript/cryptography'
   - '!sdk/typescript/faucet'
   - '!sdk/typescript/transactions'
@@ -18,7 +16,6 @@ packages:
   - '!sdk/typescript/utils'
   - '!sdk/typescript/bcs'
   - '!sdk/enoki/react'
-  - '!sdk/move-bytecode-template/pkg'
   - '!sdk/move-bytecode-template/pkg'
   - '!sdk/typescript/graphql'
   - '!sdk/typescript/keypairs/ed25519'

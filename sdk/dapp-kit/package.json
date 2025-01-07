@@ -68,6 +68,7 @@
 		"@types/react": "^18.3.3",
 		"@vanilla-extract/esbuild-plugin": "^2.3.8",
 		"@vanilla-extract/vite-plugin": "^4.0.13",
+		"happy-dom": "^16.3.0",
 		"jsdom": "^24.1.0",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1",

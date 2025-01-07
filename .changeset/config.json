@@ -9,8 +9,6 @@
 	"updateInternalDependencies": "minor",
 	"privatePackages": false,
 	"ignore": [
-		"sui-wallet",
-		"@mysten/core",
 		"sponsored-transactions",
 		"kiosk-demo",
 		"kiosk-cli",
