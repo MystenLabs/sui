@@ -49,11 +49,6 @@ pub struct DocgenOptions {
     pub section_level_start: usize,
     /// Whether to include private functions in the generated docs.
     pub include_private_fun: bool,
-    /// Whether to include specifications in the generated docs.
-    pub include_specs: bool,
-    /// Whether to put specifications in the same section as a declaration or put them all
-    /// into an independent section.
-    pub specs_inlined: bool,
     /// Whether to include Move implementations.
     pub include_impl: bool,
     /// Max depth to which sections are displayed in table-of-contents.
@@ -104,8 +99,6 @@ impl Default for DocgenOptions {
         Self {
             section_level_start: 1,
             include_private_fun: true,
-            include_specs: true,
-            specs_inlined: true,
             include_impl: true,
             toc_depth: 3,
             collapsed_sections: true,
@@ -895,8 +888,8 @@ impl<'env> Docgen<'env> {
         self.doc_text(env, struct_info.doc.text());
         self.code_block(env, &self.struct_header_display(struct_env));
 
-        if self.options.include_impl || (self.options.include_specs && self.options.specs_inlined) {
-            // Include field documentation if either impls or specs are present and inlined,
+        if self.options.include_impl {
+            // Include field documentation if impls are included
             // because they are used by both.
             self.begin_collapsed("Fields");
             self.gen_struct_fields(env, struct_info);
@@ -920,8 +913,8 @@ impl<'env> Docgen<'env> {
         self.doc_text(env, enum_info.doc.text());
         self.code_block(env, &self.enum_header_display(enum_env));
 
-        if self.options.include_impl || (self.options.include_specs && self.options.specs_inlined) {
-            // Include field documentation if either impls or specs are present and inlined,
+        if self.options.include_impl {
+            // Include field documentation if impls are included
             // because they are used by both.
             self.begin_collapsed("Variants");
             self.gen_enum_variants(enum_env);

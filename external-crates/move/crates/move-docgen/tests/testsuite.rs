@@ -21,7 +21,7 @@ const FLAGS: &[&str] = &[
     "--docgen",
 ];
 
-fn test_runner(path: &Path) -> datatest_stable::Result<()> {
+fn test_runner_OLD(path: &Path) -> datatest_stable::Result<()> {
     // let mut args = vec!["mvp_test".to_string()];
     // args.extend(FLAGS.iter().map(|s| (*s).to_string()).collect_vec());
 
@@ -71,7 +71,10 @@ fn test_runner(path: &Path) -> datatest_stable::Result<()> {
     todo!("use the package system")
 }
 
-fn test_docgen(path: &Path, /*mut options: Options, */ suffix: &str) -> anyhow::Result<()> {
+fn test_docgen_OLD(
+    path: &Path,
+    /*mut options: Options, */ suffix: &str,
+) -> anyhow::Result<()> {
     // let mut temp_path = PathBuf::from(TempDir::new()?.path());
     // options.docgen.output_directory = temp_path.to_string_lossy().to_string();
     // let base_name = format!(
@@ -102,4 +105,8 @@ fn test_docgen(path: &Path, /*mut options: Options, */ suffix: &str) -> anyhow::
     todo!("use the package system")
 }
 
+fn test_move(path: &Path) -> anyhow::Result<()> {}
+
 datatest_stable::harness!(test_runner, "tests/sources", r".*\.move|.*_template\.md",);
+
+datatest_stable::harness!(test_runner, "tests/move", r".*\.move|.*_template\.md",);
