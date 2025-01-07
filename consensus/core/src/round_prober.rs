@@ -170,6 +170,7 @@ impl<C: NetworkClient> RoundProber<C> {
             tokio::select! {
                 result = requests.next() => {
                     let Some((peer, result)) = result else { break };
+                    let peer_name = &self.context.committee.authority(peer).hostname;
                     match result {
                         Ok(Ok((received, accepted))) => {
                             if received.len() == self.context.committee.size()
@@ -177,7 +178,7 @@ impl<C: NetworkClient> RoundProber<C> {
                                 highest_received_rounds[peer] = received;
                             } else {
                                 node_metrics.round_prober_request_errors.with_label_values(&["invalid_received_rounds"]).inc();
-                                tracing::warn!("Received invalid number of received rounds from peer {}", peer);
+                                tracing::warn!("Received invalid number of received rounds from peer {}", peer_name);
                             }
 
                             if self
@@ -188,7 +189,7 @@ impl<C: NetworkClient> RoundProber<C> {
                                         highest_accepted_rounds[peer] = accepted;
                                     } else {
                                         node_metrics.round_prober_request_errors.with_label_values(&["invalid_accepted_rounds"]).inc();
-                                        tracing::warn!("Received invalid number of accepted rounds from peer {}", peer);
+                                        tracing::warn!("Received invalid number of accepted rounds from peer {}", peer_name);
                                     }
                                 }
 
@@ -205,11 +206,11 @@ impl<C: NetworkClient> RoundProber<C> {
                         // own probing failures and actual propagation issues.
                         Ok(Err(err)) => {
                             node_metrics.round_prober_request_errors.with_label_values(&["failed_fetch"]).inc();
-                            tracing::warn!("Failed to get latest rounds from peer {}: {:?}", peer, err);
+                            tracing::warn!("Failed to get latest rounds from peer {}: {:?}", peer_name, err);
                         },
                         Err(_) => {
                             node_metrics.round_prober_request_errors.with_label_values(&["timeout"]).inc();
-                            tracing::warn!("Timeout while getting latest rounds from peer {}", peer);
+                            tracing::warn!("Timeout while getting latest rounds from peer {}", peer_name);
                         },
                     }
                 }
