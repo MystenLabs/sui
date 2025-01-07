@@ -7864,7 +7864,6 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-ir-types",
- "move-model",
  "move-model-2",
  "move-symbol-pool",
  "num",

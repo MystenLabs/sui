@@ -1940,8 +1940,33 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-ir-types",
- "move-model",
  "move-model-2",
+ "move-prover-test-utils",
+ "move-symbol-pool",
+ "num",
+ "once_cell",
+ "regex",
+ "serde",
+ "tempfile",
+]
+
+[[package]]
+name = "move-docgen-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "codespan",
+ "codespan-reporting",
+ "datatest-stable",
+ "itertools",
+ "log",
+ "move-binary-format",
+ "move-compiler",
+ "move-core-types",
+ "move-docgen",
+ "move-ir-types",
+ "move-model-2",
+ "move-package",
  "move-prover-test-utils",
  "move-symbol-pool",
  "num",

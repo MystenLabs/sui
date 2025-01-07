@@ -1,12 +1,13 @@
 [package]
-name = "move-docgen"
+name = "move-docgen-tests"
 version = "0.1.0"
-authors = ["Diem Association <opensource@diem.com>"]
 publish = false
 edition = "2021"
 license = "Apache-2.0"
 
 [dependencies]
+move-docgen.workspace = true
+move-package.workspace = true
 move-binary-format.workspace = true
 move-compiler.workspace = true
 move-model-2.workspace = true
@@ -23,10 +24,10 @@ regex.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 once_cell.workspace = true
+tempfile.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
-tempfile.workspace = true
 move-prover-test-utils.workspace = true
 
 [[test]]

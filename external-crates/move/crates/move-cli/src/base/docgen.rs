@@ -4,7 +4,7 @@
 use super::reroot_path;
 use clap::*;
 use move_docgen::DocgenOptions;
-use move_package::{BuildConfig, ModelConfig};
+use move_package::BuildConfig;
 use std::{
     fs,
     path::{Path, PathBuf},

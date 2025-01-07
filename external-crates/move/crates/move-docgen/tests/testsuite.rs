@@ -105,8 +105,21 @@ fn test_docgen_OLD(
     todo!("use the package system")
 }
 
-fn test_move(path: &Path) -> anyhow::Result<()> {}
+fn test_move(path: &Path) -> anyhow::Result<()> {
+    let lock_path = out_path.join("Move.lock");
+    let config = BuildConfig {
+        dev_mode: true,
+        test_mode: false,
+        generate_docs: true,
+        install_dir: Some(out_path),
+        force_recompilation: false,
+        ..Default::default()
+    };
+    let resolved_package =
+        config.resolution_graph_for_package(self.toml_path, None, &mut progress)?;
+    model_builder::build(resolved_package)?;
+}
 
 datatest_stable::harness!(test_runner, "tests/sources", r".*\.move|.*_template\.md",);
 
-datatest_stable::harness!(test_runner, "tests/move", r".*\.move|.*_template\.md",);
+datatest_stable::harness!(test_move, "tests/move", r".*\.toml",);
