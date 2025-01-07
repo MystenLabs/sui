@@ -1153,6 +1153,7 @@ fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> 
 fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagnostic>> {
     let mut attributes_vec = vec![];
     while let Tok::NumSign = context.tokens.peek() {
+        let saved_doc_comments = context.tokens.take_doc_comment();
         let start_loc = context.tokens.start_loc();
         context.tokens.advance()?;
         let attributes_ = parse_comma_list(
@@ -1170,6 +1171,7 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
             end_loc,
             attributes_,
         ));
+        context.tokens.restore_doc_comment(saved_doc_comments);
     }
     Ok(attributes_vec)
 }

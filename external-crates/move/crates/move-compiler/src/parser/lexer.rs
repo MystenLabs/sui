@@ -6,10 +6,7 @@ use crate::{
     diag,
     diagnostics::Diagnostic,
     editions::{create_feature_error, Edition, FeatureGate},
-    parser::{
-        syntax::make_loc,
-        token_set::{TokenSet, DOC_COMMENT_STOP_SET},
-    },
+    parser::{syntax::make_loc, token_set::TokenSet},
 };
 use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
 use move_ir_types::location::Loc;
@@ -287,7 +284,6 @@ impl<'input> Lexer<'input> {
         // A helper function to compute the index of the start of the given substring.
         let len = text.len();
         let get_offset = |substring: &str| offset + len - substring.len();
-        let mut in_doc_comment = false;
 
         // Loop until we find text that isn't whitespace, and that isn't part of
         // a multi-line or single-line comment.
@@ -296,10 +292,6 @@ impl<'input> Lexer<'input> {
             (text, trimmed_preceding_eol) = trim_start_whitespace(text);
 
             if text.starts_with("/*") {
-                in_doc_comment = false;
-                if track_doc_comments {
-                    self.advance_doc_comment();
-                }
                 // Continue the loop immediately after the multi-line comment.
                 // There may be whitespace or another comment following this one.
                 text = self.parse_block_comment(get_offset(text), track_doc_comments)?;
@@ -309,20 +301,15 @@ impl<'input> Lexer<'input> {
                 let is_doc = text.starts_with("///") && !text.starts_with("////");
                 text = text.trim_start_matches(|c: char| c != '\n');
 
-                // If this was a documentation comment, record it in our map.
-                if is_doc && track_doc_comments {
-                    if !in_doc_comment {
-                        in_doc_comment = true;
-                        self.advance_doc_comment();
-                    }
-                    let end = get_offset(text);
-                    let mut comment = &self.text[(start + 3)..end];
-                    comment = comment.trim_end_matches('\r');
+                // If this was a documentation comment, append it to the current doc comment
+                if track_doc_comments {
+                    if is_doc {
+                        let end = get_offset(text);
+                        let mut comment = &self.text[(start + 3)..end];
+                        comment = comment.trim_end_matches('\r');
 
-                    self.append_current_doc_comment(start, end, comment);
-                } else {
-                    in_doc_comment = false;
-                    if track_doc_comments {
+                        self.append_current_doc_comment(start, end, comment);
+                    } else {
                         self.advance_doc_comment();
                     }
                 }
@@ -383,14 +370,20 @@ impl<'input> Lexer<'input> {
             match &text[..2] {
                 "*/" => {
                     let end = get_offset(text);
-                    // If the comment was not empty -- fuzzy ot handle `/**/`, which triggers the
-                    // doc comment check but is not actually a doc comment.
-                    if track_doc_comments && comment.is_doc_comment && comment.start + 3 < end {
-                        dbg!(self.append_current_doc_comment(
-                            comment.start,
-                            end,
-                            &self.text[(comment.start + 3)..end],
-                        ));
+                    // only consider doc comments for the outermost block comment
+                    // (and if `track_doc_comments`` is true)
+                    if track_doc_comments && comment_queue.is_empty() {
+                        // If the comment was not empty -- fuzzy ot handle `/**/`, which triggers the
+                        // doc comment check but is not actually a doc comment.
+                        if comment.is_doc_comment && comment.start + 3 < end {
+                            self.append_current_doc_comment(
+                                comment.start,
+                                end,
+                                &self.text[(comment.start + 3)..end],
+                            );
+                        } else {
+                            self.advance_doc_comment();
+                        }
                     }
                     text = &text[2..];
                 }
@@ -508,6 +501,32 @@ impl<'input> Lexer<'input> {
         self.current_doc_comment.take()
     }
 
+    // Restores the doc comment that was temporarily taken by `take_doc_comment`. This is used to
+    // allow for tokens to intersperse a doc comment, like in the case of attributes `#[...]` where
+    // a doc comment can continue with an attribute in the middle, e.g.
+    // ```
+    // /// This is a doc comment for 'fun foo'
+    // #[attr]
+    // /// This is a part of the same doc comment for 'fun foo'
+    // fun foo() {}
+    // ```
+    pub fn restore_doc_comment(&mut self, restored_opt: Option<(u32, u32, String)>) {
+        let Some((restored_start, restored_end, mut restored_comment)) = restored_opt else {
+            return;
+        };
+        match self.current_doc_comment.as_mut() {
+            None => {
+                self.current_doc_comment = Some((restored_start, restored_end, restored_comment));
+            }
+            Some((doc_start, _doc_end, doc_comment)) => {
+                *doc_start = restored_start as u32;
+                restored_comment.push('\n');
+                restored_comment.push_str(doc_comment);
+                *doc_comment = restored_comment;
+            }
+        }
+    }
+
     // At the end of parsing, checks whether there are any unmatched documentation comments,
     // producing errors if so. Otherwise returns a map from file position to associated
     // documentation.
@@ -522,9 +541,7 @@ impl<'input> Lexer<'input> {
     /// skipping over non-tokens, the first diagnostic will be recorded and returned, so that it can
     /// be acted upon (if parsing needs to stop) or ignored (if parsing should proceed regardless).
     pub fn advance(&mut self) -> Result<(), Box<Diagnostic>> {
-        if DOC_COMMENT_STOP_SET.contains(self.token, self.content()) {
-            self.advance_doc_comment();
-        }
+        self.advance_doc_comment();
         let text_end = self.text.len();
         self.prev_end = self.cur_end;
         let mut err = None;
