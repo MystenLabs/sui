@@ -85,8 +85,7 @@ impl IngestionClient {
         metrics: Arc<IndexerMetrics>,
     ) -> IngestionResult<Self> {
         let client = Arc::new(
-            RpcIngestionClient::new(url, basic_auth)
-                .map_err(|e| IngestionError::RpcClientError(e))?,
+            RpcIngestionClient::new(url, basic_auth).map_err(IngestionError::RpcClientError)?,
         );
         Ok(Self::new_impl(client, metrics))
     }
