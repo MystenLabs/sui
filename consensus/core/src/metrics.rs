@@ -126,6 +126,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) fetch_blocks_scheduler_skipped: IntCounterVec,
     pub(crate) synchronizer_fetched_blocks_by_peer: IntCounterVec,
     pub(crate) synchronizer_missing_blocks_by_authority: IntCounterVec,
+    pub(crate) synchronizer_current_missing_blocks_by_authority: IntGaugeVec,
     pub(crate) synchronizer_fetched_blocks_by_authority: IntCounterVec,
     pub(crate) invalid_blocks: IntCounterVec,
     pub(crate) rejected_blocks: IntCounterVec,
@@ -356,16 +357,22 @@ impl NodeMetrics {
                 &["peer", "type"],
                 registry,
             ).unwrap(),
-            synchronizer_fetched_blocks_by_authority: register_int_counter_vec_with_registry!(
-                "synchronizer_fetched_blocks_by_authority",
-                "Number of fetched blocks per block author via the synchronizer",
-                &["authority", "type"],
-                registry,
-            ).unwrap(),
             synchronizer_missing_blocks_by_authority: register_int_counter_vec_with_registry!(
                 "synchronizer_missing_blocks_by_authority",
                 "Number of missing blocks per block author, as observed by the synchronizer during periodic sync.",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            synchronizer_current_missing_blocks_by_authority: register_int_gauge_vec_with_registry!(
+                "synchronizer_current_missing_blocks_by_authority",
+                "Current number of missing blocks per block author, as observed by the synchronizer during periodic sync.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            synchronizer_fetched_blocks_by_authority: register_int_counter_vec_with_registry!(
+                "synchronizer_fetched_blocks_by_authority",
+                "Number of fetched blocks per block author via the synchronizer",
+                &["authority", "type"],
                 registry,
             ).unwrap(),
             last_known_own_block_round: register_int_gauge_with_registry!(
