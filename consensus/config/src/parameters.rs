@@ -155,7 +155,7 @@ impl Parameters {
         if cfg!(msim) {
             2
         } else {
-            10
+            5
         }
     }
 
