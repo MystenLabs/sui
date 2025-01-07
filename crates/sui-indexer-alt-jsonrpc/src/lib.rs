@@ -76,9 +76,7 @@ impl RpcService {
 
         info!("Starting JSON-RPC service on {listen_address}",);
 
-        let handle = server
-            .start(modules)
-            .context("Failed to start JSON-RPC service")?;
+        let handle = server.start(modules);
 
         Ok(tokio::spawn(async move {
             handle.stopped().await;

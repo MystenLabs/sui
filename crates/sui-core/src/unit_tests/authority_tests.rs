@@ -31,7 +31,6 @@ use sui_json_rpc_types::{
 };
 use sui_macros::sim_test;
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
-use sui_types::digests::Digest;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
@@ -45,7 +44,6 @@ use sui_types::messages_consensus::{
 use sui_types::object::Data;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
-use sui_types::storage::GetSharedLocks;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::utils::{
@@ -59,6 +57,7 @@ use sui_types::{
     MOVE_STDLIB_PACKAGE_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
     SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
+use sui_types::{digests::Digest, SUI_CLOCK_OBJECT_SHARED_VERSION};
 
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
@@ -4517,8 +4516,12 @@ async fn make_test_transaction(
     unreachable!("couldn't form cert")
 }
 
-async fn prepare_authority_and_shared_object_cert(
-) -> (Arc<AuthorityState>, VerifiedCertificate, ObjectID) {
+async fn prepare_authority_and_shared_object_cert() -> (
+    Arc<AuthorityState>,
+    VerifiedCertificate,
+    ObjectID,
+    SequenceNumber,
+) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
@@ -4550,13 +4553,18 @@ async fn prepare_authority_and_shared_object_cert(
         None,
     )
     .await;
-    (authority, certificate, shared_object_id)
+    (
+        authority,
+        certificate,
+        shared_object_id,
+        initial_shared_version,
+    )
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 #[should_panic]
 async fn test_shared_object_transaction_shared_locks_not_set() {
-    let (authority, certificate, _) = prepare_authority_and_shared_object_cert().await;
+    let (authority, certificate, _, _) = prepare_authority_and_shared_object_cert().await;
 
     // Executing the certificate now panics since it was not sequenced and shared locks are not set
     let _ = authority.try_execute_for_test(&certificate).await;
@@ -4564,7 +4572,7 @@ async fn test_shared_object_transaction_shared_locks_not_set() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_shared_object_transaction_ok() {
-    let (authority, certificate, shared_object_id) =
+    let (authority, certificate, shared_object_id, shared_object_initial_version) =
         prepare_authority_and_shared_object_cert().await;
 
     // Sequence the certificate to assign a sequence number to the shared object.
@@ -4573,18 +4581,20 @@ async fn test_shared_object_transaction_ok() {
     // Verify shared locks are now set for the transaction.
     let shared_object_version = authority
         .epoch_store_for_testing()
-        .get_shared_locks(&certificate.key())
-        .expect("Reading shared locks should not fail")
-        .expect("Locks should be set")
+        .get_assigned_shared_object_versions(&certificate.key())
+        .expect("Reading shared version assignments should not fail")
+        .expect("Versions should be set")
         .into_iter()
-        .find_map(|(object_id, version)| {
-            if object_id == shared_object_id {
+        .find_map(|((object_id, initial_shared_version), version)| {
+            if object_id == shared_object_id
+                && initial_shared_version == shared_object_initial_version
+            {
                 Some(version)
             } else {
                 None
             }
         })
-        .expect("Shared object must be locked");
+        .expect("Shared object must be assigned a version");
     assert_eq!(shared_object_version, OBJECT_START_VERSION);
 
     // Finally (Re-)execute the contract should succeed.
@@ -4689,12 +4699,14 @@ async fn test_consensus_commit_prologue_generation() {
     let get_assigned_version = |txn_key: &TransactionKey| -> SequenceNumber {
         authority_state
             .epoch_store_for_testing()
-            .get_shared_locks(txn_key)
+            .get_assigned_shared_object_versions(txn_key)
             .unwrap()
-            .expect("locks should be set")
+            .expect("versions should be set")
             .iter()
-            .filter_map(|(id, seq)| {
-                if id == &SUI_CLOCK_OBJECT_ID {
+            .filter_map(|((id, initial_shared_version), seq)| {
+                if id == &SUI_CLOCK_OBJECT_ID
+                    && initial_shared_version == &SUI_CLOCK_OBJECT_SHARED_VERSION
+                {
                     Some(*seq)
                 } else {
                     None
@@ -4795,7 +4807,7 @@ async fn test_consensus_message_processed() {
         } else {
             let epoch_store = authority2.epoch_store_for_testing();
             epoch_store
-                .acquire_shared_locks_from_effects(
+                .acquire_shared_version_assignments_from_effects(
                     &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
                     &effects1,
                     authority2.get_object_cache_reader().as_ref(),
@@ -4835,10 +4847,10 @@ async fn test_consensus_message_processed() {
     assert_eq!(
         authority1
             .epoch_store_for_testing()
-            .get_next_object_version(&shared_object_id),
+            .get_next_object_version(&shared_object_id, initial_shared_version),
         authority2
             .epoch_store_for_testing()
-            .get_next_object_version(&shared_object_id),
+            .get_next_object_version(&shared_object_id, initial_shared_version),
     );
 }
 
@@ -6058,15 +6070,27 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // Check cancelled transaction shared locks.
     let shared_object_version = authority
         .epoch_store_for_testing()
-        .get_shared_locks(&cancelled_txn.key())
-        .expect("Reading shared locks should not fail")
-        .expect("locks should be set")
+        .get_assigned_shared_object_versions(&cancelled_txn.key())
+        .expect("Reading shared version assignments should not fail")
+        .expect("Versions should be set")
         .into_iter()
         .collect::<HashMap<_, _>>();
     assert_eq!(
         [
-            (shared_objects[0].id(), SequenceNumber::CONGESTED),
-            (shared_objects[1].id(), SequenceNumber::CANCELLED_READ)
+            (
+                (
+                    shared_objects[0].id(),
+                    shared_objects[0].owner().start_version().unwrap()
+                ),
+                SequenceNumber::CONGESTED
+            ),
+            (
+                (
+                    shared_objects[1].id(),
+                    shared_objects[1].owner().start_version().unwrap()
+                ),
+                SequenceNumber::CANCELLED_READ
+            )
         ]
         .into_iter()
         .collect::<HashMap<_, _>>(),
@@ -6077,7 +6101,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     let input_loader = TransactionInputLoader::new(authority.get_object_cache_reader().clone());
     let input_objects = input_loader
         .read_objects_for_execution(
-            authority.epoch_store_for_testing().as_ref(),
+            &authority.epoch_store_for_testing(),
             &cancelled_txn.key(),
             &CertLockGuard::dummy_for_tests(),
             &cancelled_txn
@@ -6111,17 +6135,44 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     if let TransactionKind::ConsensusCommitPrologueV3(prologue_txn) =
         scheduled_txns[0].data().transaction_data().kind()
     {
-        assert!(matches!(
-            &prologue_txn.consensus_determined_version_assignments,
-            ConsensusDeterminedVersionAssignments::CancelledTransactions(assignment)
-            if assignment == &vec![(
-                                *cancelled_txn.digest(),
-                                vec![
-                                    (shared_objects[0].id(), SequenceNumber::CONGESTED),
-                                    (shared_objects[1].id(), SequenceNumber::CANCELLED_READ)
-                                ]
-                            )]
-        ));
+        match &prologue_txn.consensus_determined_version_assignments {
+            ConsensusDeterminedVersionAssignments::CancelledTransactions(assignment) => {
+                assert_eq!(
+                    assignment,
+                    &vec![(
+                        *cancelled_txn.digest(),
+                        vec![
+                            (shared_objects[0].id(), SequenceNumber::CONGESTED),
+                            (shared_objects[1].id(), SequenceNumber::CANCELLED_READ)
+                        ]
+                    )]
+                )
+            }
+            ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(assignment) => {
+                assert_eq!(
+                    assignment,
+                    &vec![(
+                        *cancelled_txn.digest(),
+                        vec![
+                            (
+                                (
+                                    shared_objects[0].id(),
+                                    shared_objects[0].owner().start_version().unwrap()
+                                ),
+                                SequenceNumber::CONGESTED
+                            ),
+                            (
+                                (
+                                    shared_objects[1].id(),
+                                    shared_objects[1].owner().start_version().unwrap()
+                                ),
+                                SequenceNumber::CANCELLED_READ
+                            ),
+                        ]
+                    )]
+                )
+            }
+        }
     } else {
         panic!("First scheduled transaction must be a ConsensusCommitPrologueV3 transaction.");
     }

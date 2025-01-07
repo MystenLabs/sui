@@ -116,7 +116,7 @@ module deepbook::clob_v2 {
         price: u64
     }
 
-    /// A struct to make all orders canceled a more effifient struct
+    /// A struct to make all orders canceled a more efficient struct
     public struct AllOrdersCanceledComponent<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// ID of the order within the pool
         order_id: u64,
@@ -1287,11 +1287,11 @@ module deepbook::clob_v2 {
         // We first retrieve the PriceLevel with the lowest price by calling min_leaf on the asks Critbit Tree.
         // We then match the market order by iterating through open orders on that price level in ascending order of the order id.
         // Open orders that are being filled are removed from the order book.
-        // We stop the iteration untill all quantities are filled.
+        // We stop the iteration until all quantities are filled.
         // If the total quantity of open orders at the lowest price level is not large enough to fully fill the market order,
         // we move on to the next price level by calling next_leaf on the asks Critbit Tree and repeat the same procedure.
         // Continue iterating over the price levels in ascending order until the market order is completely filled.
-        // If ther market order cannot be completely filled even after consuming all the open ask orders,
+        // If the market order cannot be completely filled even after consuming all the open ask orders,
         // the unfilled quantity will be cancelled.
         // Market ask order follows similar procedure.
         // The difference is that market ask order is matched against the open bid orders.
@@ -2008,7 +2008,7 @@ module deepbook::clob_v2 {
         let (price_low_, _) = critbit::min_leaf(&pool.bids);
         let (price_high_, _) = critbit::max_leaf(&pool.bids);
 
-        // If price_low is greater than the higest element in the tree, we return empty
+        // If price_low is greater than the highest element in the tree, we return empty
         if (price_low > price_high_) {
             return (price_vec, depth_vec)
         };

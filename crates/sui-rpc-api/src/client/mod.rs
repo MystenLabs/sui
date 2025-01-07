@@ -136,6 +136,7 @@ impl Client {
 
         let (metadata, response, _extentions) = self
             .raw_client()
+            .max_decoding_message_size(64 * 1024 * 1024)
             .get_full_checkpoint(request)
             .await?
             .into_parts();

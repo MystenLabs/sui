@@ -198,7 +198,11 @@ impl TestCheckpointDataBuilder {
     ) -> Self {
         let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
         let object_id = Self::derive_object_id(object_idx);
-        assert!(!self.live_objects.contains_key(&object_id));
+        assert!(
+            !self.live_objects.contains_key(&object_id),
+            "Object already exists: {}. Please use a different object index.",
+            object_id
+        );
         let move_object = MoveObject::new_coin(
             Coin::type_(coin_type).into(),
             // version doesn't matter since we will set it to the lamport version when we finalize the transaction

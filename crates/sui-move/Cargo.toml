@@ -10,7 +10,7 @@ edition = "2021"
 anyhow.workspace = true
 clap.workspace = true
 colored.workspace = true
-once_cell = { workspace = true, optional = true }
+once_cell.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
 tracing.workspace = true
@@ -56,13 +56,3 @@ sui-simulator.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]
-
-[features]
-default = []
-build = []
-coverage = []
-disassemble = []
-prove = []
-unit_test = ["build", "dep:once_cell"]
-calibrate = []
-all = ["build", "coverage", "disassemble", "prove", "unit_test", "calibrate"]

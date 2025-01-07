@@ -19,6 +19,7 @@ use move_core_types::ident_str;
 use std::sync::Arc;
 use sui_macros::{register_fail_point_arg, sim_test};
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{InputSharedObject, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -200,8 +201,8 @@ async fn update_objects(
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
     gas_object_id: &ObjectID,
-    shared_object_1: &(ObjectID, SequenceNumber),
-    shared_object_2: &(ObjectID, SequenceNumber),
+    shared_object_1: &ConsensusObjectSequenceKey,
+    shared_object_2: &ConsensusObjectSequenceKey,
     owned_object: &ObjectRef,
 ) -> (Transaction, TransactionEffects) {
     let mut txn_builder = ProgrammableTransactionBuilder::new();
@@ -349,7 +350,7 @@ async fn test_congestion_control_execution_cancellation() {
         .unwrap();
     authority_state_2
         .epoch_store_for_testing()
-        .acquire_shared_locks_from_effects(
+        .acquire_shared_version_assignments_from_effects(
             &VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
             &effects,
             authority_state_2.get_object_cache_reader().as_ref(),

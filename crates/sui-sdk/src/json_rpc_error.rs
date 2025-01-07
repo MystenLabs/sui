@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use jsonrpsee::types::{error::UNKNOWN_ERROR_CODE, ErrorObjectOwned};
+use jsonrpsee::types::error::UNKNOWN_ERROR_CODE;
 pub use sui_json_rpc_api::{TRANSACTION_EXECUTION_CLIENT_ERROR_CODE, TRANSIENT_ERROR_CODE};
 use thiserror::Error;
 
@@ -49,11 +49,14 @@ impl Error {
     }
 }
 
-impl From<jsonrpsee::core::Error> for Error {
-    fn from(err: jsonrpsee::core::Error) -> Self {
+impl From<jsonrpsee::core::ClientError> for Error {
+    fn from(err: jsonrpsee::core::ClientError) -> Self {
         // The following code relies on jsonrpsee's From<Error> for ErrorObjectOwned implementation
         // It converts any variant that is not Error::Call into an ErrorObject with UNKNOWN_ERROR_CODE
-        let error_object_owned: ErrorObjectOwned = err.into();
+        let error_object_owned = match err {
+            jsonrpsee::core::ClientError::Call(e) => e,
+            _ => jsonrpsee::types::error::ErrorCode::from(UNKNOWN_ERROR_CODE).into(),
+        };
         Error {
             code: error_object_owned.code(),
             message: error_object_owned.message().to_string(),

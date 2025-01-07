@@ -5,6 +5,8 @@ mod acceptor;
 mod certgen;
 mod verifier;
 
+use std::sync::Arc;
+
 pub use acceptor::{TlsAcceptor, TlsConnectionInfo};
 pub use certgen::SelfSignedCertificate;
 use rustls::ClientConfig;
@@ -20,7 +22,29 @@ use tokio_rustls::rustls::ServerConfig;
 
 pub const SUI_VALIDATOR_SERVER_NAME: &str = "sui";
 
-pub fn create_rustls_server_config<A: Allower + 'static>(
+pub fn create_rustls_server_config(
+    private_key: Ed25519PrivateKey,
+    server_name: String,
+) -> ServerConfig {
+    // TODO: refactor to use key bytes
+    let self_signed_cert = SelfSignedCertificate::new(private_key, server_name.as_str());
+    let tls_cert = self_signed_cert.rustls_certificate();
+    let tls_private_key = self_signed_cert.rustls_private_key();
+    let mut tls_config = rustls::ServerConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_protocol_versions(&[&rustls::version::TLS13])
+    .unwrap_or_else(|e| panic!("Failed to create TLS server config: {:?}", e))
+    .with_no_client_auth()
+    .with_single_cert(vec![tls_cert], tls_private_key)
+    .unwrap_or_else(|e| panic!("Failed to create TLS server config: {:?}", e));
+    tls_config.alpn_protocols = vec![b"h2".to_vec()];
+    tls_config
+}
+
+/// Create a TLS server config which requires mTLS, eg the client to also provide a cert and be
+/// verified by the server based on the provided policy
+pub fn create_rustls_server_config_with_client_verifier<A: Allower + 'static>(
     private_key: Ed25519PrivateKey,
     server_name: String,
     allower: A,

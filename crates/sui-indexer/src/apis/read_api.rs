@@ -142,10 +142,7 @@ impl ReadApiServer for ReadApi {
         _version: SequenceNumber,
         _options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
-        Err(jsonrpsee::types::error::CallError::Custom(
-            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
-        )
-        .into())
+        Err(jsonrpsee::types::error::ErrorCode::MethodNotFound.into())
     }
 
     async fn try_get_object_before_version(
@@ -153,10 +150,7 @@ impl ReadApiServer for ReadApi {
         _: ObjectID,
         _: SequenceNumber,
     ) -> RpcResult<SuiPastObjectResponse> {
-        Err(jsonrpsee::types::error::CallError::Custom(
-            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
-        )
-        .into())
+        Err(jsonrpsee::types::error::ErrorCode::MethodNotFound.into())
     }
 
     async fn try_multi_get_past_objects(
@@ -164,10 +158,7 @@ impl ReadApiServer for ReadApi {
         _past_objects: Vec<SuiGetPastObjectRequest>,
         _options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
-        Err(jsonrpsee::types::error::CallError::Custom(
-            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
-        )
-        .into())
+        Err(jsonrpsee::types::error::ErrorCode::MethodNotFound.into())
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>> {
@@ -207,20 +198,6 @@ impl ReadApiServer for ReadApi {
             next_cursor,
             has_next_page,
         })
-    }
-
-    async fn get_checkpoints_deprecated_limit(
-        &self,
-        cursor: Option<BigInt<u64>>,
-        limit: Option<BigInt<u64>>,
-        descending_order: bool,
-    ) -> RpcResult<CheckpointPage> {
-        self.get_checkpoints(
-            cursor,
-            limit.map(|l| l.into_inner() as usize),
-            descending_order,
-        )
-        .await
     }
 
     async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
@@ -282,7 +259,11 @@ async fn object_read_to_object_response(
                     Ok(rendered_fields) => display_fields = Some(rendered_fields),
                     Err(e) => {
                         return Ok(SuiObjectResponse::new(
-                            Some((object_ref, o, layout, options, None).try_into()?),
+                            Some(
+                                (object_ref, o, layout, options, None)
+                                    .try_into()
+                                    .map_err(IndexerError::from)?,
+                            ),
                             Some(SuiObjectResponseError::DisplayError {
                                 error: e.to_string(),
                             }),
@@ -291,7 +272,9 @@ async fn object_read_to_object_response(
                 }
             }
             Ok(SuiObjectResponse::new_with_data(
-                (object_ref, o, layout, options, display_fields).try_into()?,
+                (object_ref, o, layout, options, display_fields)
+                    .try_into()
+                    .map_err(IndexerError::from)?,
             ))
         }
         ObjectRead::Deleted((object_id, version, digest)) => Ok(SuiObjectResponse::new_with_error(

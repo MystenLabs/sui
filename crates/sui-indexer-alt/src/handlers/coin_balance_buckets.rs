@@ -19,14 +19,21 @@ use sui_types::{
     TypeTag,
 };
 
+/// This handler is used to track the balance buckets of address-owned coins.
+/// The balance bucket is calculated using log10 of the coin balance.
+/// Whenever a coin object's presence, owner or balance bucket changes,
+/// we will insert a new row into the `coin_balance_buckets` table.
+/// A Delete record will be inserted when a coin object is no longer present or no longer owned by an address.
 pub(crate) struct CoinBalanceBuckets;
 
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ProcessedCoinBalanceBucket {
     pub object_id: ObjectID,
     pub cp_sequence_number: u64,
     pub change: CoinBalanceBucketChangeKind,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum CoinBalanceBucketChangeKind {
     Insert {
         owner_kind: StoredCoinOwnerKind,
@@ -41,7 +48,6 @@ impl Processor for CoinBalanceBuckets {
     const NAME: &'static str = "coin_balance_buckets";
     type Value = ProcessedCoinBalanceBucket;
 
-    // TODO: We need to add tests for this function.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
         let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
@@ -209,4 +215,273 @@ pub(crate) fn get_coin_balance_bucket(coin: &Object) -> anyhow::Result<i16> {
     }
     let bucket = balance.ilog10() as i16;
     Ok(bucket)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+    use sui_protocol_config::ProtocolConfig;
+    use sui_types::base_types::{dbg_addr, MoveObjectType, ObjectID, SequenceNumber, SuiAddress};
+    use sui_types::digests::TransactionDigest;
+    use sui_types::gas_coin::GAS;
+    use sui_types::object::{Authenticator, MoveObject, Object};
+    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
+
+    #[test]
+    fn test_get_coin_balance_bucket() {
+        let id = ObjectID::random();
+
+        // Test coin with 0 balance
+        let zero_coin = Object::with_id_owner_gas_for_testing(id, SuiAddress::ZERO, 0);
+        assert_eq!(get_coin_balance_bucket(&zero_coin).unwrap(), 0);
+
+        // Test coin with balance 1 (10^0)
+        let one_coin = Object::with_id_owner_gas_for_testing(id, SuiAddress::ZERO, 1);
+        assert_eq!(get_coin_balance_bucket(&one_coin).unwrap(), 0);
+
+        // Test coin with balance 100 (10^2)
+        let hundred_coin = Object::with_id_owner_gas_for_testing(id, SuiAddress::ZERO, 100);
+        assert_eq!(get_coin_balance_bucket(&hundred_coin).unwrap(), 2);
+
+        // Test coin with balance 1000000 (10^6)
+        let million_coin = Object::with_id_owner_gas_for_testing(id, SuiAddress::ZERO, 1000000);
+        assert_eq!(get_coin_balance_bucket(&million_coin).unwrap(), 6);
+
+        // The type of this object is a staked SUI, not a coin.
+        let invalid_coin = unsafe {
+            Object::new_move(
+                MoveObject::new_from_execution(
+                    MoveObjectType::staked_sui(),
+                    false,
+                    SequenceNumber::new(),
+                    bcs::to_bytes(&Object::new_gas_for_testing()).unwrap(),
+                    &ProtocolConfig::get_for_max_version_UNSAFE(),
+                )
+                .unwrap(),
+                Owner::AddressOwner(SuiAddress::ZERO),
+                TransactionDigest::ZERO,
+            )
+        };
+        assert!(get_coin_balance_bucket(&invalid_coin).is_err());
+    }
+
+    #[test]
+    fn test_get_coin_owner() {
+        let id = ObjectID::random();
+        let addr1 = SuiAddress::random_for_testing_only();
+        let addr_owned = Object::with_id_owner_for_testing(id, addr1);
+        assert_eq!(
+            get_coin_owner(&addr_owned),
+            Some((StoredCoinOwnerKind::Fastpath, addr1))
+        );
+
+        // Test object owner (should return None)
+        let obj_owned = Object::with_object_owner_for_testing(id, addr1.into());
+        assert_eq!(get_coin_owner(&obj_owned), None);
+
+        // Test shared owner (should return None)
+        let shared = Object::shared_for_testing();
+        assert_eq!(get_coin_owner(&shared), None);
+
+        // Test immutable owner (should return None)
+        let immutable = Object::immutable_with_id_for_testing(id);
+        assert_eq!(get_coin_owner(&immutable), None);
+
+        let consensus_v2 = Object::with_id_owner_version_for_testing(
+            id,
+            SequenceNumber::new(),
+            Owner::ConsensusV2 {
+                authenticator: Box::new(Authenticator::SingleOwner(addr1)),
+                start_version: SequenceNumber::new(),
+            },
+        );
+        assert_eq!(
+            get_coin_owner(&consensus_v2),
+            Some((StoredCoinOwnerKind::Consensus, addr1))
+        );
+    }
+
+    #[test]
+    fn test_process_coin_balance_buckets_new_sui_coin() {
+        let mut builder = TestCheckpointDataBuilder::new(1);
+        builder = builder
+            .start_transaction(0)
+            .create_sui_object(0, 0)
+            .create_sui_object(1, 100)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(values.len(), 2);
+        assert!(values.iter().any(|v| matches!(
+            v.change,
+            CoinBalanceBucketChangeKind::Insert {
+                owner_kind: StoredCoinOwnerKind::Fastpath,
+                balance_bucket: 0,
+                ..
+            }
+        )));
+        assert!(values.iter().any(|v| matches!(
+            v.change,
+            CoinBalanceBucketChangeKind::Insert {
+                owner_kind: StoredCoinOwnerKind::Fastpath,
+                balance_bucket: 2,
+                ..
+            }
+        )));
+    }
+
+    #[test]
+    fn test_process_coin_balance_buckets_new_other_coin() {
+        let mut builder = TestCheckpointDataBuilder::new(1);
+        let coin_type = TypeTag::from_str("0x0::a::b").unwrap();
+        builder = builder
+            .start_transaction(0)
+            .create_coin_object(0, 0, 10, coin_type.clone())
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(values.len(), 1);
+        assert_eq!(
+            &values[0].change,
+            &CoinBalanceBucketChangeKind::Insert {
+                owner_kind: StoredCoinOwnerKind::Fastpath,
+                balance_bucket: 1,
+                coin_type: coin_type.clone(),
+                owner_id: TestCheckpointDataBuilder::derive_address(0),
+            }
+        );
+    }
+
+    #[test]
+    fn test_process_coin_balance_buckets_balance_change() {
+        let mut builder = TestCheckpointDataBuilder::new(1);
+        builder = builder
+            .start_transaction(0)
+            .create_sui_object(0, 10010)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(values.len(), 1);
+        assert_eq!(
+            values[0].change,
+            CoinBalanceBucketChangeKind::Insert {
+                owner_kind: StoredCoinOwnerKind::Fastpath,
+                balance_bucket: 4,
+                coin_type: GAS::type_tag(),
+                owner_id: TestCheckpointDataBuilder::derive_address(0),
+            }
+        );
+        // Transfer 10 MIST, balance goes from 10010 to 10000.
+        // The balance bucket for the original coin does not change.
+        // We should only see the creation of the new coin in the processed results.
+        builder = builder
+            .start_transaction(0)
+            .transfer_coin_balance(0, 1, 1, 10)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(values.len(), 1);
+        assert_eq!(
+            values[0].change,
+            CoinBalanceBucketChangeKind::Insert {
+                owner_kind: StoredCoinOwnerKind::Fastpath,
+                balance_bucket: 1,
+                coin_type: GAS::type_tag(),
+                owner_id: TestCheckpointDataBuilder::derive_address(1),
+            }
+        );
+
+        // Transfer 1 MIST, balance goes from 10000 to 9999.
+        // The balance bucket changes, we should see a change, both for the old owner and the new owner.
+        builder = builder
+            .start_transaction(0)
+            .transfer_coin_balance(0, 2, 1, 1)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(values.len(), 2);
+        assert!(values.iter().any(|v| v.change
+            == CoinBalanceBucketChangeKind::Insert {
+                owner_kind: StoredCoinOwnerKind::Fastpath,
+                balance_bucket: 3,
+                coin_type: GAS::type_tag(),
+                owner_id: TestCheckpointDataBuilder::derive_address(0),
+            }));
+        assert!(values.iter().any(|v| v.change
+            == CoinBalanceBucketChangeKind::Insert {
+                owner_kind: StoredCoinOwnerKind::Fastpath,
+                balance_bucket: 0,
+                coin_type: GAS::type_tag(),
+                owner_id: TestCheckpointDataBuilder::derive_address(1),
+            }));
+    }
+
+    #[test]
+    fn test_process_coin_balance_buckets_coin_deleted() {
+        let mut builder = TestCheckpointDataBuilder::new(1);
+        builder = builder
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        builder.build_checkpoint();
+
+        builder = builder
+            .start_transaction(0)
+            .delete_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
+    }
+
+    #[test]
+    fn test_process_coin_balance_buckets_owner_change() {
+        let mut builder = TestCheckpointDataBuilder::new(1);
+        builder = builder
+            .start_transaction(0)
+            .create_sui_object(0, 100)
+            .finish_transaction();
+        builder.build_checkpoint();
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(values.len(), 1);
+        assert_eq!(
+            values[0].change,
+            CoinBalanceBucketChangeKind::Insert {
+                owner_kind: StoredCoinOwnerKind::Fastpath,
+                balance_bucket: 2,
+                coin_type: GAS::type_tag(),
+                owner_id: TestCheckpointDataBuilder::derive_address(1),
+            }
+        );
+    }
+
+    #[test]
+    fn test_process_coin_balance_buckets_object_owned() {
+        let mut builder = TestCheckpointDataBuilder::new(1);
+        builder = builder
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        builder.build_checkpoint();
+
+        // We do not track balance buckets for object owners.
+        // So this is considered as a delete.
+        builder = builder
+            .start_transaction(0)
+            .change_object_owner(0, Owner::ObjectOwner(dbg_addr(1)))
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
+    }
 }

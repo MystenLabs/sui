@@ -319,7 +319,7 @@ Emitted when a maker order is canceled.
 
 ## Struct `AllOrdersCanceledComponent`
 
-A struct to make all orders canceled a more effifient struct
+A struct to make all orders canceled a more efficient struct
 
 
 <pre><code><b>struct</b> <a href="clob_v2.md#0xdee9_clob_v2_AllOrdersCanceledComponent">AllOrdersCanceledComponent</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
@@ -2782,11 +2782,11 @@ Place a market order to the order book.
     // We first retrieve the PriceLevel <b>with</b> the lowest price by calling min_leaf on the asks Critbit Tree.
     // We then match the market order by iterating through open orders on that price level in ascending order of the order id.
     // Open orders that are being filled are removed from the order book.
-    // We stop the iteration untill all quantities are filled.
+    // We stop the iteration until all quantities are filled.
     // If the total quantity of open orders at the lowest price level is not large enough <b>to</b> fully fill the market order,
     // we <b>move</b> on <b>to</b> the next price level by calling next_leaf on the asks Critbit Tree and repeat the same procedure.
     // Continue iterating over the price levels in ascending order until the market order is completely filled.
-    // If ther market order cannot be completely filled even after consuming all the open ask orders,
+    // If the market order cannot be completely filled even after consuming all the open ask orders,
     // the unfilled quantity will be cancelled.
     // Market ask order follows similar procedure.
     // The difference is that market ask order is matched against the open bid orders.
@@ -3822,7 +3822,7 @@ The latter is the corresponding depth list
     <b>let</b> (price_low_, _) = <a href="critbit.md#0xdee9_critbit_min_leaf">critbit::min_leaf</a>(&pool.bids);
     <b>let</b> (price_high_, _) = <a href="critbit.md#0xdee9_critbit_max_leaf">critbit::max_leaf</a>(&pool.bids);
 
-    // If price_low is greater than the higest element in the tree, we <b>return</b> empty
+    // If price_low is greater than the highest element in the tree, we <b>return</b> empty
     <b>if</b> (price_low &gt; price_high_) {
         <b>return</b> (price_vec, depth_vec)
     };
