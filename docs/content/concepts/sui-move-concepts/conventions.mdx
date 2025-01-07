@@ -127,6 +127,8 @@ use my_dep::battle::{Battle, Score};
 
 ## Naming conventions
 
+Adhering to naming conventions in your code helps readability and ultimately makes your codebase easier to maintain. The following sections outline the key naming conventions to follow when writing Move code.
+
 ### Constants
 
 Constants should be uppercase and formatted as snake case. Errors are specific constants that use PascalCase and start with an E. Make them descriptive.
@@ -134,10 +136,13 @@ Constants should be uppercase and formatted as snake case. Errors are specific c
 ```move
 module conventions::constants;
 
+// correct non-error constant
 const MAX_NAME_LENGTH: u64 = 64;
-// this is right
+
+// correct error constant
 const EInvalidName: u64 = 0;
-// this is wrong
+
+// wrong error constant
 const E_INVALID_NAME: u64 = 0;
 ```
 
@@ -166,7 +171,7 @@ public struct Receipt<Data> has key, store {
 }
 
 // right naming
-public struct Request {}
+public struct Request();
 
 // wrong naming
 public struct RequestPotato {}
@@ -208,6 +213,8 @@ public struct Receipt<Data> has store { ... }
 ```
 
 ## Code Structure
+
+The following section covers common patterns and best practices specific to Move development on Sui, including object ownership models and function design principles.
 
 ### Shared objects
 
