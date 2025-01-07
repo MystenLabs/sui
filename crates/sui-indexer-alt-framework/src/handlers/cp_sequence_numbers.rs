@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use crate::pipeline::concurrent::pruner::{PruningStrategyTrait, SimpleRangePruning};
 use crate::pipeline::{concurrent::Handler, Processor};
 use crate::schema::cp_sequence_numbers;
 use anyhow::Result;
@@ -49,5 +50,12 @@ impl Handler for CpSequenceNumbers {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    fn pruning_strategy(&self) -> Arc<dyn PruningStrategyTrait> {
+        Arc::new(SimpleRangePruning {
+            table_name: "cp_sequence_numbers".to_string(),
+            key_column_name: "cp_sequence_number".to_string(),
+        })
     }
 }

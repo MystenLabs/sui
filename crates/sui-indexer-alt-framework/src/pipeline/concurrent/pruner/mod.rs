@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use sui_pg_db::Db;
+use sui_pg_db::{Connection, Db};
 use tokio::{
     task::JoinHandle,
     time::{interval, MissedTickBehavior},
@@ -16,8 +16,35 @@ use crate::{
     pipeline::logging::{LoggerWatermark, WatermarkLogger},
     watermarks::PrunerWatermark,
 };
+pub use consistent_pruning::{PruningInfo, PruningLookupTable};
+pub use per_object_pruner::PerObjectPruning;
+pub use simple_range_pruner::SimpleRangePruning;
 
 use super::{Handler, PrunerConfig};
+
+mod consistent_pruning;
+mod per_object_pruner;
+mod simple_range_pruner;
+
+#[async_trait::async_trait]
+pub trait PruningStrategyTrait: Send + Sync {
+    /// Whether the pruner requires processed values in order to prune.
+    /// This will determine the first checkpoint to process when we start the pipeline.
+    /// If this is true, when the pipeline starts, it will process all checkpoints from the
+    /// pruner watermark, so that the pruner have access to the processed values for any unpruned
+    /// checkpoints.
+    /// If this is false, when the pipeline starts, it will process all checkpoints from the
+    /// committer watermark.
+    fn requires_processed_values(&self) -> bool;
+
+    async fn prune(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut Connection,
+    ) -> anyhow::Result<usize>;
+}
+pub type PruningStrategy = Arc<dyn PruningStrategyTrait>;
 
 /// The pruner task is responsible for deleting old data from the database. It will periodically
 /// check the `watermarks` table to see if there is any data that should be pruned between the
@@ -47,6 +74,8 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
             info!(pipeline = H::NAME, "Skipping pruner task");
             return;
         };
+
+        let strategy = handler.pruning_strategy();
 
         // The pruner can pause for a while, waiting for the delay imposed by the
         // `pruner_timestamp` to expire. In that case, the period between ticks should not be
@@ -136,7 +165,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                     break;
                 };
 
-                let affected = match handler.prune(from, to_exclusive, &mut conn).await {
+                let affected = match strategy.prune(from, to_exclusive, &mut conn).await {
                     Ok(affected) => {
                         guard.stop_and_record();
                         watermark.pruner_hi = to_exclusive as i64;

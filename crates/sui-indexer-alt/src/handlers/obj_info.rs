@@ -7,12 +7,16 @@ use anyhow::Result;
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
-use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_framework::pipeline::{
+    concurrent::{
+        pruner::{PerObjectPruning, PruningInfo, PruningLookupTable, PruningStrategy},
+        Handler,
+    },
+    Processor,
+};
 use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 use sui_pg_db as db;
 use sui_types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object};
-
-use crate::consistent_pruning::{PruningInfo, PruningLookupTable};
 
 #[derive(Default)]
 pub(crate) struct ObjInfo {
@@ -91,8 +95,6 @@ impl Processor for ObjInfo {
 
 #[async_trait::async_trait]
 impl Handler for ObjInfo {
-    const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
-
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
         let stored = values
             .iter()
@@ -105,44 +107,13 @@ impl Handler for ObjInfo {
             .await?)
     }
 
-    // TODO: Add tests for this function.
-    async fn prune(
-        &self,
-        from: u64,
-        to_exclusive: u64,
-        conn: &mut db::Connection<'_>,
-    ) -> Result<usize> {
-        use sui_indexer_alt_schema::schema::obj_info::dsl;
-
-        let to_prune = self.pruning_lookup_table.take(from, to_exclusive)?;
-
-        // For each (object_id, cp_sequence_number_exclusive), delete all entries in obj_info with
-        // cp_sequence_number less than cp_sequence_number_exclusive that match the object_id.
-
-        let values = to_prune
-            .iter()
-            .map(|(object_id, seq_number)| {
-                let object_id_hex = hex::encode(object_id);
-                format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, seq_number)
-            })
-            .collect::<Vec<_>>()
-            .join(",");
-        let query = format!(
-            "
-            WITH to_prune_data (object_id, cp_sequence_number_exclusive) AS (
-                VALUES {}
-            )
-            DELETE FROM obj_info
-            USING to_prune_data
-            WHERE obj_info.{:?} = to_prune_data.object_id
-              AND obj_info.{:?} < to_prune_data.cp_sequence_number_exclusive
-            ",
-            values,
-            dsl::object_id,
-            dsl::cp_sequence_number,
-        );
-        let rows_deleted = sql_query(query).execute(conn).await?;
-        Ok(rows_deleted)
+    fn pruning_strategy(&self) -> PruningStrategy {
+        Arc::new(PerObjectPruning {
+            pruning_lookup_table: self.pruning_lookup_table.clone(),
+            table_name: "obj_info".to_string(),
+            object_id_column_name: "object_id".to_string(),
+            cp_sequence_number_column_name: "cp_sequence_number".to_string(),
+        })
     }
 }
 
