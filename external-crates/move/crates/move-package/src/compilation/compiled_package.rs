@@ -575,9 +575,10 @@ impl CompiledPackage {
         )?;
         let program_info = program_info_hook.take_typing_info();
         let (file_map, all_compiled_units) = result;
+        let mut all_compiled_units_vec = vec![];
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
-        for annot_unit in &all_compiled_units {
+        for annot_unit in all_compiled_units {
             let source_path = PathBuf::from(
                 file_map
                     .get(&annot_unit.loc().file_hash())
@@ -587,24 +588,25 @@ impl CompiledPackage {
             );
             let package_name = annot_unit.named_module.package_name.unwrap();
             let unit = CompiledUnitWithSource {
-                unit: annot_unit.named_module.clone(),
+                unit: annot_unit.named_module,
                 source_path,
             };
             if package_name == root_package_name {
-                root_compiled_units.push(unit)
+                root_compiled_units.push(unit.clone())
             } else {
-                deps_compiled_units.push((package_name, unit))
+                deps_compiled_units.push((package_name, unit.clone()))
             }
+            all_compiled_units_vec.push((unit.source_path, unit.unit));
         }
 
         let mut compiled_docs = None;
         if resolution_graph.build_options.generate_docs {
             let root_named_address_map = resolved_package.resolved_table.clone();
             let model = source_model::Model::new(
-                file_map,
+                file_map.clone(),
                 root_named_address_map,
                 program_info,
-                all_compiled_units,
+                all_compiled_units_vec,
             )?;
 
             if resolution_graph.build_options.generate_docs {

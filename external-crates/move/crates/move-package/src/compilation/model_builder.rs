@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    compilation::{
-        build_plan::BuildPlan,
-        compiled_package::{BuildResult, CompiledPackage, CompiledUnitWithSource},
-    },
+    compilation::{build_plan::BuildPlan, compiled_package::CompiledUnitWithSource},
     resolution::resolution_graph::ResolvedGraph,
 };
 use anyhow::Result;
@@ -40,7 +37,7 @@ pub fn build<W: Write>(
         .map(|CompiledUnitWithSource { unit, source_path }| (source_path, unit))
         .collect();
     source_model::Model::new(
-        file_map,
+        compiled_package.file_map,
         root_named_address_map,
         program_info,
         all_compiled_units,
