@@ -33,8 +33,8 @@ RUN cargo build --profile ${PROFILE} \
 FROM debian:bullseye-slim AS runtime
 WORKDIR "$WORKDIR/sui"
 
-# sui-tool needs libpq at runtime
-RUN apt-get update && apt-get install -y libpq5 libpq-dev ca-certificates
+# sui-tool needs libpq at runtime and uses git when fetching move dependencies during build
+RUN apt-get update && apt-get install -y libpq5 libpq-dev ca-certificates git
 
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/stress /usr/local/bin
