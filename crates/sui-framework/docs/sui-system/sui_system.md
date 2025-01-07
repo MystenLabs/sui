@@ -218,7 +218,7 @@ This function will be called only once in genesis.
 
 ## Function `request_add_validator_candidate`
 
-Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
+Can be called by anyone who wishes to become a validator candidate and starts accruing delegated
 stakes in their staking pool. Once they have at least <code>MIN_VALIDATOR_JOINING_STAKE</code> amount of stake they
 can call <code>request_add_validator</code> to officially become an active validator at the next epoch.
 Aborts if the caller is already a pending or active validator, or a validator candidate.
