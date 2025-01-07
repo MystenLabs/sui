@@ -23,7 +23,7 @@ use mysten_metrics::spawn_monitored_task;
 use rand::Rng;
 use std::fmt::Debug;
 use std::time::{Duration, Instant, SystemTime};
-use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig, Weight};
+use sui_types::traffic_control::{PolicyConfig, PolicyType, RemoteFirewallConfig, Weight};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 use tracing::{debug, error, info, trace, warn};
@@ -110,6 +110,7 @@ impl TrafficController {
         fw_config: Option<RemoteFirewallConfig>,
     ) -> Self {
         let metrics = Arc::new(metrics);
+        Self::set_policy_config_metrics(&policy_config, metrics.clone());
         let (tx, rx) = mpsc::channel(policy_config.channel_capacity);
         // Memoized drainfile existence state. This is passed into delegation
         // funtions to prevent them from continuing to populate blocklists
@@ -148,6 +149,28 @@ impl TrafficController {
             acl: Acl::Blocklists(blocklists),
             metrics: metrics.clone(),
             dry_run_mode,
+        }
+    }
+
+    fn set_policy_config_metrics(
+        policy_config: &PolicyConfig,
+        metrics: Arc<TrafficControllerMetrics>,
+    ) {
+        if let PolicyType::FreqThreshold(config) = &policy_config.spam_policy_type {
+            metrics
+                .spam_client_threshold
+                .set(config.client_threshold as i64);
+            metrics
+                .spam_proxied_client_threshold
+                .set(config.proxied_client_threshold as i64);
+        }
+        if let PolicyType::FreqThreshold(config) = &policy_config.error_policy_type {
+            metrics
+                .error_client_threshold
+                .set(config.client_threshold as i64);
+            metrics
+                .error_proxied_client_threshold
+                .set(config.proxied_client_threshold as i64);
         }
     }
 
