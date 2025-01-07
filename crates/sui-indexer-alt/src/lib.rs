@@ -3,7 +3,7 @@
 
 use anyhow::Context;
 use bootstrap::bootstrap;
-use config::{ConsistencyConfig, IndexerConfig, PipelineLayer};
+use config::{IndexerConfig, PipelineLayer};
 use handlers::coin_balance_buckets::CoinBalanceBuckets;
 use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
@@ -47,7 +47,6 @@ pub async fn start_indexer(
 ) -> anyhow::Result<()> {
     let IndexerConfig {
         ingestion,
-        consistency,
         committer,
         pruner,
         pipeline,
@@ -80,7 +79,6 @@ pub async fn start_indexer(
     } = pipeline.finish();
 
     let ingestion = ingestion.finish(IngestionConfig::default());
-    let consistency = consistency.finish(ConsistencyConfig::default());
     let committer = committer.finish(CommitterConfig::default());
     let pruner = pruner.finish(PrunerConfig::default());
 
@@ -121,7 +119,6 @@ pub async fn start_indexer(
                         layer.finish(ConcurrentConfig {
                             committer: committer.clone(),
                             pruner: Some(pruner.clone()),
-                            checkpoint_lag: None,
                         }),
                     )
                     .await?
@@ -141,37 +138,6 @@ pub async fn start_indexer(
                         }),
                     )
                     .await?
-            }
-        };
-    }
-
-    // A consistent pipeline consists of two concurrent pipelines. The first (main) one writes
-    // new data, and the second one lags behind deleting data that has fallen out of the consistent
-    // range.
-    macro_rules! add_consistent {
-        ($main_handler:expr, $main_config:expr; $lagged_handler:expr, $lagged_config:expr) => {
-            if let Some(main_layer) = $main_config {
-                indexer
-                    .concurrent_pipeline(
-                        $main_handler,
-                        ConcurrentConfig {
-                            committer: main_layer.finish(committer.clone()),
-                            pruner: None,
-                            checkpoint_lag: None,
-                        },
-                    )
-                    .await?;
-
-                indexer
-                    .concurrent_pipeline(
-                        $lagged_handler,
-                        $lagged_config.unwrap_or_default().finish(ConcurrentConfig {
-                            committer: committer.clone(),
-                            pruner: None,
-                            checkpoint_lag: Some(consistency.consistent_range),
-                        }),
-                    )
-                    .await?;
             }
         };
     }

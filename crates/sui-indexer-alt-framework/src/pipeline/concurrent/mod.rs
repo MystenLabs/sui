@@ -94,12 +94,6 @@ pub struct ConcurrentConfig {
 
     /// Configuration for the pruner, that deletes old data.
     pub pruner: Option<PrunerConfig>,
-
-    /// How many checkpoints lagged behind latest seen checkpoint to hold back writes for.
-    /// This is useful if pruning is implemented as a concurrent pipeline, and it must be behind
-    /// the pipeline it tries to prune from by a certain number of checkpoints, to ensure
-    /// consistency reads remain valid for a certain amount of time.
-    pub checkpoint_lag: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -204,7 +198,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let ConcurrentConfig {
         committer: committer_config,
         pruner: pruner_config,
-        checkpoint_lag,
     } = config;
 
     let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
@@ -230,7 +223,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let collector = collector::<H>(
         committer_config.clone(),
-        checkpoint_lag,
         collector_rx,
         collector_tx,
         metrics.clone(),
