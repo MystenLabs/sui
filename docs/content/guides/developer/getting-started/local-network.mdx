@@ -145,7 +145,7 @@ Sui CLI provides the `sui client faucet` command to get coins from the faucet. I
 
 :::info
 
-The `faucet` command uses the active address and the active network environment by default. If you need to pass in a different address or faucet server URL, use the `--address` and `--url` flags. If you're using a different network than a local network or the public ones (`fullnode.<NETWORK>.sui.io`), pass the sui client faucet URL to the faucet server.
+The `faucet` command uses the active address and the active network environment by default. If you need to pass in a different address or faucet server URL, check the `help` menu. If you're using a different network than a local network or the public ones (`fullnode.network.sui.io`), pass the URL to the faucet server.
 
 :::
 
@@ -181,6 +181,12 @@ pnpm --filter @mysten/sui test:e2e
 ```
 
 For additional information about example data for testing, see [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).
+
+## Monitor activity
+
+Use a Sui network explorer to monitor your local network activity. You can build and run one locally or use the **Custom RPC URL** setting available on many online explorers to provide your local network's RPC URL (`http://127.0.0.1:9000` by default).
+
+{@include: ../../../snippets/lists/sui-explorers.mdx}
 
 ## Troubleshooting
 
