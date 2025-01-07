@@ -497,12 +497,12 @@ impl Core {
             .node_metrics
             .proposed_block_size
             .observe(serialized.len() as f64);
-        // Unnecessary to verify the signature of own blocks.
+        // Own blocks are assumed to be valid.
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized);
 
-        // Record the interval from last proposal.
-        let last_proposed_timestamp_ms = self.last_proposed_timestamp_ms();
-        if last_proposed_timestamp_ms > 0 {
+        // Record the interval from last proposal, before accepting the proposed block.
+        let last_proposed_block = self.last_proposed_block();
+        if last_proposed_block.round() > 0 {
             self.context
                 .metrics
                 .node_metrics
@@ -511,7 +511,7 @@ impl Core {
                     Duration::from_millis(
                         verified_block
                             .timestamp_ms()
-                            .saturating_sub(last_proposed_timestamp_ms),
+                            .saturating_sub(last_proposed_block.timestamp_ms()),
                     )
                     .as_secs_f64(),
                 );
