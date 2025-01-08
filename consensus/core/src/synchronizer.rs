@@ -20,6 +20,7 @@ use rand::{prelude::SliceRandom as _, rngs::ThreadRng};
 use sui_macros::fail_point_async;
 use tap::TapFallible;
 use tokio::{
+    runtime::Handle,
     sync::{mpsc::error::TrySendError, oneshot},
     task::{JoinError, JoinSet},
     time::{sleep, sleep_until, timeout, Instant},
@@ -510,12 +511,14 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         }
 
         // Verify all the fetched blocks
-        let blocks = Self::verify_blocks(
-            serialized_blocks,
-            block_verifier.clone(),
-            &context,
-            peer_index,
-        )?;
+        let blocks = Handle::current()
+            .spawn_blocking({
+                let block_verifier = block_verifier.clone();
+                let context = context.clone();
+                move || Self::verify_blocks(serialized_blocks, block_verifier, &context, peer_index)
+            })
+            .await
+            .expect("Spawn blocking should not fail")?;
 
         // Get all the ancestors of the requested blocks only
         let ancestors = blocks
