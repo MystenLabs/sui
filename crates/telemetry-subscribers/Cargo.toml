@@ -10,18 +10,18 @@ publish = false
 
 [dependencies]
 atomic_float.workspace = true
-console-subscriber = { workspace = true, optional = true }
+console-subscriber.workspace = true
 crossterm.workspace = true
 once_cell.workspace = true
 prometheus.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
-opentelemetry = { version = "0.25.0", optional = true }
-opentelemetry_sdk = { version = "0.25.0", features = ["rt-tokio"], optional = true }
-opentelemetry-otlp = { version = "0.25.0", features = ["grpc-tonic"], optional = true }
-tracing-opentelemetry = { version = "0.26.0", optional = true }
-opentelemetry-proto = { version = "0.25", optional = true }
+opentelemetry = { version = "0.25.0" }
+opentelemetry_sdk = { version = "0.25.0", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.25.0", features = ["grpc-tonic"] }
+tracing-opentelemetry = { version = "0.26.0" }
+opentelemetry-proto = { version = "0.25" }
 tokio = { workspace = true, features = ["full"] }
 futures.workspace = true
 clap.workspace = true
@@ -32,17 +32,6 @@ bytes-varint = { version = "1" }
 # workspace
 tonic = { version = "0.12.3" }
 prost = "0.13"
-
-[features]
-default = ["otlp"]
-tokio-console = ["console-subscriber"]
-otlp = [
-  "tracing-opentelemetry",
-  "opentelemetry",
-  "opentelemetry-otlp",
-  "opentelemetry-proto",
-  "opentelemetry_sdk"
-]
 
 [dev-dependencies]
 camino.workspace = true
