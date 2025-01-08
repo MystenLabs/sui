@@ -77,7 +77,6 @@ impl MetricsCollector {
             total_latency += metrics.latency_ms.iter().sum::<f64>();
             total_successful += successful;
         }
-
         table_stats.sort_by(|a, b| b.queries.cmp(&a.queries));
 
         BenchmarkResult {
