@@ -1802,6 +1802,7 @@ impl AuthorityStore {
             checkpoint_store,
             rpc_index,
             &self.objects_lock_table,
+            None,
             pruning_config,
             AuthorityStorePruningMetrics::new_for_test(),
             usize::MAX,

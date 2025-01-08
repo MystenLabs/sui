@@ -13450,6 +13450,7 @@ dependencies = [
  "async-trait",
  "axum 0.7.5",
  "bcs",
+ "bincode",
  "bytes",
  "chrono",
  "clap",
