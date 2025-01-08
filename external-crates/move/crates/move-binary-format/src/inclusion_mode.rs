@@ -1,15 +1,16 @@
 use crate::compatibility::InclusionCheck;
 use crate::normalized::{Enum, Function, Struct};
 use move_core_types::account_address::AccountAddress;
-use move_core_types::identifier::Identifier;
+use move_core_types::identifier::{IdentStr, Identifier};
 
 pub trait InclusionCheckMode: Default {
     type Error;
-    fn module_name_mismatch(&mut self, old_address: &Identifier, new_address: &Identifier);
-    fn module_address_mismatch(
+    fn module_id_mismatch(
         &mut self,
         old_address: &AccountAddress,
+        old_name: &IdentStr,
         new_address: &AccountAddress,
+        new_name: &IdentStr,
     );
     fn file_format_version_downgrade(&mut self, old_version: u32, new_version: u32);
     fn struct_new(&mut self, name: &Identifier, new_struct: &Struct);
@@ -45,15 +46,12 @@ impl Default for InclusionCheckExecutionMode {
 impl InclusionCheckMode for InclusionCheckExecutionMode {
     type Error = ();
 
-    fn module_name_mismatch(&mut self, _old_address: &Identifier, _new_address: &Identifier) {
-        self.is_subset = false;
-        self.is_equal = false;
-    }
-
-    fn module_address_mismatch(
+    fn module_id_mismatch(
         &mut self,
         _old_address: &AccountAddress,
+        _old_name: &IdentStr,
         _new_address: &AccountAddress,
+        _new_name: &IdentStr,
     ) {
         self.is_subset = false;
         self.is_equal = false;

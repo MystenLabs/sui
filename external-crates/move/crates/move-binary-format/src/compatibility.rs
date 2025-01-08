@@ -376,13 +376,14 @@ impl InclusionCheck {
     ) -> Result<(), M::Error> {
         let mut context = M::default();
 
-        // Module checks
-        if old_module.name != new_module.name {
-            context.module_name_mismatch(&old_module.name, &new_module.name);
-        }
-
-        if old_module.address != new_module.address {
-            context.module_address_mismatch(&old_module.address, &new_module.address);
+        // module's name and address are unchanged
+        if old_module.address != new_module.address || old_module.name != new_module.name {
+            context.module_id_mismatch(
+                &old_module.address,
+                &old_module.name,
+                &new_module.address,
+                &new_module.name,
+            );
         }
 
         if old_module.file_format_version > new_module.file_format_version {
