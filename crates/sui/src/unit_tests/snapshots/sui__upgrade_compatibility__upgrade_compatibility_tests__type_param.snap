@@ -8,7 +8,7 @@ error[Compatibility E01005]: type parameter mismatch
 13 │     public struct StructTypeParamAddU<T, U> has copy, drop { x : T }
    │                   ^^^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 1, found 2
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original struct's type parameter for struct 'StructTypeParamAddU' including the ordering.
 
 error[Compatibility E01005]: type parameter mismatch
@@ -19,7 +19,7 @@ error[Compatibility E01005]: type parameter mismatch
    │                   │                          
    │                   Struct definition
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original type parameter constraint: 'copy'
 
 error[Compatibility E01005]: type parameter mismatch
@@ -30,7 +30,7 @@ error[Compatibility E01005]: type parameter mismatch
    │                   │                          
    │                   Struct definition
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original type parameter constraints: 'copy' and 'drop'
 
 error[Compatibility E01005]: type parameter mismatch
@@ -41,7 +41,7 @@ error[Compatibility E01005]: type parameter mismatch
    │                   │                             
    │                   Struct definition
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original 'phantom' modifier
 
 error[Compatibility E01005]: type parameter mismatch
@@ -52,7 +52,7 @@ error[Compatibility E01005]: type parameter mismatch
    │                   │                                  
    │                   Struct definition
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Remove the 'phantom' modifier
 
 error[Compatibility E01005]: type parameter mismatch
@@ -61,7 +61,7 @@ error[Compatibility E01005]: type parameter mismatch
 29 │     public enum EnumTypeParamAddU<T, U> has copy, drop {
    │                 ^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 1, found 2
    │
-   = Enums are part of a module's public interface and cannot be changed during an upgrade.
+   = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original enum's type parameter for enum 'EnumTypeParamAddU' including the ordering.
 
 error[Compatibility E01005]: type parameter mismatch
@@ -70,7 +70,7 @@ error[Compatibility E01005]: type parameter mismatch
 34 │     public enum EnumTypeParamRemoveU<T> has copy, drop {
    │                 ^^^^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 2, found 1
    │
-   = Enums are part of a module's public interface and cannot be changed during an upgrade.
+   = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original enum's type parameters for enum 'EnumTypeParamRemoveU' including the ordering.
 
 error[Compatibility E01005]: type parameter mismatch
@@ -81,7 +81,7 @@ error[Compatibility E01005]: type parameter mismatch
    │                 │                        
    │                 Enum definition
    │
-   = Enums are part of a module's public interface and cannot be changed during an upgrade.
+   = Enums are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original type parameter constraint: 'copy'
 
 error[Compatibility E01005]: type parameter mismatch
@@ -90,7 +90,7 @@ error[Compatibility E01005]: type parameter mismatch
 46 │     public fun add_type_param<T, U>(a: T): T { return a }
    │                ^^^^^^^^^^^^^^ Expected 1 type parameter, found 2
    │
-   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's type parameter for function 'add_type_param', expected 1 type parameter.
 
 error[Compatibility E01005]: type parameter mismatch
@@ -99,7 +99,7 @@ error[Compatibility E01005]: type parameter mismatch
 49 │     public fun remove_type_param<T>(a: T): T { return a }
    │                ^^^^^^^^^^^^^^^^^ Expected 2 type parameters, found 1
    │
-   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's type parameters for function 'remove_type_param', expected 2 type parameters.
 
 error[Compatibility E01005]: type parameter mismatch
@@ -108,7 +108,7 @@ error[Compatibility E01005]: type parameter mismatch
 52 │     public fun add_constraint<T: copy>(a: T): T { return a }
    │                               ^ Unexpected type parameter constraint: 'copy', expected none
    │
-   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's type parameter for function 'add_constraint'.
 
 error[Compatibility E03001]: function signature mismatch
@@ -119,7 +119,7 @@ error[Compatibility E03001]: function signature mismatch
    │                                 │                         
    │                                 Type parameter 'T' is defined here
    │
-   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameters for function 'swap_type_params'.
 
 error[Compatibility E03001]: function signature mismatch
@@ -130,7 +130,7 @@ error[Compatibility E03001]: function signature mismatch
    │                                          │                      
    │                                          Type parameter 'U' is defined here
    │
-   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameters for function 'swap_type_params'.
 
 error[Compatibility E03001]: function signature mismatch
@@ -141,7 +141,7 @@ error[Compatibility E03001]: function signature mismatch
    │                                        │                                      
    │                                        Type parameter 'T' is defined here
    │
-   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's return type for function 'swap_type_params_return'.
 
 error[Compatibility E03001]: function signature mismatch
@@ -152,7 +152,7 @@ error[Compatibility E03001]: function signature mismatch
    │                                       │                         
    │                                       Type parameter 'T' is defined here
    │
-   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'vec_changed_type_param'.
 
 

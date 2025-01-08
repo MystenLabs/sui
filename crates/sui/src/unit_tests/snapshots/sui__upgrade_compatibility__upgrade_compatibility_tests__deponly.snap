@@ -1,0 +1,33 @@
+---
+source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
+expression: normalize_path(err.to_string())
+---
+error[Compatibility E01002]: type mismatch
+  ┌─ /fixtures/upgrade_errors/deponly_errors_v2/sources/UpgradeErrors.move:4:18
+  │
+4 │ module upgrades::upgrades {
+  │                  ^^^^^^^^ New unexpected struct 'NewStruct'.
+  │
+  = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+  = Restore the original struct 'NewStruct' including the ordering.
+
+error[Compatibility E02001]: variant mismatch
+  ┌─ /fixtures/upgrade_errors/deponly_errors_v2/sources/UpgradeErrors.move:4:18
+  │
+4 │ module upgrades::upgrades {
+  │                  ^^^^^^^^ New unexpected enum 'NewEnum'.
+  │
+  = Enums are part of a module's public interface and cannot be changed during an upgrade.
+  = Restore the original enum 'NewEnum' including the ordering.
+
+error[Compatibility E03001]: function signature mismatch
+  ┌─ /fixtures/upgrade_errors/deponly_errors_v2/sources/UpgradeErrors.move:4:18
+  │
+4 │ module upgrades::upgrades {
+  │                  ^^^^^^^^ New unexpected function 'new_function'.
+  │
+  = Functions are part of a module's public interface and cannot be changed during an upgrade.
+  = Restore the original function 'new_function' including the ordering.
+
+
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'dependency only'.
