@@ -27,10 +27,8 @@ pub async fn tx_interval(conn: &mut Connection<'_>, cps: Range<u64>) -> Result<R
     })
 }
 
-/// Inclusive start and exclusive end range of epochs.
-///
-/// The two values in the tuple represent which epoch the `from` and `to` checkpoints come from,
-/// respectively.
+/// Returns the epochs of the given checkpoint range. `start` is the epoch of the first checkpoint
+/// and `end` is the epoch of the last checkpoint.
 pub async fn epoch_interval(conn: &mut Connection<'_>, cps: Range<u64>) -> Result<Range<u64>> {
     let result = get_range(conn, cps).await?;
 
