@@ -71,11 +71,8 @@ impl Disassemble {
                         source_path,
                     )
                 } else {
-                    let mut d = Disassembler::from_unit(&unit.unit);
-                    if bytecode_map {
-                        d.generate_bytecode_map();
-                    }
-                    let (disassemble_string, bcode_map) = d.disassemble()?;
+                    let d = Disassembler::from_unit(&unit.unit);
+                    let (disassemble_string, bcode_map) = d.disassemble_with_source_map()?;
                     if bytecode_map {
                         println!("{}", serialize_to_json_string(&bcode_map)?);
                     }

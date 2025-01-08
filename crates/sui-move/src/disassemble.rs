@@ -74,11 +74,8 @@ impl Disassemble {
         if self.debug {
             println!("{module:#?}");
         } else {
-            let mut d = Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc)?;
-            if self.bytecode_map {
-                d.generate_bytecode_map();
-            }
-            let (disassemble_string, bcode_map) = d.disassemble()?;
+            let d = Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc)?;
+            let (disassemble_string, bcode_map) = d.disassemble_with_source_map()?;
             if self.bytecode_map {
                 println!("{}", serialize_to_json_string(&bcode_map)?);
             }

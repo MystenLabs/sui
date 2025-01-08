@@ -152,8 +152,7 @@ impl OnDiskStateView {
                 // TODO: find or create source map and pass it to disassembler
                 let d: Disassembler =
                     Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc)?;
-                let (disassemble_string, _) = d.disassemble()?;
-                Some(disassemble_string)
+                Some(d.disassemble()?)
             }
             None => None,
         })

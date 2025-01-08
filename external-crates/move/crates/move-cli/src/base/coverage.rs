@@ -93,8 +93,7 @@ impl Coverage {
                 let unit = package.get_module_by_name_from_root(&module_name)?;
                 let mut disassembler = Disassembler::from_unit(&unit.unit);
                 disassembler.add_coverage_map(coverage_map.to_unified_exec_map());
-                let (disassemble_string, _) = disassembler.disassemble()?;
-                println!("{}", disassemble_string);
+                println!("{}", disassembler.disassemble()?);
             }
         }
         Ok(())
