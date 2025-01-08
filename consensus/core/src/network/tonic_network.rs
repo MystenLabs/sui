@@ -6,7 +6,7 @@ use std::{
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
     pin::Pin,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use async_trait::async_trait;
@@ -775,18 +775,36 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             }
         }
 
-        let server = sui_http::Builder::new()
-            .config(
-                sui_http::Config::default()
-                    .initial_connection_window_size(64 << 20)
-                    .initial_stream_window_size(32 << 20)
-                    .http2_keepalive_interval(Some(config.keepalive_interval))
-                    .http2_keepalive_timeout(Some(config.keepalive_interval))
-                    .accept_http1(false),
-            )
-            .tls_config(tls_server_config)
-            .serve(own_address, consensus_service)
-            .unwrap();
+        let http_config = sui_http::Config::default()
+            .initial_connection_window_size(64 << 20)
+            .initial_stream_window_size(32 << 20)
+            .http2_keepalive_interval(Some(config.keepalive_interval))
+            .http2_keepalive_timeout(Some(config.keepalive_interval))
+            .accept_http1(false);
+
+        // Create server
+        //
+        // During simtest crash/restart tests there may be an older instance of consensus running
+        // that is bound to the TCP port of `own_address` that hasn't finished relinquishing
+        // control of the port yet. So instead of crashing when the address is inuse, we will retry
+        // for a short/reasonable period of time before giving up.
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let server = loop {
+            match sui_http::Builder::new()
+                .config(http_config.clone())
+                .tls_config(tls_server_config.clone())
+                .serve(own_address, consensus_service.clone())
+            {
+                Ok(server) => break server,
+                Err(err) => {
+                    warn!("Error starting consensus server: {err:?}");
+                    if Instant::now() > deadline {
+                        panic!("Failed to start consensus server within required deadline");
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        };
 
         info!("Server started at: {own_address}");
         self.server = Some(server);

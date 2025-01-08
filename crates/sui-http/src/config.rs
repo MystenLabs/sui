@@ -5,6 +5,7 @@ use std::time::Duration;
 
 const DEFAULT_HTTP2_KEEPALIVE_TIMEOUT_SECS: u64 = 20;
 
+#[derive(Debug, Clone)]
 pub struct Config {
     init_stream_window_size: Option<u32>,
     init_connection_window_size: Option<u32>,
