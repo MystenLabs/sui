@@ -15157,7 +15157,6 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tokio-postgres",
- "tracing",
 ]
 
 [[package]]
