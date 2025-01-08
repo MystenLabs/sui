@@ -1801,6 +1801,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "bb8"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "212d8b8e1a22743d9241575c6ba822cf9c8fef34771c86ab7e477a4fbfd254e5"
+dependencies = [
+ "futures-util",
+ "parking_lot 0.12.1",
+ "tokio",
+]
+
+[[package]]
+name = "bb8-postgres"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e570e6557cd0f88d28d32afa76644873271a70dc22656df565b2021c4036aa9c"
+dependencies = [
+ "bb8 0.9.0",
+ "tokio",
+ "tokio-postgres",
+]
+
+[[package]]
 name = "bcder"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3755,7 +3777,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcb799bb6f8ca6a794462125d7b8983b0c86e6c93a33a9c55934a4a5de4409d3"
 dependencies = [
  "async-trait",
- "bb8",
+ "bb8 0.8.5",
  "diesel",
  "futures-util",
  "scoped-futures",
@@ -12515,9 +12537,9 @@ dependencies = [
 
 [[package]]
 name = "sqlparser"
-version = "0.52.0"
+version = "0.53.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a875d8cd437cc8a97e9aeaeea352ec9a19aea99c23e9effb17757291de80b08"
+checksum = "05a528114c392209b3264855ad491fcce534b94a38771b0a0b97a79379275ce8"
 dependencies = [
  "log",
 ]
@@ -13958,7 +13980,7 @@ dependencies = [
  "async-trait",
  "axum 0.7.5",
  "backoff",
- "bb8",
+ "bb8 0.8.5",
  "bcs",
  "bytes",
  "cached",
@@ -14070,7 +14092,7 @@ dependencies = [
  "async-trait",
  "axum 0.7.5",
  "backoff",
- "bb8",
+ "bb8 0.8.5",
  "chrono",
  "clap",
  "diesel",
@@ -14899,7 +14921,7 @@ name = "sui-pg-db"
 version = "1.41.0"
 dependencies = [
  "anyhow",
- "bb8",
+ "bb8 0.8.5",
  "clap",
  "diesel",
  "diesel-async",
@@ -15131,12 +15153,15 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-benchmark"
-version = "1.40.0"
+version = "1.41.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bb8 0.9.0",
+ "bb8-postgres",
  "clap",
  "futures",
+ "rand 0.8.5",
  "sqlparser",
  "sui-pg-db",
  "tokio",

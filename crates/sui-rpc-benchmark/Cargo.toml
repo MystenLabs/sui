@@ -13,8 +13,11 @@ clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 futures.workspace = true
-sqlparser = "0.52.0"
+sqlparser = "0.53.0"
 tokio-postgres = "0.7.12"
+bb8 = "0.9.0"
+bb8-postgres = "0.9.0"
+rand = "0.8.5"
 
 sui-pg-db = { workspace = true }
 

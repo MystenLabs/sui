@@ -3,11 +3,12 @@
 
 pub mod direct;
 
-use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+use crate::direct::benchmark_config::BenchmarkConfig;
 use crate::direct::query_executor::QueryExecutor;
 use crate::direct::query_generator::QueryGenerator;
 
@@ -31,11 +32,10 @@ pub enum Command {
             default_value = "postgres://postgres:postgres@localhost:5432/sui"
         )]
         db_url: String,
-        #[clap(
-            long,
-            default_value = concat!(env!("CARGO_MANIFEST_DIR"), "/../sui-indexer-alt/migrations")
-        )]
-        migration_path: PathBuf,
+        #[clap(long, default_value = "50")]
+        concurrency: usize,
+        #[clap(long, default_value = "30")]
+        duration_secs: u64,
     },
     /// Benchmark JSON RPC endpoints
     #[clap(name = "jsonrpc")]
@@ -57,18 +57,33 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
     match opts.command {
         Command::DirectQuery {
             db_url,
-            migration_path,
+            concurrency,
+            duration_secs,
         } => {
-            println!(
-                "Running direct query benchmark against DB {} and migrations {}",
-                db_url,
-                migration_path.display()
-            );
-            let query_generator = QueryGenerator { migration_path };
-            let benchmark_queries = query_generator.generate_benchmark_queries()?;
+            println!("Running direct query benchmark against DB {}", db_url,);
+            let query_generator = QueryGenerator {
+                db_url: db_url.clone(),
+            };
+            let benchmark_queries = query_generator.generate_benchmark_queries().await?;
             println!("Generated {} benchmark queries", benchmark_queries.len());
-            let query_executor = QueryExecutor::new(db_url.as_str(), benchmark_queries).await?;
-            query_executor.run().await?;
+
+            let config = BenchmarkConfig {
+                concurrency,
+                duration: Duration::from_secs(duration_secs),
+            };
+
+            let mut query_executor = QueryExecutor::new(&db_url, benchmark_queries, config).await?;
+            let result = query_executor.run().await?;
+            println!("Total queries: {}", result.total_queries);
+            println!("Total errors: {}", result.total_errors);
+            println!("Average latency: {:.2}ms", result.avg_latency_ms);
+            println!("\nPer-table statistics:");
+            for stat in &result.table_stats {
+                println!(
+                    "  {:<30} queries: {:<8} errors: {:<8} avg latency: {:.2}ms",
+                    stat.table_name, stat.queries, stat.errors, stat.avg_latency_ms
+                );
+            }
             Ok(())
         }
         Command::JsonRpc { endpoint } => {
