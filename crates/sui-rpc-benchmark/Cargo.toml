@@ -8,15 +8,12 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
 clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
-tracing.workspace = true
-futures.workspace = true
-sqlparser = "0.52.0"
 tokio-postgres = "0.7.12"
-
-sui-pg-db = { workspace = true }
+bb8 = "0.9.0"
+bb8-postgres = "0.9.0"
+rand = "0.8.5"
 
 [[bin]]
 name = "sui-rpc-benchmark"
