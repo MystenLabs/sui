@@ -1,10 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_store_types::{ObjectContentDigest, StoreData, StoreObject};
+use super::authority_store_tables::{AuthorityPerpetualTables, AuthorityPrunerTables};
+use crate::authority::authority_store_types::{
+    ObjectContentDigest, StoreData, StoreObject, StoreObjectWrapper,
+};
 use crate::checkpoints::{CheckpointStore, CheckpointWatermark};
 use crate::rpc_index::RpcIndexStore;
 use anyhow::anyhow;
+use bincode::Options;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use once_cell::sync::Lazy;
 use prometheus::{
@@ -13,7 +17,7 @@ use prometheus::{
 };
 use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
-use std::sync::Mutex;
+use std::sync::{Mutex, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{sync::Arc, time::Duration};
 use sui_archival::reader::ArchiveReaderBalancer;
@@ -34,10 +38,9 @@ use sui_types::{
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
+use typed_store::rocksdb::compaction_filter::Decision;
 use typed_store::rocksdb::LiveFile;
 use typed_store::{Map, TypedStoreError};
-
-use super::authority_store_tables::AuthorityPerpetualTables;
 
 static PERIODIC_PRUNING_TABLES: Lazy<BTreeSet<String>> = Lazy::new(|| {
     [
@@ -128,6 +131,7 @@ impl AuthorityStorePruner {
         transaction_effects: Vec<TransactionEffects>,
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
+        pruner_db: Option<&Arc<AuthorityPrunerTables>>,
         checkpoint_number: CheckpointSequenceNumber,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
@@ -135,6 +139,7 @@ impl AuthorityStorePruner {
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
         let mut wb = perpetual_db.objects.batch();
+        let mut pruner_db_wb = pruner_db.map(|db| db.object_tombstones.batch());
 
         // Collect objects keys that need to be deleted from `transaction_effects`.
         let mut live_object_keys_to_prune = vec![];
@@ -188,9 +193,19 @@ impl AuthorityStorePruner {
                 "Pruning object {:?} versions {:?} - {:?}",
                 object_id, min_version, max_version
             );
-            let start_range = ObjectKey(object_id, min_version);
-            let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
-            wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+            match pruner_db_wb {
+                Some(ref mut batch) => {
+                    batch.insert_batch(
+                        &pruner_db.expect("invariant checked").object_tombstones,
+                        std::iter::once((object_id, max_version)),
+                    )?;
+                }
+                None => {
+                    let start_range = ObjectKey(object_id, min_version);
+                    let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
+                    wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+                }
+            }
         }
 
         // When enable_pruning_tombstones is enabled, instead of using range deletes, we need to do a scan of all the keys
@@ -226,6 +241,9 @@ impl AuthorityStorePruner {
         let _locks = objects_lock_table
             .acquire_locks(indirect_objects.into_keys())
             .await;
+        if let Some(batch) = pruner_db_wb {
+            batch.write()?;
+        }
         wb.write()?;
         Ok(())
     }
@@ -314,6 +332,7 @@ impl AuthorityStorePruner {
         checkpoint_store: &Arc<CheckpointStore>,
         rpc_index: Option<&RpcIndexStore>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
+        pruner_db: Option<&Arc<AuthorityPrunerTables>>,
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
@@ -339,6 +358,7 @@ impl AuthorityStorePruner {
             perpetual_db,
             checkpoint_store,
             rpc_index,
+            pruner_db,
             PruningMode::Objects,
             config.num_epochs_to_retain,
             pruned_checkpoint_number,
@@ -356,6 +376,7 @@ impl AuthorityStorePruner {
         checkpoint_store: &Arc<CheckpointStore>,
         rpc_index: Option<&RpcIndexStore>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
+        pruner_db: Option<&Arc<AuthorityPrunerTables>>,
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
@@ -397,6 +418,7 @@ impl AuthorityStorePruner {
             perpetual_db,
             checkpoint_store,
             rpc_index,
+            pruner_db,
             PruningMode::Checkpoints,
             config
                 .num_epochs_to_retain_for_checkpoints()
@@ -416,6 +438,7 @@ impl AuthorityStorePruner {
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
         rpc_index: Option<&RpcIndexStore>,
+        pruner_db: Option<&Arc<AuthorityPrunerTables>>,
         mode: PruningMode,
         num_epochs_to_retain: u64,
         starting_checkpoint_number: CheckpointSequenceNumber,
@@ -482,6 +505,7 @@ impl AuthorityStorePruner {
                             effects_to_prune,
                             perpetual_db,
                             objects_lock_table,
+                            pruner_db,
                             checkpoint_number,
                             metrics.clone(),
                             indirect_objects_threshold,
@@ -515,6 +539,7 @@ impl AuthorityStorePruner {
                         effects_to_prune,
                         perpetual_db,
                         objects_lock_table,
+                        pruner_db,
                         checkpoint_number,
                         metrics.clone(),
                         indirect_objects_threshold,
@@ -625,6 +650,7 @@ impl AuthorityStorePruner {
         checkpoint_store: Arc<CheckpointStore>,
         rpc_index: Option<Arc<RpcIndexStore>>,
         objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
+        pruner_db: Option<Arc<AuthorityPrunerTables>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
@@ -685,12 +711,12 @@ impl AuthorityStorePruner {
             loop {
                 tokio::select! {
                     _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), &objects_lock_table, config.clone(), metrics.clone(), indirect_objects_threshold, epoch_duration_ms).await {
+                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), &objects_lock_table, pruner_db.as_ref(), config.clone(), metrics.clone(), indirect_objects_threshold, epoch_duration_ms).await {
                             error!("Failed to prune objects: {:?}", err);
                         }
                     },
                     _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), &objects_lock_table, config.clone(), metrics.clone(), indirect_objects_threshold, archive_readers.clone(), epoch_duration_ms).await {
+                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), &objects_lock_table, pruner_db.as_ref(), config.clone(), metrics.clone(), indirect_objects_threshold, archive_readers.clone(), epoch_duration_ms).await {
                             error!("Failed to prune checkpoints: {:?}", err);
                         }
                     },
@@ -712,6 +738,7 @@ impl AuthorityStorePruner {
         registry: &Registry,
         indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
+        pruner_db: Option<Arc<AuthorityPrunerTables>>,
     ) -> Self {
         if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
         {
@@ -731,6 +758,7 @@ impl AuthorityStorePruner {
                 checkpoint_store,
                 rpc_index,
                 objects_lock_table,
+                pruner_db,
                 AuthorityStorePruningMetrics::new(registry),
                 indirect_objects_threshold,
                 archive_readers,
@@ -743,6 +771,74 @@ impl AuthorityStorePruner {
             &ObjectKey(ObjectID::ZERO, SequenceNumber::MIN),
             &ObjectKey(ObjectID::MAX, SequenceNumber::MAX),
         )
+    }
+}
+
+#[derive(Clone)]
+pub struct ObjectsCompactionFilter {
+    db: Weak<AuthorityPrunerTables>,
+    metrics: Arc<ObjectCompactionMetrics>,
+}
+
+impl ObjectsCompactionFilter {
+    pub fn new(db: Arc<AuthorityPrunerTables>, registry: &Registry) -> Self {
+        Self {
+            db: Arc::downgrade(&db),
+            metrics: ObjectCompactionMetrics::new(registry),
+        }
+    }
+    pub fn filter(&mut self, key: &[u8], value: &[u8]) -> anyhow::Result<Decision> {
+        let ObjectKey(object_id, version) = bincode::DefaultOptions::new()
+            .with_big_endian()
+            .with_fixint_encoding()
+            .deserialize(key)?;
+        let object: StoreObjectWrapper = bcs::from_bytes(value)?;
+        if matches!(object.into_inner(), StoreObject::Value(_)) {
+            if let Some(db) = self.db.upgrade() {
+                match db.object_tombstones.get(&object_id)? {
+                    Some(gc_version) => {
+                        if version <= gc_version {
+                            self.metrics.key_removed.inc();
+                            return Ok(Decision::Remove);
+                        }
+                        self.metrics.key_kept.inc();
+                    }
+                    None => self.metrics.key_not_found.inc(),
+                }
+            }
+        }
+        Ok(Decision::Keep)
+    }
+}
+
+struct ObjectCompactionMetrics {
+    key_removed: IntCounter,
+    key_kept: IntCounter,
+    key_not_found: IntCounter,
+}
+
+impl ObjectCompactionMetrics {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
+            key_removed: register_int_counter_with_registry!(
+                "objects_compaction_filter_key_removed",
+                "Compaction key removed",
+                registry
+            )
+            .unwrap(),
+            key_kept: register_int_counter_with_registry!(
+                "objects_compaction_filter_key_kept",
+                "Compaction key kept",
+                registry
+            )
+            .unwrap(),
+            key_not_found: register_int_counter_with_registry!(
+                "objects_compaction_filter_key_not_found",
+                "Compaction key not found",
+                registry
+            )
+            .unwrap(),
+        })
     }
 }
 
@@ -921,6 +1017,7 @@ mod tests {
                 vec![effects],
                 &db,
                 &lock_table(),
+                None,
                 0,
                 metrics,
                 indirect_object_threshold,
@@ -1047,6 +1144,7 @@ mod tests {
             vec![effects],
             &perpetual_db,
             &lock_table(),
+            None,
             0,
             metrics,
             0,
@@ -1169,6 +1267,7 @@ mod pprof_tests {
             vec![effects],
             &perpetual_db,
             &tests::lock_table(),
+            None,
             0,
             metrics,
             1,
@@ -1207,6 +1306,7 @@ mod pprof_tests {
             vec![effects],
             &perpetual_db,
             &lock_table(),
+            None,
             0,
             metrics,
             1,

@@ -10,6 +10,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::storage::{FullObjectKey, MarkerValue};
+use tracing::error;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
@@ -18,11 +19,13 @@ use typed_store::rocks::{
 };
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
+use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
 use crate::authority::authority_store_types::{
     get_store_object_pair, try_construct_object, ObjectContentDigest, StoreData,
     StoreMoveObjectWrapper, StoreObject, StoreObjectPair, StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use typed_store::rocksdb::compaction_filter::Decision;
 use typed_store::DBMapUtils;
 
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
@@ -37,6 +40,7 @@ const ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE: &str = "INDIRECT_OBJECTS_BLOCK_
 pub struct AuthorityPerpetualTablesOptions {
     /// Whether to enable write stalling on all column families.
     pub enable_write_stall: bool,
+    pub compaction_filter: Option<ObjectsCompactionFilter>,
 }
 
 impl AuthorityPerpetualTablesOptions {
@@ -139,6 +143,27 @@ pub struct AuthorityPerpetualTables {
     pub(crate) object_per_epoch_marker_table_v2: DBMap<(EpochId, FullObjectKey), MarkerValue>,
 }
 
+#[derive(DBMapUtils)]
+pub struct AuthorityPrunerTables {
+    pub(crate) object_tombstones: DBMap<ObjectID, SequenceNumber>,
+}
+
+impl AuthorityPrunerTables {
+    pub fn path(parent_path: &Path) -> PathBuf {
+        parent_path.join("pruner")
+    }
+
+    pub fn open(parent_path: &Path) -> Self {
+        Self::open_tables_read_write(
+            Self::path(parent_path),
+            MetricConf::new("pruner")
+                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+            None,
+            None,
+        )
+    }
+}
+
 impl AuthorityPerpetualTables {
     pub fn path(parent_path: &Path) -> PathBuf {
         parent_path.join("perpetual")
@@ -154,7 +179,7 @@ impl AuthorityPerpetualTables {
         let table_options = DBMapTableConfigMap::new(BTreeMap::from([
             (
                 "objects".to_string(),
-                objects_table_config(db_options.clone()),
+                objects_table_config(db_options.clone(), db_options_override.compaction_filter),
             ),
             (
                 "indirect_move_objects".to_string(),
@@ -652,7 +677,23 @@ fn owned_object_transaction_locks_table_config(db_options: DBOptions) -> DBOptio
     }
 }
 
-fn objects_table_config(db_options: DBOptions) -> DBOptions {
+fn objects_table_config(
+    mut db_options: DBOptions,
+    compaction_filter: Option<ObjectsCompactionFilter>,
+) -> DBOptions {
+    if let Some(mut compaction_filter) = compaction_filter {
+        db_options
+            .options
+            .set_compaction_filter("objects", move |_, key, value| {
+                match compaction_filter.filter(key, value) {
+                    Ok(decision) => decision,
+                    Err(err) => {
+                        error!("Compaction error: {:?}", err);
+                        Decision::Keep
+                    }
+                }
+            });
+    }
     db_options
         .optimize_for_write_throughput()
         .optimize_for_read(read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024))
