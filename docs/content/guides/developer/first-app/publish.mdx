@@ -8,7 +8,7 @@ To publish your package to the Sui network, use the `publish` CLI command in the
 
 {@include: ../../../snippets/info-gas-budget.mdx}
 
-```shell
+```sh
 $ sui client publish --gas-budget 5000000
 ```
 
@@ -16,7 +16,7 @@ If the publish transaction is successful, your terminal or console responds with
 
 In the **Object Changes** table, you can find the information about the package you just published in the **Published Objects** section. Your response has the actual `PackageID` that identifies the package (instead of `<PACKAGE-ID>`) in the form `0x123...ABC`.  
 
-```shell
+```sh
 ╭─────────────────────────────────────────────────────────────────────╮
 │ Object Changes                                                      │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -100,7 +100,7 @@ flowchart TB
 
 For example, you can create a new `Sword` object defined in the package by calling the `new_sword` function in the `my_module` package, and then transfer the `Sword` object to any address:
 
-```shell
+```sh
 $ sui client ptb \
 	--assign forge @<FORGE-ID> \
 	--assign to_address @<TO-ADDRESS> \

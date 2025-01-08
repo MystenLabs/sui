@@ -74,13 +74,13 @@ You can set the shell variables to the alias values instead of addresses if you 
 
 Use `sui keytool` to list the addresses you created in the previous section.
 
-```shell
+```sh
 $ sui keytool list
 ```
 
 The response resembles the following, but displays actual alias names, addresses, keys, and peer IDs:
 
-```shell
+```sh
 ╭────────────────────────────────────────────────────────────────────╮
 │ ╭─────────────────┬──────────────────────────────────────────────╮ │
 | | alias           |  <ALIAS-NAME>                                | |
@@ -125,7 +125,7 @@ $ PKEY_3=<PUBLIC-KEY-SECP256R1>
 
 To sign a transaction using multisig, you need to create a multisig address using `sui keytool multi-sig-address`. The multisig address is created using the public keys from each individual participating address. Each address is also assigned a `weight` value that determines how many are needed to create a valid signature. When summed, the `weight` of the included signatures must be greater than or equal to the `threshold` value you also set with the command. For this example, use the following command, which states that the first two addresses require at least one more signature to create a valid multisig. The last address has a weight of `3`, which is equal to the `threshold` value, so its owner can create a valid signature without the others.
 
-```shell
+```sh
 $ sui keytool multi-sig-address --pks $PKEY_1 $PKEY_2 $PKEY_3 --weights 1 2 3 --threshold 3
 ```
 
@@ -206,7 +206,7 @@ You can create the signature with other tools, as well, as long as you serialize
 
 :::
 
-```shell
+```sh
 $ sui keytool sign --address $ADDRESS1 --data $TXBYTES
 ```
 ```sh
@@ -243,7 +243,7 @@ $ SIG_2=<SIGNATURE-HASH-SECP256K1>
 
 As mentioned, the multisig must be composed of enough individual signatures such that the sum of the participating signer weights is greater than the `threshold` value. Use the `sui keytool multi-sig-combine-partial-sig` command to combine the ed25519 signature (`weight: 1`) and the secp256k1 (`weight: 2`). To complete the command, you must provide all public keys, their weights, and the threshold that defined the multisig address.
 
-```shell
+```sh
 $ sui keytool multi-sig-combine-partial-sig --pks $PKEY_1 $PKEY_2 $PKEY_3 --weights 1 2 3 --threshold 3 --sigs $SIG_1 $SIG_2
 ```
 

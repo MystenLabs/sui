@@ -21,13 +21,13 @@ If you published the previous example to a Sui network, you can use the `sui cli
 
 {@include: ../../snippets/info-gas-budget.mdx}
 
-```shell
-sui client call --function mint --module mycoin --package <PACKAGE-ID> --args <TREASURY-CAP-ID> <COIN-AMOUNT> <RECIPIENT-ADDRESS> --gas-budget <GAS-AMOUNT>
+```sh
+$ sui client call --function mint --module mycoin --package <PACKAGE-ID> --args <TREASURY-CAP-ID> <COIN-AMOUNT> <RECIPIENT-ADDRESS> --gas-budget <GAS-AMOUNT>
 ```
 
 If the call is successful your console displays the result, which includes a **Balance Changes** section with the following information included:
 
-```shell
+```sh
 ...
 
 Owner: Account Address ( <RECIPIENT-ADDRESS> ) 

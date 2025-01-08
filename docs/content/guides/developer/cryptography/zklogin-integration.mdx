@@ -103,9 +103,10 @@ zkLogin uses the user salt to compute the zkLogin Sui address (see [definition](
 
 Here's an example request and response for the Mysten Labs-maintained salt server (using option 4). If you want to use the Mysten Labs salt server, please refer to [Enoki docs](https://docs.enoki.mystenlabs.com/) and contact us. Only valid JWT authenticated with whitelisted client IDs are accepted.
 
-```bash
-curl -X POST https://salt.api.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
-
+```sh
+$ curl -X POST https://salt.api.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
+```
+```sh
 Response: {"salt":"129390038577185583942388216820280642146"}
 ```
 
@@ -150,8 +151,8 @@ Use the `prover-dev` endpoint (https://prover-dev.mystenlabs.com/v1) freely for 
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
-```bash
-curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
+```sh
+$ curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
 -d '{"jwt":"$JWT_TOKEN", \
 "extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544", \
 "maxEpoch":"10", \
@@ -159,8 +160,9 @@ curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
 "salt":"248191903847969014646285995941615069143", \
 "keyClaimName":"sub" \
 }'
-
-curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
+```
+```sh
+$ curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
 -d '{"jwt":"$JWT_TOKEN", \
 "extendedEphemeralPublicKey":"ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=", \
 "maxEpoch":"10", \
@@ -229,13 +231,13 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/). There are zkeys available for all Sui networks. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated.
 
    - Main zkey (for Mainnet and Testnet)
-     ```bash
-     wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-main-zkey.sh | bash
+     ```sh
+     $ wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-main-zkey.sh | bash
      ```
    - Test zkey (for Devnet)
 
-     ```bash
-     wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-test-zkey.sh | bash
+     ```sh
+     $ wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-test-zkey.sh | bash
      ```
 
    - To verify the download contains the correct zkey file, you can run the following command to check the Blake2b hash: `b2sum ${file_name}.zkey`.

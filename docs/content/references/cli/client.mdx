@@ -72,7 +72,7 @@ The following examples demonstrate some of the most often used commands.
 
 Use the `sui client envs` command to find the network environments set up in the CLI. The information for these environments is also stored in the client.yaml file in the Sui configuration directory (`~/.sui/sui_config`).
 
-```shell
+```sh
 ╭────────┬────────────────────────────────────┬────────╮
 │ alias  │ url                                │ active │
 ├────────┼────────────────────────────────────┼────────┤
@@ -94,9 +94,10 @@ Added new Sui env [mainnet] to config.
 
 Use the `sui client switch` command to change the current network. This example switches the current network to `mainnet`.
 
-```shell
+```sh
 $ sui client switch --env mainnet
-
+```
+```sh
 Active environment switched to [mainnet]
 ```
 
@@ -106,8 +107,10 @@ If you run `sui client envs` after this command, you see the asterisk in the `ac
 
 Use the `sui client active-address` command to reveal the current address. The CLI uses the current active address to execute address-specific CLI commands (like `sui client objects`) when you don't provide them with a Sui address value.
 
-```shell
+```sh
 $ sui client active-address
+```
+```sh
 0x514692f08249c3e9951234ce29074695840422564bff85e424b56de462913e0d
 ```
 
@@ -115,8 +118,10 @@ $ sui client active-address
 
 If you use one of the standard public RPCs (for example, `fullnode.testnet.sui.io:443`), you can use the `faucet` command to request gas coins. If you use a custom faucet service, then pass in the URL to the faucet using the `--url` option.
 
-```shell
+```sh
 $ sui client faucet
+```
+```sh
 Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.
 ```
 
@@ -124,9 +129,10 @@ Request successful. It can take up to 1 minute to get the coin. Run sui client g
 
 Use `sui client objects` to list summary information about the objects the current active address owns. You can provide a Sui address value to the command to list objects for a particular address. This example lists objects for the current active address.
 
-```
+```sh
 $ sui client objects 0x36df11369cf00ecf0be68d6ba965b0abe2e883bc5245911e3a29ebfa0aaf6b69
-
+```
+```sh
 ╭───────────────────────────────────────────────────────────────────────────────────────╮
 | ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
 │ │ objectId   │  0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f  │ │
@@ -147,8 +153,10 @@ $ sui client objects 0x36df11369cf00ecf0be68d6ba965b0abe2e883bc5245911e3a29ebfa0
 
 Use `sui client object <OBJECT-ID>` to list object information for the ID you provide. This example displays the information for a Coin object.
 
-```
+```sh
 $ sui client object 0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f
+```
+```sh
 ╭───────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ objectId  	  │  0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f                                             	  │
 │ version   	  │  33363559                                                                                                       	  │
@@ -175,8 +183,10 @@ $ sui client object 0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3
 
 Use the `sui client dynamic-field <DYNAMIC-FIELD-ID>` command to list the details of the dynamic field with the ID you provide.
 
-```
+```sh
 $ sui client dynamic-field 0x5
+```
+```sh
 ╭─────────────┬───────────────────────────────────────────────────────────────────────────────────────────╮
 │ hasNextPage │  false                                                                                	  │
 │ nextCursor  │  0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1                   	  │
@@ -211,7 +221,7 @@ The differences between these commands are:
 
 Assume you have two addresses:
 
-```
+```sh
 ╭───────────────────┬────────────────────────────────────────────────────────────────────┬────────────────╮
 │ alias             │ address                                                            │ active address │
 ├───────────────────┼────────────────────────────────────────────────────────────────────┼────────────────┤
@@ -222,8 +232,10 @@ Assume you have two addresses:
 
 Address `hungry-spodumene` has a few coins:
 
+```sh
+$ sui client gas hungry-spodumene
 ```
-sui client gas hungry-spodumene
+```sh
 ╭────────────────────────────────────────────────────────────────────┬────────────────────┬──────────────────╮
 │ gasCoinId                                                          │ mistBalance (MIST) │ suiBalance (SUI) │
 ├────────────────────────────────────────────────────────────────────┼────────────────────┼──────────────────┤
@@ -239,13 +251,13 @@ You want to send 0.5 SUI to `eloquent-amber`. Given that you have a few gas coin
 
 {@include: ../../snippets/info-gas-budget.mdx}
 
-```
-sui client pay-sui --recipients eloquent-amber --input-coins 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --amounts 500000000 --gas-budget 5000000
+```sh
+$ sui client pay-sui --recipients eloquent-amber --input-coins 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --amounts 500000000 --gas-budget 5000000
 ```
 
 The result is:
 
-```
+```sh
 Transaction Digest: AsWkciVhLHeCmqVipjjyAA7Hv5y87pFjHS59K8m4zBJV
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Transaction Data                                                                                             │
@@ -371,8 +383,10 @@ Transaction Digest: AsWkciVhLHeCmqVipjjyAA7Hv5y87pFjHS59K8m4zBJV
 ```
 
 Check the gas for the sender and the recipient's coins using `sui client gas <address>`. The sender now has 199.49 SUI for that gas coin that was used. 0.5 SUI was transferred, and the remaining 0.01 SUI paid the gas fees.
+```sh
+$ sui client gas
 ```
-sui client gas
+```sh
 ╭────────────────────────────────────────────────────────────────────┬────────────────────┬──────────────────╮
 │ gasCoinId                                                          │ mistBalance (MIST) │ suiBalance (SUI) │
 ├────────────────────────────────────────────────────────────────────┼────────────────────┼──────────────────┤
@@ -382,8 +396,11 @@ sui client gas
 │ 0xe373de9bdbd3dbd4f5f707f144c83af74a181cdb3903a953ee366f48e33865c7 │ 200000000000       │ 200.00           │
 │ 0xf7adb6aeb18eb409c03fe88cc31711b61a65333e0fdd88c1815d4ec75f713f31 │ 200000000000       │ 200.00           │
 ╰────────────────────────────────────────────────────────────────────┴────────────────────┴──────────────────╯
-
-sui client gas eloquent-amber
+```
+```sh
+$ sui client gas eloquent-amber
+```
+```sh
 ╭────────────────────────────────────────────────────────────────────┬────────────────────┬──────────────────╮
 │ gasCoinId                                                          │ mistBalance (MIST) │ suiBalance (SUI) │
 ├────────────────────────────────────────────────────────────────────┼────────────────────┼──────────────────┤
@@ -392,15 +409,19 @@ sui client gas eloquent-amber
 ```
 
 If you want to transfer the whole object, you can use `sui client pay-all-sui` or `sui client transfer-sui` (without passing the amount): 
+```sh
+$ sui client pay-sui --recipient eloquent-amber --input-coins 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --gas-budget 5000000
 ```
-sui client pay-sui --recipient eloquent-amber --input-coins 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --gas-budget 5000000
 or
-sui client transfer-sui --to eloquent-amber --sui-coin-object-id 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --gas-budget 5000000
+```sh
+$ sui client transfer-sui --to eloquent-amber --sui-coin-object-id 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --gas-budget 5000000
 ```
 
 Then check the gas for `eloquent-amber` again:
+```sh
+$ sui client gas eloquent-amber
 ```
-sui client gas eloquent-amber
+```sh
 ╭────────────────────────────────────────────────────────────────────┬────────────────────┬──────────────────╮
 │ gasCoinId                                                          │ mistBalance (MIST) │ suiBalance (SUI) │
 ├────────────────────────────────────────────────────────────────────┼────────────────────┼──────────────────┤
@@ -419,8 +440,10 @@ This will also verify that the resulting effects from the locally executed trans
 
 You can add additional flags `--gas-info` and `--ptb-info` to this command to see more information about the transaction.
 
-```
+```sh
 $ sui client replay-transaction --tx-digest 51MzJP2Uesvza8vXGpPCGbfLrY6UCfdvdoErN1z4oXPW
+```
+```sh
 ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Transaction Effects                                                                               │
 ├───────────────────────────────────────────────────────────────────────────────────────────────────┤
@@ -475,8 +498,8 @@ this command records all the Move function invocations and the gas cost breakdow
 
 To enable the profiler, you must either install or build the Sui Client binary locally with the `--features tracing` flag if it has not already been built with that feature enabled.
 
-```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features tracing sui
+```sh
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features tracing sui
 ```
 
 The command outputs a profile to the current working directory in the format `gas_profile_{tx_digest}_{unix_timestamp}.json`.
@@ -485,14 +508,14 @@ Use [speedscope](https://www.speedscope.app/) to inspect the profile.
 
 To install speedscope run
 
-```bash
-npm install -g speedscope
+```sh
+$ npm install -g speedscope
 ```
 
 To open a profile in speedscope run
 
-```bash
-speedscope <PATH/PROFILE-OUTPUT-FILE>
+```sh
+$ speedscope <PATH/PROFILE-OUTPUT-FILE>
 ```
 
 When looking at the profile in speedscope, there are three different views available from the top left menu: **Timer Order**,
@@ -519,24 +542,29 @@ One of the main uses of the `sui client` command is to publish smart contracts o
 This example also makes use of `sui move` commands. To learn more about those commands, see [Sui Move CLI](./move.mdx).
 
 1. Open a terminal or console to the root of your local Sui repository and navigate to the `move_tutorial` example.
-    ```shell
-    cd examples/move
-    cd first_package
+    ```sh
+    $ cd examples/move/first_package
     ```
 1. Switch to the Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration (use `sui client envs` for a list of your defined networks and their aliases).
-    ```shell
-    sui client switch --env devnet
+    ```sh
+    $ sui client switch --env devnet
     ```
-1. Use `sui move build` to build the package. You must run this command at the same level as the package manifest file ([Move.toml](https://move-book.com/concepts/manifest.html)). The console responds with the status of the build.
-    ```shell
-    sui move build
+1. Use `sui move build` to build the package. You must run this command at the same level as the package manifest file ([Move.toml](https://move-book.com/concepts/manifest.html)).
+    ```sh
+    $ sui move build
+    ```
+    The console responds with the status of the build.
+    ```sh
     INCLUDING DEPENDENCY Sui
     INCLUDING DEPENDENCY MoveStdlib
     BUILDING first_package
     ```
-1. Use `sui move test` to run the unit tests. The console responds with updates of its progress.
-    ```shell
-    sui move test
+1. Use `sui move test` to run the unit tests.
+    ```sh
+    $ sui move test
+    ```
+    The console responds with updates of its progress.
+    ```sh
     INCLUDING DEPENDENCY Sui
     INCLUDING DEPENDENCY MoveStdlib
     BUILDING first_package
@@ -545,9 +573,12 @@ This example also makes use of `sui move` commands. To learn more about those co
     [ PASS    ] 0x0::example::test_sword_transactions
     Test result: OK. Total tests: 2; passed: 2; failed: 0
      ```
-1. Use the `sui client verify-bytecode-meter` to check if the module passes the bytecode meter. The console responds with the maximum allowed values, as well as the amount the package uses.
-    ```shell
+1. Use the `sui client verify-bytecode-meter` to check if the module passes the bytecode meter.
+    ```sh
     $ sui client verify-bytecode-meter
+    ```
+    The console responds with the maximum allowed values, as well as the amount the package uses.
+    ```sh
     Running bytecode verifier for 1 modules
     ╭──────────────────────────────────╮
     │ Module will pass metering check! │
@@ -557,27 +588,34 @@ This example also makes use of `sui move` commands. To learn more about those co
     │ Used   │ 4565       │ 4565       │
     ╰────────┴────────────┴────────────╯
     ```
-1. Use `sui client gas` to verify that the active address has a gas coin for paying gas. In the case of this example, the console responds with the information that the address is coinless.
-    ```shell
+1. Use `sui client gas` to verify that the active address has a gas coin for paying gas. 
+    ```sh
     $ sui client gas
+    ```
+    In the case of this example, the console responds with the information that the address is coinless.
+    ```sh
     No gas coins are owned by this address
     ```
 1. If you need coins, use `sui client faucet` (not available for Mainnet). For more information on getting gas tokens, see [Get Sui Tokens](/guides/developer/getting-started/get-coins.mdx).
-    ```shell
+    ```sh
     $ sui client faucet
     ```
 1. Use `sui client gas` to verify the current active address received the coins.
-    ```shell
+    ```sh
     $ sui client gas
+    ```
+    ```sh
     ╭────────────────────────────────────────────────────────────────────┬─────────────╮
-    │ gasCoinId                                                      	   │ gasBalance  │
+    │ gasCoinId                                                          │ gasBalance  │
     ├────────────────────────────────────────────────────────────────────┼─────────────┤
     │ 0x01b2795ba5800c8f7cb7d7c56abe19e24c656ed6764f3ccc5e66da3de52402a8 │ 10000000000 │
     ╰────────────────────────────────────────────────────────────────────┴─────────────╯
     ```
-1. Use `sui client publish` to publish the package, being sure to set an appropriate value for the `gas-budget` flag. The console responds with the details of the publish. You can use `sui client object <OBJECT-ID>` to check the details of any of the objects from the process.
-    ```shell
+1. Use `sui client publish` to publish the package, being sure to set an appropriate value for the `gas-budget` flag if you're using an older version of Sui. The console responds with the details of the publish. You can use `sui client object <OBJECT-ID>` to check the details of any of the objects from the process.
+    ```sh
     $ sui client publish --gas-budget 100000000 .
+    ```
+    ```sh
      Transaction Digest: ABPd7v8BxLkcyHvX8Jt1SbneQRwzE9WzcEoptT2RDNVF
     ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
     │ Transaction Data                                                                                             │
@@ -726,23 +764,30 @@ This example also makes use of `sui move` commands. To learn more about those co
 
 Each command has its own help section. For example, `sui client call --help` displays the following prompt:
 
-```
+```sh
 Call Move function
 
-Usage: sui client call [OPTIONS] --package <PACKAGE> --module <MODULE> --function <FUNCTION> --gas-budget <GAS_BUDGET>
+Usage: sui client call [OPTIONS] --package <PACKAGE> --module <MODULE> --function <FUNCTION>
 
 Options:
-  	--package <PACKAGE>           	Object ID of the package, which contains the module
-  	--module <MODULE>             	The name of the module in the package
-  	--function <FUNCTION>         	Function name in module
-  	--type-args <TYPE_ARGS>...    	Type arguments to the generic function being called. All must be specified, or the call will fail
-  	--args <ARGS>...              	Simplified ordered args like in the function syntax ObjectIDs, Addresses must be hex strings
-  	--gas <GAS>                   	ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas object with at least gas_budget value will be selected
-  	--gas-budget <GAS_BUDGET>     	Gas budget for this call
-  	--serialize-unsigned-transaction  Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data (TransactionData) using base64 encoding, and print out
-                                    	the string <TX_BYTES>. The string can be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
-  	--serialize-signed-transaction	Instead of executing the transaction, serialize the bcs bytes of the signed transaction data (SenderSignedData) using base64 encoding, and print out the
-                                    	string <SIGNED_TX_BYTES>. The string can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>`.
-  	--json                        	Return command outputs in json format
-  -h, --help                        	Print help
+      --package <PACKAGE>               Object ID of the package, which contains the module
+      --module <MODULE>                 The name of the module in the package
+      --function <FUNCTION>             Function name in module
+      --type-args <TYPE_ARGS>...        Type arguments to the generic function being called. All must be specified, or the call will fail
+      --args <ARGS>...                  Simplified ordered args like in the function syntax ObjectIDs, Addresses must be hex strings
+      --gas <GAS>                       ID of the gas object for gas payment. If not provided, a gas object with at least gas_budget value will be selected
+      --gas-budget <GAS_BUDGET>         An optional gas budget for this transaction (in MIST). If gas budget is not provided, the tool will first perform a dry
+                                        run to estimate the gas cost, and then it will execute the transaction. Please note that this incurs a small cost in
+                                        performance due to the additional dry run call
+      --dry-run                         Perform a dry run of the transaction, without executing it
+      --dev-inspect                     Perform a dev inspect
+      --serialize-unsigned-transaction  Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data (TransactionData) using
+                                        base64 encoding, and print out the string <TX_BYTES>. The string can be used to execute transaction with `sui client
+                                        execute-signed-tx --tx-bytes <TX_BYTES>`
+      --serialize-signed-transaction    Instead of executing the transaction, serialize the bcs bytes of the signed transaction data (SenderSignedData) using
+                                        base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string can be used to execute transaction with `sui
+                                        client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>`
+      --json                            Return command outputs in json format
+  -h, --help                            Print help
+  -V, --version                         Print version
 ```
