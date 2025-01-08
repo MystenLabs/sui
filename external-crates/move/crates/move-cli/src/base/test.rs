@@ -312,7 +312,9 @@ fn save_disassembly_to_disk(
             .join(package_name.as_str())
     }
     .join(unit.unit.name.as_str());
-    let (disassembled_string, bytecode_map) = Disassembler::from_unit(&unit.unit).disassemble()?;
+    let mut d = Disassembler::from_unit(&unit.unit);
+    d.generate_bytecode_map();
+    let (disassembled_string, bytecode_map) = d.disassemble()?;
     compiled_package.save_under(
         bytecode_modules_dir.join(&file_path).with_extension("mvb"),
         disassembled_string.as_bytes(),

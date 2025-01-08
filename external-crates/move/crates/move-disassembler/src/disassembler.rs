@@ -87,6 +87,8 @@ pub struct Disassembler<'a> {
     /// `module_alias` will contain an entry for each distinct a
     /// e.g., for `use 0xA::M; use 0xB::M`, this will contain [(0xA, M) -> M, (0xB, M) -> 1M]
     module_aliases: HashMap<ModuleId, String>,
+    /// Generate bytecode map for disassembled bytecode?
+    bytecode_map: bool,
 }
 
 struct BoundedBuffer<'a> {
@@ -188,6 +190,7 @@ impl<'a> Disassembler<'a> {
             options,
             coverage_map: None,
             module_aliases,
+            bytecode_map: false,
         }
     }
 
@@ -221,6 +224,10 @@ impl<'a> Disassembler<'a> {
         self.coverage_map = Some(coverage_map);
     }
 
+    pub fn generate_bytecode_map(&mut self) {
+        self.bytecode_map = true;
+    }
+
     pub fn disassemble(&self) -> Result<(String, SourceMap)> {
         let mut buffer = String::new();
         let mut bcode_map = if let Some(budget) = self.options.max_output_size {
@@ -232,8 +239,10 @@ impl<'a> Disassembler<'a> {
         } else {
             self.print_module(&mut buffer)?
         };
-        let file_hash = FileHash::new(&buffer);
-        bcode_map.replace_file_hashes(file_hash);
+        if self.bytecode_map {
+            let file_hash = FileHash::new(&buffer);
+            bcode_map.replace_file_hashes(file_hash);
+        }
         Ok((buffer, bcode_map))
     }
 }
@@ -338,11 +347,13 @@ impl<'a> Disassembler<'a> {
             "]\n",
             buffer,
             |buffer, (idx, constant)| {
-                // no constant name in the disassembled bytecode - use index as a name
-                bcode_map.add_const_mapping(
-                    ConstantPoolIndex(idx as TableIndex),
-                    ConstantName(Symbol::from(idx.to_string())),
-                )?;
+                if self.bytecode_map {
+                    // no constant name in the disassembled bytecode - use index as a name
+                    bcode_map.add_const_mapping(
+                        ConstantPoolIndex(idx as TableIndex),
+                        ConstantName(Symbol::from(idx.to_string())),
+                    )?;
+                }
                 self.disassemble_constant(buffer, idx, constant, false)
             },
         )
@@ -403,20 +414,24 @@ impl<'a> Disassembler<'a> {
         let struct_name_start_offset = buffer.byte_len();
         any_write!(buffer, "{name}")?;
         let struct_name_end_offset = buffer.byte_len();
-        let struct_name_loc = Loc::new(
-            FileHash::empty(),
-            struct_name_start_offset,
-            struct_name_end_offset,
-        );
-        bcode_map.add_top_level_struct_mapping(struct_def_idx, struct_name_loc)?;
+        if self.bytecode_map {
+            let struct_name_loc = Loc::new(
+                FileHash::empty(),
+                struct_name_start_offset,
+                struct_name_end_offset,
+            );
+            bcode_map.add_top_level_struct_mapping(struct_def_idx, struct_name_loc)?;
+        }
 
         let type_param_source_names = Self::disassemble_datatype_type_formals(
             buffer,
             &struct_source_map.type_parameters,
             &struct_handle.type_parameters,
         )?;
-        for n in type_param_source_names {
-            bcode_map.add_struct_type_parameter_mapping(struct_def_idx, n)?;
+        if self.bytecode_map {
+            for n in type_param_source_names {
+                bcode_map.add_struct_type_parameter_mapping(struct_def_idx, n)?;
+            }
         }
 
         Self::disassemble_abilites(buffer, struct_handle.abilities)?;
@@ -437,12 +452,14 @@ impl<'a> Disassembler<'a> {
                         let field_name_start_offset = buffer.byte_len();
                         any_write!(buffer, "{name}")?;
                         let field_name_end_offset = buffer.byte_len();
-                        let field_name_loc = Loc::new(
-                            FileHash::empty(),
-                            field_name_start_offset,
-                            field_name_end_offset,
-                        );
-                        bcode_map.add_struct_field_mapping(struct_def_idx, field_name_loc)?;
+                        if self.bytecode_map {
+                            let field_name_loc = Loc::new(
+                                FileHash::empty(),
+                                field_name_start_offset,
+                                field_name_end_offset,
+                            );
+                            bcode_map.add_struct_field_mapping(struct_def_idx, field_name_loc)?;
+                        }
                         any_write!(buffer, ": ")?;
 
                         self.disassemble_sig_tok(
@@ -488,20 +505,24 @@ impl<'a> Disassembler<'a> {
         let enum_name_start_offset = buffer.byte_len();
         any_write!(buffer, "{name}")?;
         let enum_name_end_offset = buffer.byte_len();
-        let enum_name_loc = Loc::new(
-            FileHash::empty(),
-            enum_name_start_offset,
-            enum_name_end_offset,
-        );
-        bcode_map.add_top_level_enum_mapping(enum_def_idx, enum_name_loc)?;
+        if self.bytecode_map {
+            let enum_name_loc = Loc::new(
+                FileHash::empty(),
+                enum_name_start_offset,
+                enum_name_end_offset,
+            );
+            bcode_map.add_top_level_enum_mapping(enum_def_idx, enum_name_loc)?;
+        }
 
         let type_param_source_names = Self::disassemble_datatype_type_formals(
             buffer,
             &enum_source_map.type_parameters,
             &enum_handle.type_parameters,
         )?;
-        for n in type_param_source_names {
-            bcode_map.add_enum_type_parameter_mapping(enum_def_idx, n)?;
+        if self.bytecode_map {
+            for n in type_param_source_names {
+                bcode_map.add_enum_type_parameter_mapping(enum_def_idx, n)?;
+            }
         }
 
         Self::disassemble_abilites(buffer, enum_handle.abilities)?;
@@ -559,13 +580,15 @@ impl<'a> Disassembler<'a> {
                 // perhaps surprisingly, but the location is of the whole variant
                 // and not just of its name
                 let variant_end_offset = buffer.byte_len();
-                let variant_loc =
-                    Loc::new(FileHash::empty(), variant_start_offset, variant_end_offset);
-                bcode_map.add_enum_variant_mapping(
-                    enum_def_idx,
-                    (variant_name.to_string(), variant_loc),
-                    field_locs,
-                )?;
+                if self.bytecode_map {
+                    let variant_loc =
+                        Loc::new(FileHash::empty(), variant_start_offset, variant_end_offset);
+                    bcode_map.add_enum_variant_mapping(
+                        enum_def_idx,
+                        (variant_name.to_string(), variant_loc),
+                        field_locs,
+                    )?;
+                }
                 Ok(())
             },
         )?;
@@ -735,19 +758,22 @@ impl<'a> Disassembler<'a> {
         let Some(code) = &function.code else {
             any_writeln!(buffer, ";")?;
             let fun_def_end_offset = buffer.byte_len();
-            let fun_def_loc = Loc::new(FileHash::empty(), fun_def_start_offset, fun_def_end_offset);
-            self.add_function_bytecode_map(
-                bcode_map,
-                function_definition_index,
-                fun_name_loc,
-                fun_def_loc,
-                function.is_native(),
-                type_param_source_names,
-                param_source_names,
-                return_locs,
-                vec![],
-                BTreeMap::new(),
-            )?;
+            if self.bytecode_map {
+                let fun_def_loc =
+                    Loc::new(FileHash::empty(), fun_def_start_offset, fun_def_end_offset);
+                self.add_function_bytecode_map(
+                    bcode_map,
+                    function_definition_index,
+                    fun_name_loc,
+                    fun_def_loc,
+                    function.is_native(),
+                    type_param_source_names,
+                    param_source_names,
+                    return_locs,
+                    vec![],
+                    BTreeMap::new(),
+                )?;
+            }
             return Ok(());
         };
 
@@ -762,19 +788,21 @@ impl<'a> Disassembler<'a> {
         any_writeln!(buffer, "}}")?;
 
         let fun_def_end_offset = buffer.byte_len();
-        let fun_loc = Loc::new(FileHash::empty(), fun_def_start_offset, fun_def_end_offset);
-        self.add_function_bytecode_map(
-            bcode_map,
-            function_definition_index,
-            fun_loc,
-            fun_name_loc,
-            function.is_native(),
-            type_param_source_names,
-            param_source_names,
-            return_locs,
-            locals,
-            code_locations,
-        )?;
+        if self.bytecode_map {
+            let fun_loc = Loc::new(FileHash::empty(), fun_def_start_offset, fun_def_end_offset);
+            self.add_function_bytecode_map(
+                bcode_map,
+                function_definition_index,
+                fun_loc,
+                fun_name_loc,
+                function.is_native(),
+                type_param_source_names,
+                param_source_names,
+                return_locs,
+                locals,
+                code_locations,
+            )?;
+        }
         Ok(())
     }
 
