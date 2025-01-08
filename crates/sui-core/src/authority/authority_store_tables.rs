@@ -10,16 +10,14 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::storage::MarkerValue;
-use tidehunter::key_shape::{KeyShape, KeyShapeBuilder, KeySpaceConfig};
+use tidehunter::key_shape::{KeyShapeBuilder, KeySpaceConfig};
 use tidehunter::minibytes::Bytes;
 use tidehunter::wal::WalPosition;
-use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
-    default_db_options, read_size_from_env, DBBatch, DBMap, DBMapTableConfigMap, DBOptions,
-    MetricConf,
+    default_db_options, read_size_from_env, DBMapTableConfigMap, DBOptions,
 };
-use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
+use typed_store::traits::{Map, TypedStoreDebug};
 
 use crate::authority::authority_store_types::{
     get_store_object_pair, try_construct_object, ObjectContentDigest, StoreData,
@@ -27,7 +25,6 @@ use crate::authority::authority_store_types::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store::tidehunter::th_db_map::{default_cells_per_mutex, open_thdb, ThDbBatch, ThDbMap};
-use typed_store::DBMapUtils;
 
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
 pub(crate) const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";

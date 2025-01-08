@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tidehunter::batch::WriteBatch;
 use tidehunter::config::Config;
 use tidehunter::db::{Db, DbError};
-use tidehunter::key_shape::{KeyShape, KeyShapeBuilder, KeySpace};
+use tidehunter::key_shape::{KeyShape, KeySpace};
 use tidehunter::metrics::Metrics;
 use typed_store_error::TypedStoreError;
 
