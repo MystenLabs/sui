@@ -43,6 +43,21 @@ export type RuntimeValueType = string | CompoundType | IRuntimeRefValue;
 export interface IRuntimeVariableLoc {
     frameID: number;
     localIndex: number;
+}
+
+/**
+ * Global location (typically used for values
+ * computed in native functions)
+ */
+export interface IRuntimeGlobalLoc {
+    globalIndex: number;
+}
+
+/**
+ * Location where a runtime value is stored.
+ */
+export interface IRuntimeLoc {
+    loc: IRuntimeVariableLoc | IRuntimeGlobalLoc;
     indexPath: number[];
 }
 
@@ -51,7 +66,7 @@ export interface IRuntimeVariableLoc {
  */
 export interface IRuntimeRefValue {
     mutable: boolean;
-    loc: IRuntimeVariableLoc
+    indexedLoc: IRuntimeLoc;
 }
 
 /**
@@ -128,6 +143,7 @@ interface IRuntimeStackFrame {
  */
 export interface IRuntimeStack {
     frames: IRuntimeStackFrame[];
+    globals: Map<number, RuntimeValueType>;
 }
 
 /**
@@ -185,7 +201,10 @@ export class Runtime extends EventEmitter {
     /**
      * Current frame stack.
      */
-    private frameStack = { frames: [] as IRuntimeStackFrame[] };
+    private frameStack = {
+        frames: [] as IRuntimeStackFrame[],
+        globals: new Map<number, RuntimeValueType>()
+    };
 
     /**
      * Map of file hashes to file info.
@@ -257,7 +276,8 @@ export class Runtime extends EventEmitter {
                 currentEvent.optimizedLines
             );
         this.frameStack = {
-            frames: [newFrame]
+            frames: [newFrame],
+            globals: new Map<number, RuntimeValueType>()
         };
         this.step(/* next */ false, /* stopAtCloseFrame */ false);
     }
@@ -409,11 +429,19 @@ export class Runtime extends EventEmitter {
                         return ExecutionResult.Exception;
                     }
                 }
-                // if native function executed successfully, then the next event
-                // should be CloseFrame
-                if (this.trace.events.length <= this.eventIndex + 1 ||
-                    this.trace.events[this.eventIndex + 1].type !== TraceEventKind.CloseFrame) {
-                    throw new Error('Expected an CloseFrame event after native OpenFrame event');
+                // process optional effects until reaching CloseFrame for the native function
+                while (true) {
+                    const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ true);
+                    if (executionResult === ExecutionResult.Exception) {
+                        return executionResult;
+                    }
+                    if (executionResult === ExecutionResult.TraceEnd) {
+                        throw new Error('Cannot find CloseFrame event for native function');
+                    }
+                    const currentEvent = this.trace.events[this.eventIndex];
+                    if (currentEvent.type === TraceEventKind.CloseFrame) {
+                        break;
+                    }
                 }
                 // skip over CloseFrame as there is no frame to pop
                 this.eventIndex++;
@@ -449,9 +477,18 @@ export class Runtime extends EventEmitter {
                 return ExecutionResult.Ok;
             } else {
                 // pop the top frame from the stack
-                if (this.frameStack.frames.length <= 0) {
+                const framesLength = this.frameStack.frames.length;
+                if (framesLength <= 0) {
                     throw new Error('No frame to pop at CloseFrame event with ID: '
                         + currentEvent.id);
+                }
+                const currentFrameID = this.frameStack.frames[framesLength - 1].id;
+                if (currentFrameID !== currentEvent.id) {
+                    throw new Error('Frame ID mismatch at CloseFrame event with ID: '
+                        + currentEvent.id
+                        + ' (current frame ID: '
+                        + currentFrameID
+                        + ')');
                 }
                 this.frameStack.frames.pop();
                 return this.step(next, stopAtCloseFrame);
@@ -463,18 +500,23 @@ export class Runtime extends EventEmitter {
                 return ExecutionResult.Exception;
             }
             if (effect.type === TraceEffectKind.Write) {
-                const traceLocation = effect.loc;
-                const traceValue = effect.value;
-                const frame = this.frameStack.frames.find(
-                    frame => frame.id === traceLocation.frameID
-                );
-                if (!frame) {
-                    throw new Error('Cannot find frame with ID: '
-                        + traceLocation.frameID
-                        + ' when processing Write effect for local variable at index: '
-                        + traceLocation.localIndex);
+                const traceLocation = effect.indexedLoc.loc;
+                if ('globalIndex' in traceLocation) {
+                    const globalValue = effect.value;
+                    this.frameStack.globals.set(traceLocation.globalIndex, globalValue);
+                } else if ('frameID' in traceLocation && 'localIndex' in traceLocation) {
+                    const traceValue = effect.value;
+                    const frame = this.frameStack.frames.find(
+                        frame => frame.id === traceLocation.frameID
+                    );
+                    if (!frame) {
+                        throw new Error('Cannot find frame with ID: '
+                            + traceLocation.frameID
+                            + ' when processing Write effect for local variable at index: '
+                            + traceLocation.localIndex);
+                    }
+                    localWrite(frame, traceLocation.localIndex, traceValue);
                 }
-                localWrite(frame, traceLocation.localIndex, traceValue);
             }
             return this.step(next, stopAtCloseFrame);
         } else {
@@ -825,23 +867,35 @@ export class Runtime extends EventEmitter {
         name: string,
         type?: string
     ): string {
+        const indexedLoc = refValue.indexedLoc;
         let res = '';
-        const frame = this.frameStack.frames.find(frame => frame.id === refValue.loc.frameID);
-        let local = undefined;
-        if (!frame) {
-            return res;
-        }
-        for (const scope of frame.locals) {
-            local = scope[refValue.loc.localIndex];
-            if (local) {
-                break;
+        if ('globalIndex' in indexedLoc.loc) {
+            // global location
+            const globalValue = this.frameStack.globals.get(indexedLoc.loc.globalIndex);
+            if (globalValue) {
+                const indexPath = [...indexedLoc.indexPath];
+                return this.valueToString(tabs, globalValue, name, indexPath, type);
             }
+        } else if ('frameID' in indexedLoc.loc && 'localIndex' in indexedLoc.loc) {
+            const frameID = indexedLoc.loc.frameID;
+            const frame = this.frameStack.frames.find(frame => frame.id === frameID);
+            let local = undefined;
+            if (!frame) {
+                return res;
+            }
+            for (const scope of frame.locals) {
+                local = scope[indexedLoc.loc.localIndex];
+                if (local) {
+                    break;
+                }
+            }
+            if (!local) {
+                return res;
+            }
+            const indexPath = [...indexedLoc.indexPath];
+            return this.valueToString(tabs, local.value, name, indexPath, type);
         }
-        if (!local) {
-            return res;
-        }
-        const indexPath = [...refValue.loc.indexPath];
-        return this.valueToString(tabs, local.value, name, indexPath, type);
+        return res;
     }
 
     /**
