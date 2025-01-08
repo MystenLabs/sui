@@ -2,9 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(unused_imports)]
-use log::{debug, info, warn};
-
 use crate::code_writer::{CodeWriter, CodeWriterLabel};
 use itertools::Itertools;
 use move_binary_format::file_format;
@@ -41,9 +38,9 @@ use std::{
 const MAX_SUBSECTIONS: usize = 6;
 
 /// Options passed into the documentation generator.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct DocgenOptions {
+pub struct DocgenFlags {
     /// The level where we start sectioning. Often markdown sections are rendered with
     /// unnecessary large section fonts, setting this value high reduces the size.
     pub section_level_start: usize,
@@ -55,6 +52,16 @@ pub struct DocgenOptions {
     pub toc_depth: usize,
     /// Whether to use collapsed sections (<details>) for impl and specs
     pub collapsed_sections: bool,
+    /// Whether to include dependency diagrams in the generated docs.
+    pub include_dep_diagrams: bool,
+    /// Whether to include call diagrams in the generated docs.
+    pub include_call_diagrams: bool,
+}
+
+/// Options passed into the documentation generator.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DocgenOptions {
     /// In which directory to store output.
     pub output_directory: String,
     /// In which directories to look for references.
@@ -86,15 +93,14 @@ pub struct DocgenOptions {
     /// An optional file containing reference definitions. The content of this file will
     /// be added to each generated markdown doc.
     pub references_file: Option<String>,
-    /// Whether to include dependency diagrams in the generated docs.
-    pub include_dep_diagrams: bool,
-    /// Whether to include call diagrams in the generated docs.
-    pub include_call_diagrams: bool,
     /// If this is being compiled relative to a different place where it will be stored (output directory).
     pub compile_relative_to_output_dir: bool,
+
+    /// Flags controlling the generation.
+    pub flags: DocgenFlags,
 }
 
-impl Default for DocgenOptions {
+impl Default for DocgenFlags {
     fn default() -> Self {
         Self {
             section_level_start: 1,
@@ -102,13 +108,21 @@ impl Default for DocgenOptions {
             include_impl: true,
             toc_depth: 3,
             collapsed_sections: true,
+            include_dep_diagrams: false,
+            include_call_diagrams: false,
+        }
+    }
+}
+
+impl Default for DocgenOptions {
+    fn default() -> Self {
+        Self {
             output_directory: "doc".to_string(),
             doc_path: vec!["doc".to_string()],
             compile_relative_to_output_dir: false,
             root_doc_templates: vec![],
             references_file: None,
-            include_dep_diagrams: false,
-            include_call_diagrams: false,
+            flags: DocgenFlags::default(),
         }
     }
 }
@@ -191,7 +205,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generate document contents, returning pairs of output file names and generated contents.
-    pub fn gen(mut self, env: &Model) -> Vec<(String, String)> {
+    pub fn gen(mut self, env: &Model) -> anyhow::Result<Vec<(String, String)>> {
         // If there is a root templates, parse them.
         let root_templates = self
             .options
@@ -258,7 +272,13 @@ impl<'env> Docgen<'env> {
             }
         }
 
-        self.output
+        if !self.errors.is_empty() {
+            anyhow::bail!(
+                "Errors occurred during documentation generation:\n{}",
+                self.errors.join("\n")
+            );
+        }
+        Ok(self.output)
     }
 
     fn unknown_loc_error(&mut self, msg: impl ToString) {
@@ -366,28 +386,6 @@ impl<'env> Docgen<'env> {
 
     /// Compute ModuleInfo for all modules, considering root template content.
     fn compute_module_infos(&mut self, env: &Model, templates: &[(String, Vec<TemplateElement>)]) {
-        let mut out_dir = self.options.output_directory.to_string();
-        if out_dir.is_empty() {
-            out_dir = ".".to_string();
-        }
-        let log = |m: model::Module<'_>, i: &ModuleInfo| {
-            info!(
-                "Module `{}` in file `{}/{}` {}",
-                m.ident(),
-                out_dir,
-                i.target_file,
-                if matches!(
-                    m.info().target_kind,
-                    TargetKind::Source {
-                        is_root_package: true
-                    }
-                ) {
-                    "is target"
-                } else {
-                    "is a dependency"
-                }
-            );
-        };
         // First process infos for modules included via template.
         let mut included = BTreeSet::new();
         for (template_out_file, elements) in templates {
@@ -402,7 +400,6 @@ impl<'env> Docgen<'env> {
                             label: self.make_label_for_module(module_env),
                             is_included: true,
                         };
-                        log(module_env, &info);
                         self.infos.insert(id, info);
                         included.insert(id);
                     } else {
@@ -423,7 +420,6 @@ impl<'env> Docgen<'env> {
                         label: self.make_label_for_module(m),
                         is_included: false,
                     };
-                    log(m, &info);
                     self.infos.insert(id, info);
                 }
             }
@@ -550,7 +546,7 @@ impl<'env> Docgen<'env> {
         }
         self.end_code();
 
-        if self.options.include_dep_diagrams {
+        if self.options.flags.include_dep_diagrams {
             self.gen_dependency_diagram(env, id, true);
             self.begin_collapsed(&format!(
                 "Show all the modules that \"{}\" depends on directly or indirectly",
@@ -586,7 +582,7 @@ impl<'env> Docgen<'env> {
         let funs = module_env
             .functions()
             .filter(|f| {
-                self.options.include_private_fun || {
+                self.options.flags.include_private_fun || {
                     let info = f.info();
                     info.entry.is_some() || !matches!(info.visibility, Visibility::Public(_))
                 }
@@ -800,7 +796,7 @@ impl<'env> Docgen<'env> {
             for (nest, entry) in self
                 .toc
                 .iter()
-                .filter(|(n, _)| *n > 0 && *n <= self.options.toc_depth)
+                .filter(|(n, _)| *n > 0 && *n <= self.options.flags.toc_depth)
                 .cloned()
                 .collect::<Vec<_>>()
             {
@@ -888,7 +884,7 @@ impl<'env> Docgen<'env> {
         self.doc_text(env, struct_info.doc.text());
         self.code_block(env, &self.struct_header_display(struct_env));
 
-        if self.options.include_impl {
+        if self.options.flags.include_impl {
             // Include field documentation if impls are included
             // because they are used by both.
             self.begin_collapsed("Fields");
@@ -913,7 +909,7 @@ impl<'env> Docgen<'env> {
         self.doc_text(env, enum_info.doc.text());
         self.code_block(env, &self.enum_header_display(enum_env));
 
-        if self.options.include_impl {
+        if self.options.flags.include_impl {
             // Include field documentation if impls are included
             // because they are used by both.
             self.begin_collapsed("Variants");
@@ -1064,12 +1060,12 @@ impl<'env> Docgen<'env> {
         self.doc_text(env, func_info.doc.text());
         let sig = self.function_header_display(name, func_env);
         self.code_block(env, &sig);
-        if self.options.include_impl {
+        if self.options.flags.include_impl {
             self.begin_collapsed("Implementation");
             self.code_block(env, &self.get_source_with_indent(env, func_info.full_loc));
             self.end_collapsed();
         }
-        if self.options.include_call_diagrams {
+        if self.options.flags.include_call_diagrams {
             let file_prefix = full_name.replace("::", "_");
             self.gen_call_diagram(env, module_env.id(), name, true);
             self.begin_collapsed(&format!("Show all the functions that \"{}\" calls", name,));
@@ -1174,7 +1170,7 @@ impl<'env> Docgen<'env> {
     /// Creates a new section header and inserts a table-of-contents entry into the generator.
     fn section_header(&mut self, s: &str, label: &str) {
         let level = self.section_nest;
-        if usize::saturating_add(self.options.section_level_start, level) > MAX_SUBSECTIONS {
+        if usize::saturating_add(self.options.flags.section_level_start, level) > MAX_SUBSECTIONS {
             panic!("Maximum number of subheadings exceeded with heading: {}", s)
         }
         if !label.is_empty() {
@@ -1188,7 +1184,7 @@ impl<'env> Docgen<'env> {
         writeln!(
             self.writer,
             "{} {}",
-            self.repeat_str("#", self.options.section_level_start + level),
+            self.repeat_str("#", self.options.flags.section_level_start + level),
             s,
         )
         .unwrap();
@@ -1212,7 +1208,7 @@ impl<'env> Docgen<'env> {
     /// Begins a collapsed section.
     fn begin_collapsed(&mut self, summary: &str) {
         writeln!(self.writer).unwrap();
-        if self.options.collapsed_sections {
+        if self.options.flags.collapsed_sections {
             writeln!(self.writer, "<details>").unwrap();
             writeln!(self.writer, "<summary>{}</summary>", summary).unwrap();
         } else {
@@ -1223,7 +1219,7 @@ impl<'env> Docgen<'env> {
 
     /// Ends a collapsed section.
     fn end_collapsed(&mut self) {
-        if self.options.collapsed_sections {
+        if self.options.flags.collapsed_sections {
             writeln!(self.writer).unwrap();
             writeln!(self.writer, "</details>").unwrap();
         }

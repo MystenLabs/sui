@@ -10,6 +10,7 @@ use move_compiler::command_line::DEFAULT_OUTPUT_DIR;
 use move_compiler::editions::Edition;
 use move_compiler::{diagnostics::warning_filters::WarningFiltersBuilder, shared::PackageConfig};
 use move_core_types::account_address::AccountAddress;
+use move_docgen::DocgenFlags;
 use move_symbol_pool::Symbol;
 use std::fs::File;
 use std::str::FromStr;
@@ -57,6 +58,10 @@ pub struct ResolvedGraph {
     pub build_options: BuildConfig,
     /// A mapping of package name to its resolution
     pub package_table: PackageTable,
+    /// Flags for docgen, if used
+    /// TODO we need some way of setting these for tests, but it really points to maybe
+    /// having a separate tool for docgen
+    pub docgen_flags: DocgenFlags,
 }
 
 // rename_to => (from_package_name, from_address_name)
@@ -255,6 +260,8 @@ impl ResolvedGraph {
             graph,
             build_options,
             package_table,
+            // TODO there should be some way to set these flags
+            docgen_flags: DocgenFlags::default(),
         })
     }
 

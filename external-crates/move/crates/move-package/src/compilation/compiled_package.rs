@@ -32,7 +32,7 @@ use move_compiler::{
     sui_mode::{self},
     Compiler,
 };
-use move_docgen::{Docgen, DocgenOptions};
+use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
 use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
@@ -609,15 +609,14 @@ impl CompiledPackage {
                 all_compiled_units_vec,
             )?;
 
-            if resolution_graph.build_options.generate_docs {
-                compiled_docs = Some(Self::build_docs(
-                    resolved_package.source_package.package.name,
-                    &model,
-                    &resolved_package.package_path,
-                    &immediate_dependencies,
-                    &resolution_graph.build_options.install_dir,
-                ));
-            }
+            compiled_docs = Some(Self::build_docs(
+                resolution_graph.docgen_flags,
+                resolved_package.source_package.package.name,
+                &model,
+                &resolved_package.package_path,
+                &immediate_dependencies,
+                &resolution_graph.build_options.install_dir,
+            )?);
         };
 
         let compiled_package = CompiledPackage {
@@ -741,12 +740,13 @@ impl CompiledPackage {
     }
 
     fn build_docs(
+        docgen_flags: DocgenFlags,
         package_name: PackageName,
         model: &source_model::Model,
         package_root: &Path,
         deps: &[PackageName],
         install_dir: &Option<PathBuf>,
-    ) -> Vec<(String, String)> {
+    ) -> Result<Vec<(String, String)>> {
         let root_doc_templates = find_filenames(
             &[package_root
                 .join(SourcePackageLayout::DocTemplates.path())
@@ -787,7 +787,7 @@ impl CompiledPackage {
             root_doc_templates,
             compile_relative_to_output_dir: true,
             references_file,
-            ..DocgenOptions::default()
+            flags: docgen_flags,
         };
         let docgen = Docgen::new(model, package_name, &doc_options);
         docgen.gen(model)

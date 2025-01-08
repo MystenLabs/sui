@@ -2,25 +2,76 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use codespan_reporting::term::termcolor::Buffer;
+use itertools::Itertools;
 use log::debug;
+use move_docgen::{Docgen, DocgenOptions};
+use move_model_2::source_model;
+use move_package::compilation::model_builder;
+use move_package::BuildConfig;
+use move_symbol_pool::Symbol;
 use std::path::Path;
 use std::path::PathBuf;
-use std::{fs::File, io::Read};
+use std::{fmt::Write, fs::File, io::Read};
 use tempfile::TempDir;
 
-pub fn test_move(path: &Path) -> anyhow::Result<()> {
-    let out_path = TempDir::new()?;
+fn options(root_doc_templates: Vec<String>) -> DocgenOptions {
+    DocgenOptions {
+        output_directory: "output".to_string(),
+        root_doc_templates,
+        compile_relative_to_output_dir: true,
+        ..DocgenOptions::default()
+    }
+}
+
+fn test_move(toml_path: &Path) -> datatest_stable::Result<()> {
+    let output_dir = TempDir::new()?;
     let config = BuildConfig {
         dev_mode: true,
         test_mode: false,
-        generate_docs: true,
-        install_dir: Some(out_path),
+        install_dir: Some(output_dir.path().to_path_buf()),
         force_recompilation: false,
         ..Default::default()
     };
-    let resolved_package =
-        config.resolution_graph_for_package(self.toml_path, None, &mut progress)?;
-    model_builder::build(resolved_package)?;
+    let mut w = Vec::new();
+    let resolved_package = config.resolution_graph_for_package(toml_path, None, &mut w)?;
+    let package_name = resolved_package.root_package();
+    let model = model_builder::build(resolved_package, &mut w)?;
+    let mut out = String::new();
+    let mut options = options(vec![]);
+
+    assert!(options.flags.include_impl);
+    assert!(options.flags.include_private_fun);
+    test_move_one(&mut out, &model, package_name, &options)?;
+
+    assert!(options.flags.collapsed_sections);
+    options.flags.collapsed_sections = false;
+    test_move_one(&mut out, &model, package_name, &options)?;
+
+    insta::assert_snapshot!(out);
+    Ok(())
+}
+
+fn test_move_one(
+    out: &mut String,
+    model: &source_model::Model,
+    package_name: Symbol,
+    doc_options: &DocgenOptions,
+) -> anyhow::Result<()> {
+    let docgen = Docgen::new(model, package_name, &doc_options);
+    let file_contents = docgen.gen(model)?;
+    for (path, contents) in file_contents {
+        write!(
+            out,
+            "
+            <!---
+            BEGIN FILE '{path}' with settings
+            {doc_options:#?}
+            -->
+            {contents}
+            <!--- END FILE -->
+            "
+        )?;
+    }
     Ok(())
 }
 

@@ -14,7 +14,7 @@ use crate::{
 use anyhow::Result;
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{report_diagnostics_to_buffer_with_env_color, report_warnings, Migration},
+    diagnostics::{report_diagnostics_to_buffer_with_env_color, Migration},
     editions::Edition,
     shared::{files::MappedFiles, PackagePaths},
     Compiler,
