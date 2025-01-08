@@ -321,7 +321,7 @@ fn save_disassembly_to_disk(
     )?;
     compiled_package.save_under(
         bytecode_modules_dir.join(&file_path).with_extension("json"),
-        &serialize_to_json_string(&bytecode_map)?.as_bytes(),
+        serialize_to_json_string(&bytecode_map)?.as_bytes(),
     )
 }
 
