@@ -27,6 +27,7 @@ use move_binary_format::{
         VariantInstantiationHandle, VariantInstantiationHandleIndex, VariantJumpTable,
         VariantJumpTableIndex, VariantTag,
     },
+    file_format_common::Opcodes,
 };
 use move_core_types::{
     gas_algebra::AbstractMemorySize, identifier::Identifier, language_storage::ModuleId,
@@ -127,6 +128,7 @@ pub struct Function {
     pub index: FunctionDefinitionIndex,
     pub code: *const [Bytecode],
     pub parameters: Vec<Type>,
+    pub locals: Vec<Type>,
     pub return_: Vec<Type>,
     pub type_parameters: Vec<AbilitySet>,
     pub native: Option<NativeFunction>,
@@ -1128,9 +1130,97 @@ impl Type {
     }
 }
 
-//**************************************************************************************************
+// -------------------------------------------------------------------------------------------------
+// Into
+// -------------------------------------------------------------------------------------------------
+
+impl Into<Opcodes> for &Bytecode {
+    fn into(self) -> Opcodes {
+        match self {
+            Bytecode::Pop => Opcodes::POP,
+            Bytecode::Ret => Opcodes::RET,
+            Bytecode::BrTrue(_) => Opcodes::BR_TRUE,
+            Bytecode::BrFalse(_) => Opcodes::BR_FALSE,
+            Bytecode::Branch(_) => Opcodes::BRANCH,
+            Bytecode::LdU8(_) => Opcodes::LD_U8,
+            Bytecode::LdU64(_) => Opcodes::LD_U64,
+            Bytecode::LdU128(_) => Opcodes::LD_U128,
+            Bytecode::CastU8 => Opcodes::CAST_U8,
+            Bytecode::CastU64 => Opcodes::CAST_U64,
+            Bytecode::CastU128 => Opcodes::CAST_U128,
+            Bytecode::LdConst(_) => Opcodes::LD_CONST,
+            Bytecode::LdTrue => Opcodes::LD_TRUE,
+            Bytecode::LdFalse => Opcodes::LD_FALSE,
+            Bytecode::CopyLoc(_) => Opcodes::COPY_LOC,
+            Bytecode::MoveLoc(_) => Opcodes::MOVE_LOC,
+            Bytecode::StLoc(_) => Opcodes::ST_LOC,
+            Bytecode::DirectCall(_) => Opcodes::CALL,
+            Bytecode::VirtualCall(_) => Opcodes::CALL,
+            Bytecode::CallGeneric(_) => Opcodes::CALL_GENERIC,
+            Bytecode::Pack(_) => Opcodes::PACK,
+            Bytecode::PackGeneric(_) => Opcodes::PACK_GENERIC,
+            Bytecode::Unpack(_) => Opcodes::UNPACK,
+            Bytecode::UnpackGeneric(_) => Opcodes::UNPACK_GENERIC,
+            Bytecode::ReadRef => Opcodes::READ_REF,
+            Bytecode::WriteRef => Opcodes::WRITE_REF,
+            Bytecode::FreezeRef => Opcodes::FREEZE_REF,
+            Bytecode::MutBorrowLoc(_) => Opcodes::MUT_BORROW_LOC,
+            Bytecode::ImmBorrowLoc(_) => Opcodes::IMM_BORROW_LOC,
+            Bytecode::MutBorrowField(_) => Opcodes::MUT_BORROW_FIELD,
+            Bytecode::MutBorrowFieldGeneric(_) => Opcodes::MUT_BORROW_FIELD_GENERIC,
+            Bytecode::ImmBorrowField(_) => Opcodes::IMM_BORROW_FIELD,
+            Bytecode::ImmBorrowFieldGeneric(_) => Opcodes::IMM_BORROW_FIELD_GENERIC,
+            Bytecode::Add => Opcodes::ADD,
+            Bytecode::Sub => Opcodes::SUB,
+            Bytecode::Mul => Opcodes::MUL,
+            Bytecode::Mod => Opcodes::MOD,
+            Bytecode::Div => Opcodes::DIV,
+            Bytecode::BitOr => Opcodes::BIT_OR,
+            Bytecode::BitAnd => Opcodes::BIT_AND,
+            Bytecode::Xor => Opcodes::XOR,
+            Bytecode::Shl => Opcodes::SHL,
+            Bytecode::Shr => Opcodes::SHR,
+            Bytecode::Or => Opcodes::OR,
+            Bytecode::And => Opcodes::AND,
+            Bytecode::Not => Opcodes::NOT,
+            Bytecode::Eq => Opcodes::EQ,
+            Bytecode::Neq => Opcodes::NEQ,
+            Bytecode::Lt => Opcodes::LT,
+            Bytecode::Gt => Opcodes::GT,
+            Bytecode::Le => Opcodes::LE,
+            Bytecode::Ge => Opcodes::GE,
+            Bytecode::Abort => Opcodes::ABORT,
+            Bytecode::Nop => Opcodes::NOP,
+            Bytecode::VecPack(..) => Opcodes::VEC_PACK,
+            Bytecode::VecLen(_) => Opcodes::VEC_LEN,
+            Bytecode::VecImmBorrow(_) => Opcodes::VEC_IMM_BORROW,
+            Bytecode::VecMutBorrow(_) => Opcodes::VEC_MUT_BORROW,
+            Bytecode::VecPushBack(_) => Opcodes::VEC_PUSH_BACK,
+            Bytecode::VecPopBack(_) => Opcodes::VEC_POP_BACK,
+            Bytecode::VecUnpack(..) => Opcodes::VEC_UNPACK,
+            Bytecode::VecSwap(_) => Opcodes::VEC_SWAP,
+            Bytecode::LdU16(_) => Opcodes::LD_U16,
+            Bytecode::LdU32(_) => Opcodes::LD_U32,
+            Bytecode::LdU256(_) => Opcodes::LD_U256,
+            Bytecode::CastU16 => Opcodes::CAST_U16,
+            Bytecode::CastU32 => Opcodes::CAST_U32,
+            Bytecode::CastU256 => Opcodes::CAST_U256,
+            Bytecode::PackVariant(_) => Opcodes::PACK_VARIANT,
+            Bytecode::PackVariantGeneric(_) => Opcodes::PACK_VARIANT_GENERIC,
+            Bytecode::UnpackVariant(_) => Opcodes::UNPACK_VARIANT,
+            Bytecode::UnpackVariantImmRef(_) => Opcodes::UNPACK_VARIANT_IMM_REF,
+            Bytecode::UnpackVariantMutRef(_) => Opcodes::UNPACK_VARIANT_MUT_REF,
+            Bytecode::UnpackVariantGeneric(_) => Opcodes::UNPACK_VARIANT_GENERIC,
+            Bytecode::UnpackVariantGenericImmRef(_) => Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF,
+            Bytecode::UnpackVariantGenericMutRef(_) => Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF,
+            Bytecode::VariantSwitch(_) => Opcodes::VARIANT_SWITCH,
+        }
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
 // Debug
-//**************************************************************************************************
+// -------------------------------------------------------------------------------------------------
 
 impl ::std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

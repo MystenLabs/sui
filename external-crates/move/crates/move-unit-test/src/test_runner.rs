@@ -288,7 +288,7 @@ impl SharedTestingConfig {
             test_config: &SharedTestingConfig,
             gas_meter: &mut impl GasMeter,
             // TODO: Plumb tracing in
-            _tracer: Option<&mut MoveTraceBuilder>,
+            tracer: Option<&mut MoveTraceBuilder>,
             module_id: ModuleId,
             function_name: &str,
             arguments: Vec<MoveValue>,
@@ -304,13 +304,15 @@ impl SharedTestingConfig {
 
             let function_name = IdentStr::new(function_name).unwrap();
 
-            let serialized_return_values_result = vm_instance.execute_function_bypass_visibility(
-                &module_id,
-                function_name,
-                vec![], /* no ty args for now */
-                serialize_values(arguments.iter()),
-                gas_meter,
-            );
+            let serialized_return_values_result = vm_instance
+                .execute_function_bypass_visibility_with_tracer_if_enabled(
+                    &module_id,
+                    function_name,
+                    vec![], /* no ty args for now */
+                    serialize_values(arguments.iter()),
+                    tracer,
+                    gas_meter,
+                );
             serialized_return_values_result.map(|res| {
                 (
                     res.return_values
@@ -332,7 +334,7 @@ impl SharedTestingConfig {
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
         move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;
-            use move_vm_types::gas::GasMeter;
+            use move_vm_runtime::shared::gas::GasMeter;
             gas_meter.set_profiler(GasProfiler::init_default_cfg(
                 function_name.to_owned(),
                 self.execution_bound,

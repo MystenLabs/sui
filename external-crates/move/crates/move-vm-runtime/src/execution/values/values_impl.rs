@@ -2850,8 +2850,10 @@ impl<'d, 'a> serde::de::Visitor<'d> for EnumFieldVisitor<'a> {
         A: serde::de::SeqAccess<'d>,
     {
         let tag = match seq.next_element_seed(&MoveTypeLayout::U8)? {
-            Some(MoveValue::U8(tag)) if tag as u64 <= VARIANT_COUNT_MAX => tag as u16,
-            Some(MoveValue::U8(tag)) => return Err(A::Error::invalid_length(tag as usize, &self)),
+            Some(RuntimeValue::U8(tag)) if tag as u64 <= VARIANT_COUNT_MAX => tag as u16,
+            Some(RuntimeValue::U8(tag)) => {
+                return Err(A::Error::invalid_length(tag as usize, &self))
+            }
             Some(val) => {
                 return Err(A::Error::invalid_type(
                     serde::de::Unexpected::Other(&format!("{val:?}")),
@@ -3318,21 +3320,23 @@ pub mod prop {
     }
 }
 
-use move_core_types::runtime_value::{MoveStruct, MoveValue, MoveVariant};
+use move_core_types::runtime_value::{
+    MoveStruct as RuntimeStruct, MoveValue as RuntimeValue, MoveVariant as RuntimeVariant,
+};
 
 impl Value {
-    pub fn as_move_value(&self, layout: &MoveTypeLayout) -> MoveValue {
+    pub fn as_move_value(&self, layout: &MoveTypeLayout) -> RuntimeValue {
         use MoveTypeLayout as L;
 
         match (layout, self) {
-            (L::U8, Value::U8(x)) => MoveValue::U8(*x),
-            (L::U16, Value::U16(x)) => MoveValue::U16(*x),
-            (L::U32, Value::U32(x)) => MoveValue::U32(*x),
-            (L::U64, Value::U64(x)) => MoveValue::U64(*x),
-            (L::U128, Value::U128(x)) => MoveValue::U128(**x),
-            (L::U256, Value::U256(x)) => MoveValue::U256(**x),
-            (L::Bool, Value::Bool(x)) => MoveValue::Bool(*x),
-            (L::Address, Value::Address(x)) => MoveValue::Address(**x),
+            (L::U8, Value::U8(x)) => RuntimeValue::U8(*x),
+            (L::U16, Value::U16(x)) => RuntimeValue::U16(*x),
+            (L::U32, Value::U32(x)) => RuntimeValue::U32(*x),
+            (L::U64, Value::U64(x)) => RuntimeValue::U64(*x),
+            (L::U128, Value::U128(x)) => RuntimeValue::U128(**x),
+            (L::U256, Value::U256(x)) => RuntimeValue::U256(**x),
+            (L::Bool, Value::Bool(x)) => RuntimeValue::Bool(*x),
+            (L::Address, Value::Address(x)) => RuntimeValue::Address(**x),
 
             // Enum variant case with dereferencing the Box.
             (L::Enum(enum_layout), Value::Container(container)) => {
@@ -3345,7 +3349,7 @@ impl Value {
                     for (v, field_layout) in values.iter().zip(field_layouts) {
                         fields.push(v.as_move_value(field_layout));
                     }
-                    MoveValue::Variant(MoveVariant { tag, fields })
+                    RuntimeValue::Variant(RuntimeVariant { tag, fields })
                 } else {
                     panic!("Expected Enum, got non-variant container");
                 }
@@ -3358,7 +3362,7 @@ impl Value {
                     for (v, field_layout) in r.iter().zip(struct_layout.fields().iter()) {
                         fields.push(v.as_move_value(field_layout));
                     }
-                    MoveValue::Struct(MoveStruct::new(fields))
+                    RuntimeValue::Struct(RuntimeStruct::new(fields))
                 } else {
                     panic!("Expected Struct, got non-struct container");
                 }
@@ -3366,15 +3370,17 @@ impl Value {
 
             // Vector case with handling different container types
             (L::Vector(inner_layout), Value::Container(container)) => {
-                MoveValue::Vector(match &**container {
-                    Container::VecU8(r) => r.iter().map(|u| MoveValue::U8(*u)).collect(),
-                    Container::VecU16(r) => r.iter().map(|u| MoveValue::U16(*u)).collect(),
-                    Container::VecU32(r) => r.iter().map(|u| MoveValue::U32(*u)).collect(),
-                    Container::VecU64(r) => r.iter().map(|u| MoveValue::U64(*u)).collect(),
-                    Container::VecU128(r) => r.iter().map(|u| MoveValue::U128(*u)).collect(),
-                    Container::VecU256(r) => r.iter().map(|u| MoveValue::U256(*u)).collect(),
-                    Container::VecBool(r) => r.iter().map(|u| MoveValue::Bool(*u)).collect(),
-                    Container::VecAddress(r) => r.iter().map(|u| MoveValue::Address(*u)).collect(),
+                RuntimeValue::Vector(match &**container {
+                    Container::VecU8(r) => r.iter().map(|u| RuntimeValue::U8(*u)).collect(),
+                    Container::VecU16(r) => r.iter().map(|u| RuntimeValue::U16(*u)).collect(),
+                    Container::VecU32(r) => r.iter().map(|u| RuntimeValue::U32(*u)).collect(),
+                    Container::VecU64(r) => r.iter().map(|u| RuntimeValue::U64(*u)).collect(),
+                    Container::VecU128(r) => r.iter().map(|u| RuntimeValue::U128(*u)).collect(),
+                    Container::VecU256(r) => r.iter().map(|u| RuntimeValue::U256(*u)).collect(),
+                    Container::VecBool(r) => r.iter().map(|u| RuntimeValue::Bool(*u)).collect(),
+                    Container::VecAddress(r) => {
+                        r.iter().map(|u| RuntimeValue::Address(*u)).collect()
+                    }
                     Container::Vec(r) => r
                         .iter()
                         .map(|v| v.as_move_value(inner_layout.as_ref()))
@@ -3393,7 +3399,7 @@ impl Value {
                         panic!("Unexpected signer layout: {:?}", r);
                     }
                     match &r[0] {
-                        Value::Address(a) => MoveValue::Signer(**a),
+                        Value::Address(a) => RuntimeValue::Signer(**a),
                         v => panic!("Unexpected non-address while converting signer: {:?}", v),
                     }
                 } else {
@@ -3402,6 +3408,147 @@ impl Value {
             }
 
             (layout, val) => panic!("Cannot convert value {:?} as {:?}", val, layout),
+        }
+    }
+}
+
+use move_core_types::annotated_value::{
+    MoveEnumLayout as AnnEnumLayout, MoveStruct as AnnStruct, MoveTypeLayout as AnnTypeLayout,
+    MoveValue as AnnValue, MoveVariant as AnnVariant,
+};
+
+impl Value {
+    /// Converts the value to an annotated move value. This is only needed for tracing and care
+    /// should be taken when using this function as it can possibly inflate the size of the value.
+    pub(crate) fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
+        use AnnTypeLayout as L;
+        match (layout, self) {
+            (L::U8, Value::U8(x)) => Some(AnnValue::U8(*x)),
+            (L::U16, Value::U16(x)) => Some(AnnValue::U16(*x)),
+            (L::U32, Value::U32(x)) => Some(AnnValue::U32(*x)),
+            (L::U64, Value::U64(x)) => Some(AnnValue::U64(*x)),
+            (L::U128, Value::U128(x)) => Some(AnnValue::U128(**x)),
+            (L::U256, Value::U256(x)) => Some(AnnValue::U256(**x)),
+            (L::Bool, Value::Bool(x)) => Some(AnnValue::Bool(*x)),
+            (L::Address, Value::Address(x)) => Some(AnnValue::Address(**x)),
+            (layout, Value::Container(container)) => container.as_annotated_move_value(layout),
+            (layout, Value::Reference(ref_)) => ref_.as_annotated_move_value(layout),
+            (_, _) => None,
+        }
+    }
+}
+
+impl Container {
+    /// Converts the value to an annotated move value. This is only needed for tracing and care
+    /// should be taken when using this function as it can possibly inflate the size of the value.
+    pub(crate) fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
+        use AnnTypeLayout as L;
+        match (layout, self) {
+            (L::Vector(elem_layout), Container::Vec(entries)) => Some(AnnValue::Vector(
+                entries
+                    .iter()
+                    .map(|v| v.as_annotated_move_value(elem_layout))
+                    .collect::<Option<_>>()?,
+            )),
+            (L::Vector(_inner), Container::VecU8(entries)) => Some(AnnValue::Vector(
+                entries.iter().map(|n| AnnValue::U8(*n)).collect(),
+            )),
+            (L::Vector(_inner), Container::VecU16(entries)) => Some(AnnValue::Vector(
+                entries.iter().map(|n| AnnValue::U16(*n)).collect(),
+            )),
+            (L::Vector(_inner), Container::VecU32(entries)) => Some(AnnValue::Vector(
+                entries.iter().map(|n| AnnValue::U32(*n)).collect(),
+            )),
+            (L::Vector(_inner), Container::VecU64(entries)) => Some(AnnValue::Vector(
+                entries.iter().map(|n| AnnValue::U64(*n)).collect(),
+            )),
+            (L::Vector(_inner), Container::VecU128(entries)) => Some(AnnValue::Vector(
+                entries.iter().map(|n| AnnValue::U128(*n)).collect(),
+            )),
+            (L::Vector(_inner), Container::VecU256(entries)) => Some(AnnValue::Vector(
+                entries.iter().map(|n| AnnValue::U256(*n)).collect(),
+            )),
+            (L::Vector(_inner), Container::VecBool(entries)) => Some(AnnValue::Vector(
+                entries.iter().map(|n| AnnValue::Bool(*n)).collect(),
+            )),
+            (L::Vector(_inner), Container::VecAddress(entries)) => Some(AnnValue::Vector(
+                entries.iter().map(|n| AnnValue::Address(*n)).collect(),
+            )),
+            (L::Signer, Container::Struct(struct_)) => {
+                let values = &struct_.0;
+                let [Value::Address(ref addr)] = **values else {
+                    return None;
+                };
+                Some(AnnValue::Signer(**addr))
+            }
+            (L::Struct(struct_layout), Container::Struct(struct_)) => {
+                let fields = struct_
+                    .0
+                    .iter()
+                    .zip(struct_layout.fields.iter())
+                    .map(|(value, layout)| {
+                        let value = value.as_annotated_move_value(&layout.layout)?;
+                        let field_name = layout.name.clone();
+                        Some((field_name, value))
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                let struct_ = AnnStruct::new(struct_layout.type_.clone(), fields);
+                Some(AnnValue::Struct(struct_))
+            }
+            (L::Enum(enum_layout), Container::Variant(variant)) => {
+                let AnnEnumLayout { type_, variants } = enum_layout.as_ref();
+                let (tag, values) = variant.as_ref();
+                let ((variant_name, _), field_layouts) =
+                    variants.iter().find(|((_, vtag), _)| vtag == tag)?;
+
+                let fields = values
+                    .0
+                    .iter()
+                    .zip(field_layouts.iter())
+                    .map(|(value, layout)| {
+                        let value = value.as_annotated_move_value(&layout.layout)?;
+                        let field_name = layout.name.clone();
+                        Some((field_name, value))
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+
+                let tag = tag.clone();
+                let type_ = type_.clone();
+                let variant_name = variant_name.clone();
+                let variant = AnnVariant {
+                    tag,
+                    fields,
+                    type_,
+                    variant_name,
+                };
+                Some(AnnValue::Variant(variant))
+            }
+            (_, _) => None,
+        }
+    }
+}
+
+impl Reference {
+    /// Converts the value to an annotated move value. This is only needed for tracing and care
+    /// should be taken when using this function as it can possibly inflate the size of the value.
+    pub(crate) fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
+        use AnnTypeLayout as L;
+        match (layout, self) {
+            (L::U8, Reference::U8(value)) => Some(AnnValue::U8(*value.to_ref())),
+            (L::U16, Reference::U16(value)) => Some(AnnValue::U16(*value.to_ref())),
+            (L::U32, Reference::U32(value)) => Some(AnnValue::U32(*value.to_ref())),
+            (L::U64, Reference::U64(value)) => Some(AnnValue::U64(*value.to_ref())),
+            (L::U128, Reference::U128(value)) => Some(AnnValue::U128(*value.to_ref())),
+            (L::U256, Reference::U256(value)) => Some(AnnValue::U256(*value.to_ref())),
+            (L::Address, Reference::Address(value)) => Some(AnnValue::Address(*value.to_ref())),
+            (L::Bool, Reference::Bool(value)) => Some(AnnValue::Bool(*value.to_ref())),
+            (layout, Reference::Container(container)) => {
+                container.to_ref().as_annotated_move_value(layout)
+            }
+            (layout, Reference::Global(global_ref)) => {
+                global_ref.value.to_ref().as_annotated_move_value(layout)
+            }
+            (_, _) => None,
         }
     }
 }

@@ -9,6 +9,7 @@ use crate::{
             set_err_info,
             state::{CallStack, MachineState, ResolvableType},
         },
+        tracing::{trace, tracer::VMTracer},
         values::{
             IntegerValue, Reference, Struct, StructRef, VMValueCast, Value, Variant, VariantRef,
             Vector, VectorRef,
@@ -43,13 +44,15 @@ enum StepStatus {
     Done,
 }
 
-struct RunContext<'vm_cache, 'native, 'native_lifetimes> {
+struct RunContext<'vm_cache, 'native, 'native_lifetimes, 'tracer, 'trace_builder> {
     vtables: &'vm_cache VMDispatchTables,
     vm_config: Arc<VMConfig>,
     extensions: &'native mut NativeContextExtensions<'native_lifetimes>,
+    // TODO: consider making this `Option<&mut VMTracer<'_>>` and passing it like that everywhere?
+    tracer: &'tracer mut Option<VMTracer<'trace_builder>>,
 }
 
-impl RunContext<'_, '_, '_> {
+impl RunContext<'_, '_, '_, '_, '_> {
     // TODO: The Run Context should hold this, not go get it from the Loader.
     fn vm_config(&self) -> &VMConfig {
         &self.vm_config
@@ -66,12 +69,14 @@ pub(super) fn run(
     vtables: &VMDispatchTables,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,
+    tracer: &mut Option<VMTracer<'_>>,
     gas_meter: &mut impl GasMeter,
 ) -> VMResult<Vec<Value>> {
     let mut run_context = RunContext {
         extensions,
         vtables,
         vm_config,
+        tracer,
     };
 
     let mut state = start_state;
@@ -137,6 +142,13 @@ fn step(
     });
 
     profile_open_instr!(gas_meter, format!("{:?}", instruction));
+    trace(run_context.tracer, |tracer| {
+        tracer.start_instruction(
+            run_context.vtables,
+            state,
+            &gas_meter.remaining_gas().into(),
+        )
+    });
     dbg_println!(flag: eval_step, "Instruction: {instruction:?}");
     // These are split out because `PartialVMError` and `VMError` are different types. It's unclear
     // why as they hold identical data, but if we could combine them, we could entirely inline
@@ -145,6 +157,14 @@ fn step(
         Bytecode::Ret => {
             let charge_result = gas_meter.charge_simple_instr(SimpleInstruction::Ret);
             profile_close_instr!(gas_meter, format!("{:?}", instruction));
+            trace(run_context.tracer, |tracer| {
+                tracer.end_instruction(
+                    run_context.vtables,
+                    state,
+                    &gas_meter.remaining_gas().into(),
+                    None,
+                )
+            });
 
             partial_error_to_error(state, run_context, charge_result)?;
             let non_ref_vals = state
@@ -161,9 +181,17 @@ fn step(
 
             profile_close_frame!(
                 gas_meter,
-                arena::to_ref(current_frame.function).pretty_string()
+                state.call_stack.current_frame.function().pretty_string()
             );
-
+            trace(run_context.tracer, |tracer| {
+                tracer.exit_frame(
+                    run_context.vtables,
+                    state,
+                    &gas_meter.remaining_gas().into(),
+                    state.call_stack.current_frame.function(),
+                    None,
+                )
+            });
             if state.can_pop_call_frame() {
                 state.pop_call_frame()?;
                 // Note: the caller will find the callee's return values at the top of the shared operand stack
@@ -176,6 +204,14 @@ fn step(
         }
         Bytecode::CallGeneric(idx) => {
             profile_close_instr!(gas_meter, format!("{:?}", instruction));
+            trace(run_context.tracer, |tracer| {
+                tracer.end_instruction(
+                    run_context.vtables,
+                    state,
+                    &gas_meter.remaining_gas().into(),
+                    None,
+                )
+            });
             let ty_args = state
                 .call_stack
                 .current_frame
@@ -194,6 +230,14 @@ fn step(
         }
         Bytecode::VirtualCall(vtable_key) => {
             profile_close_instr!(gas_meter, format!("{:?}", instruction));
+            trace(run_context.tracer, |tracer| {
+                tracer.end_instruction(
+                    run_context.vtables,
+                    state,
+                    &gas_meter.remaining_gas().into(),
+                    None,
+                )
+            });
             let function = run_context
                 .vtables
                 .resolve_function(vtable_key)
@@ -203,11 +247,27 @@ fn step(
         }
         Bytecode::DirectCall(function) => {
             profile_close_instr!(gas_meter, format!("{:?}", instruction));
+            trace(run_context.tracer, |tracer| {
+                tracer.end_instruction(
+                    run_context.vtables,
+                    state,
+                    &gas_meter.remaining_gas().into(),
+                    None,
+                )
+            });
             call_function(state, run_context, gas_meter, *function, vec![])?;
             Ok(StepStatus::Running)
         }
         _ => {
             let step_result = op_step_impl(state, run_context, gas_meter, instruction);
+            trace(run_context.tracer, |tracer| {
+                tracer.end_instruction(
+                    run_context.vtables,
+                    state,
+                    &gas_meter.remaining_gas().into(),
+                    step_result.as_ref().err(),
+                )
+            });
             partial_error_to_error(state, run_context, step_result)?;
             Ok(StepStatus::Running)
         }
@@ -883,7 +943,16 @@ fn call_function(
     ty_args: Vec<Type>,
 ) -> VMResult<()> {
     let fun_ref = function.to_ref();
-    profile_open_frame!(gas_meter, func_name.clone());
+    trace(run_context.tracer, |tracer| {
+        tracer.enter_frame(
+            run_context.vtables,
+            state,
+            &gas_meter.remaining_gas().into(),
+            fun_ref,
+            &ty_args,
+        )
+    });
+    profile_open_frame!(gas_meter, fun_ref.name().to_string());
 
     // Charge gas
     let module_id = fun_ref.module_id();
@@ -918,11 +987,22 @@ fn call_function(
     }
 
     if fun_ref.is_native() {
-        call_native(state, run_context, gas_meter, fun_ref, ty_args)?;
+        let native_result = call_native(state, run_context, gas_meter, fun_ref, ty_args);
 
+        // NB: Pass any error into the tracer before raising it.
+        trace(run_context.tracer, |tracer| {
+            tracer.exit_frame(
+                run_context.vtables,
+                state,
+                &gas_meter.remaining_gas().into(),
+                function.to_ref(),
+                native_result.as_ref().err(),
+            )
+        });
+
+        native_result?;
         state.call_stack.current_frame.pc += 1; // advance past the Call instruction in the caller
-
-        profile_close_frame!(gas_meter, func_name.clone());
+        profile_close_frame!(gas_meter, fun_ref.name().to_string());
     } else {
         // Note: the caller will find the callee's return values at the top of the shared
         // operand stack when the new frame returns.
