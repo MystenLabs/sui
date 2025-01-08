@@ -279,7 +279,7 @@ impl<'a> Disassembler<'a> {
             mod_name_start_offset,
             mod_name_end_offset,
         );
-        let mod_ident = ModuleIdent::new(ModuleName(Symbol::from(n.as_str())), addr.clone());
+        let mod_ident = ModuleIdent::new(ModuleName(Symbol::from(n.as_str())), *addr);
         let bcode_map = SourceMap::new(mod_name_loc, mod_ident);
         Ok(bcode_map)
     }
