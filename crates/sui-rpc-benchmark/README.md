@@ -9,7 +9,7 @@
 Run benchmarks with:
 ```
 # Direct database queries:
-cargo run --bin sui-rpc-benchmark direct --db-url postgres://postgres:postgres@localhost:5432/sui
+cargo run --bin sui-rpc-benchmark direct --db-url postgres://postgres:postgres@localhost:5432/sui --concurrency 10  --duration-secs 10
 
 # JSON RPC endpoints:
 cargo run --bin sui-rpc-benchmark jsonrpc --endpoint http://127.0.0.1:9000
