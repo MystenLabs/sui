@@ -33,9 +33,11 @@ template Main() {
 component main = Main();
 ```
 Assuming that the [circom compiler has been installed](https://docs.circom.io/getting-started/installation/), the above circuit is compiled using the following command:
-```shell
-circom main.circom --r1cs --wasm
+
+```sh
+$ circom main.circom --r1cs --wasm
 ```
+
 This outputs the constraints in R1CS format and the circuit in Wasm format.
 
 ### Generate proof

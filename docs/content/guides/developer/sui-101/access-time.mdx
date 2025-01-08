@@ -21,8 +21,8 @@ A call to the previous entry function takes the following form, passing `0x6` as
 
 {@include: ../../../snippets/info-gas-budget.mdx}
 
-```shell
-sui client call --package <EXAMPLE> --module 'clock' --function 'access' --args '0x6' --gas-budget <GAS-AMOUNT>
+```sh
+$ sui client call --package <EXAMPLE> --module 'clock' --function 'access' --args '0x6' --gas-budget <GAS-AMOUNT>
 ```
 
 Expect the `Clock` timestamp to change at the rate the network generates checkpoints, which is about **every 1/4 second** with Mysticeti consensus. Find the current network checkpoint rate on this [public dashboard](https://metrics.sui.io/public-dashboards/4ceb11cc210d4025b122294586961169).

@@ -10,8 +10,8 @@ If you haven't already, you need to [install Sui CLI](./sui-install.mdx) on your
 
 To start the local network, run the following command after you install Sui CLI.
 
-```bash
-RUST_LOG="off,sui_node=info" sui start --with-faucet --force-regenesis
+```sh
+$ RUST_LOG="off,sui_node=info" sui start --with-faucet --force-regenesis
 ```
 
 This command:
@@ -68,8 +68,8 @@ To generate a custom genesis, use the `sui genesis` command and pass the desired
 
 Use the following command to retrieve the total transaction count from your local network:
 
-```bash
-curl --location --request POST 'http://127.0.0.1:9000' \
+```sh
+$ curl --location --request POST 'http://127.0.0.1:9000' \
 --header 'Content-Type: application/json' \
 --data-raw '{
   "jsonrpc": "2.0",
@@ -93,8 +93,8 @@ If successful, the response resembles the following:
 
 You can use the Sui CLI with any Sui network. By default it connects to Sui Devnet. To connect to your local network, create a new environment alias named `local` that sets the RPC URL the client uses to your local network.
 
-```shell
-sui client new-env --alias local --rpc http://127.0.0.1:9000
+```sh
+$ sui client new-env --alias local --rpc http://127.0.0.1:9000
 ```
 
 Next, use the following command to set the active environment to the new `local` environment you created.
@@ -109,8 +109,8 @@ The command returns:
 
 You can check the current active environment with the following command:
 
-```bash
-sui client active-env
+```sh
+$ sui client active-env
 ```
 
 The command returns:
@@ -153,13 +153,13 @@ The `faucet` command uses the active address and the active network environment 
 
 After you get coins from the faucet, use the following command to view the coin objects for the address:
 
-```shell
-sui client gas
+```sh
+$ sui client gas
 ```
 
 The response resembles the following, but with different IDs:
 
-```shell
+```sh
 ╭────────────────────────────────────────────────────────────────────┬────────────╮
 │ gasCoinId                                                          │ gasBalance │
 ├────────────────────────────────────────────────────────────────────┼────────────┤
@@ -176,11 +176,17 @@ The response resembles the following, but with different IDs:
 Use the TypeScript SDK to add example data to your network. This requires to start a local network with an indexer and GraphQL: `sui start --force-regenesis --with-faucet --with-indexer --with-graphql`. 
 Then run the following command from the `sui` root folder:
 
-```bash
-pnpm --filter @mysten/sui test:e2e
+```sh
+$ pnpm --filter @mysten/sui test:e2e
 ```
 
 For additional information about example data for testing, see [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).
+
+## Monitor activity
+
+Use a Sui network explorer to monitor your local network activity. You can build and run one locally or use the **Custom RPC URL** setting available on many online explorers to provide your local network's RPC URL (`http://127.0.0.1:9000` by default).
+
+{@include: ../../../snippets/lists/sui-explorers.mdx}
 
 ## Troubleshooting
 

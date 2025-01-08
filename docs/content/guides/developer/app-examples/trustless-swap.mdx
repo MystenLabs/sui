@@ -455,26 +455,26 @@ Now that you have an indexer and an API service, you can deploy your move packag
 
   Use the following command to list your available environments:
 
-  ```bash
-  sui client envs
+  ```sh
+  $ sui client envs
   ```
 
   If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
 
-  ```bash
-  sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
+  ```sh
+  $ sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
   ```
 
   Run the following command to activate the `testnet` environment:
 
-  ```bash
-  sui client switch --env testnet
+  ```sh
+  $ sui client switch --env testnet
   ```
 
   Before being able to publish your package to Testnet, you need Testnet SUI tokens. To get some, run the following command: 
 
-  ```bash
-  sui client faucet
+  ```sh
+  $ sui client faucet
   ```
 
   For other ways to get SUI in your Testnet account, see [Get SUI Tokens](/guides/developer/getting-started/get-coins).
@@ -487,22 +487,22 @@ Now that you have an indexer and an API service, you can deploy your move packag
 
   1. Publish the smart contracts by running the following command from your `api` folder: 
 
-      ```
-      npx ts-node helpers/publish-contracts.ts
+      ```sh
+      $ npx ts-node helpers/publish-contracts.ts
       ```
 
       If successful, `demo-contract.json` and `escrow-contract.json` are created in the backend root directory. These files contain the contract addresses and are used by the backend and frontend to interact with the contracts.
 
   2. Produce demo non-locked and locked objects
 
-      ```
-      npx ts-node helpers/create-demo-data.ts
+      ```sh
+      $ npx ts-node helpers/create-demo-data.ts
       ```
 
   3. Produce demo escrows
 
-      ```
-      npx ts-node helpers/create-demo-escrows.ts
+      ```sh
+      $ npx ts-node helpers/create-demo-escrows.ts
       ```
 
   If you want to reset the database (for a clean demo, for example), run `pnpm db:reset:dev && pnpm db:setup:dev` or `yarn db:reset:dev && yarn db:setup:dev`.
@@ -562,13 +562,13 @@ The first step is to set up the client app. Run the following command to scaffol
 
 <Tabs groupId="packagemanager">
   <TabItem label="PNPM" value="pnpm">
-    ```bash
-    pnpm create @mysten/dapp --template react-client-dapp
+    ```sh
+    $ pnpm create @mysten/dapp --template react-client-dapp
     ```
   </TabItem>
   <TabItem label="Yarn" value="yarn">
-    ```bash
-    yarn create @mysten/dapp --template react-client-dapp
+    ```sh
+    $ yarn create @mysten/dapp --template react-client-dapp
     ```
   </TabItem>
 </Tabs>
@@ -603,21 +603,21 @@ To streamline the styling process and keep the codebase clean and maintainable, 
 
 <Tabs groupId="packagemanager">
   <TabItem label="PNPM" value="pnpm">
-    ```bash
-    pnpm add tailwindcss@latest postcss@latest autoprefixer@latest
+    ```sh
+    $ pnpm add tailwindcss@latest postcss@latest autoprefixer@latest
     ```
   </TabItem>
   <TabItem label="Yarn" value="yarn">
-    ```bash
-    yarn add tailwindcss@latest postcss@latest autoprefixer@latest
+    ```sh
+    $ yarn add tailwindcss@latest postcss@latest autoprefixer@latest
     ```
   </TabItem>
 </Tabs>
 
 Next, generate the Tailwind CSS configuration file by running the following:
 
-```bash
-npx tailwindcss init -p
+```sh
+$ npx tailwindcss init -p
 ```
 
 <details>
@@ -694,13 +694,13 @@ Install the necessary dependencies:
 
 <Tabs groupId="packagemanager">
   <TabItem label="PNPM" value="pnpm">
-    ```bash
-    pnpm add react-hot-toast
+    ```sh
+    $ pnpm add react-hot-toast
     ```
   </TabItem>
   <TabItem label="Yarn" value="yarn">
-    ```bash
-    yarn add react-hot-toast
+    ```sh
+    $ yarn add react-hot-toast
     ```
   </TabItem>
 </Tabs>
@@ -714,13 +714,13 @@ First, install the necessary dependencies:
 
 <Tabs groupId="packagemanager">
   <TabItem label="PNPM" value="pnpm">
-    ```bash
-    pnpm add react-router-dom
+    ```sh
+    $ pnpm add react-router-dom
     ```
   </TabItem>
   <TabItem label="Yarn" value="yarn">
-    ```bash
-    yarn add react-router-dom
+    ```sh
+    $ yarn add react-router-dom
     ```
   </TabItem>
 </Tabs>

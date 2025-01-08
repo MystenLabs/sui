@@ -24,8 +24,8 @@ The service accepts the following optional headers:
 
 By default, each request returns the service's version in the response header: `x-sui-rpc-version`.
 
-```bash
-curl -i -X POST https://sui-mainnet.mystenlabs.com/graphql \
+```sh
+$ curl -i -X POST https://sui-mainnet.mystenlabs.com/graphql \
      --header 'x-sui-rpc-show-usage: true'                 \
      --header 'Content-Type: application/json'             \
      --data '{
@@ -35,7 +35,7 @@ curl -i -X POST https://sui-mainnet.mystenlabs.com/graphql \
 
 The response for the previous request looks similar to the following:
 
-```bash
+```sh
 HTTP/2 200
 content-type: application/json
 content-length: 159
@@ -96,13 +96,13 @@ When using the online IDE, supply variables as a JSON object to the query in the
 
 When making a request to the GraphQL service (for example, using `curl`), pass the query and variables as two fields of a single JSON object:
 
-```bash
- curl -X POST https://sui-testnet.mystenlabs.com/graphql \
+```sh
+$ curl -X POST https://sui-testnet.mystenlabs.com/graphql \
     --header 'Content-Type: application/json' \
     --data '{
-     "query": "query ($epochID: Int) { epoch(id: $epochID) { referenceGasPrice } }",
-     "variables": { "epochID": 100 }
-   }'
+      "query": "query ($epochID: Int) { epoch(id: $epochID) { referenceGasPrice } }",
+      "variables": { "epochID": 100 }
+  }'
 ```
 
 ## Fragments

@@ -607,14 +607,14 @@ Now that you have written our contracts, it's time to deploy them.
 
 Next, configure the Sui CLI to use `testnet` as the active environment, as well. If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
 
-```bash
-sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
+```sh
+$ sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
 ```
 
 Run the following command to activate the `testnet` environment:
 
-```bash
-sui client switch --env testnet
+```sh
+$ sui client switch --env testnet
 ```
 
 {@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
@@ -623,7 +623,7 @@ The output of this command contains a `packageID` value that you need to save to
 
 Partial snippet of CLI deployment output.
 
-```bash
+```sh
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Object Changes                                                                                           │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────────────┤
@@ -719,14 +719,14 @@ The UI has two columns:
 
 The first step is to set up the client app. Run the following command to scaffold a new app.
 
-```bash
-pnpm create @mysten/dapp --template react-client-dapp
+```sh
+$ pnpm create @mysten/dapp --template react-client-dapp
 ```
 
 or
 
-```bash
-yarn create @mysten/dapp --template react-client-dapp
+```sh
+$ yarn create @mysten/dapp --template react-client-dapp
 ```
 
 ### Project folder structure

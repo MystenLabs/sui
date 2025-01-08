@@ -42,7 +42,7 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
 1. Navigate to the expanded folder. You should have the following extracted files:
 
-    {@include: ../../../snippets/binaries-file-list.mdx}
+    {@include: ../../../snippets/lists/binaries-file-list.mdx}
 
 1. Add the folder containing the extracted files to your `PATH` variable. To do so, you can update your `~/.bashrc` to include the location of the Sui binaries. If using the suggested location, you type `export PATH=$PATH:~/sui` and press Enter.
 1. Start a new terminal session or type `source ~/.bashrc` to load the new `PATH` value.
@@ -60,7 +60,7 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system. Replace references to this location in subsequent steps if you choose a different directory.
 1. Navigate to the expanded folder. You should have the following extracted files: 
     
-    {@include: ../../../snippets/binaries-file-list.mdx}
+    {@include: ../../../snippets/lists/binaries-file-list.mdx}
 
 1. Add the folder containing the extracted files to your `PATH` variable. To do so, you can update your `~/.zshrc` or `~/.bashrc` to include the location of the Sui binaries. If using the suggested location, you type `export PATH=$PATH:~/sui` and press Enter.
 1. Start a new terminal session or type `source ~/.zshrc` (or `.bashrc`) to load the new `PATH` value.
@@ -86,7 +86,7 @@ Each Sui release provides a set of binaries for several operating systems. You c
 
 1. Navigate to the expanded folder. You should have the following extracted files:
 
-    {@include: ../../../snippets/binaries-file-list.mdx}
+    {@include: ../../../snippets/lists/binaries-file-list.mdx}
 
 1. Add the folder containing the extracted files to your `PATH` variable. There are several ways to get to the setting depending on your version of Windows. One way that works on all versions of Windows is to type `sysdm.cpl` in a console to open the System Properties window. Under the **Advanced** tab, click the **Environment Variables...** button.
 1. In the Environment Variables window, select the `Path` variable and click the **Edit...** button. 
@@ -111,8 +111,8 @@ To confirm that Sui installed correctly, type `sui --version` in your console or
 
 Run the following command to install Sui binaries from the `testnet` branch:
 
-```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
+```sh
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
 ```
 
 Enabling the `tracing` feature is important as it adds Move test coverage and debugger support in the Sui CLI. Without it these two features will not be able to be used.
@@ -121,8 +121,8 @@ The install process can take a while to complete. You can monitor installation p
 
 To update to the latest stable version of Rust:
 
-```shell
-rustup update stable
+```sh
+$ rustup update stable
 ```
 
 The command installs Sui components in the `~/.cargo/bin` folder.
@@ -131,8 +131,8 @@ The command installs Sui components in the `~/.cargo/bin` folder.
 
 If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them (changing `testnet` to the desired branch):
 
-```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
+```sh
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
 ```
 
 The `tracing` feature is important as it adds Move test coverage and debugger support in the Sui CLI. Unless it is enabled you will not be able to use these two features.
@@ -157,8 +157,8 @@ Some other commands in the installation instructions also require cURL to run. I
 
 Use the following command to install Rust and Cargo on macOS or Linux:
 
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```sh
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
 If you use Windows 11, see information about using the [Rust installer](https://www.rust-lang.org/tools/install) on the Rust website. The installer checks for C++ build tools and prompts you to install them if necessary. Select the option that best defines your environment and follow the instructions in the install wizard.
@@ -169,8 +169,8 @@ Sui uses the latest version of Cargo to build and manage dependencies. See the [
 
 Use the following command to update Rust with `rustup`:
 
-```bash
-rustup update stable
+```sh
+$ rustup update stable
 ```
 #### Additional prerequisites by operating system
 
@@ -200,8 +200,8 @@ The Linux instructions assume a distribution that uses the APT package manager. 
 
 Install the prerequisites listed in this section. Use the following command to update `apt-get`:
 
-```bash
-sudo apt-get update
+```sh
+$ sudo apt-get update
 ```
 
 #### All Linux prerequisites
@@ -214,22 +214,22 @@ Reference the relevant sections that follow to install each prerequisite individ
 
 Install cURL with the following command:
 
-```bash
-sudo apt-get install curl
+```sh
+$ sudo apt-get install curl
 ```
 
 Verify that cURL installed correctly with the following command:
 
-```bash
-curl --version
+```sh
+$ curl --version
 ```
 
 #### Git CLI {#git-cli}
 
 Run the following command to install Git, including the [Git CLI](https://cli.github.com/):
 
-```bash
-sudo apt-get install git-all
+```sh
+$ sudo apt-get install git-all
 ```
 
 For more information, see [Install Git on Linux](https://github.com/git-guides/install-git#install-git-on-linux) on the GitHub website.
@@ -238,8 +238,8 @@ For more information, see [Install Git on Linux](https://github.com/git-guides/i
 
 Use the following command to install CMake.
 
-```bash
-sudo apt-get install cmake
+```sh
+$ sudo apt-get install cmake
 ```
 
 To customize the installation, see [Installing CMake](https://cmake.org/install/) on the CMake website.
@@ -248,32 +248,32 @@ To customize the installation, see [Installing CMake](https://cmake.org/install/
 
 Use the following command to install the GNU Compiler Collection, `gcc`:
 
-```bash
-sudo apt-get install gcc
+```sh
+$ sudo apt-get install gcc
 ```
 
 #### libssl-dev {#libssl-dev}
 
 Use the following command to install `libssl-dev`:
 
-```bash
-sudo apt-get install libssl-dev
+```sh
+$ sudo apt-get install libssl-dev
 ```
 
 If the version of Linux you use doesn't support `libssl-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libssl-dev/).
 
 (Optional) If you have OpenSSL you might also need to also install `pkg-config`:
 
-```bash
-sudo apt-get install pkg-config
+```sh
+$ sudo apt-get install pkg-config
 ```
 
 #### libclang-dev {#libclang-dev}
 
 Use the following command to install `libclang-dev`:
 
-```bash
-sudo apt-get install libclang-dev
+```sh
+$ sudo apt-get install libclang-dev
 ```
 
 If the version of Linux you use doesn't support `libclang-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libclang-dev/).
@@ -284,8 +284,8 @@ If the version of Linux you use doesn't support `libclang-dev`, find an equivale
 
 Use the following command to install `libpq-dev`:
 
-```bash
-sudo apt-get install libpq-dev
+```sh
+$ sudo apt-get install libpq-dev
 ```
 
 If the version of Linux you use doesn't support `libpq-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libpq-dev/).
@@ -294,8 +294,8 @@ If the version of Linux you use doesn't support `libpq-dev`, find an equivalent 
 
 Use the following command to install `build-essential`:
 
-```bash
-sudo apt-get install build-essential
+```sh
+$ sudo apt-get install build-essential
 ```
 
 </TabItem>
@@ -317,8 +317,8 @@ macOS includes a version of cURL you can use to install Homebrew. Use Homebrew t
 
 Use the following command to install [Homebrew](https://brew.sh/):
 
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```sh
+$ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
 :::info
@@ -338,16 +338,16 @@ With Homebrew installed, you can install individual prerequisites from the follo
 
 Use the following command to update the default [cURL](https://curl.se) on macOS:
 
-```bash
-brew install curl
+```sh
+$ brew install curl
 ```
 
 #### CMake {#cmake-1}
 
 Use the following command to install CMake:
 
-```bash
-brew install cmake
+```sh
+$ brew install cmake
 ```
 
 To customize the installation, see [Installing CMake](https://cmake.org/install/) on the CMake website.
@@ -357,16 +357,16 @@ To customize the installation, see [Installing CMake](https://cmake.org/install/
 {@include: ../../../snippets/libpq-req.mdx}
 
 Use the following command to install libpq:
-```bash
-brew install libpq
+```sh
+$ brew install libpq
 ```
 
 #### Git CLI {#git-cli-1}
 
 Use the following command to install Git:
 
-```bash
-brew install git
+```sh
+$ brew install git
 ```
 
 After installing Git, download and install the [Git command line interface](https://git-scm.com/download/).
