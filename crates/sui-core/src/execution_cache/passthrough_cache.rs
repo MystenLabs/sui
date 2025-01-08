@@ -17,8 +17,8 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolVersion;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::accumulator::Accumulator;
-use sui_types::base_types::VerifiedExecutionData;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber};
+use sui_types::base_types::{FullObjectID, VerifiedExecutionData};
 use sui_types::bridge::{get_bridge, Bridge};
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -26,7 +26,9 @@ use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
-use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
+use sui_types::storage::{
+    FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
+};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapFallible;
@@ -171,22 +173,25 @@ impl ObjectCacheRead for PassthroughCache {
 
     fn get_marker_value(
         &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
+        object_key: FullObjectKey,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<MarkerValue> {
         self.store
-            .get_marker_value(object_id, &version, epoch_id)
+            .get_marker_value(object_key, epoch_id, use_object_per_epoch_marker_table_v2)
             .expect("db error")
     }
 
     fn get_latest_marker(
         &self,
-        object_id: &ObjectID,
+        object_id: FullObjectID,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<(SequenceNumber, MarkerValue)> {
         self.store
-            .get_latest_marker(object_id, epoch_id)
+            .get_latest_marker(object_id, epoch_id, use_object_per_epoch_marker_table_v2)
             .expect("db error")
     }
 
@@ -258,6 +263,8 @@ impl ExecutionCacheWrite for PassthroughCache {
         &'a self,
         epoch_id: EpochId,
         tx_outputs: Arc<TransactionOutputs>,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> BoxFuture<'a, ()> {
         async move {
             let tx_digest = *tx_outputs.transaction.digest();
@@ -277,7 +284,11 @@ impl ExecutionCacheWrite for PassthroughCache {
                 .expect("db error");
 
             self.store
-                .write_transaction_outputs(epoch_id, &[tx_outputs])
+                .write_transaction_outputs(
+                    epoch_id,
+                    &[tx_outputs],
+                    use_object_per_epoch_marker_table_v2,
+                )
                 .await
                 .expect("db error");
 
@@ -355,6 +366,8 @@ impl ExecutionCacheCommit for PassthroughCache {
         &'a self,
         _epoch: EpochId,
         _digests: &'a [TransactionDigest],
+        // TODO: Delete this parameter once table migration is complete.
+        _use_object_per_epoch_marker_table_v2: bool,
     ) -> BoxFuture<'a, ()> {
         // Nothing needs to be done since they were already committed in write_transaction_outputs
         ready(()).boxed()

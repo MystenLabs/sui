@@ -17,15 +17,15 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
-use sui_types::base_types::VerifiedExecutionData;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber};
+use sui_types::base_types::{FullObjectID, VerifiedExecutionData};
 use sui_types::bridge::Bridge;
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
-use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, PackageObject};
+use sui_types::storage::{FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone, PackageObject};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 
@@ -172,19 +172,30 @@ impl ObjectCacheRead for ProxyCache {
 
     fn get_marker_value(
         &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
+        object_key: FullObjectKey,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<MarkerValue> {
-        delegate_method!(self.get_marker_value(object_id, version, epoch_id))
+        delegate_method!(self.get_marker_value(
+            object_key,
+            epoch_id,
+            use_object_per_epoch_marker_table_v2
+        ))
     }
 
     fn get_latest_marker(
         &self,
-        object_id: &ObjectID,
+        object_id: FullObjectID,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<(SequenceNumber, MarkerValue)> {
-        delegate_method!(self.get_latest_marker(object_id, epoch_id))
+        delegate_method!(self.get_latest_marker(
+            object_id,
+            epoch_id,
+            use_object_per_epoch_marker_table_v2
+        ))
     }
 
     fn get_highest_pruned_checkpoint(&self) -> CheckpointSequenceNumber {
@@ -234,8 +245,14 @@ impl ExecutionCacheWrite for ProxyCache {
         &self,
         epoch_id: EpochId,
         tx_outputs: Arc<TransactionOutputs>,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> BoxFuture<'_, ()> {
-        delegate_method!(self.write_transaction_outputs(epoch_id, tx_outputs))
+        delegate_method!(self.write_transaction_outputs(
+            epoch_id,
+            tx_outputs,
+            use_object_per_epoch_marker_table_v2
+        ))
     }
 
     fn acquire_transaction_locks<'a>(
@@ -305,8 +322,14 @@ impl ExecutionCacheCommit for ProxyCache {
         &'a self,
         epoch: EpochId,
         digests: &'a [TransactionDigest],
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> BoxFuture<'a, ()> {
-        delegate_method!(self.commit_transaction_outputs(epoch, digests))
+        delegate_method!(self.commit_transaction_outputs(
+            epoch,
+            digests,
+            use_object_per_epoch_marker_table_v2
+        ))
     }
 
     fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()> {

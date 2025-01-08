@@ -112,6 +112,7 @@ pub(crate) struct LocalProtocolConfig {
     pub(crate) object_runtime_max_num_store_entries_system_tx: u64,
     pub(crate) loaded_child_object_format: bool,
     pub(crate) loaded_child_object_format_type: bool,
+    pub(crate) use_object_per_epoch_marker_table_v2: bool,
 }
 
 impl LocalProtocolConfig {
@@ -137,6 +138,9 @@ impl LocalProtocolConfig {
                 .object_runtime_max_num_store_entries_system_tx(),
             loaded_child_object_format: config.loaded_child_object_format(),
             loaded_child_object_format_type: config.loaded_child_object_format_type(),
+            use_object_per_epoch_marker_table_v2: config
+                .use_object_per_epoch_marker_table_v2_as_option()
+                .unwrap_or(false),
         }
     }
 }

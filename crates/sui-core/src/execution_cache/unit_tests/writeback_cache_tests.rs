@@ -325,7 +325,7 @@ impl Scenario {
                 .find(|o| **o == object.compute_object_reference())
                 .expect("received object must have new lock");
             self.outputs.markers.push((
-                object.compute_object_reference().into(),
+                object.compute_full_object_reference().into(),
                 MarkerValue::Received,
             ));
         }
@@ -348,7 +348,7 @@ impl Scenario {
         assert!(self.transactions.insert(tx), "transaction is not unique");
 
         self.cache()
-            .write_transaction_outputs(1 /* epoch */, outputs.clone())
+            .write_transaction_outputs(1 /* epoch */, outputs.clone(), true)
             .await;
 
         self.count_action();
@@ -357,7 +357,10 @@ impl Scenario {
 
     // commit a transaction to the database
     pub async fn commit(&mut self, tx: TransactionDigest) -> SuiResult {
-        let res = self.cache().commit_transaction_outputs(1, &[tx]).await;
+        let res = self
+            .cache()
+            .commit_transaction_outputs(1, &[tx], true)
+            .await;
         self.count_action();
         Ok(res)
     }
@@ -488,9 +491,11 @@ impl Scenario {
                     .unwrap(),
                 *object
             );
-            assert!(self
-                .cache()
-                .have_received_object_at_version(id, object.version(), 1));
+            assert!(self.cache().have_received_object_at_version(
+                FullObjectKey::new(object.full_id(), object.version()),
+                1,
+                true
+            ));
         }
     }
 
@@ -553,7 +558,7 @@ async fn test_committed() {
 
         s.assert_live(&[1, 2]);
         s.assert_dirty(&[1, 2]);
-        s.cache().commit_transaction_outputs(1, &[tx]).await;
+        s.cache().commit_transaction_outputs(1, &[tx], true).await;
         s.assert_not_dirty(&[1, 2]);
         s.assert_cached(&[1, 2]);
 
