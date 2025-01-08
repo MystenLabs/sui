@@ -1,17 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use crate::upgrade_compatibility::{compare_packages, missing_module_diag};
 use insta::assert_snapshot;
+use std::fs;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
+
+use crate::upgrade_compatibility::{compare_packages, missing_module_diag, FormattedField};
+
+use move_binary_format::normalized::{Field, Type};
 use move_binary_format::CompiledModule;
 use move_command_line_common::files::FileHash;
 use move_compiler::diagnostics::report_diagnostics_to_buffer;
 use move_compiler::shared::files::{FileName, FilesSourceText};
 use move_core_types::identifier::Identifier;
-use std::fs;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
 use sui_move_build::BuildConfig;
 use sui_move_build::CompiledPackage;
 use sui_types::move_package::UpgradePolicy;
@@ -165,6 +167,18 @@ fn test_missing_module_toml() {
         .unwrap();
         assert_snapshot!(malformed_pkg, output);
     }
+}
+
+#[test]
+fn positional_formatting() {
+    let name = Identifier::new("pos999").unwrap();
+    let field = Field {
+        name,
+        type_: Type::Bool,
+    };
+
+    let ff = FormattedField::new(&field, &[]);
+    assert_eq!(format!("{}", ff), "'bool' at position 999");
 }
 
 fn get_packages(name: &str) -> (Vec<CompiledModule>, CompiledPackage, PathBuf) {

@@ -90,7 +90,7 @@ error[Compatibility E01004]: field mismatch
    │                   --------------- Struct definition
 41 │         a: u64,
 42 │         c: u64, // changed from b to c
-   │         ^ Mismatched field name 'c', expected 'b'.
+   │         ^ Mismatched field 'c', expected 'b'.
    │
    = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original struct's fields for struct 'ChangeFieldName' including the ordering.
@@ -170,7 +170,7 @@ error[Compatibility E01004]: field mismatch
    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:73:38
    │
 73 │     public struct PositionalToNamed{ a: u64 } // changed to named from positional
-   │                   -----------------  ^ Mismatched field name 'a', expected at position 0.
+   │                   -----------------  ^ Mismatched field 'a', expected a positional field.
    │                   │                   
    │                   Struct definition
    │
@@ -209,6 +209,116 @@ error[Compatibility E01002]: type mismatch
    │
    = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original struct's field for struct 'ChangeNameNestedStruct' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:95:33
+   │
+95 │     public struct NamedBox<A> { x: u32 }
+   │                   --------      ^ Mismatched field type 'u32', expected 'A'.
+   │                   │              
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+   = Restore the original struct's field for struct 'NamedBox' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:96:39
+   │
+96 │     public struct NamedTwoBox<B, C> { x: u32, y: u32 }
+   │                   -----------         ^ Mismatched field type 'u32', expected 'B'.
+   │                   │                    
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+   = Restore the original struct's fields for struct 'NamedTwoBox' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:96:47
+   │
+96 │     public struct NamedTwoBox<B, C> { x: u32, y: u32 }
+   │                   -----------                 ^ Mismatched field type 'u32', expected 'C'.
+   │                   │                            
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+   = Restore the original struct's fields for struct 'NamedTwoBox' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:98:38
+   │
+98 │     public struct NamedBoxInBox<D> { x: u32 }
+   │                   -------------      ^ Mismatched field type 'u32', expected '0x0::upgrades::NamedBox<0x0::upgrades::NamedBox<D>>'.
+   │                   │                   
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+   = Restore the original struct's field for struct 'NamedBoxInBox' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:99:44
+   │
+99 │     public struct NamedBoxInTwoBox<E, F> { x: u32 }
+   │                   ----------------         ^ Mismatched field type 'u32', expected '0x0::upgrades::NamedTwoBox<0x0::upgrades::NamedBox<E>, 0x0::upgrades::NamedBox<F>>'.
+   │                   │                         
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+   = Restore the original struct's field for struct 'NamedBoxInTwoBox' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:101:36
+    │
+101 │     public struct PositionalBox<G>(u32)
+    │                   -------------    ^^^ Mismatched field type 'u32', expected 'G'.
+    │                   │                 
+    │                   Struct definition
+    │
+    = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+    = Restore the original struct's field for struct 'PositionalBox' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:102:42
+    │
+102 │     public struct PositionalTwoBox<H, I>(u32, u32)
+    │                   ----------------       ^^^ Mismatched field type 'u32', expected 'H'.
+    │                   │                       
+    │                   Struct definition
+    │
+    = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+    = Restore the original struct's fields for struct 'PositionalTwoBox' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:102:47
+    │
+102 │     public struct PositionalTwoBox<H, I>(u32, u32)
+    │                   ----------------            ^^^ Mismatched field type 'u32', expected 'I'.
+    │                   │                            
+    │                   Struct definition
+    │
+    = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+    = Restore the original struct's fields for struct 'PositionalTwoBox' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:104:41
+    │
+104 │     public struct PositionalBoxInBox<J>(u32)
+    │                   ------------------    ^^^ Mismatched field type 'u32', expected '0x0::upgrades::PositionalBox<0x0::upgrades::PositionalBox<J>>'.
+    │                   │                      
+    │                   Struct definition
+    │
+    = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+    = Restore the original struct's field for struct 'PositionalBoxInBox' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:105:47
+    │
+105 │     public struct PositionalBoxInTwoBox<K, L>(u32)
+    │                   ---------------------       ^^^ Mismatched field type 'u32', expected '0x0::upgrades::PositionalTwoBox<0x0::upgrades::PositionalBox<K>, 0x0::upgrades::PositionalBox<L>>'.
+    │                   │                            
+    │                   Struct definition
+    │
+    = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+    = Restore the original struct's field for struct 'PositionalBoxInTwoBox' including the ordering.
 
 
 Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.
