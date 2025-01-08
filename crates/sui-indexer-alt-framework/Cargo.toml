@@ -14,10 +14,12 @@ backoff.workspace = true
 bb8 = "0.8.5"
 chrono.workspace = true
 clap.workspace = true
+dashmap.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
 futures.workspace = true
+hex.workspace = true
 prometheus.workspace = true
 reqwest.workspace = true
 serde.workspace = true

@@ -32,7 +32,6 @@ pub mod args;
 pub mod benchmark;
 pub(crate) mod bootstrap;
 pub mod config;
-pub(crate) mod consistent_pruning;
 pub(crate) mod handlers;
 
 pub async fn start_indexer(

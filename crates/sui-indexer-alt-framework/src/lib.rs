@@ -216,7 +216,7 @@ impl Indexer {
         handler: H,
         config: ConcurrentConfig,
     ) -> Result<()> {
-        let start_from_pruner_watermark = H::PRUNING_REQUIRES_PROCESSED_VALUES;
+        let start_from_pruner_watermark = handler.pruning_strategy().requires_processed_values();
         let Some(watermark) = self.add_pipeline::<H>(start_from_pruner_watermark).await? else {
             return Ok(());
         };

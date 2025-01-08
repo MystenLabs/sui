@@ -8,11 +8,12 @@ use dashmap::DashMap;
 use sui_types::base_types::ObjectID;
 
 #[derive(Default)]
-pub(crate) struct PruningLookupTable {
+pub struct PruningLookupTable {
     table: DashMap<u64, PruningInfo>,
 }
 
-pub(crate) struct PruningInfo {
+#[derive(Default)]
+pub struct PruningInfo {
     /// For each object, whether this object was mutated or deleted in this checkpoint.
     /// This will determine the prune checkpoint for this object.
     info: BTreeMap<ObjectID, UpdateKind>,
@@ -30,9 +31,7 @@ enum UpdateKind {
 
 impl PruningInfo {
     pub fn new() -> Self {
-        Self {
-            info: BTreeMap::new(),
-        }
+        Self::default()
     }
 
     /// Add an object that was mutated in this checkpoint.
