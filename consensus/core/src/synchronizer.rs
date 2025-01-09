@@ -558,7 +558,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         }
 
         debug!(
-            "Synced {} missing blocks from peer {peer_index} {peer_hostname}:  {}",
+            "Synced {} missing blocks from peer {peer_index} {peer_hostname}: {}",
             blocks.len(),
             blocks.iter().map(|b| b.reference().to_string()).join(", "),
         );
@@ -995,8 +995,9 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             // lock the blocks to be fetched. If no lock can be acquired for any of the blocks then don't bother
             if let Some(blocks_guard) = inflight_blocks.lock_blocks(block_refs.clone(), peer) {
                 info!(
-                    "Fetching {} missing blocks from peer {}: {}",
+                    "Periodic sync of {} missing blocks from peer {} {}: {}",
                     block_refs.len(),
+                    peer,
                     peer_hostname,
                     block_refs
                         .iter()
@@ -1039,7 +1040,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 // do best effort to lock guards. If we can't lock then don't bother at this run.
                                 if let Some(blocks_guard) = inflight_blocks.swap_locks(blocks_guard, next_peer) {
                                     info!(
-                                        "Retrying fetching {} missing blocks from peer {}: {}",
+                                        "Retrying syncing {} missing blocks from peer {}: {}",
                                         blocks_guard.block_refs.len(),
                                         peer_hostname,
                                         blocks_guard.block_refs
