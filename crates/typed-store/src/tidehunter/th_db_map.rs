@@ -1,5 +1,5 @@
 use crate::rocks::be_fix_int_ser;
-use crate::Map;
+use crate::{DBMetrics, Map};
 use bincode::Options;
 use eyre::format_err;
 use prometheus::Registry;
@@ -23,6 +23,7 @@ pub struct ThDbMap<K, V> {
     ks: KeySpace,
     rm_prefix: Vec<u8>,
     _phantom: PhantomData<(K, V)>,
+    metrics: Arc<DBMetrics>,
 }
 
 pub struct ThDbBatch {
@@ -40,11 +41,14 @@ where
     }
 
     pub fn new_with_rm_prefix(db: &Arc<Db>, ks: KeySpace, rm_prefix: Vec<u8>) -> Self {
+        let metrics = DBMetrics::get().clone();
         let db = db.clone();
+        
         Self {
             db,
             ks,
             rm_prefix,
+            metrics,
             _phantom: PhantomData,
         }
     }
@@ -91,6 +95,10 @@ where
 
     fn deserialize_value(&self, v: &[u8]) -> V {
         bincode::deserialize(v).unwrap()
+    }
+
+    fn ks_name(&self) -> &str {
+        self.db.ks_name(self.ks)
     }
 }
 
@@ -174,6 +182,12 @@ where
     }
 
     fn get(&self, key: &K) -> Result<Option<V>, Self::Error> {
+        let _timer = self
+            .metrics
+            .op_metrics
+            .rocksdb_get_latency_seconds // todo different metric name?
+            .with_label_values(&[&self.ks_name()])
+            .start_timer();
         let key = self.serialize_key(key);
         let v = self
             .db
@@ -184,6 +198,36 @@ where
         } else {
             Ok(None)
         }
+    }
+
+    fn multi_get<J>(&self, keys: impl IntoIterator<Item=J>) -> Result<Vec<Option<V>>, Self::Error>
+    where
+        J: Borrow<K>,
+    {
+        let _timer = self
+            .metrics
+            .op_metrics
+            .rocksdb_multiget_latency_seconds // todo different metric name?
+            .with_label_values(&[&self.ks_name()])
+            .start_timer();
+        // copy from Map::multi_get
+        keys.into_iter().map(|key| self.get(key.borrow())).collect()
+    }
+
+    fn multi_contains_keys<J>(&self, keys: impl IntoIterator<Item=J>) -> Result<Vec<bool>, Self::Error>
+    where
+        J: Borrow<K>,
+    {
+        let _timer = self
+            .metrics
+            .op_metrics
+            .rocksdb_multiget_latency_seconds // todo different metric name?
+            .with_label_values(&[&self.ks_name()])
+            .start_timer();
+        // copy from Map::multi_contains_key
+        keys.into_iter()
+            .map(|key| self.contains_key(key.borrow()))
+            .collect()
     }
 
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error> {
