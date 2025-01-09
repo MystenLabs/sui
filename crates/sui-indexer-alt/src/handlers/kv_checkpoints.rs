@@ -40,9 +40,14 @@ impl Handler for KvCheckpoints {
             .await?)
     }
 
-    async fn prune(from: u64, to: u64, conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn prune(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut db::Connection<'_>,
+    ) -> Result<usize> {
         let filter = kv_checkpoints::table
-            .filter(kv_checkpoints::sequence_number.between(from as i64, to as i64 - 1));
+            .filter(kv_checkpoints::sequence_number.between(from as i64, to_exclusive as i64 - 1));
 
         Ok(diesel::delete(filter).execute(conn).await?)
     }

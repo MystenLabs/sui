@@ -131,11 +131,16 @@ impl Handler for KvEpochEnds {
             .await?)
     }
 
-    async fn prune(from: u64, to: u64, conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn prune(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut db::Connection<'_>,
+    ) -> Result<usize> {
         let Range {
             start: from_epoch,
             end: to_epoch,
-        } = epoch_interval(conn, from..to).await?;
+        } = epoch_interval(conn, from..to_exclusive).await?;
         if from_epoch < to_epoch {
             let filter = kv_epoch_ends::table
                 .filter(kv_epoch_ends::epoch.between(from_epoch as i64, to_epoch as i64 - 1));

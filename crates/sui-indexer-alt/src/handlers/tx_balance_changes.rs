@@ -71,11 +71,16 @@ impl Handler for TxBalanceChanges {
             .await?)
     }
 
-    async fn prune(from: u64, to: u64, conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn prune(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut db::Connection<'_>,
+    ) -> Result<usize> {
         let Range {
             start: from_tx,
             end: to_tx,
-        } = tx_interval(conn, from..to).await?;
+        } = tx_interval(conn, from..to_exclusive).await?;
         let filter = tx_balance_changes::table.filter(
             tx_balance_changes::tx_sequence_number.between(from_tx as i64, to_tx as i64 - 1),
         );
