@@ -364,7 +364,8 @@ impl OnDiskCompiledPackage {
         unit: &CompiledUnitWithSource,
     ) -> Result<()> {
         let root_package = self.package.compiled_package_info.package_name;
-        let bytecode_modules_dir = CompiledPackageLayout::CompiledModules.path();
+        assert!(self.root_path.ends_with(root_package.as_str()));
+        let disassembly_dir = CompiledPackageLayout::Disassembly.path();
         let file_path = if root_package == package_name {
             PathBuf::new()
         } else {
@@ -376,13 +377,13 @@ impl OnDiskCompiledPackage {
         let d = Disassembler::from_unit(&unit.unit);
         let (disassembled_string, bytecode_map) = d.disassemble_with_source_map()?;
         self.save_under(
-            bytecode_modules_dir
+            disassembly_dir
                 .join(&file_path)
                 .with_extension(MOVE_BYTECODE_EXTENSION),
             disassembled_string.as_bytes(),
         )?;
         self.save_under(
-            bytecode_modules_dir.join(&file_path).with_extension("json"),
+            disassembly_dir.join(&file_path).with_extension("json"),
             serialize_to_json_string(&bytecode_map)?.as_bytes(),
         )
     }
