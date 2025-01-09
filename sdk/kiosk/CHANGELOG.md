@@ -1,5 +1,12 @@
 # @mysten/kiosk
 
+## 0.10.0
+
+### Minor Changes
+
+- c755947: Update fee calculation to happen via dry runs to improve the display of transactions
+  within the wallet.
+
 ## 0.9.34
 
 ### Patch Changes
