@@ -3,7 +3,7 @@
 
 use sui_macros::sim_test;
 use sui_rpc_api::client::sdk::Client;
-use sui_rpc_api::proto::node::node_client::NodeClient;
+use sui_rpc_api::proto::node::node_service_client::NodeServiceClient;
 use sui_rpc_api::proto::node::{
     GetTransactionOptions, GetTransactionRequest, GetTransactionResponse,
 };
@@ -22,7 +22,7 @@ async fn get_transaction() {
 
     let _transaction = client.get_transaction(&transaction_digest).await.unwrap();
 
-    let mut grpc_client = NodeClient::connect(test_cluster.rpc_url().to_owned())
+    let mut grpc_client = NodeServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 

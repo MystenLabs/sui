@@ -216,15 +216,15 @@ message StructTag {
 
 message TypeTag {
   oneof tag {
-    google.protobuf.Empty U8 = 1;
-    google.protobuf.Empty U16 = 2;
-    google.protobuf.Empty U32 = 3;
-    google.protobuf.Empty U64 = 4;
-    google.protobuf.Empty U128 = 5;
-    google.protobuf.Empty U256 = 6;
-    google.protobuf.Empty Bool = 7;
-    google.protobuf.Empty Address = 8;
-    google.protobuf.Empty Signer = 9;
+    google.protobuf.Empty u8 = 1;
+    google.protobuf.Empty u16 = 2;
+    google.protobuf.Empty u32 = 3;
+    google.protobuf.Empty u64 = 4;
+    google.protobuf.Empty u128 = 5;
+    google.protobuf.Empty u256 = 6;
+    google.protobuf.Empty bool = 7;
+    google.protobuf.Empty address = 8;
+    google.protobuf.Empty signer = 9;
     TypeTag vector = 10;
     StructTag struct = 11;
   }

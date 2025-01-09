@@ -11,7 +11,7 @@ pub use reqwest;
 use tap::Pipe;
 use tonic::metadata::MetadataMap;
 
-use crate::proto::node::node_client::NodeClient;
+use crate::proto::node::node_service_client::NodeServiceClient;
 use crate::proto::node::{
     ExecuteTransactionResponse, GetCheckpointResponse, GetFullCheckpointResponse, GetObjectResponse,
 };
@@ -59,8 +59,8 @@ impl Client {
         Ok(Self { uri, channel })
     }
 
-    pub fn raw_client(&self) -> NodeClient<tonic::transport::Channel> {
-        NodeClient::new(self.channel.clone())
+    pub fn raw_client(&self) -> NodeServiceClient<tonic::transport::Channel> {
+        NodeServiceClient::new(self.channel.clone())
     }
 
     pub async fn get_latest_checkpoint(&self) -> Result<CertifiedCheckpointSummary> {
