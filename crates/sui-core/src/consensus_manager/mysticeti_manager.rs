@@ -167,7 +167,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             *boot_counter += 1;
         } else {
             info!(
-                "Node has not participated in previous run. Boot counter will not increment {}",
+                "Node has not participated in previous epoch consensus. Boot counter ({}) will not increment.",
                 *boot_counter
             );
         }
