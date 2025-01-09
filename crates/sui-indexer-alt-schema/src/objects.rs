@@ -85,14 +85,20 @@ impl StoredObjInfo {
                 Owner::ObjectOwner(_) => StoredOwnerKind::Object,
                 Owner::Shared { .. } => StoredOwnerKind::Shared,
                 Owner::Immutable => StoredOwnerKind::Immutable,
-                Owner::ConsensusV2 { .. } => todo!(),
+                // We do not distinguish between fastpath owned and consensus v2 owned
+                // objects. Also we only support single owner for now.
+                // In the future, if we support more sophisticated authenticator,
+                // this will be changed.
+                Owner::ConsensusV2 { .. } => StoredOwnerKind::Address,
             }),
 
             owner_id: match object.owner() {
                 Owner::AddressOwner(a) => Some(a.to_vec()),
                 Owner::ObjectOwner(o) => Some(o.to_vec()),
                 Owner::Shared { .. } | Owner::Immutable { .. } => None,
-                Owner::ConsensusV2 { .. } => todo!(),
+                Owner::ConsensusV2 { authenticator, .. } => {
+                    Some(authenticator.as_single_owner().to_vec())
+                }
             },
 
             package: type_.map(|t| t.address().to_vec()),
