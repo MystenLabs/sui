@@ -34,7 +34,6 @@ module.exports = {
 		'external-crates',
 		'storybook-static',
 		'.next',
-		'sdk/docs/public/typedoc',
 	],
 	rules: {
 		'no-case-declarations': 'off',
@@ -73,16 +72,6 @@ module.exports = {
 		],
 	},
 	overrides: [
-		{
-			files: ['sdk/**/*'],
-			rules: {
-				'require-extensions/require-extensions': 'error',
-				'require-extensions/require-index': 'error',
-				'@typescript-eslint/consistent-type-imports': ['error'],
-				'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],
-				'import/no-cycle': ['error'],
-			},
-		},
 		{
 			files: ['apps/wallet/**/*'],
 			rules: {
@@ -127,14 +116,6 @@ module.exports = {
 			},
 		},
 		{
-			files: ['sdk/ledgerjs-hw-app-sui/**/*', 'apps/wallet/**/*'],
-			rules: {
-				// ledgerjs-hw-app-sui and wallet use Buffer
-				'no-restricted-globals': ['off'],
-				'@typescript-eslint/ban-types': ['off'],
-			},
-		},
-		{
 			files: ['*.test.*', '*.spec.*'],
 			rules: {
 				// Tests can violate extension rules:
@@ -152,13 +133,6 @@ module.exports = {
 			rules: {
 				// Story files have render functions that this rule incorrectly warns on:
 				'react-hooks/rules-of-hooks': 'off',
-			},
-		},
-		{
-			files: ['sdk/create-dapp/templates/**/*'],
-			rules: {
-				'header/header': 'off',
-				'require-extensions/require-extensions': 'off',
 			},
 		},
 	],
