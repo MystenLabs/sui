@@ -11,6 +11,7 @@ edition = "2021"
 move-core-types.workspace = true
 serde.workspace = true
 move-binary-format.workspace = true
+zstd.workspace = true
 
 serde_json = { workspace = true, features = ["arbitrary_precision"] }
 
