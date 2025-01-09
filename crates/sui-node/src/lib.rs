@@ -1609,6 +1609,13 @@ impl SuiNode {
             drop(checkpoint_executor);
 
             if stop_condition == StopReason::RunWithRangeCondition {
+                // if the SUI_RUN_WITH_RANGE_NO_EXIT env var is set, sleep forever
+                if std::env::var("SUI_RUN_WITH_RANGE_NO_EXIT").is_ok() {
+                    info!("Reached end of checkpoint range specified by run_with_range. SUI_RUN_WITH_RANGE_NO_EXIT is set, so sleeping forever.");
+                    loop {
+                        tokio::time::sleep(Duration::from_secs(1000)).await;
+                    }
+                }
                 SuiNode::shutdown(&self).await;
                 self.shutdown_channel_tx
                     .send(run_with_range)
