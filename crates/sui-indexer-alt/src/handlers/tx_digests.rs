@@ -55,7 +55,12 @@ impl Handler for TxDigests {
             .await?)
     }
 
-    async fn prune(&self, from: u64, to_exclusive: u64, conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn prune(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut db::Connection<'_>,
+    ) -> Result<usize> {
         let Range {
             start: from_tx,
             end: to_tx,
