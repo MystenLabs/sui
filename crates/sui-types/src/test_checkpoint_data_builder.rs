@@ -489,8 +489,12 @@ impl TestCheckpointDataBuilder {
     }
 
     /// Derive an object ID from an index. This is used to conveniently represent an object's ID.
+    /// We ensure that the bytes of object IDs have a stable order that is the same as object_idx.
     pub fn derive_object_id(object_idx: u64) -> ObjectID {
-        ObjectID::derive_id(TransactionDigest::ZERO, object_idx)
+        // We achieve this by setting the first 8 bytes of the object ID to the object_idx.
+        let mut bytes = [0; ObjectID::LENGTH];
+        bytes[0..8].copy_from_slice(&object_idx.to_le_bytes());
+        ObjectID::from_bytes(bytes).unwrap()
     }
 
     /// Derive an address from an index.
