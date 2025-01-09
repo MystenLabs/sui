@@ -179,7 +179,7 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 #[cfg(test)]
 mod tests {
     use sui_indexer_alt_framework::Indexer;
-    use sui_indexer_alt_schema::MIGRATIONS;
+    use sui_indexer_alt_schema::{objects::StoredOwnerKind, MIGRATIONS};
     use sui_types::{
         base_types::{dbg_addr, SequenceNumber},
         object::{Authenticator, Owner},
@@ -187,6 +187,12 @@ mod tests {
     };
 
     use super::*;
+
+    // A helper function to return all entries in the obj_info table sorted by object_id and cp_sequence_number.
+    async fn get_all_obj_info(conn: &mut db::Connection<'_>) -> Result<Vec<StoredObjInfo>> {
+        let query = obj_info::table.load(conn).await?;
+        Ok(query)
+    }
 
     #[tokio::test]
     async fn test_process_basics() {
@@ -213,6 +219,15 @@ mod tests {
         // The object is newly created, so no prior state to prune.
         assert_eq!(rows_pruned, 0);
 
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
+        let addr0 = TestCheckpointDataBuilder::derive_address(0);
+        assert_eq!(all_obj_info.len(), 1);
+        assert_eq!(all_obj_info[0].object_id, object0.to_vec());
+        assert_eq!(all_obj_info[0].cp_sequence_number, 0);
+        assert_eq!(all_obj_info[0].owner_kind, Some(StoredOwnerKind::Address));
+        assert_eq!(all_obj_info[0].owner_id, Some(addr0.to_vec()));
+
         builder = builder
             .start_transaction(0)
             .mutate_object(0)
@@ -225,6 +240,11 @@ mod tests {
         let rows_pruned = obj_info.prune(1, 2, &mut conn).await.unwrap();
         // No new entries are inserted to the table, so no old entries to prune.
         assert_eq!(rows_pruned, 0);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        assert_eq!(all_obj_info.len(), 1);
+        assert_eq!(all_obj_info[0].object_id, object0.to_vec());
+        assert_eq!(all_obj_info[0].cp_sequence_number, 0);
 
         builder = builder
             .start_transaction(0)
@@ -241,9 +261,24 @@ mod tests {
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let addr1 = TestCheckpointDataBuilder::derive_address(1);
+        assert_eq!(all_obj_info.len(), 2);
+        assert_eq!(all_obj_info[1].object_id, object0.to_vec());
+        assert_eq!(all_obj_info[1].cp_sequence_number, 2);
+        assert_eq!(all_obj_info[1].owner_kind, Some(StoredOwnerKind::Address));
+        assert_eq!(all_obj_info[1].owner_id, Some(addr1.to_vec()));
+
         let rows_pruned = obj_info.prune(2, 3, &mut conn).await.unwrap();
         // The object is transferred, so we prune the old entry.
         assert_eq!(rows_pruned, 1);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        assert_eq!(all_obj_info.len(), 1);
+        assert_eq!(all_obj_info[0].object_id, object0.to_vec());
+        // Only the new entry is left in the table.
+        assert_eq!(all_obj_info[0].cp_sequence_number, 2);
 
         builder = builder
             .start_transaction(0)
@@ -263,6 +298,9 @@ mod tests {
         let rows_pruned = obj_info.prune(3, 4, &mut conn).await.unwrap();
         // The object is deleted, so we prune both the old entry and the delete entry.
         assert_eq!(rows_pruned, 2);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        assert_eq!(all_obj_info.len(), 0);
     }
 
     #[tokio::test]
@@ -284,6 +322,10 @@ mod tests {
         assert!(result.is_empty());
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 0);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        assert_eq!(all_obj_info.len(), 0);
+
         let rows_pruned = obj_info.prune(0, 1, &mut conn).await.unwrap();
         assert_eq!(rows_pruned, 0);
     }
@@ -316,9 +358,23 @@ mod tests {
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
+        assert_eq!(all_obj_info.len(), 2);
+        assert_eq!(all_obj_info[0].object_id, object0.to_vec());
+        assert_eq!(all_obj_info[0].cp_sequence_number, 0);
+        assert!(all_obj_info[0].owner_kind.is_some());
+        assert_eq!(all_obj_info[1].object_id, object0.to_vec());
+        assert_eq!(all_obj_info[1].cp_sequence_number, 1);
+        assert!(all_obj_info[1].owner_kind.is_none());
+
         let rows_pruned = obj_info.prune(0, 2, &mut conn).await.unwrap();
-        // Both the creation entyr and the wrap entry will be pruned.
+        // Both the creation entry and the wrap entry will be pruned.
         assert_eq!(rows_pruned, 2);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        assert_eq!(all_obj_info.len(), 0);
 
         builder = builder
             .start_transaction(0)
@@ -337,6 +393,12 @@ mod tests {
         let rows_pruned = obj_info.prune(2, 3, &mut conn).await.unwrap();
         // No entry prior to this checkpoint, so no entries to prune.
         assert_eq!(rows_pruned, 0);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        assert_eq!(all_obj_info.len(), 1);
+        assert_eq!(all_obj_info[0].object_id, object0.to_vec());
+        assert_eq!(all_obj_info[0].cp_sequence_number, 2);
+        assert!(all_obj_info[0].owner_kind.is_some());
     }
 
     #[tokio::test]
@@ -361,6 +423,13 @@ mod tests {
         let rows_pruned = obj_info.prune(0, 1, &mut conn).await.unwrap();
         // No entry prior to this checkpoint, so no entries to prune.
         assert_eq!(rows_pruned, 0);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
+        assert_eq!(all_obj_info.len(), 1);
+        assert_eq!(all_obj_info[0].object_id, object0.to_vec());
+        assert_eq!(all_obj_info[0].cp_sequence_number, 0);
+        assert_eq!(all_obj_info[0].owner_kind, Some(StoredOwnerKind::Shared));
     }
 
     #[tokio::test]
@@ -393,10 +462,19 @@ mod tests {
         let rows_pruned = obj_info.prune(0, 2, &mut conn).await.unwrap();
         // The creation entry will be pruned.
         assert_eq!(rows_pruned, 1);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
+        assert_eq!(all_obj_info.len(), 1);
+        assert_eq!(all_obj_info[0].object_id, object0.to_vec());
+        assert_eq!(all_obj_info[0].cp_sequence_number, 1);
+        assert_eq!(all_obj_info[0].owner_kind, Some(StoredOwnerKind::Immutable));
     }
 
-    #[test]
-    fn test_process_object_owned_object() {
+    #[tokio::test]
+    async fn test_process_object_owned_object() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.db().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -416,10 +494,21 @@ mod tests {
             processed.update,
             ProcessedObjInfoUpdate::Insert(_)
         ));
+        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        assert_eq!(rows_inserted, 1);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
+        assert_eq!(all_obj_info.len(), 1);
+        assert_eq!(all_obj_info[0].object_id, object0.to_vec());
+        assert_eq!(all_obj_info[0].cp_sequence_number, 1);
+        assert_eq!(all_obj_info[0].owner_kind, Some(StoredOwnerKind::Object));
     }
 
-    #[test]
-    fn test_process_consensus_v2_object() {
+    #[tokio::test]
+    async fn test_process_consensus_v2_object() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.db().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -445,6 +534,15 @@ mod tests {
             processed.update,
             ProcessedObjInfoUpdate::Insert(_)
         ));
+        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        assert_eq!(rows_inserted, 1);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
+        assert_eq!(all_obj_info.len(), 1);
+        assert_eq!(all_obj_info[0].object_id, object0.to_vec());
+        assert_eq!(all_obj_info[0].cp_sequence_number, 1);
+        assert_eq!(all_obj_info[0].owner_kind, Some(StoredOwnerKind::Address));
     }
 
     #[tokio::test]
@@ -479,5 +577,8 @@ mod tests {
 
         let rows_pruned = obj_info.prune(0, 3, &mut conn).await.unwrap();
         assert_eq!(rows_pruned, 3);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        assert_eq!(all_obj_info.len(), 0);
     }
 }
