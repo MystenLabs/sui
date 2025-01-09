@@ -44,7 +44,7 @@ pub struct Module {
     pub structs: BTreeMap<Symbol, Struct>,
     pub enums: BTreeMap<Symbol, Enum>,
     pub functions: BTreeMap<Symbol, Function>,
-    pub constants: BTreeMap<Symbol, Constant>,
+    pub constants: Vec<Constant>,
     pub module: CompiledModule,
     pub deps: BTreeMap<ModuleId, /* is immediate */ bool>,
     pub used_by: BTreeMap<ModuleId, /* is immediate */ bool>,
@@ -507,7 +507,12 @@ impl Module {
                 (fun.name, fun)
             })
             .collect::<BTreeMap<_, _>>();
-        let constants = BTreeMap::<Symbol, Constant>::new();
+        let constants = compiled_module
+            .constant_pool()
+            .iter()
+            .enumerate()
+            .map(|(idx, def)| make_constant(&compiled_module, def, ConstantPoolIndex(idx as u16)))
+            .collect();
 
         Self {
             name,
@@ -629,6 +634,21 @@ fn make_fun(
         def_idx,
         calls: BTreeSet::new(),
         called_by: BTreeSet::new(),
+    }
+}
+
+fn make_constant(
+    module: &CompiledModule,
+    def: &file_format::Constant,
+    def_idx: ConstantPoolIndex,
+) -> Constant {
+    let type_ = make_type(module, &def.type_);
+    let data = def.data.clone();
+    Constant {
+        type_,
+        def_idx,
+        data,
+        value: OnceCell::new(),
     }
 }
 

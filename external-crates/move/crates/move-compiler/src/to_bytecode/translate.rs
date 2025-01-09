@@ -23,7 +23,7 @@ use crate::{
 };
 use move_binary_format::file_format as F;
 use move_bytecode_source_map::source_map::SourceMap;
-use move_core_types::account_address::AccountAddress as MoveAddress;
+use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_value::MoveValue};
 use move_ir_types::{ast as IR, location::*};
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
@@ -497,10 +497,11 @@ fn constants(
 ) -> Vec<IR::Constant> {
     let mut constants = constants.into_iter().collect::<Vec<_>>();
     constants.sort_by_key(|(_, c)| c.index);
-    constants
+    let constants = constants
         .into_iter()
         .map(|(n, c)| constant(context, m, n, c))
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>();
+    constants
 }
 
 fn constant(
@@ -509,12 +510,18 @@ fn constant(
     n: ConstantName,
     c: G::Constant,
 ) -> IR::Constant {
-    let is_error_constant = c
-        .attributes
-        .contains_key_(&known_attributes::ErrorAttribute.into());
+    let G::Constant {
+        loc: _,
+        warning_filter: _,
+        index: _,
+        attributes,
+        signature,
+        value,
+    } = c;
+    let is_error_constant = attributes.contains_key_(&known_attributes::ErrorAttribute.into());
     let name = context.constant_definition_name(m, n);
-    let signature = base_type(context, c.signature);
-    let value = c.value.unwrap();
+    let signature = base_type(context, signature);
+    let value = value.unwrap();
     IR::Constant {
         name,
         signature,

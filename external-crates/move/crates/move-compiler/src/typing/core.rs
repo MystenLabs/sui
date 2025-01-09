@@ -1427,6 +1427,7 @@ pub fn make_constant_type(
             attributes: _,
             defined_loc,
             signature,
+            value: _,
         } = context.constant_info(m, c);
         (*defined_loc, signature.clone())
     };

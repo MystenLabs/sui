@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cell::LazyCell,
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
     sync::Arc,
 };
 
 use crate::compiled_model::{self, BinaryModel, ModuleId, QualifiedMemberId, TModuleId};
-use move_binary_format::file_format::{self};
+use move_binary_format::file_format;
+use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
     self,
-    compiled_unit::CompiledUnit,
+    compiled_unit::{CompiledUnit, NamedCompiledModule},
     expansion::ast::{self as E, ModuleIdent_},
     naming::ast as N,
     shared::{
@@ -21,6 +23,7 @@ use move_compiler::{
     },
 };
 use move_core_types::account_address::AccountAddress;
+use move_ir_types::ast as IR;
 use move_ir_types::location::Spanned;
 use move_symbol_pool::Symbol;
 
@@ -97,7 +100,8 @@ pub struct Variant<'a> {
 pub struct Function<'a> {
     name: Symbol,
     module: Module<'a>,
-    compiled: &'a compiled_model::Function,
+    // might be none for macros
+    compiled: Option<&'a compiled_model::Function>,
     #[allow(unused)]
     data: &'a FunctionData,
 }
@@ -106,7 +110,8 @@ pub struct Function<'a> {
 pub struct Constant<'a> {
     name: Symbol,
     module: Module<'a>,
-    compiled: &'a compiled_model::Constant,
+    // There is no guarantee a source constant will have a compiled representation
+    compiled: Option<&'a compiled_model::Constant>,
     #[allow(unused)]
     data: &'a ConstantData,
 }
@@ -305,7 +310,7 @@ impl<'a> Module<'a> {
         Some(Function {
             name,
             module: *self,
-            compiled: &self.compiled.functions[&name],
+            compiled: self.compiled.functions.get(&name),
             data,
         })
     }
@@ -319,7 +324,9 @@ impl<'a> Module<'a> {
         Some(Constant {
             name,
             module: *self,
-            compiled: &self.compiled.constants[&name],
+            compiled: data
+                .compiled_index
+                .map(|idx| &self.compiled.constants[idx.0 as usize]),
             data,
         })
     }
@@ -491,6 +498,9 @@ impl<'a> Variant<'a> {
     }
 }
 
+const MACRO_EMPTY_SET: LazyCell<&'static BTreeSet<QualifiedMemberId>> =
+    LazyCell::new(|| Box::leak(Box::new(BTreeSet::new())));
+
 impl<'a> Function<'a> {
     pub fn name(&self) -> Symbol {
         self.name
@@ -512,18 +522,25 @@ impl<'a> Function<'a> {
         self.module.info().functions.get_(&self.name).unwrap()
     }
 
-    pub fn compiled(&self) -> &'a compiled_model::Function {
+    /// Returns the compiled function if it exists. This will be `None` for `macro`s.
+    pub fn compiled(&self) -> Option<&'a compiled_model::Function> {
         self.compiled
     }
 
-    /// Returns an the functions called by this function.
+    /// Returns an the functions called by this function. This will be empty for `macro`s.
     pub fn calls(&self) -> &'a BTreeSet<QualifiedMemberId> {
-        &self.compiled.calls
+        match self.compiled {
+            Some(f) => &f.calls,
+            None => &*MACRO_EMPTY_SET,
+        }
     }
 
-    /// Returns the functions that call this function.
+    /// Returns the functions that call this function. This will be empty for `macro`s.
     pub fn called_by(&self) -> &'a BTreeSet<QualifiedMemberId> {
-        &self.compiled.called_by
+        match self.compiled {
+            Some(f) => &f.called_by,
+            None => &*MACRO_EMPTY_SET,
+        }
     }
 }
 
@@ -548,7 +565,8 @@ impl<'a> Constant<'a> {
         self.module.info().constants.get_(&self.name).unwrap()
     }
 
-    pub fn compiled(&self) -> &'a compiled_model::Constant {
+    /// Not all source constants have a compiled representation
+    pub fn compiled(&self) -> Option<&'a compiled_model::Constant> {
         self.compiled
     }
 }
@@ -613,7 +631,9 @@ struct VariantData {}
 
 struct FunctionData {}
 
-struct ConstantData {}
+struct ConstantData {
+    compiled_index: Option<file_format::ConstantPoolIndex>,
+}
 
 //**************************************************************************************************
 // Construction
@@ -642,7 +662,12 @@ impl PackageData {
 }
 
 impl ModuleData {
-    fn new(_id: ModuleId, ident: E::ModuleIdent, info: &ModuleInfo, unit: &CompiledUnit) -> Self {
+    fn new(
+        _id: ModuleId,
+        ident: E::ModuleIdent,
+        info: &ModuleInfo,
+        unit: &NamedCompiledModule,
+    ) -> Self {
         let structs = info
             .structs
             .iter()
@@ -669,10 +694,11 @@ impl ModuleData {
             .iter()
             .map(|(_loc, name, _finfo)| {
                 let name = *name;
-                let (_idx, _function_def) = unit
-                    .module
-                    .find_function_def_by_name(name.as_str())
-                    .unwrap();
+                // Note, won't be found for macros
+                // let (_idx, _function_def) = unit
+                //     .module
+                //     .find_function_def_by_name(name.as_str())
+                //     .expect(&format!("cannot find fun {name}"));
                 let function = FunctionData::new();
                 (name, function)
             })
@@ -682,7 +708,7 @@ impl ModuleData {
             .iter()
             .map(|(_loc, name, _cinfo)| {
                 let name = *name;
-                let constant = ConstantData::new();
+                let constant = ConstantData::new(&unit.source_map, name);
                 (name, constant)
             })
             .collect();
@@ -728,7 +754,12 @@ impl FunctionData {
 }
 
 impl ConstantData {
-    fn new() -> Self {
-        Self {}
+    fn new(source_map: &SourceMap, name: Symbol) -> Self {
+        let compiled_index = source_map
+            .constant_map
+            .get(&IR::ConstantName(name))
+            .copied()
+            .map(|idx| file_format::ConstantPoolIndex(idx as u16));
+        Self { compiled_index }
     }
 }

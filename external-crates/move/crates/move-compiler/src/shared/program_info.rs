@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Display, sync::Arc};
+use std::{collections::BTreeMap, fmt::Display, sync::Arc, sync::OnceLock};
 
 use self::known_attributes::AttributePosition;
 use crate::{
@@ -18,6 +18,7 @@ use crate::{
     typing::ast::{self as T},
     FullyCompiledProgram,
 };
+use move_core_types::runtime_value;
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
@@ -39,6 +40,8 @@ pub struct ConstantInfo {
     pub attributes: Attributes,
     pub defined_loc: Loc,
     pub signature: Type,
+    // Set after compilation
+    pub value: OnceLock<runtime_value::MoveValue>,
 }
 
 #[derive(Debug, Clone)]
@@ -100,6 +103,7 @@ macro_rules! program_info {
                 attributes: cdef.attributes.clone(),
                 defined_loc: cname.loc(),
                 signature: cdef.signature.clone(),
+                value: OnceLock::new(),
             });
             let use_funs = $module_use_funs
                 .as_mut()

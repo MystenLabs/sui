@@ -14,7 +14,7 @@ use move_compiler::{
     },
     shared::{files::ByteSpan, known_attributes},
 };
-use move_core_types::{account_address::AccountAddress, annotated_value::MoveValue};
+use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue};
 use move_ir_types::location::*;
 use move_model_2::{
     display as model_display,
@@ -579,15 +579,16 @@ impl<'env> Docgen<'env> {
             self.gen_named_constants(env);
         }
 
+        // TODO include macros
         let funs = module_env
             .functions()
             .filter(|f| {
-                self.options.flags.include_private_fun || {
+                f.compiled().is_some() && self.options.flags.include_private_fun || {
                     let info = f.info();
                     info.entry.is_some() || !matches!(info.visibility, Visibility::Public(_))
                 }
             })
-            .sorted_by_key(|f| f.compiled().def_idx)
+            .sorted_by_key(|f| f.compiled().unwrap().def_idx)
             .collect_vec();
         if !funs.is_empty() {
             for f in funs {
@@ -927,7 +928,7 @@ impl<'env> Docgen<'env> {
         let is_error_const = info
             .attributes
             .contains_key_(&known_attributes::ErrorAttribute.into());
-        let rendered_value = match (is_error_const, const_env.compiled().value()) {
+        let rendered_value = match (is_error_const, info.value.get().unwrap()) {
             (true, MoveValue::Vector(values))
                 if values
                     .first()
@@ -1616,14 +1617,14 @@ impl<'env> Docgen<'env> {
     /// indented. This uses a heuristic by guessing the indentation from the context.
     fn get_source_with_indent(&self, env: &Model, loc: Loc) -> String {
         let files = env.files();
-        let (_, source) = files.get(&loc.file_hash()).unwrap();
-        let source: &str = source.as_ref();
+        let (_, file_text) = files.get(&loc.file_hash()).unwrap();
+        let file_text: &str = file_text.as_ref();
         // Compute the indentation of this source fragment by looking at some
         // characters preceding it.
         let ByteSpan { start, end } = files.byte_span(&loc).byte_span;
-        let source = &source[start..end];
+        let source = &file_text[start..end];
         let peek_start = start.saturating_sub(60);
-        let source_before = &source[peek_start..start];
+        let source_before = &file_text[peek_start..start];
         let newl_at = source_before.rfind('\n').unwrap_or(0);
         let mut indent = source_before.len() - newl_at - 1;
         if indent >= 4 && source_before.ends_with("spec ") {
