@@ -935,11 +935,64 @@ impl Core {
             }
         }
 
-        assert!(parent_round_quorum.reached_threshold(&self.context.committee), "Fatal error, quorum not reached for parent round when proposing for round {clock_round}. Possible mismatch between DagState and Core.");
-
+        // Inclusion of weak links for low score ancestors so there is no long
+        // list of blocks that we need to include later.
         for (score, ancestor) in excluded_ancestors.iter() {
             let excluded_author = ancestor.author();
             let block_hostname = &self.context.committee.authority(excluded_author).hostname;
+            // Use the low quorum accepted round as reported by the network for which
+            // round to include for this ancestor.
+            let mut network_low_quorum_round = self
+                .ancestor_state_manager
+                .accepted_quorum_round_per_authority[excluded_author]
+                .0;
+
+            // If the network quourum round for this ancestor is greater than or equal
+            // to the clock round then we want to make sure to set it to clock_round - 1
+            // as that is the max round we can include as an ancestor.
+            network_low_quorum_round = network_low_quorum_round.min(quorum_round);
+
+            if let Some(last_block_ref) = self.last_included_ancestors[excluded_author] {
+                if last_block_ref.round < network_low_quorum_round {
+                    if ancestor.round() == network_low_quorum_round {
+                        // Include the ancestor block as it has been seen & accepted by a strong quorum
+                        self.last_included_ancestors[excluded_author] = Some(ancestor.reference());
+                        ancestors_to_propose.push(ancestor.clone());
+                        debug!("Included low scoring ancestor {ancestor} with score {score} seen at network low quorum accepted round {network_low_quorum_round} to propose for round {clock_round}");
+                        self.context
+                            .metrics
+                            .node_metrics
+                            .included_excluded_proposal_ancestors_count_by_authority
+                            .with_label_values(&[block_hostname, "weak"])
+                            .inc();
+                        continue;
+                    }
+
+                    // Fetch ancestor block from the store for older round
+                    let blocks = self
+                        .dag_state
+                        .read()
+                        .get_uncommitted_blocks_at_slot(Slot::new(
+                            network_low_quorum_round,
+                            excluded_author,
+                        ));
+
+                    if let Some(block) = blocks.first() {
+                        self.last_included_ancestors[excluded_author] = Some(block.reference());
+                        ancestors_to_propose.push(block.clone());
+                        debug!("Included low scoring ancestor {block} with score {score} seen at network low quorum accepted round {network_low_quorum_round} to propose for round {clock_round}");
+                        self.context
+                            .metrics
+                            .node_metrics
+                            .included_excluded_proposal_ancestors_count_by_authority
+                            .with_label_values(&[block_hostname, "weak"])
+                            .inc();
+                        continue;
+                    } else {
+                        debug!("No earlier uncommitted block found for low scoring ancestor {ancestor} with score {score} seen at network low quorum accepted round {network_low_quorum_round} to propose for round {clock_round}");
+                    }
+                }
+            }
 
             trace!("Excluded low score ancestor {ancestor} with score {score} to propose for round {clock_round}");
             self.context
@@ -949,6 +1002,8 @@ impl Core {
                 .with_label_values(&[block_hostname])
                 .inc();
         }
+
+        assert!(parent_round_quorum.reached_threshold(&self.context.committee), "Fatal error, quorum not reached for parent round when proposing for round {clock_round}. Possible mismatch between DagState and Core.");
 
         info!(
             "Included {} ancestors & excluded {} ancestors for proposal in round {clock_round}",
