@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, ops::Range, sync::Arc};
 
 use anyhow::{Context, Result};
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_framework::{
+    models::cp_sequence_numbers::tx_interval,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_indexer_alt_schema::{events::StoredEvStructInst, schema::ev_struct_inst};
 use sui_pg_db as db;
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -59,5 +63,22 @@ impl Handler for EvStructInst {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    async fn prune(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut db::Connection<'_>,
+    ) -> Result<usize> {
+        let Range {
+            start: from_tx,
+            end: to_tx,
+        } = tx_interval(conn, from..to_exclusive).await?;
+
+        let filter = ev_struct_inst::table
+            .filter(ev_struct_inst::tx_sequence_number.between(from_tx as i64, to_tx as i64 - 1));
+
+        Ok(diesel::delete(filter).execute(conn).await?)
     }
 }
