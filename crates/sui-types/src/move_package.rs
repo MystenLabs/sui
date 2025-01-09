@@ -96,6 +96,7 @@ pub struct UpgradeInfo {
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+#[serde(rename_all = "camelCase")]
 pub struct MovePackage {
     id: ObjectID,
     /// Most move packages are uniquely identified by their ID (i.e. there is only one version per
@@ -111,7 +112,7 @@ pub struct MovePackage {
     version: SequenceNumber,
     // TODO use session cache
     #[serde_as(as = "BTreeMap<_, Bytes>")]
-    module_map: BTreeMap<String, Vec<u8>>,
+    pub module_map: BTreeMap<String, Vec<u8>>,
 
     /// Maps struct/module to a package version where it was first defined, stored as a vector for
     /// simple serialization and deserialization.
@@ -606,16 +607,23 @@ where
 {
     let mut normalized_modules = BTreeMap::new();
     for bytecode in modules {
-        let module =
-            CompiledModule::deserialize_with_config(bytecode, binary_config).map_err(|error| {
-                SuiError::ModuleDeserializationFailure {
-                    error: error.to_string(),
-                }
-            })?;
-        let normalized_module = normalized::Module::new(&module);
+        let normalized_module = normalize_module(bytecode, binary_config)?;
         normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
     }
     Ok(normalized_modules)
+}
+
+pub fn normalize_module<'a>(
+    bytecode: &'a Vec<u8>,
+    binary_config: &BinaryConfig,
+) -> SuiResult<normalized::Module> {
+    let module =
+        CompiledModule::deserialize_with_config(bytecode, binary_config).map_err(|error| {
+            SuiError::ModuleDeserializationFailure {
+                error: error.to_string(),
+            }
+        })?;
+    Ok(normalized::Module::new(&module))
 }
 
 pub fn normalize_deserialized_modules<'a, I>(modules: I) -> BTreeMap<String, normalized::Module>
