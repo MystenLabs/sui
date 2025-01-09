@@ -133,4 +133,38 @@ describe('Object Reading API', () => {
 
 		expect(res.status).toBe('VersionFound');
 	});
+
+	it('Try Get Past Objects', async () => {
+		const { data } = await toolbox.client.getCoins({
+			owner: toolbox.address(),
+			coinType: SUI_TYPE_ARG,
+		});
+
+		const tx = new TransactionBlock();
+		// Transfer the entire gas object:
+		tx.transferObjects([tx.gas], tx.pure(normalizeSuiAddress('0x2')));
+
+		await toolbox.client.signAndExecuteTransactionBlock({
+			signer: toolbox.keypair,
+			transactionBlock: tx,
+		});
+
+		const pastGasObjects = [
+			{ objectId: normalizeSuiAddress('0x9999'), version: '0' }, // object not exists
+			{ objectId: data[0].coinObjectId, version: data[0].version }, // object found
+			{ objectId: data[0].coinObjectId, version: (Number(data[0].version) - 1).toString() }, // object version not found
+		];
+
+		const pastObjectInfos = await toolbox.client.tryMultiGetPastObjects({
+			pastObjects: pastGasObjects,
+			options: {
+				showType: true,
+			},
+		});
+
+		expect(pastGasObjects.length).to.equal(pastObjectInfos.length);
+		expect(pastObjectInfos[0].status).to.equal('ObjectNotExists');
+		expect(pastObjectInfos[1].status).to.equal('VersionFound');
+		expect(pastObjectInfos[2].status).to.equal('VersionNotFound');
+	});
 });

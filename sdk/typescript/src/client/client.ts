@@ -87,6 +87,7 @@ import type {
 	SuiTransactionBlockResponseQuery,
 	TransactionEffects,
 	TryGetPastObjectParams,
+	TryMultiGetPastObjectsParams,
 	Unsubscribe,
 	ValidatorsApy,
 } from './types/index.js';
@@ -331,6 +332,20 @@ export class SuiClient {
 		return await this.transport.request({
 			method: 'sui_tryGetPastObject',
 			params: [input.id, input.version, input.options],
+		});
+	}
+
+	async tryMultiGetPastObjects(input: TryMultiGetPastObjectsParams): Promise<ObjectRead[]> {
+		const objectIds = input.pastObjects.map((pastObject) => pastObject.objectId);
+		objectIds.forEach((id) => {
+			if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
+				throw new Error(`Invalid Sui Object id ${id}`);
+			}
+		});
+
+		return await this.transport.request({
+			method: 'sui_tryMultiGetPastObjects',
+			params: [input.pastObjects, input.options],
 		});
 	}
 
