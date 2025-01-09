@@ -29,23 +29,28 @@ function MyComponent() {
 					<div>
 						<button
 							onClick={async () => {
-								const { bytes, signature, reportTransactionEffects } = await signTransaction({
-									transaction: new Transaction(),
-									chain: 'sui:devnet',
-								});
-
-								const executeResult = await client.executeTransactionBlock({
-									transactionBlock: bytes,
-									signature,
-									options: {
-										showRawEffects: true,
+								signTransaction(
+									{
+										transaction: new Transaction(),
+										chain: 'sui:devnet',
 									},
-								});
+									{
+										onSuccess: async ({ bytes, signature, reportTransactionEffects }) => {
+											const executeResult = await client.executeTransactionBlock({
+												transactionBlock: bytes,
+												signature,
+												options: {
+													showRawEffects: true,
+												},
+											});
 
-								// Always report transaction effects to the wallet after execution
-								reportTransactionEffects(executeResult.rawEffects!);
+											// Always report transaction effects to the wallet after execution
+											reportTransactionEffects(executeResult.rawEffects!);
 
-								console.log(executeResult);
+											console.log(executeResult);
+										}
+									}
+								);
 							}}
 						>
 							Sign empty transaction
