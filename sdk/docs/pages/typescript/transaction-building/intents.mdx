@@ -23,6 +23,10 @@ MergeCoins commands to the transaction:
 
 ```typescript
 import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { suiClient } from "./client"
+
+const keypair = new Ed25519Keypair();
 
 const tx = new Transaction();
 
@@ -32,12 +36,20 @@ tx.setSender(keypair.toSuiAddress());
 tx.transferObjects(
 	[
 		// Create a SUI coin (balance is in MIST)
-		coinWithBalance({ balance: 100 }),
+		coinWithBalance({ balance: 100n }),
 		// Create a coin of another type
-		coinWithBalance({ balance: 100, type: '0x123::foo:Bar' }),
+		coinWithBalance({ balance: 100n, type: '0x123::foo:Bar' }),
 	],
 	recipient,
 );
+
+tx.setSender(keypair.toSuiAddress());
+
+const { digest } = await suiClient.signAndExecuteTransaction({
+      transaction: tx,
+      signer: keypair,
+});
+
 ```
 
 Splitting the gas coin also causes problems for sponsored transactions. When sponsoring
