@@ -604,6 +604,7 @@ impl CompiledPackage {
             let root_named_address_map = resolved_package.resolved_table.clone();
             let model = source_model::Model::new(
                 file_map.clone(),
+                Some(root_package_name),
                 root_named_address_map,
                 program_info,
                 all_compiled_units_vec,
@@ -789,7 +790,7 @@ impl CompiledPackage {
             references_file,
             flags: docgen_flags,
         };
-        let docgen = Docgen::new(model, package_name, &doc_options);
+        let docgen = Docgen::new(model, &doc_options);
         docgen.gen(model)
     }
 }

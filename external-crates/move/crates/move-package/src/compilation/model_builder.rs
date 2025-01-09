@@ -20,11 +20,11 @@ pub fn build<W: Write>(
     resolved_graph: ResolvedGraph,
     writer: &mut W,
 ) -> Result<source_model::Model> {
+    let root_package_name = resolved_graph.root_package();
     let build_plan = BuildPlan::create(resolved_graph)?;
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
     let compiled_package = build_plan.compile_no_exit(writer, |compiler| {
-        let compiler = compiler.add_save_hook(&program_info_hook);
-        compiler
+        compiler.add_save_hook(&program_info_hook)
     })?;
     let program_info = program_info_hook.take_typing_info();
     let root_named_address_map = compiled_package
@@ -38,6 +38,7 @@ pub fn build<W: Write>(
         .collect::<Vec<_>>();
     source_model::Model::new(
         compiled_package.file_map,
+        Some(root_package_name),
         root_named_address_map,
         program_info,
         all_compiled_units,

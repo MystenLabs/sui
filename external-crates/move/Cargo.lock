@@ -1961,6 +1961,7 @@ name = "move-docgen"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap 4.5.17",
  "codespan",
  "codespan-reporting",
  "itertools",

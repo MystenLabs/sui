@@ -4587,7 +4587,7 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
             let start_loc = context.tokens.start_loc();
             let modifiers = parse_module_member_modifiers(context)?;
             let tok = context.tokens.peek();
-            let res = match tok {
+            match tok {
                 Tok::Const => Ok(ModuleMember::Constant(parse_constant_decl(
                     doc, attributes, start_loc, modifiers, context,
                 )?)),
@@ -4670,8 +4670,7 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                         Err(ErrCase::Unknown(diag))
                     }
                 }
-            };
-            res
+            }
         }
     }
 }

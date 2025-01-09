@@ -519,7 +519,7 @@ impl<'input> Lexer<'input> {
                 self.current_doc_comment = Some((restored_start, restored_end, restored_comment));
             }
             Some((doc_start, _doc_end, doc_comment)) => {
-                *doc_start = restored_start as u32;
+                *doc_start = restored_start;
                 restored_comment.push('\n');
                 restored_comment.push_str(doc_comment);
                 *doc_comment = restored_comment;

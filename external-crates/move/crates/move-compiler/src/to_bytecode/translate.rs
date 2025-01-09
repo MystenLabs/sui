@@ -497,11 +497,10 @@ fn constants(
 ) -> Vec<IR::Constant> {
     let mut constants = constants.into_iter().collect::<Vec<_>>();
     constants.sort_by_key(|(_, c)| c.index);
-    let constants = constants
+    constants
         .into_iter()
         .map(|(n, c)| constant(context, m, n, c))
-        .collect::<Vec<_>>();
-    constants
+        .collect()
 }
 
 fn constant(

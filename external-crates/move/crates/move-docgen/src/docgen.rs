@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::code_writer::{CodeWriter, CodeWriterLabel};
+use clap::*;
 use itertools::Itertools;
 use move_binary_format::file_format;
 use move_compiler::{
@@ -38,23 +39,34 @@ use std::{
 const MAX_SUBSECTIONS: usize = 6;
 
 /// Options passed into the documentation generator.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Parser)]
 #[serde(default, deny_unknown_fields)]
 pub struct DocgenFlags {
     /// The level where we start sectioning. Often markdown sections are rendered with
     /// unnecessary large section fonts, setting this value high reduces the size.
+    #[clap(
+        long = "section-level-start",
+        value_name = "HEADER_LEVEL",
+        default_value = "1"
+    )]
     pub section_level_start: usize,
     /// Whether to include private functions in the generated docs.
-    pub include_private_fun: bool,
+    #[clap(long = "exclude-private-fun")]
+    pub exclude_private_fun: bool,
     /// Whether to include Move implementations.
-    pub include_impl: bool,
+    #[clap(long = "exclude-impl")]
+    pub exclude_impl: bool,
     /// Max depth to which sections are displayed in table-of-contents.
+    #[clap(long = "toc-depth", value_name = "DEPTH", default_value = "3")]
     pub toc_depth: usize,
     /// Whether to use collapsed sections (<details>) for impl and specs
-    pub collapsed_sections: bool,
+    #[clap(long = "no-collapsed-sections")]
+    pub no_collapsed_sections: bool,
     /// Whether to include dependency diagrams in the generated docs.
+    #[clap(long = "include-dep-diagrams")]
     pub include_dep_diagrams: bool,
     /// Whether to include call diagrams in the generated docs.
+    #[clap(long = "include-call-diagrams")]
     pub include_call_diagrams: bool,
 }
 
@@ -104,10 +116,10 @@ impl Default for DocgenFlags {
     fn default() -> Self {
         Self {
             section_level_start: 1,
-            include_private_fun: true,
-            include_impl: true,
+            exclude_private_fun: false,
+            exclude_impl: false,
             toc_depth: 3,
-            collapsed_sections: true,
+            no_collapsed_sections: false,
             include_dep_diagrams: false,
             include_call_diagrams: false,
         }
@@ -180,7 +192,8 @@ enum TemplateElement {
 
 impl<'env> Docgen<'env> {
     /// Creates a new documentation generator.
-    pub fn new(env: &Model, root_package: Symbol, options: &'env DocgenOptions) -> Self {
+    pub fn new(env: &Model, options: &'env DocgenOptions) -> Self {
+        let root_package = env.root_package_name().unwrap();
         let preferred_modules = env
             .modules()
             .filter(|m| m.info().package.is_some_and(|p| p == root_package))
@@ -582,7 +595,7 @@ impl<'env> Docgen<'env> {
         let funs = module_env
             .functions()
             .filter(|f| {
-                f.compiled().is_some() && self.options.flags.include_private_fun || {
+                f.compiled().is_some() && !self.options.flags.exclude_private_fun || {
                     let info = f.info();
                     info.entry.is_some() || !matches!(info.visibility, Visibility::Public(_))
                 }
@@ -884,7 +897,7 @@ impl<'env> Docgen<'env> {
         self.doc_text(env, struct_info.doc.text());
         self.code_block(env, &self.struct_header_display(struct_env));
 
-        if self.options.flags.include_impl {
+        if !self.options.flags.exclude_impl {
             // Include field documentation if impls are included
             // because they are used by both.
             self.begin_collapsed("Fields");
@@ -909,7 +922,7 @@ impl<'env> Docgen<'env> {
         self.doc_text(env, enum_info.doc.text());
         self.code_block(env, &self.enum_header_display(enum_env));
 
-        if self.options.flags.include_impl {
+        if !self.options.flags.exclude_impl {
             // Include field documentation if impls are included
             // because they are used by both.
             self.begin_collapsed("Variants");
@@ -932,7 +945,7 @@ impl<'env> Docgen<'env> {
                 MoveValue::U256(u) => format!("{u}"),
                 MoveValue::Bool(false) => "false".to_owned(),
                 MoveValue::Bool(true) => "true".to_owned(),
-                MoveValue::Address(a) => format!("{}", a.to_hex_literal()),
+                MoveValue::Address(a) => a.to_hex_literal().to_string(),
                 MoveValue::Signer(a) => format!("signer({})", a.to_hex_literal()),
                 MoveValue::Vector(v) => {
                     let inner = v
@@ -1086,7 +1099,7 @@ impl<'env> Docgen<'env> {
         self.doc_text(env, func_info.doc.text());
         let sig = self.function_header_display(name, func_env);
         self.code_block(env, &sig);
-        if self.options.flags.include_impl {
+        if !self.options.flags.exclude_impl {
             self.begin_collapsed("Implementation");
             self.code_block(env, &self.get_source_with_indent(env, func_info.full_loc));
             self.end_collapsed();
@@ -1234,7 +1247,7 @@ impl<'env> Docgen<'env> {
     /// Begins a collapsed section.
     fn begin_collapsed(&mut self, summary: &str) {
         writeln!(self.writer).unwrap();
-        if self.options.flags.collapsed_sections {
+        if !self.options.flags.no_collapsed_sections {
             writeln!(self.writer, "<details>").unwrap();
             writeln!(self.writer, "<summary>{}</summary>", summary).unwrap();
         } else {
@@ -1245,7 +1258,7 @@ impl<'env> Docgen<'env> {
 
     /// Ends a collapsed section.
     fn end_collapsed(&mut self) {
-        if self.options.flags.collapsed_sections {
+        if !self.options.flags.no_collapsed_sections {
             writeln!(self.writer).unwrap();
             writeln!(self.writer, "</details>").unwrap();
         }

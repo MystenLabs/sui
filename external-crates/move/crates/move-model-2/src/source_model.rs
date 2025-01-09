@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cell::LazyCell,
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 
 use crate::compiled_model::{self, BinaryModel, ModuleId, QualifiedMemberId, TModuleId};
@@ -34,6 +33,7 @@ use move_symbol_pool::Symbol;
 pub struct Model {
     files: MappedFiles,
     root_named_address_map: BTreeMap<Symbol, AccountAddress>,
+    root_package_name: Option<Symbol>,
     info: Arc<TypingProgramInfo>,
     // compiled_units: BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
     compiled_model: BinaryModel,
@@ -123,6 +123,7 @@ pub struct Constant<'a> {
 impl Model {
     pub fn new(
         files: MappedFiles,
+        root_package_name: Option<Symbol>,
         root_named_address_map: BTreeMap<Symbol, AccountAddress>,
         info: Arc<TypingProgramInfo>,
         compiled_units_vec: Vec<(/* file */ PathBuf, CompiledUnit)>,
@@ -176,17 +177,22 @@ impl Model {
             .collect();
         let compiled_modules = compiled_units
             .into_iter()
-            .flat_map(|(_addr, units)| units.into_iter().map(|(_, unit)| unit.module))
+            .flat_map(|(_addr, units)| units.into_values().map(|unit| unit.module))
             .collect();
         let compiled_model = BinaryModel::new(compiled_modules);
         let model = Self {
             files,
+            root_package_name,
             root_named_address_map,
             info,
             compiled_model,
             packages,
         };
         Ok(model)
+    }
+
+    pub fn root_package_name(&self) -> Option<Symbol> {
+        self.root_package_name
     }
 
     pub fn maybe_package(&self, addr: &AccountAddress) -> Option<Package<'_>> {
@@ -498,8 +504,8 @@ impl<'a> Variant<'a> {
     }
 }
 
-const MACRO_EMPTY_SET: LazyCell<&'static BTreeSet<QualifiedMemberId>> =
-    LazyCell::new(|| Box::leak(Box::new(BTreeSet::new())));
+static MACRO_EMPTY_SET: LazyLock<&'static BTreeSet<QualifiedMemberId>> =
+    LazyLock::new(|| Box::leak(Box::new(BTreeSet::new())));
 
 impl<'a> Function<'a> {
     pub fn name(&self) -> Symbol {
@@ -531,7 +537,7 @@ impl<'a> Function<'a> {
     pub fn calls(&self) -> &'a BTreeSet<QualifiedMemberId> {
         match self.compiled {
             Some(f) => &f.calls,
-            None => &*MACRO_EMPTY_SET,
+            None => &MACRO_EMPTY_SET,
         }
     }
 
@@ -539,7 +545,7 @@ impl<'a> Function<'a> {
     pub fn called_by(&self) -> &'a BTreeSet<QualifiedMemberId> {
         match self.compiled {
             Some(f) => &f.called_by,
-            None => &*MACRO_EMPTY_SET,
+            None => &MACRO_EMPTY_SET,
         }
     }
 }
@@ -759,7 +765,7 @@ impl ConstantData {
             .constant_map
             .get(&IR::ConstantName(name))
             .copied()
-            .map(|idx| file_format::ConstantPoolIndex(idx as u16));
+            .map(file_format::ConstantPoolIndex);
         Self { compiled_index }
     }
 }
