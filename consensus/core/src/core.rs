@@ -279,7 +279,10 @@ impl Core {
         };
 
         if !missing_block_refs.is_empty() {
-            debug!("Missing block refs: {:?}", missing_block_refs);
+            trace!(
+                "Missing block refs: {}",
+                missing_block_refs.iter().map(|b| b.to_string()).join(", ")
+            );
         }
 
         Ok(missing_block_refs)
