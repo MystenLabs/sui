@@ -1,5 +1,5 @@
 /// This is a doc comment above an annotation.
-#[allow(unused_const)]
+#[allow(unused)]
 module a::m {
     #[allow(dead_code)]
     /// This is a doc comment on a constant with an annotation. Below the annotation.

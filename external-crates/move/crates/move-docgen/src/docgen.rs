@@ -396,7 +396,7 @@ impl<'env> Docgen<'env> {
                     };
                     // TODO: currently we only support simple names, we may want to add support for
                     //   address qualification.
-                    let id = (self.preferred_modules[name], *name);
+                    let id = (*addr, *name);
                     if let Some(module_env) = env.maybe_module(id) {
                         let info = ModuleInfo {
                             target_file: template_out_file.to_string(),

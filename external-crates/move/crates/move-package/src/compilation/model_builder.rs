@@ -8,7 +8,6 @@ use crate::{
 };
 use anyhow::Result;
 use move_compiler::shared::{SaveFlag, SaveHook};
-use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;
 use std::io::Write;
 

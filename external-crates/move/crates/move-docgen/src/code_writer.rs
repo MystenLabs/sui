@@ -34,10 +34,6 @@ impl CodeWriter {
         }
     }
 
-    pub fn output_is_empty(&self) -> bool {
-        self.output.is_empty()
-    }
-
     /// Returns a label for the end of the current output.
     pub fn create_label(&mut self) -> CodeWriterLabel {
         let index = ByteIndex(self.output.len() as RawIndex);
