@@ -107,7 +107,7 @@ fn main() {
         );
     }
 
-    let (dissassemble_string, _) = disassembler.disassemble().expect("Unable to dissassemble");
+    let dissassemble_string = disassembler.disassemble().expect("Unable to dissassemble");
 
     println!("{}", dissassemble_string);
 }
