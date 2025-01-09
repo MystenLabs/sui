@@ -919,6 +919,32 @@ impl<'env> Docgen<'env> {
 
     /// Generates declaration for named constant
     fn named_constant_display(&self, const_env: Constant<'_>) -> String {
+        fn move_value_display(value: &MoveValue) -> String {
+            match value {
+                MoveValue::U8(u) => format!("{u}"),
+                MoveValue::U16(u) => format!("{u}"),
+                MoveValue::U32(u) => format!("{u}"),
+                MoveValue::U64(u) => format!("{u}"),
+                MoveValue::U128(u) => format!("{u}"),
+                MoveValue::U256(u) => format!("{u}"),
+                MoveValue::Bool(false) => "false".to_owned(),
+                MoveValue::Bool(true) => "true".to_owned(),
+                MoveValue::Address(a) => format!("{}", a.to_hex_literal()),
+                MoveValue::Signer(a) => format!("signer({})", a.to_hex_literal()),
+                MoveValue::Vector(v) => {
+                    let inner = v
+                        .iter()
+                        .map(move_value_display)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("vector[{inner}]")
+                }
+                MoveValue::Struct(_) | MoveValue::Variant(_) => {
+                    unimplemented!("struct/variant are not supported in consts")
+                }
+            }
+        }
+
         let name = const_env.name();
         let info = const_env.info();
         let is_error_const = info
@@ -944,7 +970,7 @@ impl<'env> Docgen<'env> {
                     format!("{bytes:?}")
                 }
             }
-            (_, value) => value.to_string(),
+            (_, value) => move_value_display(value),
         };
         let error_const_annot = if is_error_const { "#[error]\n" } else { "" };
         let ty = model_display::type_(&info.signature);

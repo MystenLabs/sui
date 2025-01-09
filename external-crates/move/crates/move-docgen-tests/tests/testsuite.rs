@@ -77,4 +77,4 @@ fn test_move_one(
     Ok(())
 }
 
-datatest_stable::harness!(test_move, "tests/move/code_block", r".*\.toml",);
+datatest_stable::harness!(test_move, "tests/move/", r".*\.toml",);

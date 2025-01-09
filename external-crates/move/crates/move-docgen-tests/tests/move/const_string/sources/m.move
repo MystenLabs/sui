@@ -1,5 +1,5 @@
 #[allow(unused)]
-module 0x42::m {
+module a::m {
     #[error]
     /// This is a doc comment above an error constant that should be rendered as a string
     const AString: vector<u8> = b"Hello, world  🦀   ";
@@ -12,4 +12,3 @@ module 0x42::m {
 
     const NotAString: vector<u8> = vector[1, 2, 3];
 }
-
