@@ -1,6 +1,6 @@
 /// This is a doc comment above an annotation.
 #[allow(unused)]
-module 0x42::m {
+module a::m {
     /// This is a doc comment above an enum
     public enum Enum has drop {
         /// This is a doc comment above a variant
@@ -8,9 +8,9 @@ module 0x42::m {
         B(),
         C(u64),
         /// Another doc comment
-        D { 
+        D {
             /// Doc text on variant field
-            x: u64 
+            x: u64
         },
         E { x: u64, y: u64 },
     }
@@ -44,4 +44,3 @@ module 0x42::m {
         0
     }
 }
-

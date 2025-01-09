@@ -1,4 +1,4 @@
-module 0x2::TestViz {
+module a::TestViz {
     /// This is a public function
     public fun this_is_a_public_fun() { }
 
