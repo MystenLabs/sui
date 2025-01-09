@@ -99,7 +99,7 @@ export class BrowserPasskeyProvider implements PasskeyProvider {
  * A passkey signer used for signing transactions. This is a client side implementation for [SIP-9](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md).
  */
 export class PasskeyKeypair extends Signer {
-	private publicKey?: Uint8Array;
+	private publicKey: Uint8Array;
 	private provider: PasskeyProvider;
 
 	/**
@@ -123,7 +123,7 @@ export class PasskeyKeypair extends Signer {
 	 * If there are existing passkey wallet, use `signAndRecover` to identify the correct
 	 * public key and then initialize the instance. See usage in `signAndRecover`.
 	 */
-	constructor(provider: PasskeyProvider, publicKey?: Uint8Array) {
+	constructor(publicKey: Uint8Array, provider: PasskeyProvider) {
 		super();
 		this.publicKey = publicKey;
 		this.provider = provider;
@@ -148,7 +148,7 @@ export class PasskeyKeypair extends Signer {
 			const pubkeyUncompressed = parseDerSPKI(new Uint8Array(derSPKI));
 			const pubkey = secp256r1.ProjectivePoint.fromHex(pubkeyUncompressed);
 			const pubkeyCompressed = pubkey.toRawBytes(true);
-			return new PasskeyKeypair(provider, pubkeyCompressed);
+			return new PasskeyKeypair(pubkeyCompressed, provider);
 		}
 	}
 
@@ -156,7 +156,7 @@ export class PasskeyKeypair extends Signer {
 	 * Return the public key for this passkey.
 	 */
 	getPublicKey(): PublicKey {
-		return new PasskeyPublicKey(this.publicKey!);
+		return new PasskeyPublicKey(this.publicKey);
 	}
 
 	/**

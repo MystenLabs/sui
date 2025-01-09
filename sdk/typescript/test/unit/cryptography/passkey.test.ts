@@ -348,7 +348,7 @@ describe('passkey signer E2E testing', () => {
 		const possiblePks2 = await PasskeyKeypair.signAndRecover(mockProvider, testMessage2);
 
 		const uniquePk = findUniquePublicKey(possiblePks, possiblePks2);
-		const signer2 = new PasskeyKeypair(mockProvider, uniquePk.toRawBytes());
+		const signer2 = new PasskeyKeypair(uniquePk.toRawBytes(), mockProvider);
 
 		// the address from recovered pk is the same as the one constructed from the same mock provider
 		expect(signer2.getPublicKey().toSuiAddress()).toEqual(address);
