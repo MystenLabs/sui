@@ -279,13 +279,14 @@ impl<'a> Disassembler<'a> {
         bcode_map_gen: bool,
     ) -> Result<SourceMap> {
         // NB: The order in which these are called is important as each function is effectful.
-        let mut bcode_map = self.print_header(buffer)?;
+        let mut res = Some(self.print_header(buffer)?);
+        let bcode_map_opt = if bcode_map_gen { &mut res } else { &mut None };
         self.print_imports(buffer)?;
-        self.print_user_defined_types(buffer, bcode_map_gen, &mut bcode_map)?;
-        self.print_function_definitions(buffer, bcode_map_gen, &mut bcode_map)?;
-        self.print_constants(buffer, bcode_map_gen, &mut bcode_map)?;
+        self.print_user_defined_types(buffer, bcode_map_opt)?;
+        self.print_function_definitions(buffer, bcode_map_opt)?;
+        self.print_constants(buffer, bcode_map_opt)?;
         self.print_footer(buffer)?;
-        Ok(bcode_map)
+        Ok(res.unwrap())
     }
 
     fn print_header(&self, buffer: &mut (impl Write + ByteLength)) -> Result<SourceMap> {
@@ -318,26 +319,19 @@ impl<'a> Disassembler<'a> {
     fn print_user_defined_types(
         &self,
         buffer: &mut (impl Write + ByteLength),
-        bcode_map_gen: bool,
-        bcode_map: &mut SourceMap,
+        bcode_map_opt: &mut Option<SourceMap>,
     ) -> Result<()> {
         for i in 0..self.source_mapper.bytecode.struct_defs().len() {
             self.disassemble_struct_def(
                 buffer,
-                bcode_map_gen,
-                bcode_map,
+                bcode_map_opt,
                 StructDefinitionIndex(i as TableIndex),
             )?;
             any_writeln!(buffer)?;
         }
 
         for i in 0..self.source_mapper.bytecode.enum_defs().len() {
-            self.disassemble_enum_def(
-                buffer,
-                bcode_map_gen,
-                bcode_map,
-                EnumDefinitionIndex(i as TableIndex),
-            )?;
+            self.disassemble_enum_def(buffer, bcode_map_opt, EnumDefinitionIndex(i as TableIndex))?;
             any_writeln!(buffer)?;
         }
 
@@ -347,14 +341,12 @@ impl<'a> Disassembler<'a> {
     fn print_function_definitions(
         &self,
         buffer: &mut (impl Write + ByteLength),
-        bcode_map_gen: bool,
-        bcode_map: &mut SourceMap,
+        bcode_map_opt: &mut Option<SourceMap>,
     ) -> Result<()> {
         for i in 0..self.source_mapper.bytecode.function_defs().len() {
             self.disassemble_function_definition(
                 buffer,
-                bcode_map_gen,
-                bcode_map,
+                bcode_map_opt,
                 FunctionDefinitionIndex(i as TableIndex),
             )?;
             any_writeln!(buffer)?;
@@ -366,8 +358,7 @@ impl<'a> Disassembler<'a> {
     fn print_constants(
         &self,
         buffer: &mut (impl Write + ByteLength),
-        bcode_map_gen: bool,
-        bcode_map: &mut SourceMap,
+        bcode_map_opt: &mut Option<SourceMap>,
     ) -> Result<()> {
         delimited_list(
             self.source_mapper
@@ -380,7 +371,7 @@ impl<'a> Disassembler<'a> {
             "]\n",
             buffer,
             |buffer, (idx, constant)| {
-                if bcode_map_gen {
+                if let Some(bcode_map) = bcode_map_opt {
                     // no constant name in the disassembled bytecode - use index as a name
                     bcode_map.add_const_mapping(
                         ConstantPoolIndex(idx as TableIndex),
@@ -405,8 +396,7 @@ impl<'a> Disassembler<'a> {
     fn disassemble_struct_def(
         &self,
         buffer: &mut (impl Write + ByteLength),
-        bcode_map_gen: bool,
-        bcode_map: &mut SourceMap,
+        bcode_map_opt: &mut Option<SourceMap>,
         struct_def_idx: StructDefinitionIndex,
     ) -> Result<()> {
         let struct_definition = self.source_mapper.bytecode.struct_def_at(struct_def_idx);
@@ -446,7 +436,7 @@ impl<'a> Disassembler<'a> {
 
         any_write!(buffer, "{native}struct ")?;
         let struct_name_loc = any_write!(buffer, "{name}")?;
-        if bcode_map_gen {
+        if let Some(bcode_map) = bcode_map_opt {
             bcode_map.add_top_level_struct_mapping(struct_def_idx, struct_name_loc)?;
         }
 
@@ -455,7 +445,7 @@ impl<'a> Disassembler<'a> {
             &struct_source_map.type_parameters,
             &struct_handle.type_parameters,
         )?;
-        if bcode_map_gen {
+        if let Some(bcode_map) = bcode_map_opt {
             for n in type_param_source_names {
                 bcode_map.add_struct_type_parameter_mapping(struct_def_idx, n)?;
             }
@@ -477,7 +467,7 @@ impl<'a> Disassembler<'a> {
                     |buffer, (name, ty)| {
                         any_write!(buffer, "\t")?;
                         let field_name_loc = any_write!(buffer, "{name}")?;
-                        if bcode_map_gen {
+                        if let Some(bcode_map) = bcode_map_opt {
                             bcode_map.add_struct_field_mapping(struct_def_idx, field_name_loc)?;
                         }
                         any_write!(buffer, ": ")?;
@@ -502,8 +492,7 @@ impl<'a> Disassembler<'a> {
     fn disassemble_enum_def(
         &self,
         buffer: &mut (impl Write + ByteLength),
-        bcode_map_gen: bool,
-        bcode_map: &mut SourceMap,
+        bcode_map_opt: &mut Option<SourceMap>,
         enum_def_idx: EnumDefinitionIndex,
     ) -> Result<()> {
         let enum_definition = self.source_mapper.bytecode.enum_def_at(enum_def_idx);
@@ -524,7 +513,7 @@ impl<'a> Disassembler<'a> {
 
         any_write!(buffer, "enum ")?;
         let enum_name_loc = any_write!(buffer, "{name}")?;
-        if bcode_map_gen {
+        if let Some(bcode_map) = bcode_map_opt {
             bcode_map.add_top_level_enum_mapping(enum_def_idx, enum_name_loc)?;
         }
 
@@ -533,7 +522,7 @@ impl<'a> Disassembler<'a> {
             &enum_source_map.type_parameters,
             &enum_handle.type_parameters,
         )?;
-        if bcode_map_gen {
+        if let Some(bcode_map) = bcode_map_opt {
             for n in type_param_source_names {
                 bcode_map.add_enum_type_parameter_mapping(enum_def_idx, n)?;
             }
@@ -587,7 +576,7 @@ impl<'a> Disassembler<'a> {
                 // perhaps surprisingly, but the location is of the whole variant
                 // and not just of its name
                 let variant_end_offset = buffer.byte_len();
-                if bcode_map_gen {
+                if let Some(bcode_map) = bcode_map_opt {
                     let variant_loc =
                         Loc::new(FileHash::empty(), variant_start_offset, variant_end_offset);
                     bcode_map.add_enum_variant_mapping(
@@ -643,8 +632,7 @@ impl<'a> Disassembler<'a> {
     fn disassemble_function_definition(
         &self,
         buffer: &mut (impl Write + ByteLength),
-        bcode_map_gen: bool,
-        bcode_map: &mut SourceMap,
+        bcode_map_opt: &mut Option<SourceMap>,
         function_definition_index: FunctionDefinitionIndex,
     ) -> Result<()> {
         let function_definition = self
@@ -756,7 +744,7 @@ impl<'a> Disassembler<'a> {
         let Some(code) = &function.code else {
             any_writeln!(buffer, ";")?;
             let fun_def_end_offset = buffer.byte_len();
-            if bcode_map_gen {
+            if let Some(bcode_map) = bcode_map_opt {
                 let fun_def_loc =
                     Loc::new(FileHash::empty(), fun_def_start_offset, fun_def_end_offset);
                 self.add_function_bytecode_map(
@@ -786,7 +774,7 @@ impl<'a> Disassembler<'a> {
         any_writeln!(buffer, "}}")?;
 
         let fun_def_end_offset = buffer.byte_len();
-        if bcode_map_gen {
+        if let Some(bcode_map) = bcode_map_opt {
             let fun_loc = Loc::new(FileHash::empty(), fun_def_start_offset, fun_def_end_offset);
             self.add_function_bytecode_map(
                 bcode_map,
