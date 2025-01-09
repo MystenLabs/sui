@@ -440,7 +440,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         commands_sender: Sender<Command>,
     ) {
         const MAX_RETRIES: u32 = 5;
-
+        let peer_hostname = &context.committee.authority(peer_index).hostname;
         let mut requests = FuturesUnordered::new();
 
         loop {
@@ -464,14 +464,14 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 commands_sender.clone(),
                                 "live"
                             ).await {
-                                warn!("Error while processing fetched blocks from peer {peer_index}: {err}");
+                                warn!("Error while processing fetched blocks from peer {peer_index} {peer_hostname}: {err}");
                             }
                         },
                         Err(_) => {
                             if retries <= MAX_RETRIES {
                                 requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, highest_rounds, FETCH_REQUEST_TIMEOUT, retries))
                             } else {
-                                warn!("Max retries {retries} reached while trying to fetch blocks from peer {peer_index}.");
+                                warn!("Max retries {retries} reached while trying to fetch blocks from peer {peer_index} {peer_hostname}.");
                                 // we don't necessarily need to do, but dropping the guard here to unlock the blocks
                                 drop(blocks_guard);
                             }
@@ -558,8 +558,9 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         }
 
         debug!(
-            "Synced missing ancestor blocks {} from peer {peer_index}",
-            blocks.iter().map(|b| b.reference().to_string()).join(","),
+            "Synced {} missing blocks from peer {peer_index} {peer_hostname}:  {}",
+            blocks.len(),
+            blocks.iter().map(|b| b.reference().to_string()).join(", "),
         );
 
         // Now send them to core for processing. Ignore the returned missing blocks as we don't want
@@ -640,8 +641,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             let now = context.clock.timestamp_utc_ms();
             if now < verified_block.timestamp_ms() {
                 warn!(
-                    "Fetched block {} timestamp {} is in the future (now={}). Ignoring.",
-                    verified_block,
+                    "Synced block {} timestamp {} is in the future (now={}). Ignoring.",
+                    verified_block.reference(),
                     verified_block.timestamp_ms(),
                     now
                 );
@@ -1025,7 +1026,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     let peer_hostname = &context.committee.authority(peer_index).hostname;
                     match response {
                         Ok(fetched_blocks) => {
-                            info!("Fetched {} blocks from peer {}", fetched_blocks.len(), peer_hostname);
                             results.push((blocks_guard, fetched_blocks, peer_index));
 
                             // no more pending requests are left, just break the loop
