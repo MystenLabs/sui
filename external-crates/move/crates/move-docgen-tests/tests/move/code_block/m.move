@@ -1,4 +1,4 @@
-module 0x42::m {
+module a::m {
     /// # Explanation of the algorithm
     /// ```
     /// code block

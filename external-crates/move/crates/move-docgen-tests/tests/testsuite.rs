@@ -4,15 +4,19 @@
 use codespan_reporting::term::termcolor::Buffer;
 use itertools::Itertools;
 use log::debug;
+use move_command_line_common::env::read_bool_env_var;
 use move_docgen::{Docgen, DocgenOptions};
 use move_model_2::source_model;
 use move_package::compilation::model_builder;
 use move_package::BuildConfig;
 use move_symbol_pool::Symbol;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::{fmt::Write, fs::File, io::Read};
 use tempfile::TempDir;
+
+const SAVE_FILES_ENV_VAR: &str = "KEEP";
 
 fn options(root_doc_templates: Vec<String>) -> DocgenOptions {
     DocgenOptions {
@@ -24,6 +28,7 @@ fn options(root_doc_templates: Vec<String>) -> DocgenOptions {
 }
 
 fn test_move(toml_path: &Path) -> datatest_stable::Result<()> {
+    let test_dir = toml_path.parent().unwrap();
     let output_dir = TempDir::new()?;
     let config = BuildConfig {
         dev_mode: true,
@@ -41,11 +46,11 @@ fn test_move(toml_path: &Path) -> datatest_stable::Result<()> {
 
     assert!(options.flags.include_impl);
     assert!(options.flags.include_private_fun);
-    test_move_one(&mut out, &model, package_name, &options)?;
+    test_move_one(&mut out, test_dir, &model, package_name, &options)?;
 
     assert!(options.flags.collapsed_sections);
     options.flags.collapsed_sections = false;
-    test_move_one(&mut out, &model, package_name, &options)?;
+    test_move_one(&mut out, test_dir, &model, package_name, &options)?;
 
     insta::assert_snapshot!(out);
     Ok(())
@@ -53,6 +58,7 @@ fn test_move(toml_path: &Path) -> datatest_stable::Result<()> {
 
 fn test_move_one(
     out: &mut String,
+    test_dir: &Path,
     model: &source_model::Model,
     package_name: Symbol,
     doc_options: &DocgenOptions,
@@ -60,19 +66,22 @@ fn test_move_one(
     let docgen = Docgen::new(model, package_name, &doc_options);
     let file_contents = docgen.gen(model)?;
     for (path, contents) in file_contents {
+        if read_bool_env_var(SAVE_FILES_ENV_VAR) {
+            fs::write(test_dir.join(&path), &contents).unwrap();
+        }
         write!(
             out,
             "
-            <!---
-            BEGIN FILE '{path}' with settings
-            {doc_options:#?}
-            -->
-            {contents}
-            <!--- END FILE -->
+<!---
+BEGIN FILE '{path}' with settings
+{doc_options:#?}
+-->
+{contents}
+<!--- END FILE -->
             "
         )?;
     }
     Ok(())
 }
 
-datatest_stable::harness!(test_move, "tests/move", r".*\.toml",);
+datatest_stable::harness!(test_move, "tests/move/annotation", r".*\.toml",);
