@@ -480,7 +480,9 @@ mod tests {
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
-        builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+        ObjInfo::commit(&result, &mut conn).await.unwrap();
 
         builder = builder
             .start_transaction(0)
@@ -497,12 +499,18 @@ mod tests {
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
+        let rows_pruned = obj_info.prune(1, 2, &mut conn).await.unwrap();
+        // The creation entry will be pruned.
+        assert_eq!(rows_pruned, 1);
+
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         let object0 = TestCheckpointDataBuilder::derive_object_id(0);
+        let addr0 = TestCheckpointDataBuilder::derive_address(0);
         assert_eq!(all_obj_info.len(), 1);
         assert_eq!(all_obj_info[0].object_id, object0.to_vec());
         assert_eq!(all_obj_info[0].cp_sequence_number, 1);
         assert_eq!(all_obj_info[0].owner_kind, Some(StoredOwnerKind::Object));
+        assert_eq!(all_obj_info[0].owner_id, Some(addr0.to_vec()));
     }
 
     #[tokio::test]
@@ -514,7 +522,10 @@ mod tests {
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
-        builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        assert_eq!(rows_inserted, 1);
 
         builder = builder
             .start_transaction(0)
@@ -538,11 +549,20 @@ mod tests {
         assert_eq!(rows_inserted, 1);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        assert_eq!(all_obj_info.len(), 2);
+
+        let rows_pruned = obj_info.prune(1, 2, &mut conn).await.unwrap();
+        // The creation entry will be pruned.
+        assert_eq!(rows_pruned, 1);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         let object0 = TestCheckpointDataBuilder::derive_object_id(0);
+        let addr0 = TestCheckpointDataBuilder::derive_address(0);
         assert_eq!(all_obj_info.len(), 1);
         assert_eq!(all_obj_info[0].object_id, object0.to_vec());
         assert_eq!(all_obj_info[0].cp_sequence_number, 1);
         assert_eq!(all_obj_info[0].owner_kind, Some(StoredOwnerKind::Address));
+        assert_eq!(all_obj_info[0].owner_id, Some(addr0.to_vec()));
     }
 
     #[tokio::test]
