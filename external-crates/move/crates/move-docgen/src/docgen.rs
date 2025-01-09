@@ -597,7 +597,7 @@ impl<'env> Docgen<'env> {
             .filter(|f| {
                 f.compiled().is_some() && !self.options.flags.exclude_private_fun || {
                     let info = f.info();
-                    info.entry.is_some() || !matches!(info.visibility, Visibility::Public(_))
+                    info.entry.is_some() || matches!(info.visibility, Visibility::Public(_))
                 }
             })
             .sorted_by_key(|f| f.compiled().unwrap().def_idx)
@@ -1664,11 +1664,7 @@ impl<'env> Docgen<'env> {
         let peek_start = start.saturating_sub(60);
         let source_before = &file_text[peek_start..start];
         let newl_at = source_before.rfind('\n').unwrap_or(0);
-        let mut indent = source_before.len() - newl_at - 1;
-        if indent >= 4 && source_before.ends_with("spec ") {
-            // Special case for `spec define` and similar constructs.
-            indent -= 4;
-        }
+        let indent = source_before.len() - newl_at - 1;
         // Remove the indent from all lines.
         source
             .lines()
