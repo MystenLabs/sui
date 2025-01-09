@@ -4,6 +4,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{anyhow, bail, Result};
+use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
 use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
@@ -19,12 +20,17 @@ use sui_types::{
     TypeTag,
 };
 
+use crate::consistent_pruning::{PruningInfo, PruningLookupTable};
+
 /// This handler is used to track the balance buckets of address-owned coins.
 /// The balance bucket is calculated using log10 of the coin balance.
 /// Whenever a coin object's presence, owner or balance bucket changes,
 /// we will insert a new row into the `coin_balance_buckets` table.
 /// A Delete record will be inserted when a coin object is no longer present or no longer owned by an address.
-pub(crate) struct CoinBalanceBuckets;
+#[derive(Default)]
+pub(crate) struct CoinBalanceBuckets {
+    pruning_lookup_table: Arc<PruningLookupTable>,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ProcessedCoinBalanceBucket {
@@ -57,6 +63,7 @@ impl Processor for CoinBalanceBuckets {
             .map(|o| (o.id(), o))
             .collect();
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
+        let mut prune_info = PruningInfo::new();
         for (object_id, input_object) in checkpoint_input_objects.iter() {
             // This loop processes all coins that were owned by a single address prior to the checkpoint,
             // but is now deleted or wrapped after the checkpoint.
@@ -69,6 +76,7 @@ impl Processor for CoinBalanceBuckets {
             if latest_live_output_objects.contains_key(object_id) {
                 continue;
             }
+            prune_info.add_deleted_object(*object_id);
             values.insert(
                 *object_id,
                 ProcessedCoinBalanceBucket {
@@ -108,6 +116,7 @@ impl Processor for CoinBalanceBuckets {
                             change: CoinBalanceBucketChangeKind::Delete,
                         },
                     );
+                    prune_info.add_deleted_object(*object_id);
                 }
                 (_, Some(new_owner))
                     if input_owner != output_owner
@@ -129,10 +138,18 @@ impl Processor for CoinBalanceBuckets {
                             },
                         },
                     );
+                    // If input_owner is None, it means that the coin was not tracked in the table
+                    // prior to the checkpoint, and is now created/unwrapped. In this case, we don't
+                    // need to prune anything, since there was no old data to prune.
+                    if input_owner.is_some() {
+                        prune_info.add_mutated_object(*object_id);
+                    }
                 }
                 _ => {}
             }
         }
+        self.pruning_lookup_table
+            .insert(cp_sequence_number, prune_info);
 
         Ok(values.into_values().collect())
     }
@@ -140,6 +157,8 @@ impl Processor for CoinBalanceBuckets {
 
 #[async_trait::async_trait]
 impl Handler for CoinBalanceBuckets {
+    const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
+
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
         let values = values
             .iter()
@@ -150,6 +169,50 @@ impl Handler for CoinBalanceBuckets {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    // TODO: Add tests for this function.
+    async fn prune(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut db::Connection<'_>,
+    ) -> anyhow::Result<usize> {
+        use sui_indexer_alt_schema::schema::coin_balance_buckets::dsl;
+
+        let to_prune = self.pruning_lookup_table.take(from, to_exclusive)?;
+
+        if to_prune.is_empty() {
+            return Ok(0);
+        }
+
+        // For each (object_id, cp_sequence_number_exclusive), delete all entries with
+        // cp_sequence_number less than cp_sequence_number_exclusive that match the object_id.
+
+        let values = to_prune
+            .iter()
+            .map(|(object_id, seq_number)| {
+                let object_id_hex = hex::encode(object_id);
+                format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, seq_number)
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        let query = format!(
+            "
+            WITH to_prune_data (object_id, cp_sequence_number_exclusive) AS (
+                VALUES {}
+            )
+            DELETE FROM coin_balance_buckets
+            USING to_prune_data
+            WHERE coin_balance_buckets.{:?} = to_prune_data.object_id
+              AND coin_balance_buckets.{:?} < to_prune_data.cp_sequence_number_exclusive
+            ",
+            values,
+            dsl::object_id,
+            dsl::cp_sequence_number,
+        );
+        let rows_deleted = sql_query(query).execute(conn).await?;
+        Ok(rows_deleted)
     }
 }
 
@@ -305,6 +368,7 @@ mod tests {
 
     #[test]
     fn test_process_coin_balance_buckets_new_sui_coin() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         builder = builder
             .start_transaction(0)
@@ -312,7 +376,7 @@ mod tests {
             .create_sui_object(1, 100)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 2);
         assert!(values.iter().any(|v| matches!(
             v.change,
@@ -334,6 +398,7 @@ mod tests {
 
     #[test]
     fn test_process_coin_balance_buckets_new_other_coin() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         let coin_type = TypeTag::from_str("0x0::a::b").unwrap();
         builder = builder
@@ -341,7 +406,7 @@ mod tests {
             .create_coin_object(0, 0, 10, coin_type.clone())
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(
             &values[0].change,
@@ -356,13 +421,14 @@ mod tests {
 
     #[test]
     fn test_process_coin_balance_buckets_balance_change() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         builder = builder
             .start_transaction(0)
             .create_sui_object(0, 10010)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(
             values[0].change,
@@ -381,7 +447,7 @@ mod tests {
             .transfer_coin_balance(0, 1, 1, 10)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(
             values[0].change,
@@ -400,7 +466,7 @@ mod tests {
             .transfer_coin_balance(0, 2, 1, 1)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 2);
         assert!(values.iter().any(|v| v.change
             == CoinBalanceBucketChangeKind::Insert {
@@ -420,6 +486,7 @@ mod tests {
 
     #[test]
     fn test_process_coin_balance_buckets_coin_deleted() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         builder = builder
             .start_transaction(0)
@@ -432,13 +499,14 @@ mod tests {
             .delete_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
     }
 
     #[test]
     fn test_process_coin_balance_buckets_owner_change() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         builder = builder
             .start_transaction(0)
@@ -451,7 +519,7 @@ mod tests {
             .transfer_object(0, 1)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(
             values[0].change,
@@ -466,6 +534,7 @@ mod tests {
 
     #[test]
     fn test_process_coin_balance_buckets_object_owned() {
+        let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         builder = builder
             .start_transaction(0)
@@ -480,7 +549,7 @@ mod tests {
             .change_object_owner(0, Owner::ObjectOwner(dbg_addr(1)))
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = handler.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
     }
