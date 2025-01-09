@@ -372,7 +372,7 @@ export class KioskTransaction {
 
 			if (ruleDefinition.hasLockingRule) canTransferOutsideKiosk = false;
 
-			ruleDefinition.resolveRuleFunction({
+			await ruleDefinition.resolveRuleFunction({
 				packageId: ruleDefinition.packageId,
 				transactionBlock: this.transaction,
 				transaction: this.transaction,
@@ -386,6 +386,7 @@ export class KioskTransaction {
 				kiosk: this.kiosk!,
 				kioskCap: this.kioskCap!,
 				extraArgs: extraArgs || {},
+				kioskClient: this.kioskClient,
 			});
 		}
 
