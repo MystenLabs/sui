@@ -1,4 +1,3 @@
-
 # A Root Documentation Template
 
 This document contains the description of multiple move scripts.
@@ -9,11 +8,11 @@ The function `yet_another` is documented in its own file.
 
 ## Some other scripts from a module
 
-> {{move-include OneTypeOfScript}}
+> {{move-include a}}
 
 This is another module full of funs too:
 
-> {{move-include AnotherTypeOfScript}}
+> {{move-include b}}
 
 ## Index
 

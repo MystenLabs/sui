@@ -1,27 +1,24 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use codespan_reporting::term::termcolor::Buffer;
-use itertools::Itertools;
-use log::debug;
-use move_command_line_common::env::read_bool_env_var;
 use move_docgen::{Docgen, DocgenOptions};
 use move_model_2::source_model;
 use move_package::compilation::model_builder;
 use move_package::BuildConfig;
 use move_symbol_pool::Symbol;
-use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
-use std::{fmt::Write, fs::File, io::Read};
 use tempfile::TempDir;
 
-const SAVE_FILES_ENV_VAR: &str = "KEEP";
+const ROOT_DOC_TEMPLATE_NAME: &str = "root_template.md";
 
-fn options(root_doc_templates: Vec<String>) -> DocgenOptions {
+fn options(root_doc_template: Option<&Path>) -> DocgenOptions {
     DocgenOptions {
         output_directory: "output".to_string(),
-        root_doc_templates,
+        root_doc_templates: root_doc_template
+            .into_iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect(),
         compile_relative_to_output_dir: true,
         ..DocgenOptions::default()
     }
@@ -41,7 +38,13 @@ fn test_move(toml_path: &Path) -> datatest_stable::Result<()> {
     let resolved_package = config.resolution_graph_for_package(toml_path, None, &mut w)?;
     let package_name = resolved_package.root_package();
     let model = model_builder::build(resolved_package, &mut w)?;
-    let mut options = options(vec![]);
+    let root_doc_template: PathBuf = test_dir.join(ROOT_DOC_TEMPLATE_NAME);
+    let root_doc_template = if root_doc_template.is_file() {
+        Some(root_doc_template.as_path())
+    } else {
+        None
+    };
+    let mut options = options(root_doc_template);
 
     assert!(options.flags.include_impl);
     assert!(options.flags.include_private_fun);

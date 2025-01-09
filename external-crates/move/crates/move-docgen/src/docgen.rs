@@ -338,12 +338,11 @@ impl<'env> Docgen<'env> {
         let mut toc_label = None;
         self.toc = vec![];
         for elem in elements {
-            assert!(self.writer.output_is_empty());
             match elem {
                 TemplateElement::Text(str) => self.doc_text_for_root(env, &str),
                 TemplateElement::IncludeModule(name) => {
                     let Some(addr) = self.preferred_modules.get(&name) else {
-                        writeln!(self.writer, "> undefined move-include `{name}`").unwrap();
+                        self.unknown_loc_error(format!("undefined move-include `{name}`"));
                         continue;
                     };
                     let id = (*addr, name);
@@ -363,8 +362,8 @@ impl<'env> Docgen<'env> {
                         toc_label = Some(self.writer.create_label());
                     } else {
                         // CodeWriter can only maintain one label at a time.
-                        writeln!(self.writer, ">> duplicate move-toc (technical restriction)")
-                            .unwrap();
+                        self.unknown_loc_error("duplicate move-toc".to_owned());
+                        continue;
                     }
                 }
                 TemplateElement::Index => {
@@ -391,6 +390,10 @@ impl<'env> Docgen<'env> {
         for (template_out_file, elements) in templates {
             for element in elements {
                 if let TemplateElement::IncludeModule(name) = element {
+                    let Some(addr) = self.preferred_modules.get(name) else {
+                        self.unknown_loc_error(format!("undefined move-include `{name}`"));
+                        continue;
+                    };
                     // TODO: currently we only support simple names, we may want to add support for
                     //   address qualification.
                     let id = (self.preferred_modules[name], *name);

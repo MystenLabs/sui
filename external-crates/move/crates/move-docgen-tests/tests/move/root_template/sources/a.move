@@ -1,4 +1,4 @@
-module 0x1::OneTypeOfScript {
+module a::a {
 
     /// This is a script
     entry fun script1() {}

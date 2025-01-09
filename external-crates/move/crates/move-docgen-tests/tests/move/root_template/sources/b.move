@@ -1,4 +1,4 @@
-module 0x1::AnotherTypeOfScript {
+module a::b {
 
     /// This is a script
     entry fun script3() {}
