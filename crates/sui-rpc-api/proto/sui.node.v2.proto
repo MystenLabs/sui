@@ -10,8 +10,8 @@ import "sui.types.proto";
 // Rpc Node interface
 //
 
-service Node {
-  rpc GetNodeInfo(google.protobuf.Empty) returns (GetNodeInfoResponse);
+service NodeService {
+  rpc GetNodeInfo(GetNodeInfoRequest) returns (GetNodeInfoResponse);
   rpc GetCommittee(GetCommitteeRequest) returns (GetCommitteeResponse);
 
   rpc GetObject(GetObjectRequest) returns (GetObjectResponse);
@@ -21,6 +21,8 @@ service Node {
 
   rpc ExecuteTransaction(ExecuteTransactionRequest) returns (ExecuteTransactionResponse);
 }
+
+message GetNodeInfoRequest {}
 
 message GetNodeInfoResponse {
   // The chain identifier of the chain that this Node is on
