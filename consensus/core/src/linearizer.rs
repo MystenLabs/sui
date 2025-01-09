@@ -9,6 +9,7 @@ use parking_lot::RwLock;
 use crate::{
     block::{BlockAPI, BlockRef, VerifiedBlock},
     commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
+    context::Context,
     dag_state::DagState,
     leader_schedule::LeaderSchedule,
     Round, TransactionIndex,
@@ -22,10 +23,14 @@ pub(crate) trait BlockStoreAPI {
     fn gc_round(&self) -> Round;
 
     fn gc_enabled(&self) -> bool;
+
+    fn set_committed(&mut self, block_ref: &BlockRef) -> bool;
+
+    fn is_committed(&self, block_ref: &BlockRef) -> bool;
 }
 
 impl BlockStoreAPI
-    for parking_lot::lock_api::RwLockReadGuard<'_, parking_lot::RawRwLock, DagState>
+    for parking_lot::lock_api::RwLockWriteGuard<'_, parking_lot::RawRwLock, DagState>
 {
     fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
         DagState::get_blocks(self, refs)
@@ -38,24 +43,35 @@ impl BlockStoreAPI
     fn gc_enabled(&self) -> bool {
         DagState::gc_enabled(self)
     }
+
+    fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
+        DagState::set_committed(self, block_ref)
+    }
+
+    fn is_committed(&self, block_ref: &BlockRef) -> bool {
+        DagState::is_committed(self, block_ref)
+    }
 }
 
 /// Expand a committed sequence of leader into a sequence of sub-dags.
 #[derive(Clone)]
 pub(crate) struct Linearizer {
     /// In memory block store representing the dag state
+    context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
     leader_schedule: Arc<LeaderSchedule>,
 }
 
 impl Linearizer {
     pub(crate) fn new(
+        context: Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
         leader_schedule: Arc<LeaderSchedule>,
     ) -> Self {
         Self {
             dag_state,
             leader_schedule,
+            context,
         }
     }
 
@@ -66,8 +82,16 @@ impl Linearizer {
         leader_block: VerifiedBlock,
         reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> (CommittedSubDag, TrustedCommit) {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Linearizer::collect_sub_dag_and_commit"])
+            .start_timer();
+
         // Grab latest commit state from dag state
-        let dag_state = self.dag_state.read();
+        let mut dag_state = self.dag_state.write();
         let last_commit_index = dag_state.last_commit_index();
         let last_commit_digest = dag_state.last_commit_digest();
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
@@ -75,8 +99,14 @@ impl Linearizer {
         let timestamp_ms = leader_block.timestamp_ms().max(last_commit_timestamp_ms);
 
         // Now linearize the sub-dag starting from the leader block
-        let (to_commit, rejected_transactions) =
-            Self::linearize_sub_dag(leader_block.clone(), last_committed_rounds, dag_state);
+        let (to_commit, rejected_transactions) = Self::linearize_sub_dag(
+            &self.context,
+            leader_block.clone(),
+            last_committed_rounds,
+            &mut dag_state,
+        );
+
+        drop(dag_state);
 
         // Create the Commit.
         let commit = Commit::new(
@@ -108,9 +138,10 @@ impl Linearizer {
     }
 
     pub(crate) fn linearize_sub_dag(
+        context: &Context,
         leader_block: VerifiedBlock,
         last_committed_rounds: Vec<u32>,
-        dag_state: impl BlockStoreAPI,
+        dag_state: &mut impl BlockStoreAPI,
     ) -> (Vec<VerifiedBlock>, Vec<Vec<TransactionIndex>>) {
         let gc_enabled = dag_state.gc_enabled();
         // The GC round here is calculated based on the last committed round of the leader block. The algorithm will attempt to
@@ -120,42 +151,82 @@ impl Linearizer {
         let gc_round: Round = dag_state.gc_round();
         let leader_block_ref = leader_block.reference();
         let mut buffer = vec![leader_block];
-        let mut committed = HashSet::new();
         let mut to_commit = Vec::new();
-        assert!(committed.insert(leader_block_ref));
 
-        while let Some(x) = buffer.pop() {
-            to_commit.push(x.clone());
+        // The new logic will perform the recursion without stopping at the highest round round that has been committed per authority. Instead it will
+        // allow to commit blocks that are lower than the highest committed round for an authority but higher than gc_round.
+        if context.protocol_config.consensus_linearize_subdag_v2() {
+            assert!(
+                dag_state.set_committed(&leader_block_ref),
+                "Leader block with reference {:?} attempted to be committed twice",
+                leader_block_ref
+            );
 
-            let ancestors: Vec<VerifiedBlock> = dag_state
-                .get_blocks(
-                    &x.ancestors()
-                        .iter()
-                        .copied()
-                        .filter(|ancestor| {
-                            // We skip the block if we already committed it or we reached a
-                            // round that we already committed.
-                            // TODO: for Fast Path we need to amend the recursion rule here and allow us to commit blocks all the way up to the `gc_round`.
-                            // Some additional work will be needed to make sure that we keep the uncommitted blocks up to the `gc_round` across commits.
-                            !committed.contains(ancestor)
-                                && last_committed_rounds[ancestor.author] < ancestor.round
-                        })
-                        .filter(|ancestor| {
-                            // Keep the block if GC is not enabled or it is enabled and the block is above the gc_round. We do this
-                            // to stop the recursion early and avoid going to deep when it's unnecessary.
-                            !gc_enabled || ancestor.round > gc_round
-                        })
-                        .collect::<Vec<_>>(),
-                )
-                .into_iter()
-                .map(|ancestor_opt| {
-                    ancestor_opt.expect("We should have all uncommitted blocks in dag state.")
-                })
-                .collect();
+            while let Some(x) = buffer.pop() {
+                to_commit.push(x.clone());
 
-            for ancestor in ancestors {
-                buffer.push(ancestor.clone());
-                assert!(committed.insert(ancestor.reference()));
+                let ancestors: Vec<VerifiedBlock> = dag_state
+                    .get_blocks(
+                        &x.ancestors()
+                            .iter()
+                            .copied()
+                            .filter(|ancestor| {
+                                ancestor.round > gc_round && !dag_state.is_committed(ancestor)
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                    .into_iter()
+                    .map(|ancestor_opt| {
+                        ancestor_opt.expect("We should have all uncommitted blocks in dag state.")
+                    })
+                    .collect();
+
+                for ancestor in ancestors {
+                    buffer.push(ancestor.clone());
+                    assert!(
+                        dag_state.set_committed(&ancestor.reference()),
+                        "Block with reference {:?} attempted to be committed twice",
+                        ancestor.reference()
+                    );
+                }
+            }
+        } else {
+            let mut committed = HashSet::new();
+            assert!(committed.insert(leader_block_ref));
+
+            while let Some(x) = buffer.pop() {
+                to_commit.push(x.clone());
+
+                let ancestors: Vec<VerifiedBlock> = dag_state
+                    .get_blocks(
+                        &x.ancestors()
+                            .iter()
+                            .copied()
+                            .filter(|ancestor| {
+                                // We skip the block if we already committed it or we reached a
+                                // round that we already committed.
+                                // TODO: for Fast Path we need to ammend the recursion rule here and allow us to commit blocks all the way up to the `gc_round`.
+                                // Some additional work will be needed to make sure that we keep the uncommitted blocks up to the `gc_round` across commits.
+                                !committed.contains(ancestor)
+                                    && last_committed_rounds[ancestor.author] < ancestor.round
+                            })
+                            .filter(|ancestor| {
+                                // Keep the block if GC is not enabled or it is enabled and the block is above the gc_round. We do this
+                                // to stop the recursion early and avoid going to deep when it's unnecessary.
+                                !gc_enabled || ancestor.round > gc_round
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                    .into_iter()
+                    .map(|ancestor_opt| {
+                        ancestor_opt.expect("We should have all uncommitted blocks in dag state.")
+                    })
+                    .collect();
+
+                for ancestor in ancestors {
+                    buffer.push(ancestor.clone());
+                    assert!(committed.insert(ancestor.reference()));
+                }
             }
         }
 
@@ -254,7 +325,7 @@ mod tests {
             context.clone(),
             LeaderSwapTable::default(),
         ));
-        let mut linearizer = Linearizer::new(dag_state.clone(), leader_schedule);
+        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone(), leader_schedule);
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds: u32 = 10;
@@ -304,7 +375,8 @@ mod tests {
             LeaderSchedule::new(context.clone(), LeaderSwapTable::default())
                 .with_num_commits_per_schedule(NUM_OF_COMMITS_PER_SCHEDULE),
         );
-        let mut linearizer = Linearizer::new(dag_state.clone(), leader_schedule.clone());
+        let mut linearizer =
+            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
 
         // Populate fully connected test blocks for round 0 ~ 20, authorities 0 ~ 3.
         let num_rounds: u32 = 20;
@@ -373,7 +445,8 @@ mod tests {
             LeaderSchedule::new(context.clone(), LeaderSwapTable::default())
                 .with_num_commits_per_schedule(NUM_OF_COMMITS_PER_SCHEDULE),
         );
-        let mut linearizer = Linearizer::new(dag_state.clone(), leader_schedule.clone());
+        let mut linearizer =
+            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
 
         // Populate fully connected test blocks for round 0 ~ 20, authorities 0 ~ 3.
         let num_rounds: u32 = 20;
@@ -440,7 +513,8 @@ mod tests {
             context.clone(),
             LeaderSwapTable::default(),
         ));
-        let mut linearizer = Linearizer::new(dag_state.clone(), leader_schedule.clone());
+        let mut linearizer =
+            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
         let wave_length = DEFAULT_WAVE_LENGTH;
 
         let leader_round_wave_1 = 3;
@@ -543,6 +617,13 @@ mod tests {
         context
             .protocol_config
             .set_consensus_gc_depth_for_testing(gc_depth);
+
+        if gc_depth > 0 {
+            context
+                .protocol_config
+                .set_consensus_linearize_subdag_v2_for_testing(true);
+        }
+
         let context = Arc::new(context);
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
@@ -552,7 +633,7 @@ mod tests {
             context.clone(),
             LeaderSwapTable::default(),
         ));
-        let mut linearizer = Linearizer::new(dag_state.clone(), leader_schedule);
+        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone(), leader_schedule);
 
         // Authorities of index 0->2 will always creates blocks that see each other, but until round 5 they won't see the blocks of authority 3.
         // For authority 3 we create blocks that connect to all the other authorities.
@@ -636,6 +717,108 @@ mod tests {
                     assert_eq!(dag_state.read().gc_round(), 0);
                 }
             }
+            for block in subdag.blocks.iter() {
+                assert!(block.round() <= leaders[idx].round());
+            }
+            assert_eq!(subdag.commit_ref.index, idx as CommitIndex + 1);
+        }
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_handle_commit_below_highest_committed_round(#[values(3)] gc_depth: u32) {
+        telemetry_subscribers::init_for_testing();
+
+        let num_authorities = 4;
+        let (mut context, _keys) = Context::new_for_test(num_authorities);
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(gc_depth);
+        context
+            .protocol_config
+            .set_consensus_linearize_subdag_v2_for_testing(true);
+
+        let context = Arc::new(context);
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
+        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone(), leader_schedule);
+
+        // Authority D will create an "orphaned" block on round 1 as it won't reference to it on the block of round 2. Similar, no other authority will reference to it on round 2.
+        // Then on round 3 the authorities A, B & C will link to block D1. Once the DAG gets committed we should see the block D1 getting committed as well. Normally ,as block D2 would
+        // have been committed first block D1 should be ommitted. With the new logic this is no longer true.
+        let dag_str = "DAG {
+                Round 0 : { 4 },
+                Round 1 : { * },
+                Round 2 : {
+                    A -> [-D1],
+                    B -> [-D1],
+                    C -> [-D1],
+                    D -> [-D1],
+                },
+                Round 3 : {
+                    A -> [A2, B2, C2, D1],
+                    B -> [A2, B2, C2, D1],
+                    C -> [A2, B2, C2, D1],
+                    D -> [A2, B2, C2, D2]
+                },
+                Round 4 : { * },
+            }";
+
+        let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag");
+        dag_builder.print();
+        dag_builder.persist_all_blocks(dag_state.clone());
+
+        let leaders = dag_builder
+            .leader_blocks(1..=4)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        let commits = linearizer.handle_commit(leaders.clone());
+        for (idx, subdag) in commits.into_iter().enumerate() {
+            tracing::info!("{subdag:?}");
+            assert_eq!(subdag.leader, leaders[idx].reference());
+            assert_eq!(subdag.timestamp_ms, leaders[idx].timestamp_ms());
+            if idx == 0 {
+                // First subdag includes the leader block only B1
+                assert_eq!(subdag.blocks.len(), 1);
+            } else if idx == 1 {
+                // We commit:
+                // * 1 block on round 2, the leader block C2
+                // * 2 blocks on round 1, A1, C1
+                assert_eq!(subdag.blocks.len(), 3);
+            } else if idx == 2 {
+                // We commit:
+                // * 1 block on round 3, the leader block D3
+                // * 3 blocks on round 2, A2, B2, D2
+                assert_eq!(subdag.blocks.len(), 4);
+
+                assert!(
+                    subdag.blocks.iter().any(|block| block.round() == 2
+                        && block.author() == AuthorityIndex::new_for_test(3)),
+                    "Block D2 should have been committed."
+                );
+            } else if idx == 3 {
+                // We commit:
+                // * 1 block on round 4, the leader block A4
+                // * 3 blocks on round 3, A3, B3, C3
+                // * 1 block of round 1, D1
+                assert_eq!(subdag.blocks.len(), 5);
+                assert!(
+                    subdag.blocks.iter().any(|block| block.round() == 1
+                        && block.author() == AuthorityIndex::new_for_test(3)),
+                    "Block D1 should have been committed."
+                );
+            } else {
+                panic!("Unexpected subdag with index {:?}", idx);
+            }
+
             for block in subdag.blocks.iter() {
                 assert!(block.round() <= leaders[idx].round());
             }

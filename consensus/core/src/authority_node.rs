@@ -502,6 +502,10 @@ mod tests {
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
 
+        if gc_depth == 0 {
+            protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
+        }
+
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
             .map(|_| TempDir::new().unwrap())
             .collect::<Vec<_>>();
@@ -707,6 +711,10 @@ mod tests {
 
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
+
+        if gc_depth == 0 {
+            protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
+        }
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();
