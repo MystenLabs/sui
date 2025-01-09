@@ -2059,6 +2059,7 @@ dependencies = [
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
+ "move-disassembler",
  "move-docgen",
  "move-model",
  "move-symbol-pool",
