@@ -41,24 +41,26 @@ fn test_move(toml_path: &Path) -> datatest_stable::Result<()> {
     let resolved_package = config.resolution_graph_for_package(toml_path, None, &mut w)?;
     let package_name = resolved_package.root_package();
     let model = model_builder::build(resolved_package, &mut w)?;
-    let mut out = String::new();
     let mut options = options(vec![]);
 
     assert!(options.flags.include_impl);
     assert!(options.flags.include_private_fun);
-    test_move_one(&mut out, test_dir, &model, package_name, &options)?;
+    test_move_one(&test_dir.join("default"), &model, package_name, &options)?;
 
     assert!(options.flags.collapsed_sections);
     options.flags.collapsed_sections = false;
-    test_move_one(&mut out, test_dir, &model, package_name, &options)?;
+    test_move_one(
+        &test_dir.join("collapsed_sections"),
+        &model,
+        package_name,
+        &options,
+    )?;
 
-    insta::assert_snapshot!(out);
     Ok(())
 }
 
 fn test_move_one(
-    out: &mut String,
-    test_dir: &Path,
+    out_dir: &Path,
     model: &source_model::Model,
     package_name: Symbol,
     doc_options: &DocgenOptions,
@@ -66,22 +68,13 @@ fn test_move_one(
     let docgen = Docgen::new(model, package_name, &doc_options);
     let file_contents = docgen.gen(model)?;
     for (path, contents) in file_contents {
-        if read_bool_env_var(SAVE_FILES_ENV_VAR) {
-            fs::write(test_dir.join(&path), &contents).unwrap();
+        if path.contains("dependencies") {
+            continue;
         }
-        write!(
-            out,
-            "
-<!---
-BEGIN FILE '{path}' with settings
-{doc_options:#?}
--->
-{contents}
-<!--- END FILE -->
-            "
-        )?;
+        let out_path = out_dir.join(&path).to_string_lossy().to_string();
+        insta::assert_snapshot!(out_path, contents);
     }
     Ok(())
 }
 
-datatest_stable::harness!(test_move, "tests/move/annotation", r".*\.toml",);
+datatest_stable::harness!(test_move, "tests/move/code_block", r".*\.toml",);

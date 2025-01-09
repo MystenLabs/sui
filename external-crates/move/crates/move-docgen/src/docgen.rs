@@ -414,63 +414,59 @@ impl<'env> Docgen<'env> {
         for m in env.modules() {
             let id = m.id();
             if !included.contains(&id) {
-                if let Some(file_name) = self.compute_output_file(m) {
-                    let info = ModuleInfo {
-                        target_file: file_name,
-                        label: self.make_label_for_module(m),
-                        is_included: false,
-                    };
-                    self.infos.insert(id, info);
-                }
+                let file_name = self.compute_output_file(m);
+                let info = ModuleInfo {
+                    target_file: file_name,
+                    label: self.make_label_for_module(m),
+                    is_included: false,
+                };
+                self.infos.insert(id, info);
             }
         }
     }
 
     /// Computes file location for a module. This considers if the module is a dependency
     /// and if so attempts to locate already generated documentation for it.
-    fn compute_output_file(&self, module_env: model::Module<'_>) -> Option<String> {
+    fn compute_output_file(&mut self, module_env: model::Module<'_>) -> String {
         let output_path = PathBuf::from(&self.options.output_directory);
         let file_name = PathBuf::from(module_env.source_path().as_str())
             .with_extension("md")
             .file_name()
             .expect("file name")
             .to_os_string();
-        if !matches!(module_env.info().target_kind, TargetKind::External(_)) {
+        if !matches!(
+            module_env.info().target_kind,
+            TargetKind::Source {
+                is_root_package: true
+            }
+        ) {
             // Try to locate the file in the provided search path.
-            self.options.doc_path.iter().find_map(|dir| {
-                let mut path = PathBuf::from(dir);
-                path.push(&file_name);
-                if path.exists() {
-                    Some(
+            self.options
+                .doc_path
+                .iter()
+                .find_map(|dir| {
+                    let mut path = PathBuf::from(dir);
+                    path.push(&file_name);
+                    path.exists().then(|| {
                         self.path_relative_to(&path, &output_path)
                             .to_string_lossy()
-                            .to_string(),
-                    )
-                } else {
-                    // If it's a dependency traverse back up to finde the package name so that we
-                    // can generate the documentation in the right place.
-                    let path = PathBuf::from(module_env.source_path().as_str());
-                    let package_name = path.ancestors().find_map(|dir| {
-                        let mut path = PathBuf::from(dir);
-                        path.push("Move.toml");
-                        if path.exists() {
-                            dir.file_stem()
-                        } else {
-                            None
-                        }
-                    });
-                    package_name.map(|package_name| {
-                        format!(
-                            "dependencies/{}/{}",
-                            package_name.to_string_lossy(),
-                            file_name.to_string_lossy()
-                        )
+                            .to_string()
                     })
-                }
-            })
+                })
+                .unwrap_or_else(|| {
+                    let package_name = match module_env.package().name() {
+                        Some(name) => name.to_string(),
+                        None => module_env.id().0.to_string(),
+                    };
+                    format!(
+                        "dependencies/{}/{}",
+                        package_name,
+                        file_name.to_string_lossy()
+                    )
+                })
         } else {
             // We will generate this file in the provided output directory.
-            Some(file_name.to_string_lossy().to_string())
+            file_name.to_string_lossy().to_string()
         }
     }
 
@@ -525,7 +521,7 @@ impl<'env> Docgen<'env> {
         self.doc_text(env, module_info.doc.text());
 
         // If this is a standalone doc, generate TOC header.
-        let toc_label = if info_is_included {
+        let toc_label = if !info_is_included {
             Some(self.gen_toc_header())
         } else {
             None

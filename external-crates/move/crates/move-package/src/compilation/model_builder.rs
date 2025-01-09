@@ -8,6 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 use move_compiler::shared::{SaveFlag, SaveHook};
+use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;
 use std::io::Write;
 
@@ -35,7 +36,7 @@ pub fn build<W: Write>(
         .all_compiled_units_with_source()
         .cloned()
         .map(|CompiledUnitWithSource { unit, source_path }| (source_path, unit))
-        .collect();
+        .collect::<Vec<_>>();
     source_model::Model::new(
         compiled_package.file_map,
         root_named_address_map,

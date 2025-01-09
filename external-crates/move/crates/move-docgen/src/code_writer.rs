@@ -110,7 +110,6 @@ impl CodeWriter {
         }
 
         if ends_in_newline {
-            Self::trim_trailing_whitespace(&mut self.output);
             self.output.push('\n');
         }
     }
