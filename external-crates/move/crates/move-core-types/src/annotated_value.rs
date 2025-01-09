@@ -611,8 +611,8 @@ impl fmt::Display for MoveTypeLayout {
 /// Helper type that uses `T`'s `Display` implementation as its own `Debug` implementation, to allow
 /// other `Display` implementations in this module to take advantage of the structured formatting
 /// helpers that Rust uses for its own debug types.
-struct DebugAsDisplay<'a, T>(&'a T);
-impl<T: fmt::Display> fmt::Debug for DebugAsDisplay<'_, T> {
+pub struct DebugAsDisplay<'a, T>(pub &'a T);
+impl<'a, T: fmt::Display> fmt::Debug for DebugAsDisplay<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             write!(f, "{:#}", self.0)
