@@ -2,7 +2,6 @@
 # /*
 # Enable prettier for apps, dapps and sdk
 !/apps
-!/sdk
 !/dapps
 !/.config
 !/*.js

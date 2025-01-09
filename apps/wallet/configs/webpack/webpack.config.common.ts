@@ -208,6 +208,7 @@ const commonConfig: () => Promise<Configuration> = async () => {
 				// 'typeof window': JSON.stringify(typeof {}),
 				'process.env.NODE_DEBUG': false,
 				'process.env.WALLET_KEYRING_PASSWORD': JSON.stringify(
+					// eslint-disable-next-line no-restricted-globals
 					IS_DEV ? 'DEV_PASS' : Buffer.from(randomBytes(64)).toString('hex'),
 				),
 				'process.env.WALLET_BETA': WALLET_BETA,

@@ -55,7 +55,7 @@ If you are targeting a network other than Testnet, be sure to update the `rev` v
 
 :::
 
-{@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/Move.toml}
+{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/Move.toml}
 
 ### `Counter` struct
 
@@ -69,23 +69,23 @@ module counter::counter {
 
 Add the `Counter` struct and elements described in the following sections to the module. 
 
-{@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#struct=Counter noComments}
+{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#struct=Counter noComments}
 
 - The `Counter` type stores the address of its `owner`, its current `value`, and its own `id`.
 
 ### Creating `Counter`
 
-{@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=create noComments}
+{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=create noComments}
 
 In the `create` function, a new `Counter` object is created and [shared](../../../concepts/object-ownership/shared.mdx). 
 
 ### Incrementing and resetting `Counter`
 
-{@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=increment noComments}
+{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=increment noComments}
 
 The `increment` function accepts a mutable reference to any shared `Counter` object and increments its `value` field.
 
-{@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=set_value noComments}
+{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=set_value noComments}
 
 The `set_value` function accepts a mutable reference to any shared `Counter` object, the `value` to set its `value` field, and the `ctx` which contains the `sender` of the transaction. The `Counter` `owner` is the only one that can run this function.
 
@@ -99,7 +99,7 @@ Learn more about taking [object references as input](../../../concepts/sui-move-
 
 The final module should look like this
 
-{@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move noComments}
+{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move noComments}
 
 :::checkpoint
 
@@ -275,7 +275,7 @@ This app uses the `react-spinners` package for icons. Install it by running the 
   <summary>
     Update the `src/networkConfig.ts` file to include the `packageID` constants.
   </summary>
-  {@inject: sdk/create-dapp/templates/react-e2e-counter/src/networkConfig.ts noComments}
+  {@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/src/networkConfig.ts noComments}
 </details>
 
 ### Creating `Counter`
@@ -325,7 +325,7 @@ This component renders a button that enables the user to create a counter. Now, 
   <summary>
     Update the `create` function in the `src/CreateCounter.tsx` file:
   </summary>
-  {@inject: sdk/create-dapp/templates/react-e2e-counter/src/CreateCounter.tsx noComments}
+  {@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/src/CreateCounter.tsx noComments}
 </details>
 
 The `create` function now creates a new Sui `Transaction` and calls the `create` function from your Move module. The PTB is then signed and executed via the `useSignAndExecuteTransaction` hook. The `onCreated` callback is called with the new counter's ID when the transaction is successful.
@@ -521,7 +521,7 @@ The code also adds an `executeMoveCall` function that still needs implementing. 
   <summary>
     Update the `executeMoveCall` function in the `src/Counter.tsx` file:
   </summary>
-  {@inject: sdk/create-dapp/templates/react-e2e-counter/src/Counter.tsx noComments}
+  {@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/src/Counter.tsx noComments}
 </details>
 
 ### Updating the routing
@@ -532,7 +532,7 @@ Now that you have a `Counter` component, you need to update your `App` component
   <summary>
     Update the `src/App.tsx` file to render the `Counter` component when you have a counter ID:
   </summary>
-  {@inject: sdk/create-dapp/templates/react-e2e-counter/src/App.tsx noComments}
+  {@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/src/App.tsx noComments}
 </details>
 
 :::checkpoint
