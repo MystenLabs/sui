@@ -13954,6 +13954,7 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.13.0",
+ "move-core-types",
  "prometheus",
  "rand 0.8.5",
  "serde",
