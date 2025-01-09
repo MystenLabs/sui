@@ -48,7 +48,7 @@ pub enum StoredCoinOwnerKind {
     Consensus = 1,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = obj_info, primary_key(object_id, cp_sequence_number))]
 #[diesel(treat_none_as_default_value = false)]
 pub struct StoredObjInfo {
