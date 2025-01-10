@@ -56,6 +56,7 @@ const references = [
 			'references/cli/validator',
 		],
 	},
+	'references/fullnode-protocol',
 	{
 		type: 'category',
 		label: 'Sui IDE Support',
