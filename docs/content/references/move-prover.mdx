@@ -1,6 +1,5 @@
-`---
+---
 title: Sui Move Prover
-
 ---
 
 The Sui Move Prover is a tool for verifying the correctness of Move smart contracts on the Sui blockchain. It is based on the Boogie verification engine and the Z3 SMT solver.
@@ -40,6 +39,62 @@ The `old` macro is used to refer to the state of an object before the function c
 ```move
 let old_pool = old!(pool);
 ```
+
+### Ghost variables
+
+Ghost variables are global variables that are only used in specifications.
+
+The are declared using the `ghost::declare_global` and `ghost::declare_global_mut` functions:
+
+```move
+ghost::declare_global_mut<Name, Type>();
+```
+
+The declaration takes two type-level arguments: the name of the ghost variable and its actual type.
+
+In most cases, the type-level name of the ghost variable is either a user type, or simply a newly declared spec-only struct.
+For example:
+
+```move
+public struct MyGhostVariableName {}
+```
+
+The ghost variable can then be used in the `requires`, `ensures`, and `asserts` functions:
+For example:
+
+```move
+requires(ghost::global<MyGhostVariableName, _>() == true);
+```
+
+### Loop `invariant`
+
+Loop invariants are conditions that must hold for all iterations of a loop.
+If a spec contains conditions over variables which are modified inside a loop, the loop invariant must be specified.
+The invariant is specified by calling the `invariant` macro before the loop.
+
+```move
+invariant!(|| {
+    ensures(i <= n);
+});
+while (i < n) {
+    i = i + 1;
+}
+```
+
+### Object `invariant`
+
+Object invariants are conditions that must hold for all objects of a given type.
+
+An object invariant is declared by creating a new function named `<type_name>_inv` and annotating it with the `#[spec_only]` attribute.
+
+```move
+#[spec_only]
+public fun MyType_inv(self: &MyType): bool {
+    ...
+}
+```
+
+The function must take a single argument, which is a reference to the object, and return a boolean value, representing whether the object invariant holds.
 
 ## Attributes
 
