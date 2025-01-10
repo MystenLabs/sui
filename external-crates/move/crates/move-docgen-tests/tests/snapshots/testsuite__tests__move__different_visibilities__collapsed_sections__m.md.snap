@@ -8,9 +8,9 @@ expression: contents
 
 
 
--  [Function `a::TestViz::this_is_a_public_fun`](#a_TestViz_this_is_a_public_fun)
--  [Function `a::TestViz::this_is_a_public_script_fun`](#a_TestViz_this_is_a_public_script_fun)
--  [Function `a::TestViz::this_is_a_private_fun`](#a_TestViz_this_is_a_private_fun)
+-  [Function `this_is_a_public_fun`](#a_TestViz_this_is_a_public_fun)
+-  [Function `this_is_a_public_script_fun`](#a_TestViz_this_is_a_public_script_fun)
+-  [Function `this_is_a_private_fun`](#a_TestViz_this_is_a_private_fun)
 
 
 <pre><code></code></pre>
@@ -19,7 +19,7 @@ expression: contents
 
 <a name="a_TestViz_this_is_a_public_fun"></a>
 
-## Function `a::TestViz::this_is_a_public_fun`
+## Function `this_is_a_public_fun`
 
 This is a public function
 
@@ -39,7 +39,7 @@ This is a public function
 
 <a name="a_TestViz_this_is_a_public_script_fun"></a>
 
-## Function `a::TestViz::this_is_a_public_script_fun`
+## Function `this_is_a_public_script_fun`
 
 This is a public entry function
 
@@ -52,14 +52,14 @@ This is a public entry function
 ##### Implementation
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="m.md#a_TestViz_this_is_a_public_script_fun">this_is_a_public_script_fun</a>() {}
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="m.md#a_TestViz_this_is_a_public_script_fun">this_is_a_public_script_fun</a>() {}
 </code></pre>
 
 
 
 <a name="a_TestViz_this_is_a_private_fun"></a>
 
-## Function `a::TestViz::this_is_a_private_fun`
+## Function `this_is_a_private_fun`
 
 This is a private function
 

@@ -1,5 +1,5 @@
 ---
-title: Module `0x2::prover`
+title: Module `sui::prover`
 ---
 
 

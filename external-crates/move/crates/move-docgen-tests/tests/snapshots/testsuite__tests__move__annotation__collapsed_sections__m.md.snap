@@ -10,8 +10,8 @@ This is a doc comment above an annotation.
 
 
 -  [Constants](#@Constants_0)
--  [Function `a::m::test`](#a_m_test)
--  [Function `a::m::test1`](#a_m_test1)
+-  [Function `test`](#a_m_test)
+-  [Function `test1`](#a_m_test1)
 
 
 <pre><code></code></pre>
@@ -29,7 +29,7 @@ This is the top doc comment
 This is the middle doc comment
 
 
-<pre><code><b>const</b> <a href="m.md#a_m_Cool">Cool</a>: u32&lt;&gt; = 0;
+<pre><code><b>const</b> <a href="m.md#a_m_Cool">Cool</a>: u32 = 0;
 </code></pre>
 
 
@@ -39,7 +39,7 @@ This is the middle doc comment
 This is a doc comment on a constant with an annotation. Below the annotation.
 
 
-<pre><code><b>const</b> <a href="m.md#a_m_Error">Error</a>: u32&lt;&gt; = 0;
+<pre><code><b>const</b> <a href="m.md#a_m_Error">Error</a>: u32 = 0;
 </code></pre>
 
 
@@ -49,7 +49,7 @@ This is a doc comment on a constant with an annotation. Below the annotation.
 This is a doc comment on a constant with an annotation. Above the annotation.
 
 
-<pre><code><b>const</b> <a href="m.md#a_m_OtherError">OtherError</a>: u32&lt;&gt; = 0;
+<pre><code><b>const</b> <a href="m.md#a_m_OtherError">OtherError</a>: u32 = 0;
 </code></pre>
 
 
@@ -61,14 +61,14 @@ This is the middle doc comment
 This is the bottom doc comment
 
 
-<pre><code><b>const</b> <a href="m.md#a_m_Woah">Woah</a>: u32&lt;&gt; = 0;
+<pre><code><b>const</b> <a href="m.md#a_m_Woah">Woah</a>: u32 = 0;
 </code></pre>
 
 
 
 <a name="a_m_test"></a>
 
-## Function `a::m::test`
+## Function `test`
 
 This is a doc comment above a function with an annotation. Above the annotation.
 
@@ -88,7 +88,7 @@ This is a doc comment above a function with an annotation. Above the annotation.
 
 <a name="a_m_test1"></a>
 
-## Function `a::m::test1`
+## Function `test1`
 
 This is a doc comment above a function with an annotation. Below the annotation.
 

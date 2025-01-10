@@ -8,7 +8,7 @@ expression: contents
 
 
 
--  [Function `a::m::main`](#a_m_main)
+-  [Function `main`](#a_m_main)
     -  [Explanation of the algorithm](#@Explanation_of_the_algorithm_0)
 
 
@@ -18,7 +18,7 @@ expression: contents
 
 <a name="a_m_main"></a>
 
-## Function `a::m::main`
+## Function `main`
 
 
 <a name="@Explanation_of_the_algorithm_0"></a>
@@ -31,7 +31,7 @@ code block
 then <code>inline code</code>
 
 
-<pre><code>entry <b>fun</b> <a href="m.md#a_m_main">main</a>()
+<pre><code><b>entry</b> <b>fun</b> <a href="m.md#a_m_main">main</a>()
 </code></pre>
 
 
@@ -40,7 +40,7 @@ then <code>inline code</code>
 <summary>Implementation</summary>
 
 
-<pre><code>entry <b>fun</b> <a href="m.md#a_m_main">main</a>() { }
+<pre><code><b>entry</b> <b>fun</b> <a href="m.md#a_m_main">main</a>() { }
 </code></pre>
 
 

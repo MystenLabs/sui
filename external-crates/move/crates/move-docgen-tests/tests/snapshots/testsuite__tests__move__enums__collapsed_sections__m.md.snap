@@ -19,7 +19,7 @@ This is a doc comment above an annotation.
 -  [Struct `Entry`](#a_m_Entry)
 -  [Enum `Enum`](#a_m_Enum)
 -  [Enum `GenericEnum`](#a_m_GenericEnum)
--  [Function `a::m::f`](#a_m_f)
+-  [Function `f`](#a_m_f)
 
 
 <pre><code></code></pre>
@@ -42,7 +42,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>x: a::m::Enum&lt;&gt;</code>
+<code>x: <a href="m.md#a_m_Enum">a::m::Enum</a></code>
 </dt>
 <dd>
 </dd>
@@ -65,7 +65,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>0: a::m::Enum&lt;&gt;</code>
+<code>0: <a href="m.md#a_m_Enum">a::m::Enum</a></code>
 </dt>
 <dd>
 </dd>
@@ -88,7 +88,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>x: a::m::GenericEnum&lt;a::m::Enum&lt;&gt;&gt;</code>
+<code>x: <a href="m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;<a href="m.md#a_m_Enum">a::m::Enum</a>&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -111,7 +111,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>0: a::m::GenericEnum&lt;a::m::Enum&lt;&gt;&gt;</code>
+<code>0: <a href="m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;<a href="m.md#a_m_Enum">a::m::Enum</a>&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -134,7 +134,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>x: a::m::GenericEnum&lt;T&gt;</code>
+<code>x: <a href="m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;T&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -157,7 +157,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>0: a::m::GenericEnum&lt;T&gt;</code>
+<code>0: <a href="m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;T&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -180,7 +180,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>contents: vector&lt;a::m::Entry&lt;K, V&gt;&gt;</code>
+<code>contents: vector&lt;<a href="m.md#a_m_Entry">a::m::Entry</a>&lt;K, V&gt;&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -223,7 +223,7 @@ An entry in the map
 This is a doc comment above an enum
 
 
-<pre><code><b>public</b> enum <a href="m.md#a_m_Enum">Enum</a> <b>has</b> drop
+<pre><code><b>public</b> <b>enum</b> <a href="m.md#a_m_Enum">Enum</a> <b>has</b> drop
 </code></pre>
 
 
@@ -251,7 +251,7 @@ Variant <code>C</code>
 
 <dl>
 <dt>
-<code>0: u64&lt;&gt;</code>
+<code>0: u64</code>
 </dt>
 <dd>
 </dd>
@@ -266,7 +266,7 @@ Variant <code>D</code>
 
 <dl>
 <dt>
-<code>x: u64&lt;&gt;</code>
+<code>x: u64</code>
 </dt>
 <dd>
  Doc text on variant field
@@ -281,7 +281,7 @@ Variant <code>E</code>
 
 <dl>
 <dt>
-<code>x: u64&lt;&gt;</code>
+<code>x: u64</code>
 </dt>
 <dd>
 </dd>
@@ -290,7 +290,7 @@ Variant <code>E</code>
 
 <dl>
 <dt>
-<code>y: u64&lt;&gt;</code>
+<code>y: u64</code>
 </dt>
 <dd>
 </dd>
@@ -305,7 +305,7 @@ Variant <code>E</code>
 
 
 
-<pre><code><b>public</b> enum <a href="m.md#a_m_GenericEnum">GenericEnum</a>&lt;T&gt;
+<pre><code><b>public</b> <b>enum</b> <a href="m.md#a_m_GenericEnum">GenericEnum</a>&lt;T&gt;
 </code></pre>
 
 
@@ -338,12 +338,12 @@ Variant <code>B</code>
 
 <a name="a_m_f"></a>
 
-## Function `a::m::f`
+## Function `f`
 
 Doc comments <code>type_: <a href="m.md#a_m_VecMap">VecMap</a>&lt;u64, <a href="m.md#a_m_X">X</a>&gt;</code>
 
 
-<pre><code><b>fun</b> <a href="m.md#a_m_f">f</a>(x: a::m::VecMap&lt;u64&lt;&gt;, a::m::X&lt;&gt;&gt;): u64&lt;&gt;
+<pre><code><b>fun</b> <a href="m.md#a_m_f">f</a>(x: <a href="m.md#a_m_VecMap">a::m::VecMap</a>&lt;u64, <a href="m.md#a_m_X">a::m::X</a>&gt;): u64
 </code></pre>
 
 
