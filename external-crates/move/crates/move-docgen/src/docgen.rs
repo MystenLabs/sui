@@ -1093,7 +1093,7 @@ impl<'env> Docgen<'env> {
         let full_name = format!("{}::{}", module_env.ident(), name);
         let func_info = func_env.info();
         self.section_header(
-            &format!("Function `{full_name}`"),
+            &format!("Function `{name}`"),
             &self.label_for_module_item(module_env, name),
         );
         self.increment_section_nest();

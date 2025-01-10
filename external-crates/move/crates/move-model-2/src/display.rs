@@ -20,6 +20,7 @@ impl fmt::Display for Type<'_> {
             N::Type_::Param(tp) => write!(f, "{}", tp.user_specified_name),
             N::Type_::Apply(_, sp!(_, tn), targs) => match tn {
                 N::TypeName_::Multiple(_) => {
+                    debug_assert!(targs.len() > 1);
                     write!(f, "(")?;
                     for (i, t) in targs.iter().enumerate() {
                         if i > 0 {
@@ -31,14 +32,17 @@ impl fmt::Display for Type<'_> {
                 }
                 N::TypeName_::ModuleType(_, _) | N::TypeName_::Builtin(_) => {
                     write!(f, "{tn}")?;
-                    write!(f, "<")?;
-                    for (i, t) in targs.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
+                    if !targs.is_empty() {
+                        write!(f, "<")?;
+                        for (i, t) in targs.iter().enumerate() {
+                            if i > 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(f, "{}", type_(t))?;
                         }
-                        write!(f, "{}", type_(t))?;
+                        write!(f, ">")?;
                     }
-                    write!(f, ">")
+                    Ok(())
                 }
             },
             N::Type_::Fun(targs, tret) => {
