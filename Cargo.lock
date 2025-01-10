@@ -8028,6 +8028,7 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
+ "move-package",
  "move-stdlib-natives",
  "move-vm-runtime",
  "sha2 0.9.9",

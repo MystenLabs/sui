@@ -595,10 +595,11 @@ impl<'env> Docgen<'env> {
         let funs = module_env
             .functions()
             .filter(|f| {
-                f.compiled().is_some() && !self.options.flags.exclude_private_fun || {
-                    let info = f.info();
-                    info.entry.is_some() || matches!(info.visibility, Visibility::Public(_))
-                }
+                f.compiled().is_some()
+                    && (!self.options.flags.exclude_private_fun || {
+                        let info = f.info();
+                        info.entry.is_some() || matches!(info.visibility, Visibility::Public(_))
+                    })
             })
             .sorted_by_key(|f| f.compiled().unwrap().def_idx)
             .collect_vec();
