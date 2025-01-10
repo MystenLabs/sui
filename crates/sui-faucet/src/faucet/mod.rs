@@ -126,7 +126,7 @@ pub struct FaucetConfig {
     #[clap(long, action = clap::ArgAction::Set, default_value_t = false)]
     pub batch_enabled: bool,
 
-    /// Testnet faucet requires authentication via the Web UI at https://faucet.testnet.sui.io
+    /// Testnet faucet requires authentication via the Web UI at <https://faucet.sui.io>
     /// This flag is used to indicate that the faucet is running on testnet and enables the
     /// authentication check.
     #[clap(long)]
