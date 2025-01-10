@@ -106,8 +106,10 @@ Let's break down the specification:
 1. We specify the conditions which must hold on the arguments of the function. The number of shares to withdraw must be less than or equal to the total number of shares in the pool:
 
    ```
-   shares_in.value() <= pool.shares.supply_value()
+   requires(shares_in.value() <= pool.shares.supply_value());
    ```
+
+   `requires` is a spec-only keyword that specifies a condition which is assumed to hold on the arguments of the function.
 
 2. We save the old state of the pool in `old_pool`:
 
