@@ -5,7 +5,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum FaucetError {
-    #[error("For testnet tokens, please use the Web UI: https://faucet.testnet.sui.io")]
+    #[error("For testnet tokens, please use the Web UI: https://faucet.sui.io")]
     NoToken,
 
     #[error("Request limit exceeded. {0}")]
