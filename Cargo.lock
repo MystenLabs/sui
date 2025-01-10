@@ -7710,6 +7710,7 @@ dependencies = [
  "colored",
  "difference",
  "move-binary-format",
+ "move-bytecode-source-map",
  "move-bytecode-utils",
  "move-bytecode-verifier",
  "move-bytecode-viewer",
@@ -7724,6 +7725,7 @@ dependencies = [
  "move-prover",
  "move-stdlib",
  "move-stdlib-natives",
+ "move-symbol-pool",
  "move-unit-test",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -7849,6 +7851,7 @@ dependencies = [
  "move-core-types",
  "move-coverage",
  "move-ir-types",
+ "move-symbol-pool",
 ]
 
 [[package]]
@@ -7963,6 +7966,7 @@ dependencies = [
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
+ "move-disassembler",
  "move-docgen",
  "move-model",
  "move-symbol-pool",
@@ -14447,6 +14451,7 @@ dependencies = [
  "jemalloc-ctl",
  "jsonrpsee",
  "move-binary-format",
+ "move-bytecode-source-map",
  "move-cli",
  "move-compiler",
  "move-disassembler",
