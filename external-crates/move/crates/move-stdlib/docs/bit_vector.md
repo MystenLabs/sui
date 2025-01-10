@@ -101,7 +101,7 @@ The maximum allowed bitvector size
 
 
 
-<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_new">new</a>(<a href="bit_vector.md#std_bit_vector_length">length</a>: <a href="u64.md#std_u64">u64</a>): std::bit_vector::BitVector
+<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_new">new</a>(<a href="bit_vector.md#std_bit_vector_length">length</a>: <a href="u64.md#std_u64">u64</a>): <a href="bit_vector.md#std_bit_vector_BitVector">std::bit_vector::BitVector</a>
 </code></pre>
 
 
@@ -137,7 +137,7 @@ The maximum allowed bitvector size
 Set the bit at <code>bit_index</code> in the <code>bitvector</code> regardless of its previous state.
 
 
-<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_set">set</a>(bitvector: &<b>mut</b> std::bit_vector::BitVector, bit_index: <a href="u64.md#std_u64">u64</a>)
+<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_set">set</a>(bitvector: &<b>mut</b> <a href="bit_vector.md#std_bit_vector_BitVector">std::bit_vector::BitVector</a>, bit_index: <a href="u64.md#std_u64">u64</a>)
 </code></pre>
 
 
@@ -164,7 +164,7 @@ Set the bit at <code>bit_index</code> in the <code>bitvector</code> regardless o
 Unset the bit at <code>bit_index</code> in the <code>bitvector</code> regardless of its previous state.
 
 
-<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_unset">unset</a>(bitvector: &<b>mut</b> std::bit_vector::BitVector, bit_index: <a href="u64.md#std_u64">u64</a>)
+<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_unset">unset</a>(bitvector: &<b>mut</b> <a href="bit_vector.md#std_bit_vector_BitVector">std::bit_vector::BitVector</a>, bit_index: <a href="u64.md#std_u64">u64</a>)
 </code></pre>
 
 
@@ -192,7 +192,7 @@ Shift the <code>bitvector</code> left by <code>amount</code>. If <code>amount</c
 bitvector's length the bitvector will be zeroed out.
 
 
-<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_shift_left">shift_left</a>(bitvector: &<b>mut</b> std::bit_vector::BitVector, amount: <a href="u64.md#std_u64">u64</a>)
+<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_shift_left">shift_left</a>(bitvector: &<b>mut</b> <a href="bit_vector.md#std_bit_vector_BitVector">std::bit_vector::BitVector</a>, amount: <a href="u64.md#std_u64">u64</a>)
 </code></pre>
 
 
@@ -238,7 +238,7 @@ Return the value of the bit at <code>bit_index</code> in the <code>bitvector</co
 represents "1" and <code><b>false</b></code> represents a 0
 
 
-<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_is_index_set">is_index_set</a>(bitvector: &std::bit_vector::BitVector, bit_index: <a href="u64.md#std_u64">u64</a>): bool
+<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_is_index_set">is_index_set</a>(bitvector: &<a href="bit_vector.md#std_bit_vector_BitVector">std::bit_vector::BitVector</a>, bit_index: <a href="u64.md#std_u64">u64</a>): bool
 </code></pre>
 
 
@@ -264,7 +264,7 @@ represents "1" and <code><b>false</b></code> represents a 0
 Return the length (number of usable bits) of this bitvector
 
 
-<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_length">length</a>(bitvector: &std::bit_vector::BitVector): <a href="u64.md#std_u64">u64</a>
+<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_length">length</a>(bitvector: &<a href="bit_vector.md#std_bit_vector_BitVector">std::bit_vector::BitVector</a>): <a href="u64.md#std_u64">u64</a>
 </code></pre>
 
 
@@ -291,7 +291,7 @@ including) <code>start_index</code> in the <code>bitvector</code>. If there is n
 sequence, then <code>0</code> is returned.
 
 
-<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_longest_set_sequence_starting_at">longest_set_sequence_starting_at</a>(bitvector: &std::bit_vector::BitVector, start_index: <a href="u64.md#std_u64">u64</a>): <a href="u64.md#std_u64">u64</a>
+<pre><code>publicfun <a href="bit_vector.md#std_bit_vector_longest_set_sequence_starting_at">longest_set_sequence_starting_at</a>(bitvector: &<a href="bit_vector.md#std_bit_vector_BitVector">std::bit_vector::BitVector</a>, start_index: <a href="u64.md#std_u64">u64</a>): <a href="u64.md#std_u64">u64</a>
 </code></pre>
 
 

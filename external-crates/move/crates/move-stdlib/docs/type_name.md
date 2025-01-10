@@ -17,10 +17,10 @@ Functionality for converting Move types into values. Use with care!
 -  [Function `into_string`](#std_type_name_into_string)
 
 
-<pre><code><b>use</b> std::address;
-<b>use</b> std::ascii;
-<b>use</b> std::option;
-<b>use</b> std::vector;
+<pre><code><b>use</b> <a href="address.md#std_address">std::address</a>;
+<b>use</b> <a href="ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="option.md#std_option">std::option</a>;
+<b>use</b> <a href="vector.md#std_vector">std::vector</a>;
 </code></pre>
 
 
@@ -42,7 +42,7 @@ Functionality for converting Move types into values. Use with care!
 
 <dl>
 <dt>
-<code>name: std::ascii::String</code>
+<code>name: <a href="ascii.md#std_ascii_String">std::ascii::String</a></code>
 </dt>
 <dd>
  String representation of the type. All types are represented
@@ -153,7 +153,7 @@ this function are defining IDs (the ID of the package in
 storage that first introduced the type).
 
 
-<pre><code>publicfun getT(): std::type_name::TypeName
+<pre><code>publicfun getT(): <a href="type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
 </code></pre>
 
 
@@ -180,7 +180,7 @@ the package, even if the type in question was introduced in a
 later upgrade).
 
 
-<pre><code>publicfun get_with_original_idsT(): std::type_name::TypeName
+<pre><code>publicfun get_with_original_idsT(): <a href="type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
 </code></pre>
 
 
@@ -204,7 +204,7 @@ Returns true iff the TypeName represents a primitive type, i.e. one of
 u8, u16, u32, u64, u128, u256, bool, address, vector.
 
 
-<pre><code>publicfun <a href="type_name.md#std_type_name_is_primitive">is_primitive</a>(self: &std::type_name::TypeName): bool
+<pre><code>publicfun <a href="type_name.md#std_type_name_is_primitive">is_primitive</a>(self: &<a href="type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): bool
 </code></pre>
 
 
@@ -246,7 +246,7 @@ u8, u16, u32, u64, u128, u256, bool, address, vector.
 Get the String representation of <code>self</code>
 
 
-<pre><code>publicfun <a href="type_name.md#std_type_name_borrow_string">borrow_string</a>(self: &std::type_name::TypeName): &std::ascii::String
+<pre><code>publicfun <a href="type_name.md#std_type_name_borrow_string">borrow_string</a>(self: &<a href="type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): &<a href="ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 
@@ -272,7 +272,7 @@ Get Address string (Base16 encoded), first part of the TypeName.
 Aborts if given a primitive type.
 
 
-<pre><code>publicfun <a href="type_name.md#std_type_name_get_address">get_address</a>(self: &std::type_name::TypeName): std::ascii::String
+<pre><code>publicfun <a href="type_name.md#std_type_name_get_address">get_address</a>(self: &<a href="type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): <a href="ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 
@@ -288,7 +288,7 @@ Aborts if given a primitive type.
     <b>let</b> str_bytes = self.name.as_bytes();
     <b>let</b> <b>mut</b> addr_bytes = <a href="vector.md#std_vector">vector</a>[];
     <b>let</b> <b>mut</b> i = 0;
-    // Read `len` bytes from the type name and push them <b>to</b> addr_bytes.
+    // Read `len` bytes from the type name and push them to addr_bytes.
     <b>while</b> (i &lt; len) {
         addr_bytes.push_back(str_bytes[i]);
         i = i + 1;
@@ -309,7 +309,7 @@ Get name of the module.
 Aborts if given a primitive type.
 
 
-<pre><code>publicfun <a href="type_name.md#std_type_name_get_module">get_module</a>(self: &std::type_name::TypeName): std::ascii::String
+<pre><code>publicfun <a href="type_name.md#std_type_name_get_module">get_module</a>(self: &<a href="type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): <a href="ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 
@@ -349,7 +349,7 @@ Aborts if given a primitive type.
 Convert <code>self</code> into its inner String
 
 
-<pre><code>publicfun <a href="type_name.md#std_type_name_into_string">into_string</a>(self: std::type_name::TypeName): std::ascii::String
+<pre><code>publicfun <a href="type_name.md#std_type_name_into_string">into_string</a>(self: <a href="type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): <a href="ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 

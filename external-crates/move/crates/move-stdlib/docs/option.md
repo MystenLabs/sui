@@ -27,7 +27,7 @@ This module defines the Option type and its methods to represent and handle an o
 -  [Function `to_vec`](#std_option_to_vec)
 
 
-<pre><code><b>use</b> std::vector;
+<pre><code><b>use</b> <a href="vector.md#std_vector">std::vector</a>;
 </code></pre>
 
 
@@ -94,7 +94,7 @@ The <code><a href="option.md#std_option_Option">Option</a></code> is <code>None<
 Return an empty <code><a href="option.md#std_option_Option">Option</a></code>
 
 
-<pre><code>publicfun noneElement(): std::option::Option&lt;Element&gt;
+<pre><code>publicfun noneElement(): <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;
 </code></pre>
 
 
@@ -119,7 +119,7 @@ Return an empty <code><a href="option.md#std_option_Option">Option</a></code>
 Return an <code><a href="option.md#std_option_Option">Option</a></code> containing <code>e</code>
 
 
-<pre><code>publicfun someElement(e: Element): std::option::Option&lt;Element&gt;
+<pre><code>publicfun someElement(e: Element): <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;
 </code></pre>
 
 
@@ -144,7 +144,7 @@ Return an <code><a href="option.md#std_option_Option">Option</a></code> containi
 Return true if <code>t</code> does not hold a value
 
 
-<pre><code>publicfun is_noneElement(t: &std::option::Option&lt;Element&gt;): bool
+<pre><code>publicfun is_noneElement(t: &<a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;): bool
 </code></pre>
 
 
@@ -169,7 +169,7 @@ Return true if <code>t</code> does not hold a value
 Return true if <code>t</code> holds a value
 
 
-<pre><code>publicfun is_someElement(t: &std::option::Option&lt;Element&gt;): bool
+<pre><code>publicfun is_someElement(t: &<a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;): bool
 </code></pre>
 
 
@@ -195,7 +195,7 @@ Return true if the value in <code>t</code> is equal to <code>e_ref</code>
 Always returns <code><b>false</b></code> if <code>t</code> does not hold a value
 
 
-<pre><code>publicfun containsElement(t: &std::option::Option&lt;Element&gt;, e_ref: &Element): bool
+<pre><code>publicfun containsElement(t: &<a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;, e_ref: &Element): bool
 </code></pre>
 
 
@@ -221,7 +221,7 @@ Return an immutable reference to the value inside <code>t</code>
 Aborts if <code>t</code> does not hold a value
 
 
-<pre><code>publicfun borrowElement(t: &std::option::Option&lt;Element&gt;): &Element
+<pre><code>publicfun borrowElement(t: &<a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;): &Element
 </code></pre>
 
 
@@ -248,7 +248,7 @@ Return a reference to the value inside <code>t</code> if it holds one
 Return <code>default_ref</code> if <code>t</code> does not hold a value
 
 
-<pre><code>publicfun borrow_with_defaultElement(t: &std::option::Option&lt;Element&gt;, default_ref: &Element): &Element
+<pre><code>publicfun borrow_with_defaultElement(t: &<a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;, default_ref: &Element): &Element
 </code></pre>
 
 
@@ -276,7 +276,7 @@ Return the value inside <code>t</code> if it holds one
 Return <code>default</code> if <code>t</code> does not hold a value
 
 
-<pre><code>publicfun get_with_defaultElement(t: &std::option::Option&lt;Element&gt;, default: Element): Element
+<pre><code>publicfun get_with_defaultElement(t: &<a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;, default: Element): Element
 </code></pre>
 
 
@@ -307,7 +307,7 @@ Convert the none option <code>t</code> to a some option by adding <code>e</code>
 Aborts if <code>t</code> already holds a value
 
 
-<pre><code>publicfun fillElement(t: &<b>mut</b> std::option::Option&lt;Element&gt;, e: Element)
+<pre><code>publicfun fillElement(t: &<b>mut</b> <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;, e: Element)
 </code></pre>
 
 
@@ -335,7 +335,7 @@ Convert a <code><a href="option.md#std_option_some">some</a></code> option to a 
 Aborts if <code>t</code> does not hold a value
 
 
-<pre><code>publicfun extractElement(t: &<b>mut</b> std::option::Option&lt;Element&gt;): Element
+<pre><code>publicfun extractElement(t: &<b>mut</b> <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;): Element
 </code></pre>
 
 
@@ -362,7 +362,7 @@ Return a mutable reference to the value inside <code>t</code>
 Aborts if <code>t</code> does not hold a value
 
 
-<pre><code>publicfun borrow_mutElement(t: &<b>mut</b> std::option::Option&lt;Element&gt;): &<b>mut</b> Element
+<pre><code>publicfun borrow_mutElement(t: &<b>mut</b> <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;): &<b>mut</b> Element
 </code></pre>
 
 
@@ -389,7 +389,7 @@ Swap the old value inside <code>t</code> with <code>e</code> and return the old 
 Aborts if <code>t</code> does not hold a value
 
 
-<pre><code>publicfun swapElement(t: &<b>mut</b> std::option::Option&lt;Element&gt;, e: Element): Element
+<pre><code>publicfun swapElement(t: &<b>mut</b> <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;, e: Element): Element
 </code></pre>
 
 
@@ -420,7 +420,7 @@ or if there is no old value, fill it with <code>e</code>.
 Different from swap(), swap_or_fill() allows for <code>t</code> not holding a value.
 
 
-<pre><code>publicfun swap_or_fillElement(t: &<b>mut</b> std::option::Option&lt;Element&gt;, e: Element): std::option::Option&lt;Element&gt;
+<pre><code>publicfun swap_or_fillElement(t: &<b>mut</b> <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;, e: Element): <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;
 </code></pre>
 
 
@@ -449,7 +449,7 @@ Different from swap(), swap_or_fill() allows for <code>t</code> not holding a va
 Destroys <code>t.</code> If <code>t</code> holds a value, return it. Returns <code>default</code> otherwise
 
 
-<pre><code>publicfun destroy_with_defaultElement(t: std::option::Option&lt;Element&gt;, default: Element): Element
+<pre><code>publicfun destroy_with_defaultElement(t: <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;, default: Element): Element
 </code></pre>
 
 
@@ -477,7 +477,7 @@ Unpack <code>t</code> and return its contents
 Aborts if <code>t</code> does not hold a value
 
 
-<pre><code>publicfun destroy_someElement(t: std::option::Option&lt;Element&gt;): Element
+<pre><code>publicfun destroy_someElement(t: <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;): Element
 </code></pre>
 
 
@@ -507,7 +507,7 @@ Unpack <code>t</code>
 Aborts if <code>t</code> holds a value
 
 
-<pre><code>publicfun destroy_noneElement(t: std::option::Option&lt;Element&gt;)
+<pre><code>publicfun destroy_noneElement(t: <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;)
 </code></pre>
 
 
@@ -535,7 +535,7 @@ Convert <code>t</code> into a vector of length 1 if it is <code>Some</code>,
 and an empty vector otherwise
 
 
-<pre><code>publicfun to_vecElement(t: std::option::Option&lt;Element&gt;): <a href="vector.md#std_vector">vector</a>&lt;Element&gt;
+<pre><code>publicfun to_vecElement(t: <a href="option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;): <a href="vector.md#std_vector">vector</a>&lt;Element&gt;
 </code></pre>
 
 

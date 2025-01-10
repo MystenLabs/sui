@@ -30,9 +30,9 @@ strings.
 -  [Function `sub_string`](#std_string_sub_string)
 
 
-<pre><code><b>use</b> std::ascii;
-<b>use</b> std::option;
-<b>use</b> std::vector;
+<pre><code><b>use</b> <a href="ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="option.md#std_option">std::option</a>;
+<b>use</b> <a href="vector.md#std_vector">std::vector</a>;
 </code></pre>
 
 
@@ -98,7 +98,7 @@ Creates a new string from a sequence of bytes. Aborts if the bytes do
 not represent valid utf8.
 
 
-<pre><code>publicfun <a href="string.md#std_string_utf8">utf8</a>(<a href="string.md#std_string_bytes">bytes</a>: <a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;): std::string::String
+<pre><code>publicfun <a href="string.md#std_string_utf8">utf8</a>(<a href="string.md#std_string_bytes">bytes</a>: <a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;): <a href="string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -124,7 +124,7 @@ not represent valid utf8.
 Convert an ASCII string to a UTF8 string
 
 
-<pre><code>publicfun <a href="string.md#std_string_from_ascii">from_ascii</a>(s: std::ascii::String): std::string::String
+<pre><code>publicfun <a href="string.md#std_string_from_ascii">from_ascii</a>(s: <a href="ascii.md#std_ascii_String">std::ascii::String</a>): <a href="string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -150,7 +150,7 @@ Convert an UTF8 string to an ASCII string.
 Aborts if <code>s</code> is not valid ASCII
 
 
-<pre><code>publicfun <a href="string.md#std_string_to_ascii">to_ascii</a>(s: std::string::String): std::ascii::String
+<pre><code>publicfun <a href="string.md#std_string_to_ascii">to_ascii</a>(s: <a href="string.md#std_string_String">std::string::String</a>): <a href="ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 
@@ -176,7 +176,7 @@ Aborts if <code>s</code> is not valid ASCII
 Tries to create a new string from a sequence of bytes.
 
 
-<pre><code>publicfun <a href="string.md#std_string_try_utf8">try_utf8</a>(<a href="string.md#std_string_bytes">bytes</a>: <a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;): std::option::Option&lt;std::string::String&gt;
+<pre><code>publicfun <a href="string.md#std_string_try_utf8">try_utf8</a>(<a href="string.md#std_string_bytes">bytes</a>: <a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;): <a href="option.md#std_option_Option">std::option::Option</a>&lt;<a href="string.md#std_string_String">std::string::String</a>&gt;
 </code></pre>
 
 
@@ -202,7 +202,7 @@ Tries to create a new string from a sequence of bytes.
 Returns a reference to the underlying byte vector.
 
 
-<pre><code>publicfun <a href="string.md#std_string_as_bytes">as_bytes</a>(s: &std::string::String): &<a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;
+<pre><code>publicfun <a href="string.md#std_string_as_bytes">as_bytes</a>(s: &<a href="string.md#std_string_String">std::string::String</a>): &<a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;
 </code></pre>
 
 
@@ -227,7 +227,7 @@ Returns a reference to the underlying byte vector.
 Unpack the <code><a href="string.md#std_string">string</a></code> to get its underlying bytes.
 
 
-<pre><code>publicfun <a href="string.md#std_string_into_bytes">into_bytes</a>(s: std::string::String): <a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;
+<pre><code>publicfun <a href="string.md#std_string_into_bytes">into_bytes</a>(s: <a href="string.md#std_string_String">std::string::String</a>): <a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;
 </code></pre>
 
 
@@ -253,7 +253,7 @@ Unpack the <code><a href="string.md#std_string">string</a></code> to get its und
 Checks whether this string is empty.
 
 
-<pre><code>publicfun <a href="string.md#std_string_is_empty">is_empty</a>(s: &std::string::String): bool
+<pre><code>publicfun <a href="string.md#std_string_is_empty">is_empty</a>(s: &<a href="string.md#std_string_String">std::string::String</a>): bool
 </code></pre>
 
 
@@ -278,7 +278,7 @@ Checks whether this string is empty.
 Returns the length of this string, in bytes.
 
 
-<pre><code>publicfun <a href="string.md#std_string_length">length</a>(s: &std::string::String): <a href="u64.md#std_u64">u64</a>
+<pre><code>publicfun <a href="string.md#std_string_length">length</a>(s: &<a href="string.md#std_string_String">std::string::String</a>): <a href="u64.md#std_u64">u64</a>
 </code></pre>
 
 
@@ -303,7 +303,7 @@ Returns the length of this string, in bytes.
 Appends a string.
 
 
-<pre><code>publicfun <a href="string.md#std_string_append">append</a>(s: &<b>mut</b> std::string::String, r: std::string::String)
+<pre><code>publicfun <a href="string.md#std_string_append">append</a>(s: &<b>mut</b> <a href="string.md#std_string_String">std::string::String</a>, r: <a href="string.md#std_string_String">std::string::String</a>)
 </code></pre>
 
 
@@ -328,7 +328,7 @@ Appends a string.
 Appends bytes which must be in valid utf8 format.
 
 
-<pre><code>publicfun <a href="string.md#std_string_append_utf8">append_utf8</a>(s: &<b>mut</b> std::string::String, <a href="string.md#std_string_bytes">bytes</a>: <a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;)
+<pre><code>publicfun <a href="string.md#std_string_append_utf8">append_utf8</a>(s: &<b>mut</b> <a href="string.md#std_string_String">std::string::String</a>, <a href="string.md#std_string_bytes">bytes</a>: <a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;)
 </code></pre>
 
 
@@ -354,7 +354,7 @@ Insert the other string at the byte index in given string. The index
 must be at a valid utf8 char boundary.
 
 
-<pre><code>publicfun <a href="string.md#std_string_insert">insert</a>(s: &<b>mut</b> std::string::String, at: <a href="u64.md#std_u64">u64</a>, o: std::string::String)
+<pre><code>publicfun <a href="string.md#std_string_insert">insert</a>(s: &<b>mut</b> <a href="string.md#std_string_String">std::string::String</a>, at: <a href="u64.md#std_u64">u64</a>, o: <a href="string.md#std_string_String">std::string::String</a>)
 </code></pre>
 
 
@@ -392,7 +392,7 @@ length of the string). The indices must be at valid utf8 char boundaries,
 guaranteeing that the result is valid utf8.
 
 
-<pre><code>publicfun <a href="string.md#std_string_substring">substring</a>(s: &std::string::String, i: <a href="u64.md#std_u64">u64</a>, j: <a href="u64.md#std_u64">u64</a>): std::string::String
+<pre><code>publicfun <a href="string.md#std_string_substring">substring</a>(s: &<a href="string.md#std_string_String">std::string::String</a>, i: <a href="u64.md#std_u64">u64</a>, j: <a href="u64.md#std_u64">u64</a>): <a href="string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -427,7 +427,7 @@ Computes the index of the first occurrence of a string. Returns <code>s.<a href=
 if no occurrence found.
 
 
-<pre><code>publicfun <a href="string.md#std_string_index_of">index_of</a>(s: &std::string::String, r: &std::string::String): <a href="u64.md#std_u64">u64</a>
+<pre><code>publicfun <a href="string.md#std_string_index_of">index_of</a>(s: &<a href="string.md#std_string_String">std::string::String</a>, r: &<a href="string.md#std_string_String">std::string::String</a>): <a href="u64.md#std_u64">u64</a>
 </code></pre>
 
 
@@ -539,7 +539,7 @@ if no occurrence found.
 
 
 
-<pre><code>publicfun <a href="string.md#std_string_bytes">bytes</a>(s: &std::string::String): &<a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;
+<pre><code>publicfun <a href="string.md#std_string_bytes">bytes</a>(s: &<a href="string.md#std_string_String">std::string::String</a>): &<a href="vector.md#std_vector">vector</a>&lt;<a href="u8.md#std_u8">u8</a>&gt;
 </code></pre>
 
 
@@ -561,7 +561,7 @@ if no occurrence found.
 
 
 
-<pre><code>publicfun <a href="string.md#std_string_sub_string">sub_string</a>(s: &std::string::String, i: <a href="u64.md#std_u64">u64</a>, j: <a href="u64.md#std_u64">u64</a>): std::string::String
+<pre><code>publicfun <a href="string.md#std_string_sub_string">sub_string</a>(s: &<a href="string.md#std_string_String">std::string::String</a>, i: <a href="u64.md#std_u64">u64</a>, j: <a href="u64.md#std_u64">u64</a>): <a href="string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
