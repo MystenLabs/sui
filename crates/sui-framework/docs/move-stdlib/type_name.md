@@ -16,7 +16,8 @@ Functionality for converting Move types into values. Use with care!
 -  [Function `into_string`](#0x1_type_name_into_string)
 
 
-<pre><code><b>use</b> <a href="../move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
+<pre><code><b>use</b> <a href="address.md#0x1_address">0x1::address</a>;
+<b>use</b> <a href="ascii.md#0x1_ascii">0x1::ascii</a>;
 </code></pre>
 
 
@@ -27,7 +28,7 @@ Functionality for converting Move types into values. Use with care!
 
 
 
-<pre><code><b>struct</b> <a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">TypeName</a> <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="type_name.md#0x1_type_name_TypeName">TypeName</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -38,7 +39,7 @@ Functionality for converting Move types into values. Use with care!
 
 <dl>
 <dt>
-<code>name: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a></code>
+<code>name: <a href="ascii.md#0x1_ascii_String">ascii::String</a></code>
 </dt>
 <dd>
  String representation of the type. All types are represented
@@ -46,7 +47,7 @@ Functionality for converting Move types into values. Use with care!
  "u8", "u64", "bool", "address", "vector", and so on for primitive types.
  Struct types are represented as fully qualified type names; e.g.
  <code>00000000000000000000000000000001::string::String</code> or
- <code>0000000000000000000000000000000a::module_name1::type_name1&lt;0000000000000000000000000000000a::module_name2::type_name2&lt;u64&gt;&gt;</code>
+ <code>0000000000000000000000000000000a::module_name1::type_name1&lt;0000000000000000000000000000000a::module_name2::type_name2&lt;<a href="u64.md#0x1_u64">u64</a>&gt;&gt;</code>
  Addresses are hex-encoded lowercase values of length ADDRESS_LENGTH (16, 20, or 32 depending on the Move platform)
 </dd>
 </dl>
@@ -64,7 +65,7 @@ Functionality for converting Move types into values. Use with care!
 ASCII Character code for the <code>c</code> (lowercase c) symbol.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_C">ASCII_C</a>: u8 = 99;
+<pre><code><b>const</b> <a href="type_name.md#0x1_type_name_ASCII_C">ASCII_C</a>: <a href="u8.md#0x1_u8">u8</a> = 99;
 </code></pre>
 
 
@@ -74,7 +75,7 @@ ASCII Character code for the <code>c</code> (lowercase c) symbol.
 ASCII Character code for the <code>:</code> (colon) symbol.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_COLON">ASCII_COLON</a>: u8 = 58;
+<pre><code><b>const</b> <a href="type_name.md#0x1_type_name_ASCII_COLON">ASCII_COLON</a>: <a href="u8.md#0x1_u8">u8</a> = 58;
 </code></pre>
 
 
@@ -84,7 +85,7 @@ ASCII Character code for the <code>:</code> (colon) symbol.
 ASCII Character code for the <code>e</code> (lowercase e) symbol.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_E">ASCII_E</a>: u8 = 101;
+<pre><code><b>const</b> <a href="type_name.md#0x1_type_name_ASCII_E">ASCII_E</a>: <a href="u8.md#0x1_u8">u8</a> = 101;
 </code></pre>
 
 
@@ -94,7 +95,7 @@ ASCII Character code for the <code>e</code> (lowercase e) symbol.
 ASCII Character code for the <code>o</code> (lowercase o) symbol.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_O">ASCII_O</a>: u8 = 111;
+<pre><code><b>const</b> <a href="type_name.md#0x1_type_name_ASCII_O">ASCII_O</a>: <a href="u8.md#0x1_u8">u8</a> = 111;
 </code></pre>
 
 
@@ -104,7 +105,7 @@ ASCII Character code for the <code>o</code> (lowercase o) symbol.
 ASCII Character code for the <code>r</code> (lowercase r) symbol.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_R">ASCII_R</a>: u8 = 114;
+<pre><code><b>const</b> <a href="type_name.md#0x1_type_name_ASCII_R">ASCII_R</a>: <a href="u8.md#0x1_u8">u8</a> = 114;
 </code></pre>
 
 
@@ -114,7 +115,7 @@ ASCII Character code for the <code>r</code> (lowercase r) symbol.
 ASCII Character code for the <code>t</code> (lowercase t) symbol.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_T">ASCII_T</a>: u8 = 116;
+<pre><code><b>const</b> <a href="type_name.md#0x1_type_name_ASCII_T">ASCII_T</a>: <a href="u8.md#0x1_u8">u8</a> = 116;
 </code></pre>
 
 
@@ -124,7 +125,7 @@ ASCII Character code for the <code>t</code> (lowercase t) symbol.
 ASCII Character code for the <code>v</code> (lowercase v) symbol.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_V">ASCII_V</a>: u8 = 118;
+<pre><code><b>const</b> <a href="type_name.md#0x1_type_name_ASCII_V">ASCII_V</a>: <a href="u8.md#0x1_u8">u8</a> = 118;
 </code></pre>
 
 
@@ -134,7 +135,7 @@ ASCII Character code for the <code>v</code> (lowercase v) symbol.
 The type is not from a package/module. It is a primitive type.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/type_name.md#0x1_type_name_ENonModuleType">ENonModuleType</a>: u64 = 0;
+<pre><code><b>const</b> <a href="type_name.md#0x1_type_name_ENonModuleType">ENonModuleType</a>: <a href="u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -149,7 +150,7 @@ this function are defining IDs (the ID of the package in
 storage that first introduced the type).
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_get">get</a>&lt;T&gt;(): <a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get">get</a>&lt;T&gt;(): <a href="type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>
 </code></pre>
 
 
@@ -158,7 +159,7 @@ storage that first introduced the type).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_get">get</a>&lt;T&gt;(): <a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">TypeName</a>;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get">get</a>&lt;T&gt;(): <a href="type_name.md#0x1_type_name_TypeName">TypeName</a>;
 </code></pre>
 
 
@@ -176,7 +177,7 @@ the package, even if the type in question was introduced in a
 later upgrade).
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">get_with_original_ids</a>&lt;T&gt;(): <a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get_with_original_ids">get_with_original_ids</a>&lt;T&gt;(): <a href="type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>
 </code></pre>
 
 
@@ -185,7 +186,7 @@ later upgrade).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">get_with_original_ids</a>&lt;T&gt;(): <a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">TypeName</a>;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get_with_original_ids">get_with_original_ids</a>&lt;T&gt;(): <a href="type_name.md#0x1_type_name_TypeName">TypeName</a>;
 </code></pre>
 
 
@@ -200,7 +201,7 @@ Returns true iff the TypeName represents a primitive type, i.e. one of
 u8, u16, u32, u64, u128, u256, bool, address, vector.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_is_primitive">is_primitive</a>(self: &<a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_is_primitive">is_primitive</a>(self: &<a href="type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>): bool
 </code></pre>
 
 
@@ -209,24 +210,24 @@ u8, u16, u32, u64, u128, u256, bool, address, vector.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_is_primitive">is_primitive</a>(self: &<a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">TypeName</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_is_primitive">is_primitive</a>(self: &<a href="type_name.md#0x1_type_name_TypeName">TypeName</a>): bool {
     <b>let</b> bytes = self.name.as_bytes();
     bytes == &b"bool" ||
-        bytes == &b"u8" ||
-        bytes == &b"u16" ||
-        bytes == &b"u32" ||
-        bytes == &b"u64" ||
-        bytes == &b"u128" ||
-        bytes == &b"u256" ||
+        bytes == &b"<a href="u8.md#0x1_u8">u8</a>" ||
+        bytes == &b"<a href="u16.md#0x1_u16">u16</a>" ||
+        bytes == &b"<a href="u32.md#0x1_u32">u32</a>" ||
+        bytes == &b"<a href="u64.md#0x1_u64">u64</a>" ||
+        bytes == &b"<a href="u128.md#0x1_u128">u128</a>" ||
+        bytes == &b"<a href="u256.md#0x1_u256">u256</a>" ||
         bytes == &b"<b>address</b>" ||
         (
             bytes.length() &gt;= 6 &&
-            bytes[0] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_V">ASCII_V</a> &&
-            bytes[1] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_E">ASCII_E</a> &&
-            bytes[2] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_C">ASCII_C</a> &&
-            bytes[3] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_T">ASCII_T</a> &&
-            bytes[4] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_O">ASCII_O</a> &&
-            bytes[5] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_R">ASCII_R</a>,
+            bytes[0] == <a href="type_name.md#0x1_type_name_ASCII_V">ASCII_V</a> &&
+            bytes[1] == <a href="type_name.md#0x1_type_name_ASCII_E">ASCII_E</a> &&
+            bytes[2] == <a href="type_name.md#0x1_type_name_ASCII_C">ASCII_C</a> &&
+            bytes[3] == <a href="type_name.md#0x1_type_name_ASCII_T">ASCII_T</a> &&
+            bytes[4] == <a href="type_name.md#0x1_type_name_ASCII_O">ASCII_O</a> &&
+            bytes[5] == <a href="type_name.md#0x1_type_name_ASCII_R">ASCII_R</a>,
         )
 }
 </code></pre>
@@ -242,7 +243,7 @@ u8, u16, u32, u64, u128, u256, bool, address, vector.
 Get the String representation of <code>self</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_borrow_string">borrow_string</a>(self: &<a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>): &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_borrow_string">borrow_string</a>(self: &<a href="type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>): &<a href="ascii.md#0x1_ascii_String">ascii::String</a>
 </code></pre>
 
 
@@ -251,7 +252,7 @@ Get the String representation of <code>self</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_borrow_string">borrow_string</a>(self: &<a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">TypeName</a>): &String {
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_borrow_string">borrow_string</a>(self: &<a href="type_name.md#0x1_type_name_TypeName">TypeName</a>): &String {
     &self.name
 }
 </code></pre>
@@ -268,7 +269,7 @@ Get Address string (Base16 encoded), first part of the TypeName.
 Aborts if given a primitive type.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_get_address">get_address</a>(self: &<a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get_address">get_address</a>(self: &<a href="type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>): <a href="ascii.md#0x1_ascii_String">ascii::String</a>
 </code></pre>
 
 
@@ -277,13 +278,13 @@ Aborts if given a primitive type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_get_address">get_address</a>(self: &<a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">TypeName</a>): String {
-    <b>assert</b>!(!self.<a href="../move-stdlib/type_name.md#0x1_type_name_is_primitive">is_primitive</a>(), <a href="../move-stdlib/type_name.md#0x1_type_name_ENonModuleType">ENonModuleType</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get_address">get_address</a>(self: &<a href="type_name.md#0x1_type_name_TypeName">TypeName</a>): String {
+    <b>assert</b>!(!self.<a href="type_name.md#0x1_type_name_is_primitive">is_primitive</a>(), <a href="type_name.md#0x1_type_name_ENonModuleType">ENonModuleType</a>);
 
-    // Base16 (<a href="../move-stdlib/string.md#0x1_string">string</a>) representation of an <b>address</b> <b>has</b> 2 symbols per byte.
-    <b>let</b> len = address::length() * 2;
+    // Base16 (<a href="string.md#0x1_string">string</a>) representation of an <b>address</b> <b>has</b> 2 symbols per byte.
+    <b>let</b> len = <a href="address.md#0x1_address_length">address::length</a>() * 2;
     <b>let</b> str_bytes = self.name.as_bytes();
-    <b>let</b> <b>mut</b> addr_bytes = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> <b>mut</b> addr_bytes = <a href="vector.md#0x1_vector">vector</a>[];
     <b>let</b> <b>mut</b> i = 0;
 
     // Read `len` bytes from the type name and push them <b>to</b> addr_bytes.
@@ -292,7 +293,7 @@ Aborts if given a primitive type.
         i = i + 1;
     };
 
-    <a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(addr_bytes)
+    <a href="ascii.md#0x1_ascii_string">ascii::string</a>(addr_bytes)
 }
 </code></pre>
 
@@ -308,7 +309,7 @@ Get name of the module.
 Aborts if given a primitive type.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_get_module">get_module</a>(self: &<a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get_module">get_module</a>(self: &<a href="type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>): <a href="ascii.md#0x1_ascii_String">ascii::String</a>
 </code></pre>
 
 
@@ -317,14 +318,14 @@ Aborts if given a primitive type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_get_module">get_module</a>(self: &<a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">TypeName</a>): String {
-    <b>assert</b>!(!self.<a href="../move-stdlib/type_name.md#0x1_type_name_is_primitive">is_primitive</a>(), <a href="../move-stdlib/type_name.md#0x1_type_name_ENonModuleType">ENonModuleType</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get_module">get_module</a>(self: &<a href="type_name.md#0x1_type_name_TypeName">TypeName</a>): String {
+    <b>assert</b>!(!self.<a href="type_name.md#0x1_type_name_is_primitive">is_primitive</a>(), <a href="type_name.md#0x1_type_name_ENonModuleType">ENonModuleType</a>);
 
     // Starts after <b>address</b> and a double colon: `&lt;addr <b>as</b> HEX&gt;::`
-    <b>let</b> <b>mut</b> i = address::length() * 2 + 2;
+    <b>let</b> <b>mut</b> i = <a href="address.md#0x1_address_length">address::length</a>() * 2 + 2;
     <b>let</b> str_bytes = self.name.as_bytes();
-    <b>let</b> <b>mut</b> module_name = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <b>let</b> colon = <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_COLON">ASCII_COLON</a>;
+    <b>let</b> <b>mut</b> module_name = <a href="vector.md#0x1_vector">vector</a>[];
+    <b>let</b> colon = <a href="type_name.md#0x1_type_name_ASCII_COLON">ASCII_COLON</a>;
     <b>loop</b> {
         <b>let</b> char = &str_bytes[i];
         <b>if</b> (char != &colon) {
@@ -335,7 +336,7 @@ Aborts if given a primitive type.
         }
     };
 
-    <a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(module_name)
+    <a href="ascii.md#0x1_ascii_string">ascii::string</a>(module_name)
 }
 </code></pre>
 
@@ -350,7 +351,7 @@ Aborts if given a primitive type.
 Convert <code>self</code> into its inner String
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">into_string</a>(self: <a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_into_string">into_string</a>(self: <a href="type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>): <a href="ascii.md#0x1_ascii_String">ascii::String</a>
 </code></pre>
 
 
@@ -359,7 +360,7 @@ Convert <code>self</code> into its inner String
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">into_string</a>(self: <a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">TypeName</a>): String {
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_into_string">into_string</a>(self: <a href="type_name.md#0x1_type_name_TypeName">TypeName</a>): String {
     self.name
 }
 </code></pre>
