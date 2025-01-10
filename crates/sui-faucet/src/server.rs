@@ -39,8 +39,7 @@ use serde::Deserialize;
 use std::sync::Mutex;
 
 use anyhow::bail;
-use lazy_static::lazy_static;
-use std::env;
+use once_cell::sync::Lazy;
 
 /// Interval to cleanup expired tokens
 const CLEANUP_INTERVAL: u64 = 60; // 60 seconds
@@ -51,13 +50,10 @@ const RESET_TIME_INTERVAL_SECS: u64 = 12 * 3600; // 12 hours
 const CLOUDFLARE_URL: &str = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const FAUCET_WEB_APP_URL: &str = "https://faucet.sui.io"; // make this lazy static env?
 
-lazy_static! {
-    static ref DISCORD_BOT: Option<String> = env::var("DISCORD_BOT").ok();
-}
+static DISCORD_BOT: Lazy<Option<String>> = Lazy::new(|| std::env::var("DISCORD_BOT").ok());
 
-lazy_static! {
-    static ref TURNSTILE_SECRET_KEY: Option<String> = env::var("TURNSTILE_SECRET_KEY").ok();
-}
+static TURNSTILE_SECRET_KEY: Lazy<Option<String>> =
+    Lazy::new(|| std::env::var("TURNSTILE_SECRET_KEY").ok());
 
 type IPAddr = String;
 
@@ -203,7 +199,7 @@ impl RequestsManager {
                 } else {
                     return Err((
                         StatusCode::BAD_REQUEST,
-                        FaucetError::Internal(format!("Invalid token")),
+                        FaucetError::Internal("Invalid token".to_string()),
                     ));
                 }
             }
