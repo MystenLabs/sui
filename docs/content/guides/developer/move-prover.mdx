@@ -23,14 +23,14 @@ module amm::simple_lp;
 
 use sui::balance::{Balance, Supply, zero};
 
-public struct LP<phantom A> has drop {}
+public struct LP<phantom T> has drop {}
 
-public struct Pool<phantom A> has store {
-    balance: Balance<A>,
-    shares: Supply<LP<A>>,
+public struct Pool<phantom T> has store {
+    balance: Balance<T>,
+    shares: Supply<LP<T>>,
 }
 
-public fun withdraw<T: key>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
+public fun withdraw<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
     if (shares_in.value() == 0) {
         shares_in.destroy_zero();
         return zero()
@@ -54,7 +54,7 @@ Specs usually have the following structure:
 
 ```move
 #[spec(verify)]
-fun withdraw_spec<T: key>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
+fun withdraw_spec<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
 
     // Conditions which are assumed to hold on the arguments of the function
 
@@ -82,7 +82,7 @@ Let's write a specification that says that the price of a share should not decre
 
 ```move
 #[spec(verify)]
-fun withdraw_spec<T: key>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
+fun withdraw_spec<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
     requires(shares_in.value() <= pool.shares.supply_value());
 
     let old_pool = old!(pool);
@@ -175,14 +175,14 @@ use sui::balance::{Balance, Supply, zero};
 #[spec_only]
 use prover::prover::{requires, ensures, asserts, old};
 
-public struct LP<phantom A> has drop {}
+public struct LP<phantom T> has drop {}
 
-public struct Pool<phantom A> has store {
-    balance: Balance<A>,
-    shares: Supply<LP<A>>,
+public struct Pool<phantom T> has store {
+    balance: Balance<T>,
+    shares: Supply<LP<T>>,
 }
 
-public fun withdraw<T: key>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
+public fun withdraw<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
     if (shares_in.value() == 0) {
         shares_in.destroy_zero();
         return zero()
@@ -199,7 +199,7 @@ public fun withdraw<T: key>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Bala
 
 // Verify that the price of the token is not decreased by withdrawing liquidity
 #[spec(verify)]
-fun withdraw_spec<T: key>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
+fun withdraw_spec<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
     requires(shares_in.value() <= pool.shares.supply_value());
 
     let old_pool = old!(pool);
