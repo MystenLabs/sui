@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) mod checkpoints;
+pub(crate) mod coin;
 pub(crate) mod dynamic_fields;
 pub(crate) mod governance;
 pub(crate) mod move_utils;
