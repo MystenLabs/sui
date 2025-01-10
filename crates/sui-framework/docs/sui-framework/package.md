@@ -1,5 +1,5 @@
 ---
-title: Module `sui::package`
+title: Module `0x2::package`
 ---
 
 Functions for operating on Move packages from within Move:
@@ -7,57 +7,50 @@ Functions for operating on Move packages from within Move:
 - Administering package upgrades through upgrade policies.
 
 
--  [Struct `Publisher`](#sui_package_Publisher)
--  [Struct `UpgradeCap`](#sui_package_UpgradeCap)
--  [Struct `UpgradeTicket`](#sui_package_UpgradeTicket)
--  [Struct `UpgradeReceipt`](#sui_package_UpgradeReceipt)
+-  [Resource `Publisher`](#0x2_package_Publisher)
+-  [Resource `UpgradeCap`](#0x2_package_UpgradeCap)
+-  [Struct `UpgradeTicket`](#0x2_package_UpgradeTicket)
+-  [Struct `UpgradeReceipt`](#0x2_package_UpgradeReceipt)
 -  [Constants](#@Constants_0)
--  [Function `claim`](#sui_package_claim)
--  [Function `claim_and_keep`](#sui_package_claim_and_keep)
--  [Function `burn_publisher`](#sui_package_burn_publisher)
--  [Function `from_package`](#sui_package_from_package)
--  [Function `from_module`](#sui_package_from_module)
--  [Function `published_module`](#sui_package_published_module)
--  [Function `published_package`](#sui_package_published_package)
--  [Function `upgrade_package`](#sui_package_upgrade_package)
--  [Function `version`](#sui_package_version)
--  [Function `upgrade_policy`](#sui_package_upgrade_policy)
--  [Function `ticket_package`](#sui_package_ticket_package)
--  [Function `ticket_policy`](#sui_package_ticket_policy)
--  [Function `receipt_cap`](#sui_package_receipt_cap)
--  [Function `receipt_package`](#sui_package_receipt_package)
--  [Function `ticket_digest`](#sui_package_ticket_digest)
--  [Function `compatible_policy`](#sui_package_compatible_policy)
--  [Function `additive_policy`](#sui_package_additive_policy)
--  [Function `dep_only_policy`](#sui_package_dep_only_policy)
--  [Function `only_additive_upgrades`](#sui_package_only_additive_upgrades)
--  [Function `only_dep_upgrades`](#sui_package_only_dep_upgrades)
--  [Function `make_immutable`](#sui_package_make_immutable)
--  [Function `authorize_upgrade`](#sui_package_authorize_upgrade)
--  [Function `commit_upgrade`](#sui_package_commit_upgrade)
--  [Function `restrict`](#sui_package_restrict)
+-  [Function `claim`](#0x2_package_claim)
+-  [Function `claim_and_keep`](#0x2_package_claim_and_keep)
+-  [Function `burn_publisher`](#0x2_package_burn_publisher)
+-  [Function `from_package`](#0x2_package_from_package)
+-  [Function `from_module`](#0x2_package_from_module)
+-  [Function `published_module`](#0x2_package_published_module)
+-  [Function `published_package`](#0x2_package_published_package)
+-  [Function `upgrade_package`](#0x2_package_upgrade_package)
+-  [Function `version`](#0x2_package_version)
+-  [Function `upgrade_policy`](#0x2_package_upgrade_policy)
+-  [Function `ticket_package`](#0x2_package_ticket_package)
+-  [Function `ticket_policy`](#0x2_package_ticket_policy)
+-  [Function `receipt_cap`](#0x2_package_receipt_cap)
+-  [Function `receipt_package`](#0x2_package_receipt_package)
+-  [Function `ticket_digest`](#0x2_package_ticket_digest)
+-  [Function `compatible_policy`](#0x2_package_compatible_policy)
+-  [Function `additive_policy`](#0x2_package_additive_policy)
+-  [Function `dep_only_policy`](#0x2_package_dep_only_policy)
+-  [Function `only_additive_upgrades`](#0x2_package_only_additive_upgrades)
+-  [Function `only_dep_upgrades`](#0x2_package_only_dep_upgrades)
+-  [Function `make_immutable`](#0x2_package_make_immutable)
+-  [Function `authorize_upgrade`](#0x2_package_authorize_upgrade)
+-  [Function `commit_upgrade`](#0x2_package_commit_upgrade)
+-  [Function `restrict`](#0x2_package_restrict)
 
 
-<pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
-<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
-<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
-<b>use</b> <a href="address.md#sui_address">sui::address</a>;
-<b>use</b> <a href="hex.md#sui_hex">sui::hex</a>;
-<b>use</b> <a href="object.md#sui_object">sui::object</a>;
-<b>use</b> <a href="transfer.md#sui_transfer">sui::transfer</a>;
-<b>use</b> <a href="tx_context.md#sui_tx_context">sui::tx_context</a>;
-<b>use</b> <a href="types.md#sui_types">sui::types</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
+<b>use</b> <a href="../move-stdlib/type_name.md#0x1_type_name">0x1::type_name</a>;
+<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
+<b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
+<b>use</b> <a href="types.md#0x2_types">0x2::types</a>;
 </code></pre>
 
 
 
-<a name="sui_package_Publisher"></a>
+<a name="0x2_package_Publisher"></a>
 
-## Struct `Publisher`
+## Resource `Publisher`
 
 This type can only be created in the transaction that
 generates a module, by consuming its one-time witness, so it
@@ -65,7 +58,7 @@ can be used to identify the address that published the package
 a type originated from.
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="package.md#sui_package_Publisher">Publisher</a> <b>has</b> key, store
+<pre><code><b>struct</b> <a href="package.md#0x2_package_Publisher">Publisher</a> <b>has</b> store, key
 </code></pre>
 
 
@@ -76,33 +69,36 @@ a type originated from.
 
 <dl>
 <dt>
-<code>id: <a href="object.md#sui_object_UID">sui::object::UID</a></code>
+<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
+
 </dd>
 <dt>
-<code><a href="package.md#sui_package">package</a>: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a></code>
+<code><a href="package.md#0x2_package">package</a>: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a></code>
 </dt>
 <dd>
+
 </dd>
 <dt>
-<code>module_name: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a></code>
+<code>module_name: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a></code>
 </dt>
 <dd>
+
 </dd>
 </dl>
 
 
 </details>
 
-<a name="sui_package_UpgradeCap"></a>
+<a name="0x2_package_UpgradeCap"></a>
 
-## Struct `UpgradeCap`
+## Resource `UpgradeCap`
 
 Capability controlling the ability to upgrade a package.
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="package.md#sui_package_UpgradeCap">UpgradeCap</a> <b>has</b> key, store
+<pre><code><b>struct</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a> <b>has</b> store, key
 </code></pre>
 
 
@@ -113,18 +109,19 @@ Capability controlling the ability to upgrade a package.
 
 <dl>
 <dt>
-<code>id: <a href="object.md#sui_object_UID">sui::object::UID</a></code>
+<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
+
 </dd>
 <dt>
-<code><a href="package.md#sui_package">package</a>: <a href="object.md#sui_object_ID">sui::object::ID</a></code>
+<code><a href="package.md#0x2_package">package</a>: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
  (Mutable) ID of the package that can be upgraded.
 </dd>
 <dt>
-<code><a href="package.md#sui_package_version">version</a>: u64</code>
+<code>version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
  (Mutable) The number of upgrades that have been applied
@@ -141,7 +138,7 @@ Capability controlling the ability to upgrade a package.
 
 </details>
 
-<a name="sui_package_UpgradeTicket"></a>
+<a name="0x2_package_UpgradeTicket"></a>
 
 ## Struct `UpgradeTicket`
 
@@ -149,13 +146,13 @@ Permission to perform a particular upgrade (for a fixed version of
 the package, bytecode to upgrade with and transitive dependencies to
 depend against).
 
-An <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></code> can only issue one ticket at a time, to prevent races
+An <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code> can only issue one ticket at a time, to prevent races
 between concurrent updates or a change in its upgrade policy after
 issuing a ticket, so the ticket is a "Hot Potato" to preserve forward
 progress.
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="package.md#sui_package_UpgradeTicket">UpgradeTicket</a>
+<pre><code><b>struct</b> <a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a>
 </code></pre>
 
 
@@ -166,13 +163,13 @@ progress.
 
 <dl>
 <dt>
-<code>cap: <a href="object.md#sui_object_ID">sui::object::ID</a></code>
+<code>cap: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
- (Immutable) ID of the <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></code> this originated from.
+ (Immutable) ID of the <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code> this originated from.
 </dd>
 <dt>
-<code><a href="package.md#sui_package">package</a>: <a href="object.md#sui_object_ID">sui::object::ID</a></code>
+<code><a href="package.md#0x2_package">package</a>: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
  (Immutable) ID of the package that can be upgraded.
@@ -185,7 +182,7 @@ progress.
  permits.
 </dd>
 <dt>
-<code>digest: vector&lt;u8&gt;</code>
+<code>digest: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
 </dt>
 <dd>
  (Immutable) SHA256 digest of the bytecode and transitive
@@ -196,17 +193,17 @@ progress.
 
 </details>
 
-<a name="sui_package_UpgradeReceipt"></a>
+<a name="0x2_package_UpgradeReceipt"></a>
 
 ## Struct `UpgradeReceipt`
 
 Issued as a result of a successful upgrade, containing the
-information to be used to update the <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></code>.  This is a "Hot
-Potato" to ensure that it is used to update its <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></code> before
+information to be used to update the <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code>.  This is a "Hot
+Potato" to ensure that it is used to update its <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code> before
 the end of the transaction that performed the upgrade.
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a>
+<pre><code><b>struct</b> <a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a>
 </code></pre>
 
 
@@ -217,13 +214,13 @@ the end of the transaction that performed the upgrade.
 
 <dl>
 <dt>
-<code>cap: <a href="object.md#sui_object_ID">sui::object::ID</a></code>
+<code>cap: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
- (Immutable) ID of the <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></code> this originated from.
+ (Immutable) ID of the <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code> this originated from.
 </dd>
 <dt>
-<code><a href="package.md#sui_package">package</a>: <a href="object.md#sui_object_ID">sui::object::ID</a></code>
+<code><a href="package.md#0x2_package">package</a>: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
  (Immutable) ID of the package after it was upgraded.
@@ -238,90 +235,90 @@ the end of the transaction that performed the upgrade.
 ## Constants
 
 
-<a name="sui_package_ADDITIVE"></a>
+<a name="0x2_package_ADDITIVE"></a>
 
 Add new functions or types, or change dependencies, existing
 functions can't change.
 
 
-<pre><code><b>const</b> <a href="package.md#sui_package_ADDITIVE">ADDITIVE</a>: u8 = 128;
+<pre><code><b>const</b> <a href="package.md#0x2_package_ADDITIVE">ADDITIVE</a>: u8 = 128;
 </code></pre>
 
 
 
-<a name="sui_package_COMPATIBLE"></a>
+<a name="0x2_package_COMPATIBLE"></a>
 
 Update any part of the package (function implementations, add new
 functions or types, change dependencies)
 
 
-<pre><code><b>const</b> <a href="package.md#sui_package_COMPATIBLE">COMPATIBLE</a>: u8 = 0;
+<pre><code><b>const</b> <a href="package.md#0x2_package_COMPATIBLE">COMPATIBLE</a>: u8 = 0;
 </code></pre>
 
 
 
-<a name="sui_package_DEP_ONLY"></a>
+<a name="0x2_package_DEP_ONLY"></a>
 
 Only be able to change dependencies.
 
 
-<pre><code><b>const</b> <a href="package.md#sui_package_DEP_ONLY">DEP_ONLY</a>: u8 = 192;
+<pre><code><b>const</b> <a href="package.md#0x2_package_DEP_ONLY">DEP_ONLY</a>: u8 = 192;
 </code></pre>
 
 
 
-<a name="sui_package_EAlreadyAuthorized"></a>
+<a name="0x2_package_EAlreadyAuthorized"></a>
 
-This <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></code> has already authorized a pending upgrade.
+This <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code> has already authorized a pending upgrade.
 
 
-<pre><code><b>const</b> <a href="package.md#sui_package_EAlreadyAuthorized">EAlreadyAuthorized</a>: u64 = 2;
+<pre><code><b>const</b> <a href="package.md#0x2_package_EAlreadyAuthorized">EAlreadyAuthorized</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
 
-<a name="sui_package_ENotAuthorized"></a>
+<a name="0x2_package_ENotAuthorized"></a>
 
-This <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></code> has not authorized an upgrade.
+This <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code> has not authorized an upgrade.
 
 
-<pre><code><b>const</b> <a href="package.md#sui_package_ENotAuthorized">ENotAuthorized</a>: u64 = 3;
+<pre><code><b>const</b> <a href="package.md#0x2_package_ENotAuthorized">ENotAuthorized</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
 
-<a name="sui_package_ENotOneTimeWitness"></a>
+<a name="0x2_package_ENotOneTimeWitness"></a>
 
-Tried to create a <code><a href="package.md#sui_package_Publisher">Publisher</a></code> using a type that isn't a
+Tried to create a <code><a href="package.md#0x2_package_Publisher">Publisher</a></code> using a type that isn't a
 one-time witness.
 
 
-<pre><code><b>const</b> <a href="package.md#sui_package_ENotOneTimeWitness">ENotOneTimeWitness</a>: u64 = 0;
+<pre><code><b>const</b> <a href="package.md#0x2_package_ENotOneTimeWitness">ENotOneTimeWitness</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
 
-<a name="sui_package_ETooPermissive"></a>
+<a name="0x2_package_ETooPermissive"></a>
 
 Tried to set a less restrictive policy than currently in place.
 
 
-<pre><code><b>const</b> <a href="package.md#sui_package_ETooPermissive">ETooPermissive</a>: u64 = 1;
+<pre><code><b>const</b> <a href="package.md#0x2_package_ETooPermissive">ETooPermissive</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
 
-<a name="sui_package_EWrongUpgradeCap"></a>
+<a name="0x2_package_EWrongUpgradeCap"></a>
 
-Trying to commit an upgrade to the wrong <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></code>.
+Trying to commit an upgrade to the wrong <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code>.
 
 
-<pre><code><b>const</b> <a href="package.md#sui_package_EWrongUpgradeCap">EWrongUpgradeCap</a>: u64 = 4;
+<pre><code><b>const</b> <a href="package.md#0x2_package_EWrongUpgradeCap">EWrongUpgradeCap</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
 
-<a name="sui_package_claim"></a>
+<a name="0x2_package_claim"></a>
 
 ## Function `claim`
 
@@ -331,7 +328,7 @@ constraint there can be only one Publisher object per module
 but multiple per package (!).
 
 
-<pre><code>publicfun claimOTW(otw: OTW, ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="package.md#sui_package_Publisher">sui::package::Publisher</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="package.md#0x2_package_Publisher">package::Publisher</a>
 </code></pre>
 
 
@@ -340,13 +337,15 @@ but multiple per package (!).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext): <a href="package.md#sui_package_Publisher">Publisher</a> {
-    <b>assert</b>!(<a href="types.md#sui_types_is_one_time_witness">types::is_one_time_witness</a>(&otw), <a href="package.md#sui_package_ENotOneTimeWitness">ENotOneTimeWitness</a>);
-    <b>let</b> type_name = type_name::get_with_original_ids&lt;OTW&gt;();
-    <a href="package.md#sui_package_Publisher">Publisher</a> {
-        id: <a href="object.md#sui_object_new">object::new</a>(ctx),
-        <a href="package.md#sui_package">package</a>: type_name.get_address(),
-        module_name: type_name.get_module(),
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext): <a href="package.md#0x2_package_Publisher">Publisher</a> {
+    <b>assert</b>!(<a href="types.md#0x2_types_is_one_time_witness">types::is_one_time_witness</a>(&otw), <a href="package.md#0x2_package_ENotOneTimeWitness">ENotOneTimeWitness</a>);
+
+    <b>let</b> <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a> = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;OTW&gt;();
+
+    <a href="package.md#0x2_package_Publisher">Publisher</a> {
+        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
+        <a href="package.md#0x2_package">package</a>: <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>.get_address(),
+        module_name: <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>.get_module(),
     }
 }
 </code></pre>
@@ -355,7 +354,7 @@ but multiple per package (!).
 
 </details>
 
-<a name="sui_package_claim_and_keep"></a>
+<a name="0x2_package_claim_and_keep"></a>
 
 ## Function `claim_and_keep`
 
@@ -364,7 +363,7 @@ Since this function can only be called in the module initializer,
 the sender is the publisher.
 
 
-<pre><code>publicfun claim_and_keepOTW(otw: OTW, ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_claim_and_keep">claim_and_keep</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -373,8 +372,8 @@ the sender is the publisher.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_claim_and_keep">claim_and_keep</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext) {
-    <a href="transfer.md#sui_transfer_public_transfer">sui::transfer::public_transfer</a>(<a href="package.md#sui_package_claim">claim</a>(otw, ctx), ctx.sender())
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_claim_and_keep">claim_and_keep</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext) {
+    sui::transfer::public_transfer(<a href="package.md#0x2_package_claim">claim</a>(otw, ctx), ctx.sender())
 }
 </code></pre>
 
@@ -382,7 +381,7 @@ the sender is the publisher.
 
 </details>
 
-<a name="sui_package_burn_publisher"></a>
+<a name="0x2_package_burn_publisher"></a>
 
 ## Function `burn_publisher`
 
@@ -390,7 +389,7 @@ Destroy a Publisher object effectively removing all privileges
 associated with it.
 
 
-<pre><code>publicfun <a href="package.md#sui_package_burn_publisher">burn_publisher</a>(self: <a href="package.md#sui_package_Publisher">sui::package::Publisher</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_burn_publisher">burn_publisher</a>(self: <a href="package.md#0x2_package_Publisher">package::Publisher</a>)
 </code></pre>
 
 
@@ -399,8 +398,8 @@ associated with it.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_burn_publisher">burn_publisher</a>(self: <a href="package.md#sui_package_Publisher">Publisher</a>) {
-    <b>let</b> <a href="package.md#sui_package_Publisher">Publisher</a> { id, <a href="package.md#sui_package">package</a>: _, module_name: _ } = self;
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_burn_publisher">burn_publisher</a>(self: <a href="package.md#0x2_package_Publisher">Publisher</a>) {
+    <b>let</b> <a href="package.md#0x2_package_Publisher">Publisher</a> { id, <a href="package.md#0x2_package">package</a>: _, module_name: _ } = self;
     id.delete();
 }
 </code></pre>
@@ -409,14 +408,14 @@ associated with it.
 
 </details>
 
-<a name="sui_package_from_package"></a>
+<a name="0x2_package_from_package"></a>
 
 ## Function `from_package`
 
 Check whether type belongs to the same package as the publisher object.
 
 
-<pre><code>publicfun from_packageT(self: &<a href="package.md#sui_package_Publisher">sui::package::Publisher</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_from_package">from_package</a>&lt;T&gt;(self: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>): bool
 </code></pre>
 
 
@@ -425,8 +424,8 @@ Check whether type belongs to the same package as the publisher object.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_from_package">from_package</a>&lt;T&gt;(self: &<a href="package.md#sui_package_Publisher">Publisher</a>): bool {
-    type_name::get_with_original_ids&lt;T&gt;().get_address() == self.<a href="package.md#sui_package">package</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_from_package">from_package</a>&lt;T&gt;(self: &<a href="package.md#0x2_package_Publisher">Publisher</a>): bool {
+    <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().get_address() == self.<a href="package.md#0x2_package">package</a>
 }
 </code></pre>
 
@@ -434,14 +433,14 @@ Check whether type belongs to the same package as the publisher object.
 
 </details>
 
-<a name="sui_package_from_module"></a>
+<a name="0x2_package_from_module"></a>
 
 ## Function `from_module`
 
 Check whether a type belongs to the same module as the publisher object.
 
 
-<pre><code>publicfun from_moduleT(self: &<a href="package.md#sui_package_Publisher">sui::package::Publisher</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_from_module">from_module</a>&lt;T&gt;(self: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>): bool
 </code></pre>
 
 
@@ -450,9 +449,10 @@ Check whether a type belongs to the same module as the publisher object.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_from_module">from_module</a>&lt;T&gt;(self: &<a href="package.md#sui_package_Publisher">Publisher</a>): bool {
-    <b>let</b> type_name = type_name::get_with_original_ids&lt;T&gt;();
-    (type_name.get_address() == self.<a href="package.md#sui_package">package</a>) && (type_name.get_module() == self.module_name)
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_from_module">from_module</a>&lt;T&gt;(self: &<a href="package.md#0x2_package_Publisher">Publisher</a>): bool {
+    <b>let</b> <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a> = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
+
+    (<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>.get_address() == self.<a href="package.md#0x2_package">package</a>) && (<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>.get_module() == self.module_name)
 }
 </code></pre>
 
@@ -460,14 +460,14 @@ Check whether a type belongs to the same module as the publisher object.
 
 </details>
 
-<a name="sui_package_published_module"></a>
+<a name="0x2_package_published_module"></a>
 
 ## Function `published_module`
 
 Read the name of the module.
 
 
-<pre><code>publicfun <a href="package.md#sui_package_published_module">published_module</a>(self: &<a href="package.md#sui_package_Publisher">sui::package::Publisher</a>): &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_published_module">published_module</a>(self: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>): &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
 </code></pre>
 
 
@@ -476,7 +476,7 @@ Read the name of the module.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_published_module">published_module</a>(self: &<a href="package.md#sui_package_Publisher">Publisher</a>): &String {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_published_module">published_module</a>(self: &<a href="package.md#0x2_package_Publisher">Publisher</a>): &String {
     &self.module_name
 }
 </code></pre>
@@ -485,14 +485,14 @@ Read the name of the module.
 
 </details>
 
-<a name="sui_package_published_package"></a>
+<a name="0x2_package_published_package"></a>
 
 ## Function `published_package`
 
 Read the package address string.
 
 
-<pre><code>publicfun <a href="package.md#sui_package_published_package">published_package</a>(self: &<a href="package.md#sui_package_Publisher">sui::package::Publisher</a>): &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_published_package">published_package</a>(self: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>): &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
 </code></pre>
 
 
@@ -501,8 +501,8 @@ Read the package address string.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_published_package">published_package</a>(self: &<a href="package.md#sui_package_Publisher">Publisher</a>): &String {
-    &self.<a href="package.md#sui_package">package</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_published_package">published_package</a>(self: &<a href="package.md#0x2_package_Publisher">Publisher</a>): &String {
+    &self.<a href="package.md#0x2_package">package</a>
 }
 </code></pre>
 
@@ -510,7 +510,7 @@ Read the package address string.
 
 </details>
 
-<a name="sui_package_upgrade_package"></a>
+<a name="0x2_package_upgrade_package"></a>
 
 ## Function `upgrade_package`
 
@@ -521,7 +521,7 @@ Otherwise guaranteed to be the latest version of any given
 package.
 
 
-<pre><code>publicfun <a href="package.md#sui_package_upgrade_package">upgrade_package</a>(cap: &<a href="package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>): <a href="object.md#sui_object_ID">sui::object::ID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_upgrade_package">upgrade_package</a>(cap: &<a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>): <a href="object.md#0x2_object_ID">object::ID</a>
 </code></pre>
 
 
@@ -530,8 +530,8 @@ package.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_upgrade_package">upgrade_package</a>(cap: &<a href="package.md#sui_package_UpgradeCap">UpgradeCap</a>): ID {
-    cap.<a href="package.md#sui_package">package</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_upgrade_package">upgrade_package</a>(cap: &<a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>): ID {
+    cap.<a href="package.md#0x2_package">package</a>
 }
 </code></pre>
 
@@ -539,7 +539,7 @@ package.
 
 </details>
 
-<a name="sui_package_version"></a>
+<a name="0x2_package_version"></a>
 
 ## Function `version`
 
@@ -547,7 +547,7 @@ The most recent version of the package, increments by one for each
 successfully applied upgrade.
 
 
-<pre><code>publicfun <a href="package.md#sui_package_version">version</a>(cap: &<a href="package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_version">version</a>(cap: &<a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -556,8 +556,8 @@ successfully applied upgrade.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_version">version</a>(cap: &<a href="package.md#sui_package_UpgradeCap">UpgradeCap</a>): u64 {
-    cap.<a href="package.md#sui_package_version">version</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_version">version</a>(cap: &<a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+    cap.version
 }
 </code></pre>
 
@@ -565,7 +565,7 @@ successfully applied upgrade.
 
 </details>
 
-<a name="sui_package_upgrade_policy"></a>
+<a name="0x2_package_upgrade_policy"></a>
 
 ## Function `upgrade_policy`
 
@@ -573,7 +573,7 @@ The most permissive kind of upgrade currently supported by this
 <code>cap</code>.
 
 
-<pre><code>publicfun <a href="package.md#sui_package_upgrade_policy">upgrade_policy</a>(cap: &<a href="package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_upgrade_policy">upgrade_policy</a>(cap: &<a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>): u8
 </code></pre>
 
 
@@ -582,7 +582,7 @@ The most permissive kind of upgrade currently supported by this
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_upgrade_policy">upgrade_policy</a>(cap: &<a href="package.md#sui_package_UpgradeCap">UpgradeCap</a>): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_upgrade_policy">upgrade_policy</a>(cap: &<a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>): u8 {
     cap.policy
 }
 </code></pre>
@@ -591,14 +591,14 @@ The most permissive kind of upgrade currently supported by this
 
 </details>
 
-<a name="sui_package_ticket_package"></a>
+<a name="0x2_package_ticket_package"></a>
 
 ## Function `ticket_package`
 
 The package that this ticket is authorized to upgrade
 
 
-<pre><code>publicfun <a href="package.md#sui_package_ticket_package">ticket_package</a>(ticket: &<a href="package.md#sui_package_UpgradeTicket">sui::package::UpgradeTicket</a>): <a href="object.md#sui_object_ID">sui::object::ID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_package">ticket_package</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>): <a href="object.md#0x2_object_ID">object::ID</a>
 </code></pre>
 
 
@@ -607,8 +607,8 @@ The package that this ticket is authorized to upgrade
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_ticket_package">ticket_package</a>(ticket: &<a href="package.md#sui_package_UpgradeTicket">UpgradeTicket</a>): ID {
-    ticket.<a href="package.md#sui_package">package</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_package">ticket_package</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a>): ID {
+    ticket.<a href="package.md#0x2_package">package</a>
 }
 </code></pre>
 
@@ -616,14 +616,14 @@ The package that this ticket is authorized to upgrade
 
 </details>
 
-<a name="sui_package_ticket_policy"></a>
+<a name="0x2_package_ticket_policy"></a>
 
 ## Function `ticket_policy`
 
 The kind of upgrade that this ticket authorizes.
 
 
-<pre><code>publicfun <a href="package.md#sui_package_ticket_policy">ticket_policy</a>(ticket: &<a href="package.md#sui_package_UpgradeTicket">sui::package::UpgradeTicket</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_policy">ticket_policy</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>): u8
 </code></pre>
 
 
@@ -632,7 +632,7 @@ The kind of upgrade that this ticket authorizes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_ticket_policy">ticket_policy</a>(ticket: &<a href="package.md#sui_package_UpgradeTicket">UpgradeTicket</a>): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_policy">ticket_policy</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a>): u8 {
     ticket.policy
 }
 </code></pre>
@@ -641,15 +641,15 @@ The kind of upgrade that this ticket authorizes.
 
 </details>
 
-<a name="sui_package_receipt_cap"></a>
+<a name="0x2_package_receipt_cap"></a>
 
 ## Function `receipt_cap`
 
-ID of the <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></code> that this <code>receipt</code> should be used to
+ID of the <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code> that this <code>receipt</code> should be used to
 update.
 
 
-<pre><code>publicfun <a href="package.md#sui_package_receipt_cap">receipt_cap</a>(receipt: &<a href="package.md#sui_package_UpgradeReceipt">sui::package::UpgradeReceipt</a>): <a href="object.md#sui_object_ID">sui::object::ID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_receipt_cap">receipt_cap</a>(receipt: &<a href="package.md#0x2_package_UpgradeReceipt">package::UpgradeReceipt</a>): <a href="object.md#0x2_object_ID">object::ID</a>
 </code></pre>
 
 
@@ -658,7 +658,7 @@ update.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_receipt_cap">receipt_cap</a>(receipt: &<a href="package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a>): ID {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_receipt_cap">receipt_cap</a>(receipt: &<a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a>): ID {
     receipt.cap
 }
 </code></pre>
@@ -667,7 +667,7 @@ update.
 
 </details>
 
-<a name="sui_package_receipt_package"></a>
+<a name="0x2_package_receipt_package"></a>
 
 ## Function `receipt_package`
 
@@ -675,7 +675,7 @@ ID of the package that was upgraded to: the latest version of
 the package, as of the upgrade represented by this <code>receipt</code>.
 
 
-<pre><code>publicfun <a href="package.md#sui_package_receipt_package">receipt_package</a>(receipt: &<a href="package.md#sui_package_UpgradeReceipt">sui::package::UpgradeReceipt</a>): <a href="object.md#sui_object_ID">sui::object::ID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_receipt_package">receipt_package</a>(receipt: &<a href="package.md#0x2_package_UpgradeReceipt">package::UpgradeReceipt</a>): <a href="object.md#0x2_object_ID">object::ID</a>
 </code></pre>
 
 
@@ -684,8 +684,8 @@ the package, as of the upgrade represented by this <code>receipt</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_receipt_package">receipt_package</a>(receipt: &<a href="package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a>): ID {
-    receipt.<a href="package.md#sui_package">package</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_receipt_package">receipt_package</a>(receipt: &<a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a>): ID {
+    receipt.<a href="package.md#0x2_package">package</a>
 }
 </code></pre>
 
@@ -693,7 +693,7 @@ the package, as of the upgrade represented by this <code>receipt</code>.
 
 </details>
 
-<a name="sui_package_ticket_digest"></a>
+<a name="0x2_package_ticket_digest"></a>
 
 ## Function `ticket_digest`
 
@@ -711,7 +711,7 @@ A package's digest is calculated as:
 sha3_256(sort(modules ++ deps))
 
 
-<pre><code>publicfun <a href="package.md#sui_package_ticket_digest">ticket_digest</a>(ticket: &<a href="package.md#sui_package_UpgradeTicket">sui::package::UpgradeTicket</a>): &vector&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_digest">ticket_digest</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>): &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -720,7 +720,7 @@ sha3_256(sort(modules ++ deps))
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_ticket_digest">ticket_digest</a>(ticket: &<a href="package.md#sui_package_UpgradeTicket">UpgradeTicket</a>): &vector&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_digest">ticket_digest</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a>): &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
     &ticket.digest
 }
 </code></pre>
@@ -729,14 +729,14 @@ sha3_256(sort(modules ++ deps))
 
 </details>
 
-<a name="sui_package_compatible_policy"></a>
+<a name="0x2_package_compatible_policy"></a>
 
 ## Function `compatible_policy`
 
 Expose the constants representing various upgrade policies
 
 
-<pre><code>publicfun <a href="package.md#sui_package_compatible_policy">compatible_policy</a>(): u8
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_compatible_policy">compatible_policy</a>(): u8
 </code></pre>
 
 
@@ -745,20 +745,20 @@ Expose the constants representing various upgrade policies
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_compatible_policy">compatible_policy</a>(): u8 { <a href="package.md#sui_package_COMPATIBLE">COMPATIBLE</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_compatible_policy">compatible_policy</a>(): u8 { <a href="package.md#0x2_package_COMPATIBLE">COMPATIBLE</a> }
 </code></pre>
 
 
 
 </details>
 
-<a name="sui_package_additive_policy"></a>
+<a name="0x2_package_additive_policy"></a>
 
 ## Function `additive_policy`
 
 
 
-<pre><code>publicfun <a href="package.md#sui_package_additive_policy">additive_policy</a>(): u8
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_additive_policy">additive_policy</a>(): u8
 </code></pre>
 
 
@@ -767,20 +767,20 @@ Expose the constants representing various upgrade policies
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_additive_policy">additive_policy</a>(): u8 { <a href="package.md#sui_package_ADDITIVE">ADDITIVE</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_additive_policy">additive_policy</a>(): u8 { <a href="package.md#0x2_package_ADDITIVE">ADDITIVE</a> }
 </code></pre>
 
 
 
 </details>
 
-<a name="sui_package_dep_only_policy"></a>
+<a name="0x2_package_dep_only_policy"></a>
 
 ## Function `dep_only_policy`
 
 
 
-<pre><code>publicfun <a href="package.md#sui_package_dep_only_policy">dep_only_policy</a>(): u8
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_dep_only_policy">dep_only_policy</a>(): u8
 </code></pre>
 
 
@@ -789,14 +789,14 @@ Expose the constants representing various upgrade policies
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_dep_only_policy">dep_only_policy</a>(): u8 { <a href="package.md#sui_package_DEP_ONLY">DEP_ONLY</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_dep_only_policy">dep_only_policy</a>(): u8 { <a href="package.md#0x2_package_DEP_ONLY">DEP_ONLY</a> }
 </code></pre>
 
 
 
 </details>
 
-<a name="sui_package_only_additive_upgrades"></a>
+<a name="0x2_package_only_additive_upgrades"></a>
 
 ## Function `only_additive_upgrades`
 
@@ -804,7 +804,7 @@ Restrict upgrades through this upgrade <code>cap</code> to just add code, or
 change dependencies.
 
 
-<pre><code>publicentry <b>fun</b> <a href="package.md#sui_package_only_additive_upgrades">only_additive_upgrades</a>(cap: &<b>mut</b> <a href="package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_only_additive_upgrades">only_additive_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>)
 </code></pre>
 
 
@@ -813,8 +813,8 @@ change dependencies.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="package.md#sui_package_only_additive_upgrades">only_additive_upgrades</a>(cap: &<b>mut</b> <a href="package.md#sui_package_UpgradeCap">UpgradeCap</a>) {
-    cap.<a href="package.md#sui_package_restrict">restrict</a>(<a href="package.md#sui_package_ADDITIVE">ADDITIVE</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_only_additive_upgrades">only_additive_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
+    cap.<a href="package.md#0x2_package_restrict">restrict</a>(<a href="package.md#0x2_package_ADDITIVE">ADDITIVE</a>)
 }
 </code></pre>
 
@@ -822,7 +822,7 @@ change dependencies.
 
 </details>
 
-<a name="sui_package_only_dep_upgrades"></a>
+<a name="0x2_package_only_dep_upgrades"></a>
 
 ## Function `only_dep_upgrades`
 
@@ -830,7 +830,7 @@ Restrict upgrades through this upgrade <code>cap</code> to just change
 dependencies.
 
 
-<pre><code>publicentry <b>fun</b> <a href="package.md#sui_package_only_dep_upgrades">only_dep_upgrades</a>(cap: &<b>mut</b> <a href="package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_only_dep_upgrades">only_dep_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>)
 </code></pre>
 
 
@@ -839,8 +839,8 @@ dependencies.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="package.md#sui_package_only_dep_upgrades">only_dep_upgrades</a>(cap: &<b>mut</b> <a href="package.md#sui_package_UpgradeCap">UpgradeCap</a>) {
-    cap.<a href="package.md#sui_package_restrict">restrict</a>(<a href="package.md#sui_package_DEP_ONLY">DEP_ONLY</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_only_dep_upgrades">only_dep_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
+    cap.<a href="package.md#0x2_package_restrict">restrict</a>(<a href="package.md#0x2_package_DEP_ONLY">DEP_ONLY</a>)
 }
 </code></pre>
 
@@ -848,14 +848,14 @@ dependencies.
 
 </details>
 
-<a name="sui_package_make_immutable"></a>
+<a name="0x2_package_make_immutable"></a>
 
 ## Function `make_immutable`
 
-Discard the <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></code> to make a package immutable.
+Discard the <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code> to make a package immutable.
 
 
-<pre><code>publicentry <b>fun</b> <a href="package.md#sui_package_make_immutable">make_immutable</a>(cap: <a href="package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_make_immutable">make_immutable</a>(cap: <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>)
 </code></pre>
 
 
@@ -864,8 +864,8 @@ Discard the <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></co
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="package.md#sui_package_make_immutable">make_immutable</a>(cap: <a href="package.md#sui_package_UpgradeCap">UpgradeCap</a>) {
-    <b>let</b> <a href="package.md#sui_package_UpgradeCap">UpgradeCap</a> { id, <a href="package.md#sui_package">package</a>: _, <a href="package.md#sui_package_version">version</a>: _, policy: _ } = cap;
+<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_make_immutable">make_immutable</a>(cap: <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
+    <b>let</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a> { id, <a href="package.md#0x2_package">package</a>: _, version: _, policy: _ } = cap;
     id.delete();
 }
 </code></pre>
@@ -874,7 +874,7 @@ Discard the <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></co
 
 </details>
 
-<a name="sui_package_authorize_upgrade"></a>
+<a name="0x2_package_authorize_upgrade"></a>
 
 ## Function `authorize_upgrade`
 
@@ -890,7 +890,7 @@ the parent package must be compatible with the policy in the ticket
 for the upgrade to succeed.
 
 
-<pre><code>publicfun <a href="package.md#sui_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, policy: u8, digest: vector&lt;u8&gt;): <a href="package.md#sui_package_UpgradeTicket">sui::package::UpgradeTicket</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, policy: u8, digest: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>
 </code></pre>
 
 
@@ -899,15 +899,17 @@ for the upgrade to succeed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="package.md#sui_package_UpgradeCap">UpgradeCap</a>, policy: u8, digest: vector&lt;u8&gt;): <a href="package.md#sui_package_UpgradeTicket">UpgradeTicket</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>, policy: u8, digest: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a> {
     <b>let</b> id_zero = @0x0.to_id();
-    <b>assert</b>!(cap.<a href="package.md#sui_package">package</a> != id_zero, <a href="package.md#sui_package_EAlreadyAuthorized">EAlreadyAuthorized</a>);
-    <b>assert</b>!(policy &gt;= cap.policy, <a href="package.md#sui_package_ETooPermissive">ETooPermissive</a>);
-    <b>let</b> <a href="package.md#sui_package">package</a> = cap.<a href="package.md#sui_package">package</a>;
-    cap.<a href="package.md#sui_package">package</a> = id_zero;
-    <a href="package.md#sui_package_UpgradeTicket">UpgradeTicket</a> {
-        cap: <a href="object.md#sui_object_id">object::id</a>(cap),
-        <a href="package.md#sui_package">package</a>,
+    <b>assert</b>!(cap.<a href="package.md#0x2_package">package</a> != id_zero, <a href="package.md#0x2_package_EAlreadyAuthorized">EAlreadyAuthorized</a>);
+    <b>assert</b>!(policy &gt;= cap.policy, <a href="package.md#0x2_package_ETooPermissive">ETooPermissive</a>);
+
+    <b>let</b> <a href="package.md#0x2_package">package</a> = cap.<a href="package.md#0x2_package">package</a>;
+    cap.<a href="package.md#0x2_package">package</a> = id_zero;
+
+    <a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a> {
+        cap: <a href="object.md#0x2_object_id">object::id</a>(cap),
+        <a href="package.md#0x2_package">package</a>,
         policy,
         digest,
     }
@@ -918,15 +920,15 @@ for the upgrade to succeed.
 
 </details>
 
-<a name="sui_package_commit_upgrade"></a>
+<a name="0x2_package_commit_upgrade"></a>
 
 ## Function `commit_upgrade`
 
-Consume an <code><a href="package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a></code> to update its <code><a href="package.md#sui_package_UpgradeCap">UpgradeCap</a></code>, finalizing
+Consume an <code><a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a></code> to update its <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code>, finalizing
 the upgrade.
 
 
-<pre><code>publicfun <a href="package.md#sui_package_commit_upgrade">commit_upgrade</a>(cap: &<b>mut</b> <a href="package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, receipt: <a href="package.md#sui_package_UpgradeReceipt">sui::package::UpgradeReceipt</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_commit_upgrade">commit_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, receipt: <a href="package.md#0x2_package_UpgradeReceipt">package::UpgradeReceipt</a>)
 </code></pre>
 
 
@@ -935,12 +937,14 @@ the upgrade.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#sui_package_commit_upgrade">commit_upgrade</a>(cap: &<b>mut</b> <a href="package.md#sui_package_UpgradeCap">UpgradeCap</a>, receipt: <a href="package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a>) {
-    <b>let</b> <a href="package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a> { cap: cap_id, <a href="package.md#sui_package">package</a> } = receipt;
-    <b>assert</b>!(<a href="object.md#sui_object_id">object::id</a>(cap) == cap_id, <a href="package.md#sui_package_EWrongUpgradeCap">EWrongUpgradeCap</a>);
-    <b>assert</b>!(cap.<a href="package.md#sui_package">package</a>.to_address() == @0x0, <a href="package.md#sui_package_ENotAuthorized">ENotAuthorized</a>);
-    cap.<a href="package.md#sui_package">package</a> = <a href="package.md#sui_package">package</a>;
-    cap.<a href="package.md#sui_package_version">version</a> = cap.<a href="package.md#sui_package_version">version</a> + 1;
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_commit_upgrade">commit_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>, receipt: <a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a>) {
+    <b>let</b> <a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a> { cap: cap_id, <a href="package.md#0x2_package">package</a> } = receipt;
+
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(cap) == cap_id, <a href="package.md#0x2_package_EWrongUpgradeCap">EWrongUpgradeCap</a>);
+    <b>assert</b>!(cap.<a href="package.md#0x2_package">package</a>.to_address() == @0x0, <a href="package.md#0x2_package_ENotAuthorized">ENotAuthorized</a>);
+
+    cap.<a href="package.md#0x2_package">package</a> = <a href="package.md#0x2_package">package</a>;
+    cap.version = cap.version + 1;
 }
 </code></pre>
 
@@ -948,13 +952,13 @@ the upgrade.
 
 </details>
 
-<a name="sui_package_restrict"></a>
+<a name="0x2_package_restrict"></a>
 
 ## Function `restrict`
 
 
 
-<pre><code><b>fun</b> <a href="package.md#sui_package_restrict">restrict</a>(cap: &<b>mut</b> <a href="package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, policy: u8)
+<pre><code><b>fun</b> <a href="package.md#0x2_package_restrict">restrict</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, policy: u8)
 </code></pre>
 
 
@@ -963,8 +967,8 @@ the upgrade.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="package.md#sui_package_restrict">restrict</a>(cap: &<b>mut</b> <a href="package.md#sui_package_UpgradeCap">UpgradeCap</a>, policy: u8) {
-    <b>assert</b>!(cap.policy &lt;= policy, <a href="package.md#sui_package_ETooPermissive">ETooPermissive</a>);
+<pre><code><b>fun</b> <a href="package.md#0x2_package_restrict">restrict</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>, policy: u8) {
+    <b>assert</b>!(cap.policy &lt;= policy, <a href="package.md#0x2_package_ETooPermissive">ETooPermissive</a>);
     cap.policy = policy;
 }
 </code></pre>

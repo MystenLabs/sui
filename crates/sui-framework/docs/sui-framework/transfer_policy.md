@@ -1,87 +1,73 @@
 ---
-title: Module `sui::transfer_policy`
+title: Module `0x2::transfer_policy`
 ---
 
-Defines the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> type and the logic to approve <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code>s.
+Defines the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> type and the logic to approve <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>s.
 
 - TransferPolicy - is a highly customizable primitive, which provides an
 interface for the type owner to set custom transfer rules for every
 deal performed in the <code>Kiosk</code> or a similar system that integrates with TP.
 
-- Once a <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;</code> is created for and shared (or frozen), the
+- Once a <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;</code> is created for and shared (or frozen), the
 type <code>T</code> becomes tradable in <code>Kiosk</code>s. On every purchase operation, a
-<code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code> is created and needs to be confirmed by the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>
+<code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> is created and needs to be confirmed by the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>
 hot potato or transaction will fail.
 
 - Type owner (creator) can set any Rules as long as the ecosystem supports
 them. All of the Rules need to be resolved within a single transaction (eg
 pay royalty and pay fixed commission). Once required actions are performed,
-the <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code> can be "confirmed" via <code><a href="transfer_policy.md#sui_transfer_policy_confirm_request">confirm_request</a></code> call.
+the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> can be "confirmed" via <code>confirm_request</code> call.
 
-- <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> aims to be the main interface for creators to control trades
+- <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> aims to be the main interface for creators to control trades
 of their types and collect profits if a fee is required on sales. Custom
 policies can be removed at any moment, and the change will affect all instances
 of the type at once.
 
 
--  [Struct `TransferRequest`](#sui_transfer_policy_TransferRequest)
--  [Struct `TransferPolicy`](#sui_transfer_policy_TransferPolicy)
--  [Struct `TransferPolicyCap`](#sui_transfer_policy_TransferPolicyCap)
--  [Struct `TransferPolicyCreated`](#sui_transfer_policy_TransferPolicyCreated)
--  [Struct `TransferPolicyDestroyed`](#sui_transfer_policy_TransferPolicyDestroyed)
--  [Struct `RuleKey`](#sui_transfer_policy_RuleKey)
+-  [Struct `TransferRequest`](#0x2_transfer_policy_TransferRequest)
+-  [Resource `TransferPolicy`](#0x2_transfer_policy_TransferPolicy)
+-  [Resource `TransferPolicyCap`](#0x2_transfer_policy_TransferPolicyCap)
+-  [Struct `TransferPolicyCreated`](#0x2_transfer_policy_TransferPolicyCreated)
+-  [Struct `TransferPolicyDestroyed`](#0x2_transfer_policy_TransferPolicyDestroyed)
+-  [Struct `RuleKey`](#0x2_transfer_policy_RuleKey)
 -  [Constants](#@Constants_0)
--  [Function `new_request`](#sui_transfer_policy_new_request)
--  [Function `new`](#sui_transfer_policy_new)
--  [Function `default`](#sui_transfer_policy_default)
--  [Function `withdraw`](#sui_transfer_policy_withdraw)
--  [Function `destroy_and_withdraw`](#sui_transfer_policy_destroy_and_withdraw)
--  [Function `confirm_request`](#sui_transfer_policy_confirm_request)
--  [Function `add_rule`](#sui_transfer_policy_add_rule)
--  [Function `get_rule`](#sui_transfer_policy_get_rule)
--  [Function `add_to_balance`](#sui_transfer_policy_add_to_balance)
--  [Function `add_receipt`](#sui_transfer_policy_add_receipt)
--  [Function `has_rule`](#sui_transfer_policy_has_rule)
--  [Function `remove_rule`](#sui_transfer_policy_remove_rule)
--  [Function `uid`](#sui_transfer_policy_uid)
--  [Function `uid_mut_as_owner`](#sui_transfer_policy_uid_mut_as_owner)
--  [Function `rules`](#sui_transfer_policy_rules)
--  [Function `item`](#sui_transfer_policy_item)
--  [Function `paid`](#sui_transfer_policy_paid)
--  [Function `from`](#sui_transfer_policy_from)
+-  [Function `new_request`](#0x2_transfer_policy_new_request)
+-  [Function `new`](#0x2_transfer_policy_new)
+-  [Function `default`](#0x2_transfer_policy_default)
+-  [Function `withdraw`](#0x2_transfer_policy_withdraw)
+-  [Function `destroy_and_withdraw`](#0x2_transfer_policy_destroy_and_withdraw)
+-  [Function `confirm_request`](#0x2_transfer_policy_confirm_request)
+-  [Function `add_rule`](#0x2_transfer_policy_add_rule)
+-  [Function `get_rule`](#0x2_transfer_policy_get_rule)
+-  [Function `add_to_balance`](#0x2_transfer_policy_add_to_balance)
+-  [Function `add_receipt`](#0x2_transfer_policy_add_receipt)
+-  [Function `has_rule`](#0x2_transfer_policy_has_rule)
+-  [Function `remove_rule`](#0x2_transfer_policy_remove_rule)
+-  [Function `uid`](#0x2_transfer_policy_uid)
+-  [Function `uid_mut_as_owner`](#0x2_transfer_policy_uid_mut_as_owner)
+-  [Function `rules`](#0x2_transfer_policy_rules)
+-  [Function `item`](#0x2_transfer_policy_item)
+-  [Function `paid`](#0x2_transfer_policy_paid)
+-  [Function `from`](#0x2_transfer_policy_from)
 
 
-<pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
-<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
-<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
-<b>use</b> <a href="address.md#sui_address">sui::address</a>;
-<b>use</b> <a href="bag.md#sui_bag">sui::bag</a>;
-<b>use</b> <a href="balance.md#sui_balance">sui::balance</a>;
-<b>use</b> <a href="coin.md#sui_coin">sui::coin</a>;
-<b>use</b> <a href="config.md#sui_config">sui::config</a>;
-<b>use</b> <a href="deny_list.md#sui_deny_list">sui::deny_list</a>;
-<b>use</b> <a href="dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
-<b>use</b> <a href="dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
-<b>use</b> <a href="event.md#sui_event">sui::event</a>;
-<b>use</b> <a href="hex.md#sui_hex">sui::hex</a>;
-<b>use</b> <a href="object.md#sui_object">sui::object</a>;
-<b>use</b> <a href="package.md#sui_package">sui::package</a>;
-<b>use</b> <a href="sui.md#sui_sui">sui::sui</a>;
-<b>use</b> <a href="table.md#sui_table">sui::table</a>;
-<b>use</b> <a href="transfer.md#sui_transfer">sui::transfer</a>;
-<b>use</b> <a href="tx_context.md#sui_tx_context">sui::tx_context</a>;
-<b>use</b> <a href="types.md#sui_types">sui::types</a>;
-<b>use</b> <a href="url.md#sui_url">sui::url</a>;
-<b>use</b> <a href="vec_set.md#sui_vec_set">sui::vec_set</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
+<b>use</b> <a href="../move-stdlib/type_name.md#0x1_type_name">0x1::type_name</a>;
+<b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
+<b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
+<b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
+<b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
+<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="package.md#0x2_package">0x2::package</a>;
+<b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
+<b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
+<b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
+<b>use</b> <a href="vec_set.md#0x2_vec_set">0x2::vec_set</a>;
 </code></pre>
 
 
 
-<a name="sui_transfer_policy_TransferRequest"></a>
+<a name="0x2_transfer_policy_TransferRequest"></a>
 
 ## Struct `TransferRequest`
 
@@ -89,7 +75,7 @@ A "Hot Potato" forcing the buyer to get a transfer permission
 from the item type (<code>T</code>) owner on purchase attempt.
 
 
-<pre><code><b>public</b> <b>struct</b> TransferRequestT
+<pre><code><b>struct</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;
 </code></pre>
 
 
@@ -100,7 +86,7 @@ from the item type (<code>T</code>) owner on purchase attempt.
 
 <dl>
 <dt>
-<code><a href="transfer_policy.md#sui_transfer_policy_item">item</a>: <a href="object.md#sui_object_ID">sui::object::ID</a></code>
+<code>item: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
  The ID of the transferred item. Although the <code>T</code> has no
@@ -108,43 +94,43 @@ from the item type (<code>T</code>) owner on purchase attempt.
  with Objects.
 </dd>
 <dt>
-<code><a href="transfer_policy.md#sui_transfer_policy_paid">paid</a>: u64</code>
+<code>paid: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
  Amount of SUI paid for the item. Can be used to
  calculate the fee / transfer policy enforcement.
 </dd>
 <dt>
-<code><a href="transfer_policy.md#sui_transfer_policy_from">from</a>: <a href="object.md#sui_object_ID">sui::object::ID</a></code>
+<code>from: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
  The ID of the Kiosk / Safe the object is being sold from.
  Can be used by the TransferPolicy implementors.
 </dd>
 <dt>
-<code>receipts: <a href="vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;</code>
+<code>receipts: <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>&gt;</code>
 </dt>
 <dd>
  Collected Receipts. Used to verify that all of the rules
- were followed and <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code> can be confirmed.
+ were followed and <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> can be confirmed.
 </dd>
 </dl>
 
 
 </details>
 
-<a name="sui_transfer_policy_TransferPolicy"></a>
+<a name="0x2_transfer_policy_TransferPolicy"></a>
 
-## Struct `TransferPolicy`
+## Resource `TransferPolicy`
 
 A unique capability that allows the owner of the <code>T</code> to authorize
 transfers. Can only be created with the <code>Publisher</code> object. Although
 there's no limitation to how many policies can be created, for most
 of the cases there's no need to create more than one since any of the
-policies can be used to confirm the <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code>.
+policies can be used to confirm the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>.
 
 
-<pre><code><b>public</b> <b>struct</b> TransferPolicyT <b>has</b> key, store
+<pre><code><b>struct</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt; <b>has</b> store, key
 </code></pre>
 
 
@@ -155,25 +141,27 @@ policies can be used to confirm the <code><a href="transfer_policy.md#sui_transf
 
 <dl>
 <dt>
-<code>id: <a href="object.md#sui_object_UID">sui::object::UID</a></code>
+<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
+
 </dd>
 <dt>
-<code><a href="balance.md#sui_balance">balance</a>: <a href="balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;</code>
+<code><a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;</code>
 </dt>
 <dd>
- The Balance of the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> which collects <code>SUI</code>.
+ The Balance of the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> which collects <code>SUI</code>.
  By default, transfer policy does not collect anything , and it's
  a matter of an implementation of a specific rule - whether to add
  to balance and how much.
 </dd>
 <dt>
-<code><a href="transfer_policy.md#sui_transfer_policy_rules">rules</a>: <a href="vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;</code>
+<code>rules: <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>&gt;</code>
 </dt>
 <dd>
  Set of types of attached rules - used to verify <code>receipts</code> when
- a <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code> is received in <code><a href="transfer_policy.md#sui_transfer_policy_confirm_request">confirm_request</a></code> function.
+ a <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> is received in <code>confirm_request</code> function.
+
  Additionally provides a way to look up currently attached Rules.
 </dd>
 </dl>
@@ -181,15 +169,15 @@ policies can be used to confirm the <code><a href="transfer_policy.md#sui_transf
 
 </details>
 
-<a name="sui_transfer_policy_TransferPolicyCap"></a>
+<a name="0x2_transfer_policy_TransferPolicyCap"></a>
 
-## Struct `TransferPolicyCap`
+## Resource `TransferPolicyCap`
 
 A Capability granting the owner permission to add/remove rules as well
-as to <code><a href="transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a></code> and <code><a href="transfer_policy.md#sui_transfer_policy_destroy_and_withdraw">destroy_and_withdraw</a></code> the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+as to <code>withdraw</code> and <code>destroy_and_withdraw</code> the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
 
 
-<pre><code><b>public</b> <b>struct</b> TransferPolicyCapT <b>has</b> key, store
+<pre><code><b>struct</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt; <b>has</b> store, key
 </code></pre>
 
 
@@ -200,29 +188,31 @@ as to <code><a href="transfer_policy.md#sui_transfer_policy_withdraw">withdraw</
 
 <dl>
 <dt>
-<code>id: <a href="object.md#sui_object_UID">sui::object::UID</a></code>
+<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
+
 </dd>
 <dt>
-<code>policy_id: <a href="object.md#sui_object_ID">sui::object::ID</a></code>
+<code>policy_id: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
+
 </dd>
 </dl>
 
 
 </details>
 
-<a name="sui_transfer_policy_TransferPolicyCreated"></a>
+<a name="0x2_transfer_policy_TransferPolicyCreated"></a>
 
 ## Struct `TransferPolicyCreated`
 
-Event that is emitted when a publisher creates a new <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code>
+Event that is emitted when a publisher creates a new <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code>
 making the discoverability and tracking the supported types easier.
 
 
-<pre><code><b>public</b> <b>struct</b> TransferPolicyCreatedT <b>has</b> <b>copy</b>, drop
+<pre><code><b>struct</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCreated">TransferPolicyCreated</a>&lt;T&gt; <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -233,24 +223,25 @@ making the discoverability and tracking the supported types easier.
 
 <dl>
 <dt>
-<code>id: <a href="object.md#sui_object_ID">sui::object::ID</a></code>
+<code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
+
 </dd>
 </dl>
 
 
 </details>
 
-<a name="sui_transfer_policy_TransferPolicyDestroyed"></a>
+<a name="0x2_transfer_policy_TransferPolicyDestroyed"></a>
 
 ## Struct `TransferPolicyDestroyed`
 
-Event that is emitted when a publisher destroys a <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code>.
+Event that is emitted when a publisher destroys a <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code>.
 Allows for tracking supported policies.
 
 
-<pre><code><b>public</b> <b>struct</b> TransferPolicyDestroyedT <b>has</b> <b>copy</b>, drop
+<pre><code><b>struct</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyDestroyed">TransferPolicyDestroyed</a>&lt;T&gt; <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -261,23 +252,24 @@ Allows for tracking supported policies.
 
 <dl>
 <dt>
-<code>id: <a href="object.md#sui_object_ID">sui::object::ID</a></code>
+<code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
+
 </dd>
 </dl>
 
 
 </details>
 
-<a name="sui_transfer_policy_RuleKey"></a>
+<a name="0x2_transfer_policy_RuleKey"></a>
 
 ## Struct `RuleKey`
 
-Key to store "Rule" configuration for a specific <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+Key to store "Rule" configuration for a specific <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
 
 
-<pre><code><b>public</b> <b>struct</b> RuleKeyT <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="transfer_policy.md#0x2_transfer_policy_RuleKey">RuleKey</a>&lt;T: drop&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -287,6 +279,12 @@ Key to store "Rule" configuration for a specific <code><a href="transfer_policy.
 
 
 <dl>
+<dt>
+<code>dummy_field: bool</code>
+</dt>
+<dd>
+
+</dd>
 </dl>
 
 
@@ -297,77 +295,77 @@ Key to store "Rule" configuration for a specific <code><a href="transfer_policy.
 ## Constants
 
 
-<a name="sui_transfer_policy_EIllegalRule"></a>
+<a name="0x2_transfer_policy_ENotEnough"></a>
 
-A completed rule is not set in the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+Trying to <code>withdraw</code> more than there is.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#sui_transfer_policy_EIllegalRule">EIllegalRule</a>: u64 = 1;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_ENotEnough">ENotEnough</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 5;
 </code></pre>
 
 
 
-<a name="sui_transfer_policy_ENotEnough"></a>
+<a name="0x2_transfer_policy_ENotOwner"></a>
 
-Trying to <code><a href="transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a></code> more than there is.
+Trying to <code>withdraw</code> or <code>close_and_withdraw</code> with a wrong Cap.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#sui_transfer_policy_ENotEnough">ENotEnough</a>: u64 = 5;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
 
-<a name="sui_transfer_policy_ENotOwner"></a>
+<a name="0x2_transfer_policy_EIllegalRule"></a>
 
-Trying to <code><a href="transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a></code> or <code>close_and_withdraw</code> with a wrong Cap.
+A completed rule is not set in the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>: u64 = 4;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EIllegalRule">EIllegalRule</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
 
-<a name="sui_transfer_policy_EPolicyNotSatisfied"></a>
+<a name="0x2_transfer_policy_EPolicyNotSatisfied"></a>
 
-The number of receipts does not match the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> requirement.
+The number of receipts does not match the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> requirement.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>: u64 = 0;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
 
-<a name="sui_transfer_policy_ERuleAlreadySet"></a>
+<a name="0x2_transfer_policy_ERuleAlreadySet"></a>
 
 Attempting to create a Rule that is already set.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#sui_transfer_policy_ERuleAlreadySet">ERuleAlreadySet</a>: u64 = 3;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_ERuleAlreadySet">ERuleAlreadySet</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
 
-<a name="sui_transfer_policy_EUnknownRequirement"></a>
+<a name="0x2_transfer_policy_EUnknownRequirement"></a>
 
 A Rule is not set.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#sui_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>: u64 = 2;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
 
-<a name="sui_transfer_policy_new_request"></a>
+<a name="0x2_transfer_policy_new_request"></a>
 
 ## Function `new_request`
 
-Construct a new <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code> hot potato which requires an
+Construct a new <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> hot potato which requires an
 approving action from the creator to be destroyed / resolved. Once
-created, it must be confirmed in the <code><a href="transfer_policy.md#sui_transfer_policy_confirm_request">confirm_request</a></code> call otherwise
+created, it must be confirmed in the <code>confirm_request</code> call otherwise
 the transaction will fail.
 
 
-<pre><code>publicfun new_requestT(<a href="transfer_policy.md#sui_transfer_policy_item">item</a>: <a href="object.md#sui_object_ID">sui::object::ID</a>, <a href="transfer_policy.md#sui_transfer_policy_paid">paid</a>: u64, <a href="transfer_policy.md#sui_transfer_policy_from">from</a>: <a href="object.md#sui_object_ID">sui::object::ID</a>): <a href="transfer_policy.md#sui_transfer_policy_TransferRequest">sui::transfer_policy::TransferRequest</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new_request">new_request</a>&lt;T&gt;(item: <a href="object.md#0x2_object_ID">object::ID</a>, paid: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, from: <a href="object.md#0x2_object_ID">object::ID</a>): <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;
 </code></pre>
 
 
@@ -376,8 +374,8 @@ the transaction will fail.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_new_request">new_request</a>&lt;T&gt;(<a href="transfer_policy.md#sui_transfer_policy_item">item</a>: ID, <a href="transfer_policy.md#sui_transfer_policy_paid">paid</a>: u64, <a href="transfer_policy.md#sui_transfer_policy_from">from</a>: ID): <a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt; {
-    <a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a> { <a href="transfer_policy.md#sui_transfer_policy_item">item</a>, <a href="transfer_policy.md#sui_transfer_policy_paid">paid</a>, <a href="transfer_policy.md#sui_transfer_policy_from">from</a>, receipts: <a href="vec_set.md#sui_vec_set_empty">vec_set::empty</a>() }
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new_request">new_request</a>&lt;T&gt;(item: ID, paid: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, from: ID): <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt; {
+    <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a> { item, paid, from, receipts: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>() }
 }
 </code></pre>
 
@@ -385,17 +383,17 @@ the transaction will fail.
 
 </details>
 
-<a name="sui_transfer_policy_new"></a>
+<a name="0x2_transfer_policy_new"></a>
 
 ## Function `new`
 
-Register a type in the Kiosk system and receive a <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> and
-a <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code> for the type. The <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> is required to
-confirm kiosk deals for the <code>T</code>. If there's no <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>
+Register a type in the Kiosk system and receive a <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> and
+a <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code> for the type. The <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> is required to
+confirm kiosk deals for the <code>T</code>. If there's no <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>
 available for use, the type can not be traded in kiosks.
 
 
-<pre><code>publicfun newT(pub: &<a href="package.md#sui_package_Publisher">sui::package::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;, <a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">sui::transfer_policy::TransferPolicyCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new">new</a>&lt;T&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -404,14 +402,16 @@ available for use, the type can not be traded in kiosks.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_new">new</a>&lt;T&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext): (<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, <a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;) {
-    <b>assert</b>!(<a href="package.md#sui_package_from_package">package::from_package</a>&lt;T&gt;(pub), 0);
-    <b>let</b> id = <a href="object.md#sui_object_new">object::new</a>(ctx);
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new">new</a>&lt;T&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext): (<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;) {
+    <b>assert</b>!(<a href="package.md#0x2_package_from_package">package::from_package</a>&lt;T&gt;(pub), 0);
+    <b>let</b> id = <a href="object.md#0x2_object_new">object::new</a>(ctx);
     <b>let</b> policy_id = id.to_inner();
-    <a href="event.md#sui_event_emit">event::emit</a>(<a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCreated">TransferPolicyCreated</a>&lt;T&gt; { id: policy_id });
+
+    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCreated">TransferPolicyCreated</a>&lt;T&gt; { id: policy_id });
+
     (
-        <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a> { id, <a href="transfer_policy.md#sui_transfer_policy_rules">rules</a>: <a href="vec_set.md#sui_vec_set_empty">vec_set::empty</a>(), <a href="balance.md#sui_balance">balance</a>: <a href="balance.md#sui_balance_zero">balance::zero</a>() },
-        <a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a> { id: <a href="object.md#sui_object_new">object::new</a>(ctx), policy_id },
+        <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a> { id, rules: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>(), <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_zero">balance::zero</a>() },
+        <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), policy_id },
     )
 }
 </code></pre>
@@ -420,16 +420,16 @@ available for use, the type can not be traded in kiosks.
 
 </details>
 
-<a name="sui_transfer_policy_default"></a>
+<a name="0x2_transfer_policy_default"></a>
 
 ## Function `default`
 
 Initialize the Transfer Policy in the default scenario: Create and share
-the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>, transfer <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code> to the transaction
+the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>, transfer <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code> to the transaction
 sender.
 
 
-<pre><code><b>entry</b> <b>fun</b> defaultT(pub: &<a href="package.md#sui_package_Publisher">sui::package::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code>entry <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_default">default</a>&lt;T&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -438,10 +438,10 @@ sender.
 <summary>Implementation</summary>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_default">default</a>&lt;T&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
-    <b>let</b> (policy, cap) = <a href="transfer_policy.md#sui_transfer_policy_new">new</a>&lt;T&gt;(pub, ctx);
-    <a href="transfer.md#sui_transfer_share_object">sui::transfer::share_object</a>(policy);
-    <a href="transfer.md#sui_transfer_transfer">sui::transfer::transfer</a>(cap, ctx.sender());
+<pre><code>entry <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_default">default</a>&lt;T&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
+    <b>let</b> (policy, cap) = <a href="transfer_policy.md#0x2_transfer_policy_new">new</a>&lt;T&gt;(pub, ctx);
+    sui::transfer::share_object(policy);
+    sui::transfer::transfer(cap, ctx.sender());
 }
 </code></pre>
 
@@ -449,15 +449,15 @@ sender.
 
 </details>
 
-<a name="sui_transfer_policy_withdraw"></a>
+<a name="0x2_transfer_policy_withdraw"></a>
 
 ## Function `withdraw`
 
-Withdraw some amount of profits from the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>. If amount
+Withdraw some amount of profits from the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>. If amount
 is not specified, all profits are withdrawn.
 
 
-<pre><code>publicfun withdrawT(self: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">sui::transfer_policy::TransferPolicyCap</a>&lt;T&gt;, amount: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;<a href="sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_withdraw">withdraw</a>&lt;T&gt;(self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;, amount: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -466,21 +466,23 @@ is not specified, all profits are withdrawn.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a>&lt;T&gt;(
-    self: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
-    cap: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
-    amount: Option&lt;u64&gt;,
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_withdraw">withdraw</a>&lt;T&gt;(
+    self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
+    cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
+    amount: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     ctx: &<b>mut</b> TxContext,
 ): Coin&lt;SUI&gt; {
-    <b>assert</b>!(<a href="object.md#sui_object_id">object::id</a>(self) == cap.policy_id, <a href="transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
+
     <b>let</b> amount = <b>if</b> (amount.is_some()) {
         <b>let</b> amt = amount.destroy_some();
-        <b>assert</b>!(amt &lt;= self.<a href="balance.md#sui_balance">balance</a>.value(), <a href="transfer_policy.md#sui_transfer_policy_ENotEnough">ENotEnough</a>);
+        <b>assert</b>!(amt &lt;= self.<a href="balance.md#0x2_balance">balance</a>.value(), <a href="transfer_policy.md#0x2_transfer_policy_ENotEnough">ENotEnough</a>);
         amt
     } <b>else</b> {
-        self.<a href="balance.md#sui_balance">balance</a>.value()
+        self.<a href="balance.md#0x2_balance">balance</a>.value()
     };
-    <a href="coin.md#sui_coin_take">coin::take</a>(&<b>mut</b> self.<a href="balance.md#sui_balance">balance</a>, amount, ctx)
+
+    <a href="coin.md#0x2_coin_take">coin::take</a>(&<b>mut</b> self.<a href="balance.md#0x2_balance">balance</a>, amount, ctx)
 }
 </code></pre>
 
@@ -488,7 +490,7 @@ is not specified, all profits are withdrawn.
 
 </details>
 
-<a name="sui_transfer_policy_destroy_and_withdraw"></a>
+<a name="0x2_transfer_policy_destroy_and_withdraw"></a>
 
 ## Function `destroy_and_withdraw`
 
@@ -496,7 +498,7 @@ Destroy a TransferPolicyCap.
 Can be performed by any party as long as they own it.
 
 
-<pre><code>publicfun destroy_and_withdrawT(self: <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: <a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">sui::transfer_policy::TransferPolicyCap</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;<a href="sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_destroy_and_withdraw">destroy_and_withdraw</a>&lt;T&gt;(self: <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -505,18 +507,20 @@ Can be performed by any party as long as they own it.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_destroy_and_withdraw">destroy_and_withdraw</a>&lt;T&gt;(
-    self: <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
-    cap: <a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_destroy_and_withdraw">destroy_and_withdraw</a>&lt;T&gt;(
+    self: <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
+    cap: <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
     ctx: &<b>mut</b> TxContext,
 ): Coin&lt;SUI&gt; {
-    <b>assert</b>!(<a href="object.md#sui_object_id">object::id</a>(&self) == cap.policy_id, <a href="transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
-    <b>let</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a> { id: cap_id, policy_id } = cap;
-    <b>let</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a> { id, <a href="transfer_policy.md#sui_transfer_policy_rules">rules</a>: _, <a href="balance.md#sui_balance">balance</a> } = self;
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(&self) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
+
+    <b>let</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a> { id: cap_id, policy_id } = cap;
+    <b>let</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a> { id, rules: _, <a href="balance.md#0x2_balance">balance</a> } = self;
+
     id.delete();
     cap_id.delete();
-    <a href="event.md#sui_event_emit">event::emit</a>(<a href="transfer_policy.md#sui_transfer_policy_TransferPolicyDestroyed">TransferPolicyDestroyed</a>&lt;T&gt; { id: policy_id });
-    <a href="balance.md#sui_balance">balance</a>.into_coin(ctx)
+    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyDestroyed">TransferPolicyDestroyed</a>&lt;T&gt; { id: policy_id });
+    <a href="balance.md#0x2_balance">balance</a>.into_coin(ctx)
 }
 </code></pre>
 
@@ -524,19 +528,19 @@ Can be performed by any party as long as they own it.
 
 </details>
 
-<a name="sui_transfer_policy_confirm_request"></a>
+<a name="0x2_transfer_policy_confirm_request"></a>
 
 ## Function `confirm_request`
 
-Allow a <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code> for the type <code>T</code>. The call is protected
+Allow a <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> for the type <code>T</code>. The call is protected
 by the type constraint, as only the publisher of the <code>T</code> can get
-<code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;</code>.
+<code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;</code>.
 
 Note: unless there's a policy for <code>T</code> to allow transfers,
 Kiosk trades will not be possible.
 
 
-<pre><code>publicfun confirm_requestT(self: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;, request: <a href="transfer_policy.md#sui_transfer_policy_TransferRequest">sui::transfer_policy::TransferRequest</a>&lt;T&gt;): (<a href="object.md#sui_object_ID">sui::object::ID</a>, u64, <a href="object.md#sui_object_ID">sui::object::ID</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_confirm_request">confirm_request</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, request: <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): (<a href="object.md#0x2_object_ID">object::ID</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="object.md#0x2_object_ID">object::ID</a>)
 </code></pre>
 
 
@@ -545,20 +549,23 @@ Kiosk trades will not be possible.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_confirm_request">confirm_request</a>&lt;T&gt;(
-    self: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
-    request: <a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;,
-): (ID, u64, ID) {
-    <b>let</b> <a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a> { <a href="transfer_policy.md#sui_transfer_policy_item">item</a>, <a href="transfer_policy.md#sui_transfer_policy_paid">paid</a>, <a href="transfer_policy.md#sui_transfer_policy_from">from</a>, receipts } = request;
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_confirm_request">confirm_request</a>&lt;T&gt;(
+    self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
+    request: <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;,
+): (ID, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ID) {
+    <b>let</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a> { item, paid, from, receipts } = request;
     <b>let</b> <b>mut</b> completed = receipts.into_keys();
     <b>let</b> <b>mut</b> total = completed.length();
-    <b>assert</b>!(total == self.<a href="transfer_policy.md#sui_transfer_policy_rules">rules</a>.size(), <a href="transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
+
+    <b>assert</b>!(total == self.rules.size(), <a href="transfer_policy.md#0x2_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
+
     <b>while</b> (total &gt; 0) {
         <b>let</b> rule_type = completed.pop_back();
-        <b>assert</b>!(self.<a href="transfer_policy.md#sui_transfer_policy_rules">rules</a>.contains(&rule_type), <a href="transfer_policy.md#sui_transfer_policy_EIllegalRule">EIllegalRule</a>);
+        <b>assert</b>!(self.rules.contains(&rule_type), <a href="transfer_policy.md#0x2_transfer_policy_EIllegalRule">EIllegalRule</a>);
         total = total - 1;
     };
-    (<a href="transfer_policy.md#sui_transfer_policy_item">item</a>, <a href="transfer_policy.md#sui_transfer_policy_paid">paid</a>, <a href="transfer_policy.md#sui_transfer_policy_from">from</a>)
+
+    (item, paid, from)
 }
 </code></pre>
 
@@ -566,11 +573,11 @@ Kiosk trades will not be possible.
 
 </details>
 
-<a name="sui_transfer_policy_add_rule"></a>
+<a name="0x2_transfer_policy_add_rule"></a>
 
 ## Function `add_rule`
 
-Add a custom Rule to the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>. Once set, <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code> must
+Add a custom Rule to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>. Once set, <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> must
 receive a confirmation of the rule executed so the hot potato can be unpacked.
 
 - T: the type to which TransferPolicy<T> is applied.
@@ -581,7 +588,7 @@ Config requires <code>drop</code> to allow creators to remove any policy at any 
 even if graceful unpacking has not been implemented in a "rule module".
 
 
-<pre><code>publicfun add_ruleT, Rule, Config(_: Rule, policy: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">sui::transfer_policy::TransferPolicyCap</a>&lt;T&gt;, cfg: Config)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_add_rule">add_rule</a>&lt;T, Rule: drop, Config: drop, store&gt;(_: Rule, policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;, cfg: Config)
 </code></pre>
 
 
@@ -590,16 +597,16 @@ even if graceful unpacking has not been implemented in a "rule module".
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_add_rule">add_rule</a>&lt;T, Rule: drop, Config: store + drop&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_add_rule">add_rule</a>&lt;T, Rule: drop, Config: store + drop&gt;(
     _: Rule,
-    policy: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
-    cap: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
+    policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
+    cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
     cfg: Config,
 ) {
-    <b>assert</b>!(<a href="object.md#sui_object_id">object::id</a>(policy) == cap.policy_id, <a href="transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(!<a href="transfer_policy.md#sui_transfer_policy_has_rule">has_rule</a>&lt;T, Rule&gt;(policy), <a href="transfer_policy.md#sui_transfer_policy_ERuleAlreadySet">ERuleAlreadySet</a>);
-    df::add(&<b>mut</b> policy.id, <a href="transfer_policy.md#sui_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {}, cfg);
-    policy.<a href="transfer_policy.md#sui_transfer_policy_rules">rules</a>.insert(type_name::get&lt;Rule&gt;())
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(policy) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(!<a href="transfer_policy.md#0x2_transfer_policy_has_rule">has_rule</a>&lt;T, Rule&gt;(policy), <a href="transfer_policy.md#0x2_transfer_policy_ERuleAlreadySet">ERuleAlreadySet</a>);
+    df::add(&<b>mut</b> policy.id, <a href="transfer_policy.md#0x2_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {}, cfg);
+    policy.rules.insert(<a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -607,14 +614,14 @@ even if graceful unpacking has not been implemented in a "rule module".
 
 </details>
 
-<a name="sui_transfer_policy_get_rule"></a>
+<a name="0x2_transfer_policy_get_rule"></a>
 
 ## Function `get_rule`
 
 Get the custom Config for the Rule (can be only one per "Rule" type).
 
 
-<pre><code>publicfun get_ruleT, Rule, Config(_: Rule, policy: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;): &Config
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_get_rule">get_rule</a>&lt;T, Rule: drop, Config: drop, store&gt;(_: Rule, policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;): &Config
 </code></pre>
 
 
@@ -623,11 +630,11 @@ Get the custom Config for the Rule (can be only one per "Rule" type).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_get_rule">get_rule</a>&lt;T, Rule: drop, Config: store + drop&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_get_rule">get_rule</a>&lt;T, Rule: drop, Config: store + drop&gt;(
     _: Rule,
-    policy: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
+    policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
 ): &Config {
-    df::borrow(&policy.id, <a href="transfer_policy.md#sui_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {})
+    df::borrow(&policy.id, <a href="transfer_policy.md#0x2_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {})
 }
 </code></pre>
 
@@ -635,14 +642,14 @@ Get the custom Config for the Rule (can be only one per "Rule" type).
 
 </details>
 
-<a name="sui_transfer_policy_add_to_balance"></a>
+<a name="0x2_transfer_policy_add_to_balance"></a>
 
 ## Function `add_to_balance`
 
-Add some <code>SUI</code> to the balance of a <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+Add some <code>SUI</code> to the balance of a <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
 
 
-<pre><code>publicfun add_to_balanceT, Rule(_: Rule, policy: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;, <a href="coin.md#sui_coin">coin</a>: <a href="coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;<a href="sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_add_to_balance">add_to_balance</a>&lt;T, Rule: drop&gt;(_: Rule, policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;)
 </code></pre>
 
 
@@ -651,9 +658,9 @@ Add some <code>SUI</code> to the balance of a <code><a href="transfer_policy.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_add_to_balance">add_to_balance</a>&lt;T, Rule: drop&gt;(_: Rule, policy: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, <a href="coin.md#sui_coin">coin</a>: Coin&lt;SUI&gt;) {
-    <b>assert</b>!(<a href="transfer_policy.md#sui_transfer_policy_has_rule">has_rule</a>&lt;T, Rule&gt;(policy), <a href="transfer_policy.md#sui_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>);
-    <a href="coin.md#sui_coin_put">coin::put</a>(&<b>mut</b> policy.<a href="balance.md#sui_balance">balance</a>, <a href="coin.md#sui_coin">coin</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_add_to_balance">add_to_balance</a>&lt;T, Rule: drop&gt;(_: Rule, policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: Coin&lt;SUI&gt;) {
+    <b>assert</b>!(<a href="transfer_policy.md#0x2_transfer_policy_has_rule">has_rule</a>&lt;T, Rule&gt;(policy), <a href="transfer_policy.md#0x2_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>);
+    <a href="coin.md#0x2_coin_put">coin::put</a>(&<b>mut</b> policy.<a href="balance.md#0x2_balance">balance</a>, <a href="coin.md#0x2_coin">coin</a>)
 }
 </code></pre>
 
@@ -661,15 +668,15 @@ Add some <code>SUI</code> to the balance of a <code><a href="transfer_policy.md#
 
 </details>
 
-<a name="sui_transfer_policy_add_receipt"></a>
+<a name="0x2_transfer_policy_add_receipt"></a>
 
 ## Function `add_receipt`
 
-Adds a <code>Receipt</code> to the <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code>, unblocking the request and
+Adds a <code>Receipt</code> to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>, unblocking the request and
 confirming that the policy requirements are satisfied.
 
 
-<pre><code>publicfun add_receiptT, Rule(_: Rule, request: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferRequest">sui::transfer_policy::TransferRequest</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_add_receipt">add_receipt</a>&lt;T, Rule: drop&gt;(_: Rule, request: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -678,8 +685,8 @@ confirming that the policy requirements are satisfied.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_add_receipt">add_receipt</a>&lt;T, Rule: drop&gt;(_: Rule, request: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;) {
-    request.receipts.insert(type_name::get&lt;Rule&gt;())
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_add_receipt">add_receipt</a>&lt;T, Rule: drop&gt;(_: Rule, request: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;) {
+    request.receipts.insert(<a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -687,14 +694,14 @@ confirming that the policy requirements are satisfied.
 
 </details>
 
-<a name="sui_transfer_policy_has_rule"></a>
+<a name="0x2_transfer_policy_has_rule"></a>
 
 ## Function `has_rule`
 
-Check whether a custom rule has been added to the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+Check whether a custom rule has been added to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
 
 
-<pre><code>publicfun has_ruleT, Rule(policy: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;): bool
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_has_rule">has_rule</a>&lt;T, Rule: drop&gt;(policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;): bool
 </code></pre>
 
 
@@ -703,8 +710,8 @@ Check whether a custom rule has been added to the <code><a href="transfer_policy
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_has_rule">has_rule</a>&lt;T, Rule: drop&gt;(policy: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;): bool {
-    df::exists_(&policy.id, <a href="transfer_policy.md#sui_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {})
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_has_rule">has_rule</a>&lt;T, Rule: drop&gt;(policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;): bool {
+    df::exists_(&policy.id, <a href="transfer_policy.md#0x2_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {})
 }
 </code></pre>
 
@@ -712,14 +719,14 @@ Check whether a custom rule has been added to the <code><a href="transfer_policy
 
 </details>
 
-<a name="sui_transfer_policy_remove_rule"></a>
+<a name="0x2_transfer_policy_remove_rule"></a>
 
 ## Function `remove_rule`
 
-Remove the Rule from the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+Remove the Rule from the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
 
 
-<pre><code>publicfun remove_ruleT, Rule, Config(policy: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">sui::transfer_policy::TransferPolicyCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_remove_rule">remove_rule</a>&lt;T, Rule: drop, Config: drop, store&gt;(policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -728,13 +735,13 @@ Remove the Rule from the <code><a href="transfer_policy.md#sui_transfer_policy_T
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_remove_rule">remove_rule</a>&lt;T, Rule: drop, Config: store + drop&gt;(
-    policy: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
-    cap: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_remove_rule">remove_rule</a>&lt;T, Rule: drop, Config: store + drop&gt;(
+    policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
+    cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
 ) {
-    <b>assert</b>!(<a href="object.md#sui_object_id">object::id</a>(policy) == cap.policy_id, <a href="transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
-    <b>let</b> _: Config = df::remove(&<b>mut</b> policy.id, <a href="transfer_policy.md#sui_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {});
-    policy.<a href="transfer_policy.md#sui_transfer_policy_rules">rules</a>.remove(&type_name::get&lt;Rule&gt;());
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(policy) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
+    <b>let</b> _: Config = df::remove(&<b>mut</b> policy.id, <a href="transfer_policy.md#0x2_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {});
+    policy.rules.remove(&<a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;Rule&gt;());
 }
 </code></pre>
 
@@ -742,14 +749,14 @@ Remove the Rule from the <code><a href="transfer_policy.md#sui_transfer_policy_T
 
 </details>
 
-<a name="sui_transfer_policy_uid"></a>
+<a name="0x2_transfer_policy_uid"></a>
 
 ## Function `uid`
 
-Allows reading custom attachments to the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> if there are any.
+Allows reading custom attachments to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> if there are any.
 
 
-<pre><code>publicfun uidT(self: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;): &<a href="object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_uid">uid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;): &<a href="object.md#0x2_object_UID">object::UID</a>
 </code></pre>
 
 
@@ -758,22 +765,22 @@ Allows reading custom attachments to the <code><a href="transfer_policy.md#sui_t
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_uid">uid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;): &UID { &self.id }
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_uid">uid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;): &UID { &self.id }
 </code></pre>
 
 
 
 </details>
 
-<a name="sui_transfer_policy_uid_mut_as_owner"></a>
+<a name="0x2_transfer_policy_uid_mut_as_owner"></a>
 
 ## Function `uid_mut_as_owner`
 
 Get a mutable reference to the <code>self.id</code> to enable custom attachments
-to the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
 
 
-<pre><code>publicfun uid_mut_as_ownerT(self: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">sui::transfer_policy::TransferPolicyCap</a>&lt;T&gt;): &<b>mut</b> <a href="object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_uid_mut_as_owner">uid_mut_as_owner</a>&lt;T&gt;(self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;): &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>
 </code></pre>
 
 
@@ -782,8 +789,8 @@ to the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">Tra
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_uid_mut_as_owner">uid_mut_as_owner</a>&lt;T&gt;(self: &<b>mut</b> <a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;): &<b>mut</b> UID {
-    <b>assert</b>!(<a href="object.md#sui_object_id">object::id</a>(self) == cap.policy_id, <a href="transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_uid_mut_as_owner">uid_mut_as_owner</a>&lt;T&gt;(self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;): &<b>mut</b> UID {
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
     &<b>mut</b> self.id
 }
 </code></pre>
@@ -792,14 +799,14 @@ to the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">Tra
 
 </details>
 
-<a name="sui_transfer_policy_rules"></a>
+<a name="0x2_transfer_policy_rules"></a>
 
 ## Function `rules`
 
-Read the <code><a href="transfer_policy.md#sui_transfer_policy_rules">rules</a></code> field from the <code><a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+Read the <code>rules</code> field from the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
 
 
-<pre><code>publicfun rulesT(self: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;): &<a href="vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_rules">rules</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;): &<a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<a href="../move-stdlib/type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>&gt;
 </code></pre>
 
 
@@ -808,8 +815,8 @@ Read the <code><a href="transfer_policy.md#sui_transfer_policy_rules">rules</a><
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_rules">rules</a>&lt;T&gt;(self: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;): &VecSet&lt;TypeName&gt; {
-    &self.<a href="transfer_policy.md#sui_transfer_policy_rules">rules</a>
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_rules">rules</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;): &VecSet&lt;TypeName&gt; {
+    &self.rules
 }
 </code></pre>
 
@@ -817,14 +824,14 @@ Read the <code><a href="transfer_policy.md#sui_transfer_policy_rules">rules</a><
 
 </details>
 
-<a name="sui_transfer_policy_item"></a>
+<a name="0x2_transfer_policy_item"></a>
 
 ## Function `item`
 
-Get the <code><a href="transfer_policy.md#sui_transfer_policy_item">item</a></code> field of the <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code>.
+Get the <code>item</code> field of the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>.
 
 
-<pre><code>publicfun itemT(self: &<a href="transfer_policy.md#sui_transfer_policy_TransferRequest">sui::transfer_policy::TransferRequest</a>&lt;T&gt;): <a href="object.md#sui_object_ID">sui::object::ID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_item">item</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): <a href="object.md#0x2_object_ID">object::ID</a>
 </code></pre>
 
 
@@ -833,21 +840,21 @@ Get the <code><a href="transfer_policy.md#sui_transfer_policy_item">item</a></co
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_item">item</a>&lt;T&gt;(self: &<a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;): ID { self.<a href="transfer_policy.md#sui_transfer_policy_item">item</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_item">item</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;): ID { self.item }
 </code></pre>
 
 
 
 </details>
 
-<a name="sui_transfer_policy_paid"></a>
+<a name="0x2_transfer_policy_paid"></a>
 
 ## Function `paid`
 
-Get the <code><a href="transfer_policy.md#sui_transfer_policy_paid">paid</a></code> field of the <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code>.
+Get the <code>paid</code> field of the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>.
 
 
-<pre><code>publicfun paidT(self: &<a href="transfer_policy.md#sui_transfer_policy_TransferRequest">sui::transfer_policy::TransferRequest</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_paid">paid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -856,21 +863,21 @@ Get the <code><a href="transfer_policy.md#sui_transfer_policy_paid">paid</a></co
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_paid">paid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;): u64 { self.<a href="transfer_policy.md#sui_transfer_policy_paid">paid</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_paid">paid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> { self.paid }
 </code></pre>
 
 
 
 </details>
 
-<a name="sui_transfer_policy_from"></a>
+<a name="0x2_transfer_policy_from"></a>
 
 ## Function `from`
 
-Get the <code><a href="transfer_policy.md#sui_transfer_policy_from">from</a></code> field of the <code><a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code>.
+Get the <code>from</code> field of the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>.
 
 
-<pre><code>publicfun fromT(self: &<a href="transfer_policy.md#sui_transfer_policy_TransferRequest">sui::transfer_policy::TransferRequest</a>&lt;T&gt;): <a href="object.md#sui_object_ID">sui::object::ID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_from">from</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): <a href="object.md#0x2_object_ID">object::ID</a>
 </code></pre>
 
 
@@ -879,7 +886,7 @@ Get the <code><a href="transfer_policy.md#sui_transfer_policy_from">from</a></co
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#sui_transfer_policy_from">from</a>&lt;T&gt;(self: &<a href="transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;): ID { self.<a href="transfer_policy.md#sui_transfer_policy_from">from</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_from">from</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;): ID { self.from }
 </code></pre>
 
 

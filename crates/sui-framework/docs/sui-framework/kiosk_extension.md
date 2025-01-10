@@ -1,5 +1,5 @@
 ---
-title: Module `sui::kiosk_extension`
+title: Module `0x2::kiosk_extension`
 ---
 
 This module implements the Kiosk Extensions functionality. It allows
@@ -9,7 +9,7 @@ A Kiosk Extension is a module that implements any functionality on top of
 the <code>Kiosk</code> without discarding nor blocking the base. Given that <code>Kiosk</code>
 itself is a trading primitive, most of the extensions are expected to be
 related to trading. However, there's no limit to what can be built using the
-<code><a href="kiosk_extension.md#sui_kiosk_extension">kiosk_extension</a></code> module, as it gives certain benefits such as using <code>Kiosk</code>
+<code><a href="kiosk_extension.md#0x2_kiosk_extension">kiosk_extension</a></code> module, as it gives certain benefits such as using <code>Kiosk</code>
 as the storage for any type of data / assets.
 
 
@@ -20,12 +20,12 @@ as the storage for any type of data / assets.
 - An extension can only be installed by the Kiosk Owner and requires an
 authorization via the <code>KioskOwnerCap</code>.
 - When installed, the extension is given a permission bitmap that allows it
-to perform certain protected actions (eg <code><a href="kiosk_extension.md#sui_kiosk_extension_place">place</a></code>, <code><a href="kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code>). However, it is
+to perform certain protected actions (eg <code>place</code>, <code>lock</code>). However, it is
 possible to install an extension that does not have any permissions.
-- Kiosk Owner can <code><a href="kiosk_extension.md#sui_kiosk_extension_disable">disable</a></code> the extension at any time, which prevents it
+- Kiosk Owner can <code>disable</code> the extension at any time, which prevents it
 from performing any protected actions. The storage is still available to the
 extension until it is completely removed.
-- A disabled extension can be <code><a href="kiosk_extension.md#sui_kiosk_extension_enable">enable</a></code>d at any time giving the permissions
+- A disabled extension can be <code>enable</code>d at any time giving the permissions
 back to the extension.
 - An extension permissions follow the all-or-nothing policy. Either all of
 the requested permissions are granted or none of them (can't install).
@@ -48,75 +48,53 @@ default trading functionality.
 - Trading functionality can utilize the <code>PurchaseCap</code> to build a custom
 logic around the purchase flow. However, it should be carefully managed to
 prevent asset locking.
-- <code><a href="kiosk_extension.md#sui_kiosk_extension">kiosk_extension</a></code> is a friend module to <code><a href="kiosk.md#sui_kiosk">kiosk</a></code> and has access to its
+- <code><a href="kiosk_extension.md#0x2_kiosk_extension">kiosk_extension</a></code> is a friend module to <code><a href="kiosk.md#0x2_kiosk">kiosk</a></code> and has access to its
 internal functions (such as <code>place_internal</code> and <code>lock_internal</code> to
-implement custom authorization scheme for <code><a href="kiosk_extension.md#sui_kiosk_extension_place">place</a></code> and <code><a href="kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> respectively).
+implement custom authorization scheme for <code>place</code> and <code>lock</code> respectively).
 
 
         -  [Flow:](#@Flow:_0)
         -  [Examples:](#@Examples:_1)
         -  [Notes:](#@Notes:_2)
--  [Struct `Extension`](#sui_kiosk_extension_Extension)
--  [Struct `ExtensionKey`](#sui_kiosk_extension_ExtensionKey)
+-  [Struct `Extension`](#0x2_kiosk_extension_Extension)
+-  [Struct `ExtensionKey`](#0x2_kiosk_extension_ExtensionKey)
 -  [Constants](#@Constants_3)
--  [Function `add`](#sui_kiosk_extension_add)
--  [Function `disable`](#sui_kiosk_extension_disable)
--  [Function `enable`](#sui_kiosk_extension_enable)
--  [Function `remove`](#sui_kiosk_extension_remove)
--  [Function `storage`](#sui_kiosk_extension_storage)
--  [Function `storage_mut`](#sui_kiosk_extension_storage_mut)
--  [Function `place`](#sui_kiosk_extension_place)
--  [Function `lock`](#sui_kiosk_extension_lock)
--  [Function `is_installed`](#sui_kiosk_extension_is_installed)
--  [Function `is_enabled`](#sui_kiosk_extension_is_enabled)
--  [Function `can_place`](#sui_kiosk_extension_can_place)
--  [Function `can_lock`](#sui_kiosk_extension_can_lock)
--  [Function `extension`](#sui_kiosk_extension_extension)
--  [Function `extension_mut`](#sui_kiosk_extension_extension_mut)
+-  [Function `add`](#0x2_kiosk_extension_add)
+-  [Function `disable`](#0x2_kiosk_extension_disable)
+-  [Function `enable`](#0x2_kiosk_extension_enable)
+-  [Function `remove`](#0x2_kiosk_extension_remove)
+-  [Function `storage`](#0x2_kiosk_extension_storage)
+-  [Function `storage_mut`](#0x2_kiosk_extension_storage_mut)
+-  [Function `place`](#0x2_kiosk_extension_place)
+-  [Function `lock`](#0x2_kiosk_extension_lock)
+-  [Function `is_installed`](#0x2_kiosk_extension_is_installed)
+-  [Function `is_enabled`](#0x2_kiosk_extension_is_enabled)
+-  [Function `can_place`](#0x2_kiosk_extension_can_place)
+-  [Function `can_lock`](#0x2_kiosk_extension_can_lock)
+-  [Function `extension`](#0x2_kiosk_extension_extension)
+-  [Function `extension_mut`](#0x2_kiosk_extension_extension_mut)
 
 
-<pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
-<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
-<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
-<b>use</b> <a href="address.md#sui_address">sui::address</a>;
-<b>use</b> <a href="bag.md#sui_bag">sui::bag</a>;
-<b>use</b> <a href="balance.md#sui_balance">sui::balance</a>;
-<b>use</b> <a href="coin.md#sui_coin">sui::coin</a>;
-<b>use</b> <a href="config.md#sui_config">sui::config</a>;
-<b>use</b> <a href="deny_list.md#sui_deny_list">sui::deny_list</a>;
-<b>use</b> <a href="dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
-<b>use</b> <a href="dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
-<b>use</b> <a href="event.md#sui_event">sui::event</a>;
-<b>use</b> <a href="hex.md#sui_hex">sui::hex</a>;
-<b>use</b> <a href="kiosk.md#sui_kiosk">sui::kiosk</a>;
-<b>use</b> <a href="object.md#sui_object">sui::object</a>;
-<b>use</b> <a href="package.md#sui_package">sui::package</a>;
-<b>use</b> <a href="sui.md#sui_sui">sui::sui</a>;
-<b>use</b> <a href="table.md#sui_table">sui::table</a>;
-<b>use</b> <a href="transfer.md#sui_transfer">sui::transfer</a>;
-<b>use</b> <a href="transfer_policy.md#sui_transfer_policy">sui::transfer_policy</a>;
-<b>use</b> <a href="tx_context.md#sui_tx_context">sui::tx_context</a>;
-<b>use</b> <a href="types.md#sui_types">sui::types</a>;
-<b>use</b> <a href="url.md#sui_url">sui::url</a>;
-<b>use</b> <a href="vec_set.md#sui_vec_set">sui::vec_set</a>;
+<pre><code><b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
+<b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
+<b>use</b> <a href="kiosk.md#0x2_kiosk">0x2::kiosk</a>;
+<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="transfer_policy.md#0x2_transfer_policy">0x2::transfer_policy</a>;
+<b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
 
 
-<a name="sui_kiosk_extension_Extension"></a>
+<a name="0x2_kiosk_extension_Extension"></a>
 
 ## Struct `Extension`
 
 The Extension struct contains the data used by the extension and the
-configuration for this extension. Stored under the <code><a href="kiosk_extension.md#sui_kiosk_extension_ExtensionKey">ExtensionKey</a></code>
+configuration for this extension. Stored under the <code><a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a></code>
 dynamic field.
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="kiosk_extension.md#sui_kiosk_extension_Extension">Extension</a> <b>has</b> store
+<pre><code><b>struct</b> <a href="kiosk_extension.md#0x2_kiosk_extension_Extension">Extension</a> <b>has</b> store
 </code></pre>
 
 
@@ -127,7 +105,7 @@ dynamic field.
 
 <dl>
 <dt>
-<code><a href="kiosk_extension.md#sui_kiosk_extension_storage">storage</a>: <a href="bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
+<code>storage: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
 </dt>
 <dd>
  Storage for the extension, an isolated Bag. By putting the extension
@@ -136,27 +114,30 @@ dynamic field.
  the ability to store any data they want.
 </dd>
 <dt>
-<code>permissions: u128</code>
+<code>permissions: <a href="../move-stdlib/u128.md#0x1_u128">u128</a></code>
 </dt>
 <dd>
  Bitmap of permissions that the extension has (can be revoked any
  moment). It's all or nothing policy - either the extension has the
  required permissions or no permissions at all.
- 1st bit - <code><a href="kiosk_extension.md#sui_kiosk_extension_place">place</a></code> - allows to place items for sale
- 2nd bit - <code><a href="kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> and <code><a href="kiosk_extension.md#sui_kiosk_extension_place">place</a></code> - allows to lock items (and place)
+
+ 1st bit - <code>place</code> - allows to place items for sale
+ 2nd bit - <code>lock</code> and <code>place</code> - allows to lock items (and place)
+
  For example:
  - <code>10</code> - allows to place items and lock them.
- - <code>11</code> - allows to place items and lock them (<code><a href="kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> includes <code><a href="kiosk_extension.md#sui_kiosk_extension_place">place</a></code>).
+ - <code>11</code> - allows to place items and lock them (<code>lock</code> includes <code>place</code>).
  - <code>01</code> - allows to place items, but not lock them.
  - <code>00</code> - no permissions.
 </dd>
 <dt>
-<code><a href="kiosk_extension.md#sui_kiosk_extension_is_enabled">is_enabled</a>: bool</code>
+<code>is_enabled: bool</code>
 </dt>
 <dd>
  Whether the extension can call protected actions. By default, all
- extensions are enabled (on <code><a href="kiosk_extension.md#sui_kiosk_extension_add">add</a></code> call), however the Kiosk
+ extensions are enabled (on <code>add</code> call), however the Kiosk
  owner can disable them at any time.
+
  Disabling the extension does not limit its access to the storage.
 </dd>
 </dl>
@@ -164,16 +145,16 @@ dynamic field.
 
 </details>
 
-<a name="sui_kiosk_extension_ExtensionKey"></a>
+<a name="0x2_kiosk_extension_ExtensionKey"></a>
 
 ## Struct `ExtensionKey`
 
-The <code><a href="kiosk_extension.md#sui_kiosk_extension_ExtensionKey">ExtensionKey</a></code> is a typed dynamic field key used to store the
+The <code><a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a></code> is a typed dynamic field key used to store the
 extension configuration and data. <code>Ext</code> is a phantom type that is used
 to identify the extension witness.
 
 
-<pre><code><b>public</b> <b>struct</b> ExtensionKeyExt <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -183,6 +164,12 @@ to identify the extension witness.
 
 
 <dl>
+<dt>
+<code>dummy_field: bool</code>
+</dt>
+<dd>
+
+</dd>
 </dl>
 
 
@@ -193,68 +180,68 @@ to identify the extension witness.
 ## Constants
 
 
-<a name="sui_kiosk_extension_EExtensionNotAllowed"></a>
+<a name="0x2_kiosk_extension_ENotOwner"></a>
+
+Trying to add an extension while not being the owner of the Kiosk.
+
+
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
+</code></pre>
+
+
+
+<a name="0x2_kiosk_extension_EExtensionNotAllowed"></a>
 
 Extension is trying to access a permissioned action while not having
 the required permission.
 
 
-<pre><code><b>const</b> <a href="kiosk_extension.md#sui_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>: u64 = 2;
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
 
-<a name="sui_kiosk_extension_EExtensionNotInstalled"></a>
+<a name="0x2_kiosk_extension_EExtensionNotInstalled"></a>
 
 Extension is not installed in the Kiosk.
 
 
-<pre><code><b>const</b> <a href="kiosk_extension.md#sui_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>: u64 = 3;
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
 
-<a name="sui_kiosk_extension_ENotOwner"></a>
+<a name="0x2_kiosk_extension_LOCK"></a>
 
-Trying to add an extension while not being the owner of the Kiosk.
-
-
-<pre><code><b>const</b> <a href="kiosk_extension.md#sui_kiosk_extension_ENotOwner">ENotOwner</a>: u64 = 0;
-</code></pre>
-
-
-
-<a name="sui_kiosk_extension_LOCK"></a>
-
-Value that represents the <code><a href="kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> and <code><a href="kiosk_extension.md#sui_kiosk_extension_place">place</a></code> permission in the
+Value that represents the <code>lock</code> and <code>place</code> permission in the
 permissions bitmap.
 
 
-<pre><code><b>const</b> <a href="kiosk_extension.md#sui_kiosk_extension_LOCK">LOCK</a>: u128 = 2;
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_LOCK">LOCK</a>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a> = 2;
 </code></pre>
 
 
 
-<a name="sui_kiosk_extension_PLACE"></a>
+<a name="0x2_kiosk_extension_PLACE"></a>
 
-Value that represents the <code><a href="kiosk_extension.md#sui_kiosk_extension_place">place</a></code> permission in the permissions bitmap.
+Value that represents the <code>place</code> permission in the permissions bitmap.
 
 
-<pre><code><b>const</b> <a href="kiosk_extension.md#sui_kiosk_extension_PLACE">PLACE</a>: u128 = 1;
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_PLACE">PLACE</a>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a> = 1;
 </code></pre>
 
 
 
-<a name="sui_kiosk_extension_add"></a>
+<a name="0x2_kiosk_extension_add"></a>
 
 ## Function `add`
 
 Add an extension to the Kiosk. Can only be performed by the owner. The
 extension witness is required to allow extensions define their set of
-permissions in the custom <code><a href="kiosk_extension.md#sui_kiosk_extension_add">add</a></code> call.
+permissions in the custom <code>add</code> call.
 
 
-<pre><code>publicfun addExt(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>, permissions: u128, ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_add">add</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, permissions: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -263,21 +250,21 @@ permissions in the custom <code><a href="kiosk_extension.md#sui_kiosk_extension_
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_add">add</a>&lt;Ext: drop&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_add">add</a>&lt;Ext: drop&gt;(
     _ext: Ext,
     self: &<b>mut</b> Kiosk,
     cap: &KioskOwnerCap,
-    permissions: u128,
+    permissions: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#sui_kiosk_extension_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
     df::add(
         self.uid_mut_as_owner(cap),
-        <a href="kiosk_extension.md#sui_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {},
-        <a href="kiosk_extension.md#sui_kiosk_extension_Extension">Extension</a> {
-            <a href="kiosk_extension.md#sui_kiosk_extension_storage">storage</a>: <a href="bag.md#sui_bag_new">bag::new</a>(ctx),
+        <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {},
+        <a href="kiosk_extension.md#0x2_kiosk_extension_Extension">Extension</a> {
+            storage: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
             permissions,
-            <a href="kiosk_extension.md#sui_kiosk_extension_is_enabled">is_enabled</a>: <b>true</b>,
+            is_enabled: <b>true</b>,
         },
     )
 }
@@ -287,7 +274,7 @@ permissions in the custom <code><a href="kiosk_extension.md#sui_kiosk_extension_
 
 </details>
 
-<a name="sui_kiosk_extension_disable"></a>
+<a name="0x2_kiosk_extension_disable"></a>
 
 ## Function `disable`
 
@@ -296,7 +283,7 @@ extension completely, it keeps it from performing any protected actions.
 The storage is still available to the extension (until it's removed).
 
 
-<pre><code>publicfun disableExt(self: &<b>mut</b> <a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_disable">disable</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>)
 </code></pre>
 
 
@@ -305,10 +292,10 @@ The storage is still available to the extension (until it's removed).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_disable">disable</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap) {
-    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#sui_kiosk_extension_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(<a href="kiosk_extension.md#sui_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#sui_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
-    <a href="kiosk_extension.md#sui_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).<a href="kiosk_extension.md#sui_kiosk_extension_is_enabled">is_enabled</a> = <b>false</b>;
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_disable">disable</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap) {
+    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
+    <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).is_enabled = <b>false</b>;
 }
 </code></pre>
 
@@ -316,16 +303,16 @@ The storage is still available to the extension (until it's removed).
 
 </details>
 
-<a name="sui_kiosk_extension_enable"></a>
+<a name="0x2_kiosk_extension_enable"></a>
 
 ## Function `enable`
 
 Re-enable the extension allowing it to call protected actions (eg
-<code><a href="kiosk_extension.md#sui_kiosk_extension_place">place</a></code>, <code><a href="kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code>). By default, all added extensions are enabled. Kiosk
-owner can disable them via <code><a href="kiosk_extension.md#sui_kiosk_extension_disable">disable</a></code> call.
+<code>place</code>, <code>lock</code>). By default, all added extensions are enabled. Kiosk
+owner can disable them via <code>disable</code> call.
 
 
-<pre><code>publicfun enableExt(self: &<b>mut</b> <a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_enable">enable</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>)
 </code></pre>
 
 
@@ -334,10 +321,10 @@ owner can disable them via <code><a href="kiosk_extension.md#sui_kiosk_extension
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_enable">enable</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap) {
-    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#sui_kiosk_extension_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(<a href="kiosk_extension.md#sui_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#sui_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
-    <a href="kiosk_extension.md#sui_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).<a href="kiosk_extension.md#sui_kiosk_extension_is_enabled">is_enabled</a> = <b>true</b>;
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_enable">enable</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap) {
+    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
+    <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).is_enabled = <b>true</b>;
 }
 </code></pre>
 
@@ -345,7 +332,7 @@ owner can disable them via <code><a href="kiosk_extension.md#sui_kiosk_extension
 
 </details>
 
-<a name="sui_kiosk_extension_remove"></a>
+<a name="0x2_kiosk_extension_remove"></a>
 
 ## Function `remove`
 
@@ -353,7 +340,7 @@ Remove an extension from the Kiosk. Can only be performed by the owner,
 the extension storage must be empty for the transaction to succeed.
 
 
-<pre><code>publicfun removeExt(self: &<b>mut</b> <a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_remove">remove</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>)
 </code></pre>
 
 
@@ -362,15 +349,17 @@ the extension storage must be empty for the transaction to succeed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_remove">remove</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap) {
-    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#sui_kiosk_extension_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(<a href="kiosk_extension.md#sui_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#sui_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
-    <b>let</b> <a href="kiosk_extension.md#sui_kiosk_extension_Extension">Extension</a> {
-        <a href="kiosk_extension.md#sui_kiosk_extension_storage">storage</a>,
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_remove">remove</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap) {
+    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
+
+    <b>let</b> <a href="kiosk_extension.md#0x2_kiosk_extension_Extension">Extension</a> {
+        storage,
         permissions: _,
-        <a href="kiosk_extension.md#sui_kiosk_extension_is_enabled">is_enabled</a>: _,
-    } = df::remove(self.uid_mut_as_owner(cap), <a href="kiosk_extension.md#sui_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {});
-    <a href="kiosk_extension.md#sui_kiosk_extension_storage">storage</a>.destroy_empty();
+        is_enabled: _,
+    } = df::remove(self.uid_mut_as_owner(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {});
+
+    storage.destroy_empty();
 }
 </code></pre>
 
@@ -378,7 +367,7 @@ the extension storage must be empty for the transaction to succeed.
 
 </details>
 
-<a name="sui_kiosk_extension_storage"></a>
+<a name="0x2_kiosk_extension_storage"></a>
 
 ## Function `storage`
 
@@ -386,7 +375,7 @@ Get immutable access to the extension storage. Can only be performed by
 the extension as long as the extension is installed.
 
 
-<pre><code>publicfun storageExt(_ext: Ext, self: &<a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<a href="bag.md#sui_bag_Bag">sui::bag::Bag</a>
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_storage">storage</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<a href="bag.md#0x2_bag_Bag">bag::Bag</a>
 </code></pre>
 
 
@@ -395,9 +384,9 @@ the extension as long as the extension is installed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_storage">storage</a>&lt;Ext: drop&gt;(_ext: Ext, self: &Kiosk): &Bag {
-    <b>assert</b>!(<a href="kiosk_extension.md#sui_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#sui_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
-    &<a href="kiosk_extension.md#sui_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).<a href="kiosk_extension.md#sui_kiosk_extension_storage">storage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_storage">storage</a>&lt;Ext: drop&gt;(_ext: Ext, self: &Kiosk): &Bag {
+    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
+    &<a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).storage
 }
 </code></pre>
 
@@ -405,7 +394,7 @@ the extension as long as the extension is installed.
 
 </details>
 
-<a name="sui_kiosk_extension_storage_mut"></a>
+<a name="0x2_kiosk_extension_storage_mut"></a>
 
 ## Function `storage_mut`
 
@@ -423,7 +412,7 @@ Extensions should be crafted carefully, and the KioskOwner should be
 aware of the risks.
 
 
-<pre><code>publicfun storage_mutExt(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<b>mut</b> <a href="bag.md#sui_bag_Bag">sui::bag::Bag</a>
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_storage_mut">storage_mut</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<b>mut</b> <a href="bag.md#0x2_bag_Bag">bag::Bag</a>
 </code></pre>
 
 
@@ -432,9 +421,9 @@ aware of the risks.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_storage_mut">storage_mut</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> Kiosk): &<b>mut</b> Bag {
-    <b>assert</b>!(<a href="kiosk_extension.md#sui_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#sui_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
-    &<b>mut</b> <a href="kiosk_extension.md#sui_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).<a href="kiosk_extension.md#sui_kiosk_extension_storage">storage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_storage_mut">storage_mut</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> Kiosk): &<b>mut</b> Bag {
+    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
+    &<b>mut</b> <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).storage
 }
 </code></pre>
 
@@ -442,19 +431,19 @@ aware of the risks.
 
 </details>
 
-<a name="sui_kiosk_extension_place"></a>
+<a name="0x2_kiosk_extension_place"></a>
 
 ## Function `place`
 
 Protected action: place an item into the Kiosk. Can be performed by an
-authorized extension. The extension must have the <code><a href="kiosk_extension.md#sui_kiosk_extension_place">place</a></code> permission or
-a <code><a href="kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> permission.
+authorized extension. The extension must have the <code>place</code> permission or
+a <code>lock</code> permission.
 
 To prevent non-tradable items from being placed into <code>Kiosk</code> the method
 requires a <code>TransferPolicy</code> for the placed type to exist.
 
 
-<pre><code>publicfun placeExt, T(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, item: T, _policy: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_place">place</a>&lt;Ext: drop, T: store, key&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T, _policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -463,14 +452,15 @@ requires a <code>TransferPolicy</code> for the placed type to exist.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_place">place</a>&lt;Ext: drop, T: key + store&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_place">place</a>&lt;Ext: drop, T: key + store&gt;(
     _ext: Ext,
     self: &<b>mut</b> Kiosk,
     item: T,
     _policy: &TransferPolicy&lt;T&gt;,
 ) {
-    <b>assert</b>!(<a href="kiosk_extension.md#sui_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#sui_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
-    <b>assert</b>!(<a href="kiosk_extension.md#sui_kiosk_extension_can_place">can_place</a>&lt;Ext&gt;(self) || <a href="kiosk_extension.md#sui_kiosk_extension_can_lock">can_lock</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#sui_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>);
+    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
+    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_can_place">can_place</a>&lt;Ext&gt;(self) || <a href="kiosk_extension.md#0x2_kiosk_extension_can_lock">can_lock</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>);
+
     self.place_internal(item)
 }
 </code></pre>
@@ -479,15 +469,15 @@ requires a <code>TransferPolicy</code> for the placed type to exist.
 
 </details>
 
-<a name="sui_kiosk_extension_lock"></a>
+<a name="0x2_kiosk_extension_lock"></a>
 
 ## Function `lock`
 
 Protected action: lock an item in the Kiosk. Can be performed by an
-authorized extension. The extension must have the <code><a href="kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> permission.
+authorized extension. The extension must have the <code>lock</code> permission.
 
 
-<pre><code>publicfun lockExt, T(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, item: T, _policy: &<a href="transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_lock">lock</a>&lt;Ext: drop, T: store, key&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T, _policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -496,14 +486,15 @@ authorized extension. The extension must have the <code><a href="kiosk_extension
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_lock">lock</a>&lt;Ext: drop, T: key + store&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_lock">lock</a>&lt;Ext: drop, T: key + store&gt;(
     _ext: Ext,
     self: &<b>mut</b> Kiosk,
     item: T,
     _policy: &TransferPolicy&lt;T&gt;,
 ) {
-    <b>assert</b>!(<a href="kiosk_extension.md#sui_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#sui_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
-    <b>assert</b>!(<a href="kiosk_extension.md#sui_kiosk_extension_can_lock">can_lock</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#sui_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>);
+    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
+    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_can_lock">can_lock</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>);
+
     self.lock_internal(item)
 }
 </code></pre>
@@ -512,14 +503,14 @@ authorized extension. The extension must have the <code><a href="kiosk_extension
 
 </details>
 
-<a name="sui_kiosk_extension_is_installed"></a>
+<a name="0x2_kiosk_extension_is_installed"></a>
 
 ## Function `is_installed`
 
 Check whether an extension of type <code>Ext</code> is installed.
 
 
-<pre><code>publicfun is_installedExt(self: &<a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext: drop&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): bool
 </code></pre>
 
 
@@ -528,8 +519,8 @@ Check whether an extension of type <code>Ext</code> is installed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_is_installed">is_installed</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
-    df::exists_(self.uid(), <a href="kiosk_extension.md#sui_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
+    df::exists_(self.uid(), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
 }
 </code></pre>
 
@@ -537,14 +528,14 @@ Check whether an extension of type <code>Ext</code> is installed.
 
 </details>
 
-<a name="sui_kiosk_extension_is_enabled"></a>
+<a name="0x2_kiosk_extension_is_enabled"></a>
 
 ## Function `is_enabled`
 
 Check whether an extension of type <code>Ext</code> is enabled.
 
 
-<pre><code>publicfun is_enabledExt(self: &<a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext: drop&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): bool
 </code></pre>
 
 
@@ -553,8 +544,8 @@ Check whether an extension of type <code>Ext</code> is enabled.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
-    <a href="kiosk_extension.md#sui_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).<a href="kiosk_extension.md#sui_kiosk_extension_is_enabled">is_enabled</a>
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
+    <a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).is_enabled
 }
 </code></pre>
 
@@ -562,14 +553,14 @@ Check whether an extension of type <code>Ext</code> is enabled.
 
 </details>
 
-<a name="sui_kiosk_extension_can_place"></a>
+<a name="0x2_kiosk_extension_can_place"></a>
 
 ## Function `can_place`
 
-Check whether an extension of type <code>Ext</code> can <code><a href="kiosk_extension.md#sui_kiosk_extension_place">place</a></code> into Kiosk.
+Check whether an extension of type <code>Ext</code> can <code>place</code> into Kiosk.
 
 
-<pre><code>publicfun can_placeExt(self: &<a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_can_place">can_place</a>&lt;Ext: drop&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): bool
 </code></pre>
 
 
@@ -578,8 +569,8 @@ Check whether an extension of type <code>Ext</code> can <code><a href="kiosk_ext
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_can_place">can_place</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
-    <a href="kiosk_extension.md#sui_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext&gt;(self) && <a href="kiosk_extension.md#sui_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).permissions & <a href="kiosk_extension.md#sui_kiosk_extension_PLACE">PLACE</a> != 0
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_can_place">can_place</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
+    <a href="kiosk_extension.md#0x2_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext&gt;(self) && <a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).permissions & <a href="kiosk_extension.md#0x2_kiosk_extension_PLACE">PLACE</a> != 0
 }
 </code></pre>
 
@@ -587,15 +578,15 @@ Check whether an extension of type <code>Ext</code> can <code><a href="kiosk_ext
 
 </details>
 
-<a name="sui_kiosk_extension_can_lock"></a>
+<a name="0x2_kiosk_extension_can_lock"></a>
 
 ## Function `can_lock`
 
-Check whether an extension of type <code>Ext</code> can <code><a href="kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> items in Kiosk.
-Locking also enables <code><a href="kiosk_extension.md#sui_kiosk_extension_place">place</a></code>.
+Check whether an extension of type <code>Ext</code> can <code>lock</code> items in Kiosk.
+Locking also enables <code>place</code>.
 
 
-<pre><code>publicfun can_lockExt(self: &<a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_can_lock">can_lock</a>&lt;Ext: drop&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): bool
 </code></pre>
 
 
@@ -604,8 +595,8 @@ Locking also enables <code><a href="kiosk_extension.md#sui_kiosk_extension_place
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_can_lock">can_lock</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
-    <a href="kiosk_extension.md#sui_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext&gt;(self) && <a href="kiosk_extension.md#sui_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).permissions & <a href="kiosk_extension.md#sui_kiosk_extension_LOCK">LOCK</a> != 0
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_can_lock">can_lock</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
+    <a href="kiosk_extension.md#0x2_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext&gt;(self) && <a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).permissions & <a href="kiosk_extension.md#0x2_kiosk_extension_LOCK">LOCK</a> != 0
 }
 </code></pre>
 
@@ -613,14 +604,14 @@ Locking also enables <code><a href="kiosk_extension.md#sui_kiosk_extension_place
 
 </details>
 
-<a name="sui_kiosk_extension_extension"></a>
+<a name="0x2_kiosk_extension_extension"></a>
 
 ## Function `extension`
 
 Internal: get a read-only access to the Extension.
 
 
-<pre><code><b>fun</b> extensionExt(self: &<a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<a href="kiosk_extension.md#sui_kiosk_extension_Extension">sui::kiosk_extension::Extension</a>
+<pre><code><b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext: drop&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<a href="kiosk_extension.md#0x2_kiosk_extension_Extension">kiosk_extension::Extension</a>
 </code></pre>
 
 
@@ -629,8 +620,8 @@ Internal: get a read-only access to the Extension.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_extension">extension</a>&lt;Ext: drop&gt;(self: &Kiosk): &<a href="kiosk_extension.md#sui_kiosk_extension_Extension">Extension</a> {
-    df::borrow(self.uid(), <a href="kiosk_extension.md#sui_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
+<pre><code><b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext: drop&gt;(self: &Kiosk): &<a href="kiosk_extension.md#0x2_kiosk_extension_Extension">Extension</a> {
+    df::borrow(self.uid(), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
 }
 </code></pre>
 
@@ -638,14 +629,14 @@ Internal: get a read-only access to the Extension.
 
 </details>
 
-<a name="sui_kiosk_extension_extension_mut"></a>
+<a name="0x2_kiosk_extension_extension_mut"></a>
 
 ## Function `extension_mut`
 
 Internal: get a mutable access to the Extension.
 
 
-<pre><code><b>fun</b> extension_mutExt(self: &<b>mut</b> <a href="kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<b>mut</b> <a href="kiosk_extension.md#sui_kiosk_extension_Extension">sui::kiosk_extension::Extension</a>
+<pre><code><b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<b>mut</b> <a href="kiosk_extension.md#0x2_kiosk_extension_Extension">kiosk_extension::Extension</a>
 </code></pre>
 
 
@@ -654,8 +645,8 @@ Internal: get a mutable access to the Extension.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="kiosk_extension.md#sui_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk): &<b>mut</b> <a href="kiosk_extension.md#sui_kiosk_extension_Extension">Extension</a> {
-    df::borrow_mut(self.uid_mut_internal(), <a href="kiosk_extension.md#sui_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
+<pre><code><b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk): &<b>mut</b> <a href="kiosk_extension.md#0x2_kiosk_extension_Extension">Extension</a> {
+    df::borrow_mut(self.uid_mut_internal(), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
 }
 </code></pre>
 

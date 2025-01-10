@@ -7721,8 +7721,8 @@ dependencies = [
  "move-disassembler",
  "move-docgen",
  "move-ir-types",
- "move-model-2",
  "move-package",
+ "move-prover",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
@@ -7859,17 +7859,12 @@ name = "move-docgen"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
  "codespan",
  "codespan-reporting",
  "itertools 0.10.5",
  "log",
- "move-binary-format",
  "move-compiler",
- "move-core-types",
- "move-ir-types",
- "move-model-2",
- "move-symbol-pool",
+ "move-model",
  "num",
  "once_cell",
  "regex",
@@ -7958,27 +7953,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-model-2"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "codespan",
- "codespan-reporting",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-disassembler",
- "move-ir-types",
- "move-symbol-pool",
- "num",
- "serde",
- "vfs",
-]
-
-[[package]]
 name = "move-package"
 version = "0.1.0"
 dependencies = [
@@ -7994,7 +7968,7 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-docgen",
- "move-model-2",
+ "move-model",
  "move-symbol-pool",
  "named-lock",
  "once_cell",
@@ -8022,6 +7996,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-prover"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "codespan-reporting",
+ "itertools 0.10.5",
+ "log",
+ "move-command-line-common",
+ "move-compiler",
+ "move-docgen",
+ "move-model",
+ "move-stackless-bytecode",
+ "once_cell",
+ "serde",
+ "simplelog",
+ "toml 0.5.11",
+]
+
+[[package]]
+name = "move-stackless-bytecode"
+version = "0.1.0"
+dependencies = [
+ "codespan",
+ "codespan-reporting",
+ "ethnum",
+ "im",
+ "itertools 0.10.5",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-model",
+ "num",
+ "petgraph 0.5.1",
+ "serde",
+]
+
+[[package]]
 name = "move-stdlib"
 version = "0.1.1"
 dependencies = [
@@ -8032,7 +8046,7 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
- "move-package",
+ "move-prover",
  "move-stdlib-natives",
  "move-vm-runtime",
  "sha2 0.9.9",
@@ -8970,7 +8984,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate 1.1.3",
+ "proc-macro-crate 3.2.0",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
  "syn 2.0.87",
@@ -12239,6 +12253,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "simplelog"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bc0ffd69814a9b251d43afcabf96dad1b29f5028378056257be9e3fecc9f720"
+dependencies = [
+ "chrono",
+ "log",
+ "termcolor",
+]
+
+[[package]]
 name = "simulacrum"
 version = "0.1.0"
 dependencies = [
@@ -14432,6 +14457,7 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "move-package",
+ "move-prover",
  "move-unit-test",
  "move-vm-runtime",
  "mysten-metrics",

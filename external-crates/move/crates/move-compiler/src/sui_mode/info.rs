@@ -13,7 +13,7 @@ use crate::{
     diagnostics::warning_filters::WarningFilters,
     expansion::ast::{Fields, ModuleIdent},
     naming::ast as N,
-    parser::ast::{Ability_, DatatypeName, DocComment, Field},
+    parser::ast::{Ability_, DatatypeName, Field},
     shared::{
         program_info::{DatatypeKind, TypingProgramInfo},
         unique_map::UniqueMap,
@@ -160,11 +160,11 @@ fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeN
         info: &TypingProgramInfo,
         visited: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
         uid_holders: &mut BTreeMap<(ModuleIdent, DatatypeName), UIDHolder>,
-        fields: &Fields<(DocComment, N::Type)>,
+        fields: &Fields<N::Type>,
     ) -> Option<UIDHolder> {
         fields
             .key_cloned_iter()
-            .map(|(field, (_, (_, ty)))| {
+            .map(|(field, (_, ty))| {
                 Some(match visit_ty(info, visited, uid_holders, ty)? {
                     UIDHolder::IsUID => UIDHolder::Direct { field, ty: ty.loc },
                     UIDHolder::Direct { field, ty: uid }

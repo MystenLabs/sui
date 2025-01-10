@@ -191,7 +191,6 @@ fn filter_module<T: FilterContext>(
     let module_def = context.filter_map_module(module_def)?;
 
     let P::ModuleDefinition {
-        doc,
         attributes,
         loc,
         address,
@@ -207,7 +206,6 @@ fn filter_module<T: FilterContext>(
         .collect();
 
     Some(P::ModuleDefinition {
-        doc,
         attributes,
         loc,
         address,

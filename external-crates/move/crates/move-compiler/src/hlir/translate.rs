@@ -350,7 +350,6 @@ fn module(
     mdef: T::ModuleDefinition,
 ) -> (ModuleIdent, H::ModuleDefinition) {
     let T::ModuleDefinition {
-        doc: _,
         loc: _,
         warning_filter,
         package_name,
@@ -410,11 +409,10 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
     assert!(context.has_empty_locals());
     assert!(context.tmp_counter == 0);
     let T::Function {
-        doc: _,
-        loc,
         warning_filter,
         index,
         attributes,
+        loc,
         compiled_visibility: tcompiled_visibility,
         visibility: tvisibility,
         entry,
@@ -428,10 +426,10 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
     let body = function_body(context, &signature, _name, body);
     context.pop_warning_filter_scope();
     H::Function {
-        loc,
         warning_filter,
         index,
         attributes,
+        loc,
         compiled_visibility: visibility(tcompiled_visibility),
         visibility: visibility(tvisibility),
         entry,
@@ -525,7 +523,6 @@ fn visibility(evisibility: E::Visibility) -> H::Visibility {
 
 fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H::Constant {
     let T::Constant {
-        doc: _,
         warning_filter,
         index,
         attributes,
@@ -568,7 +565,6 @@ fn struct_def(
     sdef: N::StructDefinition,
 ) -> H::StructDefinition {
     let N::StructDefinition {
-        doc: _,
         warning_filter,
         index,
         loc: _loc,
@@ -597,7 +593,7 @@ fn struct_fields(context: &mut Context, tfields: N::StructFields) -> H::StructFi
     };
     let mut indexed_fields = tfields_map
         .into_iter()
-        .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(context, t))))
+        .map(|(f, (idx, t))| (idx, (f, base_type(context, t))))
         .collect::<Vec<_>>();
     indexed_fields.sort_by(|(idx1, _), (idx2, _)| idx1.cmp(idx2));
     H::StructFields::Defined(indexed_fields.into_iter().map(|(_, f_ty)| f_ty).collect())
@@ -613,7 +609,6 @@ fn enum_def(
     edef: N::EnumDefinition,
 ) -> H::EnumDefinition {
     let N::EnumDefinition {
-        doc: _,
         warning_filter,
         index,
         loc: _loc,
@@ -646,7 +641,7 @@ fn variant_fields(context: &mut Context, tfields: N::VariantFields) -> Vec<(Fiel
     };
     let mut indexed_fields = tfields_map
         .into_iter()
-        .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(context, t))))
+        .map(|(f, (idx, t))| (idx, (f, base_type(context, t))))
         .collect::<Vec<_>>();
     indexed_fields.sort_by(|(idx1, _), (idx2, _)| idx1.cmp(idx2));
     indexed_fields.into_iter().map(|(_, f_ty)| f_ty).collect()

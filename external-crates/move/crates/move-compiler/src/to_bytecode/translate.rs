@@ -500,7 +500,7 @@ fn constants(
     constants
         .into_iter()
         .map(|(n, c)| constant(context, m, n, c))
-        .collect()
+        .collect::<Vec<_>>()
 }
 
 fn constant(
@@ -509,18 +509,12 @@ fn constant(
     n: ConstantName,
     c: G::Constant,
 ) -> IR::Constant {
-    let G::Constant {
-        loc: _,
-        warning_filter: _,
-        index: _,
-        attributes,
-        signature,
-        value,
-    } = c;
-    let is_error_constant = attributes.contains_key_(&known_attributes::ErrorAttribute.into());
+    let is_error_constant = c
+        .attributes
+        .contains_key_(&known_attributes::ErrorAttribute.into());
     let name = context.constant_definition_name(m, n);
-    let signature = base_type(context, signature);
-    let value = value.unwrap();
+    let signature = base_type(context, c.signature);
+    let value = c.value.unwrap();
     IR::Constant {
         name,
         signature,

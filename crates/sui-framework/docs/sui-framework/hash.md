@@ -1,20 +1,20 @@
 ---
-title: Module `sui::hash`
+title: Module `0x2::hash`
 ---
 
 Module which defines hash functions. Note that Sha-256 and Sha3-256 is available in the std::hash module in the
 standard library.
 
 
--  [Function `blake2b256`](#sui_hash_blake2b256)
--  [Function `keccak256`](#sui_hash_keccak256)
+-  [Function `blake2b256`](#0x2_hash_blake2b256)
+-  [Function `keccak256`](#0x2_hash_keccak256)
 
 
 <pre><code></code></pre>
 
 
 
-<a name="sui_hash_blake2b256"></a>
+<a name="0x2_hash_blake2b256"></a>
 
 ## Function `blake2b256`
 
@@ -22,7 +22,7 @@ standard library.
 Hash the input bytes using Blake2b-256 and returns 32 bytes.
 
 
-<pre><code>publicfun <a href="hash.md#sui_hash_blake2b256">blake2b256</a>(data: &vector&lt;u8&gt;): vector&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="hash.md#0x2_hash_blake2b256">blake2b256</a>(data: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -31,14 +31,14 @@ Hash the input bytes using Blake2b-256 and returns 32 bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="hash.md#sui_hash_blake2b256">blake2b256</a>(data: &vector&lt;u8&gt;): vector&lt;u8&gt;;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="hash.md#0x2_hash_blake2b256">blake2b256</a>(data: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
 </code></pre>
 
 
 
 </details>
 
-<a name="sui_hash_keccak256"></a>
+<a name="0x2_hash_keccak256"></a>
 
 ## Function `keccak256`
 
@@ -46,7 +46,7 @@ Hash the input bytes using Blake2b-256 and returns 32 bytes.
 Hash the input bytes using keccak256 and returns 32 bytes.
 
 
-<pre><code>publicfun <a href="hash.md#sui_hash_keccak256">keccak256</a>(data: &vector&lt;u8&gt;): vector&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="hash.md#0x2_hash_keccak256">keccak256</a>(data: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -55,7 +55,7 @@ Hash the input bytes using keccak256 and returns 32 bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="hash.md#sui_hash_keccak256">keccak256</a>(data: &vector&lt;u8&gt;): vector&lt;u8&gt;;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="hash.md#0x2_hash_keccak256">keccak256</a>(data: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
 </code></pre>
 
 

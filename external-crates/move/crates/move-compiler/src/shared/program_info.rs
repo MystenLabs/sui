@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Display, sync::Arc, sync::OnceLock};
+use std::{collections::BTreeMap, fmt::Display, sync::Arc};
 
 use self::known_attributes::AttributePosition;
 use crate::{
@@ -10,10 +10,9 @@ use crate::{
         self as N, DatatypeTypeParameter, EnumDefinition, FunctionSignature, ResolvedUseFuns,
         StructDefinition, SyntaxMethods, Type,
     },
-    parser::ast::{
-        ConstantName, DatatypeName, DocComment, Field, FunctionName, TargetKind, VariantName,
-    },
-    shared::{unique_map::UniqueMap, *},
+    parser::ast::{ConstantName, DatatypeName, Field, FunctionName, TargetKind, VariantName},
+    shared::unique_map::UniqueMap,
+    shared::*,
     sui_mode::info::SuiInfo,
     typing::ast::{self as T},
     FullyCompiledProgram,
@@ -24,7 +23,6 @@ use move_symbol_pool::Symbol;
 
 #[derive(Debug, Clone)]
 pub struct FunctionInfo {
-    pub doc: DocComment,
     pub attributes: Attributes,
     pub defined_loc: Loc,
     pub full_loc: Loc,
@@ -36,7 +34,6 @@ pub struct FunctionInfo {
 
 #[derive(Debug, Clone)]
 pub struct ConstantInfo {
-    pub doc: DocComment,
     pub attributes: Attributes,
     pub defined_loc: Loc,
     pub signature: Type,
@@ -46,7 +43,6 @@ pub struct ConstantInfo {
 
 #[derive(Debug, Clone)]
 pub struct ModuleInfo {
-    pub doc: DocComment,
     pub defined_loc: Loc,
     pub target_kind: TargetKind,
     pub attributes: Attributes,
@@ -89,7 +85,6 @@ macro_rules! program_info {
             let structs = mdef.structs.clone();
             let enums = mdef.enums.clone();
             let functions = mdef.functions.ref_map(|fname, fdef| FunctionInfo {
-                doc: fdef.doc.clone(),
                 attributes: fdef.attributes.clone(),
                 defined_loc: fname.loc(),
                 full_loc: fdef.loc,
@@ -99,7 +94,6 @@ macro_rules! program_info {
                 signature: fdef.signature.clone(),
             });
             let constants = mdef.constants.ref_map(|cname, cdef| ConstantInfo {
-                doc: cdef.doc.clone(),
                 attributes: cdef.attributes.clone(),
                 defined_loc: cname.loc(),
                 signature: cdef.signature.clone(),
@@ -110,7 +104,6 @@ macro_rules! program_info {
                 .map(|module_use_funs| module_use_funs.remove(&mident).unwrap())
                 .unwrap_or_default();
             let minfo = ModuleInfo {
-                doc: mdef.doc.clone(),
                 defined_loc: mdef.loc,
                 target_kind: mdef.target_kind,
                 attributes: mdef.attributes.clone(),

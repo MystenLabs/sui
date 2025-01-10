@@ -14,7 +14,7 @@ use crate::{
 use anyhow::Result;
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{report_diagnostics_to_buffer_with_env_color, Migration},
+    diagnostics::{report_diagnostics_to_buffer_with_env_color, report_warnings, Migration},
     editions::Edition,
     shared::{files::MappedFiles, PackagePaths},
     Compiler,
@@ -86,14 +86,8 @@ impl BuildPlan {
     }
 
     /// Compilation results in the process exit upon warning/failure
-    pub fn compile<W: Write>(
-        &self,
-        writer: &mut W,
-        modify_compiler: impl FnOnce(Compiler) -> Compiler,
-    ) -> Result<CompiledPackage> {
-        self.compile_with_driver(writer, |compiler| {
-            modify_compiler(compiler).build_and_report()
-        })
+    pub fn compile<W: Write>(&self, writer: &mut W) -> Result<CompiledPackage> {
+        self.compile_with_driver(writer, |compiler| compiler.build_and_report())
     }
 
     /// Compilation results in the process exit upon warning/failure
@@ -136,20 +130,12 @@ impl BuildPlan {
     }
 
     /// Compilation process does not exit even if warnings/failures are encountered
-    pub fn compile_no_exit<W: Write>(
-        &self,
-        writer: &mut W,
-        modify_compiler: impl FnOnce(Compiler) -> Compiler,
-    ) -> Result<CompiledPackage> {
+    pub fn compile_no_exit<W: Write>(&self, writer: &mut W) -> Result<CompiledPackage> {
         self.compile_with_driver(writer, |compiler| {
-            let (files, units_res) = modify_compiler(compiler).build()?;
+            let (files, units_res) = compiler.build()?;
             match units_res {
                 Ok((units, warning_diags)) => {
-                    let diags_buf =
-                        report_diagnostics_to_buffer_with_env_color(&files, warning_diags);
-                    if let Err(err) = std::io::stdout().write_all(&diags_buf) {
-                        anyhow::bail!("Cannot output compiler diagnostics: {}", err);
-                    }
+                    report_warnings(&files, warning_diags);
                     Ok((files, units))
                 }
                 Err(error_diags) => {
@@ -221,7 +207,7 @@ impl BuildPlan {
     pub fn compile_with_driver<W: Write>(
         &self,
         writer: &mut W,
-        compiler_driver: impl FnOnce(
+        compiler_driver: impl FnMut(
             Compiler,
         )
             -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
@@ -234,7 +220,7 @@ impl BuildPlan {
         &self,
         dependencies: CompilationDependencies,
         writer: &mut W,
-        compiler_driver: impl FnOnce(
+        mut compiler_driver: impl FnMut(
             Compiler,
         )
             -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
@@ -252,7 +238,7 @@ impl BuildPlan {
             root_package,
             transitive_dependencies,
             &self.resolution_graph,
-            compiler_driver,
+            &mut compiler_driver,
         )?;
 
         Self::clean(

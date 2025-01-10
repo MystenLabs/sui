@@ -16,7 +16,7 @@ use crate::{
     },
     editions::Edition,
     expansion, hlir, interface_generator, naming,
-    parser::{self, *},
+    parser::{self, comments::*, *},
     shared::{
         files::{FilesSourceText, MappedFiles},
         CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, NamedAddressMap,
@@ -102,6 +102,7 @@ enum PassResult {
 #[derive(Clone)]
 pub struct FullyCompiledProgram {
     pub files: MappedFiles,
+    pub comments: CommentMap,
     pub parser: parser::ast::Program,
     pub expansion: expansion::ast::Program,
     pub naming: naming::ast::Program,
@@ -321,7 +322,7 @@ impl Compiler {
         self,
     ) -> anyhow::Result<(
         MappedFiles,
-        Result<SteppedCompiler<TARGET>, (Pass, Diagnostics)>,
+        Result<(CommentMap, SteppedCompiler<TARGET>), (Pass, Diagnostics)>,
     )> {
         let Self {
             maps,
@@ -399,7 +400,7 @@ impl Compiler {
             compilation_env.add_custom_known_filters(prefix, filters)?;
         }
 
-        let (source_text, pprog) = parse_program(&compilation_env, maps, targets, deps)?;
+        let (source_text, pprog, comments) = parse_program(&compilation_env, maps, targets, deps)?;
 
         for (fhash, (fname, contents)) in &source_text {
             // TODO better support for bytecode interface file paths
@@ -411,7 +412,8 @@ impl Compiler {
 
         let res: Result<_, (Pass, Diagnostics)> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
-                .run::<TARGET>();
+                .run::<TARGET>()
+                .map(|compiler| (comments, compiler));
 
         Ok((mapped_files, res))
     }
@@ -465,7 +467,7 @@ impl Compiler {
         let (files, res) = self.run::<PASS_COMPILATION>()?;
         Ok((
             files,
-            res.map(|stepped| stepped.into_compiled_units())
+            res.map(|(_comments, stepped)| stepped.into_compiled_units())
                 .map_err(|(_pass, diags)| diags),
         ))
     }
@@ -660,7 +662,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     .add_save_hook(&hook)
     .run::<PASS_PARSER>()?;
 
-    let stepped = match pprog_and_comments_res {
+    let (comments, stepped) = match pprog_and_comments_res {
         Err((_pass, errors)) => return Ok(Err((files, errors))),
         Ok(res) => res,
     };
@@ -672,6 +674,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
         Err((_pass, errors)) => Ok(Err((files, errors))),
         Ok(PassResult::Compilation(compiled, _)) => Ok(Ok(FullyCompiledProgram {
             files,
+            comments,
             parser: hook.take_parser_ast(),
             expansion: hook.take_expansion_ast(),
             naming: hook.take_naming_ast(),
@@ -881,12 +884,18 @@ fn has_compiled_module_magic_number(path: &VfsPath) -> bool {
 }
 
 pub fn move_check_for_errors(
-    comments_and_compiler_res: Result<SteppedCompiler<PASS_PARSER>, (Pass, Diagnostics)>,
+    comments_and_compiler_res: Result<
+        (CommentMap, SteppedCompiler<PASS_PARSER>),
+        (Pass, Diagnostics),
+    >,
 ) -> Diagnostics {
     fn try_impl(
-        comments_and_compiler_res: Result<SteppedCompiler<PASS_PARSER>, (Pass, Diagnostics)>,
+        comments_and_compiler_res: Result<
+            (CommentMap, SteppedCompiler<PASS_PARSER>),
+            (Pass, Diagnostics),
+        >,
     ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), (Pass, Diagnostics)> {
-        let compiler = comments_and_compiler_res?;
+        let (_, compiler) = comments_and_compiler_res?;
 
         let (compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
         let compilation_env = compiler.compilation_env();

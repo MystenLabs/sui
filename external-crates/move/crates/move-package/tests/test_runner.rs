@@ -7,13 +7,15 @@ use move_command_line_common::testing::{
     add_update_baseline_fix, format_diff, read_env_update_baseline,
 };
 use move_package::{
-    compilation::{build_plan::BuildPlan, compiled_package::CompiledPackageInfo},
+    compilation::{
+        build_plan::BuildPlan, compiled_package::CompiledPackageInfo, model_builder::ModelBuilder,
+    },
     package_hooks,
     package_hooks::PackageHooks,
     package_hooks::PackageIdentifier,
     resolution::resolution_graph::Package,
     source_package::parsed_manifest::{OnChainInfo, PackageDigest, SourceManifest},
-    BuildConfig,
+    BuildConfig, ModelConfig,
 };
 use move_symbol_pool::Symbol;
 use std::{
@@ -146,10 +148,21 @@ impl Test<'_> {
             "notlocked" => "Lock file uncommitted\n".to_string(),
 
             "compiled" => {
-                let mut pkg = BuildPlan::create(resolved_package?)?
-                    .compile(&mut progress, |compile| compile)?;
+                let mut pkg = BuildPlan::create(resolved_package?)?.compile(&mut progress)?;
                 scrub_compiled_package(&mut pkg.compiled_package_info);
                 format!("{:#?}\n", pkg.compiled_package_info)
+            }
+
+            "modeled" => {
+                ModelBuilder::create(
+                    resolved_package?,
+                    ModelConfig {
+                        all_files_as_targets: false,
+                        target_filter: None,
+                    },
+                )
+                .build_model()?;
+                "Built model\n".to_string()
             }
 
             "resolved" => {

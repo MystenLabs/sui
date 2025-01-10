@@ -893,7 +893,6 @@ fn module_(
     mdef: P::ModuleDefinition,
 ) -> (ModuleIdent, E::ModuleDefinition) {
     let P::ModuleDefinition {
-        doc,
         attributes,
         loc,
         address,
@@ -974,7 +973,6 @@ fn module_(
     context.pop_alias_scope(Some(&mut use_funs));
 
     let def = E::ModuleDefinition {
-        doc,
         package_name,
         attributes,
         loc,
@@ -1582,7 +1580,6 @@ fn use_(
     u: P::UseDecl,
 ) {
     let P::UseDecl {
-        doc,
         use_: u,
         loc,
         attributes,
@@ -1625,7 +1622,6 @@ fn use_(
                 }
             };
             let explicit = ParserExplicitUseFun {
-                doc,
                 loc,
                 attributes,
                 is_public,
@@ -1793,7 +1789,6 @@ fn explicit_use_fun(
     pexplicit: ParserExplicitUseFun,
 ) -> Option<E::ExplicitUseFun> {
     let ParserExplicitUseFun {
-        doc,
         loc,
         attributes,
         is_public,
@@ -1830,7 +1825,6 @@ fn explicit_use_fun(
         "Found a 'use fun' as a macro"
     );
     Some(E::ExplicitUseFun {
-        doc,
         loc,
         attributes,
         is_public,
@@ -1913,7 +1907,6 @@ fn struct_def_(
     pstruct: P::StructDefinition,
 ) -> (DatatypeName, E::StructDefinition) {
     let P::StructDefinition {
-        doc,
         attributes,
         loc,
         name,
@@ -1929,7 +1922,6 @@ fn struct_def_(
     let abilities = ability_set(context, "modifier", abilities_vec);
     let fields = struct_fields(context, &name, pfields);
     let sdef = E::StructDefinition {
-        doc,
         warning_filter,
         index,
         attributes,
@@ -1951,18 +1943,15 @@ fn struct_fields(
     let pfields_vec = match pfields {
         P::StructFields::Native(loc) => return E::StructFields::Native(loc),
         P::StructFields::Positional(tys) => {
-            let field_tys = tys
-                .into_iter()
-                .map(|(doc, fty)| (doc, type_(context, fty)))
-                .collect();
+            let field_tys = tys.into_iter().map(|fty| type_(context, fty)).collect();
             return E::StructFields::Positional(field_tys);
         }
         P::StructFields::Named(v) => v,
     };
     let mut field_map = UniqueMap::new();
-    for (idx, (doc, field, pt)) in pfields_vec.into_iter().enumerate() {
+    for (idx, (field, pt)) in pfields_vec.into_iter().enumerate() {
         let t = type_(context, pt);
-        if let Err((field, old_loc)) = field_map.add(field, (idx, (doc, t))) {
+        if let Err((field, old_loc)) = field_map.add(field, (idx, t)) {
             context.add_diag(diag!(
                 Declarations::DuplicateItem,
                 (
@@ -2000,7 +1989,6 @@ fn enum_def_(
     penum: P::EnumDefinition,
 ) -> (DatatypeName, E::EnumDefinition) {
     let P::EnumDefinition {
-        doc,
         attributes,
         loc,
         name,
@@ -2016,7 +2004,6 @@ fn enum_def_(
     let abilities = ability_set(context, "modifier", abilities_vec);
     let variants = enum_variants(context, &name, loc, pvariants);
     let edef = E::EnumDefinition {
-        doc,
         warning_filter,
         index,
         attributes,
@@ -2066,19 +2053,9 @@ fn enum_variant_def(
     index: usize,
     pvariant: P::VariantDefinition,
 ) -> (VariantName, E::VariantDefinition) {
-    let P::VariantDefinition {
-        doc,
-        loc,
-        name,
-        fields,
-    } = pvariant;
+    let P::VariantDefinition { loc, name, fields } = pvariant;
     let fields = variant_fields(context, &name, fields);
-    let vdef = E::VariantDefinition {
-        doc,
-        loc,
-        index,
-        fields,
-    };
+    let vdef = E::VariantDefinition { loc, index, fields };
     (name, vdef)
 }
 
@@ -2090,18 +2067,15 @@ fn variant_fields(
     let pfields_vec = match pfields {
         P::VariantFields::Empty => return E::VariantFields::Empty,
         P::VariantFields::Positional(tys) => {
-            let field_tys = tys
-                .into_iter()
-                .map(|(doc, fty)| (doc, type_(context, fty)))
-                .collect();
+            let field_tys = tys.into_iter().map(|fty| type_(context, fty)).collect();
             return E::VariantFields::Positional(field_tys);
         }
         P::VariantFields::Named(v) => v,
     };
     let mut field_map = UniqueMap::new();
-    for (idx, (doc, field, pt)) in pfields_vec.into_iter().enumerate() {
+    for (idx, (field, pt)) in pfields_vec.into_iter().enumerate() {
         let t = type_(context, pt);
-        if let Err((field, old_loc)) = field_map.add(field, (idx, (doc, t))) {
+        if let Err((field, old_loc)) = field_map.add(field, (idx, t)) {
             context.add_diag(diag!(
                 Declarations::DuplicateItem,
                 (
@@ -2190,7 +2164,6 @@ fn constant_(
     pconstant: P::Constant,
 ) -> (ConstantName, E::Constant) {
     let P::Constant {
-        doc,
         attributes: pattributes,
         loc,
         name,
@@ -2203,7 +2176,6 @@ fn constant_(
     let signature = type_(context, psignature);
     let value = *exp(context, Box::new(pvalue));
     let constant = E::Constant {
-        doc,
         warning_filter,
         index,
         attributes,
@@ -2238,7 +2210,6 @@ fn function_(
     pfunction: P::Function,
 ) -> (FunctionName, E::Function) {
     let P::Function {
-        doc,
         attributes: pattributes,
         loc,
         name,
@@ -2296,7 +2267,6 @@ fn function_(
         let _ = use_funs_builder.implicit.add(name.0, implicit);
     }
     let fdef = E::Function {
-        doc,
         warning_filter,
         index,
         attributes,
