@@ -1424,25 +1424,32 @@ impl<'env> Docgen<'env> {
     /// heuristic and may not work in all cases or produce wrong results (for instance, it
     /// ignores aliases). To improve on this, we would need best direct support by the compiler.
     fn resolve_to_label(&self, env: &Model, mut s: &str) -> Option<String> {
-        // For clarity in documentation, we allow `script::` or `module::` as a prefix.
+        // For clarity in documentation, we allow  `module::` as a prefix.
         // However, right now it will be ignored for resolution.
         let lower_s = s.to_lowercase();
-        if lower_s.starts_with("script::") {
-            s = &s["script::".len()..]
-        } else if lower_s.starts_with("module::") {
+        if lower_s.starts_with("module::") {
             s = &s["module::".len()..]
         }
         let parts_data: Vec<&str> = s.splitn(3, "::").collect();
         let mut parts = parts_data.as_slice();
-        let module_opt = if parts[0].starts_with("0x") {
-            if parts.len() == 1 {
-                // Cannot resolve.
-                return None;
-            }
-            let addr = AccountAddress::from_hex_literal(parts[0]).ok()?;
-            let mname = (addr, Symbol::from(parts[1]));
-            parts = &parts[2..];
-            Some(env.maybe_module(mname)?)
+        let module_opt = if parts.len() > 1 {
+            let addr = if parts[0].starts_with("0x") {
+                // cannot resolve if it starts with an invalid address
+                Some(AccountAddress::from_hex_literal(parts[0]).ok()?)
+            } else {
+                // if it is not a named address, it might be a module so we do not return None
+                // in that case
+                env.package_by_name(&Symbol::from(parts[0]))
+                    .map(|p| p.address())
+            };
+            addr.and_then(|addr| {
+                let mname = (addr, Symbol::from(parts[1]));
+                parts = &parts[2..];
+                Some(env.maybe_module(mname)?)
+            })
+        } else if parts.len() == 1 && parts[0].starts_with("0x") {
+            // no label for address
+            return None;
         } else {
             None
         };
