@@ -1445,7 +1445,7 @@ impl<'env> Docgen<'env> {
             addr.and_then(|addr| {
                 let mname = (addr, Symbol::from(parts[1]));
                 parts = &parts[2..];
-                Some(env.maybe_module(mname)?)
+                env.maybe_module(mname)
             })
         } else if parts.len() == 1 && parts[0].starts_with("0x") {
             // no label for address

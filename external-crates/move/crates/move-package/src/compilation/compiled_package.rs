@@ -611,7 +611,7 @@ impl CompiledPackage {
             )?;
 
             compiled_docs = Some(Self::build_docs(
-                resolution_graph.docgen_flags,
+                DocgenFlags::default(), // TODO this should be configurable
                 resolved_package.source_package.package.name,
                 &model,
                 &resolved_package.package_path,
