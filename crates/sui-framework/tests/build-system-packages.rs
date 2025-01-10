@@ -50,7 +50,6 @@ fn build_system_packages() {
         &move_stdlib_path,
         out_dir,
     );
-
     check_diff(Path::new(CRATE_ROOT), out_dir)
 }
 
@@ -190,6 +189,11 @@ fn build_packages_with_move_config(
     let docs_dir = out_dir.join(DOCS_DIR);
     let mut files_to_write = BTreeMap::new();
     relocate_docs(
+        stdlib_dir,
+        &stdlib_pkg.package.compiled_docs.unwrap(),
+        &mut files_to_write,
+    );
+    relocate_docs(
         deepbook_dir,
         &deepbook_pkg.package.compiled_docs.unwrap(),
         &mut files_to_write,
@@ -254,9 +258,10 @@ fn relocate_docs(prefix: &str, files: &[(String, String)], output: &mut BTreeMap
             new_path.push(file_name);
             new_path.to_string_lossy().to_string()
         } else {
-            let mut new_path = PathBuf::new();
-            new_path.push(path.components().skip(1).collect::<PathBuf>());
-            new_path.to_string_lossy().to_string()
+            // we don't need to keep the dependency version of each doc since it will be generated
+            // on its own
+            debug_assert!(file_name.contains("dependencies"));
+            continue;
         };
         output.entry(file_name).or_insert_with(|| {
             re.replace_all(

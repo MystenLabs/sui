@@ -46,10 +46,10 @@ Used for creating custom indexes and tracking onchain
 activity in a way that suits a specific application the most.
 
 The type <code>T</code> is the main way to index the event, and can contain
-phantom parameters, eg <code><a href="../sui-framework/event.md#0x2_event_emit">emit</a>(MyEvent&lt;<b>phantom</b> T&gt;)</code>.
+phantom parameters, eg <code><a href="event.md#0x2_event_emit">emit</a>(MyEvent&lt;<b>phantom</b> T&gt;)</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/event.md#0x2_event_emit">emit</a>&lt;T: <b>copy</b>, drop&gt;(<a href="../sui-framework/event.md#0x2_event">event</a>: T)
+<pre><code><b>public</b> <b>fun</b> <a href="event.md#0x2_event_emit">emit</a>&lt;T: <b>copy</b>, drop&gt;(<a href="event.md#0x2_event">event</a>: T)
 </code></pre>
 
 
@@ -58,7 +58,7 @@ phantom parameters, eg <code><a href="../sui-framework/event.md#0x2_event_emit">
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../sui-framework/event.md#0x2_event_emit">emit</a>&lt;T: <b>copy</b> + drop&gt;(<a href="../sui-framework/event.md#0x2_event">event</a>: T);
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="event.md#0x2_event_emit">emit</a>&lt;T: <b>copy</b> + drop&gt;(<a href="event.md#0x2_event">event</a>: T);
 </code></pre>
 
 
