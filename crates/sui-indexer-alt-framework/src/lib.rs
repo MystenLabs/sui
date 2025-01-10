@@ -27,6 +27,7 @@ use watermarks::{CommitterWatermark, PrunerWatermark};
 pub mod handlers;
 pub mod ingestion;
 pub(crate) mod metrics;
+pub mod models;
 pub mod pipeline;
 pub(crate) mod schema;
 pub mod task;
@@ -176,7 +177,7 @@ impl Indexer {
         })
     }
 
-    pub async fn new_for_testing() -> (Self, TempDb) {
+    pub async fn new_for_testing(migrations: &'static EmbeddedMigrations) -> (Self, TempDb) {
         let temp_db = TempDb::new().unwrap();
         let db_args = DbArgs::new_for_testing(temp_db.database().url().clone());
         let indexer = Indexer::new(
@@ -187,7 +188,7 @@ impl Indexer {
                 local_ingestion_path: Some(tempdir().unwrap().into_path()),
             },
             IngestionConfig::default(),
-            &MIGRATIONS,
+            migrations,
             CancellationToken::new(),
         )
         .await
@@ -499,7 +500,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_new_pipeline() {
-        let (mut indexer, _temp_db) = Indexer::new_for_testing().await;
+        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
         indexer
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
@@ -509,7 +510,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_existing_pipeline() {
-        let (mut indexer, _temp_db) = Indexer::new_for_testing().await;
+        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let watermark = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
         watermark
             .update(&mut indexer.db().connect().await.unwrap())
@@ -524,7 +525,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_multiple_pipelines() {
-        let (mut indexer, _temp_db) = Indexer::new_for_testing().await;
+        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let watermark1 = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
         watermark1
             .update(&mut indexer.db().connect().await.unwrap())
@@ -550,7 +551,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_multiple_pipelines_pruning_requires_processed_values() {
-        let (mut indexer, _temp_db) = Indexer::new_for_testing().await;
+        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let watermark1 = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
         watermark1
             .update(&mut indexer.db().connect().await.unwrap())

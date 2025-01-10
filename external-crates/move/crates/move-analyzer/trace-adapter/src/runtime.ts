@@ -46,11 +46,27 @@ export interface IRuntimeVariableLoc {
 }
 
 /**
+ * Global location (typically used for values
+ * computed in native functions)
+ */
+export interface IRuntimeGlobalLoc {
+    globalIndex: number;
+}
+
+/**
+ * Location where a runtime value is stored.
+ */
+export interface IRuntimeLoc {
+    loc: IRuntimeVariableLoc | IRuntimeGlobalLoc;
+    indexPath: number[];
+}
+
+/**
  * Value of a reference in the runtime.
  */
 export interface IRuntimeRefValue {
     mutable: boolean;
-    loc: IRuntimeVariableLoc
+    indexedLoc: IRuntimeLoc;
 }
 
 /**
@@ -127,6 +143,7 @@ interface IRuntimeStackFrame {
  */
 export interface IRuntimeStack {
     frames: IRuntimeStackFrame[];
+    globals: Map<number, RuntimeValueType>;
 }
 
 /**
@@ -184,7 +201,10 @@ export class Runtime extends EventEmitter {
     /**
      * Current frame stack.
      */
-    private frameStack = { frames: [] as IRuntimeStackFrame[] };
+    private frameStack = {
+        frames: [] as IRuntimeStackFrame[],
+        globals: new Map<number, RuntimeValueType>()
+    };
 
     /**
      * Map of file hashes to file info.
@@ -256,7 +276,8 @@ export class Runtime extends EventEmitter {
                 currentEvent.optimizedLines
             );
         this.frameStack = {
-            frames: [newFrame]
+            frames: [newFrame],
+            globals: new Map<number, RuntimeValueType>()
         };
         this.step(/* next */ false, /* stopAtCloseFrame */ false);
     }
@@ -408,11 +429,19 @@ export class Runtime extends EventEmitter {
                         return ExecutionResult.Exception;
                     }
                 }
-                // if native function executed successfully, then the next event
-                // should be CloseFrame
-                if (this.trace.events.length <= this.eventIndex + 1 ||
-                    this.trace.events[this.eventIndex + 1].type !== TraceEventKind.CloseFrame) {
-                    throw new Error('Expected an CloseFrame event after native OpenFrame event');
+                // process optional effects until reaching CloseFrame for the native function
+                while (true) {
+                    const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ true);
+                    if (executionResult === ExecutionResult.Exception) {
+                        return executionResult;
+                    }
+                    if (executionResult === ExecutionResult.TraceEnd) {
+                        throw new Error('Cannot find CloseFrame event for native function');
+                    }
+                    const currentEvent = this.trace.events[this.eventIndex];
+                    if (currentEvent.type === TraceEventKind.CloseFrame) {
+                        break;
+                    }
                 }
                 // skip over CloseFrame as there is no frame to pop
                 this.eventIndex++;
@@ -448,9 +477,18 @@ export class Runtime extends EventEmitter {
                 return ExecutionResult.Ok;
             } else {
                 // pop the top frame from the stack
-                if (this.frameStack.frames.length <= 0) {
+                const framesLength = this.frameStack.frames.length;
+                if (framesLength <= 0) {
                     throw new Error('No frame to pop at CloseFrame event with ID: '
                         + currentEvent.id);
+                }
+                const currentFrameID = this.frameStack.frames[framesLength - 1].id;
+                if (currentFrameID !== currentEvent.id) {
+                    throw new Error('Frame ID mismatch at CloseFrame event with ID: '
+                        + currentEvent.id
+                        + ' (current frame ID: '
+                        + currentFrameID
+                        + ')');
                 }
                 this.frameStack.frames.pop();
                 return this.step(next, stopAtCloseFrame);
@@ -462,18 +500,23 @@ export class Runtime extends EventEmitter {
                 return ExecutionResult.Exception;
             }
             if (effect.type === TraceEffectKind.Write) {
-                const traceLocation = effect.loc;
-                const traceValue = effect.value;
-                const frame = this.frameStack.frames.find(
-                    frame => frame.id === traceLocation.frameID
-                );
-                if (!frame) {
-                    throw new Error('Cannot find frame with ID: '
-                        + traceLocation.frameID
-                        + ' when processing Write effect for local variable at index: '
-                        + traceLocation.localIndex);
+                const traceLocation = effect.indexedLoc.loc;
+                if ('globalIndex' in traceLocation) {
+                    const globalValue = effect.value;
+                    this.frameStack.globals.set(traceLocation.globalIndex, globalValue);
+                } else if ('frameID' in traceLocation && 'localIndex' in traceLocation) {
+                    const traceValue = effect.value;
+                    const frame = this.frameStack.frames.find(
+                        frame => frame.id === traceLocation.frameID
+                    );
+                    if (!frame) {
+                        throw new Error('Cannot find frame with ID: '
+                            + traceLocation.frameID
+                            + ' when processing Write effect for local variable at index: '
+                            + traceLocation.localIndex);
+                    }
+                    localWrite(frame, traceLocation.localIndex, traceValue);
                 }
-                localWrite(frame, traceLocation.localIndex, traceValue);
             }
             return this.step(next, stopAtCloseFrame);
         } else {
@@ -789,7 +832,7 @@ export class Runtime extends EventEmitter {
      * @returns string representation of the variable.
      */
     private varToString(tabs: string, variable: IRuntimeVariable): string {
-        return this.valueToString(tabs, variable.value, variable.name, variable.type);
+        return this.valueToString(tabs, variable.value, variable.name, [], variable.type);
     }
 
     /**
@@ -804,7 +847,7 @@ export class Runtime extends EventEmitter {
             : compoundValue.type;
         let res = '(' + type + ') {\n';
         for (const [name, value] of compoundValue.fields) {
-            res += this.valueToString(tabs + this.singleTab, value, name);
+            res += this.valueToString(tabs + this.singleTab, value, name, []);
         }
         res += tabs + '}\n';
         return res;
@@ -824,22 +867,35 @@ export class Runtime extends EventEmitter {
         name: string,
         type?: string
     ): string {
+        const indexedLoc = refValue.indexedLoc;
         let res = '';
-        const frame = this.frameStack.frames.find(frame => frame.id === refValue.loc.frameID);
-        let local = undefined;
-        if (!frame) {
-            return res;
-        }
-        for (const scope of frame.locals) {
-            local = scope[refValue.loc.localIndex];
-            if (local) {
-                break;
+        if ('globalIndex' in indexedLoc.loc) {
+            // global location
+            const globalValue = this.frameStack.globals.get(indexedLoc.loc.globalIndex);
+            if (globalValue) {
+                const indexPath = [...indexedLoc.indexPath];
+                return this.valueToString(tabs, globalValue, name, indexPath, type);
             }
+        } else if ('frameID' in indexedLoc.loc && 'localIndex' in indexedLoc.loc) {
+            const frameID = indexedLoc.loc.frameID;
+            const frame = this.frameStack.frames.find(frame => frame.id === frameID);
+            let local = undefined;
+            if (!frame) {
+                return res;
+            }
+            for (const scope of frame.locals) {
+                local = scope[indexedLoc.loc.localIndex];
+                if (local) {
+                    break;
+                }
+            }
+            if (!local) {
+                return res;
+            }
+            const indexPath = [...indexedLoc.indexPath];
+            return this.valueToString(tabs, local.value, name, indexPath, type);
         }
-        if (!local) {
-            return res;
-        }
-        return this.valueToString(tabs, local.value, name, type);
+        return res;
     }
 
     /**
@@ -847,6 +903,8 @@ export class Runtime extends EventEmitter {
      *
      * @param value runtime value.
      * @param name name of the variable containing the value.
+     * @param indexPath a path to actual value for compound types (e.g, [1, 7] means
+     * first field/vector element and then seventh field/vector element)
      * @param type optional type of the variable containing the value.
      * @returns string representation of the value.
      */
@@ -854,6 +912,7 @@ export class Runtime extends EventEmitter {
         tabs: string,
         value: RuntimeValueType,
         name: string,
+        indexPath: number[],
         type?: string
     ): string {
         let res = '';
@@ -863,19 +922,32 @@ export class Runtime extends EventEmitter {
                 res += tabs + 'type: ' + type + '\n';
             }
         } else if (Array.isArray(value)) {
-            res += tabs + name + ' : [\n';
-            for (let i = 0; i < value.length; i++) {
-                res += this.valueToString(tabs + this.singleTab, value[i], String(i));
+            if (indexPath.length > 0) {
+                const index = indexPath.pop();
+                if (index !== undefined) {
+                    res += this.valueToString(tabs, value[index], name, indexPath, type);
+                }
+            } else {
+                res += tabs + name + ' : [\n';
+                for (let i = 0; i < value.length; i++) {
+                    res += this.valueToString(tabs + this.singleTab, value[i], String(i), indexPath);
+                }
+                res += tabs + ']\n';
+                if (type) {
+                    res += tabs + 'type: ' + type + '\n';
+                }
             }
-            res += tabs + ']\n';
-            if (type) {
-                res += tabs + 'type: ' + type + '\n';
-            }
-            return res;
         } else if ('fields' in value) {
-            res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
-            if (type) {
-                res += tabs + 'type: ' + type + '\n';
+            if (indexPath.length > 0) {
+                const index = indexPath.pop();
+                if (index !== undefined) {
+                    res += this.valueToString(tabs, value.fields[index][1], name, indexPath, type);
+                }
+            } else {
+                res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
+                if (type) {
+                    res += tabs + 'type: ' + type + '\n';
+                }
             }
         } else {
             res += this.refValueToString(tabs, value, name, type);

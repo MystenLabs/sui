@@ -279,7 +279,10 @@ impl Core {
         };
 
         if !missing_block_refs.is_empty() {
-            debug!("Missing block refs: {:?}", missing_block_refs);
+            trace!(
+                "Missing block refs: {}",
+                missing_block_refs.iter().map(|b| b.to_string()).join(", ")
+            );
         }
 
         Ok(missing_block_refs)
@@ -497,8 +500,25 @@ impl Core {
             .node_metrics
             .proposed_block_size
             .observe(serialized.len() as f64);
-        // Unnecessary to verify own blocks.
+        // Own blocks are assumed to be valid.
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized);
+
+        // Record the interval from last proposal, before accepting the proposed block.
+        let last_proposed_block = self.last_proposed_block();
+        if last_proposed_block.round() > 0 {
+            self.context
+                .metrics
+                .node_metrics
+                .block_proposal_interval
+                .observe(
+                    Duration::from_millis(
+                        verified_block
+                            .timestamp_ms()
+                            .saturating_sub(last_proposed_block.timestamp_ms()),
+                    )
+                    .as_secs_f64(),
+                );
+        }
 
         // Accept the block into BlockManager and DagState.
         let (accepted_blocks, missing) = self
@@ -512,18 +532,6 @@ impl Core {
 
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
         self.dag_state.write().flush();
-
-        let current_proposal_duration = Duration::from_millis(verified_block.timestamp_ms());
-        let previous_proposal_duration = Duration::from_millis(self.last_proposed_timestamp_ms());
-        self.context
-            .metrics
-            .node_metrics
-            .block_proposal_interval
-            .observe(
-                current_proposal_duration
-                    .saturating_sub(previous_proposal_duration)
-                    .as_secs_f64(),
-            );
 
         // Now acknowledge the transactions for their inclusion to block
         ack_transactions(verified_block.reference());

@@ -2076,7 +2076,7 @@ module deepbook::clob_v2 {
         (price_vec, depth_vec)
     }
 
-    /// internal func to retrive single depth of a tick price
+    /// internal func to retrieve single depth of a tick price
     fun get_level2_book_status(
         open_orders: &CritbitTree<TickLevel>,
         price: u64,

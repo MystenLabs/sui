@@ -699,15 +699,15 @@ Select a package for specific instructions.
 
 In a terminal or console at the `move/asset_tokenization` directory of the project enter:
 
-```bash
-sui client publish --gas-budget <GAS-BUDGET>
+```sh
+$ sui client publish --gas-budget <GAS-BUDGET>
 ```
 
 For the gas budget, use a standard value such as `20000000`.
 
 The package should successfully deploy, and you then see:
 
-```bash
+```sh
 UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
@@ -727,8 +727,8 @@ The fields that are automatically filled are: `SUI_NETWORK`, `ASSET_TOKENIZATION
 
 To publish with the bash script run:
 
-```bash
-npm run publish-asset-tokenization
+```sh
+$ npm run publish-asset-tokenization
 ```
 
 After publishing, you can now edit the `Move.toml` file like described in the Manual flow.
@@ -743,15 +743,15 @@ For more details regarding this process, please consult the setup folder's [READ
 
 In a terminal or console at the `move/template` directory of the project enter:
 
-```bash
-sui client publish --gas-budget <GAS-BUDGET>
+```sh
+$ sui client publish --gas-budget <GAS-BUDGET>
 ```
 
 For the gas budget, use a standard value such as `20000000`.
 
 The package should successfully deploy, and you then see:
 
-```bash
+```sh
 UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY asset_tokenization
 INCLUDING DEPENDENCY Sui
@@ -802,8 +802,8 @@ On modifications that are made to the template package this process needs to be 
 
 Before proceeding to how to make these edits, it's important to understand how the library exposes the template module bytecode. The process is currently manual. This requires that you build and retrieve the compiled bytecode. To do this, navigate inside the template folder and run the following command:
 
-```bash
-xxd -c 0 -p build/template/bytecode_modules/template.mv | head -n 1
+```sh
+$ xxd -c 0 -p build/template/bytecode_modules/template.mv | head -n 1
 ```
 
 <details>
@@ -813,7 +813,7 @@ xxd -c 0 -p build/template/bytecode_modules/template.mv | head -n 1
 
 The response you should receive looks similar to the following:
 
-```bash
+```sh
 a11ceb0b060000000a010010021026033637046d0a05776807df01ec0108cb03800106cb043
 e0a8905050c8e0549001303140107010d01120215021602170004020001000c01000101010c
 010001020307000302070100000403070006050200070607000009000100010a0a0b0102021
@@ -843,8 +843,8 @@ Copy the output you receive and paste it in the return instruction of the `getBy
 
 Additionally, because the template package contains two modules, and therefore has another dependency, you also need to retrieve the bytecode of the genesis module in a similar fashion. This module bytecode, however, is not edited and isn't used as is. This operation is not directly relevant to the WASM library, but is necessary to successfully deploy the edited template module. To acquire the bytecode for genesis, navigate to the `template` folder and run:
 
-```bash
-xxd -c 0 -p build/template/bytecode_modules/genesis.mv | head -n 1
+```sh
+$ xxd -c 0 -p build/template/bytecode_modules/genesis.mv | head -n 1
 ```
 
 The output format is similar to the template module but smaller in length. Similarly to what you did with the template module, you need to copy this output but this time paste it in the bytecode constant variable located in the [genesis_bytecode.ts](https://github.com/MystenLabs/asset-tokenization/blob/main/setup/src/utils/genesis_bytecode.ts) file.
@@ -935,8 +935,8 @@ In a terminal or console within the project's setup directory, utilize the follo
 
   First, create a `TransferPolicy` and a `ProtectedTP` with the following command:
 
-  ```shell
-  npm run call create-tp
+  ```sh
+  $ npm run call create-tp
   ```
 
   After executing the command, the console displays the effects of the transaction.

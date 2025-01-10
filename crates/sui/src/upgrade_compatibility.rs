@@ -12,16 +12,15 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use move_binary_format::compatibility::InclusionCheck;
 use move_binary_format::file_format::{
     AbilitySet, DatatypeTyParameter, EnumDefinitionIndex, FunctionDefinitionIndex,
     StructDefinitionIndex, TableIndex,
 };
-use move_binary_format::normalized::Type;
 use move_binary_format::{
-    compatibility::Compatibility,
+    compatibility::{Compatibility, InclusionCheck},
     compatibility_mode::CompatibilityMode,
     file_format::Visibility,
+    inclusion_mode::InclusionCheckMode,
     normalized::{Enum, Field, Function, Module, Struct, Type, Variant},
     CompiledModule,
 };
@@ -33,7 +32,7 @@ use move_compiler::{
         codes::{custom, Severity},
         report_diagnostics_to_buffer, Diagnostic, Diagnostics,
     },
-    shared::files::{FileName, FilesSourceText},
+    shared::files::FileName,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -126,50 +125,140 @@ pub(crate) enum UpgradeCompatibilityModeError {
         name: Identifier,
         old_function: Function,
     },
+
+    // inclusion check specific errors
+    FileFormatVersionDowngrade {
+        old_version: u32,
+        new_version: u32,
+    },
+    StructNew {
+        name: Identifier,
+        new_struct: Struct,
+    },
+    StructChange {
+        name: Identifier,
+        old_struct: Struct,
+        new_struct: Struct,
+    },
+    EnumNew {
+        name: Identifier,
+        new_enum: Enum,
+    },
+    EnumChange {
+        name: Identifier,
+        new_enum: Enum,
+    },
+    FunctionNew {
+        name: Identifier,
+        new_func: Function,
+    },
+    FunctionChange {
+        name: Identifier,
+        old_func: Function,
+        new_func: Function,
+    },
+    FunctionMissing {
+        name: Identifier,
+    },
+    FriendNew,
+    FriendMissing,
 }
 
-impl UpgradeCompatibilityModeError {
-    /// check if the error breaks compatibility for a given [`Compatibility`]
-    fn breaks_compatibility(&self, compatability: &Compatibility) -> bool {
-        match self {
-            UpgradeCompatibilityModeError::ModuleMissing { .. }
-            | UpgradeCompatibilityModeError::ModuleMismatch { .. } => true,
+/// Check if a specifc error breaks 'compatible' upgrades
+fn breaks_compatibility(
+    error: &UpgradeCompatibilityModeError,
+    compatability: &Compatibility,
+) -> bool {
+    match error {
+        UpgradeCompatibilityModeError::ModuleMissing { .. }
+        | UpgradeCompatibilityModeError::ModuleMismatch { .. } => true,
 
-            UpgradeCompatibilityModeError::StructAbilityMismatch { .. }
-            | UpgradeCompatibilityModeError::StructTypeParamMismatch { .. }
-            | UpgradeCompatibilityModeError::EnumAbilityMismatch { .. }
-            | UpgradeCompatibilityModeError::EnumTypeParamMismatch { .. }
-            | UpgradeCompatibilityModeError::FunctionMissingPublic { .. }
-            | UpgradeCompatibilityModeError::FunctionLostPublicVisibility { .. } => true,
+        UpgradeCompatibilityModeError::StructAbilityMismatch { .. }
+        | UpgradeCompatibilityModeError::StructTypeParamMismatch { .. }
+        | UpgradeCompatibilityModeError::EnumAbilityMismatch { .. }
+        | UpgradeCompatibilityModeError::EnumTypeParamMismatch { .. }
+        | UpgradeCompatibilityModeError::FunctionMissingPublic { .. }
+        | UpgradeCompatibilityModeError::FunctionLostPublicVisibility { .. } => true,
 
-            UpgradeCompatibilityModeError::StructFieldMismatch { .. }
-            | UpgradeCompatibilityModeError::EnumVariantMissing { .. }
-            | UpgradeCompatibilityModeError::EnumVariantMismatch { .. } => {
-                compatability.check_datatype_layout
+        UpgradeCompatibilityModeError::StructFieldMismatch { .. }
+        | UpgradeCompatibilityModeError::EnumVariantMissing { .. }
+        | UpgradeCompatibilityModeError::EnumVariantMismatch { .. } => {
+            compatability.check_datatype_layout
+        }
+
+        UpgradeCompatibilityModeError::StructMissing { .. }
+        | UpgradeCompatibilityModeError::EnumMissing { .. } => true,
+
+        UpgradeCompatibilityModeError::FunctionSignatureMismatch { old_function, .. } => {
+            if old_function.visibility == Visibility::Public {
+                return true;
             }
-
-            UpgradeCompatibilityModeError::StructMissing { .. }
-            | UpgradeCompatibilityModeError::EnumMissing { .. } => true,
-
-            UpgradeCompatibilityModeError::FunctionSignatureMismatch { old_function, .. } => {
-                if old_function.visibility == Visibility::Public {
-                    return true;
-                }
-                if old_function.is_entry {
-                    compatability.check_private_entry_linking
-                } else {
-                    false
-                }
-            }
-
-            UpgradeCompatibilityModeError::FunctionMissingEntry { .. }
-            | UpgradeCompatibilityModeError::FunctionEntryCompatibility { .. } => {
+            if old_function.is_entry {
                 compatability.check_private_entry_linking
-            }
-            UpgradeCompatibilityModeError::EnumNewVariant { .. } => {
-                compatability.check_datatype_layout
+            } else {
+                false
             }
         }
+
+        UpgradeCompatibilityModeError::FunctionMissingEntry { .. }
+        | UpgradeCompatibilityModeError::FunctionEntryCompatibility { .. } => {
+            compatability.check_private_entry_linking
+        }
+        UpgradeCompatibilityModeError::EnumNewVariant { .. } => compatability.check_datatype_layout,
+
+        UpgradeCompatibilityModeError::FileFormatVersionDowngrade { .. }
+        | UpgradeCompatibilityModeError::StructNew { .. }
+        | UpgradeCompatibilityModeError::StructChange { .. }
+        | UpgradeCompatibilityModeError::EnumNew { .. }
+        | UpgradeCompatibilityModeError::EnumChange { .. }
+        | UpgradeCompatibilityModeError::FunctionNew { .. }
+        | UpgradeCompatibilityModeError::FunctionChange { .. }
+        | UpgradeCompatibilityModeError::FunctionMissing { .. }
+        | UpgradeCompatibilityModeError::FriendNew { .. }
+        | UpgradeCompatibilityModeError::FriendMissing { .. } => false,
+    }
+}
+
+/// Check if a specifc error breaks inclusion checks for 'additive' (Subset) or 'dependency only' (Equal) upgrades
+fn breaks_inclusion_check(
+    error: &UpgradeCompatibilityModeError,
+    inclusion_check: &InclusionCheck,
+) -> bool {
+    match error {
+        UpgradeCompatibilityModeError::StructNew { .. } => {
+            matches!(inclusion_check, InclusionCheck::Equal)
+        }
+        UpgradeCompatibilityModeError::EnumNew { .. } => {
+            matches!(inclusion_check, InclusionCheck::Equal)
+        }
+        UpgradeCompatibilityModeError::FunctionNew { .. } => {
+            matches!(inclusion_check, InclusionCheck::Equal)
+        }
+
+        UpgradeCompatibilityModeError::ModuleMissing { .. }
+        | UpgradeCompatibilityModeError::ModuleMismatch { .. }
+        | UpgradeCompatibilityModeError::StructMissing { .. }
+        | UpgradeCompatibilityModeError::StructAbilityMismatch { .. }
+        | UpgradeCompatibilityModeError::StructTypeParamMismatch { .. }
+        | UpgradeCompatibilityModeError::StructFieldMismatch { .. }
+        | UpgradeCompatibilityModeError::EnumMissing { .. }
+        | UpgradeCompatibilityModeError::EnumAbilityMismatch { .. }
+        | UpgradeCompatibilityModeError::EnumTypeParamMismatch { .. }
+        | UpgradeCompatibilityModeError::EnumNewVariant { .. }
+        | UpgradeCompatibilityModeError::EnumVariantMissing { .. }
+        | UpgradeCompatibilityModeError::EnumVariantMismatch { .. }
+        | UpgradeCompatibilityModeError::FunctionMissingPublic { .. }
+        | UpgradeCompatibilityModeError::FunctionMissingEntry { .. }
+        | UpgradeCompatibilityModeError::FunctionSignatureMismatch { .. }
+        | UpgradeCompatibilityModeError::FunctionLostPublicVisibility { .. }
+        | UpgradeCompatibilityModeError::FunctionEntryCompatibility { .. }
+        | UpgradeCompatibilityModeError::FileFormatVersionDowngrade { .. }
+        | UpgradeCompatibilityModeError::StructChange { .. }
+        | UpgradeCompatibilityModeError::EnumChange { .. }
+        | UpgradeCompatibilityModeError::FunctionChange { .. }
+        | UpgradeCompatibilityModeError::FunctionMissing { .. }
+        | UpgradeCompatibilityModeError::FriendNew { .. }
+        | UpgradeCompatibilityModeError::FriendMissing { .. } => true,
     }
 }
 
@@ -341,7 +430,7 @@ impl CompatibilityMode for CliCompatibilityMode {
         let errors: Vec<UpgradeCompatibilityModeError> = self
             .errors
             .into_iter()
-            .filter(|e| e.breaks_compatibility(compatability))
+            .filter(|e| breaks_compatibility(e, compatability))
             .collect();
 
         if !errors.is_empty() {
@@ -351,6 +440,119 @@ impl CompatibilityMode for CliCompatibilityMode {
     }
 }
 
+/// A Compatibility mode used for checking inclusion checks for 'additive' (Subset) or 'dependency only' (Equal) upgrades
+#[derive(Default)]
+struct CliInclusionCheckMode {
+    errors: Vec<UpgradeCompatibilityModeError>,
+}
+
+impl InclusionCheckMode for CliInclusionCheckMode {
+    type Error = Vec<UpgradeCompatibilityModeError>;
+
+    // ignored address is not populated pre-tx
+    fn module_id_mismatch(
+        &mut self,
+        old_address: &AccountAddress,
+        old_name: &IdentStr,
+        new_address: &AccountAddress,
+        new_name: &IdentStr,
+    ) {
+    }
+
+    fn file_format_version_downgrade(&mut self, old_version: u32, new_version: u32) {
+        self.errors
+            .push(UpgradeCompatibilityModeError::FileFormatVersionDowngrade {
+                old_version,
+                new_version,
+            });
+    }
+
+    fn struct_new(&mut self, name: &Identifier, new_struct: &Struct) {
+        self.errors.push(UpgradeCompatibilityModeError::StructNew {
+            name: name.clone(),
+            new_struct: new_struct.clone(),
+        });
+    }
+
+    fn struct_change(&mut self, name: &Identifier, old_struct: &Struct, new_struct: &Struct) {
+        self.errors
+            .push(UpgradeCompatibilityModeError::StructChange {
+                name: name.clone(),
+                old_struct: old_struct.clone(),
+                new_struct: new_struct.clone(),
+            });
+    }
+
+    fn struct_missing(&mut self, name: &Identifier, old_struct: &Struct) {
+        self.errors
+            .push(UpgradeCompatibilityModeError::StructMissing { name: name.clone() });
+    }
+
+    fn enum_new(&mut self, name: &Identifier, new_enum: &Enum) {
+        self.errors.push(UpgradeCompatibilityModeError::EnumNew {
+            name: name.clone(),
+            new_enum: new_enum.clone(),
+        });
+    }
+
+    fn enum_change(&mut self, name: &Identifier, new_enum: &Enum) {
+        self.errors.push(UpgradeCompatibilityModeError::EnumChange {
+            name: name.clone(),
+            new_enum: new_enum.clone(),
+        });
+    }
+
+    fn enum_missing(&mut self, name: &Identifier, old_enum: &Enum) {
+        self.errors
+            .push(UpgradeCompatibilityModeError::EnumMissing { name: name.clone() });
+    }
+
+    fn function_new(&mut self, name: &Identifier, new_func: &Function) {
+        self.errors
+            .push(UpgradeCompatibilityModeError::FunctionNew {
+                name: name.clone(),
+                new_func: new_func.clone(),
+            });
+    }
+
+    fn function_change(&mut self, name: &Identifier, old_func: &Function, new_func: &Function) {
+        self.errors
+            .push(UpgradeCompatibilityModeError::FunctionChange {
+                name: name.clone(),
+                old_func: old_func.clone(),
+                new_func: new_func.clone(),
+            });
+    }
+
+    fn function_missing(&mut self, name: &Identifier, old_func: &Function) {
+        self.errors
+            .push(UpgradeCompatibilityModeError::FunctionMissing { name: name.clone() });
+    }
+
+    fn friend_mismatch(&mut self, old_count: usize, new_count: usize) {
+        if old_count < new_count {
+            self.errors.push(UpgradeCompatibilityModeError::FriendNew);
+        } else {
+            self.errors
+                .push(UpgradeCompatibilityModeError::FriendMissing);
+        }
+    }
+
+    fn finish(self, inclusion: &InclusionCheck) -> Result<(), Self::Error> {
+        let errors: Vec<UpgradeCompatibilityModeError> = self
+            .errors
+            .into_iter()
+            .filter(|e| breaks_inclusion_check(e, inclusion))
+            .collect();
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
 struct IdentifierTableLookup {
     struct_identifier_to_index: BTreeMap<Identifier, TableIndex>,
     enum_identifier_to_index: BTreeMap<Identifier, TableIndex>,
@@ -458,6 +660,9 @@ upgrade_codes!(
         TypeParamMismatch: { msg: "type parameter mismatch" },
         ModuleMismatch: { msg: "module incompatible" },
         ModuleMissing: { msg: "module missing" },
+        Missing: { msg: "missing declaration" },
+        VersionMismatch: { msg: "file format version downgrade" },
+        FriendMismatch: { msg: "friend mismatch" },
     ],
     Enums: [
         VariantMismatch: { msg: "variant mismatch" },
@@ -507,76 +712,23 @@ pub(crate) async fn check_compatibility(
     compare_packages(existing_modules, new_package, package_path, policy)
 }
 
+/// Collect all the errors into a single error message.
 fn compare_packages(
     existing_modules: Vec<CompiledModule>,
     mut new_package: CompiledPackage,
     package_path: PathBuf,
     policy: UpgradePolicy,
 ) -> Result<(), Error> {
+    // create a map from the new modules
     let new_modules_map: HashMap<Identifier, CompiledModule> = new_package
         .get_modules()
         .map(|m| (m.self_id().name().to_owned(), m.clone()))
         .collect();
 
-    let lookup: HashMap<Identifier, IdentifierTableLookup> = new_package
-        .get_modules()
+    let lookup: HashMap<Identifier, IdentifierTableLookup> = new_modules_map
+        .values()
         .map(|m| (m.self_id().name().to_owned(), table_index(m)))
         .collect();
-
-    let errors: Vec<(Identifier, UpgradeCompatibilityModeError)> = existing_modules
-        .iter()
-        .flat_map(|existing_module| {
-            let name = existing_module.self_id().name().to_owned();
-
-            // find the new module with the same name
-            match new_modules_map.get(&name) {
-                Some(new_module) => {
-                    let existing_module = Module::new(existing_module);
-                    let new_module = Module::new(new_module);
-
-                    match policy {
-                        UpgradePolicy::Compatible => errors_or_empty_vec(
-                            name,
-                            Compatibility::upgrade_check().check_with_mode::<CliCompatibilityMode>(
-                                &existing_module,
-                                &new_module,
-                            ),
-                        ),
-                        // TODO improve on this error message
-                        UpgradePolicy::Additive => errors_or_empty_vec(
-                            name,
-                            InclusionCheck::Subset
-                                .check(&existing_module, &new_module)
-                                .map_err(|_| {
-                                    vec![UpgradeCompatibilityModeError::ModuleMismatch {
-                                        policy: UpgradePolicy::Additive,
-                                    }]
-                                }),
-                        ),
-                        // TODO improve on this error message
-                        UpgradePolicy::DepOnly => errors_or_empty_vec(
-                            name,
-                            InclusionCheck::Equal
-                                .check(&existing_module, &new_module)
-                                .map_err(|_| {
-                                    vec![UpgradeCompatibilityModeError::ModuleMismatch {
-                                        policy: UpgradePolicy::DepOnly,
-                                    }]
-                                }),
-                        ),
-                    }
-                }
-                None => vec![(
-                    name.clone(),
-                    UpgradeCompatibilityModeError::ModuleMissing { name },
-                )],
-            }
-        })
-        .collect();
-
-    if errors.is_empty() {
-        return Ok(());
-    }
 
     let mut diags = Diagnostics::new();
 
@@ -595,48 +747,97 @@ fn compare_packages(
         Arc::clone(&move_toml_contents),
     );
 
-    for (name, err) in errors {
-        if let UpgradeCompatibilityModeError::ModuleMissing { name, .. } = &err {
-            diags.extend(missing_module_diag(
-                name,
-                &move_toml_hash,
-                &move_toml_contents,
-            )?);
-            continue;
+    for existing_module in existing_modules {
+        let name = existing_module.self_id().name().to_owned();
+        match new_modules_map.get(&name) {
+            Some(new_module) => {
+                let compiled_unit_with_source = new_package
+                    .package
+                    .get_module_by_name_from_root(name.as_str())
+                    .context("Unable to get module")?;
+
+                let module_diags = modules_into_diags(
+                    &existing_module,
+                    new_module,
+                    compiled_unit_with_source,
+                    &lookup[&name],
+                    policy,
+                )?;
+
+                diags.extend(module_diags);
+            }
+            None => {
+                diags.extend(missing_module_diag(
+                    &name,
+                    &move_toml_hash,
+                    &move_toml_contents,
+                )?);
+            }
         }
-
-        let compiled_unit_with_source = new_package
-            .package
-            .get_module_by_name_from_root(name.as_str())
-            .context("Unable to get module")?;
-
-        diags.extend(diag_from_error(
-            &err,
-            compiled_unit_with_source,
-            &lookup[&name],
-        )?);
     }
 
-    // use colors but inline
-    Err(anyhow!(
-        "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
-        Its upgrade policy is set to '{}'.",
-        if !diags.is_empty() {
+    if diags.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
+            Its upgrade policy is set to '{}'.",
             String::from_utf8(report_diagnostics_to_buffer(
                 &new_package.package.file_map,
                 diags,
                 use_colors()
-            ))
-            .context("Unable to convert buffer to string")?
-        } else {
-            "".to_string()
-        },
-        match policy {
-            UpgradePolicy::Compatible => "compatible",
-            UpgradePolicy::Additive => "additive",
-            UpgradePolicy::DepOnly => "dependency only",
-        }
-    ))
+            )).context("Unable to convert buffer to string")?,
+            match policy {
+                UpgradePolicy::Compatible => "compatible",
+                UpgradePolicy::Additive => "additive",
+                UpgradePolicy::DepOnly => "dependency only",
+            }
+        ))
+    }
+}
+
+/// Runs the compatibility check between two modules and flattens the errors into a single error message.
+fn modules_into_diags(
+    existing_module: &CompiledModule,
+    new_module: &CompiledModule,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+    policy: UpgradePolicy,
+) -> Result<Diagnostics, Error> {
+    let diags_list = match policy {
+        UpgradePolicy::DepOnly => InclusionCheck::Equal.check_with_mode::<CliInclusionCheckMode>(
+            &Module::new(existing_module),
+            &Module::new(new_module),
+        ),
+        UpgradePolicy::Additive => InclusionCheck::Subset.check_with_mode::<CliInclusionCheckMode>(
+            &Module::new(existing_module),
+            &Module::new(new_module),
+        ),
+        _ => Compatibility::upgrade_check().check_with_mode::<CliCompatibilityMode>(
+            &Module::new(existing_module),
+            &Module::new(new_module),
+        ),
+    }
+    .err()
+    .unwrap_or_default()
+    .into_iter()
+    .map(|e| {
+        compatibility_diag_from_error(
+            &e,
+            compiled_unit_with_source,
+            matches!(policy, UpgradePolicy::Compatible),
+            lookup,
+        )
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+
+    let mut diags = Diagnostics::new();
+
+    for diag in diags_list {
+        diags.extend(diag);
+    }
+
+    Ok(diags)
 }
 
 fn errors_or_empty_vec(
@@ -650,14 +851,16 @@ fn errors_or_empty_vec(
 }
 
 /// Convert an error to a diagnostic using the specific error type's function.
-fn diag_from_error(
+fn compatibility_diag_from_error(
     error: &UpgradeCompatibilityModeError,
     compiled_unit_with_source: &CompiledUnitWithSource,
+    is_compatible: bool,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
+    let module_name = compiled_unit_with_source.unit.name.as_str();
     match error {
         UpgradeCompatibilityModeError::StructMissing { name, .. } => {
-            missing_definition_diag("struct", name, compiled_unit_with_source)
+            missing_definition_diag("struct", name, is_compatible, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::StructAbilityMismatch {
             name,
@@ -667,6 +870,7 @@ fn diag_from_error(
             name,
             old_struct,
             new_struct,
+            is_compatible,
             compiled_unit_with_source,
             lookup,
         ),
@@ -678,9 +882,13 @@ fn diag_from_error(
             name,
             old_struct,
             new_struct,
+            is_compatible,
             compiled_unit_with_source,
             lookup,
         ),
+        UpgradeCompatibilityModeError::EnumMissing { name, .. } => {
+            missing_definition_diag("enum", name, is_compatible, compiled_unit_with_source)
+        }
 
         UpgradeCompatibilityModeError::StructTypeParamMismatch {
             name,
@@ -690,20 +898,24 @@ fn diag_from_error(
             name,
             old_struct,
             new_struct,
+            is_compatible,
             compiled_unit_with_source,
             lookup,
         ),
 
-        UpgradeCompatibilityModeError::EnumMissing { name, .. } => {
-            missing_definition_diag("enum", name, compiled_unit_with_source)
-        }
         UpgradeCompatibilityModeError::EnumAbilityMismatch {
             name,
             old_enum,
             new_enum,
-        } => {
-            enum_ability_mismatch_diag(name, old_enum, new_enum, compiled_unit_with_source, lookup)
-        }
+        } => enum_ability_mismatch_diag(
+            name,
+            old_enum,
+            new_enum,
+            is_compatible,
+            compiled_unit_with_source,
+            lookup,
+        ),
+
         UpgradeCompatibilityModeError::EnumNewVariant {
             name,
             old_enum,
@@ -726,19 +938,41 @@ fn diag_from_error(
             old_enum,
             new_enum,
             ..
-        } => {
-            enum_variant_mismatch_diag(name, old_enum, new_enum, compiled_unit_with_source, lookup)
-        }
+        } => enum_variant_mismatch_diag(
+            name,
+            old_enum,
+            new_enum,
+            is_compatible,
+            compiled_unit_with_source,
+            lookup,
+        ),
         UpgradeCompatibilityModeError::EnumTypeParamMismatch {
             name,
             old_enum,
             new_enum,
-        } => enum_type_param_mismatch(name, old_enum, new_enum, compiled_unit_with_source, lookup),
+        } => enum_type_param_mismatch(
+            name,
+            old_enum,
+            new_enum,
+            is_compatible,
+            compiled_unit_with_source,
+            lookup,
+        ),
         UpgradeCompatibilityModeError::FunctionMissingPublic { name, .. } => {
-            missing_definition_diag("public function", name, compiled_unit_with_source)
+            missing_definition_diag(
+                "public function",
+                name,
+                is_compatible,
+                compiled_unit_with_source,
+            )
         }
         UpgradeCompatibilityModeError::FunctionMissingEntry { name, .. } => {
-            missing_definition_diag("entry function", name, compiled_unit_with_source)
+            missing_definition_diag(
+                "entry function",
+                name,
+                is_compatible,
+                compiled_unit_with_source,
+            )
         }
         UpgradeCompatibilityModeError::FunctionLostPublicVisibility { name, .. } => {
             function_lost_public(name, compiled_unit_with_source, lookup)
@@ -751,6 +985,7 @@ fn diag_from_error(
             name,
             old_function,
             new_function,
+            is_compatible,
             compiled_unit_with_source,
             lookup,
         ),
@@ -766,10 +1001,53 @@ fn diag_from_error(
         UpgradeCompatibilityModeError::ModuleMissing { .. } => {
             unreachable!("Module Missing should be handled by outer function")
         }
+
+        UpgradeCompatibilityModeError::StructNew { name, .. } => {
+            struct_new_diag(name, compiled_unit_with_source)
+        }
+        UpgradeCompatibilityModeError::StructChange {
+            name,
+            old_struct,
+            new_struct,
+        } => struct_changed_diag(
+            name,
+            old_struct,
+            new_struct,
+            compiled_unit_with_source,
+            lookup,
+        ),
+
+        UpgradeCompatibilityModeError::EnumNew { name, new_enum } => {
+            enum_new_diag(name, new_enum, compiled_unit_with_source)
+        }
+        UpgradeCompatibilityModeError::EnumChange { name, new_enum } => {
+            enum_changed_diag(name, new_enum, new_enum, compiled_unit_with_source, lookup)
+        }
+
+        UpgradeCompatibilityModeError::FunctionNew { name, .. } => {
+            function_new_diag(name, compiled_unit_with_source)
+        }
+        UpgradeCompatibilityModeError::FunctionChange {
+            name,
+            old_func,
+            new_func,
+        } => function_changed_diag(name, old_func, new_func, compiled_unit_with_source, lookup),
+        UpgradeCompatibilityModeError::FunctionMissing { name } => {
+            missing_definition_diag("function", name, is_compatible, compiled_unit_with_source)
+        }
+        UpgradeCompatibilityModeError::FileFormatVersionDowngrade {
+            old_version,
+            new_version,
+        } => {
+            file_format_version_downgrade_diag(old_version, new_version, compiled_unit_with_source)
+        }
+        UpgradeCompatibilityModeError::FriendNew { .. }
+        | UpgradeCompatibilityModeError::FriendMissing { .. } => {
+            friend_link_diag(compiled_unit_with_source)
+        }
     }
 }
 
-// TODO provide more depth in the diagnostics
 // give specifics about the declarations which do not match
 fn module_compatibility_error_diag(
     policy: UpgradePolicy,
@@ -808,6 +1086,7 @@ fn module_compatibility_error_diag(
     Ok(diags)
 }
 
+/// Return a diagnostic when a module is missing from a package.
 fn missing_module_diag(
     module_name: &Identifier,
     move_toml_hash: &FileHash,
@@ -826,7 +1105,7 @@ fn missing_module_diag(
         .map(|(idx, _)| start + idx)
         .unwrap_or(start + PACKAGE_TABLE.len());
 
-    let loc = Loc::new(move_toml_hash.clone(), start as ByteIndex, end as ByteIndex);
+    let loc = Loc::new(*move_toml_hash, start as ByteIndex, end as ByteIndex);
 
     diags.add(Diagnostic::new(
         Declarations::ModuleMissing,
@@ -845,18 +1124,49 @@ fn missing_module_diag(
 fn missing_definition_diag(
     declaration_kind: &str,
     identifier_name: &Identifier,
+    public_visibility_related_error: bool, // give a different code for errors which are public visibility related
     compiled_unit_with_source: &CompiledUnitWithSource,
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
 
-    let module_name = compiled_unit_with_source.unit.name;
+    let module_name = compiled_unit_with_source.unit.name.as_str();
     let loc = compiled_unit_with_source
         .unit
         .source_map
         .definition_location;
 
+    let (code, reason_notes) = if public_visibility_related_error {
+        (
+            Declarations::PublicMissing,
+            vec![
+                format!(
+                    "{declaration_kind}s are part of a module's public interface \
+                     and cannot be removed or changed during a 'compatible' upgrade.",
+                ),
+                format!(
+                    "add missing {declaration_kind} '{identifier_name}' \
+                     back to the module '{module_name}'.",
+                ),
+            ],
+        )
+    } else {
+        (
+            Declarations::Missing,
+            vec![
+                format!(
+                    "{declaration_kind}s cannot be removed or changed during an 'additive' or \
+                    'dependency only' upgrade.",
+                ),
+                format!(
+                    "add missing {declaration_kind} '{identifier_name}' \
+                     back to the module '{module_name}'.",
+                ),
+            ],
+        )
+    };
+
     diags.add(Diagnostic::new(
-        Declarations::PublicMissing,
+        code,
         (
             loc,
             format!(
@@ -866,16 +1176,7 @@ fn missing_definition_diag(
             ),
         ),
         std::iter::empty::<(Loc, String)>(),
-        vec![
-            format!(
-                "{declaration_kind}s are part of a module's public interface \
-                and cannot be removed or changed during an upgrade.",
-            ),
-            format!(
-                "add missing {declaration_kind} '{identifier_name}' \
-                back to the module '{module_name}'.",
-            ),
-        ],
+        [reason_notes].concat(),
     ));
 
     Ok(diags)
@@ -911,7 +1212,7 @@ fn function_lost_public(
         Vec::<(Loc, String)>::new(),
         vec![
             "Functions are part of a module's public interface \
-            and cannot be changed during an upgrade."
+            and cannot be removed or changed during an upgrade."
                 .to_string(),
             format!(
                 "Restore the original function's 'public' visibility for \
@@ -954,12 +1255,13 @@ fn format_param(
 }
 
 /// Return a diagnostic for a function signature mismatch.
-/// start by checking the lengths of the parameters and returns and return a diagnostic if they are different
-/// if the lengths are the same check each parameter piece wise and return a diagnostic for each mismatch
+/// Start by checking the lengths of the parameters and returns and return a diagnostic if they are different.
+/// If the lengths are the same check each parameter piece wise and return a diagnostic for each mismatch.
 fn function_signature_mismatch_diag(
     function_name: &Identifier,
     old_function: &Function,
     new_function: &Function,
+    public_visibility_related_error: bool,
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
@@ -978,6 +1280,14 @@ fn function_signature_mismatch_diag(
 
     let def_loc = func_sourcemap.definition_location;
 
+    let reason = if public_visibility_related_error {
+        "Functions are part of a module's public interface \
+        and cannot be removed or changed during a 'compatible' upgrade."
+    } else {
+        "Functions cannot be removed or changed during an 'additive' or \
+        'dependency only' upgrade."
+    };
+
     // handle function arguments
     if old_function.parameters.len() != new_function.parameters.len() {
         diags.add(Diagnostic::new(
@@ -993,9 +1303,7 @@ fn function_signature_mismatch_diag(
             ),
             Vec::<(Loc, String)>::new(),
             vec![
-                "Functions are part of a module's public interface and cannot be \
-                changed during an upgrade."
-                    .to_string(),
+                reason.to_string(),
                 format!(
                     "Restore the original function's {} for \
                     function '{function_name}', expected {} {}.",
@@ -1039,9 +1347,7 @@ fn function_signature_mismatch_diag(
                     (param_loc, label),
                     secondary,
                     vec![
-                        "Functions are part of a module's public interface \
-                        and cannot be changed during an upgrade."
-                            .to_string(),
+                        reason.to_string(),
                         format!(
                             "Restore the original function's {} \
                             for function '{function_name}'.",
@@ -1075,9 +1381,7 @@ fn function_signature_mismatch_diag(
             ),
             Vec::<(Loc, String)>::new(),
             vec![
-                "Functions are part of a module's public interface \
-                and cannot be changed during an upgrade."
-                    .to_string(),
+                reason.to_string(),
                 format!(
                     "Restore the original function's type {} for \
                     function '{function_name}', expected {} type {}.",
@@ -1131,9 +1435,7 @@ fn function_signature_mismatch_diag(
                     ),
                     Vec::<(Loc, String)>::new(),
                     vec![
-                        "Functions are part of a module's public interface \
-                        and cannot be changed during an upgrade."
-                            .to_string(),
+                        reason.to_string(),
                         format!(
                             "Restore the original function's type {} \
                             for function '{function_name}'.",
@@ -1164,9 +1466,7 @@ fn function_signature_mismatch_diag(
             ),
             Vec::<(Loc, String)>::new(),
             vec![
-                "Functions are part of a module's public interface \
-                and cannot be changed during an upgrade."
-                    .to_string(),
+                reason.to_string(),
                 format!(
                     "Restore the original function's return {} \
                     for function '{function_name}'.",
@@ -1188,7 +1488,6 @@ fn function_signature_mismatch_diag(
 
             if old_return != new_return {
                 let mut secondary = Vec::new();
-
                 let old_return = format_param(
                     old_return,
                     func_sourcemap.type_parameters.clone(),
@@ -1213,9 +1512,7 @@ fn function_signature_mismatch_diag(
                     (*return_, label),
                     secondary,
                     vec![
-                        "Functions are part of a module's public interface \
-                        and cannot be changed during an upgrade."
-                            .to_string(),
+                        reason.to_string(),
                         format!(
                             "Restore the original function's return \
                             {} for function '{function_name}'.",
@@ -1263,7 +1560,7 @@ fn function_entry_mismatch(
         ),
         Vec::<(Loc, String)>::new(),
         vec![
-            "Entry functions cannot be changed during an upgrade.".to_string(),
+            "Entry functions cannot be removed or changed during an upgrade.".to_string(),
             format!(
                 "Restore the original function's 'entry' visibility for \
                 function '{function_name}'.",
@@ -1321,6 +1618,7 @@ fn struct_ability_mismatch_diag(
     struct_name: &Identifier,
     old_struct: &Struct,
     new_struct: &Struct,
+    public_visibility_related_error: bool,
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
@@ -1359,9 +1657,14 @@ fn struct_ability_mismatch_diag(
             ),
             Vec::<(Loc, String)>::new(),
             vec![
-                "Structs are part of a module's public interface and \
-                cannot be changed during an upgrade."
-                    .to_string(),
+                if public_visibility_related_error {
+                    "Structs are part of a module's public interface and \
+                    cannot be removed or changed during a 'compatible' upgrade."
+                } else {
+                    "Structs cannot be removed or changed during an 'additive' or \
+                    'dependency only' upgrade."
+                }
+                .to_string(),
                 format!(
                     "Restore the original {} of struct '{struct_name}': {}.",
                     singular_or_plural(old_abilities.len(), "ability", "abilities"),
@@ -1434,12 +1737,13 @@ fn field_mismatch_message(old_field: &Field, new_field: &Field) -> (Declarations
 }
 
 /// Return a diagnostic for a field mismatch
-/// Start by checking the lengths of the fields and return a diagnostic if they are different.
-/// If the lengths are the same check each field piece wise and return a diagnostic for each mismatch.
+/// start by checking the lengths of the fields and return a diagnostic if they are different
+/// if the lengths are the same check each field piece wise and return a diagnostic for each mismatch
 fn struct_field_mismatch_diag(
     struct_name: &Identifier,
     old_struct: &Struct,
     new_struct: &Struct,
+    public_visibility_related_error: bool,
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
@@ -1470,6 +1774,14 @@ fn struct_field_mismatch_diag(
         .filter(|f| f.name != Identifier::new("dummy_field").unwrap() && f.type_ != Type::Bool)
         .collect();
 
+    let reason = if public_visibility_related_error {
+        "Structs are part of a module's public interface \
+        and cannot be removed or changed during an upgrade."
+    } else {
+        "Structs cannot be removed or changed during an 'additive' or 'dependency only' upgrade."
+    }
+    .to_string();
+
     if old_fields.len() != new_fields.len() {
         diags.add(Diagnostic::new(
             Declarations::TypeMismatch,
@@ -1483,9 +1795,7 @@ fn struct_field_mismatch_diag(
             ),
             Vec::<(Loc, String)>::new(),
             vec![
-                "Structs are part of a module's public interface and \
-                cannot be changed during an upgrade."
-                    .to_string(),
+                reason,
                 format!(
                     "Restore the original struct's {} \
                     for struct '{struct_name}' including the ordering.",
@@ -1508,9 +1818,7 @@ fn struct_field_mismatch_diag(
                     (*field_loc, label),
                     vec![(def_loc, "Struct definition".to_string())],
                     vec![
-                        "Structs are part of a module's public interface \
-                        and cannot be changed during an upgrade."
-                            .to_string(),
+                        reason.to_string(),
                         format!(
                             "Restore the original struct's {} for \
                             struct '{struct_name}' including the ordering.",
@@ -1532,6 +1840,7 @@ fn struct_type_param_mismatch_diag(
     name: &Identifier,
     old_struct: &Struct,
     new_struct: &Struct,
+    public_visibility_related_error: bool, // give a different code for errors which are public visibility related
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
@@ -1553,6 +1862,7 @@ fn struct_type_param_mismatch_diag(
         name,
         &old_struct.type_parameters,
         &new_struct.type_parameters,
+        public_visibility_related_error,
         def_loc,
         &struct_sourcemap.type_parameters,
     )
@@ -1563,6 +1873,7 @@ fn enum_ability_mismatch_diag(
     enum_name: &Identifier,
     old_enum: &Enum,
     new_enum: &Enum,
+    public_visibility_related_error: bool, // give a different code for errors which are public visibility related
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
@@ -1588,6 +1899,15 @@ fn enum_ability_mismatch_diag(
             .map(|a| format!("'{:?}'", a).to_lowercase())
             .collect();
 
+        let reason = if public_visibility_related_error {
+            "Enums are part of a module's public interface \
+            and cannot be removed or changed during a 'compatible' upgrade."
+                .to_string()
+        } else {
+            "Enums cannot be removed or changed during an 'additive' or 'dependency only' upgrade."
+                .to_string()
+        };
+
         diags.add(Diagnostic::new(
             Declarations::AbilityMismatch,
             (
@@ -1601,9 +1921,7 @@ fn enum_ability_mismatch_diag(
             ),
             Vec::<(Loc, String)>::new(),
             vec![
-                "Enums are part of a module's public interface \
-                and cannot be changed during an upgrade."
-                    .to_string(),
+                reason,
                 format!(
                     "Restore the original {} of the enum: {} \
                     for enum '{enum_name}'.",
@@ -1689,6 +2007,7 @@ fn enum_variant_mismatch_diag(
     enum_name: &Identifier,
     old_enum: &Enum,
     new_enum: &Enum,
+    public_visibility_related_error: bool, // give a different code for errors which are public visibility related
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
@@ -1730,12 +2049,18 @@ fn enum_variant_mismatch_diag(
                     (variant_loc, label),
                     vec![(def_loc, "Enum definition".to_string())],
                     vec![
-                        "Enums are part of a module's public interface \
-                    and cannot be changed during an upgrade."
-                            .to_string(),
+                        if public_visibility_related_error {
+                            "Enums are part of a module's public interface \
+                            and cannot be removed or changed during an upgrade."
+                                .to_string()
+                        } else {
+                            "Enums cannot be removed or changed during an 'additive' \
+                            or 'dependency only' upgrade."
+                                .to_string()
+                        },
                         format!(
                             "Restore the original enum's {} for \
-                        enum '{enum_name}' including the ordering.",
+                            enum '{enum_name}' including the ordering.",
                             singular_or_plural(old_enum.variants.len(), "variant", "variants")
                         ),
                     ],
@@ -1793,8 +2118,8 @@ fn enum_new_variant_diag(
                 ),
                 vec![(def_loc, "Enum definition".to_string())],
                 vec![
-                    "Enums are part of a module's public interface and cannot be \
-                    changed during an upgrade."
+                    "Enums are part of a module's public interface \
+                    and cannot be removed or changed during an upgrade."
                         .to_string(),
                     format!(
                         "Restore the original enum's {} for enum \
@@ -1857,11 +2182,216 @@ fn enum_variant_missing_diag(
     Ok(diags)
 }
 
+fn struct_new_diag(
+    struct_name: &Identifier,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let def_loc = compiled_unit_with_source
+        .unit
+        .source_map
+        .definition_location;
+
+    diags.add(Diagnostic::new(
+        Declarations::TypeMismatch,
+        (def_loc, format!("New unexpected struct '{}'.", struct_name)),
+        Vec::<(Loc, String)>::new(),
+        vec![
+            "Structs are part of a module's public interface \
+            and cannot be removed or changed during an upgrade."
+                .to_string(),
+            format!(
+                "Restore the original struct '{struct_name}' including the ordering.",
+                struct_name = struct_name,
+            ),
+        ],
+    ));
+
+    Ok(diags)
+}
+
+fn struct_changed_diag(
+    struct_name: &Identifier,
+    old_struct: &Struct,
+    new_struct: &Struct,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    if old_struct.abilities != new_struct.abilities {
+        diags.extend(struct_ability_mismatch_diag(
+            struct_name,
+            old_struct,
+            new_struct,
+            false,
+            compiled_unit_with_source,
+            lookup,
+        )?);
+    }
+
+    if old_struct.type_parameters != new_struct.type_parameters {
+        diags.extend(struct_type_param_mismatch_diag(
+            struct_name,
+            old_struct,
+            new_struct,
+            true,
+            compiled_unit_with_source,
+            lookup,
+        )?);
+    }
+
+    if old_struct.fields != new_struct.fields {
+        diags.extend(struct_field_mismatch_diag(
+            struct_name,
+            old_struct,
+            new_struct,
+            false,
+            compiled_unit_with_source,
+            lookup,
+        )?);
+    }
+
+    Ok(diags)
+}
+
+fn enum_new_diag(
+    enum_name: &Identifier,
+    _new_enum: &Enum,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let def_loc = compiled_unit_with_source
+        .unit
+        .source_map
+        .definition_location;
+
+    diags.add(Diagnostic::new(
+        Enums::VariantMismatch,
+        (def_loc, format!("New unexpected enum '{}'.", enum_name)),
+        Vec::<(Loc, String)>::new(),
+        vec![
+            "Enums are part of a module's public interface and cannot \
+            be changed during an upgrade."
+                .to_string(),
+            format!(
+                "Restore the original enum '{enum_name}' including the ordering.",
+                enum_name = enum_name,
+            ),
+        ],
+    ));
+
+    Ok(diags)
+}
+
+fn enum_changed_diag(
+    enum_name: &Identifier,
+    old_enum: &Enum,
+    new_enum: &Enum,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    if old_enum.abilities != new_enum.abilities {
+        diags.extend(enum_ability_mismatch_diag(
+            enum_name,
+            old_enum,
+            new_enum,
+            false,
+            compiled_unit_with_source,
+            lookup,
+        )?);
+    }
+
+    if old_enum.type_parameters != new_enum.type_parameters {
+        diags.extend(enum_ability_mismatch_diag(
+            enum_name,
+            old_enum,
+            new_enum,
+            false,
+            compiled_unit_with_source,
+            lookup,
+        )?);
+    }
+
+    if old_enum.variants != new_enum.variants {
+        diags.extend(enum_variant_mismatch_diag(
+            enum_name,
+            old_enum,
+            new_enum,
+            false,
+            compiled_unit_with_source,
+            lookup,
+        )?);
+    }
+
+    Ok(diags)
+}
+
+fn function_new_diag(
+    function_name: &Identifier,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let def_loc = compiled_unit_with_source
+        .unit
+        .source_map
+        .definition_location;
+
+    diags.add(Diagnostic::new(
+        Functions_::SignatureMismatch,
+        (
+            def_loc,
+            format!("New unexpected function '{}'.", function_name),
+        ),
+        Vec::<(Loc, String)>::new(),
+        vec![
+            "Functions are part of a module's public interface and cannot \
+            be changed during an upgrade."
+                .to_string(),
+            format!(
+                "Restore the original function '{function_name}' including the ordering.",
+                function_name = function_name,
+            ),
+        ],
+    ));
+
+    Ok(diags)
+}
+
+fn function_changed_diag(
+    function_name: &Identifier,
+    old_function: &Function,
+    new_function: &Function,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    if old_function != new_function {
+        diags.extend(function_signature_mismatch_diag(
+            function_name,
+            old_function,
+            new_function,
+            false,
+            compiled_unit_with_source,
+            lookup,
+        )?);
+    }
+
+    Ok(diags)
+}
+
 /// Return a diagnostic for a type parameter mismatch
 fn enum_type_param_mismatch(
     enum_name: &Identifier,
     old_enum: &Enum,
     new_enum: &Enum,
+    public_visibility_related_error: bool, // give a different code for errors which are public visibility related
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
@@ -1883,6 +2413,7 @@ fn enum_type_param_mismatch(
         enum_name,
         &old_enum.type_parameters,
         &new_enum.type_parameters,
+        public_visibility_related_error,
         def_loc,
         &enum_sourcemap.type_parameters,
     )
@@ -1894,6 +2425,7 @@ fn type_parameter_diag(
     name: &Identifier,
     old_type_parameters: &[DatatypeTyParameter],
     new_type_parameters: &[DatatypeTyParameter],
+    public_visibility_related_error: bool, // give a different code for errors which are public visibility related
     def_loc: Loc,
     type_parameter_locs: &[SourceName],
 ) -> Result<Diagnostics, Error> {
@@ -1925,10 +2457,17 @@ fn type_parameter_diag(
             ),
             Vec::<(Loc, String)>::new(),
             vec![
-                format!(
-                    "{capital_declaration_kind}s are part of a module's public interface and \
-                cannot be changed during an upgrade."
-                ),
+                if public_visibility_related_error {
+                    format!(
+                        "{capital_declaration_kind}s are part of a module's public interface \
+                        and cannot be removed or changed during a 'compatible' upgrade.",
+                    )
+                } else {
+                    format!(
+                        "{capital_declaration_kind}s cannot be removed or changed during an 'additive' or \
+                        'dependency only' upgrade."
+                    )
+                },
                 format!(
                     "Restore the original {declaration_kind}'s type {} \
                     for {declaration_kind} '{name}' including the ordering.",
@@ -1956,7 +2495,7 @@ fn type_parameter_diag(
                     vec![
                         format!(
                             "{capital_declaration_kind}s are part of a module's public interface \
-                        and cannot be changed during an upgrade."
+                            and cannot be removed or changed during an upgrade."
                         ),
                         fix_note,
                     ],
@@ -1973,7 +2512,7 @@ fn type_parameter_diag(
                     vec![
                         format!(
                             "{capital_declaration_kind}s are part of a module's public interface \
-                        and cannot be changed during an upgrade."
+                            and cannot be removed or changed during an upgrade."
                         ),
                         fix_note,
                     ],
@@ -2029,6 +2568,59 @@ fn type_param_phantom_labels(old_phantom: bool, new_phantom: bool) -> Option<(St
             "Remove the 'phantom' modifier".to_string(),
         )
     })
+}
+
+/// Return a diagnostic for package file format version mismatch
+fn file_format_version_downgrade_diag(
+    old_version: &u32,
+    new_version: &u32,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let def_loc = compiled_unit_with_source
+        .unit
+        .source_map
+        .definition_location;
+
+    diags.add(Diagnostic::new(
+        Declarations::VersionMismatch,
+        (
+            def_loc,
+            format!(
+                "Downgrading from file format version {} to {} is not supported.",
+                old_version, new_version
+            ),
+        ),
+        Vec::<(Loc, String)>::new(),
+        vec![
+            "File format version downgrades are not supported.".to_string(),
+            "Please upgrade to the latest version of the move language tooling.".to_string(),
+        ],
+    ));
+
+    Ok(diags)
+}
+
+/// Return a diagnostic for a friend link mismatch
+fn friend_link_diag(
+    compiled_unit_with_source: &CompiledUnitWithSource,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let def_loc = compiled_unit_with_source
+        .unit
+        .source_map
+        .definition_location;
+
+    diags.add(Diagnostic::new(
+        Declarations::FriendMismatch,
+        (def_loc, "Friends links are mismatched".to_string()),
+        Vec::<(Loc, String)>::new(),
+        vec!["Restore the original friend declarations.".to_string()],
+    ));
+
+    Ok(diags)
 }
 
 /// Format a list of items into a human-readable string.

@@ -129,8 +129,8 @@ All the following examples were tested using a `bash` shell environment and your
 
 Sometimes, CLI PTBs require that you specify the type of a value or variable. For instance, in the following example you must provide the `<u64>` type when calling the `0x1::option::is_none` function.
 
-```shell
-sui client ptb \
+```sh
+$ sui client ptb \
 --assign my_variable none \
 --move-call 0x1::option::is_none "<u64>" my_variable \
 --gas-budget 50000000
@@ -138,7 +138,7 @@ sui client ptb \
 
 To pass in multiple types, delimit them with a comma:
 
-```shell
+```sh
 ...
 --move-call package::module::function "<u64,u8,u256>" \
 ...
@@ -148,8 +148,8 @@ To pass in multiple types, delimit them with a comma:
 
 CLI PTBs support string literals as inputs, which will be encoded as pure values that can be used as inputs to `vector<u8>`, `std::ascii::String` and `std::string::String` parameters. The following example previews a transaction block that passes the string `"Hello, world"` to a function `m::f` in a package `$PKG` (its ID is held in an environment variable).
 
-```bash
-sui client ptb --move-call "$PKG::m::f" '"Hello, world"' --gas-budget 10000000 --preview
+```sh
+$ sui client ptb --move-call "$PKG::m::f" '"Hello, world"' --gas-budget 10000000 --preview
 ```
 
 :::warning
@@ -164,8 +164,8 @@ Double-quoted string literals tend to also be valid syntax for shells (like `bas
 
 Here are some examples for `transfer-objects` and `gas-coin`:
 
-```bash
-sui client ptb --transfer-objects "[ARRAY_OF_OBJECTS]" @0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331 --gas-coin @0x00002819ee07a66e53800495ccf5eeade8a02054a2e0827546c70e4b226f0495
+```sh
+$ sui client ptb --transfer-objects "[ARRAY_OF_OBJECTS]" @0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331 --gas-coin @0x00002819ee07a66e53800495ccf5eeade8a02054a2e0827546c70e4b226f0495
 ```
 
 ### Assign
@@ -177,8 +177,8 @@ Use the `--assign` argument to bind values to variables. There are two ways you 
 
 Let's look at the first case where you assign a value to a variable. You want to check if some variable's value is `none`. Call the `0x1::option::is_none` function from the Move standard library, and pass in the variable name:
 
-```bash
-sui client ptb \
+```sh
+$ sui client ptb \
 --assign my_variable none \
 --move-call 0x1::option::is_none "<u64>" my_variable \
 --gas-budget 50000000
@@ -192,8 +192,8 @@ CLI PTB uses name resolution for common packages like `sui`, `std`, `deepbook`, 
 
 In the second case, if a previous command outputs some result, you can bound it to a variable for later access. Let's see an example where you want a new coin with 1000 MIST, which you can achieve by using the `split-coins` command. After you do that, you want to transfer the new coin to another address. Without the `--assign` argument, you couldn't instruct the CLI to transfer that new coin object as you would not have a way to refer to it.
 
-```bash
-sui client ptb \
+```sh
+$ sui client ptb \
 --split-coins gas "[1000]" \
 --assign coin \
 --transfer-objects "[coin]" @recipient_address \
@@ -220,14 +220,14 @@ When a PTB is executed, the output contains all the relevant information (transa
 
 When needing to execute a Move call, use the `--move-call` transaction to call a specific function from a package. The CLI PTB supports name resolution for common packages like `sui`, `std`, `deepbook`, so you can use both `0x1::option::is_none` as well as `std::option::is_none` for passing the function name.
 
-```bash
+```sh
 --assign A none
 --move-call std::option::is_none "<u64>" A
 ```
 
 To call a specific function from a specific package, you can use the following call:
 
-```bash
+```sh
 --move-call PACKAGE_ADDR::MODULE::FUNCTION "<TYPE>" FUNC_ARG1 FUNC_ARG2 ...
 ```
 
@@ -235,8 +235,8 @@ To call a specific function from a specific package, you can use the following c
 
 Publishing a package is one of the most important commands you need when working with Sui. While the CLI has a standalone `publish` command, PTBs also support publishing and upgrading packages. One main difference is that with `sui client ptb`, you must explicitly transfer the `UpgradeCap` object that is returned when creating a package, or destroy it with a call to [`make_immutable`](/concepts/sui-move-concepts/packages.mdx). Here is an example on how to publish a Move project on chain using the `sui client ptb` command. It makes a call to the `sui::tx_context::sender` to acquire the sender and assigns the result of that call to the `sender` variable, and then calls the publish command. The result of `publish` is bounded to `upgrade_cap` variable, and then this object is transferred to the sender.
 
-```bash
-sui client ptb \
+```sh
+$ sui client ptb \
 --move-call sui::tx_context::sender \
 --assign sender \
 --publish "." \
@@ -249,7 +249,7 @@ sui client ptb \
 
 The following example showcases how to split a gas coin into multiple coins, make a move call to destroy one or more of the new coins, and finally merge the coins that were not destroyed back into the gas coin. It also showcases how to use framework name resolution (for example, `sui::coin` instead of `0x2::coin`) and how to refer to different values in an array using the `.` syntax.
 
-```bash
+```sh
 # Split off from gas
 --split-coins gas "[0,1,2,3]"
 --assign coins
@@ -269,7 +269,7 @@ The following example showcases how to split a gas coin into multiple coins, mak
 
 This example creates three new coins from gas and transfers them to a different address.
 
-```bash
+```sh
 --assign to_address @0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331 \
 --split-coins gas "[1,2,3]" \
 --assign s \

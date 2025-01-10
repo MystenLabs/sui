@@ -239,7 +239,7 @@ Aborts if <code>i</code> or <code>j</code> is out of bounds.
 
 ## Function `singleton`
 
-Return an vector of size one containing element <code>e</code>.
+Return a vector of size one containing element <code>e</code>.
 
 
 <pre><code>publicfun singletonElement(e: Element): <a href="vector.md#std_vector">vector</a>&lt;Element&gt;

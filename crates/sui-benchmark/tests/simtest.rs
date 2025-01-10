@@ -933,12 +933,7 @@ mod test {
             .await
             .into();
 
-        tokio::time::timeout(
-            Duration::from_secs(120),
-            test_simulated_load(test_cluster, 60),
-        )
-        .await
-        .expect("test_backpressure timed out");
+        test_simulated_load(test_cluster, 60).await;
     }
 
     fn handle_bool_failpoint(

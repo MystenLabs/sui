@@ -84,6 +84,8 @@ impl Test {
     ) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
         let compute_coverage = self.compute_coverage;
+        // save disassembly if trace execution is enabled
+        let save_disassembly = self.trace_execution.is_some();
         let result = run_move_unit_tests(
             &rerooted_path,
             config,
@@ -91,6 +93,7 @@ impl Test {
             natives,
             cost_table,
             compute_coverage,
+            save_disassembly,
             &mut std::io::stdout(),
         )?;
 
@@ -143,11 +146,13 @@ pub fn run_move_unit_tests<W: Write + Send>(
     natives: Vec<NativeFunctionRecord>,
     cost_table: Option<CostTable>,
     compute_coverage: bool,
+    save_disassembly: bool,
     writer: &mut W,
 ) -> Result<(UnitTestResult, Option<Diagnostics>)> {
     let mut test_plan = None;
     build_config.test_mode = true;
     build_config.dev_mode = true;
+    build_config.save_disassembly = save_disassembly;
 
     // Build the resolution graph (resolution graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer)

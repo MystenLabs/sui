@@ -3,9 +3,8 @@
 
 use anyhow::Context;
 use bootstrap::bootstrap;
-use config::{ConsistencyConfig, IndexerConfig, PipelineLayer};
+use config::{IndexerConfig, PipelineLayer};
 use handlers::coin_balance_buckets::CoinBalanceBuckets;
-use handlers::coin_balance_buckets_pruner::CoinBalanceBucketsPruner;
 use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
@@ -48,7 +47,6 @@ pub async fn start_indexer(
 ) -> anyhow::Result<()> {
     let IndexerConfig {
         ingestion,
-        consistency,
         committer,
         pruner,
         pipeline,
@@ -59,7 +57,6 @@ pub async fn start_indexer(
         sum_displays,
         sum_packages,
         coin_balance_buckets,
-        coin_balance_buckets_pruner,
         cp_sequence_numbers,
         ev_emit_mod,
         ev_struct_inst,
@@ -82,7 +79,6 @@ pub async fn start_indexer(
     } = pipeline.finish();
 
     let ingestion = ingestion.finish(IngestionConfig::default());
-    let consistency = consistency.finish(ConsistencyConfig::default());
     let committer = committer.finish(CommitterConfig::default());
     let pruner = pruner.finish(PrunerConfig::default());
 
@@ -123,7 +119,6 @@ pub async fn start_indexer(
                         layer.finish(ConcurrentConfig {
                             committer: committer.clone(),
                             pruner: Some(pruner.clone()),
-                            checkpoint_lag: None,
                         }),
                     )
                     .await?
@@ -147,37 +142,6 @@ pub async fn start_indexer(
         };
     }
 
-    // A consistent pipeline consists of two concurrent pipelines. The first (main) one writes
-    // new data, and the second one lags behind deleting data that has fallen out of the consistent
-    // range.
-    macro_rules! add_consistent {
-        ($main_handler:expr, $main_config:expr; $lagged_handler:expr, $lagged_config:expr) => {
-            if let Some(main_layer) = $main_config {
-                indexer
-                    .concurrent_pipeline(
-                        $main_handler,
-                        ConcurrentConfig {
-                            committer: main_layer.finish(committer.clone()),
-                            pruner: None,
-                            checkpoint_lag: None,
-                        },
-                    )
-                    .await?;
-
-                indexer
-                    .concurrent_pipeline(
-                        $lagged_handler,
-                        $lagged_config.unwrap_or_default().finish(ConcurrentConfig {
-                            committer: committer.clone(),
-                            pruner: None,
-                            checkpoint_lag: Some(consistency.consistent_range),
-                        }),
-                    )
-                    .await?;
-            }
-        };
-    }
-
     if with_genesis {
         let genesis = bootstrap(&indexer, retry_interval, cancel.clone()).await?;
 
@@ -190,12 +154,8 @@ pub async fn start_indexer(
     add_sequential!(SumDisplays, sum_displays);
     add_sequential!(SumPackages, sum_packages);
 
-    add_consistent!(
-        CoinBalanceBuckets, coin_balance_buckets;
-        CoinBalanceBucketsPruner, coin_balance_buckets_pruner
-    );
-
     // Unpruned concurrent pipelines
+    add_concurrent!(CoinBalanceBuckets::default(), coin_balance_buckets);
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);

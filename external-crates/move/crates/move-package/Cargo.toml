@@ -30,6 +30,7 @@ move-binary-format.workspace = true
 move-compiler.workspace = true
 move-bytecode-source-map.workspace = true
 move-docgen.workspace = true
+move-disassembler.workspace = true
 move-core-types.workspace = true
 move-symbol-pool.workspace = true
 move-command-line-common.workspace = true

@@ -39,7 +39,7 @@ With the dependency added, you can use the `emit` function to trigger an event w
 The Sui RPC provides a [queryEvents](/sui-api-ref#suix_queryEvents) method to query on-chain packages and return available events. As an example, the following `curl` command queries the Deepbook package on Mainnet for a specific type of event:
 
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST https://fullnode.mainnet.sui.io:443 \
 -H "Content-Type: application/json" \
 -d '{
   "jsonrpc": "2.0",

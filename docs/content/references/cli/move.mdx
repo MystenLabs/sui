@@ -50,14 +50,23 @@ The following examples demonstrate some of the most often used commands.
 
 To create a new Move project that automatically adds the necessary dependencies in a `Move.toml` file, run `sui move new [<PROJECT-NAME>]`.
 
-```shell
+```sh
 $ sui move new smart_contract_test
+```
+```sh
 $ ls -l smart_contract_test
+```
+```sh
 Move.toml
 Sources
+```
+Display the contents of Move.toml file.
 
-# display the contents of Move.toml file
+```sh
 $ cat smart_contract_test/Move.toml
+```
+
+```sh
 [package]
 name = "smart_contract_test"
 version = "0.0.1"
@@ -73,8 +82,10 @@ smart_contract_test = "0x0"
 
 Use `sui move build` at the root of your Move project to build the package.
 
-```shell
+```sh
 $ sui move build
+```
+```sh
 UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
@@ -85,8 +96,10 @@ BUILDING smart_contract_test
 
 Use `sui move test` to run the tests in a Move package.
 
-```shell
+```sh
 $ sui move test
+```
+```sh
 UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
@@ -109,8 +122,10 @@ This example uses [`first_package`](https://github.com/MystenLabs/sui/tree/main/
 
 To get the a summary of the test coverage, you must first run the `sui move test --coverage` command, and then the `sui move coverage summary --test` to get a summary of the test coverage in the example project.
 
-```shell
+```sh
 $ sui move test --coverage
+```
+```sh
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING first_package
@@ -132,30 +147,43 @@ Module 0000000000000000000000000000000000000000000000000000000000000000::example
 
 ## Help
 
-Each command has its own help section. For example `sui move build –help` displays the following prompt:
+Each command has its own help section. For example `sui move build --help` displays the following prompt:
 
-```shell
+```sh
 $ sui move build --help
+```
+```sh
 Usage: sui move build [OPTIONS]
 
 Options:
-  -p, --path <PACKAGE_PATH>                 	Path to a package which the command should be run with respect to
-  	--with-unpublished-dependencies       	Include the contents of packages in dependencies that haven't been published (only relevant when dumping bytecode as base64)
-  -d, --dev                                 	Compile in 'dev' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used if this flag is set. This flag is useful for development
-                                            	of packages that expose named addresses that are not set to a specific value
-  	--dump-bytecode-as-base64             	Whether we are printing in base64
-  	--generate-struct-layouts             	If true, generate struct layout schemas for all struct types passed into `entry` functions declared by modules in this package These layout
-                                            	schemas can be consumed by clients (e.g., the TypeScript SDK) to enable serialization/deserialization of transaction arguments and events
-  	--test                                	Compile in 'test' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used along with any code in the 'tests' directory
-  	--doc                                 	Generate documentation for packages
-  	--lint                                	If `true`, enable linters
-  	--abi                                 	Generate ABIs for packages
-  	--install-dir <INSTALL_DIR>           	Installation directory for compiled artifacts. Defaults to current directory
-  	--force                               	Force recompilation of all packages
-  	--fetch-deps-only                     	Only fetch dependency repos to MOVE_HOME
-  	--skip-fetch-latest-git-deps          	Skip fetching latest git dependencies
-  	--default-move-flavor <DEFAULT_FLAVOR>	Default flavor for move compilation, if not specified in the package's config
-  	--default-move-edition <DEFAULT_EDITION>  Default edition for move compilation, if not specified in the package's config
-  	--dependencies-are-root               	If set, dependency packages are treated as root packages. Notably, this will remove warning suppression in dependency packages
-  -h, --help                                	Print help
+  -p, --path <PACKAGE_PATH>                     Path to a package which the command should be run with respect to
+      --with-unpublished-dependencies           Include the contents of packages in dependencies that haven't been published (only relevant when dumping
+                                                bytecode as base64)
+      --dump-bytecode-as-base64                 Whether we are printing in base64
+  -d, --dev                                     Compile in 'dev' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used if this flag is set. This
+                                                flag is useful for development of packages that expose named addresses that are not set to a specific value
+      --ignore-chain                            Don't specialize the package to the active chain when dumping bytecode as Base64. This allows building to
+                                                proceed without a network connection or active environment, but it will not be able to automatically determine
+                                                the addresses of its dependencies
+      --generate-struct-layouts                 If true, generate struct layout schemas for all struct types passed into `entry` functions declared by modules
+                                                in this package These layout schemas can be consumed by clients (e.g., the TypeScript SDK) to enable
+                                                serialization/deserialization of transaction arguments and events
+      --test                                    Compile in 'test' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used along with any code in
+                                                the 'tests' directory
+      --doc                                     Generate documentation for packages
+      --install-dir <INSTALL_DIR>               Installation directory for compiled artifacts. Defaults to current directory
+      --force                                   Force recompilation of all packages
+      --fetch-deps-only                         Only fetch dependency repos to MOVE_HOME
+      --skip-fetch-latest-git-deps              Skip fetching latest git dependencies
+      --default-move-flavor <DEFAULT_FLAVOR>    Default flavor for move compilation, if not specified in the package's config
+      --default-move-edition <DEFAULT_EDITION>  Default edition for move compilation, if not specified in the package's config
+      --dependencies-are-root                   If set, dependency packages are treated as root packages. Notably, this will remove warning suppression in
+                                                dependency packages
+      --silence-warnings                        If set, ignore any compiler warnings
+      --warnings-are-errors                     If set, warnings become errors
+      --json-errors                             If set, reports errors at JSON
+      --no-lint                                 If `true`, disable linters
+      --lint                                    If `true`, enables extra linters
+  -h, --help                                    Print help
+  -V, --version                                 Print version
 ```

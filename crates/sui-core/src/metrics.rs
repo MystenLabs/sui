@@ -72,7 +72,7 @@ pub struct RateTracker {
     window_duration: Duration,
     total_bins: usize,
 
-    // We use the event time and the tracker start time to calculate the bin that a event
+    // We use the event time and the tracker start time to calculate the bin that an event
     // belongs to.
     // event_global_bin_index = (event_time - start_time) / BIN_DURATION.
     // event_index_in_buffer = event_global_bin_index % buffer_size.

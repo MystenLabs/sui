@@ -277,12 +277,12 @@ sui_package = "0x0"
 
 When your package is ready, you publish it:
 
-```shell
-sui client publish
+```sh
+$ sui client publish
 ```
 And receive the response:
 
-```shell
+```sh
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING my_first_package
@@ -492,13 +492,13 @@ With the new manifest and code in place, you can proceed.
 
 Run `sui client upgrade` command to upgrade your package. Pass the `UpgradeCap` ID (the `<UPGRADE-CAP-ID>` value from the example) to the `--upgrade-capability` flag.
 
-```shell
-sui client upgrade --upgrade-capability <UPGRADE-CAP-ID>
+```sh
+$ sui client upgrade --upgrade-capability <UPGRADE-CAP-ID>
 ```
 
 The console alerts you if the new package doesn't satisfy [requirements](#requirements), otherwise the compiler publishes the upgraded package to the network and returns its result:
 
-```shell
+```sh
 Transaction Digest: 3NnJGryz2k2BJzjpndDVqVcdZmmefNMB8SJ9bCEQct22
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Transaction Data                                                                                                                                             │

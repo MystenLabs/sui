@@ -2391,7 +2391,7 @@ The latter is the corresponding depth list
 
 ## Function `get_level2_book_status`
 
-internal func to retrive single depth of a tick price
+internal func to retrieve single depth of a tick price
 
 
 <pre><code><b>fun</b> <a href="clob.md#deepbook_clob_get_level2_book_status">get_level2_book_status</a>(open_orders: &<a href="critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;<a href="clob.md#deepbook_clob_TickLevel">deepbook::clob::TickLevel</a>&gt;, price: u64, time_stamp: u64): u64

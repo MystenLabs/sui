@@ -111,6 +111,7 @@ impl AccountChangeSet {
         Self { modules }
     }
 
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             modules: BTreeMap::new(),

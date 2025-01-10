@@ -5,6 +5,7 @@ use std::time::Duration;
 
 const DEFAULT_HTTP2_KEEPALIVE_TIMEOUT_SECS: u64 = 20;
 
+#[derive(Debug, Clone)]
 pub struct Config {
     init_stream_window_size: Option<u32>,
     init_connection_window_size: Option<u32>,
@@ -30,7 +31,7 @@ impl Default for Config {
             init_connection_window_size: None,
             max_concurrent_streams: None,
             tcp_keepalive: None,
-            tcp_nodelay: false,
+            tcp_nodelay: true,
             http2_keepalive_interval: None,
             http2_keepalive_timeout: None,
             http2_adaptive_window: None,

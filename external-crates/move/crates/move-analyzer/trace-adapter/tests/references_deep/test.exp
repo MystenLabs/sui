@@ -25,14 +25,10 @@ current frame stack:
 
   function: bar (m.move:13)
     scope 0 :
-      vec_ref : (0x0::m::SomeStruct) {
-        struct_field : (0x0::m::VecStruct) {
-          vec_field : [
-            0 : 0
-            1 : 7
-          ]
-        }
-      }
+      vec_ref : [
+        0 : 0
+        1 : 7
+      ]
       type: &mut vector<u64>
 
 current frame stack:
@@ -62,13 +58,9 @@ current frame stack:
 
   function: bar (m.move:15)
     scope 0 :
-      vec_ref : (0x0::m::SomeStruct) {
-        struct_field : (0x0::m::VecStruct) {
-          vec_field : [
-            0 : 42
-            1 : 7
-          ]
-        }
-      }
+      vec_ref : [
+        0 : 42
+        1 : 7
+      ]
       type: &mut vector<u64>
 
