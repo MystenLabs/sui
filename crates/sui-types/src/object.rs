@@ -37,7 +37,7 @@ use sui_protocol_config::ProtocolConfig;
 use self::balance_traversal::BalanceTraversal;
 use self::bounded_visitor::BoundedVisitor;
 
-mod balance_traversal;
+pub(crate) mod balance_traversal;
 pub mod bounded_visitor;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 300_000_000_000_000;
@@ -356,7 +356,12 @@ impl MoveObject {
     /// Get the total amount of SUI embedded in `self`. Intended for testing purposes
     pub fn get_total_sui(&self, layout_resolver: &mut dyn LayoutResolver) -> Result<u64, SuiError> {
         let balances = self.get_coin_balances(layout_resolver)?;
-        Ok(balances.get(&GAS::type_tag()).copied().unwrap_or(0))
+        let sui_balance = balances.get(&GAS::type_tag()).copied().unwrap_or(0);
+        assert!(
+            sui_balance <= u64::MAX as u128,
+            "SUI supply should make this impossible"
+        );
+        Ok(sui_balance as u64)
     }
 }
 
@@ -366,10 +371,10 @@ impl MoveObject {
     pub fn get_coin_balances(
         &self,
         layout_resolver: &mut dyn LayoutResolver,
-    ) -> Result<BTreeMap<TypeTag, u64>, SuiError> {
+    ) -> Result<BTreeMap<TypeTag, u128>, SuiError> {
         // Fast path without deserialization.
         if let Some(type_tag) = self.type_.coin_type_maybe() {
-            let balance = self.get_coin_value_unsafe();
+            let balance = self.get_coin_value_unsafe() as u128;
             Ok(if balance > 0 {
                 BTreeMap::from([(type_tag.clone(), balance)])
             } else {

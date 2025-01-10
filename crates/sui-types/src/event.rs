@@ -19,6 +19,9 @@ use serde_with::Bytes;
 
 use crate::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use crate::error::{SuiError, SuiResult};
+use crate::gas_coin::GAS;
+use crate::layout_resolver::LayoutResolver;
+use crate::object::balance_traversal::BalanceTraversal;
 use crate::object::bounded_visitor::BoundedVisitor;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
@@ -156,6 +159,29 @@ impl Event {
             },
             contents: vec![],
         }
+    }
+
+    pub fn get_total_sui_in_event(
+        &self,
+        layout_resolver: &mut impl LayoutResolver,
+    ) -> SuiResult<u64> {
+        let ty = &self.type_;
+
+        let layout = layout_resolver.get_annotated_layout(&ty.clone())?;
+
+        let mut traversal = BalanceTraversal::default();
+        MoveValue::visit_deserialize(&self.contents, &layout.into_layout(), &mut traversal)
+            .map_err(|e| SuiError::ObjectSerializationError {
+                error: e.to_string(),
+            })?;
+
+        let balances = traversal.finish();
+        let sui_balance = balances.get(&GAS::type_tag()).copied().unwrap_or(0);
+        assert!(
+            sui_balance <= u64::MAX as u128,
+            "SUI supply should make this impossible"
+        );
+        Ok(sui_balance as u64)
     }
 }
 
