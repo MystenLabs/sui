@@ -1851,6 +1851,7 @@ impl SuiNode {
             }
 
             info!("Reconfiguration finished");
+            panic!("panicking");
         }
     }
 
