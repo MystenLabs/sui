@@ -83,7 +83,17 @@ impl FilterContext for Context<'_> {
     }
 }
 
-const REMOVED_FUNCTIONS: [&str; 3] = ["invariant", "old", "ensures"];
+const REMOVED_FUNCTIONS: [&str; 9] = [
+    "invariant",
+    "old",
+    "requires",
+    "ensures",
+    "asserts",
+    "type_inv",
+    "declare_global",
+    "declare_global_mut",
+    "global",
+];
 const REMOVED_METHODS: [&str; 2] = ["to_int", "to_real"];
 
 fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bool {

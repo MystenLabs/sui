@@ -40,6 +40,25 @@ The `old` macro is used to refer to the state of an object before the function c
 let old_pool = old!(pool);
 ```
 
+### `to_int`
+
+The `to_int` method is used to convert a fixed-precision unsigned integer to an unbounded integer.
+Unbounded integers are only available while executing a specification.
+
+```move
+let x = 10.to_int();
+```
+
+### `to_real`
+
+The `to_real` method is used to convert a fixed-precision unsigned integer to an arbitrary-precision real number.
+This is useful for checking rounding direction.
+Real numbers are only available while executing a specification.
+
+```move
+let x = 10.to_real();
+```
+
 ### Ghost variables
 
 Ghost variables are global variables that are only used in specifications.

@@ -10,7 +10,7 @@ For now, the Sui Move Prover lives in the [Move Nursery](https://github.com/Myst
 
 TODO: Add instructions for installing the Sui Move Prover.
 
-## Usage
+## Basic usage
 
 To use the Move Prover you need to write specifications for your smart contract. The Move Prover will then verify that your smart contract satisfies these specifications.
 
@@ -151,7 +151,7 @@ Let's break down the specification:
    result
    ```
 
-### Running the Move Prover
+## Running the Move Prover
 
 To run the Move Prover, you need to have the Move Prover installed and configured.
 
@@ -165,17 +165,30 @@ When the specifications are correct, the output is empty. On error, the Move Pro
 
 TODO: update the documentation once we create a better way to run the prover
 
-### Full example for reference
+## Using ghost variables
 
-And here is the full example for reference:
+Ghost variables are a way to declare global variables that are only used in specifications.
+They are particularly useful for propagating information between different specifications.
+
+Starting with the example above, let's:
+
+- add functionality to that emits an event on a large withdrawal,
+- then add a ghost variable to check that the event is correctly emitted.
+
+### Updated example
+
+First, let's add the event emission to the original example:
 
 ```move
 module amm::simple_lp;
 
 use sui::balance::{Balance, Supply, zero};
+use sui::event;
 
 #[spec_only]
 use prover::prover::{requires, ensures, asserts, old};
+#[spec_only]
+use prover::ghost::{declare_global, global};
 
 public struct LP<phantom T> has drop {}
 
@@ -183,6 +196,10 @@ public struct Pool<phantom T> has store {
     balance: Balance<T>,
     shares: Supply<LP<T>>,
 }
+
+const LARGE_WITHDRAW_AMOUNT: u64 = 10000;
+
+public struct LargeWithdrawEvent has copy, drop {}
 
 public fun withdraw<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
     if (shares_in.value() == 0) {
@@ -192,10 +209,98 @@ public fun withdraw<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T
 
     let balance = pool.balance.value();
     let shares = pool.shares.supply_value();
+    let shares_in_value = shares_in.value();
 
     let balance_to_withdraw = (((shares_in.value() as u128) * (balance as u128)) / (shares as u128)) as u64;
 
     pool.shares.decrease_supply(shares_in);
+
+    if (shares_in_value >= LARGE_WITHDRAW_AMOUNT) {
+        event::emit(LargeWithdrawEvent { });
+    };
+
+    pool.balance.split(balance_to_withdraw)
+}
+```
+
+We made the following changes:
+
+- added the `event` module,
+- declared the `LARGE_WITHDRAW_AMOUNT` bound,
+- added a `LargeWithdrawEvent` struct,
+- added the `event::emit` function to emit the event.
+
+### Updated specification
+
+Now, to check that the event is correctly emitted, we need to declare a ghost variable and check that it is set to `true` after the event is emitted:
+
+First, we declare the ghost variable by adding the following line to the beginning of the specification:
+
+```move
+declare_global<LargeWithdrawEvent, bool>();
+```
+
+Then, we check that it is set to `true` after the event is emitted.
+The logical condition is "if the amount of shares withdrawn is greater than or equal to `LARGE_WITHDRAW_AMOUNT`, then the ghost variable should be set to `true`".
+Expressed in Move, this is:
+
+```move
+ensures(!(shares_in_value >= LARGE_WITHDRAW_AMOUNT) || *global<LargeWithdrawEvent, bool>());
+```
+
+Finally, we make sure the original function `requires` the ghost variable to be set to `true` when the event is emitted:
+
+```move
+requires(global<LargeWithdrawEvent, bool>() == true);
+```
+
+The full code is available below.
+
+## Full example for reference
+
+And here is the full example for reference:
+
+```move
+module amm::simple_lp;
+
+use sui::balance::{Balance, Supply, zero};
+use sui::event;
+
+#[spec_only]
+use prover::prover::{requires, ensures, asserts, old};
+#[spec_only]
+use prover::ghost::{declare_global, global};
+
+public struct LP<phantom T> has drop {}
+
+public struct Pool<phantom T> has store {
+    balance: Balance<T>,
+    shares: Supply<LP<T>>,
+}
+
+const LARGE_WITHDRAW_AMOUNT: u64 = 10000;
+
+public struct LargeWithdrawEvent has copy, drop {}
+
+public fun withdraw<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
+    if (shares_in.value() == 0) {
+        shares_in.destroy_zero();
+        return zero()
+    };
+
+    let balance = pool.balance.value();
+    let shares = pool.shares.supply_value();
+    let shares_in_value = shares_in.value();
+
+    let balance_to_withdraw = (((shares_in.value() as u128) * (balance as u128)) / (shares as u128)) as u64;
+
+    pool.shares.decrease_supply(shares_in);
+
+    if (shares_in_value >= LARGE_WITHDRAW_AMOUNT) {
+        event::emit(LargeWithdrawEvent { });
+        requires(global<LargeWithdrawEvent, bool>() == true);
+    };
+
     pool.balance.split(balance_to_withdraw)
 }
 
@@ -204,7 +309,10 @@ public fun withdraw<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T
 fun withdraw_spec<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
     requires(shares_in.value() <= pool.shares.supply_value());
 
+    declare_global<LargeWithdrawEvent, bool>();
+
     let old_pool = old!(pool);
+    let shares_in_value = shares_in.value();
 
     let result = withdraw(pool, shares_in);
 
@@ -216,7 +324,10 @@ fun withdraw_spec<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> 
 
     ensures(new_shares.mul(old_balance).lte(old_shares.mul(new_balance)));
 
+    ensures(!(shares_in_value >= LARGE_WITHDRAW_AMOUNT) || *global<LargeWithdrawEvent, bool>());
+
     result
 }
+
 
 ```
