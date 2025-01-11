@@ -63,6 +63,10 @@ pub fn start_thread_stall_monitor() {
         info!("Not running in a tokio runtime, not starting thread stall monitor.");
         return;
     }
+    // Allow overriding the debugger trigger threshold via env var
+    let debugger_alert_threshold = std::env::var("THREAD_STALL_DEBUGGER_THRESHOLD")
+        .map(|v| Duration::from_millis(v.parse::<u64>().unwrap()))
+        .unwrap_or(ALERT_THRESHOLD);
 
     let last_update: Arc<Mutex<Instant>> = Arc::new(Mutex::new(Instant::now()));
 
@@ -78,7 +82,8 @@ pub fn start_thread_stall_monitor() {
                 let last_update = *last_update.lock().unwrap();
                 let time_since_last_update = now - last_update;
                 if time_since_last_update > ALERT_THRESHOLD {
-                    if stall_duration.is_none() {
+                    if stall_duration.is_none() && time_since_last_update > debugger_alert_threshold
+                    {
                         thread_monitor_report_stall(time_since_last_update.as_millis() as u64);
                     }
                     stall_duration = Some(time_since_last_update);
