@@ -201,6 +201,10 @@ const LARGE_WITHDRAW_AMOUNT: u64 = 10000;
 
 public struct LargeWithdrawEvent has copy, drop {}
 
+fun emit_large_withdraw_event() {
+    event::emit(LargeWithdrawEvent { });
+}
+
 public fun withdraw<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
     if (shares_in.value() == 0) {
         shares_in.destroy_zero();
@@ -216,7 +220,7 @@ public fun withdraw<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T
     pool.shares.decrease_supply(shares_in);
 
     if (shares_in_value >= LARGE_WITHDRAW_AMOUNT) {
-        event::emit(LargeWithdrawEvent { });
+        emit_large_withdraw_event();
     };
 
     pool.balance.split(balance_to_withdraw)
@@ -241,17 +245,18 @@ declare_global<LargeWithdrawEvent, bool>();
 ```
 
 Then, we check that it is set to `true` after the event is emitted.
-The logical condition is "if the amount of shares withdrawn is greater than or equal to `LARGE_WITHDRAW_AMOUNT`, then the ghost variable should be set to `true`".
-Expressed in Move, this is:
+We can do this using a regular `if` statement, which becomes a logical condition in the specification.
 
 ```move
-ensures(!(shares_in_value >= LARGE_WITHDRAW_AMOUNT) || *global<LargeWithdrawEvent, bool>());
+if (shares_in_value >= LARGE_WITHDRAW_AMOUNT) {
+    ensures(*global<LargeWithdrawEvent, bool>());
+};
 ```
 
-Finally, we make sure the original function `requires` the ghost variable to be set to `true` when the event is emitted:
+Finally, we make sure the original function `requires` the ghost variable to be set when the event is emitted:
 
 ```move
-requires(global<LargeWithdrawEvent, bool>() == true);
+requires(*global<LargeWithdrawEvent, bool>());
 ```
 
 The full code is available below.
@@ -282,6 +287,11 @@ const LARGE_WITHDRAW_AMOUNT: u64 = 10000;
 
 public struct LargeWithdrawEvent has copy, drop {}
 
+fun emit_large_withdraw_event() {
+    event::emit(LargeWithdrawEvent { });
+    requires(*global<LargeWithdrawEvent, bool>());
+}
+
 public fun withdraw<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> {
     if (shares_in.value() == 0) {
         shares_in.destroy_zero();
@@ -297,8 +307,7 @@ public fun withdraw<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T
     pool.shares.decrease_supply(shares_in);
 
     if (shares_in_value >= LARGE_WITHDRAW_AMOUNT) {
-        event::emit(LargeWithdrawEvent { });
-        requires(global<LargeWithdrawEvent, bool>() == true);
+        emit_large_withdraw_event();
     };
 
     pool.balance.split(balance_to_withdraw)
@@ -324,10 +333,10 @@ fun withdraw_spec<T>(pool: &mut Pool<T>, shares_in: Balance<LP<T>>): Balance<T> 
 
     ensures(new_shares.mul(old_balance).lte(old_shares.mul(new_balance)));
 
-    ensures(!(shares_in_value >= LARGE_WITHDRAW_AMOUNT) || *global<LargeWithdrawEvent, bool>());
+    if (shares_in_value >= LARGE_WITHDRAW_AMOUNT) {
+        ensures(*global<LargeWithdrawEvent, bool>());
+    };
 
     result
 }
-
-
 ```
