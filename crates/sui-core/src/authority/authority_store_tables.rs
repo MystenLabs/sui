@@ -205,7 +205,8 @@ impl AuthorityPerpetualTables {
         let live_owned_object_markers = builder.add_key_space("live_owned_object_markers", 32 + 8 + 32 + 8, MUTEXES, default_cells_per_mutex());
         let transactions = builder.add_key_space("transactions", 32, MUTEXES, default_cells_per_mutex());
         let effects = builder.add_key_space("effects", 32, MUTEXES, default_cells_per_mutex());
-        let executed_effects = builder.add_key_space("executed_effects",32, MUTEXES, default_cells_per_mutex());
+        let executed_effects_config = KeySpaceConfig::new().disable_unload();
+        let executed_effects = builder.add_key_space_config("executed_effects",32, MUTEXES, default_cells_per_mutex(), executed_effects_config);
         let events = builder.add_key_space("events", 32 + 8, MUTEXES, default_cells_per_mutex());
         let executed_transactions_to_checkpoint =
             builder.add_key_space("executed_transactions_to_checkpoint", 32, MUTEXES, default_cells_per_mutex());
