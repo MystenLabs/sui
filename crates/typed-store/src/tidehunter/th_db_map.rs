@@ -375,7 +375,7 @@ pub fn open_thdb(
     let config = Arc::new(config);
     let db = Db::open(path, key_shape, config, metrics).unwrap();
     let db = Arc::new(db);
-    db.start_periodic_snapshot();
+    // db.start_periodic_snapshot();
     db
 }
 
