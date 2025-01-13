@@ -13676,6 +13676,7 @@ dependencies = [
  "axum 0.7.5",
  "bin-version",
  "clap",
+ "dashmap",
  "eyre",
  "futures",
  "http 1.1.0",

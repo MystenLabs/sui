@@ -127,10 +127,29 @@ pub struct FaucetConfig {
     pub batch_enabled: bool,
 
     /// Testnet faucet requires authentication via the Web UI at <https://faucet.sui.io>
-    /// This flag is used to indicate that the faucet is running on testnet and enables the
-    /// authentication check.
+    /// This flag is used to indicate that authentication mode is enabled.
     #[clap(long)]
-    pub testnet: bool,
+    pub authenticated: bool,
+
+    /// Maximum number of requests per IP address. This is used for the authenticated mode.
+    #[clap(long, default_value_t = 3)]
+    pub max_requests_per_ip: u64,
+
+    /// This is the amount of time to wait before adding one more quota to the rate limiter. Basically,
+    /// it ensures that we're not allowing too many requests all at once. This is very specific to
+    /// governor and tower-governor crates. This is used for authenticated mode.
+    #[clap(long, default_value_t = 10)]
+    pub replenish_quota_interval_ms: u64,
+
+    /// The amount of seconds to wait before resetting the request count for the IP addresses recorded
+    /// by the rate limit layer. Default is 12 hours. This is used for authenticated mode.
+    #[clap(long, default_value_t = 3600*12)]
+    pub reset_time_interval_secs: u64,
+
+    /// Interval time to run the task to clear the banned IP addresses by the rate limiter. This is
+    /// used for authenticated mode.
+    #[clap(long, default_value_t = 60)]
+    pub rate_limiter_cleanup_interval_secs: u64,
 }
 
 impl Default for FaucetConfig {
@@ -149,7 +168,11 @@ impl Default for FaucetConfig {
             batch_request_size: 500,
             ttl_expiration: 300,
             batch_enabled: false,
-            testnet: false,
+            authenticated: false,
+            max_requests_per_ip: 3,
+            replenish_quota_interval_ms: 10,
+            reset_time_interval_secs: 3600 * 12,
+            rate_limiter_cleanup_interval_secs: 60,
         }
     }
 }

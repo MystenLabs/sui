@@ -5,8 +5,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum FaucetError {
-    #[error("For testnet tokens, please use the Web UI: https://faucet.sui.io")]
-    NoToken,
+    #[error("Missing X-Turnstile-Token header. For testnet tokens, please use the Web UI: https://faucet.sui.io")]
+    MissingTurnstileTokenHeader,
 
     #[error("Request limit exceeded. {0}")]
     TooManyRequests(String),

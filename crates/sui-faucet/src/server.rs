@@ -3,26 +3,25 @@
 
 use crate::{
     AppState, BatchFaucetResponse, BatchStatusFaucetResponse, FaucetConfig, FaucetError,
-    FaucetRequest, FaucetResponse, RequestMetricsLayer,
+    FaucetRequest, FaucetResponse, FixedAmountRequest, RequestMetricsLayer,
 };
 use axum::{
     error_handling::HandleErrorLayer,
     extract::{ConnectInfo, Host, Path},
     http::{header::HeaderMap, StatusCode},
-    response::{IntoResponse, Redirect},
+    response::{IntoResponse, Redirect, Response},
     routing::{get, post},
     BoxError, Extension, Json, Router,
 };
-use http::{header::USER_AGENT, HeaderValue, Method};
+use http::Method;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::{
     borrow::Cow,
-    collections::BTreeMap,
     net::{IpAddr, SocketAddr},
     path::PathBuf,
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 use sui_config::SUI_CLIENT_CONFIG;
 use sui_sdk::wallet_context::WalletContext;
@@ -31,26 +30,26 @@ use tower_governor::{
     governor::GovernorConfigBuilder, key_extractor::GlobalKeyExtractor, GovernorLayer,
 };
 use tower_http::cors::{Any, CorsLayer};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::faucet::Faucet;
+use dashmap::DashMap;
 use serde::Deserialize;
-use std::sync::Mutex;
 
-use anyhow::bail;
+use anyhow::ensure;
 use once_cell::sync::Lazy;
 
-/// Interval to cleanup expired tokens
-const CLEANUP_INTERVAL: u64 = 60; // 60 seconds
-/// Maximum number of requests per IP address
-const MAX_REQUESTS_PER_IP: u32 = 3;
-/// Interval to reset the request count for each IP address
-const RESET_TIME_INTERVAL_SECS: u64 = 12 * 3600; // 12 hours
-const CLOUDFLARE_URL: &str = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
-const FAUCET_WEB_APP_URL: &str = "https://faucet.sui.io"; // make this lazy static env?
+const DEFAULT_FAUCET_WEB_APP_URL: &str = "https://faucet.sui.io";
 
-static DISCORD_BOT: Lazy<Option<String>> = Lazy::new(|| std::env::var("DISCORD_BOT").ok());
+static FAUCET_WEB_APP_URL: Lazy<String> = Lazy::new(|| {
+    std::env::var("FAUCET_WEB_APP_URL")
+        .ok()
+        .unwrap_or_else(|| DEFAULT_FAUCET_WEB_APP_URL.to_string())
+});
+
+static CLOUDFLARE_TURNSTILE_URL: Lazy<Option<String>> =
+    Lazy::new(|| std::env::var("CLOUDFLARE_TURNSTILE_URL").ok());
 
 static TURNSTILE_SECRET_KEY: Lazy<Option<String>> =
     Lazy::new(|| std::env::var("TURNSTILE_SECRET_KEY").ok());
@@ -60,155 +59,137 @@ type IPAddr = String;
 /// Keep track of every IP address' requests.
 #[derive(Debug)]
 struct RequestsManager {
-    pub data: Mutex<BTreeMap<IPAddr, RequestInfo>>,
+    pub data: Arc<DashMap<IPAddr, RequestInfo>>,
     reset_time_interval_secs: u64,
-    max_requests_per_ip: u32,
+    max_requests_per_ip: u64,
+    pub cloudflare_turnstile_url: String,
+    pub turnstile_secret_key: String,
 }
 
 /// Request's metadata
 #[derive(Debug, Clone)]
 struct RequestInfo {
-    expires_at: u64,
-    requests_used: u32,
-    total_requests_allowed: u32,
+    /// When the first request from this IP address was made. In case of resetting the IP addresses
+    /// metadata, this field will be updated with the new current time.
+    timestamp: Instant,
+    requests_used: u64,
 }
 
 /// Struct to deserialize token verification response from Cloudflare
 #[derive(Deserialize, Debug)]
-struct TokenVerification {
+struct TurnstileValidationResponse {
     success: bool,
     #[serde(rename = "error-codes")]
     error_codes: Vec<String>,
 }
 
 impl RequestsManager {
-    /// Initialize a new RequestsManager the default values.
-    fn new() -> Self {
+    /// Initialize a new RequestsManager
+    fn new(
+        max_requests_per_ip: u64,
+        reset_time_interval_secs: u64,
+        cloudflare_turnstile_url: String,
+        turnstile_secret_key: String,
+    ) -> Self {
         Self {
-            data: Mutex::new(BTreeMap::new()),
-            reset_time_interval_secs: RESET_TIME_INTERVAL_SECS,
-            max_requests_per_ip: MAX_REQUESTS_PER_IP,
-        }
-    }
-
-    #[cfg(test)]
-    fn new_with_limits(max_requests_per_ip: u32, reset_time_interval_secs: u64) -> Self {
-        Self {
-            data: Mutex::new(BTreeMap::new()),
+            data: Arc::new(DashMap::new()),
             reset_time_interval_secs,
             max_requests_per_ip,
+            cloudflare_turnstile_url,
+            turnstile_secret_key,
         }
     }
 
-    /// Get the current timestamp in seconds
-    fn current_timestamp_secs() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs()
-    }
-
-    /// Checks if the user-agent is present, and if it is the expected discord bot user-agent. This
-    /// includes a unique password that the bot has set in the user-agent header.
-    fn is_discord_bot(&self, user_agent: Option<&HeaderValue>) -> Result<bool, FaucetError> {
-        if let (Some(discord_bot), Some(v)) = (DISCORD_BOT.as_ref(), user_agent) {
-            let header = v
-                .to_str()
-                .map_err(|e| FaucetError::InvalidUserAgent(e.to_string()))?;
-            Ok(header == format!("discord-bot-{}", discord_bot))
-        } else {
-            Ok(false)
-        }
-    }
-
-    /// Validates a token
+    /// Validates a turnstile token
     /// - against Cloudflare turnstile's server to ensure token was issued by turnstile
     /// - against the IP address' request count
-    async fn validate_token(
+    async fn validate_turnstile_token(
         &self,
-        url: &str,
         addr: SocketAddr,
         token: &str,
     ) -> Result<(), (StatusCode, FaucetError)> {
-        let turnstile_key = TURNSTILE_SECRET_KEY.as_ref().unwrap().as_str();
         let req = reqwest::Client::new();
         let params = [
-            ("secret", turnstile_key),
+            ("secret", self.turnstile_secret_key.as_str()),
             ("response", token),
             ("remoteip", &addr.ip().to_string()),
         ];
 
         // Make the POST request
-        let response = req.post(url).form(&params).send().await;
-
-        match response {
-            Ok(resp) => {
-                if resp.status().is_success() {
-                    let body = resp.json::<TokenVerification>().await;
-                    if let Ok(body) = body {
-                        // if body success is false, that means that token verification failed
-                        // either because the token is invalid or the token has already been used
-                        if !body.success {
-                            return Err((
-                                StatusCode::BAD_REQUEST,
-                                FaucetError::Internal(format!(
-                                    "Token verification failed: {:?}",
-                                    body.error_codes
-                                )),
-                            ));
-                        }
-                    }
-
-                    let current_time = Self::current_timestamp_secs();
-
-                    // Check if the IP address is already in the map
-                    let mut locked_data = self.data.lock().unwrap();
-                    let token_entry = locked_data.get_mut(&addr.ip().to_string());
-
-                    if let Some(token_entry) = token_entry {
-                        // Check IP address expiration time
-                        if current_time > token_entry.expires_at {
-                            locked_data.remove(token);
-                            return Err((
-                                StatusCode::BAD_REQUEST,
-                                FaucetError::Internal("Token expired".to_string()),
-                            ));
-                        }
-
-                        // Check request limit
-                        if token_entry.requests_used >= token_entry.total_requests_allowed {
-                            return Err((
-                                StatusCode::TOO_MANY_REQUESTS,
-                                FaucetError::TooManyRequests(format!(
-                                    "You can request a new token in {}",
-                                    secs_to_human_readable(token_entry.expires_at - current_time)
-                                )),
-                            ));
-                        }
-                        // Increment request count
-                        token_entry.requests_used += 1;
-                    } else {
-                        // Create new token entry
-                        let token_info = RequestInfo {
-                            expires_at: current_time + self.reset_time_interval_secs, // 12 hours
-                            requests_used: 1,
-                            total_requests_allowed: self.max_requests_per_ip,
-                        };
-                        locked_data.insert(addr.ip().to_string(), token_info);
-                    }
-                } else {
-                    return Err((
-                        StatusCode::BAD_REQUEST,
-                        FaucetError::Internal("Invalid token".to_string()),
-                    ));
-                }
-            }
+        let resp = match req
+            .post(&self.cloudflare_turnstile_url)
+            .form(&params)
+            .send()
+            .await
+        {
+            Ok(resp) => resp,
             Err(e) => {
+                error!("Cloudflare turnstile request failed: {:?}", e);
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    FaucetError::Internal(format!("Internal server error: {:?}", e)),
+                    FaucetError::Internal(e.to_string()),
                 ));
             }
+        };
+
+        // Check if the request was successful.
+        if !resp.status().is_success() {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                FaucetError::Internal("Verification failed".to_string()),
+            ));
+        }
+
+        let body = match resp.json::<TurnstileValidationResponse>().await {
+            Ok(body) => body,
+            Err(e) => {
+                error!("Failed to parse token validation response: {:?}", e);
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    FaucetError::Internal(e.to_string()),
+                ));
+            }
+        };
+
+        if !body.success {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                FaucetError::Internal(format!("Token verification failed: {:?}", body.error_codes)),
+            ));
+        }
+
+        // Check if the IP address is already in the map
+        let token_entry = self.data.get_mut(&addr.ip().to_string());
+
+        if let Some(mut token_entry) = token_entry {
+            // Check IP address expiration time, maybe it is "just" before cleanup
+            if token_entry.timestamp.elapsed().as_secs() > self.reset_time_interval_secs {
+                token_entry.timestamp = Instant::now();
+                token_entry.requests_used = 0;
+            }
+
+            // Check request limit
+            if token_entry.requests_used >= self.max_requests_per_ip {
+                return Err((
+                    StatusCode::TOO_MANY_REQUESTS,
+                    FaucetError::TooManyRequests(format!(
+                        "You can request a new token in {}",
+                        secs_to_human_readable(
+                            self.reset_time_interval_secs
+                                - token_entry.timestamp.elapsed().as_secs()
+                        )
+                    )),
+                ));
+            }
+            // Increment request count
+            token_entry.requests_used += 1;
+        } else {
+            // Create new token entry
+            let token_info = RequestInfo {
+                timestamp: Instant::now(),
+                requests_used: 1,
+            };
+            self.data.insert(addr.ip().to_string(), token_info);
         }
         Ok(())
     }
@@ -216,11 +197,9 @@ impl RequestsManager {
     /// This function iterates through the stored IPs and removes those IP addresses which are now
     /// eligible to make new requests.
     fn cleanup_expired_tokens(&self) {
-        let current_time = Self::current_timestamp_secs();
-        let mut data = self.data.lock().unwrap();
-
         // keep only those IP addresses that are still under time limit.
-        data.retain(|_, info| current_time <= info.expires_at);
+        self.data
+            .retain(|_, info| info.timestamp.elapsed().as_secs() < self.reset_time_interval_secs);
     }
 }
 
@@ -229,8 +208,9 @@ pub async fn start_faucet(
     concurrency_limit: usize,
     prometheus_registry: &Registry,
 ) -> Result<(), anyhow::Error> {
-    if app_state.config.testnet && (DISCORD_BOT.is_none() || TURNSTILE_SECRET_KEY.is_none()) {
-        bail!("Both DISCORD_BOT and TURNSTILE_SECRET_KEY env vars must be set for testnet deployment (--testnet flag was set)");
+    if app_state.config.authenticated {
+        ensure!(TURNSTILE_SECRET_KEY.is_some() && CLOUDFLARE_TURNSTILE_URL.is_some(),
+                "Both CLOUDFLARE_TURNSTILE_URL and TURNSTILE_SECRET_KEY env vars must be set for testnet deployment (--authenticated flag was set)");
     }
     // TODO: restrict access if needed
     let cors = CorsLayer::new()
@@ -244,24 +224,48 @@ pub async fn start_faucet(
         request_buffer_size,
         max_request_per_second,
         wal_retry_interval,
+        replenish_quota_interval_ms,
+        reset_time_interval_secs,
+        rate_limiter_cleanup_interval_secs,
+        max_requests_per_ip,
         ..
     } = app_state.config;
 
     let governor_cfg = Arc::new(
         GovernorConfigBuilder::default()
+            .const_per_millisecond(replenish_quota_interval_ms)
             .burst_size(max_request_per_second as u32)
             .key_extractor(GlobalKeyExtractor)
             .finish()
             .unwrap(),
     );
-    let token_manager = Arc::new(RequestsManager::new());
+    let token_manager = Arc::new(RequestsManager::new(
+        max_requests_per_ip,
+        reset_time_interval_secs,
+        CLOUDFLARE_TURNSTILE_URL.as_ref().unwrap().to_string(),
+        TURNSTILE_SECRET_KEY.as_ref().unwrap().to_string(),
+    ));
 
-    let app = Router::new()
-        .route("/", get(redirect))
-        .route("/health", get(health))
+    let global_limited_routes = Router::new()
         .route("/gas", post(request_gas))
         .route("/v1/gas", post(batch_request_gas))
-        .route("/v1/status/:task_id", get(request_status))
+        .layer(GovernorLayer {
+            config: governor_cfg.clone(),
+        });
+
+    // This has its own rate limiter via the RequestManager
+    let faucet_web_routes = Router::new().route("/v1/faucet_web_gas", post(batch_faucet_web_gas));
+    // Routes with no rate limit
+    let unrestricted_routes = Router::new()
+        .route("/batch_get_status/:id", get(request_status))
+        .route("/", get(redirect))
+        .route("/health", get(health));
+
+    // Combine all routes
+    let app = Router::new()
+        .merge(global_limited_routes)
+        .merge(unrestricted_routes)
+        .merge(faucet_web_routes)
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_error))
@@ -269,9 +273,6 @@ pub async fn start_faucet(
                 .layer(cors)
                 .load_shed()
                 .buffer(request_buffer_size)
-                .layer(GovernorLayer {
-                    config: governor_cfg,
-                })
                 .concurrency_limit(concurrency_limit)
                 .layer(Extension(app_state.clone()))
                 .layer(Extension(token_manager.clone()))
@@ -290,7 +291,7 @@ pub async fn start_faucet(
     spawn_monitored_task!(async move {
         info!("Starting task to clear banned ip addresses.");
         loop {
-            tokio::time::sleep(Duration::from_secs(CLEANUP_INTERVAL)).await;
+            tokio::time::sleep(Duration::from_secs(rate_limiter_cleanup_interval_secs)).await;
             token_manager.cleanup_expired_tokens();
         }
     });
@@ -312,62 +313,43 @@ async fn health() -> &'static str {
 }
 
 /// Redirect to faucet.sui.io/?network if it's testnet/devnet network
-async fn redirect(Host(host): Host) -> impl IntoResponse {
+async fn redirect(Host(host): Host) -> Response {
+    let url = FAUCET_WEB_APP_URL.to_string();
     if host.contains("testnet") {
-        let redirect = Redirect::to(&format!("{FAUCET_WEB_APP_URL}/?network=testnet"));
+        let redirect = Redirect::to(&format!("{url}/?network=testnet"));
         redirect.into_response()
     } else if host.contains("devnet") {
-        let redirect = Redirect::to(&format!("{FAUCET_WEB_APP_URL}/?network=devnet"));
+        let redirect = Redirect::to(&format!("{url}/?network=devnet"));
         redirect.into_response()
     } else {
         health().await.into_response()
     }
 }
 
-/// handler for batch_request_gas requests
-async fn batch_request_gas(
+async fn batch_faucet_web_gas(
     headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(token_manager): Extension<Arc<RequestsManager>>,
     Extension(state): Extension<Arc<AppState>>,
     Json(payload): Json<FaucetRequest>,
 ) -> impl IntoResponse {
-    let id = Uuid::new_v4();
-    // ID for traceability
-    info!(uuid = ?id, "Got new gas request.");
-
-    // If this service is running for testnet and it is not the discord bot, users need to use the
-    // WebUI to request tokens and we need to validate the CloudFlare turnstile token here
-
-    if state.config.testnet {
-        // Check if the user-agent is present, and if it is the expected discord bot user-agent.
-        let is_discord_bot = match token_manager.is_discord_bot(headers.get(USER_AGENT)) {
-            Ok(bot) => bot,
-            Err(err) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(BatchFaucetResponse::from(err)),
-                );
-            }
+    if state.config.authenticated {
+        let Some(token) = headers
+            .get("X-Turnstile-Token")
+            .and_then(|v| v.to_str().ok())
+        else {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(BatchFaucetResponse::from(
+                    FaucetError::MissingTurnstileTokenHeader,
+                )),
+            );
         };
 
-        if !is_discord_bot {
-            let Some(token) = headers
-                .get("X-Turnstile-Token")
-                .and_then(|v| v.to_str().ok())
-            else {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(BatchFaucetResponse::from(FaucetError::NoToken)),
-                );
-            };
+        let validation = token_manager.validate_turnstile_token(addr, token).await;
 
-            let validation = token_manager
-                .validate_token(CLOUDFLARE_URL, addr, token)
-                .await;
-            if let Err((status_code, faucet_error)) = validation {
-                return (status_code, Json(BatchFaucetResponse::from(faucet_error)));
-            }
+        if let Err((status_code, faucet_error)) = validation {
+            return (status_code, Json(BatchFaucetResponse::from(faucet_error)));
         }
     }
 
@@ -380,33 +362,55 @@ async fn batch_request_gas(
         );
     };
 
-    if state.config.batch_enabled {
-        let result = spawn_monitored_task!(async move {
-            state
-                .faucet
-                .batch_send(
-                    id,
-                    request.recipient,
-                    &vec![state.config.amount; state.config.num_coins],
-                )
-                .await
-        })
-        .await
-        .unwrap();
+    batch_request_spawn_task(request, state).await
+}
 
-        match result {
-            Ok(v) => {
-                info!(uuid =?id, "Request is successfully served");
-                (StatusCode::ACCEPTED, Json(BatchFaucetResponse::from(v)))
-            }
-            Err(v) => {
-                warn!(uuid =?id, "Failed to request gas: {:?}", v);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(BatchFaucetResponse::from(v)),
-                )
-            }
-        }
+// helper method
+async fn batch_request_spawn_task(
+    request: FixedAmountRequest,
+    state: Arc<AppState>,
+) -> (StatusCode, Json<BatchFaucetResponse>) {
+    let result = spawn_monitored_task!(async move {
+        state
+            .faucet
+            .batch_send(
+                Uuid::new_v4(),
+                request.recipient,
+                &vec![state.config.amount; state.config.num_coins],
+            )
+            .await
+    })
+    .await
+    .unwrap();
+    match result {
+        Ok(v) => (StatusCode::ACCEPTED, Json(BatchFaucetResponse::from(v))),
+        Err(v) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(BatchFaucetResponse::from(v)),
+        ),
+    }
+}
+
+/// handler for batch_request_gas requests
+async fn batch_request_gas(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
+) -> impl IntoResponse {
+    let id = Uuid::new_v4();
+    // ID for traceability
+    info!(uuid = ?id, "Got new gas request.");
+
+    let FaucetRequest::FixedAmountRequest(request) = payload else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(BatchFaucetResponse::from(FaucetError::Internal(
+                "Input Error.".to_string(),
+            ))),
+        );
+    };
+
+    if state.config.batch_enabled {
+        batch_request_spawn_task(request, state).await
     } else {
         // TODO (jian): remove this feature gate when batch has proven to be baked long enough
         info!(uuid = ?id, "Falling back to v1 implementation");
@@ -469,44 +473,12 @@ async fn request_status(
 
 /// handler for all the request_gas requests
 async fn request_gas(
-    headers: HeaderMap,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Extension(token_manager): Extension<Arc<RequestsManager>>,
     Extension(state): Extension<Arc<AppState>>,
     Json(payload): Json<FaucetRequest>,
 ) -> impl IntoResponse {
     // ID for traceability
     let id = Uuid::new_v4();
     info!(uuid = ?id, "Got new gas request.");
-
-    if state.config.testnet {
-        // Check if the user-agent is present, and if it is the expected discord bot user-agent.
-        let is_discord_bot = match token_manager.is_discord_bot(headers.get(USER_AGENT)) {
-            Ok(bot) => bot,
-            Err(err) => {
-                return (StatusCode::BAD_REQUEST, Json(FaucetResponse::from(err)));
-            }
-        };
-
-        if !is_discord_bot {
-            let Some(token) = headers
-                .get("X-Turnstile-Token")
-                .and_then(|v| v.to_str().ok())
-            else {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(FaucetResponse::from(FaucetError::NoToken)),
-                );
-            };
-
-            let validation = token_manager
-                .validate_token(CLOUDFLARE_URL, addr, token)
-                .await;
-            if let Err((status_code, faucet_error)) = validation {
-                return (status_code, Json(FaucetResponse::from(faucet_error)));
-            }
-        }
-    }
 
     let result = match payload {
         FaucetRequest::FixedAmountRequest(requests) => {
@@ -599,12 +571,17 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    const MAX_REQUESTS_PER_IP: u64 = 3;
+    const RESET_TIME_INTERVAL_SECS: u64 = 5;
+
     async fn setup_mock_cloudflare() -> MockServer {
-        std::env::set_var("TURNSTILE_SECRET_KEY", "test_secret");
         let mock_server = MockServer::start().await;
 
         Mock::given(method("POST"))
-            .respond_with(ResponseTemplate::new(200))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({ "success": true, "error-codes": [] })),
+            )
             .mount(&mock_server)
             .await;
 
@@ -615,60 +592,67 @@ mod tests {
     async fn test_token_validation_and_limits() {
         // Start mock server
         let mock_server = setup_mock_cloudflare().await;
-        let manager = RequestsManager::new();
+        let manager = RequestsManager::new(
+            MAX_REQUESTS_PER_IP,
+            RESET_TIME_INTERVAL_SECS,
+            mock_server.uri(),
+            "test_secret".to_string(),
+        );
         let ip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
         let token = "test_token";
 
         // First request should succeed
-        let result = manager.validate_token(&mock_server.uri(), ip, token).await;
+        let result = manager.validate_turnstile_token(ip, token).await;
         assert!(result.is_ok());
 
         // Use up remaining requests
         for _ in 1..manager.max_requests_per_ip {
-            let result = manager.validate_token(&mock_server.uri(), ip, token).await;
+            let result = manager.validate_turnstile_token(ip, token).await;
             assert!(result.is_ok());
         }
 
         // Next request should fail due to limit
-        let result = manager.validate_token(&mock_server.uri(), ip, token).await;
+        let result = manager.validate_turnstile_token(ip, token).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_token_reset_after_interval() {
         let mock_server = setup_mock_cloudflare().await;
-        let reset_time_interval_secs = 5; // seconds for testing
-        let manager =
-            RequestsManager::new_with_limits(MAX_REQUESTS_PER_IP, reset_time_interval_secs);
+        let manager = RequestsManager::new(
+            MAX_REQUESTS_PER_IP,
+            RESET_TIME_INTERVAL_SECS,
+            mock_server.uri(),
+            "test_secret".to_string(),
+        );
 
         let ip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
         let token = "test_token";
 
         // Use up all requests
         for _ in 0..manager.max_requests_per_ip {
-            let result = manager.validate_token(&mock_server.uri(), ip, token).await;
+            let result = manager.validate_turnstile_token(ip, token).await;
             assert!(result.is_ok());
         }
 
         // Try one more, it should fail
-        let result = manager.validate_token(&mock_server.uri(), ip, token).await;
+        let result = manager.validate_turnstile_token(ip, token).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().0 == StatusCode::TOO_MANY_REQUESTS);
-        assert!(!manager.data.lock().unwrap().is_empty());
+        assert!(!manager.data.is_empty());
 
-        tokio::time::sleep(Duration::from_secs(reset_time_interval_secs + 1)).await;
+        tokio::time::sleep(Duration::from_secs(RESET_TIME_INTERVAL_SECS + 3)).await;
         // Trigger cleanup
         manager.cleanup_expired_tokens();
 
         // Should be able to make new requests
-        let result = manager.validate_token(&mock_server.uri(), ip, token).await;
+        let result = manager.validate_turnstile_token(ip, token).await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_invalid_token_response() {
         let mock_server = MockServer::start().await;
-        std::env::set_var("TURNSTILE_SECRET_KEY", "test_secret");
 
         // Setup mock for invalid token
         Mock::given(method("POST"))
@@ -680,11 +664,89 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let manager = RequestsManager::new();
+        let manager = RequestsManager::new(
+            MAX_REQUESTS_PER_IP,
+            RESET_TIME_INTERVAL_SECS,
+            mock_server.uri(),
+            "test_secret".to_string(),
+        );
         let ip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
         let token = "invalid_token";
 
-        let result = manager.validate_token(&mock_server.uri(), ip, token).await;
+        let result = manager.validate_turnstile_token(ip, token).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_ip_requests() {
+        let mock_server = setup_mock_cloudflare().await;
+        let manager = Arc::new(RequestsManager::new(
+            MAX_REQUESTS_PER_IP,
+            RESET_TIME_INTERVAL_SECS,
+            mock_server.uri(),
+            "test_secret".to_string(),
+        ));
+
+        // Create 10 different IP addresses
+        let ips: Vec<SocketAddr> = (0..10)
+            .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, i as u8)), 8080))
+            .collect();
+
+        let token = "test_token";
+
+        // Spawn tasks for each IP to make requests concurrently
+        let mut handles = vec![];
+
+        for (idx, &ip) in ips.iter().enumerate() {
+            let manager = manager.clone();
+            let handle = tokio::spawn(async move {
+                // Add some random delay to simulate real-world conditions
+                tokio::time::sleep(Duration::from_millis(idx as u64 * 50)).await;
+
+                let mut results = vec![];
+                // Each IP tries to make MAX_REQUESTS_PER_IP + 1 requests
+                for _ in 0..=MAX_REQUESTS_PER_IP {
+                    let result = manager.validate_turnstile_token(ip, token).await;
+                    results.push(result);
+                }
+                (ip, results)
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all tasks to complete and check results
+        let all_results = futures::future::join_all(handles).await;
+
+        for result in all_results {
+            let (ip, results) = result.unwrap();
+
+            // First MAX_REQUESTS_PER_IP requests should succeed
+            for i in 0..MAX_REQUESTS_PER_IP as usize {
+                assert!(
+                    results[i].is_ok(),
+                    "Request {} for IP {} should succeed",
+                    i,
+                    ip
+                );
+            }
+
+            // The last request (MAX_REQUESTS_PER_IP + 1) should fail
+            assert!(
+                results[MAX_REQUESTS_PER_IP as usize].is_err(),
+                "Request {} for IP {} should fail",
+                MAX_REQUESTS_PER_IP,
+                ip
+            );
+        }
+
+        // Verify the data in the DashMap
+        assert_eq!(manager.data.len(), 10, "Should have 10 IPs in the map");
+
+        for info in manager.data.iter() {
+            assert_eq!(
+                info.requests_used, MAX_REQUESTS_PER_IP,
+                "Each IP should have used exactly MAX_REQUESTS_PER_IP requests"
+            );
+        }
     }
 }
