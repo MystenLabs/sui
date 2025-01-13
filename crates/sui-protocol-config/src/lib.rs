@@ -598,6 +598,10 @@ struct FeatureFlags {
     // Properly convert certain type argument errors in the execution layer.
     #[serde(skip_serializing_if = "is_false")]
     convert_type_argument_error: bool,
+
+    // Enable native functions for nitro attestation.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1206,6 +1210,10 @@ pub struct ProtocolConfig {
     vdf_verify_vdf_cost: Option<u64>,
     vdf_hash_to_input_cost: Option<u64>,
 
+    nitro_attestation_parse_cost: Option<u64>,
+    nitro_attestation_verify_base_cost: Option<u64>,
+    nitro_attestation_verify_cost_per_cert: Option<u64>,
+
     // Stdlib costs
     bcs_per_byte_serialized_cost: Option<u64>,
     bcs_legacy_min_output_size_cost: Option<u64>,
@@ -1755,6 +1763,10 @@ impl ProtocolConfig {
     pub fn convert_type_argument_error(&self) -> bool {
         self.feature_flags.convert_type_argument_error
     }
+
+    pub fn enable_nitro_attestation(&self) -> bool {
+        self.feature_flags.enable_nitro_attestation
+    }
 }
 
 #[cfg(not(msim))]
@@ -2188,6 +2200,10 @@ impl ProtocolConfig {
 
             vdf_verify_vdf_cost: None,
             vdf_hash_to_input_cost: None,
+
+            nitro_attestation_parse_cost: None,
+            nitro_attestation_verify_base_cost: None,
+            nitro_attestation_verify_cost_per_cert: None,
 
             bcs_per_byte_serialized_cost: None,
             bcs_legacy_min_output_size_cost: None,
@@ -3130,6 +3146,13 @@ impl ProtocolConfig {
                 }
                 72 => {
                     cfg.feature_flags.convert_type_argument_error = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_nitro_attestation = true;
+                        // todo: change this
+                        cfg.nitro_attestation_parse_cost = Some(100);
+                        cfg.nitro_attestation_verify_base_cost = Some(300);
+                        cfg.nitro_attestation_verify_cost_per_cert = Some(100);
+                    }
                 }
                 // Use this template when making changes:
                 //

@@ -89,7 +89,7 @@ impl NativeResult {
             Err(err) if err.major_status() == StatusCode::ABORTED => {
                 let (_, abort_code, _, _, _, _) = err.all_data();
                 NativeResult::err(
-                    cost,
+                    cost, 
                     abort_code.unwrap_or(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR as u64),
                 )
             }

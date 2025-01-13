@@ -98,13 +98,13 @@ pub fn parse_nitro_attestation_inner(
 /// <https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html> and
 /// <https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md>.
 pub fn verify_nitro_attestation_inner(
-    signature: Vec<u8>,
-    signed_message: Vec<u8>,
-    payload: AttestationDocument,
+    signature: &[u8],
+    signed_message: &[u8],
+    payload: &AttestationDocument,
     timestamp: u64,
 ) -> SuiResult<()> {
     // Extract public key from cert and signature as P384.
-    let signature = Signature::from_slice(&signature)
+    let signature = Signature::from_slice(signature)
         .map_err(|_| NitroAttestationVerifyError::InvalidSignature)?;
     let cert = X509Certificate::from_der(payload.certificate.as_slice())
         .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?;
@@ -117,7 +117,7 @@ pub fn verify_nitro_attestation_inner(
             let verifying_key = VerifyingKey::from_sec1_bytes(ec.data())
                 .map_err(|_| NitroAttestationVerifyError::InvalidPublicKey)?;
             verifying_key
-                .verify(&signed_message, &signature)
+                .verify(signed_message, &signature)
                 .map_err(|_| NitroAttestationVerifyError::SignatureFailedToVerify)?;
         }
         _ => {
@@ -389,7 +389,7 @@ pub struct AttestationDocument {
 
 impl AttestationDocument {
     /// Parse the payload of the attestation document, validate the cert based on timestamp, and the pcrs match.
-    /// Adapted from https://github.com/EternisAI/remote-attestation-verifier/blob/main/src/lib.rs
+    /// Adapted from <https://github.com/EternisAI/remote-attestation-verifier/blob/main/src/lib.rs>
     pub fn parse_and_validate_payload(
         payload: &Vec<u8>,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
