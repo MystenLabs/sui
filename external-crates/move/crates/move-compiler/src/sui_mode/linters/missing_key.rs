@@ -43,7 +43,7 @@ simple_visitor!(
 
 fn first_field_has_id_field_of_type_uid(sdef: &StructDefinition) -> bool {
     match &sdef.fields {
-        StructFields::Defined(_, fields) => fields.iter().any(|(_, symbol, (idx, ty))| {
+        StructFields::Defined(_, fields) => fields.iter().any(|(_, symbol, (idx, (_, ty)))| {
             *idx == 0
                 && symbol == &ID_FIELD_NAME
                 && ty

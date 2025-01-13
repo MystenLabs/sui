@@ -27,13 +27,16 @@ use move_compiler::{
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
     editions::Flavor,
     linters,
-    shared::{files::MappedFiles, NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
+    shared::{
+        files::MappedFiles, NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths,
+        SaveFlag, SaveHook,
+    },
     sui_mode::{self},
     Compiler,
 };
 use move_disassembler::disassembler::Disassembler;
-use move_docgen::{Docgen, DocgenOptions};
-use move_model::{model::GlobalEnv, options::ModelBuilderOptions, run_model_builder_with_options};
+use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
+use move_model_2::source_model;
 use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -140,11 +143,9 @@ pub struct DependencyInfo<'a> {
 }
 
 pub(crate) struct BuildResult<T> {
-    root_package_name: Symbol,
-    sources_package_paths: PackagePaths,
-    immediate_dependencies: Vec<Symbol>,
-    deps_package_paths: Vec<(PackagePaths, ModuleFormat)>,
-    result: T,
+    pub(crate) root_package_name: Symbol,
+    pub(crate) immediate_dependencies: Vec<Symbol>,
+    pub(crate) result: T,
 }
 
 impl OnDiskCompiledPackage {
@@ -492,7 +493,7 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        mut compiler_driver: impl FnMut(Compiler) -> Result<T>,
+        compiler_driver: impl FnOnce(Compiler) -> Result<T>,
     ) -> Result<BuildResult<T>> {
         let immediate_dependencies = transitive_dependencies
             .iter()
@@ -556,9 +557,7 @@ impl CompiledPackage {
             .add_visitors(linters::linter_visitors(lint_level));
         Ok(BuildResult {
             root_package_name,
-            sources_package_paths,
             immediate_dependencies,
-            deps_package_paths,
             result: compiler_driver(compiler)?,
         })
     }
@@ -589,13 +588,12 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        compiler_driver: impl FnMut(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
+        compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
+        let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
         let BuildResult {
             root_package_name,
-            sources_package_paths,
             immediate_dependencies,
-            deps_package_paths,
             result,
         } = Self::build_for_driver(
             w,
@@ -603,9 +601,14 @@ impl CompiledPackage {
             resolved_package.clone(),
             transitive_dependencies,
             resolution_graph,
-            compiler_driver,
+            |compiler| {
+                let compiler = compiler.add_save_hook(&program_info_hook);
+                compiler_driver(compiler)
+            },
         )?;
+        let program_info = program_info_hook.take_typing_info();
         let (file_map, all_compiled_units) = result;
+        let mut all_compiled_units_vec = vec![];
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
         for annot_unit in all_compiled_units {
@@ -618,34 +621,36 @@ impl CompiledPackage {
             );
             let package_name = annot_unit.named_module.package_name.unwrap();
             let unit = CompiledUnitWithSource {
-                unit: annot_unit.into_compiled_unit(),
+                unit: annot_unit.named_module,
                 source_path,
             };
             if package_name == root_package_name {
-                root_compiled_units.push(unit)
+                root_compiled_units.push(unit.clone())
             } else {
-                deps_compiled_units.push((package_name, unit))
+                deps_compiled_units.push((package_name, unit.clone()))
             }
+            all_compiled_units_vec.push((unit.source_path, unit.unit));
         }
 
         let mut compiled_docs = None;
         if resolution_graph.build_options.generate_docs {
-            let model = run_model_builder_with_options(
-                vec![sources_package_paths],
-                deps_package_paths.into_iter().map(|(p, _)| p).collect_vec(),
-                ModelBuilderOptions::default(),
-                None,
+            let root_named_address_map = resolved_package.resolved_table.clone();
+            let model = source_model::Model::new(
+                file_map.clone(),
+                Some(root_package_name),
+                root_named_address_map,
+                program_info,
+                all_compiled_units_vec,
             )?;
 
-            if resolution_graph.build_options.generate_docs {
-                compiled_docs = Some(Self::build_docs(
-                    resolved_package.source_package.package.name,
-                    &model,
-                    &resolved_package.package_path,
-                    &immediate_dependencies,
-                    &resolution_graph.build_options.install_dir,
-                ));
-            }
+            compiled_docs = Some(Self::build_docs(
+                DocgenFlags::default(), // TODO this should be configurable
+                resolved_package.source_package.package.name,
+                &model,
+                &resolved_package.package_path,
+                &immediate_dependencies,
+                &resolution_graph.build_options.install_dir,
+            )?);
         };
 
         let compiled_package = CompiledPackage {
@@ -775,12 +780,13 @@ impl CompiledPackage {
     }
 
     fn build_docs(
+        docgen_flags: DocgenFlags,
         package_name: PackageName,
-        model: &GlobalEnv,
+        model: &source_model::Model,
         package_root: &Path,
         deps: &[PackageName],
         install_dir: &Option<PathBuf>,
-    ) -> Vec<(String, String)> {
+    ) -> Result<Vec<(String, String)>> {
         let root_doc_templates = find_filenames(
             &[package_root
                 .join(SourcePackageLayout::DocTemplates.path())
@@ -821,10 +827,10 @@ impl CompiledPackage {
             root_doc_templates,
             compile_relative_to_output_dir: true,
             references_file,
-            ..DocgenOptions::default()
+            flags: docgen_flags,
         };
         let docgen = Docgen::new(model, &doc_options);
-        docgen.gen()
+        docgen.gen(model)
     }
 }
 

@@ -1,33 +1,33 @@
 ---
-title: Module `0x2::tx_context`
+title: Module `sui::tx_context`
 ---
 
 
 
--  [Struct `TxContext`](#0x2_tx_context_TxContext)
--  [Function `sender`](#0x2_tx_context_sender)
--  [Function `digest`](#0x2_tx_context_digest)
--  [Function `epoch`](#0x2_tx_context_epoch)
--  [Function `epoch_timestamp_ms`](#0x2_tx_context_epoch_timestamp_ms)
--  [Function `fresh_object_address`](#0x2_tx_context_fresh_object_address)
--  [Function `ids_created`](#0x2_tx_context_ids_created)
--  [Function `derive_id`](#0x2_tx_context_derive_id)
+-  [Struct `TxContext`](#sui_tx_context_TxContext)
+-  [Function `sender`](#sui_tx_context_sender)
+-  [Function `digest`](#sui_tx_context_digest)
+-  [Function `epoch`](#sui_tx_context_epoch)
+-  [Function `epoch_timestamp_ms`](#sui_tx_context_epoch_timestamp_ms)
+-  [Function `fresh_object_address`](#sui_tx_context_fresh_object_address)
+-  [Function `ids_created`](#sui_tx_context_ids_created)
+-  [Function `derive_id`](#sui_tx_context_derive_id)
 
 
 <pre><code></code></pre>
 
 
 
-<a name="0x2_tx_context_TxContext"></a>
+<a name="sui_tx_context_TxContext"></a>
 
 ## Struct `TxContext`
 
 Information about the transaction currently being executed.
 This cannot be constructed by a transaction--it is a privileged object created by
-the VM and passed in to the entrypoint of the transaction as <code>&<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a></code>.
+the VM and passed in to the entrypoint of the transaction as <code>&<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">TxContext</a></code>.
 
 
-<pre><code><b>struct</b> <a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a> <b>has</b> drop
+<pre><code><b>public</b> <b>struct</b> <a href="tx_context.md#sui_tx_context_TxContext">TxContext</a> <b>has</b> drop
 </code></pre>
 
 
@@ -38,31 +38,31 @@ the VM and passed in to the entrypoint of the transaction as <code>&<b>mut</b> <
 
 <dl>
 <dt>
-<code>sender: <b>address</b></code>
+<code><a href="tx_context.md#sui_tx_context_sender">sender</a>: <b>address</b></code>
 </dt>
 <dd>
  The address of the user that signed the current transaction
 </dd>
 <dt>
-<code>tx_hash: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
+<code>tx_hash: vector&lt;u8&gt;</code>
 </dt>
 <dd>
  Hash of the current transaction
 </dd>
 <dt>
-<code>epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code><a href="tx_context.md#sui_tx_context_epoch">epoch</a>: u64</code>
 </dt>
 <dd>
  The current epoch number
 </dd>
 <dt>
-<code>epoch_timestamp_ms: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code><a href="tx_context.md#sui_tx_context_epoch_timestamp_ms">epoch_timestamp_ms</a>: u64</code>
 </dt>
 <dd>
  Timestamp that the epoch started at
 </dd>
 <dt>
-<code>ids_created: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code><a href="tx_context.md#sui_tx_context_ids_created">ids_created</a>: u64</code>
 </dt>
 <dd>
  Counter recording the number of fresh id's created while executing
@@ -73,7 +73,7 @@ the VM and passed in to the entrypoint of the transaction as <code>&<b>mut</b> <
 
 </details>
 
-<a name="0x2_tx_context_sender"></a>
+<a name="sui_tx_context_sender"></a>
 
 ## Function `sender`
 
@@ -81,7 +81,7 @@ Return the address of the user that signed the current
 transaction
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_sender">sender</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <b>address</b>
+<pre><code>publicfun <a href="tx_context.md#sui_tx_context_sender">sender</a>(self: &<a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <b>address</b>
 </code></pre>
 
 
@@ -90,8 +90,8 @@ transaction
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_sender">sender</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): <b>address</b> {
-    self.sender
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#sui_tx_context_sender">sender</a>(self: &<a href="tx_context.md#sui_tx_context_TxContext">TxContext</a>): <b>address</b> {
+    self.<a href="tx_context.md#sui_tx_context_sender">sender</a>
 }
 </code></pre>
 
@@ -99,7 +99,7 @@ transaction
 
 </details>
 
-<a name="0x2_tx_context_digest"></a>
+<a name="sui_tx_context_digest"></a>
 
 ## Function `digest`
 
@@ -107,7 +107,7 @@ Return the transaction digest (hash of transaction inputs).
 Please do not use as a source of randomness.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_digest">digest</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code>publicfun <a href="tx_context.md#sui_tx_context_digest">digest</a>(self: &<a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): &vector&lt;u8&gt;
 </code></pre>
 
 
@@ -116,7 +116,7 @@ Please do not use as a source of randomness.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_digest">digest</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#sui_tx_context_digest">digest</a>(self: &<a href="tx_context.md#sui_tx_context_TxContext">TxContext</a>): &vector&lt;u8&gt; {
     &self.tx_hash
 }
 </code></pre>
@@ -125,14 +125,14 @@ Please do not use as a source of randomness.
 
 </details>
 
-<a name="0x2_tx_context_epoch"></a>
+<a name="sui_tx_context_epoch"></a>
 
 ## Function `epoch`
 
 Return the current epoch
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch">epoch</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code>publicfun <a href="tx_context.md#sui_tx_context_epoch">epoch</a>(self: &<a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
 </code></pre>
 
 
@@ -141,8 +141,8 @@ Return the current epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch">epoch</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
-    self.epoch
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#sui_tx_context_epoch">epoch</a>(self: &<a href="tx_context.md#sui_tx_context_TxContext">TxContext</a>): u64 {
+    self.<a href="tx_context.md#sui_tx_context_epoch">epoch</a>
 }
 </code></pre>
 
@@ -150,14 +150,14 @@ Return the current epoch
 
 </details>
 
-<a name="0x2_tx_context_epoch_timestamp_ms"></a>
+<a name="sui_tx_context_epoch_timestamp_ms"></a>
 
 ## Function `epoch_timestamp_ms`
 
 Return the epoch start time as a unix timestamp in milliseconds.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch_timestamp_ms">epoch_timestamp_ms</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code>publicfun <a href="tx_context.md#sui_tx_context_epoch_timestamp_ms">epoch_timestamp_ms</a>(self: &<a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
 </code></pre>
 
 
@@ -166,8 +166,8 @@ Return the epoch start time as a unix timestamp in milliseconds.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch_timestamp_ms">epoch_timestamp_ms</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
-    self.epoch_timestamp_ms
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#sui_tx_context_epoch_timestamp_ms">epoch_timestamp_ms</a>(self: &<a href="tx_context.md#sui_tx_context_TxContext">TxContext</a>): u64 {
+    self.<a href="tx_context.md#sui_tx_context_epoch_timestamp_ms">epoch_timestamp_ms</a>
 }
 </code></pre>
 
@@ -175,7 +175,7 @@ Return the epoch start time as a unix timestamp in milliseconds.
 
 </details>
 
-<a name="0x2_tx_context_fresh_object_address"></a>
+<a name="sui_tx_context_fresh_object_address"></a>
 
 ## Function `fresh_object_address`
 
@@ -184,7 +184,7 @@ occur as the address for a user.
 In other words, the generated address is a globally unique object ID.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_fresh_object_address">fresh_object_address</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <b>address</b>
+<pre><code>publicfun <a href="tx_context.md#sui_tx_context_fresh_object_address">fresh_object_address</a>(ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <b>address</b>
 </code></pre>
 
 
@@ -193,10 +193,10 @@ In other words, the generated address is a globally unique object ID.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_fresh_object_address">fresh_object_address</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): <b>address</b> {
-    <b>let</b> ids_created = ctx.ids_created;
-    <b>let</b> id = <a href="tx_context.md#0x2_tx_context_derive_id">derive_id</a>(*&ctx.tx_hash, ids_created);
-    ctx.ids_created = ids_created + 1;
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#sui_tx_context_fresh_object_address">fresh_object_address</a>(ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">TxContext</a>): <b>address</b> {
+    <b>let</b> <a href="tx_context.md#sui_tx_context_ids_created">ids_created</a> = ctx.<a href="tx_context.md#sui_tx_context_ids_created">ids_created</a>;
+    <b>let</b> id = <a href="tx_context.md#sui_tx_context_derive_id">derive_id</a>(*&ctx.tx_hash, <a href="tx_context.md#sui_tx_context_ids_created">ids_created</a>);
+    ctx.<a href="tx_context.md#sui_tx_context_ids_created">ids_created</a> = <a href="tx_context.md#sui_tx_context_ids_created">ids_created</a> + 1;
     id
 }
 </code></pre>
@@ -205,7 +205,7 @@ In other words, the generated address is a globally unique object ID.
 
 </details>
 
-<a name="0x2_tx_context_ids_created"></a>
+<a name="sui_tx_context_ids_created"></a>
 
 ## Function `ids_created`
 
@@ -213,7 +213,7 @@ Return the number of id's created by the current transaction.
 Hidden for now, but may expose later
 
 
-<pre><code><b>fun</b> <a href="tx_context.md#0x2_tx_context_ids_created">ids_created</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>fun</b> <a href="tx_context.md#sui_tx_context_ids_created">ids_created</a>(self: &<a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
 </code></pre>
 
 
@@ -222,8 +222,8 @@ Hidden for now, but may expose later
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="tx_context.md#0x2_tx_context_ids_created">ids_created</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
-    self.ids_created
+<pre><code><b>fun</b> <a href="tx_context.md#sui_tx_context_ids_created">ids_created</a>(self: &<a href="tx_context.md#sui_tx_context_TxContext">TxContext</a>): u64 {
+    self.<a href="tx_context.md#sui_tx_context_ids_created">ids_created</a>
 }
 </code></pre>
 
@@ -231,14 +231,14 @@ Hidden for now, but may expose later
 
 </details>
 
-<a name="0x2_tx_context_derive_id"></a>
+<a name="sui_tx_context_derive_id"></a>
 
 ## Function `derive_id`
 
 Native function for deriving an ID via hash(tx_hash || ids_created)
 
 
-<pre><code><b>fun</b> <a href="tx_context.md#0x2_tx_context_derive_id">derive_id</a>(tx_hash: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ids_created: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <b>address</b>
+<pre><code><b>fun</b> <a href="tx_context.md#sui_tx_context_derive_id">derive_id</a>(tx_hash: vector&lt;u8&gt;, <a href="tx_context.md#sui_tx_context_ids_created">ids_created</a>: u64): <b>address</b>
 </code></pre>
 
 
@@ -247,7 +247,7 @@ Native function for deriving an ID via hash(tx_hash || ids_created)
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_derive_id">derive_id</a>(tx_hash: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ids_created: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <b>address</b>;
+<pre><code><b>native</b> <b>fun</b> <a href="tx_context.md#sui_tx_context_derive_id">derive_id</a>(tx_hash: vector&lt;u8&gt;, <a href="tx_context.md#sui_tx_context_ids_created">ids_created</a>: u64): <b>address</b>;
 </code></pre>
 
 

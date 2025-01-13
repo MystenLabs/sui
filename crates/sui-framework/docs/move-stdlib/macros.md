@@ -1,5 +1,5 @@
 ---
-title: Module `0x1::macros`
+title: Module `std::macros`
 ---
 
 This module holds shared implementation of macros used in <code>std</code>
