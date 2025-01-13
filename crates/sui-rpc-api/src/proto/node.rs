@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use super::types::proto_to_timestamp_ms;
 use super::types::timestamp_ms_to_proto;
 use super::TryFromProtoError;
