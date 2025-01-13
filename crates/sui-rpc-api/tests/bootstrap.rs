@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use prost_types::FileDescriptorSet;
 use protox::prost::Message as _;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -35,7 +37,6 @@ fn bootstrap() {
     };
 
     let out_dir = root_dir.join("src").join("proto").join("generated");
-    let file_descriptor_set_path = out_dir.join("sui.node.v2.fds.bin");
 
     let fds = protox::Compiler::new(&[proto_dir.clone()])
         .unwrap()
@@ -56,7 +57,7 @@ fn bootstrap() {
     }
 
     // Generate fds to expose via reflection
-    let mut fds = protox::Compiler::new(&[proto_dir])
+    let fds = protox::Compiler::new(&[proto_dir])
         .unwrap()
         .include_source_info(false)
         .include_imports(true)
@@ -64,9 +65,23 @@ fn bootstrap() {
         .unwrap()
         .file_descriptor_set();
 
-    // Sort them by their file name in order to have a stable serialized format
-    fds.file.sort_by(|a, b| a.name.cmp(&b.name));
-    std::fs::write(file_descriptor_set_path, fds.encode_to_vec()).unwrap();
+    // Sort the files by their package, in order to have a single fds file per package, and have
+    // the files in the package sorted by their filename in order have a stable serialized format.
+    let mut packages: HashMap<_, FileDescriptorSet> = HashMap::new();
+    for file in fds.file {
+        packages
+            .entry(file.package().to_owned())
+            .or_default()
+            .file
+            .push(file);
+    }
+
+    for (package, mut fds) in packages {
+        fds.file.sort_by(|a, b| a.name.cmp(&b.name));
+        let file_name = format!("{package}.fds.bin");
+        let file_descriptor_set_path = out_dir.join(&file_name);
+        std::fs::write(file_descriptor_set_path, fds.encode_to_vec()).unwrap();
+    }
 
     let status = std::process::Command::new("git")
         .arg("diff")

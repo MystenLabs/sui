@@ -88,12 +88,16 @@ impl RpcService {
             let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
 
             let reflection_v1 = tonic_reflection::server::Builder::configure()
+                .register_encoded_file_descriptor_set(crate::proto::google::FILE_DESCRIPTOR_SET)
+                .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::node::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
                 .build_v1()
                 .unwrap();
 
             let reflection_v1alpha = tonic_reflection::server::Builder::configure()
+                .register_encoded_file_descriptor_set(crate::proto::google::FILE_DESCRIPTOR_SET)
+                .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::node::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
                 .build_v1alpha()
