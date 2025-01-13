@@ -386,30 +386,7 @@ impl Core {
         }
 
         // Determine the ancestors to be included in proposal.
-        // Smart ancestor selection requires distributed scoring to be enabled.
-        let ancestors = if self
-            .context
-            .protocol_config
-            .consensus_distributed_vote_scoring_strategy()
-            && self
-                .context
-                .protocol_config
-                .consensus_smart_ancestor_selection()
-        {
-            let ancestors = self.smart_ancestors_to_propose(clock_round, !force);
-
-            // If we did not find enough good ancestors to propose, continue to wait before proposing.
-            if ancestors.is_empty() {
-                assert!(
-                    !force,
-                    "Ancestors should have been returned if force is true!"
-                );
-                return None;
-            }
-            ancestors
-        } else {
-            self.ancestors_to_propose(clock_round)
-        };
+        let ancestors = self.ancestors_to_propose(clock_round);
 
         // Update the last included ancestor block refs
         for ancestor in &ancestors {
@@ -842,6 +819,7 @@ impl Core {
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
     /// If smart selection is enabled then this will try to select the best ancestors
     /// based on the propagation scores of the authorities.
+    #[allow(unused)]
     fn smart_ancestors_to_propose(
         &mut self,
         clock_round: Round,
