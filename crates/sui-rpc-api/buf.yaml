@@ -13,15 +13,19 @@ modules:
         DIRECTORY_SAME_PACKAGE:
           - proto/sui.types.proto
           - proto/sui.node.v2.proto
+          - proto/sui.node.v2alpha.proto
         PACKAGE_DIRECTORY_MATCH:
           - proto/sui.types.proto
           - proto/sui.node.v2.proto
+          - proto/sui.node.v2alpha.proto
         PACKAGE_SAME_DIRECTORY:
           - proto/sui.types.proto
           - proto/sui.node.v2.proto
+          - proto/sui.node.v2alpha.proto
         FILE_LOWER_SNAKE_CASE:
           - proto/sui.types.proto
           - proto/sui.node.v2.proto
+          - proto/sui.node.v2alpha.proto
 
       disallow_comment_ignores: false
       enum_zero_value_suffix: _UNKNOWN
