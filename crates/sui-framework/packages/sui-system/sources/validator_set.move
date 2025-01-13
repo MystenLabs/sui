@@ -514,7 +514,7 @@ module sui_system::validator_set {
         }
     }
 
-    /// Effectutate pending next epoch metadata if they are staged.
+    /// Effectuate pending next epoch metadata if they are staged.
     fun effectuate_staged_metadata(
         self: &mut ValidatorSet,
     ) {

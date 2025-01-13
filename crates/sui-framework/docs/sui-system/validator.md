@@ -2899,7 +2899,7 @@ Update Narwhal worker public key of this candidate validator
 
 ## Function `effectuate_staged_metadata`
 
-Effectutate all staged next epoch metadata for this validator.
+Effectuate all staged next epoch metadata for this validator.
 NOTE: this function SHOULD ONLY be called by validator_set when
 advancing an epoch.
 

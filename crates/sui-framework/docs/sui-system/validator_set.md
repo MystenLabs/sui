@@ -1257,7 +1257,7 @@ It does the following things:
 
 ## Function `effectuate_staged_metadata`
 
-Effectutate pending next epoch metadata if they are staged.
+Effectuate pending next epoch metadata if they are staged.
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>)
