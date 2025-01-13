@@ -13,3 +13,7 @@ cargo insta test -p sui-swarm-config --review
 ```
 
 Please use your best judgment to decide if the changes between old and new versions of the snapshots look "reasonable" (e.g., a minor change in gas costs). When in doubt, please reach out to a member of Sui core team.
+
+### Updating auto-generated documentation
+
+To avoid CI failure, follow these steps. First, make your desired code changes. Then, navigate to the `crates/sui-framework` directory and execute the command `UPDATE=1 cargo nextest run build_system_packages`. This action will automatically update the md files associated with your code changes on your behalf and ensure that the portion of the CI responsible for checking those auto-generated pages passes successfully. 
