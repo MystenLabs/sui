@@ -13589,6 +13589,7 @@ dependencies = [
  "tempfile",
  "test-cluster",
  "tokio",
+ "tokio-stream",
  "tracing",
  "url",
 ]
@@ -15168,6 +15169,7 @@ name = "sui-rpc-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "axum 0.7.5",
  "bcs",
@@ -15200,11 +15202,13 @@ dependencies = [
  "test-strategy",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
  "tonic 0.12.3",
  "tonic-build",
  "tonic-health",
  "tonic-reflection",
  "tower 0.4.13",
+ "tracing",
  "url",
 ]
 

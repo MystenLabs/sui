@@ -37,10 +37,12 @@ use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
+use sui_rpc_api::subscription::SubscriptionService;
 use sui_rpc_api::RpcMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
@@ -265,6 +267,8 @@ pub struct SuiNode {
     // TODO: Eventually we can make this auth aggregator a shared reference so that this
     // update will automatically propagate to other uses.
     auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
+
+    subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -766,7 +770,7 @@ impl SuiNode {
             None
         };
 
-        let http_server = build_http_server(
+        let (http_server, subscription_service_checkpoint_sender) = build_http_server(
             state.clone(),
             state_sync_store,
             &transaction_orchestrator.clone(),
@@ -864,6 +868,7 @@ impl SuiNode {
             shutdown_channel_tx: shutdown_channel,
 
             auth_agg,
+            subscription_service_checkpoint_sender,
         };
 
         info!("SuiNode started!");
@@ -1571,6 +1576,7 @@ impl SuiNode {
                 self.backpressure_manager.clone(),
                 self.config.checkpoint_executor_config.clone(),
                 checkpoint_executor_metrics.clone(),
+                self.subscription_service_checkpoint_sender.clone(),
             );
 
             let run_with_range = self.config.run_with_range;
@@ -2020,10 +2026,13 @@ pub async fn build_http_server(
     prometheus_registry: &Registry,
     _custom_runtime: Option<Handle>,
     software_version: &'static str,
-) -> Result<Option<sui_http::ServerHandle>> {
+) -> Result<(
+    Option<sui_http::ServerHandle>,
+    Option<tokio::sync::mpsc::Sender<CheckpointData>>,
+)> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
-        return Ok(None);
+        return Ok((None, None));
     }
 
     let mut router = axum::Router::new();
@@ -2102,6 +2111,8 @@ pub async fn build_http_server(
 
     router = router.merge(json_rpc_router);
 
+    let (subscription_service_checkpoint_sender, subscription_service_handle) =
+        SubscriptionService::build(prometheus_registry);
     let rpc_router = {
         let mut rpc_service = sui_rpc_api::RpcService::new(
             Arc::new(RestReadStore::new(state.clone(), store)),
@@ -2113,6 +2124,7 @@ pub async fn build_http_server(
         }
 
         rpc_service.with_metrics(RpcMetrics::new(prometheus_registry));
+        rpc_service.with_subscription_service(subscription_service_handle);
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {
             rpc_service.with_executor(transaction_orchestrator.clone())
@@ -2139,7 +2151,7 @@ pub async fn build_http_server(
 
     info!(local_addr =? handle.local_addr(), "Sui JSON-RPC server listening on {}", handle.local_addr());
 
-    Ok(Some(handle))
+    Ok((Some(handle), Some(subscription_service_checkpoint_sender)))
 }
 
 #[cfg(not(test))]

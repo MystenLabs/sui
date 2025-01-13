@@ -35,6 +35,7 @@ use sui_types::accumulator::Accumulator;
 use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::message_envelope::Message;
 use sui_types::transaction::TransactionKind;
@@ -148,6 +149,7 @@ pub struct CheckpointExecutor {
     backpressure_manager: Arc<BackpressureManager>,
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
+    subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
 }
 
 impl CheckpointExecutor {
@@ -159,6 +161,7 @@ impl CheckpointExecutor {
         backpressure_manager: Arc<BackpressureManager>,
         config: CheckpointExecutorConfig,
         metrics: Arc<CheckpointExecutorMetrics>,
+        subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
     ) -> Self {
         Self {
             mailbox,
@@ -171,6 +174,7 @@ impl CheckpointExecutor {
             backpressure_manager,
             config,
             metrics,
+            subscription_service_checkpoint_sender,
         }
     }
 
@@ -188,6 +192,7 @@ impl CheckpointExecutor {
             BackpressureManager::new_for_tests(),
             Default::default(),
             CheckpointExecutorMetrics::new_for_tests(),
+            None,
         )
     }
 
@@ -482,6 +487,12 @@ impl CheckpointExecutor {
             rpc_index
                 .commit_update_for_checkpoint(checkpoint.checkpoint_summary.sequence_number)
                 .expect("failed to update rpc_indexes");
+        }
+
+        if let Some(sender) = &self.subscription_service_checkpoint_sender {
+            if let Err(e) = sender.send(checkpoint).await {
+                tracing::warn!("unable to send checkpoint to subscription service: {e}");
+            }
         }
     }
 

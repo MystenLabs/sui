@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use mysten_network::callback::CallbackLayer;
+use proto::node::v2alpha::subscription_service_server::SubscriptionServiceServer;
 use reader::StateReader;
 use rest::build_rest_router;
 use std::sync::Arc;
+use subscription::SubscriptionServiceHandle;
 use sui_types::storage::RpcStateReader;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
@@ -19,6 +21,7 @@ mod reader;
 mod response;
 pub mod rest;
 mod service;
+pub mod subscription;
 pub mod types;
 
 pub use client::Client;
@@ -33,6 +36,7 @@ pub use types::ObjectResponse;
 pub struct RpcService {
     reader: StateReader,
     executor: Option<Arc<dyn TransactionExecutor>>,
+    subscription_service_handle: Option<SubscriptionServiceHandle>,
     chain_id: sui_types::digests::ChainIdentifier,
     software_version: &'static str,
     metrics: Option<Arc<RpcMetrics>>,
@@ -45,6 +49,7 @@ impl RpcService {
         Self {
             reader: StateReader::new(reader),
             executor: None,
+            subscription_service_handle: None,
             chain_id,
             software_version,
             metrics: None,
@@ -62,6 +67,13 @@ impl RpcService {
 
     pub fn with_executor(&mut self, executor: Arc<dyn TransactionExecutor + Send + Sync>) {
         self.executor = Some(executor);
+    }
+
+    pub fn with_subscription_service(
+        &mut self,
+        subscription_service_handle: SubscriptionServiceHandle,
+    ) {
+        self.subscription_service_handle = Some(subscription_service_handle);
     }
 
     pub fn with_metrics(&mut self, metrics: RpcMetrics) {
@@ -114,13 +126,19 @@ impl RpcService {
                 )
                 .await;
 
-            grpc::Services::new()
+            let mut services = grpc::Services::new()
                 .add_service(health_service)
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha)
                 .add_service(node_service)
-                .add_service(node)
-                .into_router()
+                .add_service(node);
+
+            if let Some(subscription_service_handle) = self.subscription_service_handle.clone() {
+                services = services
+                    .add_service(SubscriptionServiceServer::new(subscription_service_handle));
+            }
+
+            services.into_router()
         };
 
         if self.config.enable_experimental_rest_api() {
