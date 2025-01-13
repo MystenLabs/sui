@@ -13,15 +13,29 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
 };
 use serde::Serialize;
-use std::fmt::Display;
+use std::{fmt::Display, sync::mpsc::Receiver};
 
 /// An index into the trace. This should be used when referring to locations in the trace.
 /// Otherwise, a `usize` should be used when referring to indices that are not in the trace.
 pub type TraceIndex = usize;
 pub type TraceVersion = u64;
 
+/// json.zst file extension for the trace since that is what we compress with
+pub const TRACE_FILE_EXTENSION: &str = "json.zst";
+
 /// The current version of the trace format.
-const TRACE_VERSION: TraceVersion = 1;
+const TRACE_VERSION: TraceVersion = 2;
+
+/// Compression level for the trace. This is the level of compression that we will use for the
+/// trace in zstd.
+const COMPRESSION_LEVEL: i32 = 1;
+
+/// Size of the compression chunk. This is the size of the buffer that we will compress at a time.
+const COMPRESSION_CHUNK_SIZE: usize = 1024 * 1024 * 1024;
+
+/// Size of the channel buffer. This is the size of the buffer that we will use to buffer events
+/// before adding backpressure to the tracer.
+const CHANNEL_BUFFER_SIZE: usize = 100;
 
 /// A Location is a valid root for a reference. This can either be a local in a frame, a stack
 /// value, or a reference into another location (e.g., vec[0][2]).
@@ -164,10 +178,20 @@ pub enum TraceEvent {
     External(Box<serde_json::Value>),
 }
 
-#[derive(Serialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct TraceVersionData {
+    version: TraceVersion,
+}
+
+pub struct BufferedEventStream {
+    pub event_count: TraceIndex,
+    handle: std::thread::JoinHandle<Vec<u8>>,
+    sender: std::sync::mpsc::SyncSender<TraceEvent>,
+}
+
 pub struct MoveTrace {
     pub version: TraceVersion,
-    pub events: Vec<TraceEvent>,
+    buf: BufferedEventStream,
 }
 
 /// The Move trace format. The custom tracer is not serialized, but the events are.
@@ -204,16 +228,67 @@ impl TraceValue {
     }
 }
 
+impl BufferedEventStream {
+    pub fn new() -> Self {
+        let (tx, rx): (_, Receiver<TraceEvent>) =
+            std::sync::mpsc::sync_channel(CHANNEL_BUFFER_SIZE);
+        let handle = std::thread::spawn(move || {
+            use std::io::Write;
+            let mut events = zstd::stream::Encoder::new(Vec::new(), COMPRESSION_LEVEL).unwrap();
+            serde_json::to_writer(
+                &mut events,
+                &TraceVersionData {
+                    version: TRACE_VERSION,
+                },
+            )
+            .unwrap();
+            let mut buf = Vec::new();
+            for event in rx {
+                serde_json::to_writer(&mut buf, &event).unwrap();
+                writeln!(&mut buf).unwrap();
+
+                if buf.len() > COMPRESSION_CHUNK_SIZE {
+                    events.write_all(&std::mem::take(&mut buf)).unwrap();
+                }
+            }
+
+            events.write_all(buf.as_slice()).unwrap();
+            events.finish().unwrap()
+        });
+
+        Self {
+            event_count: 0,
+            handle,
+            sender: tx,
+        }
+    }
+
+    pub fn push(&mut self, event: TraceEvent) {
+        self.sender.send(event).unwrap();
+        self.event_count += 1;
+    }
+
+    pub fn finish(self) -> Vec<u8> {
+        // close channel
+        drop(self.sender);
+        self.handle.join().unwrap()
+    }
+}
+
 impl MoveTrace {
     pub fn new() -> Self {
         Self {
             version: TRACE_VERSION,
-            events: vec![],
+            buf: BufferedEventStream::new(),
         }
     }
 
-    pub fn to_json(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap()
+    pub fn push_event(&mut self, event: TraceEvent) {
+        self.buf.push(event);
+    }
+
+    pub fn into_compressed_json_bytes(self) -> Vec<u8> {
+        self.buf.finish()
     }
 }
 
@@ -241,7 +316,7 @@ impl MoveTraceBuilder {
 
     /// Get the current offset in the `MoveTrace` that is being built.
     pub fn current_trace_offset(&self) -> TraceIndex {
-        self.trace.events.len()
+        self.trace.buf.event_count
     }
 
     /// Record an `OpenFrame` event in the trace.
@@ -309,7 +384,7 @@ impl MoveTraceBuilder {
     // All events pushed to the trace are first pushed, and then the tracer is notified of the
     // event.
     fn push_event(&mut self, event: TraceEvent) {
-        self.trace.events.push(event.clone());
+        self.trace.push_event(event.clone());
         self.tracer.notify(&event, Writer(&mut self.trace));
     }
 }
