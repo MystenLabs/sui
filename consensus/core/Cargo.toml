@@ -43,7 +43,6 @@ strum_macros.workspace = true
 sui-config.workspace = true
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
-sui-simulator.workspace = true
 sui-tls.workspace = true
 tap.workspace = true
 thiserror.workspace = true
@@ -62,6 +61,9 @@ tempfile.workspace = true
 [dev-dependencies]
 rstest.workspace = true
 telemetry-subscribers.workspace = true
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator.workspace = true
 
 [build-dependencies]
 anemo-build.workspace = true
