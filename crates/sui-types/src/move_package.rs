@@ -511,13 +511,21 @@ impl MovePackage {
         module: &Identifier,
         binary_config: &BinaryConfig,
     ) -> SuiResult<CompiledModule> {
+        self.deserialize_module_by_name(module.as_str(), binary_config)
+    }
+
+    pub fn deserialize_module_by_name(
+        &self,
+        module: &str,
+        binary_config: &BinaryConfig,
+    ) -> SuiResult<CompiledModule> {
         // TODO use the session's cache
-        let bytes = self
-            .serialized_module_map()
-            .get(module.as_str())
-            .ok_or_else(|| SuiError::ModuleNotFound {
-                module_name: module.to_string(),
-            })?;
+        let bytes =
+            self.serialized_module_map()
+                .get(module)
+                .ok_or_else(|| SuiError::ModuleNotFound {
+                    module_name: module.to_string(),
+                })?;
         CompiledModule::deserialize_with_config(bytes, binary_config).map_err(|error| {
             SuiError::ModuleDeserializationFailure {
                 error: error.to_string(),

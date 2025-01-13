@@ -76,13 +76,6 @@ mod checked {
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
-        // let linking_metadata =
-        //     PTBLinkageMetadata::from_ptb(&pt, state_view.as_backing_package_store())
-        //         .expect("Unable to create linking metadata");
-        // linking_metadata
-        //     .try_compute_unified_linkage(LinkageConfig::loose())
-        //     .expect("Unable to unify linkage across ptb");
-
         let ProgrammableTransaction { inputs, commands } = pt;
         let mut context = ExecutionContext::new(
             protocol_config,

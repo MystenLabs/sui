@@ -1,69 +1,90 @@
-use std::collections::{BTreeMap, BTreeSet};
-
 use move_binary_format::{binary_config::BinaryConfig, file_format::Visibility};
+use std::collections::BTreeMap;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
-    move_package::{normalize_module, MovePackage},
+    move_package::MovePackage,
     storage::BackingPackageStore,
     transaction::{Command, ProgrammableTransaction},
     type_input::TypeInput,
-    Identifier,
 };
 
+#[derive(Debug)]
 pub struct PTBLinkageMetadata {
-    pub types: Vec<ObjectID>,
-    pub entry_functions: Vec<ObjectID>,
-    pub non_entry_functions: Vec<ObjectID>,
-    pub publication_linkages: Vec<ObjectID>,
-    pub upgrading_packages: Vec<ObjectID>,
+    pub config: LinkageConfig,
+    pub unification_table: BTreeMap<ObjectID, ConflictResolution>,
     pub all_packages: BTreeMap<ObjectID, MovePackage>,
 }
 
+#[derive(Debug)]
 pub struct LinkageConfig {
     pub fix_top_level_functions: bool,
     pub fix_types: bool,
+    pub exact_entry_transitive_deps: bool,
 }
 
 #[derive(Debug)]
 pub enum ConflictResolution {
     Exact(SequenceNumber, ObjectID),
     AtLeast(SequenceNumber, ObjectID),
-    Never(ObjectID),
 }
 
 impl LinkageConfig {
-    pub fn strict() -> Self {
+    pub fn loose() -> Self {
         Self {
             fix_top_level_functions: true,
-            fix_types: true,
+            fix_types: false,
+            exact_entry_transitive_deps: false,
         }
     }
 
-    pub fn loose() -> Self {
-        Self {
-            fix_top_level_functions: false,
-            fix_types: false,
+    pub fn generate_top_level_fn_constraint(
+        &self,
+    ) -> for<'a> fn(&'a MovePackage) -> ConflictResolution {
+        if self.fix_top_level_functions {
+            ConflictResolution::exact
+        } else {
+            ConflictResolution::at_least
+        }
+    }
+
+    pub fn generate_type_constraint(&self) -> for<'a> fn(&'a MovePackage) -> ConflictResolution {
+        if self.fix_types {
+            ConflictResolution::exact
+        } else {
+            ConflictResolution::at_least
+        }
+    }
+
+    pub fn generate_entry_transitive_dep_constraint(
+        &self,
+    ) -> for<'a> fn(&'a MovePackage) -> ConflictResolution {
+        if self.exact_entry_transitive_deps {
+            ConflictResolution::exact
+        } else {
+            ConflictResolution::at_least
         }
     }
 }
 
 impl ConflictResolution {
-    pub fn unify(&mut self, other: &ConflictResolution) -> anyhow::Result<()> {
+    pub fn exact<'a>(pkg: &MovePackage) -> ConflictResolution {
+        ConflictResolution::Exact(pkg.version(), pkg.id())
+    }
+
+    pub fn at_least<'a>(pkg: &MovePackage) -> ConflictResolution {
+        ConflictResolution::AtLeast(pkg.version(), pkg.id())
+    }
+
+    pub fn unify(&self, other: &ConflictResolution) -> anyhow::Result<ConflictResolution> {
         match (&self, other) {
-            // If we ever try to unify with a Never we fail.
-            (ConflictResolution::Never(_), _) | (_, ConflictResolution::Never(_)) => {
-                return Err(anyhow::anyhow!(
-                    "Cannot unify with Never: {:?} and {:?}",
-                    self,
-                    other
-                ));
-            }
             // If we have two exact resolutions, they must be the same.
             (ConflictResolution::Exact(sv, self_id), ConflictResolution::Exact(ov, other_id)) => {
-                if self_id != other_id {
+                if self_id != other_id || sv != ov {
                     return Err(anyhow::anyhow!(
-                        "Exact/exact conflicting resolutions for packages: {self_id}@{sv} and {other_id}@{ov}",
+                        "UNIFICATION ERROR: Exact/exact conflicting resolutions for packages: {self_id}@{sv} and {other_id}@{ov}",
                     ));
+                } else {
+                    Ok(ConflictResolution::Exact(*sv, *self_id))
                 }
             }
             // Take the max if you have two at least resolutions.
@@ -77,29 +98,30 @@ impl ConflictResolution {
                     *oid
                 };
 
-                *self = ConflictResolution::AtLeast(*self_version.max(other_version), id);
+                Ok(ConflictResolution::AtLeast(
+                    *self_version.max(other_version),
+                    id,
+                ))
             }
             // If you unify an exact and an at least, the exact must be greater than or equal to
             // the at least. It unifies to an exact.
             (
-                ConflictResolution::Exact(exact_version, self_id),
-                ConflictResolution::AtLeast(at_least_version, oid),
+                ConflictResolution::Exact(exact_version, exact_id),
+                ConflictResolution::AtLeast(at_least_version, at_least_id),
             )
             | (
-                ConflictResolution::AtLeast(at_least_version, oid),
-                ConflictResolution::Exact(exact_version, self_id),
+                ConflictResolution::AtLeast(at_least_version, at_least_id),
+                ConflictResolution::Exact(exact_version, exact_id),
             ) => {
                 if exact_version < at_least_version {
                     return Err(anyhow::anyhow!(
-                        "Exact/at least Conflicting resolutions for packages: Exact {self_id}@{exact_version} and {oid}@{at_least_version}",
+                        "UNIFICATION ERROR: Exact/at least Conflicting resolutions for packages: Exact {exact_id}@{exact_version} and {at_least_id}@{at_least_version}",
                     ));
                 }
 
-                *self = ConflictResolution::Exact(*exact_version, *self_id);
+                Ok(ConflictResolution::Exact(*exact_version, *exact_id))
             }
         }
-
-        Ok(())
     }
 }
 
@@ -107,18 +129,17 @@ impl PTBLinkageMetadata {
     pub fn from_ptb(
         ptb: &ProgrammableTransaction,
         store: &dyn BackingPackageStore,
+        config: LinkageConfig,
+        binary_config: &BinaryConfig,
     ) -> anyhow::Result<Self> {
         let mut linkage = PTBLinkageMetadata {
-            types: Vec::new(),
-            entry_functions: Vec::new(),
-            non_entry_functions: Vec::new(),
-            publication_linkages: Vec::new(),
-            upgrading_packages: Vec::new(),
+            unification_table: BTreeMap::new(),
             all_packages: BTreeMap::new(),
+            config,
         };
 
         for command in &ptb.commands {
-            linkage.add_command(command, store)?;
+            linkage.add_command(command, store, binary_config)?;
         }
 
         Ok(linkage)
@@ -128,34 +149,26 @@ impl PTBLinkageMetadata {
         &mut self,
         command: &Command,
         store: &dyn BackingPackageStore,
+        binary_config: &BinaryConfig,
     ) -> anyhow::Result<()> {
         match command {
             Command::MoveCall(programmable_move_call) => {
                 let pkg = self.get_package(&programmable_move_call.package, store)?;
 
-                // TODO/XXX: Make this work without needing to normalize the module.
-                let module = normalize_module(
-                    pkg.serialized_module_map()
-                        .get(&programmable_move_call.module)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "Module {} not found in package {}",
-                                programmable_move_call.module,
-                                pkg.id()
-                            )
-                        })?,
-                    &BinaryConfig::standard(),
-                )?;
-                let function = module
-                    .functions
-                    .get(&Identifier::new(programmable_move_call.function.clone())?)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "Function {} not found in module {}",
-                            programmable_move_call.function,
-                            module.module_id(),
-                        )
-                    })?;
+                let m = pkg
+                    .deserialize_module_by_name(&programmable_move_call.module, binary_config)
+                    .map_err(|e| anyhow::anyhow!("Error deserializing module: {:?}", e))?;
+                let Some(fdef) = m.function_defs().into_iter().find(|f| {
+                    m.identifier_at(m.function_handle_at(f.function).name)
+                        .as_str()
+                        == &programmable_move_call.function
+                }) else {
+                    return Err(anyhow::anyhow!(
+                        "Function {} not found in module {}",
+                        programmable_move_call.function,
+                        programmable_move_call.module
+                    ));
+                };
 
                 let pkg_id = pkg.id();
                 let transitive_deps = pkg
@@ -164,20 +177,33 @@ impl PTBLinkageMetadata {
                     .map(|info| info.upgraded_id)
                     .collect::<Vec<_>>();
 
-                // load transitive deps
-                for id in transitive_deps {
-                    self.get_package(&id, store)?;
+                for ty in &programmable_move_call.type_arguments {
+                    self.add_type(ty, store)?;
                 }
 
                 // Register function entrypoint
-                if function.is_entry && function.visibility != Visibility::Public {
-                    self.entry_functions.push(pkg_id);
-                } else {
-                    self.non_entry_functions.push(pkg_id);
-                }
+                if fdef.is_entry && fdef.visibility != Visibility::Public {
+                    self.add_and_unify(&pkg_id, store, ConflictResolution::exact)?;
 
-                for ty in &programmable_move_call.type_arguments {
-                    self.add_type(ty, store)?;
+                    // transitive closure of entry functions are fixed
+                    for object_id in transitive_deps.iter() {
+                        self.add_and_unify(
+                            object_id,
+                            store,
+                            self.config.generate_entry_transitive_dep_constraint(),
+                        )?;
+                    }
+                } else {
+                    self.add_and_unify(
+                        &pkg_id,
+                        store,
+                        self.config.generate_top_level_fn_constraint(),
+                    )?;
+
+                    // transitive closure of non-entry functions are at-least
+                    for object_id in transitive_deps.iter() {
+                        self.add_and_unify(object_id, store, ConflictResolution::at_least)?;
+                    }
                 }
             }
             Command::MakeMoveVec(type_input, _) => {
@@ -185,24 +211,12 @@ impl PTBLinkageMetadata {
                     self.add_type(ty, store)?;
                 }
             }
-            Command::Upgrade(_, transitive_deps, upgrading_object_id, _) => {
-                self.upgrading_packages.push(*upgrading_object_id);
-                self.get_package(upgrading_object_id, store)?;
-
-                self.publication_linkages.extend_from_slice(transitive_deps);
-                for object_id in transitive_deps {
-                    self.get_package(object_id, store)?;
-                }
-            }
-            Command::Publish(_, transitive_deps) => {
-                self.publication_linkages.extend_from_slice(transitive_deps);
-                for object_id in transitive_deps {
-                    self.get_package(object_id, store)?;
-                }
-            }
-            Command::TransferObjects(_, _) => (),
-            Command::SplitCoins(_, _) => (),
-            Command::MergeCoins(_, _) => (),
+            // Upgrades and Publishes don't count toward the global linkage determination.
+            Command::Upgrade(_, _, _, _)
+            | Command::Publish(_, _)
+            | Command::TransferObjects(_, _)
+            | Command::SplitCoins(_, _)
+            | Command::MergeCoins(_, _) => (),
         };
 
         Ok(())
@@ -225,10 +239,11 @@ impl PTBLinkageMetadata {
                     stack.push(&**type_input);
                 }
                 TypeInput::Struct(struct_input) => {
-                    let pkg = self
-                        .get_package(&ObjectID::from(struct_input.address), store)?
-                        .id();
-                    self.types.push(pkg);
+                    self.add_and_unify(
+                        &ObjectID::from(struct_input.address),
+                        store,
+                        self.config.generate_type_constraint(),
+                    )?;
                     for ty in struct_input.type_params.iter() {
                         stack.push(ty);
                     }
@@ -238,8 +253,6 @@ impl PTBLinkageMetadata {
         Ok(())
     }
 
-    // Gather and dedup all packages loaded by the PTB.
-    // Also gathers the versions of each package loaded by the PTB at the same time.
     fn get_package(
         &mut self,
         object_id: &ObjectID,
@@ -259,119 +272,28 @@ impl PTBLinkageMetadata {
             .get(object_id)
             .expect("Guaranteed to exist"))
     }
-}
-
-impl PTBLinkageMetadata {
-    pub fn try_compute_unified_linkage(
-        &self,
-        linking_config: LinkageConfig,
-    ) -> anyhow::Result<BTreeSet<ObjectID>> {
-        let mut unification_table = BTreeMap::new();
-
-        // Any packages that are being upgraded cannot be called in the transaction
-        for object_id in self.upgrading_packages.iter() {
-            Self::add_and_unify(
-                &mut unification_table,
-                &self.all_packages,
-                object_id,
-                |pkg| ConflictResolution::Never(pkg.id()),
-            )?;
-        }
-
-        // Linkages for packages that are to be published must be exact.
-        for object_id in self.publication_linkages.iter() {
-            Self::add_and_unify(
-                &mut unification_table,
-                &self.all_packages,
-                object_id,
-                |pkg| ConflictResolution::Exact(pkg.version(), pkg.id()),
-            )?;
-        }
-
-        for object_id in self.entry_functions.iter() {
-            Self::add_and_unify(
-                &mut unification_table,
-                &self.all_packages,
-                object_id,
-                |pkg| ConflictResolution::Exact(pkg.version(), pkg.id()),
-            )?;
-
-            // transitive closure of entry functions are fixed
-            for dep_id in self.all_packages[object_id]
-                .linkage_table()
-                .values()
-                .map(|info| &info.upgraded_id)
-            {
-                Self::add_and_unify(&mut unification_table, &self.all_packages, dep_id, |pkg| {
-                    ConflictResolution::Exact(pkg.version(), pkg.id())
-                })?;
-            }
-        }
-
-        // Types can be fixed or not depending on config.
-        for object_id in self.types.iter() {
-            Self::add_and_unify(
-                &mut unification_table,
-                &self.all_packages,
-                object_id,
-                |pkg| {
-                    if linking_config.fix_types {
-                        ConflictResolution::Exact(pkg.version(), pkg.id())
-                    } else {
-                        ConflictResolution::AtLeast(pkg.version(), *object_id)
-                    }
-                },
-            )?;
-        }
-
-        // Top level functions can be fixed or not depending on config. But they won't ever
-        // transitively fix their dependencies.
-        for object_id in self.non_entry_functions.iter() {
-            Self::add_and_unify(
-                &mut unification_table,
-                &self.all_packages,
-                object_id,
-                |pkg| {
-                    if linking_config.fix_top_level_functions {
-                        ConflictResolution::Exact(pkg.version(), pkg.id())
-                    } else {
-                        ConflictResolution::AtLeast(pkg.version(), *object_id)
-                    }
-                },
-            )?;
-        }
-
-        Ok(unification_table
-            .into_values()
-            .flat_map(|unifier| match unifier {
-                ConflictResolution::Exact(_, object_id) => Some(object_id),
-                ConflictResolution::AtLeast(_, object_id) => Some(object_id),
-                ConflictResolution::Never(_) => None,
-            })
-            .collect())
-    }
 
     // Add a package to the unification table, unifying it with any existing package in the table.
     // Errors if the packages cannot be unified (e.g., if one is exact and the other is not).
     fn add_and_unify(
-        unification_table: &mut BTreeMap<ObjectID, ConflictResolution>,
-        loaded_top_level_packages: &BTreeMap<ObjectID, MovePackage>,
+        &mut self,
         object_id: &ObjectID,
-        resolution_fn: impl Fn(&MovePackage) -> ConflictResolution,
+        store: &dyn BackingPackageStore,
+        resolution_fn: fn(&MovePackage) -> ConflictResolution,
     ) -> anyhow::Result<()> {
-        let package = loaded_top_level_packages
-            .get(object_id)
-            .ok_or_else(|| anyhow::anyhow!("Object {} not found in any package", object_id))?;
+        let package = self.get_package(object_id, store)?;
 
         let resolution = resolution_fn(package);
+        let original_pkg_id = package.original_package_id();
 
-        if unification_table.contains_key(&package.original_package_id()) {
-            let existing_unifier = unification_table
-                .get_mut(&package.original_package_id())
+        if self.unification_table.contains_key(&original_pkg_id) {
+            let existing_unifier = self
+                .unification_table
+                .get_mut(&original_pkg_id)
                 .expect("Guaranteed to exist");
-            existing_unifier.unify(&resolution)?;
+            *existing_unifier = existing_unifier.unify(&resolution)?;
         } else {
-            unification_table.insert(package.original_package_id(), resolution);
+            self.unification_table.insert(original_pkg_id, resolution);
         }
 
         Ok(())
