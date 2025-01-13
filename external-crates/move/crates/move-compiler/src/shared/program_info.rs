@@ -17,6 +17,7 @@ use crate::{
     typing::ast::{self as T},
     FullyCompiledProgram,
 };
+use move_core_types::runtime_value;
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
@@ -24,6 +25,7 @@ use move_symbol_pool::Symbol;
 pub struct FunctionInfo {
     pub attributes: Attributes,
     pub defined_loc: Loc,
+    pub full_loc: Loc,
     pub visibility: Visibility,
     pub entry: Option<Loc>,
     pub macro_: Option<Loc>,
@@ -35,10 +37,13 @@ pub struct ConstantInfo {
     pub attributes: Attributes,
     pub defined_loc: Loc,
     pub signature: Type,
+    // Set after compilation
+    pub value: OnceLock<runtime_value::MoveValue>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ModuleInfo {
+    pub defined_loc: Loc,
     pub target_kind: TargetKind,
     pub attributes: Attributes,
     pub package: Option<Symbol>,
@@ -82,6 +87,7 @@ macro_rules! program_info {
             let functions = mdef.functions.ref_map(|fname, fdef| FunctionInfo {
                 attributes: fdef.attributes.clone(),
                 defined_loc: fname.loc(),
+                full_loc: fdef.loc,
                 visibility: fdef.visibility.clone(),
                 entry: fdef.entry,
                 macro_: fdef.macro_,
@@ -91,12 +97,14 @@ macro_rules! program_info {
                 attributes: cdef.attributes.clone(),
                 defined_loc: cname.loc(),
                 signature: cdef.signature.clone(),
+                value: OnceLock::new(),
             });
             let use_funs = $module_use_funs
                 .as_mut()
                 .map(|module_use_funs| module_use_funs.remove(&mident).unwrap())
                 .unwrap_or_default();
             let minfo = ModuleInfo {
+                defined_loc: mdef.loc,
                 target_kind: mdef.target_kind,
                 attributes: mdef.attributes.clone(),
                 package: mdef.package_name,
