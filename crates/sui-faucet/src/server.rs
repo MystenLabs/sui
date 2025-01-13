@@ -722,11 +722,15 @@ mod tests {
             let (ip, results) = result.unwrap();
 
             // First MAX_REQUESTS_PER_IP requests should succeed
-            for i in 0..MAX_REQUESTS_PER_IP as usize {
+            for (idx, _) in results
+                .iter()
+                .enumerate()
+                .take(MAX_REQUESTS_PER_IP as usize)
+            {
                 assert!(
-                    results[i].is_ok(),
+                    results[idx].is_ok(),
                     "Request {} for IP {} should succeed",
-                    i,
+                    idx,
                     ip
                 );
             }
@@ -749,5 +753,24 @@ mod tests {
                 "Each IP should have used exactly MAX_REQUESTS_PER_IP requests"
             );
         }
+    }
+
+    #[test]
+    fn test_secs_to_human_readable() {
+        // Test seconds only
+        assert_eq!(secs_to_human_readable(45), "45s");
+        assert_eq!(secs_to_human_readable(1), "1s");
+        
+        // Test minutes and seconds
+        assert_eq!(secs_to_human_readable(65), "1m 5s");
+        assert_eq!(secs_to_human_readable(3599), "59m 59s");
+        
+        // Test hours, minutes, and seconds
+        assert_eq!(secs_to_human_readable(3600), "1h 0m 0s");
+        assert_eq!(secs_to_human_readable(3661), "1h 1m 1s");
+        assert_eq!(secs_to_human_readable(7384), "2h 3m 4s");
+        
+        // Test edge case
+        assert_eq!(secs_to_human_readable(0), "0s");
     }
 }
