@@ -30,7 +30,6 @@ use vfs::VfsPath;
 struct ParsedFile {
     fname: Symbol,
     defs: Vec<parser::ast::Definition>,
-    comments: MatchedFileCommentMap,
     hash: FileHash,
     text: Arc<str>,
 }
@@ -49,7 +48,7 @@ pub(crate) fn parse_program(
     named_address_maps: NamedAddressMaps,
     mut targets: Vec<IndexedVfsPackagePath>,
     mut deps: Vec<IndexedVfsPackagePath>,
-) -> anyhow::Result<(MappedFiles, parser::ast::Program, CommentMap)> {
+) -> anyhow::Result<(MappedFiles, parser::ast::Program)> {
     // sort the filenames so errors about redefinitions, or other inter-file conflicts, are
     // deterministic
     targets.sort_by(|p1, p2| p1.path.as_str().cmp(p2.path.as_str()));
@@ -57,7 +56,6 @@ pub(crate) fn parse_program(
     ensure_targets_deps_dont_intersect(compilation_env, &targets, &mut deps)?;
     let mut files: MappedFiles = MappedFiles::empty();
     let mut source_definitions = Vec::new();
-    let mut source_comments = CommentMap::new();
     let mut lib_definitions = Vec::new();
 
     let parsed = targets
@@ -89,12 +87,10 @@ pub(crate) fn parse_program(
         let ParsedFile {
             fname,
             defs,
-            comments,
             hash,
             text,
         } = file;
         files.add(hash, fname, text);
-        source_comments.insert(hash, comments);
         let defs = defs.into_iter().map(|def| {
             let pkg_def_kind = pkg_target_kind(
                 compilation_env,
@@ -121,7 +117,7 @@ pub(crate) fn parse_program(
         source_definitions,
         lib_definitions,
     };
-    Ok((files, pprog, source_comments))
+    Ok((files, pprog))
 }
 
 fn pkg_target_kind(
@@ -193,23 +189,18 @@ fn parse_file(
         return Ok(ParsedFile {
             fname,
             defs: vec![],
-            comments: MatchedFileCommentMap::new(),
             hash: file_hash,
             text: source_str,
         });
     }
-    let (defs, comments) = match parse_file_string(compilation_env, file_hash, &source_str, package)
-    {
-        Ok(defs_and_comments) => defs_and_comments,
-        Err(ds) => {
+    let defs =
+        parse_file_string(compilation_env, file_hash, &source_str, package).unwrap_or_else(|ds| {
             reporter.add_diags(ds);
-            (vec![], MatchedFileCommentMap::new())
-        }
-    };
+            vec![]
+        });
     Ok(ParsedFile {
         fname,
         defs,
-        comments,
         hash: file_hash,
         text: source_str,
     })

@@ -1,7 +1,7 @@
 
-<a name="0x1_macros"></a>
+<a name="std_macros"></a>
 
-# Module `0x1::macros`
+# Module `std::macros`
 
 This module holds shared implementation of macros used in <code>std</code>
 

@@ -1,42 +1,48 @@
 ---
-title: Module `0x2::config`
+title: Module `sui::config`
 ---
 
 
 
--  [Resource `Config`](#0x2_config_Config)
--  [Struct `Setting`](#0x2_config_Setting)
--  [Struct `SettingData`](#0x2_config_SettingData)
+-  [Struct `Config`](#sui_config_Config)
+-  [Struct `Setting`](#sui_config_Setting)
+-  [Struct `SettingData`](#sui_config_SettingData)
 -  [Constants](#@Constants_0)
--  [Function `new`](#0x2_config_new)
--  [Function `share`](#0x2_config_share)
--  [Function `transfer`](#0x2_config_transfer)
--  [Function `add_for_next_epoch`](#0x2_config_add_for_next_epoch)
--  [Function `remove_for_next_epoch`](#0x2_config_remove_for_next_epoch)
--  [Function `exists_with_type`](#0x2_config_exists_with_type)
--  [Function `exists_with_type_for_next_epoch`](#0x2_config_exists_with_type_for_next_epoch)
--  [Function `borrow_for_next_epoch_mut`](#0x2_config_borrow_for_next_epoch_mut)
--  [Function `read_setting_for_next_epoch`](#0x2_config_read_setting_for_next_epoch)
--  [Function `read_setting`](#0x2_config_read_setting)
--  [Function `read_setting_impl`](#0x2_config_read_setting_impl)
+-  [Function `new`](#sui_config_new)
+-  [Function `share`](#sui_config_share)
+-  [Function `transfer`](#sui_config_transfer)
+-  [Function `add_for_next_epoch`](#sui_config_add_for_next_epoch)
+-  [Function `remove_for_next_epoch`](#sui_config_remove_for_next_epoch)
+-  [Function `exists_with_type`](#sui_config_exists_with_type)
+-  [Function `exists_with_type_for_next_epoch`](#sui_config_exists_with_type_for_next_epoch)
+-  [Function `borrow_for_next_epoch_mut`](#sui_config_borrow_for_next_epoch_mut)
+-  [Function `read_setting_for_next_epoch`](#sui_config_read_setting_for_next_epoch)
+-  [Function `read_setting`](#sui_config_read_setting)
+-  [Function `read_setting_impl`](#sui_config_read_setting_impl)
 
 
-<pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
-<b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
-<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
-<b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
-<b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
+<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="address.md#sui_address">sui::address</a>;
+<b>use</b> <a href="dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
+<b>use</b> <a href="hex.md#sui_hex">sui::hex</a>;
+<b>use</b> <a href="object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="transfer.md#sui_transfer">sui::transfer</a>;
+<b>use</b> <a href="tx_context.md#sui_tx_context">sui::tx_context</a>;
 </code></pre>
 
 
 
-<a name="0x2_config_Config"></a>
+<a name="sui_config_Config"></a>
 
-## Resource `Config`
+## Struct `Config`
 
 
 
-<pre><code><b>struct</b> <a href="config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt; <b>has</b> key
+<pre><code><b>public</b> <b>struct</b> ConfigWriteCap <b>has</b> key
 </code></pre>
 
 
@@ -47,23 +53,22 @@ title: Module `0x2::config`
 
 <dl>
 <dt>
-<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
+<code>id: <a href="object.md#sui_object_UID">sui::object::UID</a></code>
 </dt>
 <dd>
-
 </dd>
 </dl>
 
 
 </details>
 
-<a name="0x2_config_Setting"></a>
+<a name="sui_config_Setting"></a>
 
 ## Struct `Setting`
 
 
 
-<pre><code><b>struct</b> <a href="config.md#0x2_config_Setting">Setting</a>&lt;Value: <b>copy</b>, drop, store&gt; <b>has</b> drop, store
+<pre><code><b>public</b> <b>struct</b> SettingValue <b>has</b> drop, store
 </code></pre>
 
 
@@ -74,23 +79,22 @@ title: Module `0x2::config`
 
 <dl>
 <dt>
-<code>data: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="config.md#0x2_config_SettingData">config::SettingData</a>&lt;Value&gt;&gt;</code>
+<code>data: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="config.md#sui_config_SettingData">sui::config::SettingData</a>&lt;Value&gt;&gt;</code>
 </dt>
 <dd>
-
 </dd>
 </dl>
 
 
 </details>
 
-<a name="0x2_config_SettingData"></a>
+<a name="sui_config_SettingData"></a>
 
 ## Struct `SettingData`
 
 
 
-<pre><code><b>struct</b> <a href="config.md#0x2_config_SettingData">SettingData</a>&lt;Value: <b>copy</b>, drop, store&gt; <b>has</b> drop, store
+<pre><code><b>public</b> <b>struct</b> SettingDataValue <b>has</b> drop, store
 </code></pre>
 
 
@@ -101,22 +105,19 @@ title: Module `0x2::config`
 
 <dl>
 <dt>
-<code>newer_value_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>newer_value_epoch: u64</code>
 </dt>
 <dd>
-
 </dd>
 <dt>
-<code>newer_value: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;</code>
+<code>newer_value: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;</code>
 </dt>
 <dd>
-
 </dd>
 <dt>
-<code>older_value_opt: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;</code>
+<code>older_value_opt: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;</code>
 </dt>
 <dd>
-
 </dd>
 </dl>
 
@@ -128,40 +129,40 @@ title: Module `0x2::config`
 ## Constants
 
 
-<a name="0x2_config_EBCSSerializationFailure"></a>
+<a name="sui_config_EAlreadySetForEpoch"></a>
 
 
 
-<pre><code><b>const</b> <a href="config.md#0x2_config_EBCSSerializationFailure">EBCSSerializationFailure</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
+<pre><code><b>const</b> <a href="config.md#sui_config_EAlreadySetForEpoch">EAlreadySetForEpoch</a>: u64 = 0;
 </code></pre>
 
 
 
-<a name="0x2_config_EAlreadySetForEpoch"></a>
+<a name="sui_config_EBCSSerializationFailure"></a>
 
 
 
-<pre><code><b>const</b> <a href="config.md#0x2_config_EAlreadySetForEpoch">EAlreadySetForEpoch</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
+<pre><code><b>const</b> <a href="config.md#sui_config_EBCSSerializationFailure">EBCSSerializationFailure</a>: u64 = 2;
 </code></pre>
 
 
 
-<a name="0x2_config_ENotSetForEpoch"></a>
+<a name="sui_config_ENotSetForEpoch"></a>
 
 
 
-<pre><code><b>const</b> <a href="config.md#0x2_config_ENotSetForEpoch">ENotSetForEpoch</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
+<pre><code><b>const</b> <a href="config.md#sui_config_ENotSetForEpoch">ENotSetForEpoch</a>: u64 = 1;
 </code></pre>
 
 
 
-<a name="0x2_config_new"></a>
+<a name="sui_config_new"></a>
 
 ## Function `new`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="config.md#0x2_config_new">new</a>&lt;WriteCap&gt;(_cap: &<b>mut</b> WriteCap, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>)<b>fun</b> newWriteCap(_cap: &<b>mut</b> WriteCap, ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;
 </code></pre>
 
 
@@ -170,8 +171,8 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="config.md#0x2_config_new">new</a>&lt;WriteCap&gt;(_cap: &<b>mut</b> WriteCap, ctx: &<b>mut</b> TxContext): <a href="config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt; {
-    <a href="config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt; { id: <a href="object.md#0x2_object_new">object::new</a>(ctx) }
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>) <b>fun</b> <a href="config.md#sui_config_new">new</a>&lt;WriteCap&gt;(_cap: &<b>mut</b> WriteCap, ctx: &<b>mut</b> TxContext): <a href="config.md#sui_config_Config">Config</a>&lt;WriteCap&gt; {
+    <a href="config.md#sui_config_Config">Config</a>&lt;WriteCap&gt; { id: <a href="object.md#sui_object_new">object::new</a>(ctx) }
 }
 </code></pre>
 
@@ -179,13 +180,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_share"></a>
+<a name="sui_config_share"></a>
 
 ## Function `share`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="config.md#0x2_config_share">share</a>&lt;WriteCap&gt;(<a href="config.md#0x2_config">config</a>: <a href="config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;)
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>)<b>fun</b> shareWriteCap(<a href="config.md#sui_config">config</a>: <a href="config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;)
 </code></pre>
 
 
@@ -194,8 +195,8 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="config.md#0x2_config_share">share</a>&lt;WriteCap&gt;(<a href="config.md#0x2_config">config</a>: <a href="config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;) {
-    <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="config.md#0x2_config">config</a>)
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>) <b>fun</b> <a href="config.md#sui_config_share">share</a>&lt;WriteCap&gt;(<a href="config.md#sui_config">config</a>: <a href="config.md#sui_config_Config">Config</a>&lt;WriteCap&gt;) {
+    <a href="transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="config.md#sui_config">config</a>)
 }
 </code></pre>
 
@@ -203,13 +204,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_transfer"></a>
+<a name="sui_config_transfer"></a>
 
 ## Function `transfer`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;WriteCap&gt;(<a href="config.md#0x2_config">config</a>: <a href="config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, owner: <b>address</b>)
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>)<b>fun</b> transferWriteCap(<a href="config.md#sui_config">config</a>: <a href="config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, owner: <b>address</b>)
 </code></pre>
 
 
@@ -218,8 +219,8 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;WriteCap&gt;(<a href="config.md#0x2_config">config</a>: <a href="config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;, owner: <b>address</b>) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="config.md#0x2_config">config</a>, owner)
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>) <b>fun</b> <a href="transfer.md#sui_transfer">transfer</a>&lt;WriteCap&gt;(<a href="config.md#sui_config">config</a>: <a href="config.md#sui_config_Config">Config</a>&lt;WriteCap&gt;, owner: <b>address</b>) {
+    <a href="transfer.md#sui_transfer_transfer">transfer::transfer</a>(<a href="config.md#sui_config">config</a>, owner)
 }
 </code></pre>
 
@@ -227,13 +228,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_add_for_next_epoch"></a>
+<a name="sui_config_add_for_next_epoch"></a>
 
 ## Function `add_for_next_epoch`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="config.md#0x2_config_add_for_next_epoch">add_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="config.md#0x2_config">config</a>: &<b>mut</b> <a href="config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>)<b>fun</b> add_for_next_epochWriteCap, Name, Value(<a href="config.md#sui_config">config</a>: &<b>mut</b> <a href="config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -242,49 +243,49 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="config.md#0x2_config_add_for_next_epoch">add_for_next_epoch</a>&lt;
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>) <b>fun</b> <a href="config.md#sui_config_add_for_next_epoch">add_for_next_epoch</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
 &gt;(
-    <a href="config.md#0x2_config">config</a>: &<b>mut</b> <a href="config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;,
+    <a href="config.md#sui_config">config</a>: &<b>mut</b> <a href="config.md#sui_config_Config">Config</a>&lt;WriteCap&gt;,
     _cap: &<b>mut</b> WriteCap,
     name: Name,
     value: Value,
     ctx: &<b>mut</b> TxContext,
 ): Option&lt;Value&gt; {
     <b>let</b> epoch = ctx.epoch();
-    <b>if</b> (!field::exists_(&<a href="config.md#0x2_config">config</a>.id, name)) {
-        <b>let</b> sobj = <a href="config.md#0x2_config_Setting">Setting</a> {
-            data: <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="config.md#0x2_config_SettingData">SettingData</a> {
+    <b>if</b> (!field::exists_(&<a href="config.md#sui_config">config</a>.id, name)) {
+        <b>let</b> sobj = <a href="config.md#sui_config_Setting">Setting</a> {
+            data: option::some(<a href="config.md#sui_config_SettingData">SettingData</a> {
                 newer_value_epoch: epoch,
-                newer_value: <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(value),
-                older_value_opt: <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>(),
+                newer_value: option::some(value),
+                older_value_opt: option::none(),
             }),
         };
-        field::add(&<b>mut</b> <a href="config.md#0x2_config">config</a>.id, name, sobj);
-        <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>()
+        field::add(&<b>mut</b> <a href="config.md#sui_config">config</a>.id, name, sobj);
+        option::none()
     } <b>else</b> {
-        <b>let</b> sobj: &<b>mut</b> <a href="config.md#0x2_config_Setting">Setting</a>&lt;Value&gt; = field::borrow_mut(&<b>mut</b> <a href="config.md#0x2_config">config</a>.id, name);
-        <b>let</b> <a href="config.md#0x2_config_SettingData">SettingData</a> {
+        <b>let</b> sobj: &<b>mut</b> <a href="config.md#sui_config_Setting">Setting</a>&lt;Value&gt; = field::borrow_mut(&<b>mut</b> <a href="config.md#sui_config">config</a>.id, name);
+        <b>let</b> <a href="config.md#sui_config_SettingData">SettingData</a> {
             newer_value_epoch,
             newer_value,
             older_value_opt,
         } = sobj.data.extract();
         <b>let</b> (older_value_opt, removed_value) =
             <b>if</b> (epoch &gt; newer_value_epoch) {
-                // <b>if</b> the `newer_value` is for a previous epoch, <b>move</b> it <b>to</b> `older_value_opt`
+                // <b>if</b> the `newer_value` is <b>for</b> a previous epoch, <b>move</b> it to `older_value_opt`
                 (<b>move</b> newer_value, <b>move</b> older_value_opt)
             } <b>else</b> {
                 // the current epoch cannot be less than the `newer_value_epoch`
                 <b>assert</b>!(epoch == newer_value_epoch);
-                // <b>if</b> the `newer_value` is for the current epoch, then the <a href="../move-stdlib/option.md#0x1_option">option</a> must be `none`
-                <b>assert</b>!(newer_value.is_none(), <a href="config.md#0x2_config_EAlreadySetForEpoch">EAlreadySetForEpoch</a>);
-                (<b>move</b> older_value_opt, <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>())
+                // <b>if</b> the `newer_value` is <b>for</b> the current epoch, then the option must be `none`
+                <b>assert</b>!(newer_value.is_none(), <a href="config.md#sui_config_EAlreadySetForEpoch">EAlreadySetForEpoch</a>);
+                (<b>move</b> older_value_opt, option::none())
             };
-        sobj.data.fill(<a href="config.md#0x2_config_SettingData">SettingData</a> {
+        sobj.data.fill(<a href="config.md#sui_config_SettingData">SettingData</a> {
             newer_value_epoch: epoch,
-            newer_value: <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(value),
+            newer_value: option::some(value),
             older_value_opt,
         });
         removed_value
@@ -296,13 +297,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_remove_for_next_epoch"></a>
+<a name="sui_config_remove_for_next_epoch"></a>
 
 ## Function `remove_for_next_epoch`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="config.md#0x2_config_remove_for_next_epoch">remove_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="config.md#0x2_config">config</a>: &<b>mut</b> <a href="config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>)<b>fun</b> remove_for_next_epochWriteCap, Name, Value(<a href="config.md#sui_config">config</a>: &<b>mut</b> <a href="config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -311,41 +312,41 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="config.md#0x2_config_remove_for_next_epoch">remove_for_next_epoch</a>&lt;
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>) <b>fun</b> <a href="config.md#sui_config_remove_for_next_epoch">remove_for_next_epoch</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
 &gt;(
-    <a href="config.md#0x2_config">config</a>: &<b>mut</b> <a href="config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;,
+    <a href="config.md#sui_config">config</a>: &<b>mut</b> <a href="config.md#sui_config_Config">Config</a>&lt;WriteCap&gt;,
     _cap: &<b>mut</b> WriteCap,
     name: Name,
     ctx: &<b>mut</b> TxContext,
 ): Option&lt;Value&gt; {
     <b>let</b> epoch = ctx.epoch();
-    <b>if</b> (!field::exists_(&<a href="config.md#0x2_config">config</a>.id, name)) <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
-    <b>let</b> sobj: &<b>mut</b> <a href="config.md#0x2_config_Setting">Setting</a>&lt;Value&gt; = field::borrow_mut(&<b>mut</b> <a href="config.md#0x2_config">config</a>.id, name);
-    <b>let</b> <a href="config.md#0x2_config_SettingData">SettingData</a> {
+    <b>if</b> (!field::exists_(&<a href="config.md#sui_config">config</a>.id, name)) <b>return</b> option::none();
+    <b>let</b> sobj: &<b>mut</b> <a href="config.md#sui_config_Setting">Setting</a>&lt;Value&gt; = field::borrow_mut(&<b>mut</b> <a href="config.md#sui_config">config</a>.id, name);
+    <b>let</b> <a href="config.md#sui_config_SettingData">SettingData</a> {
         newer_value_epoch,
         newer_value,
         older_value_opt,
     } = sobj.data.extract();
     <b>let</b> (older_value_opt, removed_value) =
         <b>if</b> (epoch &gt; newer_value_epoch) {
-            // <b>if</b> the `newer_value` is for a previous epoch, <b>move</b> it <b>to</b> `older_value_opt`
-            (<b>move</b> newer_value, <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>())
+            // <b>if</b> the `newer_value` is <b>for</b> a previous epoch, <b>move</b> it to `older_value_opt`
+            (<b>move</b> newer_value, option::none())
         } <b>else</b> {
             // the current epoch cannot be less than the `newer_value_epoch`
             <b>assert</b>!(epoch == newer_value_epoch);
             (<b>move</b> older_value_opt, <b>move</b> newer_value)
         };
     <b>let</b> older_value_opt_is_none = older_value_opt.is_none();
-    sobj.data.fill(<a href="config.md#0x2_config_SettingData">SettingData</a> {
+    sobj.data.fill(<a href="config.md#sui_config_SettingData">SettingData</a> {
         newer_value_epoch: epoch,
-        newer_value: <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>(),
+        newer_value: option::none(),
         older_value_opt,
     });
     <b>if</b> (older_value_opt_is_none) {
-        field::remove&lt;_, <a href="config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<b>mut</b> <a href="config.md#0x2_config">config</a>.id, name);
+        field::remove&lt;_, <a href="config.md#sui_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<b>mut</b> <a href="config.md#sui_config">config</a>.id, name);
     };
     removed_value
 }
@@ -355,13 +356,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_exists_with_type"></a>
+<a name="sui_config_exists_with_type"></a>
 
 ## Function `exists_with_type`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="config.md#0x2_config_exists_with_type">exists_with_type</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="config.md#0x2_config">config</a>: &<a href="config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, name: Name): bool
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>)<b>fun</b> exists_with_typeWriteCap, Name, Value(<a href="config.md#sui_config">config</a>: &<a href="config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, name: Name): bool
 </code></pre>
 
 
@@ -370,15 +371,15 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="config.md#0x2_config_exists_with_type">exists_with_type</a>&lt;
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>) <b>fun</b> <a href="config.md#sui_config_exists_with_type">exists_with_type</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
 &gt;(
-    <a href="config.md#0x2_config">config</a>: &<a href="config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;,
+    <a href="config.md#sui_config">config</a>: &<a href="config.md#sui_config_Config">Config</a>&lt;WriteCap&gt;,
     name: Name,
 ): bool {
-    field::exists_with_type&lt;_, <a href="config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<a href="config.md#0x2_config">config</a>.id, name)
+    field::exists_with_type&lt;_, <a href="config.md#sui_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<a href="config.md#sui_config">config</a>.id, name)
 }
 </code></pre>
 
@@ -386,13 +387,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_exists_with_type_for_next_epoch"></a>
+<a name="sui_config_exists_with_type_for_next_epoch"></a>
 
 ## Function `exists_with_type_for_next_epoch`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="config.md#0x2_config_exists_with_type_for_next_epoch">exists_with_type_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="config.md#0x2_config">config</a>: &<a href="config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, name: Name, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>)<b>fun</b> exists_with_type_for_next_epochWriteCap, Name, Value(<a href="config.md#sui_config">config</a>: &<a href="config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, name: Name, ctx: &<a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -401,20 +402,20 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="config.md#0x2_config_exists_with_type_for_next_epoch">exists_with_type_for_next_epoch</a>&lt;
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>) <b>fun</b> <a href="config.md#sui_config_exists_with_type_for_next_epoch">exists_with_type_for_next_epoch</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
 &gt;(
-    <a href="config.md#0x2_config">config</a>: &<a href="config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;,
+    <a href="config.md#sui_config">config</a>: &<a href="config.md#sui_config_Config">Config</a>&lt;WriteCap&gt;,
     name: Name,
     ctx: &TxContext,
 ): bool {
-    field::exists_with_type&lt;_, <a href="config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<a href="config.md#0x2_config">config</a>.id, name) && {
+    field::exists_with_type&lt;_, <a href="config.md#sui_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<a href="config.md#sui_config">config</a>.id, name) && {
         <b>let</b> epoch = ctx.epoch();
-        <b>let</b> sobj: &<a href="config.md#0x2_config_Setting">Setting</a>&lt;Value&gt; = field::borrow(&<a href="config.md#0x2_config">config</a>.id, name);
-        epoch == sobj.data.<a href="borrow.md#0x2_borrow">borrow</a>().newer_value_epoch &&
-        sobj.data.<a href="borrow.md#0x2_borrow">borrow</a>().newer_value.is_some()
+        <b>let</b> sobj: &<a href="config.md#sui_config_Setting">Setting</a>&lt;Value&gt; = field::borrow(&<a href="config.md#sui_config">config</a>.id, name);
+        epoch == sobj.data.<a href="borrow.md#sui_borrow">borrow</a>().newer_value_epoch &&
+        sobj.data.<a href="borrow.md#sui_borrow">borrow</a>().newer_value.is_some()
     }
 }
 </code></pre>
@@ -423,13 +424,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_borrow_for_next_epoch_mut"></a>
+<a name="sui_config_borrow_for_next_epoch_mut"></a>
 
 ## Function `borrow_for_next_epoch_mut`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="config.md#0x2_config_borrow_for_next_epoch_mut">borrow_for_next_epoch_mut</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="config.md#0x2_config">config</a>: &<b>mut</b> <a href="config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): &<b>mut</b> Value
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>)<b>fun</b> borrow_for_next_epoch_mutWriteCap, Name, Value(<a href="config.md#sui_config">config</a>: &<b>mut</b> <a href="config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): &<b>mut</b> Value
 </code></pre>
 
 
@@ -438,21 +439,21 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="config.md#0x2_config_borrow_for_next_epoch_mut">borrow_for_next_epoch_mut</a>&lt;
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>) <b>fun</b> <a href="config.md#sui_config_borrow_for_next_epoch_mut">borrow_for_next_epoch_mut</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
 &gt;(
-    <a href="config.md#0x2_config">config</a>: &<b>mut</b> <a href="config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;,
+    <a href="config.md#sui_config">config</a>: &<b>mut</b> <a href="config.md#sui_config_Config">Config</a>&lt;WriteCap&gt;,
     _cap: &<b>mut</b> WriteCap,
     name: Name,
     ctx: &<b>mut</b> TxContext,
 ): &<b>mut</b> Value {
     <b>let</b> epoch = ctx.epoch();
-    <b>let</b> sobj: &<b>mut</b> <a href="config.md#0x2_config_Setting">Setting</a>&lt;Value&gt; = field::borrow_mut(&<b>mut</b> <a href="config.md#0x2_config">config</a>.id, name);
+    <b>let</b> sobj: &<b>mut</b> <a href="config.md#sui_config_Setting">Setting</a>&lt;Value&gt; = field::borrow_mut(&<b>mut</b> <a href="config.md#sui_config">config</a>.id, name);
     <b>let</b> data = sobj.data.borrow_mut();
-    <b>assert</b>!(data.newer_value_epoch == epoch, <a href="config.md#0x2_config_ENotSetForEpoch">ENotSetForEpoch</a>);
-    <b>assert</b>!(data.newer_value.is_some(), <a href="config.md#0x2_config_ENotSetForEpoch">ENotSetForEpoch</a>);
+    <b>assert</b>!(data.newer_value_epoch == epoch, <a href="config.md#sui_config_ENotSetForEpoch">ENotSetForEpoch</a>);
+    <b>assert</b>!(data.newer_value.is_some(), <a href="config.md#sui_config_ENotSetForEpoch">ENotSetForEpoch</a>);
     data.newer_value.borrow_mut()
 }
 </code></pre>
@@ -461,13 +462,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_read_setting_for_next_epoch"></a>
+<a name="sui_config_read_setting_for_next_epoch"></a>
 
 ## Function `read_setting_for_next_epoch`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="config.md#0x2_config_read_setting_for_next_epoch">read_setting_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="config.md#0x2_config">config</a>: &<a href="config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, name: Name): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>)<b>fun</b> read_setting_for_next_epochWriteCap, Name, Value(<a href="config.md#sui_config">config</a>: &<a href="config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, name: Name): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -476,17 +477,17 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="config.md#0x2_config_read_setting_for_next_epoch">read_setting_for_next_epoch</a>&lt;
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>) <b>fun</b> <a href="config.md#sui_config_read_setting_for_next_epoch">read_setting_for_next_epoch</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
 &gt;(
-    <a href="config.md#0x2_config">config</a>: &<a href="config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;,
+    <a href="config.md#sui_config">config</a>: &<a href="config.md#sui_config_Config">Config</a>&lt;WriteCap&gt;,
     name: Name,
 ): Option&lt;Value&gt; {
-    <b>if</b> (!field::exists_with_type&lt;_, <a href="config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<a href="config.md#0x2_config">config</a>.id, name)) <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
-    <b>let</b> sobj: &<a href="config.md#0x2_config_Setting">Setting</a>&lt;Value&gt; = field::borrow(&<a href="config.md#0x2_config">config</a>.id, name);
-    <b>let</b> data = sobj.data.<a href="borrow.md#0x2_borrow">borrow</a>();
+    <b>if</b> (!field::exists_with_type&lt;_, <a href="config.md#sui_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<a href="config.md#sui_config">config</a>.id, name)) <b>return</b> option::none();
+    <b>let</b> sobj: &<a href="config.md#sui_config_Setting">Setting</a>&lt;Value&gt; = field::borrow(&<a href="config.md#sui_config">config</a>.id, name);
+    <b>let</b> data = sobj.data.<a href="borrow.md#sui_borrow">borrow</a>();
     data.newer_value
 }
 </code></pre>
@@ -495,13 +496,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_read_setting"></a>
+<a name="sui_config_read_setting"></a>
 
 ## Function `read_setting`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="config.md#0x2_config_read_setting">read_setting</a>&lt;Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="config.md#0x2_config">config</a>: <a href="object.md#0x2_object_ID">object::ID</a>, name: Name, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>)<b>fun</b> read_settingName, Value(<a href="config.md#sui_config">config</a>: <a href="object.md#sui_object_ID">sui::object::ID</a>, name: Name, ctx: &<a href="tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -510,15 +511,15 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="config.md#0x2_config_read_setting">read_setting</a>&lt;Name: <b>copy</b> + drop + store, Value: <b>copy</b> + drop + store&gt;(
-    <a href="config.md#0x2_config">config</a>: ID,
+<pre><code><b>public</b>(<a href="package.md#sui_package">package</a>) <b>fun</b> <a href="config.md#sui_config_read_setting">read_setting</a>&lt;Name: <b>copy</b> + drop + store, Value: <b>copy</b> + drop + store&gt;(
+    <a href="config.md#sui_config">config</a>: ID,
     name: Name,
     ctx: &TxContext,
 ): Option&lt;Value&gt; {
-    <b>use</b> sui::dynamic_field::Field;
-    <b>let</b> config_id = <a href="config.md#0x2_config">config</a>.to_address();
+    <b>use</b> <a href="dynamic_field.md#sui_dynamic_field_Field">sui::dynamic_field::Field</a>;
+    <b>let</b> config_id = <a href="config.md#sui_config">config</a>.to_address();
     <b>let</b> setting_df = field::hash_type_and_key(config_id, name);
-    <a href="config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;Field&lt;Name, <a href="config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;&gt;, <a href="config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;, <a href="config.md#0x2_config_SettingData">SettingData</a>&lt;Value&gt;, Value&gt;(
+    <a href="config.md#sui_config_read_setting_impl">read_setting_impl</a>&lt;Field&lt;Name, <a href="config.md#sui_config_Setting">Setting</a>&lt;Value&gt;&gt;, <a href="config.md#sui_config_Setting">Setting</a>&lt;Value&gt;, <a href="config.md#sui_config_SettingData">SettingData</a>&lt;Value&gt;, Value&gt;(
         config_id,
         setting_df,
         ctx.epoch(),
@@ -530,13 +531,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_read_setting_impl"></a>
+<a name="sui_config_read_setting_impl"></a>
 
 ## Function `read_setting_impl`
 
 
 
-<pre><code><b>fun</b> <a href="config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;FieldSettingValue: key, SettingValue: store, SettingDataValue: store, Value: <b>copy</b>, drop, store&gt;(<a href="config.md#0x2_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+<pre><code><b>fun</b> read_setting_implFieldSettingValue, SettingValue, SettingDataValue, Value(<a href="config.md#sui_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: u64): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -545,15 +546,15 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;
+<pre><code><b>native</b> <b>fun</b> <a href="config.md#sui_config_read_setting_impl">read_setting_impl</a>&lt;
     FieldSettingValue: key,
     SettingValue: store,
     SettingDataValue: store,
     Value: <b>copy</b> + drop + store,
 &gt;(
-    <a href="config.md#0x2_config">config</a>: <b>address</b>,
+    <a href="config.md#sui_config">config</a>: <b>address</b>,
     name: <b>address</b>,
-    current_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    current_epoch: u64,
 ): Option&lt;Value&gt;;
 </code></pre>
 

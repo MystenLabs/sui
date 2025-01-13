@@ -6,7 +6,7 @@ use crate::{
         ast::{self as E, ModuleIdent},
         name_validation::ModuleMemberKind,
     },
-    parser::ast::{self as P},
+    parser::ast::{self as P, DocComment},
     shared::{unique_map::UniqueMap, *},
 };
 use move_ir_types::location::*;
@@ -73,6 +73,7 @@ pub struct AliasMap {
 }
 
 pub struct ParserExplicitUseFun {
+    pub doc: DocComment,
     pub loc: Loc,
     pub attributes: E::Attributes,
     pub is_public: Option<Loc>,

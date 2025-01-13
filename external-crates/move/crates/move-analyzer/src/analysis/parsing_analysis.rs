@@ -206,12 +206,12 @@ impl<'a> ParsingAnalysisContext<'a> {
                     });
 
                     match &sdef.fields {
-                        P::StructFields::Named(v) => v.iter().for_each(|(x, t)| {
+                        P::StructFields::Named(v) => v.iter().for_each(|(_, x, t)| {
                             self.field_defn(x);
                             self.type_symbols(t)
                         }),
                         P::StructFields::Positional(v) => {
-                            v.iter().for_each(|t| self.type_symbols(t))
+                            v.iter().for_each(|(_, t)| self.type_symbols(t))
                         }
                         P::StructFields::Native(_) => (),
                     }
@@ -237,12 +237,12 @@ impl<'a> ParsingAnalysisContext<'a> {
                     for variant in variants {
                         let P::VariantDefinition { fields, .. } = variant;
                         match fields {
-                            P::VariantFields::Named(v) => v.iter().for_each(|(x, t)| {
+                            P::VariantFields::Named(v) => v.iter().for_each(|(_, x, t)| {
                                 self.field_defn(x);
                                 self.type_symbols(t)
                             }),
                             P::VariantFields::Positional(v) => {
-                                v.iter().for_each(|t| self.type_symbols(t))
+                                v.iter().for_each(|(_, t)| self.type_symbols(t))
                             }
                             P::VariantFields::Empty => (),
                         }

@@ -29,41 +29,12 @@ pub const KEYWORDS: &[&str] = &[
     "true",
     "use",
     "while",
+    "enum",
+    "for",
 ];
 
-pub const CONTEXTUAL_KEYWORDS: &[&str] = &[
-    "aborts_if",
-    "aborts_with",
-    "address",
-    "apply",
-    "assume",
-    "axiom",
-    "choose",
-    "decreases",
-    "emits",
-    "ensures",
-    "except",
-    "forall",
-    "global",
-    "include",
-    "internal",
-    "local",
-    "min",
-    "modifies",
-    "mut",
-    "phantom",
-    "post",
-    "pragma",
-    "requires",
-    "Self",
-    "schema",
-    "succeeds_if",
-    "to",
-    "update",
-    "where",
-    "with",
-];
+pub const CONTEXTUAL_KEYWORDS: &[&str] = &["address", "mut", "phantom", "Self", "entry", "macro"];
 
 pub const PRIMITIVE_TYPES: &[&str] = &["u8", "u16", "u32", "u64", "u128", "u256", "bool", "vector"];
 
-pub const BUILTINS: &[&str] = &["assert", "freeze", "old"];
+pub const BUILTINS: &[&str] = &["assert", "freeze"];
