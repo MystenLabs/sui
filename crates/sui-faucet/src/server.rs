@@ -158,39 +158,40 @@ impl RequestsManager {
             ));
         }
 
-        // Check if the IP address is already in the map
-        let token_entry = self.data.get_mut(&addr.ip().to_string());
-
-        if let Some(mut token_entry) = token_entry {
-            // Check IP address expiration time, maybe it is "just" before cleanup
-            if token_entry.timestamp.elapsed().as_secs() > self.reset_time_interval_secs {
-                token_entry.timestamp = Instant::now();
-                token_entry.requests_used = 0;
-            }
-
-            // Check request limit
-            if token_entry.requests_used >= self.max_requests_per_ip {
-                return Err((
-                    StatusCode::TOO_MANY_REQUESTS,
-                    FaucetError::TooManyRequests(format!(
-                        "You can request a new token in {}",
-                        secs_to_human_readable(
-                            self.reset_time_interval_secs
-                                - token_entry.timestamp.elapsed().as_secs()
-                        )
-                    )),
-                ));
-            }
-            // Increment request count
-            token_entry.requests_used += 1;
-        } else {
-            // Create new token entry
-            let token_info = RequestInfo {
+        let mut error = None;
+        self.data
+            .entry(addr.ip().to_string())
+            .and_modify(|token| {
+                if token.timestamp.elapsed().as_secs() >= self.reset_time_interval_secs {
+                    token.timestamp = Instant::now();
+                    token.requests_used = 1;
+                }
+                // reached the token limit and the reset time interval has not passed
+                else if token.requests_used >= self.max_requests_per_ip
+                    && token.timestamp.elapsed().as_secs() < self.reset_time_interval_secs
+                {
+                    error = Some((
+                        StatusCode::TOO_MANY_REQUESTS,
+                        FaucetError::TooManyRequests(format!(
+                            "You can request a new token in {}",
+                            secs_to_human_readable(
+                                self.reset_time_interval_secs - token.timestamp.elapsed().as_secs()
+                            )
+                        )),
+                    ));
+                } else {
+                    token.requests_used += 1;
+                }
+            })
+            .or_insert_with(|| RequestInfo {
                 timestamp: Instant::now(),
                 requests_used: 1,
-            };
-            self.data.insert(addr.ip().to_string(), token_info);
+            });
+
+        if let Some((status_code, faucet_error)) = error {
+            return Err((status_code, faucet_error));
         }
+
         Ok(())
     }
 
