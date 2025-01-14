@@ -60,7 +60,7 @@ impl TransactionOutputs {
         let markers: Vec<_> = {
             let received = received_objects.clone().map(|objref| {
                 (
-                    // TODO-DNS is it safe to assume that received objects are always fastpath?
+                    // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
                     FullObjectKey::new(FullObjectID::new(objref.0, None), objref.1),
                     MarkerValue::Received,
                 )

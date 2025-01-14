@@ -307,8 +307,6 @@ pub trait ObjectCacheRead: Send + Sync {
                 input_key
             );
             // If the key exists at the specified version, then the object is available.
-            // TODO-DNS does this need to be inverted to check markers first, so that it doesn't incorrectly load
-            // a fastpath object value for a tx that's expecting a shared object at the same version?
             if has_key {
                 versioned_results.push((*idx, true))
             } else if receiving_objects.contains(input_key) {
@@ -776,7 +774,7 @@ macro_rules! implement_storage_traits {
                 // transaction replay due to possible reordering of transactions during replay.
                 if recv_object.owner != Owner::AddressOwner((*owner).into())
                     || self.have_received_object_at_version(
-                        // TODO-DNS Is it safe to assume receiving objects are always fastpath objects?
+                        // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
                         FullObjectKey::new(
                             FullObjectID::new(*receiving_object_id, None),
                             receive_object_at_version,

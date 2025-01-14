@@ -461,7 +461,7 @@ impl TransactionManager {
                     cert.data().intent_message().value.receiving_objects();
                 for entry in receiving_object_entries {
                     let key = InputKey::VersionedObject {
-                        // TODO-DNS Is it safe to assume receiving objects are always fastpath objects?
+                        // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
                         id: FullObjectID::new(entry.0, None),
                         version: entry.1,
                     };

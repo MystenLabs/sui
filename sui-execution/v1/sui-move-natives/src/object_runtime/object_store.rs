@@ -95,7 +95,7 @@ impl<'a> Inner<'a> {
                 &child,
                 version,
                 self.current_epoch_id,
-                self.local_config.use_object_per_epoch_marker_table_v2,
+                false, // invariant verified in LocalProtocolConfig::new
             )
             .map_err(|msg| {
                 PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))

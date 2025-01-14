@@ -534,6 +534,9 @@ impl From<&ObjectRef> for ObjectKey {
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct ConsensusObjectKey(pub ConsensusObjectSequenceKey, pub VersionNumber);
 
+/// FullObjectKey represents a unique object a specific version. For fastpath objects, this
+/// is the same as ObjectKey. For consensus objects, this includes the start version, which
+/// may change if an object is transferred out of and back into consensus.
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub enum FullObjectKey {
