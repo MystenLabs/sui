@@ -6,12 +6,9 @@ use super::types::timestamp_ms_to_proto;
 use super::TryFromProtoError;
 use tap::Pipe;
 
-#[rustfmt::skip]
-#[path = "generated/sui.node.v2.rs"]
-mod generated;
-pub use generated::*;
+pub mod v2 {
+    include!("generated/sui.node.v2.rs");
 
-mod file_descriptor_set {
     /// Byte encoded FILE_DESCRIPTOR_SET.
     pub const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!("generated/sui.node.v2.fds.bin");
 
@@ -26,7 +23,8 @@ mod file_descriptor_set {
         }
     }
 }
-pub use file_descriptor_set::FILE_DESCRIPTOR_SET;
+
+use v2::*;
 
 //
 // BalanceChange
@@ -1485,9 +1483,9 @@ impl TryFrom<&ExecuteTransactionResponse> for crate::types::ExecuteTransactionRe
 // EffectsFinality
 //
 
-impl From<crate::types::EffectsFinality> for crate::proto::node::EffectsFinality {
+impl From<crate::types::EffectsFinality> for crate::proto::node::v2::EffectsFinality {
     fn from(value: crate::types::EffectsFinality) -> Self {
-        use crate::proto::node::effects_finality::Finality;
+        use crate::proto::node::v2::effects_finality::Finality;
         use crate::types::EffectsFinality::*;
 
         let finality = match value {
@@ -1502,11 +1500,11 @@ impl From<crate::types::EffectsFinality> for crate::proto::node::EffectsFinality
     }
 }
 
-impl TryFrom<&crate::proto::node::EffectsFinality> for crate::types::EffectsFinality {
+impl TryFrom<&crate::proto::node::v2::EffectsFinality> for crate::types::EffectsFinality {
     type Error = crate::proto::TryFromProtoError;
 
-    fn try_from(value: &crate::proto::node::EffectsFinality) -> Result<Self, Self::Error> {
-        use crate::proto::node::effects_finality::Finality;
+    fn try_from(value: &crate::proto::node::v2::EffectsFinality) -> Result<Self, Self::Error> {
+        use crate::proto::node::v2::effects_finality::Finality;
 
         match value
             .finality

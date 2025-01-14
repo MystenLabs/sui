@@ -3,27 +3,22 @@
 
 use super::TryFromProtoError;
 
-#[rustfmt::skip]
-#[path = "../generated/sui.types.rs"]
-pub mod generated;
-pub use generated::*;
+// Include the generated proto definitions
+include!("../generated/sui.types.rs");
 
-mod file_descriptor_set {
-    /// Byte encoded FILE_DESCRIPTOR_SET.
-    pub const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!("../generated/sui.types.fds.bin");
+/// Byte encoded FILE_DESCRIPTOR_SET.
+pub const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!("../generated/sui.types.fds.bin");
 
-    #[cfg(test)]
-    mod tests {
-        use super::FILE_DESCRIPTOR_SET;
-        use prost::Message as _;
+#[cfg(test)]
+mod tests {
+    use super::FILE_DESCRIPTOR_SET;
+    use prost::Message as _;
 
-        #[test]
-        fn file_descriptor_set_is_valid() {
-            prost_types::FileDescriptorSet::decode(FILE_DESCRIPTOR_SET).unwrap();
-        }
+    #[test]
+    fn file_descriptor_set_is_valid() {
+        prost_types::FileDescriptorSet::decode(FILE_DESCRIPTOR_SET).unwrap();
     }
 }
-pub use file_descriptor_set::FILE_DESCRIPTOR_SET;
 
 mod checkpoint;
 mod effects;
