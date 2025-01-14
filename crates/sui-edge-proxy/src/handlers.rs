@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::PeerConfig;
+use crate::config::{LoggingConfig, PeerConfig};
 use crate::metrics::AppMetrics;
 use axum::{
     body::Body,
@@ -11,7 +11,9 @@ use axum::{
     response::Response,
 };
 use bytes::Bytes;
-use std::time::Instant;
+use rand::Rng;
+use std::{sync::Arc, time::Instant};
+use tokio::sync::Mutex;
 use tracing::{debug, warn};
 
 #[derive(Debug)]
@@ -35,6 +37,8 @@ pub struct AppState {
     read_peer: PeerConfig,
     execution_peer: PeerConfig,
     metrics: AppMetrics,
+    logging_config: LoggingConfig,
+    log_file_lock: Arc<Mutex<()>>,
 }
 
 impl AppState {
@@ -43,12 +47,15 @@ impl AppState {
         read_peer: PeerConfig,
         execution_peer: PeerConfig,
         metrics: AppMetrics,
+        logging_config: LoggingConfig,
     ) -> Self {
         Self {
             client,
             read_peer,
             execution_peer,
             metrics,
+            logging_config,
+            log_file_lock: Arc::new(Mutex::new(())),
         }
     }
 }
@@ -141,7 +148,7 @@ async fn proxy_request(
         .client
         .request(parts.method.clone(), target_url)
         .headers(headers)
-        .body(body_bytes);
+        .body(body_bytes.clone());
     debug!("Request builder: {:?}", request_builder);
 
     let upstream_start = Instant::now();
@@ -205,5 +212,30 @@ async fn proxy_request(
             resp.headers_mut().insert(name, value);
         }
     }
+
+    // Only log read requests, check sampling
+    if matches!(peer_type, PeerRole::Read) {
+        let rate = state.logging_config.read_request_sample_rate;
+        if rand::thread_rng().gen::<f64>() < rate {
+            let log_entry = format!(
+                "HEADERS: {:?}\nBODY: {:?}\nPEER_TYPE: {:?}\n\n",
+                parts.headers, body_bytes, peer_type
+            );
+
+            let _guard = state.log_file_lock.lock().await;
+            if let Err(e) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&state.logging_config.log_file_path)
+                .and_then(|mut file| {
+                    use std::io::Write;
+                    file.write_all(log_entry.as_bytes())
+                })
+            {
+                warn!("Failed to write read request log: {}", e);
+            }
+        }
+    }
+
     Ok(resp)
 }
