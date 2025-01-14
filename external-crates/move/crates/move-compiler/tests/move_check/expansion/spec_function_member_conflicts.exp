@@ -1,56 +1,123 @@
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:4:5
-  │  
-4 │ ╭     spec module {
-5 │ │         fun Foo(): bool { true }
-6 │ │     }
-  │ ╰─────^ Specification blocks are deprecated and are no longer used
+  │
+4 │     spec module {
+  │     ^^^^
+  │     │
+  │     Unexpected 'spec'
+  │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:4:17
+  │
+4 │     spec module {
+  │                 ^
+  │                 │
+  │                 Unexpected '{'
+  │                 Expected an address or an identifier
+
+error[E02004]: invalid 'module' declaration
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:10:8
+   │
+10 │ module X2 {
+   │        ^^ Invalid module declaration. The module does not have a specified address. Either declare it inside of an 'address <address> {' block or declare it with an address 'module <address>::X2''
+
+error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:11:5
-   │  
-11 │ ╭     spec module {
-12 │ │         fun Foo(): bool { true }
-13 │ │     }
-   │ ╰─────^ Specification blocks are deprecated and are no longer used
+   │
+11 │     spec module {
+   │     ^^^^
+   │     │
+   │     Unexpected 'spec'
+   │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
-warning[W00001]: DEPRECATED. will be removed
-   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:14:5
-   │  
-14 │ ╭     spec schema Foo<T> {
-15 │ │         ensures true;
-16 │ │     }
-   │ ╰─────^ Specification blocks are deprecated and are no longer used
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:11:17
+   │
+11 │     spec module {
+   │                 ^
+   │                 │
+   │                 Unexpected '{'
+   │                 Expected an address or an identifier
 
-warning[W00001]: DEPRECATED. will be removed
+error[E02004]: invalid 'module' declaration
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:19:8
+   │
+19 │ module X3 {
+   │        ^^ Invalid module declaration. The module does not have a specified address. Either declare it inside of an 'address <address> {' block or declare it with an address 'module <address>::X3''
+
+error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:20:5
-   │  
-20 │ ╭     spec module {
-21 │ │         fun Foo(): bool { true }
-22 │ │     }
-   │ ╰─────^ Specification blocks are deprecated and are no longer used
+   │
+20 │     spec module {
+   │     ^^^^
+   │     │
+   │     Unexpected 'spec'
+   │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:20:17
+   │
+20 │     spec module {
+   │                 ^
+   │                 │
+   │                 Unexpected '{'
+   │                 Expected an address or an identifier
+
+error[E02004]: invalid 'module' declaration
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:26:8
+   │
+26 │ module X4 {
+   │        ^^ Invalid module declaration. The module does not have a specified address. Either declare it inside of an 'address <address> {' block or declare it with an address 'module <address>::X4''
+
+error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:27:5
-   │  
-27 │ ╭     spec module {
-28 │ │         fun foo(): bool { true }
-29 │ │     }
-   │ ╰─────^ Specification blocks are deprecated and are no longer used
+   │
+27 │     spec module {
+   │     ^^^^
+   │     │
+   │     Unexpected 'spec'
+   │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:27:17
+   │
+27 │     spec module {
+   │                 ^
+   │                 │
+   │                 Unexpected '{'
+   │                 Expected an address or an identifier
+
+error[E02004]: invalid 'module' declaration
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:33:8
+   │
+33 │ module X5 {
+   │        ^^ Invalid module declaration. The module does not have a specified address. Either declare it inside of an 'address <address> {' block or declare it with an address 'module <address>::X5''
+
+error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:34:5
-   │  
-34 │ ╭     spec module {
-35 │ │         fun foo(): bool { true }
-36 │ │     }
-   │ ╰─────^ Specification blocks are deprecated and are no longer used
+   │
+34 │     spec module {
+   │     ^^^^
+   │     │
+   │     Unexpected 'spec'
+   │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
-warning[W00001]: DEPRECATED. will be removed
-   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:37:5
-   │  
-37 │ ╭     spec module {
-38 │ │         fun foo(): bool { true }
-39 │ │     }
-   │ ╰─────^ Specification blocks are deprecated and are no longer used
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:34:17
+   │
+34 │     spec module {
+   │                 ^
+   │                 │
+   │                 Unexpected '{'
+   │                 Expected an address or an identifier
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:37:17
+   │
+37 │     spec module {
+   │                 ^
+   │                 │
+   │                 Unexpected '{'
+   │                 Expected an address or an identifier
 

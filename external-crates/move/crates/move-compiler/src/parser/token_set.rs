@@ -22,15 +22,7 @@ pub struct TokenSet {
 
 const MOVE_2024_KEYWORDS: &[Tok] = &[Tok::Mut, Tok::Match, Tok::For, Tok::Enum, Tok::Type];
 
-const MODULE_MEMBER_TOKENS: &[Tok] = &[
-    Tok::Fun,
-    Tok::Struct,
-    Tok::Use,
-    Tok::Const,
-    Tok::Friend,
-    Tok::Spec,
-    Tok::Invariant,
-];
+const MODULE_MEMBER_TOKENS: &[Tok] = &[Tok::Fun, Tok::Struct, Tok::Use, Tok::Const, Tok::Friend];
 
 const MEMBER_VISIBILITY_TOKENS: &[Tok] = &[Tok::Public];
 
