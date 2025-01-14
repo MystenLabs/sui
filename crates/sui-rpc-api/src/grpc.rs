@@ -46,11 +46,11 @@ impl Services {
 }
 
 #[tonic::async_trait]
-impl crate::proto::node::node_service_server::NodeService for crate::RpcService {
+impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcService {
     async fn get_node_info(
         &self,
-        _request: tonic::Request<crate::proto::node::GetNodeInfoRequest>,
-    ) -> Result<tonic::Response<crate::proto::node::GetNodeInfoResponse>, tonic::Status> {
+        _request: tonic::Request<crate::proto::node::v2::GetNodeInfoRequest>,
+    ) -> Result<tonic::Response<crate::proto::node::v2::GetNodeInfoResponse>, tonic::Status> {
         self.get_node_info()
             .map(Into::into)
             .map(tonic::Response::new)
@@ -59,12 +59,14 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn get_committee(
         &self,
-        request: tonic::Request<crate::proto::node::GetCommitteeRequest>,
-    ) -> std::result::Result<tonic::Response<crate::proto::node::GetCommitteeResponse>, tonic::Status>
-    {
+        request: tonic::Request<crate::proto::node::v2::GetCommitteeRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2::GetCommitteeResponse>,
+        tonic::Status,
+    > {
         let committee = self.get_committee(request.into_inner().epoch)?;
 
-        crate::proto::node::GetCommitteeResponse {
+        crate::proto::node::v2::GetCommitteeResponse {
             committee: Some(committee.into()),
         }
         .pipe(tonic::Response::new)
@@ -73,9 +75,11 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn get_object(
         &self,
-        request: tonic::Request<crate::proto::node::GetObjectRequest>,
-    ) -> std::result::Result<tonic::Response<crate::proto::node::GetObjectResponse>, tonic::Status>
-    {
+        request: tonic::Request<crate::proto::node::v2::GetObjectRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2::GetObjectResponse>,
+        tonic::Status,
+    > {
         let request = request.into_inner();
         let object_id = request
             .object_id
@@ -94,9 +98,9 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn get_transaction(
         &self,
-        request: tonic::Request<crate::proto::node::GetTransactionRequest>,
+        request: tonic::Request<crate::proto::node::v2::GetTransactionRequest>,
     ) -> std::result::Result<
-        tonic::Response<crate::proto::node::GetTransactionResponse>,
+        tonic::Response<crate::proto::node::v2::GetTransactionResponse>,
         tonic::Status,
     > {
         let request = request.into_inner();
@@ -121,9 +125,9 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn get_checkpoint(
         &self,
-        request: tonic::Request<crate::proto::node::GetCheckpointRequest>,
+        request: tonic::Request<crate::proto::node::v2::GetCheckpointRequest>,
     ) -> std::result::Result<
-        tonic::Response<crate::proto::node::GetCheckpointResponse>,
+        tonic::Response<crate::proto::node::v2::GetCheckpointResponse>,
         tonic::Status,
     > {
         let request = request.into_inner();
@@ -155,9 +159,9 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn get_full_checkpoint(
         &self,
-        request: tonic::Request<crate::proto::node::GetFullCheckpointRequest>,
+        request: tonic::Request<crate::proto::node::v2::GetFullCheckpointRequest>,
     ) -> std::result::Result<
-        tonic::Response<crate::proto::node::GetFullCheckpointResponse>,
+        tonic::Response<crate::proto::node::v2::GetFullCheckpointResponse>,
         tonic::Status,
     > {
         let request = request.into_inner();
@@ -195,9 +199,9 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn execute_transaction(
         &self,
-        request: tonic::Request<crate::proto::node::ExecuteTransactionRequest>,
+        request: tonic::Request<crate::proto::node::v2::ExecuteTransactionRequest>,
     ) -> std::result::Result<
-        tonic::Response<crate::proto::node::ExecuteTransactionResponse>,
+        tonic::Response<crate::proto::node::v2::ExecuteTransactionResponse>,
         tonic::Status,
     > {
         let request = request.into_inner();
