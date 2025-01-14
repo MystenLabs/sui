@@ -18,6 +18,8 @@ import {
     Runtime,
     RuntimeEvents,
     RuntimeValueType,
+    IRuntimeVariableLoc,
+    IRuntimeGlobalLoc,
     IRuntimeVariableScope,
     CompoundType,
     IRuntimeRefValue,
@@ -296,32 +298,48 @@ export class MoveDebugSession extends LoggingDebugSession {
         name: string,
         type?: string
     ): DebugProtocol.Variable {
-        const frameID = value.loc.frameID;
-        const localIndex = value.loc.localIndex;
+        const indexedLoc = value.indexedLoc;
         const runtimeStack = this.runtime.stack();
-        const frame = runtimeStack.frames.find(frame => frame.id === frameID);
-        if (!frame) {
-            throw new Error('No frame found for id '
-                + frameID
-                + ' when converting ref value for local index '
-                + localIndex);
-        }
-        // a local will be in one of the scopes at a position corresponding to its local index
-        let local = undefined;
-        for (const scope of frame.locals) {
-            local = scope[localIndex];
-            if (local) {
-                break;
+        if ('globalIndex' in indexedLoc.loc) {
+            // global location
+            const globalValue = runtimeStack.globals.get(indexedLoc.loc.globalIndex);
+            if (!globalValue) {
+                throw new Error('No global found for index '
+                    + indexedLoc.loc.globalIndex
+                    + ' when converting ref value ');
             }
+            const indexPath = [...indexedLoc.indexPath];
+            return this.convertRuntimeValue(globalValue, name, indexPath, type);
+        } else if ('frameID' in indexedLoc.loc && 'localIndex' in indexedLoc.loc) {
+            // local variable
+            const frameID = indexedLoc.loc.frameID;
+            const localIndex = indexedLoc.loc.localIndex;
+            const frame = runtimeStack.frames.find(frame => frame.id === frameID);
+            if (!frame) {
+                throw new Error('No frame found for id '
+                    + frameID
+                    + ' when converting ref value for local index '
+                    + localIndex);
+            }
+            // a local will be in one of the scopes at a position corresponding to its local index
+            let local = undefined;
+            for (const scope of frame.locals) {
+                local = scope[localIndex];
+                if (local) {
+                    break;
+                }
+            }
+            if (!local) {
+                throw new Error('No local found for index '
+                    + localIndex
+                    + ' when converting ref value for frame id '
+                    + frameID);
+            }
+            const indexPath = [...indexedLoc.indexPath];
+            return this.convertRuntimeValue(local.value, name, indexPath, type);
+        } else {
+            throw new Error('Invalid runtime location');
         }
-        if (!local) {
-            throw new Error('No local found for index '
-                + localIndex
-                + ' when converting ref value for frame id '
-                + frameID);
-        }
-        const indexPath = [...value.loc.indexPath];
-        return this.convertRuntimeValue(local.value, name, indexPath, type);
     }
 
     /**

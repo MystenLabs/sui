@@ -1,11 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Range;
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{Context, Result};
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_framework::{
+    models::cp_sequence_numbers::tx_interval,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_indexer_alt_schema::{
     schema::tx_balance_changes,
     transactions::{BalanceChange, StoredTxBalanceChange},
@@ -64,6 +69,23 @@ impl Handler for TxBalanceChanges {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    async fn prune(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut db::Connection<'_>,
+    ) -> Result<usize> {
+        let Range {
+            start: from_tx,
+            end: to_tx,
+        } = tx_interval(conn, from..to_exclusive).await?;
+        let filter = tx_balance_changes::table.filter(
+            tx_balance_changes::tx_sequence_number.between(from_tx as i64, to_tx as i64 - 1),
+        );
+
+        Ok(diesel::delete(filter).execute(conn).await?)
     }
 }
 

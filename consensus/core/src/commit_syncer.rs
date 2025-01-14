@@ -38,6 +38,7 @@ use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
 use rand::{prelude::SliceRandom as _, rngs::ThreadRng};
 use tokio::{
+    runtime::Handle,
     sync::oneshot,
     task::{JoinHandle, JoinSet},
     time::{sleep, MissedTickBehavior},
@@ -499,12 +500,20 @@ impl<C: NetworkClient> CommitSyncer<C> {
         // 2. Verify the response contains blocks that can certify the last returned commit,
         // and the returned commits are chained by digest, so earlier commits are certified
         // as well.
-        let commits = inner.verify_commits(
-            target_authority,
-            commit_range,
-            serialized_commits,
-            serialized_blocks,
-        )?;
+        let commits = Handle::current()
+            .spawn_blocking({
+                let inner = inner.clone();
+                move || {
+                    inner.verify_commits(
+                        target_authority,
+                        commit_range,
+                        serialized_commits,
+                        serialized_blocks,
+                    )
+                }
+            })
+            .await
+            .expect("Spawn blocking should not fail")?;
 
         // 3. Fetch blocks referenced by the commits, from the same authority.
         let block_refs: Vec<_> = commits.iter().flat_map(|c| c.blocks()).cloned().collect();

@@ -146,7 +146,7 @@ impl Parameters {
         if cfg!(msim) {
             800
         } else {
-            2000
+            4000
         }
     }
 

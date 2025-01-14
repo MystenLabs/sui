@@ -897,7 +897,7 @@ Examine the `updateConstant` method, which is used to update constants. This met
 - An `expectedValue` that contains the current value of the constant.
 - An `expectedType` that contains the current type of the constant.
 
-The last two arguments are requited to minimize the risk of accidentally updating the wrong constant since this library is directly manipulating complied bytecode, which is quite dangerous.
+The last two arguments are required to minimize the risk of accidentally updating the wrong constant since this library is directly manipulating complied bytecode, which is quite dangerous.
 
 Additionally, the `changeIdentifiers` method updates identifiers, which in our case are the module name and the struct name. This method takes a JSON object as an argument with keys of the current identifier names in the module and values being the desired names you want to change them into.
 

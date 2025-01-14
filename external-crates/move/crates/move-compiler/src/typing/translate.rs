@@ -3980,6 +3980,7 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             attributes,
             defined_loc,
             signature: _,
+            value: _,
         } = context.constant_info(module_ident, constant_name);
         const_name = Some((*defined_loc, *constant_name));
         let has_error_annotation =

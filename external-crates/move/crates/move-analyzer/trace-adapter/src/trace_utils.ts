@@ -7,9 +7,12 @@ import {
     IRuntimeCompoundValue,
     RuntimeValueType,
     IRuntimeVariableLoc,
+    IRuntimeGlobalLoc,
+    IRuntimeLoc,
     IRuntimeRefValue
 } from './runtime';
 import { ISourceMap, IFileLoc, IFileInfo, ILoc, ISourceMapFunction } from './source_map_utils';
+import { logger } from '@vscode/debugadapter';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -116,7 +119,12 @@ interface JSONTraceIndexedLocation {
     Indexed: [JSONTraceLocalLocation, number];
 }
 
-type JSONTraceLocation = JSONTraceLocalLocation | JSONTraceIndexedLocation;
+interface JSONTraceGlobalLocation {
+    Global: number;
+}
+
+
+type JSONTraceLocation = JSONTraceLocalLocation | JSONTraceIndexedLocation | JSONTraceGlobalLocation;
 
 interface JSONTraceWriteEffect {
     location: JSONTraceLocation;
@@ -145,11 +153,18 @@ interface JSONTracePopEffect {
     };
 }
 
+interface JSONDataLoadEffect {
+    ref_type: JSONTraceRefType;
+    location: JSONTraceLocation;
+    snapshot: JSONTraceRuntimeValueType;
+}
+
 interface JSONTraceEffect {
     Push?: JSONTracePushEffect;
     Pop?: JSONTracePopEffect;
     Write?: JSONTraceWriteEffect;
     Read?: JSONTraceReadEffect;
+    DataLoad?: JSONDataLoadEffect;
     ExecutionError?: string;
 
 }
@@ -238,6 +253,7 @@ export type TraceEvent =
  */
 export enum TraceEffectKind {
     Write = 'Write',
+    DataLoad = 'DataLoad',
     ExecutionError = 'ExecutionError'
     // TODO: other effect types
 }
@@ -246,7 +262,7 @@ export enum TraceEffectKind {
  * Effect of an instruction.
  */
 export type EventEffect =
-    | { type: TraceEffectKind.Write, loc: IRuntimeVariableLoc, value: RuntimeValueType }
+    | { type: TraceEffectKind.Write, indexedLoc: IRuntimeLoc, value: RuntimeValueType }
     | { type: TraceEffectKind.ExecutionError, msg: string };
 
 /**
@@ -513,31 +529,37 @@ export function readTrace(
             localLifetimeEndsMax.set(nonInlinedFrameID, lifetimeEndsMax);
         } else if (event.Effect) {
             const effect = event.Effect;
-            if (effect.Write || effect.Read) {
-                // if a local is read or written, set its end of lifetime
-                // to infinite (end of frame)
-                const location = effect.Write ? effect.Write.location : effect.Read!.location;
-                const loc = processJSONLocalLocation(location, [], localLifetimeEnds);
+            if (effect.Write || effect.Read || effect.DataLoad) {
+                const location = effect.Write
+                    ? effect.Write.location
+                    : (effect.Read
+                        ? effect.Read.location
+                        : effect.DataLoad!.location);
+                const loc = processJSONLocation(location, [], localLifetimeEnds);
                 if (effect.Write) {
-                    if (loc !== undefined) {
-                        // Process a write only if the location is supported.
-                        // We can see global location here in some cases when source-level
-                        // assignment does not involve an explicit local variable, along
-                        // the lines of:
-                        //
-                        // field::borrow_mut(...).next = ...
-                        const value = 'RuntimeValue' in effect.Write.root_value_after_write
-                            ? traceRuntimeValueFromJSON(effect.Write.root_value_after_write.RuntimeValue.value)
-                            : traceRefValueFromJSON(effect.Write.root_value_after_write);
-                        events.push({
-                            type: TraceEventKind.Effect,
-                            effect: {
-                                type: TraceEffectKind.Write,
-                                loc,
-                                value
-                            }
-                        });
-                    }
+                    // DataLoad is essentially a form of a write
+                    const value = 'RuntimeValue' in effect.Write.root_value_after_write
+                        ? traceRuntimeValueFromJSON(effect.Write.root_value_after_write.RuntimeValue.value)
+                        : traceRefValueFromJSON(effect.Write.root_value_after_write);
+                    events.push({
+                        type: TraceEventKind.Effect,
+                        effect: {
+                            type: TraceEffectKind.Write,
+                            indexedLoc: loc,
+                            value
+                        }
+                    });
+                }
+                else if (effect.DataLoad) {
+                    const value = traceRuntimeValueFromJSON(effect.DataLoad.snapshot);
+                    events.push({
+                        type: TraceEventKind.Effect,
+                        effect: {
+                            type: TraceEffectKind.Write,
+                            indexedLoc: loc,
+                            value
+                        }
+                    });
                 }
             }
             if (effect.ExecutionError) {
@@ -785,20 +807,20 @@ function JSONTraceAddressToHexString(address: string): string {
 }
 
 /**
- * Processes a location of a local variable in a JSON trace: sets the end of its lifetime
- * when requested and returns its location
+ * Processes a location of a value in a JSON trace: returns the location
+ * and, if dealing with a local variable, sets the end of its lifetime.
  * @param traceLocation location in the trace.
  * @param indexPath a path to actual value for compound types (e.g, [1, 7] means
  * first field/vector element and then seventh field/vector element)
  * @param localLifetimeEnds map of local variable lifetimes (defined if local variable
  * lifetime should happen).
- * @returns variable location.
+ * @returns location.
  */
-function processJSONLocalLocation(
+function processJSONLocation(
     traceLocation: JSONTraceLocation,
     indexPath: number[],
     localLifetimeEnds?: Map<number, number[]>,
-): IRuntimeVariableLoc | undefined {
+): IRuntimeLoc {
     if ('Local' in traceLocation) {
         const frameID = traceLocation.Local[0];
         const localIndex = traceLocation.Local[1];
@@ -807,20 +829,17 @@ function processJSONLocalLocation(
             lifetimeEnds[localIndex] = FRAME_LIFETIME;
             localLifetimeEnds.set(frameID, lifetimeEnds);
         }
-        return { frameID, localIndex, indexPath };
+        const loc: IRuntimeVariableLoc = { frameID, localIndex };
+        return { loc, indexPath };
+    } else if ('Global' in traceLocation) {
+        const globalIndex = traceLocation.Global;
+        const loc: IRuntimeGlobalLoc = { globalIndex };
+        return { loc, indexPath };
     } else if ('Indexed' in traceLocation) {
         indexPath.push(traceLocation.Indexed[1]);
-        return processJSONLocalLocation(traceLocation.Indexed[0], indexPath, localLifetimeEnds);
+        return processJSONLocation(traceLocation.Indexed[0], indexPath, localLifetimeEnds);
     } else {
-        // Currently, there is nothing that needs to be done for 'Global' locations,
-        // neither with respect to lifetime nor with respect to location itself.
-        // This is because `Global` locations currently only represent read-only
-        // reference values returned from native functions. If there ever was
-        // a native function that would return a mutable reference, we should
-        // consider how to handle value changes via such reference, but it's unlikely
-        // that such a function would ever be added to either Move stdlib or
-        // the Sui framework.
-        return undefined;
+        throw new Error('Unsupported location type');
     }
 }
 
@@ -833,18 +852,18 @@ function processJSONLocalLocation(
  */
 function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
     if ('MutRef' in value) {
-        const loc = processJSONLocalLocation(value.MutRef.location, []);
+        const loc = processJSONLocation(value.MutRef.location, []);
         if (!loc) {
             throw new Error('Unsupported location type in MutRef');
         }
-        const ret: IRuntimeRefValue = { mutable: true, loc };
+        const ret: IRuntimeRefValue = { mutable: true, indexedLoc: loc };
         return ret;
     } else {
-        const loc = processJSONLocalLocation(value.ImmRef.location, []);
+        const loc = processJSONLocation(value.ImmRef.location, []);
         if (!loc) {
             throw new Error('Unsupported location type in ImmRef');
         }
-        const ret: IRuntimeRefValue = { mutable: false, loc };
+        const ret: IRuntimeRefValue = { mutable: false, indexedLoc: loc };
         return ret;
     }
 }
@@ -934,6 +953,22 @@ function instructionKindToString(kind: TraceInstructionKind): string {
 }
 
 /**
+ * Converts a location to string representation.
+ *
+ * @param indexedLoc indexed location.
+ * @returns string representing the location.
+ */
+function locToString(indexedLoc: IRuntimeLoc): string {
+    if ('globalIndex' in indexedLoc.loc) {
+        return `global at ${indexedLoc.loc.globalIndex}`;
+    } else if ('frameID' in indexedLoc.loc && 'localIndex' in indexedLoc.loc) {
+        return `local at ${indexedLoc.loc.localIndex} in frame ${indexedLoc.loc.frameID}`;
+    } else {
+        return 'unsupported location';
+    }
+}
+
+/**
  * Converts an effect of an instruction to a string representation.
  *
  * @param effect effect.
@@ -942,7 +977,7 @@ function instructionKindToString(kind: TraceInstructionKind): string {
 function effectToString(effect: EventEffect): string {
     switch (effect.type) {
         case TraceEffectKind.Write:
-            return `Write at idx ${effect.loc.localIndex} in frame ${effect.loc.frameID}`;
+            return 'Write ' + locToString(effect.indexedLoc);
         case TraceEffectKind.ExecutionError:
             return `ExecutionError ${effect.msg}`;
     }

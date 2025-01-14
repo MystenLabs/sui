@@ -31,7 +31,7 @@ impl Default for Config {
             init_connection_window_size: None,
             max_concurrent_streams: None,
             tcp_keepalive: None,
-            tcp_nodelay: false,
+            tcp_nodelay: true,
             http2_keepalive_interval: None,
             http2_keepalive_timeout: None,
             http2_adaptive_window: None,

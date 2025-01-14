@@ -22,6 +22,7 @@ toml_edit.workspace = true
 
 bcs.workspace = true
 
+move-bytecode-source-map.workspace = true
 move-bytecode-verifier.workspace = true
 move-disassembler.workspace = true
 move-docgen.workspace = true
@@ -40,6 +41,7 @@ move-vm-test-utils.workspace = true
 move-binary-format.workspace = true
 move-package.workspace = true
 move-prover.workspace = true
+move-symbol-pool.workspace = true
 move-unit-test.workspace = true
 move-bytecode-viewer.workspace = true
 

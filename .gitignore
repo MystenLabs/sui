@@ -73,3 +73,5 @@ docs/content/references/sui-api/sui-graphql/*
 docs/content/references/framework/**
 
 lcov.info
+
+.sparse

@@ -46,10 +46,10 @@ impl Services {
 }
 
 #[tonic::async_trait]
-impl crate::proto::node::node_server::Node for crate::RpcService {
+impl crate::proto::node::node_service_server::NodeService for crate::RpcService {
     async fn get_node_info(
         &self,
-        _request: tonic::Request<()>,
+        _request: tonic::Request<crate::proto::node::GetNodeInfoRequest>,
     ) -> Result<tonic::Response<crate::proto::node::GetNodeInfoResponse>, tonic::Status> {
         self.get_node_info()
             .map(Into::into)

@@ -1,6 +1,0 @@
-{
-	"private": true,
-	"import": "../dist/esm/multisig/index.js",
-	"main": "../dist/cjs/multisig/index.js",
-	"sideEffects": false
-}

@@ -89,6 +89,7 @@ ResolvedGraph {
         dev_mode: true,
         test_mode: false,
         generate_docs: false,
+        save_disassembly: false,
         install_dir: Some(
             "ELIDED_FOR_TEST",
         ),

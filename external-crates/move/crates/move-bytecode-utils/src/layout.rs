@@ -217,13 +217,17 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
             .map_err(|e| anyhow::format_err!("{:?}", e))?
             .expect("Failed to resolve module");
         let def = match (
-            declaring_module.borrow().find_struct_def_by_name(name),
-            declaring_module.borrow().find_enum_def_by_name(name),
+            declaring_module
+                .borrow()
+                .find_struct_def_by_name(name.as_str()),
+            declaring_module
+                .borrow()
+                .find_enum_def_by_name(name.as_str()),
         ) {
-            (Some(struct_def), None) => {
+            (Some((_, struct_def)), None) => {
                 Container::Struct(Struct::new(declaring_module.borrow(), struct_def).1)
             }
-            (None, Some(enum_def)) => {
+            (None, Some((_, enum_def))) => {
                 Container::Enum(Enum::new(declaring_module.borrow(), enum_def).1)
             }
             (Some(_), Some(_)) => bail!("Found both struct and enum with name {}", name),
@@ -608,10 +612,10 @@ impl DatatypeLayoutBuilder {
             Ok(Some(m)) => m,
         };
         match (
-            module.borrow().find_struct_def_by_name(name),
-            module.borrow().find_enum_def_by_name(name),
+            module.borrow().find_struct_def_by_name(name.as_str()),
+            module.borrow().find_enum_def_by_name(name.as_str()),
         ) {
-            (Some(struct_def), None) => Ok(A::MoveDatatypeLayout::Struct(Box::new(
+            (Some((_, struct_def)), None) => Ok(A::MoveDatatypeLayout::Struct(Box::new(
                 Self::build_from_struct_definition(
                     module.borrow(),
                     struct_def,
@@ -620,7 +624,7 @@ impl DatatypeLayoutBuilder {
                     depth,
                 )?,
             ))),
-            (None, Some(enum_def)) => Ok(A::MoveDatatypeLayout::Enum(Box::new(
+            (None, Some((_, enum_def))) => Ok(A::MoveDatatypeLayout::Enum(Box::new(
                 Self::build_from_enum_definition(
                     module.borrow(),
                     enum_def,

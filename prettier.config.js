@@ -20,12 +20,6 @@ module.exports = {
 	],
 	overrides: [
 		{
-			files: 'sdk/**/*',
-			options: {
-				proseWrap: 'always',
-			},
-		},
-		{
 			files: 'external-crates/move/documentation/book/**/*',
 			options: {
 				proseWrap: 'always',

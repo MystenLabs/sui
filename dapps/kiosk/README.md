@@ -38,7 +38,7 @@ If the connected address doesn't own a Kiosk (missing kioskOwnerCap), the purcha
 ### Transfer Policy Rules supported
 
 Currently, the demo supports the following Transfer Policy cases:
-(based on the [`@mysten/kiosk`](https://github.com/MystenLabs/sui/tree/main/sdk/kiosk) SDK)
+(based on the [`@mysten/kiosk`](https://github.com/MystenLabs/ts-sdks/tree/main/packages/kiosk) SDK)
 
 1. No rules
 2. Royalty rule (soft royalties)
