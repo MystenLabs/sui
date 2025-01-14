@@ -3,7 +3,7 @@ title: Avoiding Equivocation
 description: Avoid unintentionally locking objects with your smart contract logic. 
 ---
 
-Equivocation is when validators send conflicting information about objects on the network. Sometimes this is because of bad actors trying to subvert the integrety of the Sui network. The network has measures in place to punish validators that might engage in such behavior.
+Equivocation is when validators send conflicting information about objects on the network. Sometimes this is because of bad actors trying to subvert the integrity of the Sui network. The network has measures in place to punish validators that might engage in such behavior.
 
 The other source of equivocation does not originate from bad intentions. There are logic traps that smart contract code can inadvertently trigger, like when dealing with [sponsored transactions](https://docs.sui.io/guides/developer/sui-101/sponsor-txn#client-equivocation-risk). The effects of this type of equivocation can lock the objects your code interacts with until the end of the current epoch. This can lead to frustration for you, and more importantly, your users.
 
