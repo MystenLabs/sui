@@ -45,7 +45,7 @@ export default function ProtocolConfig(props) {
   const DisplayResults = (props) => {
     const { results } = props;
     return (
-      <table>
+      <table className="table w-full">
         <thead>
           <tr>
             <th>Parameter</th>
