@@ -2268,6 +2268,9 @@ impl StateSyncAPI for WritebackCache {
         transaction: &VerifiedTransaction,
         transaction_effects: &TransactionEffects,
     ) {
+        self.store
+            .insert_transaction_and_effects(transaction, transaction_effects)
+            .expect("db error");
         self.cached
             .transactions
             .insert(
@@ -2284,15 +2287,15 @@ impl StateSyncAPI for WritebackCache {
                 Ticket::Write,
             )
             .ok();
-        self.store
-            .insert_transaction_and_effects(transaction, transaction_effects)
-            .expect("db error");
     }
 
     fn multi_insert_transaction_and_effects(
         &self,
         transactions_and_effects: &[VerifiedExecutionData],
     ) {
+        self.store
+            .multi_insert_transaction_and_effects(transactions_and_effects.iter())
+            .expect("db error");
         for VerifiedExecutionData {
             transaction,
             effects,
@@ -2315,8 +2318,5 @@ impl StateSyncAPI for WritebackCache {
                 )
                 .ok();
         }
-        self.store
-            .multi_insert_transaction_and_effects(transactions_and_effects.iter())
-            .expect("db error");
     }
 }
