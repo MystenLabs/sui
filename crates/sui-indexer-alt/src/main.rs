@@ -16,6 +16,7 @@ use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_schema::MIGRATIONS;
 use sui_pg_db::reset_database;
 use tokio::fs;
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -33,6 +34,7 @@ async fn main() -> Result<()> {
             config,
         } => {
             let indexer_config = read_config(&config).await?;
+            info!("Starting indexer with config: {:?}", indexer_config);
 
             start_indexer(
                 args.db_args,

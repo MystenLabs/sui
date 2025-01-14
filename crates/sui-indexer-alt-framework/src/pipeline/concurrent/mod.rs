@@ -9,6 +9,7 @@ use sui_pg_db::{self as db, Db};
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 use crate::{metrics::IndexerMetrics, watermarks::CommitterWatermark};
 
@@ -195,6 +196,10 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
+    info!(
+        pipeline = H::NAME,
+        "Starting pipeline with config: {:?}", config
+    );
     let ConcurrentConfig {
         committer: committer_config,
         pruner: pruner_config,
