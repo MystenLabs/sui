@@ -132,11 +132,16 @@ impl MoveObject {
         }
     }
 
-    pub fn new_coin(coin_type: TypeTag, version: SequenceNumber, id: ObjectID, value: u64) -> Self {
+    pub fn new_coin(
+        coin_type: StructTag,
+        version: SequenceNumber,
+        id: ObjectID,
+        value: u64,
+    ) -> Self {
         // unwrap safe because coins are always smaller than the max object size
         unsafe {
             Self::new_from_execution_with_limit(
-                MoveObjectType::coin(coin_type),
+                MoveObjectType::coin(TypeTag::Struct(Box::new(coin_type))),
                 true,
                 version,
                 Coin::new(id, value).to_bcs_bytes(),
