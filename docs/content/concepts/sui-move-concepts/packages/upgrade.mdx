@@ -11,7 +11,7 @@ The inability to change package objects, however, becomes a problem when conside
 
 There are some details of the process that you should consider before upgrading your packages.
 
-For example, [module initializers](../init.mdx) do not re-run with package upgrades. When you publish your initial package, Move runs the `init` function you define for the package once (and only once) at the time of the publish event. Any `init` functions you might include in subsequent versions of your package are ignored.
+For example, module initializers do not re-run with package upgrades. When you publish your initial package, Move runs the `init` function you define for the package once (and only once) at the time of the publish event. Any `init` functions you might include in subsequent versions of your package are ignored. See [Module Initializer](https://move-book.com/programmability/module-initializer.html) in The Move Book for more information.
 
 As alluded to previously, all packages on the Sui network are immutable. Because of this fact, you cannot delete old packages from the chain. As a result, there is nothing that prevents other packages from accessing the methods and types defined in the old versions of your upgraded packages. By default, users can choose to keep using the old version of a package, as well. As a package developer, you must be aware of and account for this possibility.
 
