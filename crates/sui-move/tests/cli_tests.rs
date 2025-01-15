@@ -34,6 +34,7 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
         }
     }
 
+    // set up path
     // Note: we need to create a symlink instead of just adding the bin dir to the path to prevent
     // local pathnames from leaking into the snapshot files.
     std::os::unix::fs::symlink(
@@ -48,8 +49,6 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
         .current_dir(sandbox)
         .arg(path.file_name().unwrap());
 
-    println!("{shell:?}");
-
     // run it!
     let snapshot_name: String = path
         .strip_prefix("tests/tests")?
@@ -59,16 +58,6 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     assert_cmd_snapshot!(snapshot_name, shell);
 
     Ok(())
-}
-
-/// The parent directory of the `sui-move` binary
-fn cargo_bin_path() -> String {
-    insta_cmd::get_cargo_bin("sui-move")
-        .parent()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string()
 }
 
 datatest_stable::harness!(test_shell_snapshot, TEST_DIR, TEST_PATTERN);
