@@ -2147,12 +2147,6 @@ impl AuthorityState {
         )?;
 
         // Create and use a dummy gas object if there is no gas object provided.
-        debug_assert!(
-            DEV_INSPECT_GAS_COIN_VALUE >= max_tx_gas,
-            "DEV_INSPECT_GAS_COIN_VALUE {} cannot be less than max_tx_gas {}",
-            DEV_INSPECT_GAS_COIN_VALUE,
-            max_tx_gas
-        );
         let dummy_gas_object = Object::new_gas_with_balance_and_owner_for_testing(
             DEV_INSPECT_GAS_COIN_VALUE,
             transaction.gas_owner(),

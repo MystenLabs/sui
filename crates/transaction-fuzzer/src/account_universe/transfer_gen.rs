@@ -469,8 +469,6 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
                     max_gas_price: PROTOCOL_CONFIG.max_gas_price(),
                 },
             }),
-            // NOTE: at protocol version 71, gas budget can be both too high and too low.
-            // So the variants here need to be ordered same as the checks in gas_v2.rs
             RunInfo {
                 gas_budget_too_high: true,
                 ..
