@@ -7,8 +7,12 @@ use std::path::Path;
 use std::process::Command;
 use walkdir::WalkDir;
 
-const TEST_DIR: &str = "tests";
-const TEST_PATTERN: &str = r"test.*\.sh";
+// [test_shell_snapshot] is run on every file matching [TEST_PATTERN] in [TEST_DIR]; this runs the
+// files as shell scripts and compares their output to the snapshots; use `cargo insta test
+// --review` to update the snapshots.
+
+const TEST_DIR: &str = "tests/tests";
+const TEST_PATTERN: &str = r"^test.*\.sh$";
 
 /// run the bash script at [path], comparing its output to the insta snapshot of the same name.
 /// The script is run in a temporary working directory that contains a copy of the parent directory
@@ -22,18 +26,26 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
         let entry = entry.unwrap();
         let srcfile = entry.path();
         let dstfile = tmpdir.path().join(srcfile.strip_prefix(srcdir)?);
-        fs::copy(srcfile, dstfile)?;
+        if srcfile.is_dir() {
+            fs::create_dir_all(dstfile)?;
+        } else {
+            fs::copy(srcfile, dstfile)?;
+        }
     }
 
     // set up command
-    let mut shell = Command::new("/bin/bash");
+    let mut shell = Command::new("bash");
     shell
         .env("PATH", format!("/bin:/usr/bin:{}", cargo_bin_path()))
-        .current_dir(tmpdir)
-        .arg(path);
+        .current_dir(tmpdir.path())
+        .arg(path.canonicalize()?);
 
     // run it!
-    let snapshot_name: String = path.to_string_lossy().to_string();
+    let snapshot_name: String = path
+        .strip_prefix("tests/tests")?
+        .to_string_lossy()
+        .to_string();
+
     assert_cmd_snapshot!(snapshot_name, shell);
 
     Ok(())

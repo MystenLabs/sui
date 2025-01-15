@@ -14459,6 +14459,7 @@ dependencies = [
  "colored",
  "datatest-stable",
  "futures",
+ "insta",
  "insta-cmd",
  "jemalloc-ctl",
  "jsonrpsee",
