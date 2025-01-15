@@ -141,28 +141,33 @@ impl BuildPlan {
         writer: &mut W,
         modify_compiler: impl FnOnce(Compiler) -> Compiler,
     ) -> Result<CompiledPackage> {
-        self.compile_with_driver(writer, |compiler| {
+        let mut diags = None;
+        let res = self.compile_with_driver(writer, |compiler| {
             let (files, units_res) = modify_compiler(compiler).build()?;
             match units_res {
                 Ok((units, warning_diags)) => {
-                    let diags_buf =
-                        report_diagnostics_to_buffer_with_env_color(&files, warning_diags);
-                    if let Err(err) = std::io::stdout().write_all(&diags_buf) {
-                        anyhow::bail!("Cannot output compiler diagnostics: {}", err);
-                    }
+                    diags = Some(report_diagnostics_to_buffer_with_env_color(
+                        &files,
+                        warning_diags,
+                    ));
                     Ok((files, units))
                 }
                 Err(error_diags) => {
                     assert!(!error_diags.is_empty());
-                    let diags_buf =
-                        report_diagnostics_to_buffer_with_env_color(&files, error_diags);
-                    if let Err(err) = std::io::stdout().write_all(&diags_buf) {
-                        anyhow::bail!("Cannot output compiler diagnostics: {}", err);
-                    }
+                    diags = Some(report_diagnostics_to_buffer_with_env_color(
+                        &files,
+                        error_diags,
+                    ));
                     anyhow::bail!("Compilation error");
                 }
             }
-        })
+        });
+        if let Some(diags) = diags {
+            if let Err(err) = std::io::stdout().write_all(&diags) {
+                anyhow::bail!("Cannot output compiler diagnostics: {}", err);
+            }
+        }
+        res
     }
 
     pub fn compute_dependencies(&self) -> CompilationDependencies {

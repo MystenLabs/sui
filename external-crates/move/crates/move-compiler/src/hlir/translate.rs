@@ -411,10 +411,10 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
     assert!(context.tmp_counter == 0);
     let T::Function {
         doc: _,
-        loc,
         warning_filter,
         index,
         attributes,
+        loc,
         compiled_visibility: tcompiled_visibility,
         visibility: tvisibility,
         entry,
@@ -428,10 +428,10 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
     let body = function_body(context, &signature, _name, body);
     context.pop_warning_filter_scope();
     H::Function {
-        loc,
         warning_filter,
         index,
         attributes,
+        loc,
         compiled_visibility: visibility(tcompiled_visibility),
         visibility: visibility(tvisibility),
         entry,
