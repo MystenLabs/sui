@@ -422,7 +422,7 @@ impl Indexer {
             PrunerWatermark::get(&mut conn, P::NAME, Default::default())
                 .await
                 .with_context(|| format!("Failed to get pruner watermark for {}", P::NAME))?
-                .map(|w| (w.pruner_hi as u64) + 1)
+                .map(|w| w.pruner_hi as u64)
                 .unwrap_or_default()
         } else {
             watermark
@@ -577,6 +577,6 @@ mod tests {
             .concurrent_pipeline(ConcurrentPipeline3, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_checkpoint_from_watermark, 6);
+        assert_eq!(indexer.first_checkpoint_from_watermark, 5);
     }
 }

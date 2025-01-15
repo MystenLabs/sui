@@ -1,5 +1,6 @@
 ---
-title: Sponsored Transaction
+title: Sponsored Transactions
+description: Sponsored transactions are a primitive on the Sui blockchain that enable the execution of a transaction where you pay the gas fee for your users transactions.
 ---
 
 A transaction on Sui takes a payment to execute. The payment, also known as gas, is a list of `0x2::coin::Coin<0x2::sui::Sui>` objects. Although gas is a critical piece in Sui tokenomics, it sometimes adds challenges when new Web3 users start to navigate on Sui.
@@ -119,6 +120,6 @@ Both the user and the sponsor need to sign over the entire `TransactionData`, in
 
 ### Censorship risk
 
-If you choose to submit the dual-signed transaction to the sponsor or gas station rather than a Full node, the transaction might be subject to sponsor or gas station censorship. Namely, the sponsor might choose not to submit the transaction to the network, or delay the submission. 
+If you chooses to submit the dual-signed transaction to the sponsor or gas station rather than a Full node, the transaction might be subject to sponsor or gas station censorship. Namely, the sponsor might choose not to submit the transaction to the network, or delay the submission. 
 
 You can mitigate this risk by submitting the transaction directly to a Full node.

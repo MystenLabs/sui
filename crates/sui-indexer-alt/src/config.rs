@@ -20,7 +20,7 @@ pub trait Merge {
 }
 
 #[DefaultConfig]
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct IndexerConfig {
     /// How checkpoints are read by the indexer.
     pub ingestion: IngestionLayer,

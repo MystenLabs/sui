@@ -19,3 +19,4 @@ proto/google/protobuf/timestamp.proto
 # available on $PATH. See https://github.com/pseudomuto/protoc-gen-doc for more
 # info
 cd "$SCRIPT_DIR" && protoc --doc_out=proto/ --doc_opt=markdown,documentation.md ${PROTO_FILES[@]} --proto_path=proto/
+cd "$SCRIPT_DIR" && protoc --doc_out=proto/ --doc_opt=json,documentation.json ${PROTO_FILES[@]} --proto_path=proto/
