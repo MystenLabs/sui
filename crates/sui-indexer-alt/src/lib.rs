@@ -47,6 +47,7 @@ pub async fn start_indexer(
 ) -> anyhow::Result<()> {
     let IndexerConfig {
         ingestion,
+        consistency,
         committer,
         pruner,
         pipeline,
@@ -79,6 +80,7 @@ pub async fn start_indexer(
     } = pipeline.finish();
 
     let ingestion = ingestion.finish(IngestionConfig::default());
+    let consistency = consistency.finish(PrunerConfig::default());
     let committer = committer.finish(CommitterConfig::default());
     let pruner = pruner.finish(PrunerConfig::default());
 
@@ -109,6 +111,22 @@ pub async fn start_indexer(
     // `add_consistent` is a special case that generates both a sequential "summary" pipeline and a
     // `concurrent` "write-ahead log" pipeline, with their configuration based on the supplied
     // ConsistencyConfig.
+
+    macro_rules! add_consistent {
+        ($handler:expr, $config:expr) => {
+            if let Some(layer) = $config {
+                indexer
+                    .concurrent_pipeline(
+                        $handler,
+                        ConcurrentConfig {
+                            committer: layer.finish(committer.clone()),
+                            pruner: Some(consistency.clone()),
+                        },
+                    )
+                    .await?
+            }
+        };
+    }
 
     macro_rules! add_concurrent {
         ($handler:expr, $config:expr) => {
@@ -150,12 +168,15 @@ pub async fn start_indexer(
         add_concurrent!(KvProtocolConfigs(genesis.clone()), kv_protocol_configs);
     }
 
-    // Other summary tables (without write-ahead log)
+    // Consistent pipelines
+    add_consistent!(CoinBalanceBuckets::default(), coin_balance_buckets);
+    add_consistent!(ObjInfo::default(), obj_info);
+
+    // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);
     add_sequential!(SumPackages, sum_packages);
 
     // Unpruned concurrent pipelines
-    add_concurrent!(CoinBalanceBuckets::default(), coin_balance_buckets);
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);
@@ -164,7 +185,6 @@ pub async fn start_indexer(
     add_concurrent!(KvEpochStarts, kv_epoch_starts);
     add_concurrent!(KvObjects, kv_objects);
     add_concurrent!(KvTransactions, kv_transactions);
-    add_concurrent!(ObjInfo::default(), obj_info);
     add_concurrent!(ObjVersions, obj_versions);
     add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);
