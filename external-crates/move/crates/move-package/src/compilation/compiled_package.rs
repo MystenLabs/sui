@@ -15,11 +15,13 @@ use anyhow::{ensure, Result};
 use colored::Colorize;
 use itertools::{Either, Itertools};
 use move_binary_format::file_format::CompiledModule;
-use move_bytecode_source_map::utils::{serialize_to_json, source_map_from_file};
+use move_bytecode_source_map::utils::{
+    serialize_to_json, serialize_to_json_string, source_map_from_file,
+};
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{
-    extension_equals, find_filenames, try_exists, FileHash, MOVE_COMPILED_EXTENSION,
-    MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
+    extension_equals, find_filenames, try_exists, FileHash, MOVE_BYTECODE_EXTENSION,
+    MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
 };
 use move_compiler::{
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
@@ -29,6 +31,7 @@ use move_compiler::{
     sui_mode::{self},
     Compiler,
 };
+use move_disassembler::disassembler::Disassembler;
 use move_docgen::{Docgen, DocgenOptions};
 use move_model::{model::GlobalEnv, options::ModelBuilderOptions, run_model_builder_with_options};
 use move_symbol_pool::Symbol;
@@ -352,6 +355,36 @@ impl OnDiskCompiledPackage {
                 .join(&file_path)
                 .with_extension(MOVE_EXTENSION),
             std::fs::read_to_string(&compiled_unit.source_path)?.as_bytes(),
+        )
+    }
+
+    fn save_disassembly_to_disk(
+        &self,
+        package_name: Symbol,
+        unit: &CompiledUnitWithSource,
+    ) -> Result<()> {
+        let root_package = self.package.compiled_package_info.package_name;
+        assert!(self.root_path.ends_with(root_package.as_str()));
+        let disassembly_dir = CompiledPackageLayout::Disassembly.path();
+        let file_path = if root_package == package_name {
+            PathBuf::new()
+        } else {
+            CompiledPackageLayout::Dependencies
+                .path()
+                .join(package_name.as_str())
+        }
+        .join(unit.unit.name.as_str());
+        let d = Disassembler::from_unit(&unit.unit);
+        let (disassembled_string, bytecode_map) = d.disassemble_with_source_map()?;
+        self.save_under(
+            disassembly_dir
+                .join(&file_path)
+                .with_extension(MOVE_BYTECODE_EXTENSION),
+            disassembled_string.as_bytes(),
+        )?;
+        self.save_under(
+            disassembly_dir.join(&file_path).with_extension("json"),
+            serialize_to_json_string(&bytecode_map)?.as_bytes(),
         )
     }
 }
@@ -710,9 +743,15 @@ impl CompiledPackage {
 
         for compiled_unit in &self.root_compiled_units {
             on_disk_package.save_compiled_unit(root_package, compiled_unit)?;
+            if self.compiled_package_info.build_flags.save_disassembly {
+                on_disk_package.save_disassembly_to_disk(root_package, compiled_unit)?;
+            }
         }
         for (dep_name, compiled_unit) in &self.deps_compiled_units {
             on_disk_package.save_compiled_unit(*dep_name, compiled_unit)?;
+            if self.compiled_package_info.build_flags.save_disassembly {
+                on_disk_package.save_disassembly_to_disk(*dep_name, compiled_unit)?;
+            }
         }
 
         if let Some(docs) = &self.compiled_docs {

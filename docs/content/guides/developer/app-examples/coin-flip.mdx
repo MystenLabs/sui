@@ -24,7 +24,7 @@ Source code locations for the smart contracts and frontend:
 - **Asserts:** The guide teaches you how to use [asserts](https://move-book.com/move-basics/assert-and-abort.html?highlight=asserts#assert) to abort functions due to certain conditions not being met.
 - **Address-owned objects:** The guide teaches you how to use [address-owned objects](concepts/object-ownership/address-owned.mdx) when necessary.
 - **Events:** The guide teaches you how to emit events in your contracts, which can be used to track on-chain activity. For more information on events, see [Using Events](../sui-101/using-events.mdx) for practical usage of events on Sui or [Events in The Move Book](https://move-book.com/programmability/events.html) to learn about event structure and how to emit them in Move.
-- **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](concepts/tokenomics/storage-fund.mdx#incentives).
+- **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](concepts/tokenomics.mdx#storage-fund-rewards).
 - **MEV attack protection:** The guide introduces you to [MEV attacks](https://github.com/MystenLabs/satoshi-coin-flip?tab=readme-ov-file#mev-attack-resistant-single-player-satoshi-smart-contract-flow), how to make your contracts MEV-resistant, and the trade-offs between protection and user experience.
 
 
@@ -46,7 +46,7 @@ To follow along with this guide, set your new Move package to `satoshi_flip`.
 
 ### House module
 
-This example uses several modules to create a package for the Satoshi Coin Flip game. The first module is `house_data.move`. You need to store the game’s data somewhere, and in this module you create a [shared object](concepts/object-ownership/shared.mdx) for all house data.
+This example uses several modules to create a package for the Satoshi Coin Flip game. The first module is `house_data.move`. You need to store the game's data somewhere, and in this module you create a [shared object](concepts/object-ownership/shared.mdx) for all house data.
 
 Create a new file in the `sources` directory with the name `house_data.move` and populate the file with the following code:
 
@@ -444,10 +444,10 @@ Now take a look at the main function in this game, `finish_game`:
   }
 ```
 
-- First, the function makes sure the `Game` object exists, then deletes it, as after the game concludes the metadata is no longer needed. Freeing up unnecessary storage is not only recommended, but [incentivized through rebates on storage fees](concepts/tokenomics/storage-fund.mdx#incentives).
+- First, the function makes sure the `Game` object exists, then deletes it, as after the game concludes the metadata is no longer needed. Freeing up unnecessary storage is not only recommended, but [incentivized through rebates on storage fees](concepts/tokenomics.mdx#storage-fund-rewards).
 - In step 1, the function checks to see if the BLS signature is valid. This is to ensure the game is truly random.
-- In step 2, the function checks to see if the player’s guess, heads (`0`) or tails (`1`), is the same as that of the house. This is done by taking the first byte of the randomized vector and checking to see if it’s divisible by two. If it is, it is heads, if it is not, it is tails.
-- In step 3, if the player won, meaning the player’s guess matched the results of the house, the logic transfers fees from the stake to the house, then distributes the rest of the principle plus an equal amount from the house’s balance back to the player. If the player loses, the logic transfers the entire stake to the house, and takes no fees.
+- In step 2, the function checks to see if the player's guess, heads (`0`) or tails (`1`), is the same as that of the house. This is done by taking the first byte of the randomized vector and checking to see if it's divisible by two. If it is, it is heads, if it is not, it is tails.
+- In step 3, if the player won, meaning the player's guess matched the results of the house, the logic transfers fees from the stake to the house, then distributes the rest of the principle plus an equal amount from the house's balance back to the player. If the player loses, the logic transfers the entire stake to the house, and takes no fees.
 - Lastly, the game emits its outcome as an event.
 
 Now add a function that handles game disputes:
@@ -823,11 +823,11 @@ export default App;
 
 Like other dApps, you need a "connect wallet" button to enable connecting users' wallets. dApp Kit contains a pre-made `ConnectButton` React component that you can reuse to help users onboard.
 
-`useCurrentAccount()` is a React hook the dApp Kit also provides to query the current connected wallet; returning `null` if there isn't a wallet connection. Leverage this behavior to prevent a user from proceeding further if they haven’t connected their wallet yet.
+`useCurrentAccount()` is a React hook the dApp Kit also provides to query the current connected wallet; returning `null` if there isn't a wallet connection. Leverage this behavior to prevent a user from proceeding further if they haven't connected their wallet yet.
 
 After ensuring that the user has connected their wallet, you can display the two columns described in the previous section: `PlayerSesh` and `HouseSesh` components.
 
-Okay, that’s a good start to have an overview of the project. Time to move to initializing the `HouseData` object. All the frontend logic for calling this lives in the `HouseInitialize.tsx` component. The component includes UI code, but the logic that executes the transaction follows:
+Okay, that's a good start to have an overview of the project. Time to move to initializing the `HouseData` object. All the frontend logic for calling this lives in the `HouseInitialize.tsx` component. The component includes UI code, but the logic that executes the transaction follows:
 
 ```typescript title='containers/House/HouseInitialize.tsx'
 <form
@@ -913,7 +913,7 @@ Now sign and execute the transaction block. dApp Kit provides a React hook `useS
 
 Great, now you know how to initialize the `HouseData` shared object. Move to the next function call.
 
-In this game, the users must create a `Counter` object to start the game. So there should be a place in the Player column UI to list the existing `Counter` object information for the player to choose. It seems likely that you will reuse the fetching logic for the `Counter` object in several places in your UI, so it’s good practice to isolate this logic into a React hook, which you call `useFetchCounterNft()` in `useFetchCounterNft.ts`:
+In this game, the users must create a `Counter` object to start the game. So there should be a place in the Player column UI to list the existing `Counter` object information for the player to choose. It seems likely that you will reuse the fetching logic for the `Counter` object in several places in your UI, so it's good practice to isolate this logic into a React hook, which you call `useFetchCounterNft()` in `useFetchCounterNft.ts`:
 
 ```typescript title='containers/Player/useFetchCounterNft.ts'
 import { useCurrentAccount, useSuiClientQuery } from '@mysten/dapp-kit';
@@ -973,7 +973,7 @@ Now, pass the address of the connected wallet, as well as the global identifier 
 
 `${PACKAGE_ID}::counter_nft::Counter`
 
-That’s it, now put the hook into the UI component `PlayerListCounterNft.tsx` and display the data:
+That's it, now put the hook into the UI component `PlayerListCounterNft.tsx` and display the data:
 
 ```typescript title='containers/Player/PlayerListCounterNft.tsx'
 export function PlayerListCounterNft() {

@@ -712,4 +712,68 @@ impl SourceMap {
 
         Ok(empty_source_map)
     }
+
+    pub fn replace_file_hashes(&mut self, file_hash: FileHash) {
+        self.definition_location = Loc::new(
+            file_hash,
+            self.definition_location.start(),
+            self.definition_location.end(),
+        );
+        for (_, struct_map) in self.struct_map.iter_mut() {
+            struct_map.definition_location = Loc::new(
+                file_hash,
+                struct_map.definition_location.start(),
+                struct_map.definition_location.end(),
+            );
+            for (_, loc) in struct_map.type_parameters.iter_mut() {
+                *loc = Loc::new(file_hash, loc.start(), loc.end());
+            }
+            for loc in struct_map.fields.iter_mut() {
+                *loc = Loc::new(file_hash, loc.start(), loc.end());
+            }
+        }
+        for (_, enum_map) in self.enum_map.iter_mut() {
+            enum_map.definition_location = Loc::new(
+                file_hash,
+                enum_map.definition_location.start(),
+                enum_map.definition_location.end(),
+            );
+            for (_, loc) in enum_map.type_parameters.iter_mut() {
+                *loc = Loc::new(file_hash, loc.start(), loc.end());
+            }
+            for ((_, loc), field_locations) in enum_map.variants.iter_mut() {
+                *loc = Loc::new(file_hash, loc.start(), loc.end());
+                for field_loc in field_locations.iter_mut() {
+                    *field_loc = Loc::new(file_hash, field_loc.start(), field_loc.end());
+                }
+            }
+        }
+        for (_, function_map) in self.function_map.iter_mut() {
+            function_map.location = Loc::new(
+                file_hash,
+                function_map.location.start(),
+                function_map.location.end(),
+            );
+            function_map.definition_location = Loc::new(
+                file_hash,
+                function_map.definition_location.start(),
+                function_map.definition_location.end(),
+            );
+            for (_, loc) in function_map.type_parameters.iter_mut() {
+                *loc = Loc::new(file_hash, loc.start(), loc.end());
+            }
+            for (_, loc) in function_map.parameters.iter_mut() {
+                *loc = Loc::new(file_hash, loc.start(), loc.end());
+            }
+            for loc in function_map.returns.iter_mut() {
+                *loc = Loc::new(file_hash, loc.start(), loc.end());
+            }
+            for (_, loc) in function_map.locals.iter_mut() {
+                *loc = Loc::new(file_hash, loc.start(), loc.end());
+            }
+            for (_, loc) in function_map.code_map.iter_mut() {
+                *loc = Loc::new(file_hash, loc.start(), loc.end());
+            }
+        }
+    }
 }

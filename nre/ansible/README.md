@@ -19,7 +19,7 @@ Tested with `ansible [core 2.13.4]` and:
 
 5. Copy the genesis.blob to this directory (should be available after the Genesis ceremony).
 
-6. Udate the `keypair_path` var in the [Ansible Inventory](./inventory.yaml)
+6. Update the `keypair_path` var in the [Ansible Inventory](./inventory.yaml)
 
 ## Example use:
 

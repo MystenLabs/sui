@@ -48,6 +48,11 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
             return;
         };
 
+        info!(
+            pipeline = H::NAME,
+            "Starting pruner with config: {:?}", config
+        );
+
         // The pruner can pause for a while, waiting for the delay imposed by the
         // `pruner_timestamp` to expire. In that case, the period between ticks should not be
         // compressed to make up for missed ticks.
@@ -135,6 +140,11 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                     );
                     break;
                 };
+
+                debug!(
+                    pipeline = H::NAME,
+                    "Pruning from {} to {}", from, to_exclusive
+                );
 
                 let affected = match handler.prune(from, to_exclusive, &mut conn).await {
                     Ok(affected) => {

@@ -159,6 +159,7 @@ move-ir-to-bytecode = { path = "crates/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "crates/move-ir-to-bytecode-syntax" }
 move-ir-types = { path = "crates/move-ir-types" }
 move-model = { path = "crates/move-model" }
+move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-prover = { path = "crates/move-prover" }
