@@ -1444,8 +1444,9 @@ impl SuiClientCommands {
             SuiClientCommands::Faucet { address, url } => {
                 let address = get_identity_address(address, context)?;
                 let url = if let Some(url) = url {
-                    ensure!(!url.starts_with("https://faucet.testnet.sui.io"),
-                            "For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}"
+                    ensure!(
+                        !url.starts_with("https://faucet.testnet.sui.io"),
+                        "For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}"
                     );
                     url
                 } else {
