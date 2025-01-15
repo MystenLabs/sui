@@ -716,6 +716,8 @@ pub enum SuiError {
         round: u64,
         last_committed_round: u64,
     },
+    #[error("Invalid admin request: {0}")]
+    InvalidAdminRequest(String),
 }
 
 #[repr(u64)]

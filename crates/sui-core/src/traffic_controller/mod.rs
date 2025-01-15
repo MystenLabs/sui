@@ -8,11 +8,13 @@ pub mod policies;
 
 use dashmap::DashMap;
 use fs::File;
+use parking_lot::Mutex;
 use prometheus::IntGauge;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Add;
 use std::sync::Arc;
+use sui_types::error::{SuiError, SuiResult};
 
 use self::metrics::TrafficControllerMetrics;
 use crate::traffic_controller::nodefw_client::{BlockAddress, BlockAddresses, NodeFWClient};
@@ -23,7 +25,10 @@ use mysten_metrics::spawn_monitored_task;
 use rand::Rng;
 use std::fmt::Debug;
 use std::time::{Duration, Instant, SystemTime};
-use sui_types::traffic_control::{PolicyConfig, PolicyType, RemoteFirewallConfig, Weight};
+use sui_types::traffic_control::{
+    FreqThresholdConfig, PolicyConfig, PolicyType, RemoteFirewallConfig, Weight,
+};
+use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 use tracing::{debug, error, info, trace, warn};
@@ -55,6 +60,8 @@ pub struct TrafficController {
     acl: Acl,
     metrics: Arc<TrafficControllerMetrics>,
     dry_run_mode: bool,
+    config: Arc<Mutex<PolicyConfig>>,
+    reconfigure_channel: Option<broadcast::Sender<PolicyConfig>>,
 }
 
 impl Debug for TrafficController {
@@ -84,12 +91,12 @@ impl TrafficController {
         fw_config: Option<RemoteFirewallConfig>,
     ) -> Self {
         metrics.dry_run_enabled.set(policy_config.dry_run as i64);
-        match policy_config.allow_list {
+        match &policy_config.allow_list {
             Some(allow_list) => {
                 let allowlist = allow_list
-                    .into_iter()
+                    .iter()
                     .map(|ip_str| {
-                        parse_ip(&ip_str).unwrap_or_else(|| {
+                        parse_ip(ip_str).unwrap_or_else(|| {
                             panic!("Failed to parse allowlist IP address: {:?}", ip_str)
                         })
                     })
@@ -99,10 +106,66 @@ impl TrafficController {
                     acl: Acl::Allowlist(allowlist),
                     metrics: Arc::new(metrics),
                     dry_run_mode: policy_config.dry_run,
+                    config: Arc::new(Mutex::new(policy_config)),
+                    reconfigure_channel: None,
                 }
             }
             None => Self::spawn(policy_config, metrics, fw_config),
         }
+    }
+
+    /// Reconfigure traffic control without clearing the blocklists
+    pub fn reconfigure_no_clear(
+        &self,
+        error_threshold: Option<u64>,
+        spam_threshold: Option<u64>,
+        dry_run: Option<bool>,
+    ) -> SuiResult<()> {
+        let mut config = self.config.lock();
+        if let Some(error_threshold) = error_threshold {
+            if let PolicyType::FreqThreshold(threshold_config) = &mut config.error_policy_type {
+                threshold_config.client_threshold = error_threshold;
+            } else {
+                let error_policy_type = PolicyType::FreqThreshold(FreqThresholdConfig {
+                    client_threshold: error_threshold,
+                    window_size_secs: 5,
+                    update_interval_secs: 1,
+                    ..Default::default()
+                });
+                config.error_policy_type = error_policy_type;
+            }
+        }
+        if let Some(spam_threshold) = spam_threshold {
+            if let PolicyType::FreqThreshold(threshold_config) = &mut config.spam_policy_type {
+                threshold_config.client_threshold = spam_threshold;
+            } else {
+                let spam_policy_type = PolicyType::FreqThreshold(FreqThresholdConfig {
+                    client_threshold: spam_threshold,
+                    window_size_secs: 5,
+                    update_interval_secs: 1,
+                    ..Default::default()
+                });
+                config.spam_policy_type = spam_policy_type;
+            }
+        }
+        if let Some(dry_run) = dry_run {
+            config.dry_run = dry_run;
+        }
+
+        self.reconfigure_channel
+            .as_ref()
+            .map(|channel| {
+                channel.send(config.clone()).map_err(|e| {
+                    SuiError::InvalidAdminRequest(format!(
+                        "Failed to send reconfigure message: {}",
+                        e
+                    ))
+                })
+            })
+            .unwrap_or(Err(SuiError::InvalidAdminRequest(
+                "reconfigure channel not enabled".to_string(),
+            )))?;
+        Ok(())
     }
 
     fn spawn(
@@ -133,23 +196,30 @@ impl TrafficController {
         let tally_loop_metrics = metrics.clone();
         let clear_loop_metrics = metrics.clone();
         let dry_run_mode = policy_config.dry_run;
+        let (reconfigure_tx, reconfigure_rx) = broadcast::channel(4);
+        let reconfigure_rx2 = reconfigure_tx.subscribe();
+        let policy_config_clone = policy_config.clone();
         spawn_monitored_task!(run_tally_loop(
             rx,
-            policy_config,
+            policy_config_clone,
             fw_config,
             tally_loop_blocklists,
             tally_loop_metrics,
             mem_drainfile_present,
+            reconfigure_rx,
         ));
         spawn_monitored_task!(run_clear_blocklists_loop(
             clear_loop_blocklists,
             clear_loop_metrics,
+            reconfigure_rx2,
         ));
         Self {
             tally_channel: Some(tx),
             acl: Acl::Blocklists(blocklists),
             metrics: metrics.clone(),
             dry_run_mode,
+            config: Arc::new(Mutex::new(policy_config)),
+            reconfigure_channel: Some(reconfigure_tx),
         }
     }
 
@@ -301,20 +371,30 @@ impl TrafficController {
 /// never checked again. This function runs periodically to clear out any
 /// such stale IPs. This also ensures that the blocklist length metric
 /// accurately reflects TTL.
-async fn run_clear_blocklists_loop(blocklists: Blocklists, metrics: Arc<TrafficControllerMetrics>) {
+async fn run_clear_blocklists_loop(
+    blocklists: Blocklists,
+    metrics: Arc<TrafficControllerMetrics>,
+    mut reconfigure_rx: broadcast::Receiver<PolicyConfig>,
+) {
     loop {
-        tokio::time::sleep(Duration::from_secs(3)).await;
-        let now = SystemTime::now();
-        blocklists.clients.retain(|_, expiration| now < *expiration);
-        blocklists
-            .proxied_clients
-            .retain(|_, expiration| now < *expiration);
-        metrics
-            .connection_ip_blocklist_len
-            .set(blocklists.clients.len() as i64);
-        metrics
-            .proxy_ip_blocklist_len
-            .set(blocklists.proxied_clients.len() as i64);
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(3)) => {
+                let now = SystemTime::now();
+                blocklists.clients.retain(|_, expiration| now < *expiration);
+                blocklists
+                    .proxied_clients
+                    .retain(|_, expiration| now < *expiration);
+                metrics
+                    .connection_ip_blocklist_len
+                    .set(blocklists.clients.len() as i64);
+                metrics
+                    .proxy_ip_blocklist_len
+                    .set(blocklists.proxied_clients.len() as i64);
+            }
+            Ok(config) = reconfigure_rx.recv() => {
+                TrafficController::set_policy_config_metrics(&config, metrics.clone());
+            }
+        }
     }
 }
 
@@ -325,6 +405,7 @@ async fn run_tally_loop(
     blocklists: Blocklists,
     metrics: Arc<TrafficControllerMetrics>,
     mut mem_drainfile_present: bool,
+    mut reconfigure_rx: broadcast::Receiver<PolicyConfig>,
 ) {
     let mut spam_policy = TrafficControlPolicy::from_spam_config(policy_config.clone()).await;
     let mut error_policy = TrafficControlPolicy::from_error_config(policy_config.clone()).await;
@@ -395,6 +476,12 @@ async fn run_tally_loop(
                         metrics.deadmans_switch_enabled.set(1);
                     }
                 }
+            }
+            // process channel for receiving new policy config
+            Ok(config) = reconfigure_rx.recv() => {
+                // mutate the policy config
+                spam_policy = TrafficControlPolicy::from_spam_config(config.clone()).await;
+                error_policy = TrafficControlPolicy::from_error_config(config.clone()).await;
             }
         }
 

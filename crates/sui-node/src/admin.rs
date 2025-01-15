@@ -87,6 +87,7 @@ const RANDOMNESS_INJECT_PARTIAL_SIGS_ROUTE: &str = "/randomness-inject-partial-s
 const RANDOMNESS_INJECT_FULL_SIG_ROUTE: &str = "/randomness-inject-full-sig";
 const GET_TX_COST_ROUTE: &str = "/get-tx-cost";
 const DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE: &str = "/dump-consensus-tx-cost-estimates";
+const RECONFIGURE_TRAFFIC_CONTROL: &str = "/reconfigure-traffic-control";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -130,6 +131,10 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, tracing_handle: Tra
         .route(
             DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE,
             get(dump_consensus_tx_cost_estimates),
+        )
+        .route(
+            RECONFIGURE_TRAFFIC_CONTROL,
+            post(reconfigure_traffic_control),
         )
         .with_state(Arc::new(app_state));
 
@@ -496,4 +501,30 @@ async fn dump_consensus_tx_cost_estimates(
     let epoch_store = state.node.state().load_epoch_store_one_call_per_task();
     let estimates = epoch_store.get_consensus_tx_cost_estimates().await;
     (StatusCode::OK, format!("{:#?}", estimates))
+}
+
+#[derive(Deserialize)]
+struct TrafficControlConfig {
+    error_threshold: Option<u64>,
+    spam_threshold: Option<u64>,
+    dry_run: Option<bool>,
+}
+
+async fn reconfigure_traffic_control(
+    State(state): State<Arc<AppState>>,
+    args: Query<TrafficControlConfig>,
+) -> (StatusCode, String) {
+    let Query(TrafficControlConfig {
+        error_threshold,
+        spam_threshold,
+        dry_run,
+    }) = args;
+    match state
+        .node
+        .state()
+        .reconfigure_traffic_control(error_threshold, spam_threshold, dry_run)
+    {
+        Ok(()) => (StatusCode::OK, "traffic control configured\n".to_string()),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
 }
