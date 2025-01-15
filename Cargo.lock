@@ -13604,6 +13604,7 @@ dependencies = [
  "futures",
  "mysten-metrics",
  "prometheus",
+ "rand 0.8.5",
  "reqwest 0.12.5",
  "serde",
  "serde_json",
