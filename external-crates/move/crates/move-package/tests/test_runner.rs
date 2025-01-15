@@ -23,14 +23,7 @@ use std::{
 };
 use tempfile::{tempdir, TempDir};
 
-const EXTENSIONS: &[&str] = &[
-    "progress",
-    "resolved",
-    "locked",
-    "notlocked",
-    "compiled",
-    "modeled",
-];
+const EXTENSIONS: &[&str] = &["progress", "resolved", "locked", "notlocked", "compiled"];
 
 pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     if path.iter().any(|part| part == "deps_only") {
