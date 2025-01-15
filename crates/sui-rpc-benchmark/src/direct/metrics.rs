@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+/// This module defines data structures and functions for collecting
+/// and summarizing performance metrics from benchmark queries. It
+/// supports tracking overall and per-table query latencies, error counts, total queries,
+use dashmap::DashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Debug, Default)]
@@ -28,41 +31,33 @@ pub struct TableStats {
     pub avg_latency_ms: f64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MetricsCollector {
-    metrics: Arc<Mutex<HashMap<String, QueryMetrics>>>,
-}
-
-impl Default for MetricsCollector {
-    fn default() -> Self {
-        Self {
-            metrics: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
+    metrics: Arc<DashMap<String, QueryMetrics>>,
 }
 
 impl MetricsCollector {
     pub fn record_query(&self, query_type: &str, latency: Duration, is_error: bool) {
-        let mut metrics = self.metrics.lock().unwrap();
-        let metrics = metrics.entry(query_type.to_string()).or_default();
+        let mut entry = self.metrics.entry(query_type.to_string()).or_default();
 
-        metrics.total_queries += 1;
+        entry.total_queries += 1;
         if is_error {
-            metrics.errors += 1;
+            entry.errors += 1;
         } else {
-            metrics.latency_ms.push(latency.as_secs_f64() * 1000.0);
+            entry.latency_ms.push(latency.as_secs_f64() * 1000.0);
         }
     }
 
     pub fn generate_report(&self) -> BenchmarkResult {
-        let metrics = self.metrics.lock().unwrap();
         let mut total_queries = 0;
         let mut total_errors = 0;
         let mut total_latency = 0.0;
         let mut total_successful = 0;
         let mut table_stats = Vec::new();
 
-        for (table_name, metrics) in metrics.iter() {
+        for entry in self.metrics.iter() {
+            let table_name = entry.key().clone();
+            let metrics = entry.value();
             let successful = metrics.total_queries - metrics.errors;
             let avg_latency = if successful > 0 {
                 metrics.latency_ms.iter().sum::<f64>() / successful as f64
@@ -71,7 +66,7 @@ impl MetricsCollector {
             };
 
             table_stats.push(TableStats {
-                table_name: table_name.clone(),
+                table_name,
                 queries: metrics.total_queries,
                 errors: metrics.errors,
                 avg_latency_ms: avg_latency,
@@ -82,6 +77,7 @@ impl MetricsCollector {
             total_latency += metrics.latency_ms.iter().sum::<f64>();
             total_successful += successful;
         }
+
         table_stats.sort_by(|a, b| b.queries.cmp(&a.queries));
 
         BenchmarkResult {

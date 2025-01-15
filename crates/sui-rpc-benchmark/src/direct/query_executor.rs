@@ -7,12 +7,31 @@ use anyhow::Result;
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use rand::seq::SliceRandom;
+use sui_indexer_alt_framework::task::TrySpawnStreamExt;
 use tokio_postgres::{types::ToSql, types::Type, NoTls, Row};
+use tracing::info;
 
 use crate::direct::benchmark_config::BenchmarkConfig;
 use crate::direct::metrics::{BenchmarkResult, MetricsCollector};
 use crate::direct::query_generator::BenchmarkQuery;
 
+/// This module contains the QueryExecutor, which coordinates benchmark queries
+/// against the database. It can “enrich” each BenchmarkQuery by sampling real
+/// data from the relevant table. Each query’s execution is timed and recorded
+/// via MetricsCollector, which is defined in the metrics module.
+pub struct QueryExecutor {
+    pool: Pool<PostgresConnectionManager<NoTls>>,
+    queries: Vec<BenchmarkQuery>,
+    enriched_queries: Vec<EnrichedBenchmarkQuery>,
+    config: BenchmarkConfig,
+    metrics: MetricsCollector,
+}
+
+/// Represents strongly typed SQL values used in parametric queries.
+/// Storing them as an enum allows us to handle different column types
+/// transparently when performing random queries from the database.
+/// This approach lets us build parameter lists matching each column's
+/// actual type at runtime, ensuring correct and safe query execution.
 #[derive(Clone, Debug)]
 pub enum SqlValue {
     Text(Option<String>),
@@ -29,14 +48,6 @@ pub struct EnrichedBenchmarkQuery {
     pub query: BenchmarkQuery,
     pub rows: Vec<Vec<SqlValue>>,
     pub types: Vec<Type>,
-}
-
-pub struct QueryExecutor {
-    pool: Pool<PostgresConnectionManager<NoTls>>,
-    queries: Vec<BenchmarkQuery>,
-    enriched_queries: Vec<EnrichedBenchmarkQuery>,
-    config: BenchmarkConfig,
-    metrics: MetricsCollector,
 }
 
 impl QueryExecutor {
@@ -72,6 +83,10 @@ impl QueryExecutor {
             .collect()
     }
 
+    /// "Enriching" a query involves discovering valid column values for
+    /// placeholders. By sampling data from the table, we can produce
+    /// realistic sets of parameters, rather than random or empty
+    /// placeholders, leading to more accurate benchmark results.
     async fn enrich_query(&self, query: &BenchmarkQuery) -> Result<EnrichedBenchmarkQuery> {
         let client = self.pool.get().await?;
         let sql = format!(
@@ -83,7 +98,7 @@ impl QueryExecutor {
 
         let rows = client.query(&sql, &[]).await?;
         if rows.is_empty() {
-            println!(
+            info!(
                 "Warning: No sample data found for query on table {}, table is empty",
                 query.table_name
             );
@@ -168,33 +183,31 @@ impl QueryExecutor {
             self.initialize_samples().await?;
         }
 
-        println!(
+        info!(
             "Running benchmark with {} concurrent clients",
             self.config.concurrency
         );
 
         let start = Instant::now();
         let deadline = start + self.config.duration;
-
-        let queries_per_worker = self.enriched_queries.chunks(
-            (self.enriched_queries.len() + self.config.concurrency - 1) / self.config.concurrency,
+        let (concurrency, metrics, pool, queries) = (
+            self.config.concurrency,
+            self.metrics.clone(),
+            self.pool.clone(),
+            self.enriched_queries.clone(),
         );
-
-        let mut handles = Vec::new();
-        for worker_queries in queries_per_worker {
-            let pool = self.pool.clone();
-            let worker_queries = worker_queries.to_vec();
-            let metrics = self.metrics.clone();
-
-            let handle = tokio::spawn(async move {
-                QueryExecutor::worker_task(pool, worker_queries, metrics, deadline).await
-            });
-            handles.push(handle);
-        }
-
-        for handle in handles {
-            handle.await??;
-        }
+        futures::stream::iter(
+            queries
+                .into_iter()
+                .map(move |query| (pool.clone(), vec![query], metrics.clone(), deadline)),
+        )
+        .try_for_each_spawned(
+            concurrency,
+            |(pool, queries, metrics, deadline)| async move {
+                QueryExecutor::worker_task(pool, queries, metrics, deadline).await
+            },
+        )
+        .await?;
 
         Ok(self.metrics.generate_report())
     }

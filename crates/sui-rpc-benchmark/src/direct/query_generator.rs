@@ -1,7 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// This module generates SQL queries for benchmarking, including
+/// queries based on primary key columns and indexed columns.
+///
+/// The primary key queries ("pk queries") select a row by each PK,
+/// while the "index queries" filter by indexed columns. Instead
+/// of returning just a list of tables and indexes, this module
+/// returns a vector of BenchmarkQuery objects, each of which is
+/// ready to be executed. This approach streamlines the pipeline
+/// so we can directly run these queries as part of the benchmark.
 use tokio_postgres::NoTls;
+use tracing::info;
 
 pub struct QueryGenerator {
     pub db_url: String,
@@ -31,7 +41,7 @@ impl QueryGenerator {
             .iter()
             .map(|row| row.get::<_, String>(0))
             .collect();
-        println!(
+        info!(
             "Found {} active tables in database: {:?}",
             tables.len(),
             tables
@@ -94,9 +104,9 @@ impl QueryGenerator {
             queries.push(self.create_index_query(&table, &columns));
         }
 
-        println!("\nGenerated {} queries:", queries.len());
+        info!("\nGenerated {} queries:", queries.len());
         for (i, query) in queries.iter().enumerate() {
-            println!(
+            info!(
                 "  {}. Table: {}, Template: {}",
                 i + 1,
                 query.table_name,
