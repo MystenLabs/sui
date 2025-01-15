@@ -63,11 +63,6 @@ const concepts = [
 					id: 'concepts/sui-move-concepts',
 				},
 				items: [
-					'concepts/sui-move-concepts/strings',
-					'concepts/sui-move-concepts/collections',
-					'concepts/sui-move-concepts/init',
-					'concepts/sui-move-concepts/entry-functions',
-					'concepts/sui-move-concepts/one-time-witness',
 					{
 						type: 'category',
 						label: 'Packages',
