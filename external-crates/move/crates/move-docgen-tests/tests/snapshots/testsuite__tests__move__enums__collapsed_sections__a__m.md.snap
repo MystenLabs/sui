@@ -32,7 +32,7 @@ This is a doc comment above an annotation.
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="a/m.md#a_m_X">X</a> <b>has</b> drop
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_X">X</a> <b>has</b> drop
 </code></pre>
 
 
@@ -42,7 +42,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>x: <a href="a/m.md#a_m_Enum">a::m::Enum</a></code>
+<code>x: <a href="../a/m.md#a_m_Enum">a::m::Enum</a></code>
 </dt>
 <dd>
 </dd>
@@ -55,7 +55,7 @@ This is a doc comment above an annotation.
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="a/m.md#a_m_Y">Y</a>
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_Y">Y</a>
 </code></pre>
 
 
@@ -65,7 +65,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>0: <a href="a/m.md#a_m_Enum">a::m::Enum</a></code>
+<code>0: <a href="../a/m.md#a_m_Enum">a::m::Enum</a></code>
 </dt>
 <dd>
 </dd>
@@ -78,7 +78,7 @@ This is a doc comment above an annotation.
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="a/m.md#a_m_XG">XG</a>
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_XG">XG</a>
 </code></pre>
 
 
@@ -88,7 +88,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>x: <a href="a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;<a href="a/m.md#a_m_Enum">a::m::Enum</a>&gt;</code>
+<code>x: <a href="../a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;<a href="../a/m.md#a_m_Enum">a::m::Enum</a>&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -101,7 +101,7 @@ This is a doc comment above an annotation.
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="a/m.md#a_m_YG">YG</a>
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_YG">YG</a>
 </code></pre>
 
 
@@ -111,7 +111,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>0: <a href="a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;<a href="a/m.md#a_m_Enum">a::m::Enum</a>&gt;</code>
+<code>0: <a href="../a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;<a href="../a/m.md#a_m_Enum">a::m::Enum</a>&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -134,7 +134,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>x: <a href="a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;T&gt;</code>
+<code>x: <a href="../a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;T&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -157,7 +157,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>0: <a href="a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;T&gt;</code>
+<code>0: <a href="../a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;T&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -180,7 +180,7 @@ This is a doc comment above an annotation.
 
 <dl>
 <dt>
-<code>contents: vector&lt;<a href="a/m.md#a_m_Entry">a::m::Entry</a>&lt;K, V&gt;&gt;</code>
+<code>contents: vector&lt;<a href="../a/m.md#a_m_Entry">a::m::Entry</a>&lt;K, V&gt;&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -223,7 +223,7 @@ An entry in the map
 This is a doc comment above an enum
 
 
-<pre><code><b>public</b> <b>enum</b> <a href="a/m.md#a_m_Enum">Enum</a> <b>has</b> drop
+<pre><code><b>public</b> <b>enum</b> <a href="../a/m.md#a_m_Enum">Enum</a> <b>has</b> drop
 </code></pre>
 
 
@@ -305,7 +305,7 @@ Variant <code>E</code>
 
 
 
-<pre><code><b>public</b> <b>enum</b> <a href="a/m.md#a_m_GenericEnum">GenericEnum</a>&lt;T&gt;
+<pre><code><b>public</b> <b>enum</b> <a href="../a/m.md#a_m_GenericEnum">GenericEnum</a>&lt;T&gt;
 </code></pre>
 
 
@@ -340,10 +340,10 @@ Variant <code>B</code>
 
 ## Function `f`
 
-Doc comments <code>type_: <a href="a/m.md#a_m_VecMap">VecMap</a>&lt;u64, <a href="a/m.md#a_m_X">X</a>&gt;</code>
+Doc comments <code>type_: <a href="../a/m.md#a_m_VecMap">VecMap</a>&lt;u64, <a href="../a/m.md#a_m_X">X</a>&gt;</code>
 
 
-<pre><code><b>fun</b> <a href="a/m.md#a_m_f">f</a>(x: <a href="a/m.md#a_m_VecMap">a::m::VecMap</a>&lt;u64, <a href="a/m.md#a_m_X">a::m::X</a>&gt;): u64
+<pre><code><b>fun</b> <a href="../a/m.md#a_m_f">f</a>(x: <a href="../a/m.md#a_m_VecMap">a::m::VecMap</a>&lt;u64, <a href="../a/m.md#a_m_X">a::m::X</a>&gt;): u64
 </code></pre>
 
 
@@ -351,7 +351,7 @@ Doc comments <code>type_: <a href="a/m.md#a_m_VecMap">VecMap</a>&lt;u64, <a href
 ##### Implementation
 
 
-<pre><code><b>fun</b> <a href="a/m.md#a_m_f">f</a>(x: <a href="a/m.md#a_m_VecMap">VecMap</a>&lt;u64, <a href="a/m.md#a_m_X">X</a>&gt;): u64 {
+<pre><code><b>fun</b> <a href="../a/m.md#a_m_f">f</a>(x: <a href="../a/m.md#a_m_VecMap">VecMap</a>&lt;u64, <a href="../a/m.md#a_m_X">X</a>&gt;): u64 {
     0
 }
 </code></pre>

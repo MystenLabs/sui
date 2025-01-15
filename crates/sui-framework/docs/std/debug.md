@@ -19,7 +19,7 @@ Module providing debug functionality.
 
 
 
-<pre><code>publicfun printT(x: &T)
+<pre><code><b>public</b> <b>fun</b> printT(x: &T)
 </code></pre>
 
 
@@ -28,7 +28,7 @@ Module providing debug functionality.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="std/debug.md#std_debug_print">print</a>&lt;T&gt;(x: &T);
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/debug.md#std_debug_print">print</a>&lt;T&gt;(x: &T);
 </code></pre>
 
 
@@ -41,7 +41,7 @@ Module providing debug functionality.
 
 
 
-<pre><code>publicfun <a href="std/debug.md#std_debug_print_stack_trace">print_stack_trace</a>()
+<pre><code><b>public</b> <b>fun</b> <a href="../std/debug.md#std_debug_print_stack_trace">print_stack_trace</a>()
 </code></pre>
 
 
@@ -50,7 +50,7 @@ Module providing debug functionality.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="std/debug.md#std_debug_print_stack_trace">print_stack_trace</a>();
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/debug.md#std_debug_print_stack_trace">print_stack_trace</a>();
 </code></pre>
 
 

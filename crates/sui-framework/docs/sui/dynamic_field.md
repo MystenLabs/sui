@@ -30,15 +30,15 @@ building block for core collection types
 -  [Function `has_child_object_with_ty`](#sui_dynamic_field_has_child_object_with_ty)
 
 
-<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
-<b>use</b> <a href="sui/address.md#sui_address">sui::address</a>;
-<b>use</b> <a href="sui/hex.md#sui_hex">sui::hex</a>;
-<b>use</b> <a href="sui/object.md#sui_object">sui::object</a>;
-<b>use</b> <a href="sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
+<pre><code><b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
+<b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
+<b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 </code></pre>
 
 
@@ -61,7 +61,7 @@ Internal object used for storing the field and value
 
 <dl>
 <dt>
-<code>id: <a href="sui/object.md#sui_object_UID">sui::object::UID</a></code>
+<code>id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a></code>
 </dt>
 <dd>
  Determined by the hash of the object ID, the field name value and it's type,
@@ -94,7 +94,7 @@ Internal object used for storing the field and value
 Failed to serialize the field's name
 
 
-<pre><code><b>const</b> <a href="sui/dynamic_field.md#sui_dynamic_field_EBCSSerializationFailure">EBCSSerializationFailure</a>: u64 = 3;
+<pre><code><b>const</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_EBCSSerializationFailure">EBCSSerializationFailure</a>: u64 = 3;
 </code></pre>
 
 
@@ -104,7 +104,7 @@ Failed to serialize the field's name
 The object already has a dynamic field with this name (with the value and type specified)
 
 
-<pre><code><b>const</b> <a href="sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>: u64 = 0;
 </code></pre>
 
 
@@ -115,7 +115,7 @@ Cannot load dynamic field.
 The object does not have a dynamic field with this name (with the value and type specified)
 
 
-<pre><code><b>const</b> <a href="sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a>: u64 = 1;
 </code></pre>
 
 
@@ -125,7 +125,7 @@ The object does not have a dynamic field with this name (with the value and type
 The object has a field with that name, but the value type does not match
 
 
-<pre><code><b>const</b> <a href="sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a>: u64 = 2;
 </code></pre>
 
 
@@ -135,7 +135,7 @@ The object has a field with that name, but the value type does not match
 The object added as a dynamic field was previously a shared object
 
 
-<pre><code><b>const</b> <a href="sui/dynamic_field.md#sui_dynamic_field_ESharedObjectOperationNotSupported">ESharedObjectOperationNotSupported</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_ESharedObjectOperationNotSupported">ESharedObjectOperationNotSupported</a>: u64 = 4;
 </code></pre>
 
 
@@ -144,11 +144,11 @@ The object added as a dynamic field was previously a shared object
 
 ## Function `add`
 
-Adds a dynamic field to the object <code><a href="sui/object.md#sui_object">object</a>: &<b>mut</b> UID</code> at field specified by <code>name: Name</code>.
-Aborts with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a></code> if the object already has that field with that name.
+Adds a dynamic field to the object <code><a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID</code> at field specified by <code>name: Name</code>.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a></code> if the object already has that field with that name.
 
 
-<pre><code>publicfun addName, Value(<a href="sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name, value: Value)
+<pre><code><b>public</b> <b>fun</b> addName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name, value: Value)
 </code></pre>
 
 
@@ -157,21 +157,21 @@ Aborts with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyE
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_add">add</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_add">add</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
     // we <b>use</b> &<b>mut</b> UID in several spots <b>for</b> access control
-    <a href="sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+    <a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
     name: Name,
     value: Value,
 ) {
-    <b>let</b> object_addr = <a href="sui/object.md#sui_object">object</a>.to_address();
-    <b>let</b> <a href="sui/hash.md#sui_hash">hash</a> = <a href="sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>assert</b>!(!<a href="sui/dynamic_field.md#sui_dynamic_field_has_child_object">has_child_object</a>(object_addr, <a href="sui/hash.md#sui_hash">hash</a>), <a href="sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>);
-    <b>let</b> field = <a href="sui/dynamic_field.md#sui_dynamic_field_Field">Field</a> {
-        id: <a href="sui/object.md#sui_object_new_uid_from_hash">object::new_uid_from_hash</a>(<a href="sui/hash.md#sui_hash">hash</a>),
+    <b>let</b> object_addr = <a href="../sui/object.md#sui_object">object</a>.to_address();
+    <b>let</b> <a href="../sui/hash.md#sui_hash">hash</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
+    <b>assert</b>!(!<a href="../sui/dynamic_field.md#sui_dynamic_field_has_child_object">has_child_object</a>(object_addr, <a href="../sui/hash.md#sui_hash">hash</a>), <a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>);
+    <b>let</b> field = <a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a> {
+        id: <a href="../sui/object.md#sui_object_new_uid_from_hash">object::new_uid_from_hash</a>(<a href="../sui/hash.md#sui_hash">hash</a>),
         name,
         value,
     };
-    <a href="sui/dynamic_field.md#sui_dynamic_field_add_child_object">add_child_object</a>(object_addr, field)
+    <a href="../sui/dynamic_field.md#sui_dynamic_field_add_child_object">add_child_object</a>(object_addr, field)
 }
 </code></pre>
 
@@ -183,13 +183,13 @@ Aborts with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyE
 
 ## Function `borrow`
 
-Immutably borrows the <code><a href="sui/object.md#sui_object">object</a></code>s dynamic field with the name specified by <code>name: Name</code>.
-Aborts with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if the object does not have a field with that name.
-Aborts with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
+Immutably borrows the <code><a href="../sui/object.md#sui_object">object</a></code>s dynamic field with the name specified by <code>name: Name</code>.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if the object does not have a field with that name.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
 type.
 
 
-<pre><code>publicfun borrowName, Value(<a href="sui/object.md#sui_object">object</a>: &<a href="sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &Value
+<pre><code><b>public</b> <b>fun</b> borrowName, Value(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &Value
 </code></pre>
 
 
@@ -198,10 +198,10 @@ type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="sui/borrow.md#sui_borrow">borrow</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(<a href="sui/object.md#sui_object">object</a>: &UID, name: Name): &Value {
-    <b>let</b> object_addr = <a href="sui/object.md#sui_object">object</a>.to_address();
-    <b>let</b> <a href="sui/hash.md#sui_hash">hash</a> = <a href="sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>let</b> field = <a href="sui/dynamic_field.md#sui_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(<a href="sui/object.md#sui_object">object</a>, <a href="sui/hash.md#sui_hash">hash</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(<a href="../sui/object.md#sui_object">object</a>: &UID, name: Name): &Value {
+    <b>let</b> object_addr = <a href="../sui/object.md#sui_object">object</a>.to_address();
+    <b>let</b> <a href="../sui/hash.md#sui_hash">hash</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
+    <b>let</b> field = <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(<a href="../sui/object.md#sui_object">object</a>, <a href="../sui/hash.md#sui_hash">hash</a>);
     &field.value
 }
 </code></pre>
@@ -214,13 +214,13 @@ type.
 
 ## Function `borrow_mut`
 
-Mutably borrows the <code><a href="sui/object.md#sui_object">object</a></code>s dynamic field with the name specified by <code>name: Name</code>.
-Aborts with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if the object does not have a field with that name.
-Aborts with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
+Mutably borrows the <code><a href="../sui/object.md#sui_object">object</a></code>s dynamic field with the name specified by <code>name: Name</code>.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if the object does not have a field with that name.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
 type.
 
 
-<pre><code>publicfun borrow_mutName, Value(<a href="sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &<b>mut</b> Value
+<pre><code><b>public</b> <b>fun</b> borrow_mutName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &<b>mut</b> Value
 </code></pre>
 
 
@@ -229,13 +229,13 @@ type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
-    <a href="sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
+    <a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): &<b>mut</b> Value {
-    <b>let</b> object_addr = <a href="sui/object.md#sui_object">object</a>.to_address();
-    <b>let</b> <a href="sui/hash.md#sui_hash">hash</a> = <a href="sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>let</b> field = <a href="sui/dynamic_field.md#sui_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;<a href="sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(<a href="sui/object.md#sui_object">object</a>, <a href="sui/hash.md#sui_hash">hash</a>);
+    <b>let</b> object_addr = <a href="../sui/object.md#sui_object">object</a>.to_address();
+    <b>let</b> <a href="../sui/hash.md#sui_hash">hash</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
+    <b>let</b> field = <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;<a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(<a href="../sui/object.md#sui_object">object</a>, <a href="../sui/hash.md#sui_hash">hash</a>);
     &<b>mut</b> field.value
 }
 </code></pre>
@@ -248,14 +248,14 @@ type.
 
 ## Function `remove`
 
-Removes the <code><a href="sui/object.md#sui_object">object</a></code>s dynamic field with the name specified by <code>name: Name</code> and returns the
+Removes the <code><a href="../sui/object.md#sui_object">object</a></code>s dynamic field with the name specified by <code>name: Name</code> and returns the
 bound value.
-Aborts with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if the object does not have a field with that name.
-Aborts with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if the object does not have a field with that name.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
 type.
 
 
-<pre><code>publicfun removeName, Value(<a href="sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): Value
+<pre><code><b>public</b> <b>fun</b> removeName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): Value
 </code></pre>
 
 
@@ -264,10 +264,10 @@ type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_remove">remove</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(<a href="sui/object.md#sui_object">object</a>: &<b>mut</b> UID, name: Name): Value {
-    <b>let</b> object_addr = <a href="sui/object.md#sui_object">object</a>.to_address();
-    <b>let</b> <a href="sui/hash.md#sui_hash">hash</a> = <a href="sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>let</b> <a href="sui/dynamic_field.md#sui_dynamic_field_Field">Field</a> { id, name: _, value } = <a href="sui/dynamic_field.md#sui_dynamic_field_remove_child_object">remove_child_object</a>&lt;<a href="sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, <a href="sui/hash.md#sui_hash">hash</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_remove">remove</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID, name: Name): Value {
+    <b>let</b> object_addr = <a href="../sui/object.md#sui_object">object</a>.to_address();
+    <b>let</b> <a href="../sui/hash.md#sui_hash">hash</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
+    <b>let</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a> { id, name: _, value } = <a href="../sui/dynamic_field.md#sui_dynamic_field_remove_child_object">remove_child_object</a>&lt;<a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, <a href="../sui/hash.md#sui_hash">hash</a>);
     id.delete();
     value
 }
@@ -281,11 +281,11 @@ type.
 
 ## Function `exists_`
 
-Returns true if and only if the <code><a href="sui/object.md#sui_object">object</a></code> has a dynamic field with the name specified by
+Returns true if and only if the <code><a href="../sui/object.md#sui_object">object</a></code> has a dynamic field with the name specified by
 <code>name: Name</code> but without specifying the <code>Value</code> type
 
 
-<pre><code>publicfun exists_Name(<a href="sui/object.md#sui_object">object</a>: &<a href="sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
+<pre><code><b>public</b> <b>fun</b> exists_Name(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
 </code></pre>
 
 
@@ -294,10 +294,10 @@ Returns true if and only if the <code><a href="sui/object.md#sui_object">object<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_exists_">exists_</a>&lt;Name: <b>copy</b> + drop + store&gt;(<a href="sui/object.md#sui_object">object</a>: &UID, name: Name): bool {
-    <b>let</b> object_addr = <a href="sui/object.md#sui_object">object</a>.to_address();
-    <b>let</b> <a href="sui/hash.md#sui_hash">hash</a> = <a href="sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <a href="sui/dynamic_field.md#sui_dynamic_field_has_child_object">has_child_object</a>(object_addr, <a href="sui/hash.md#sui_hash">hash</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_exists_">exists_</a>&lt;Name: <b>copy</b> + drop + store&gt;(<a href="../sui/object.md#sui_object">object</a>: &UID, name: Name): bool {
+    <b>let</b> object_addr = <a href="../sui/object.md#sui_object">object</a>.to_address();
+    <b>let</b> <a href="../sui/hash.md#sui_hash">hash</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
+    <a href="../sui/dynamic_field.md#sui_dynamic_field_has_child_object">has_child_object</a>(object_addr, <a href="../sui/hash.md#sui_hash">hash</a>)
 }
 </code></pre>
 
@@ -312,7 +312,7 @@ Returns true if and only if the <code><a href="sui/object.md#sui_object">object<
 Removes the dynamic field if it exists. Returns the <code>some(Value)</code> if it exists or none otherwise.
 
 
-<pre><code>publicfun remove_if_existsName, Value(<a href="sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b> <b>fun</b> remove_if_existsName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -321,12 +321,12 @@ Removes the dynamic field if it exists. Returns the <code>some(Value)</code> if 
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_remove_if_exists">remove_if_exists</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
-    <a href="sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_remove_if_exists">remove_if_exists</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
+    <a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): Option&lt;Value&gt; {
-    <b>if</b> (<a href="sui/dynamic_field.md#sui_dynamic_field_exists_">exists_</a>&lt;Name&gt;(<a href="sui/object.md#sui_object">object</a>, name)) {
-        option::some(<a href="sui/dynamic_field.md#sui_dynamic_field_remove">remove</a>(<a href="sui/object.md#sui_object">object</a>, name))
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_">exists_</a>&lt;Name&gt;(<a href="../sui/object.md#sui_object">object</a>, name)) {
+        option::some(<a href="../sui/dynamic_field.md#sui_dynamic_field_remove">remove</a>(<a href="../sui/object.md#sui_object">object</a>, name))
     } <b>else</b> {
         option::none()
     }
@@ -341,11 +341,11 @@ Removes the dynamic field if it exists. Returns the <code>some(Value)</code> if 
 
 ## Function `exists_with_type`
 
-Returns true if and only if the <code><a href="sui/object.md#sui_object">object</a></code> has a dynamic field with the name specified by
+Returns true if and only if the <code><a href="../sui/object.md#sui_object">object</a></code> has a dynamic field with the name specified by
 <code>name: Name</code> with an assigned value of type <code>Value</code>.
 
 
-<pre><code>publicfun exists_with_typeName, Value(<a href="sui/object.md#sui_object">object</a>: &<a href="sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
+<pre><code><b>public</b> <b>fun</b> exists_with_typeName, Value(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
 </code></pre>
 
 
@@ -354,13 +354,13 @@ Returns true if and only if the <code><a href="sui/object.md#sui_object">object<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
-    <a href="sui/object.md#sui_object">object</a>: &UID,
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
+    <a href="../sui/object.md#sui_object">object</a>: &UID,
     name: Name,
 ): bool {
-    <b>let</b> object_addr = <a href="sui/object.md#sui_object">object</a>.to_address();
-    <b>let</b> <a href="sui/hash.md#sui_hash">hash</a> = <a href="sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <a href="sui/dynamic_field.md#sui_dynamic_field_has_child_object_with_ty">has_child_object_with_ty</a>&lt;<a href="sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, <a href="sui/hash.md#sui_hash">hash</a>)
+    <b>let</b> object_addr = <a href="../sui/object.md#sui_object">object</a>.to_address();
+    <b>let</b> <a href="../sui/hash.md#sui_hash">hash</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
+    <a href="../sui/dynamic_field.md#sui_dynamic_field_has_child_object_with_ty">has_child_object_with_ty</a>&lt;<a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, <a href="../sui/hash.md#sui_hash">hash</a>)
 }
 </code></pre>
 
@@ -374,7 +374,7 @@ Returns true if and only if the <code><a href="sui/object.md#sui_object">object<
 
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>)<b>fun</b> field_infoName(<a href="sui/object.md#sui_object">object</a>: &<a href="sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): (&<a href="sui/object.md#sui_object_UID">sui::object::UID</a>, <b>address</b>)
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> field_infoName(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): (&<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, <b>address</b>)
 </code></pre>
 
 
@@ -383,13 +383,13 @@ Returns true if and only if the <code><a href="sui/object.md#sui_object">object<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>) <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_field_info">field_info</a>&lt;Name: <b>copy</b> + drop + store&gt;(
-    <a href="sui/object.md#sui_object">object</a>: &UID,
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_field_info">field_info</a>&lt;Name: <b>copy</b> + drop + store&gt;(
+    <a href="../sui/object.md#sui_object">object</a>: &UID,
     name: Name,
 ): (&UID, <b>address</b>) {
-    <b>let</b> object_addr = <a href="sui/object.md#sui_object">object</a>.to_address();
-    <b>let</b> <a href="sui/hash.md#sui_hash">hash</a> = <a href="sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>let</b> <a href="sui/dynamic_field.md#sui_dynamic_field_Field">Field</a> { id, name: _, value } = <a href="sui/dynamic_field.md#sui_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, ID&gt;&gt;(<a href="sui/object.md#sui_object">object</a>, <a href="sui/hash.md#sui_hash">hash</a>);
+    <b>let</b> object_addr = <a href="../sui/object.md#sui_object">object</a>.to_address();
+    <b>let</b> <a href="../sui/hash.md#sui_hash">hash</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
+    <b>let</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a> { id, name: _, value } = <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, ID&gt;&gt;(<a href="../sui/object.md#sui_object">object</a>, <a href="../sui/hash.md#sui_hash">hash</a>);
     (id, value.to_address())
 }
 </code></pre>
@@ -404,7 +404,7 @@ Returns true if and only if the <code><a href="sui/object.md#sui_object">object<
 
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>)<b>fun</b> field_info_mutName(<a href="sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): (&<b>mut</b> <a href="sui/object.md#sui_object_UID">sui::object::UID</a>, <b>address</b>)
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> field_info_mutName(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): (&<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, <b>address</b>)
 </code></pre>
 
 
@@ -413,13 +413,13 @@ Returns true if and only if the <code><a href="sui/object.md#sui_object">object<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>) <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_field_info_mut">field_info_mut</a>&lt;Name: <b>copy</b> + drop + store&gt;(
-    <a href="sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_field_info_mut">field_info_mut</a>&lt;Name: <b>copy</b> + drop + store&gt;(
+    <a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): (&<b>mut</b> UID, <b>address</b>) {
-    <b>let</b> object_addr = <a href="sui/object.md#sui_object">object</a>.to_address();
-    <b>let</b> <a href="sui/hash.md#sui_hash">hash</a> = <a href="sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>let</b> <a href="sui/dynamic_field.md#sui_dynamic_field_Field">Field</a> { id, name: _, value } = <a href="sui/dynamic_field.md#sui_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;<a href="sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, ID&gt;&gt;(<a href="sui/object.md#sui_object">object</a>, <a href="sui/hash.md#sui_hash">hash</a>);
+    <b>let</b> object_addr = <a href="../sui/object.md#sui_object">object</a>.to_address();
+    <b>let</b> <a href="../sui/hash.md#sui_hash">hash</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
+    <b>let</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a> { id, name: _, value } = <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;<a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, ID&gt;&gt;(<a href="../sui/object.md#sui_object">object</a>, <a href="../sui/hash.md#sui_hash">hash</a>);
     (id, value.to_address())
 }
 </code></pre>
@@ -432,10 +432,10 @@ Returns true if and only if the <code><a href="sui/object.md#sui_object">object<
 
 ## Function `hash_type_and_key`
 
-May abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EBCSSerializationFailure">EBCSSerializationFailure</a></code>.
+May abort with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EBCSSerializationFailure">EBCSSerializationFailure</a></code>.
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>)<b>fun</b> hash_type_and_keyK(parent: <b>address</b>, k: K): <b>address</b>
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> hash_type_and_keyK(parent: <b>address</b>, k: K): <b>address</b>
 </code></pre>
 
 
@@ -444,7 +444,7 @@ May abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EBCSSeriali
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>&lt;K: <b>copy</b> + drop + store&gt;(
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>&lt;K: <b>copy</b> + drop + store&gt;(
     parent: <b>address</b>,
     k: K,
 ): <b>address</b>;
@@ -460,7 +460,7 @@ May abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EBCSSeriali
 
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>)<b>fun</b> add_child_objectChild(parent: <b>address</b>, child: Child)
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> add_child_objectChild(parent: <b>address</b>, child: Child)
 </code></pre>
 
 
@@ -469,7 +469,7 @@ May abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EBCSSeriali
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_add_child_object">add_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, child: Child);
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_add_child_object">add_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, child: Child);
 </code></pre>
 
 
@@ -480,13 +480,13 @@ May abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EBCSSeriali
 
 ## Function `borrow_child_object`
 
-throws <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if a child does not exist with that ID
-or throws <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the type does not match,
-and may also abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EBCSSerializationFailure">EBCSSerializationFailure</a></code>
+throws <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if a child does not exist with that ID
+or throws <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the type does not match,
+and may also abort with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EBCSSerializationFailure">EBCSSerializationFailure</a></code>
 we need two versions to return a reference or a mutable reference
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>)<b>fun</b> borrow_child_objectChild(<a href="sui/object.md#sui_object">object</a>: &<a href="sui/object.md#sui_object_UID">sui::object::UID</a>, id: <b>address</b>): &Child
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> borrow_child_objectChild(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, id: <b>address</b>): &Child
 </code></pre>
 
 
@@ -495,7 +495,7 @@ we need two versions to return a reference or a mutable reference
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;Child: key&gt;(<a href="sui/object.md#sui_object">object</a>: &UID, id: <b>address</b>): &Child;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;Child: key&gt;(<a href="../sui/object.md#sui_object">object</a>: &UID, id: <b>address</b>): &Child;
 </code></pre>
 
 
@@ -508,7 +508,7 @@ we need two versions to return a reference or a mutable reference
 
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>)<b>fun</b> borrow_child_object_mutChild(<a href="sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="sui/object.md#sui_object_UID">sui::object::UID</a>, id: <b>address</b>): &<b>mut</b> Child
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> borrow_child_object_mutChild(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, id: <b>address</b>): &<b>mut</b> Child
 </code></pre>
 
 
@@ -517,8 +517,8 @@ we need two versions to return a reference or a mutable reference
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;Child: key&gt;(
-    <a href="sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;Child: key&gt;(
+    <a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
     id: <b>address</b>,
 ): &<b>mut</b> Child;
 </code></pre>
@@ -531,12 +531,12 @@ we need two versions to return a reference or a mutable reference
 
 ## Function `remove_child_object`
 
-throws <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if a child does not exist with that ID
-or throws <code><a href="sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the type does not match,
-and may also abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EBCSSerializationFailure">EBCSSerializationFailure</a></code>.
+throws <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if a child does not exist with that ID
+or throws <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the type does not match,
+and may also abort with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EBCSSerializationFailure">EBCSSerializationFailure</a></code>.
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>)<b>fun</b> remove_child_objectChild(parent: <b>address</b>, id: <b>address</b>): Child
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> remove_child_objectChild(parent: <b>address</b>, id: <b>address</b>): Child
 </code></pre>
 
 
@@ -545,7 +545,7 @@ and may also abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EB
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_remove_child_object">remove_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, id: <b>address</b>): Child;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_remove_child_object">remove_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, id: <b>address</b>): Child;
 </code></pre>
 
 
@@ -558,7 +558,7 @@ and may also abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EB
 
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>)<b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_has_child_object">has_child_object</a>(parent: <b>address</b>, id: <b>address</b>): bool
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_has_child_object">has_child_object</a>(parent: <b>address</b>, id: <b>address</b>): bool
 </code></pre>
 
 
@@ -567,7 +567,7 @@ and may also abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EB
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_has_child_object">has_child_object</a>(parent: <b>address</b>, id: <b>address</b>): bool;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_has_child_object">has_child_object</a>(parent: <b>address</b>, id: <b>address</b>): bool;
 </code></pre>
 
 
@@ -580,7 +580,7 @@ and may also abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EB
 
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>)<b>fun</b> has_child_object_with_tyChild(parent: <b>address</b>, id: <b>address</b>): bool
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> has_child_object_with_tyChild(parent: <b>address</b>, id: <b>address</b>): bool
 </code></pre>
 
 
@@ -589,7 +589,7 @@ and may also abort with <code><a href="sui/dynamic_field.md#sui_dynamic_field_EB
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="sui/dynamic_field.md#sui_dynamic_field_has_child_object_with_ty">has_child_object_with_ty</a>&lt;Child: key&gt;(parent: <b>address</b>, id: <b>address</b>): bool;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_has_child_object_with_ty">has_child_object_with_ty</a>&lt;Child: key&gt;(parent: <b>address</b>, id: <b>address</b>): bool;
 </code></pre>
 
 

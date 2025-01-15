@@ -22,7 +22,7 @@ as in the Move prover's prelude.
 
 
 
-<pre><code>publicfun <a href="std/hash.md#std_hash_sha2_256">sha2_256</a>(data: <a href="std/vector.md#std_vector">vector</a>&lt;<a href="std/u8.md#std_u8">u8</a>&gt;): <a href="std/vector.md#std_vector">vector</a>&lt;<a href="std/u8.md#std_u8">u8</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../std/hash.md#std_hash_sha2_256">sha2_256</a>(data: <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;): <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;
 </code></pre>
 
 
@@ -31,7 +31,7 @@ as in the Move prover's prelude.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="std/hash.md#std_hash_sha2_256">sha2_256</a>(data: <a href="std/vector.md#std_vector">vector</a>&lt;<a href="std/u8.md#std_u8">u8</a>&gt;): <a href="std/vector.md#std_vector">vector</a>&lt;<a href="std/u8.md#std_u8">u8</a>&gt;;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/hash.md#std_hash_sha2_256">sha2_256</a>(data: <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;): <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;;
 </code></pre>
 
 
@@ -44,7 +44,7 @@ as in the Move prover's prelude.
 
 
 
-<pre><code>publicfun <a href="std/hash.md#std_hash_sha3_256">sha3_256</a>(data: <a href="std/vector.md#std_vector">vector</a>&lt;<a href="std/u8.md#std_u8">u8</a>&gt;): <a href="std/vector.md#std_vector">vector</a>&lt;<a href="std/u8.md#std_u8">u8</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../std/hash.md#std_hash_sha3_256">sha3_256</a>(data: <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;): <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;
 </code></pre>
 
 
@@ -53,7 +53,7 @@ as in the Move prover's prelude.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="std/hash.md#std_hash_sha3_256">sha3_256</a>(data: <a href="std/vector.md#std_vector">vector</a>&lt;<a href="std/u8.md#std_u8">u8</a>&gt;): <a href="std/vector.md#std_vector">vector</a>&lt;<a href="std/u8.md#std_u8">u8</a>&gt;;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/hash.md#std_hash_sha3_256">sha3_256</a>(data: <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;): <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;;
 </code></pre>
 
 

@@ -24,7 +24,7 @@ title: Module `sui::vdf`
 
 
 
-<pre><code><b>const</b> <a href="sui/vdf.md#sui_vdf_EInvalidInput">EInvalidInput</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/vdf.md#sui_vdf_EInvalidInput">EInvalidInput</a>: u64 = 0;
 </code></pre>
 
 
@@ -33,10 +33,10 @@ title: Module `sui::vdf`
 
 ## Function `hash_to_input`
 
-Hash an arbitrary binary <code>message</code> to a class group element to be used as input for <code><a href="sui/vdf.md#sui_vdf_vdf_verify">vdf_verify</a></code>.
+Hash an arbitrary binary <code>message</code> to a class group element to be used as input for <code><a href="../sui/vdf.md#sui_vdf_vdf_verify">vdf_verify</a></code>.
 
 
-<pre><code>publicfun <a href="sui/vdf.md#sui_vdf_hash_to_input">hash_to_input</a>(message: &vector&lt;u8&gt;): vector&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vdf.md#sui_vdf_hash_to_input">hash_to_input</a>(message: &vector&lt;u8&gt;): vector&lt;u8&gt;
 </code></pre>
 
 
@@ -45,8 +45,8 @@ Hash an arbitrary binary <code>message</code> to a class group element to be use
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="sui/vdf.md#sui_vdf_hash_to_input">hash_to_input</a>(message: &vector&lt;u8&gt;): vector&lt;u8&gt; {
-    <a href="sui/vdf.md#sui_vdf_hash_to_input_internal">hash_to_input_internal</a>(message)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vdf.md#sui_vdf_hash_to_input">hash_to_input</a>(message: &vector&lt;u8&gt;): vector&lt;u8&gt; {
+    <a href="../sui/vdf.md#sui_vdf_hash_to_input_internal">hash_to_input_internal</a>(message)
 }
 </code></pre>
 
@@ -58,10 +58,10 @@ Hash an arbitrary binary <code>message</code> to a class group element to be use
 
 ## Function `hash_to_input_internal`
 
-The internal functions for <code><a href="sui/vdf.md#sui_vdf_hash_to_input">hash_to_input</a></code>.
+The internal functions for <code><a href="../sui/vdf.md#sui_vdf_hash_to_input">hash_to_input</a></code>.
 
 
-<pre><code><b>fun</b> <a href="sui/vdf.md#sui_vdf_hash_to_input_internal">hash_to_input_internal</a>(message: &vector&lt;u8&gt;): vector&lt;u8&gt;
+<pre><code><b>fun</b> <a href="../sui/vdf.md#sui_vdf_hash_to_input_internal">hash_to_input_internal</a>(message: &vector&lt;u8&gt;): vector&lt;u8&gt;
 </code></pre>
 
 
@@ -70,7 +70,7 @@ The internal functions for <code><a href="sui/vdf.md#sui_vdf_hash_to_input">hash
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="sui/vdf.md#sui_vdf_hash_to_input_internal">hash_to_input_internal</a>(message: &vector&lt;u8&gt;): vector&lt;u8&gt;;
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/vdf.md#sui_vdf_hash_to_input_internal">hash_to_input_internal</a>(message: &vector&lt;u8&gt;): vector&lt;u8&gt;;
 </code></pre>
 
 
@@ -95,7 +95,7 @@ crate. The final selection of the discriminant for Mainnet will be computed and 
 process.
 
 
-<pre><code>publicfun <a href="sui/vdf.md#sui_vdf_vdf_verify">vdf_verify</a>(input: &vector&lt;u8&gt;, output: &vector&lt;u8&gt;, proof: &vector&lt;u8&gt;, iterations: u64): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vdf.md#sui_vdf_vdf_verify">vdf_verify</a>(input: &vector&lt;u8&gt;, output: &vector&lt;u8&gt;, proof: &vector&lt;u8&gt;, iterations: u64): bool
 </code></pre>
 
 
@@ -104,13 +104,13 @@ process.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="sui/vdf.md#sui_vdf_vdf_verify">vdf_verify</a>(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vdf.md#sui_vdf_vdf_verify">vdf_verify</a>(
     input: &vector&lt;u8&gt;,
     output: &vector&lt;u8&gt;,
     proof: &vector&lt;u8&gt;,
     iterations: u64,
 ): bool {
-    <a href="sui/vdf.md#sui_vdf_vdf_verify_internal">vdf_verify_internal</a>(input, output, proof, iterations)
+    <a href="../sui/vdf.md#sui_vdf_vdf_verify_internal">vdf_verify_internal</a>(input, output, proof, iterations)
 }
 </code></pre>
 
@@ -122,10 +122,10 @@ process.
 
 ## Function `vdf_verify_internal`
 
-The internal functions for <code><a href="sui/vdf.md#sui_vdf_vdf_verify_internal">vdf_verify_internal</a></code>.
+The internal functions for <code><a href="../sui/vdf.md#sui_vdf_vdf_verify_internal">vdf_verify_internal</a></code>.
 
 
-<pre><code><b>fun</b> <a href="sui/vdf.md#sui_vdf_vdf_verify_internal">vdf_verify_internal</a>(input: &vector&lt;u8&gt;, output: &vector&lt;u8&gt;, proof: &vector&lt;u8&gt;, iterations: u64): bool
+<pre><code><b>fun</b> <a href="../sui/vdf.md#sui_vdf_vdf_verify_internal">vdf_verify_internal</a>(input: &vector&lt;u8&gt;, output: &vector&lt;u8&gt;, proof: &vector&lt;u8&gt;, iterations: u64): bool
 </code></pre>
 
 
@@ -134,7 +134,7 @@ The internal functions for <code><a href="sui/vdf.md#sui_vdf_vdf_verify_internal
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="sui/vdf.md#sui_vdf_vdf_verify_internal">vdf_verify_internal</a>(
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/vdf.md#sui_vdf_vdf_verify_internal">vdf_verify_internal</a>(
     input: &vector&lt;u8&gt;,
     output: &vector&lt;u8&gt;,
     proof: &vector&lt;u8&gt;,

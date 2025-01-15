@@ -31,7 +31,7 @@ code block
 then <code>inline code</code>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="a/m.md#a_m_main">main</a>()
+<pre><code><b>entry</b> <b>fun</b> <a href="../a/m.md#a_m_main">main</a>()
 </code></pre>
 
 
@@ -39,5 +39,5 @@ then <code>inline code</code>
 ##### Implementation
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="a/m.md#a_m_main">main</a>() { }
+<pre><code><b>entry</b> <b>fun</b> <a href="../a/m.md#a_m_main">main</a>() { }
 </code></pre>
