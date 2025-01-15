@@ -477,16 +477,12 @@ impl<'env> Docgen<'env> {
                     format!(
                         "dependencies/{}/{}",
                         package_name,
-                        file_name.to_string_lossy()
+                        file_name.to_string_lossy(),
                     )
                 })
         } else {
             // We will generate this file in the provided output directory.
-            format!(
-                "{}/{}",
-                package_name,
-                file_name.to_string_lossy().to_string()
-            )
+            format!("{}/{}", package_name, file_name.to_string_lossy(),)
         }
     }
 
