@@ -271,12 +271,12 @@ pub async fn start_faucet(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_error))
                 .layer(RequestMetricsLayer::new(prometheus_registry))
-                .layer(cors)
                 .load_shed()
                 .buffer(request_buffer_size)
                 .concurrency_limit(concurrency_limit)
                 .layer(Extension(app_state.clone()))
                 .layer(Extension(token_manager.clone()))
+                .layer(cors)
                 .into_inner(),
         );
 
