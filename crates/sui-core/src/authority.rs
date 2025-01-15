@@ -2147,7 +2147,7 @@ impl AuthorityState {
         )?;
 
         // Create and use a dummy gas object if there is no gas object provided.
-        assert!(
+        debug_assert!(
             DEV_INSPECT_GAS_COIN_VALUE >= max_tx_gas,
             "DEV_INSPECT_GAS_COIN_VALUE {} cannot be less than max_tx_gas {}",
             DEV_INSPECT_GAS_COIN_VALUE,
