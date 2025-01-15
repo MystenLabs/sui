@@ -114,9 +114,12 @@ impl Handler for ObjInfo {
     ) -> Result<usize> {
         use sui_indexer_alt_schema::schema::obj_info::dsl;
 
-        let to_prune = self.pruning_lookup_table.take(from, to_exclusive)?;
+        let to_prune = self
+            .pruning_lookup_table
+            .get_prune_info(from, to_exclusive)?;
 
         if to_prune.is_empty() {
+            self.pruning_lookup_table.gc_prune_info(from, to_exclusive);
             return Ok(0);
         }
 
@@ -146,6 +149,7 @@ impl Handler for ObjInfo {
             dsl::cp_sequence_number,
         );
         let rows_deleted = sql_query(query).execute(conn).await?;
+        self.pruning_lookup_table.gc_prune_info(from, to_exclusive);
         Ok(rows_deleted)
     }
 }
@@ -600,5 +604,57 @@ mod tests {
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         assert_eq!(all_obj_info.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_obj_info_prune_with_missing_data() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.db().connect().await.unwrap();
+        let obj_info = ObjInfo::default();
+        let mut builder = TestCheckpointDataBuilder::new(0);
+        builder = builder
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = obj_info.process(&Arc::new(checkpoint)).unwrap();
+        ObjInfo::commit(&values, &mut conn).await.unwrap();
+
+        // Cannot prune checkpoint 1 yet since we haven't processed the checkpoint 1 data.
+        // This should not yet remove the prune info for checkpoint 0.
+        assert!(obj_info.prune(0, 2, &mut conn).await.is_err());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = obj_info.process(&Arc::new(checkpoint)).unwrap();
+        ObjInfo::commit(&values, &mut conn).await.unwrap();
+
+        // Now we can prune both checkpoints 0 and 1.
+        obj_info.prune(0, 2, &mut conn).await.unwrap();
+
+        builder = builder
+            .start_transaction(1)
+            .transfer_object(0, 0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = obj_info.process(&Arc::new(checkpoint)).unwrap();
+        ObjInfo::commit(&values, &mut conn).await.unwrap();
+
+        // Checkpoint 3 is missing, so we can not prune it.
+        assert!(obj_info.prune(2, 4, &mut conn).await.is_err());
+
+        builder = builder
+            .start_transaction(2)
+            .delete_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = obj_info.process(&Arc::new(checkpoint)).unwrap();
+        ObjInfo::commit(&values, &mut conn).await.unwrap();
+
+        // Now we can prune checkpoint 2, as well as 3.
+        obj_info.prune(2, 4, &mut conn).await.unwrap();
     }
 }
