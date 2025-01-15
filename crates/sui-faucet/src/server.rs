@@ -34,7 +34,7 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::faucet::Faucet;
-use dashmap::DashMap;
+use dashmap::{mapref::entry::Entry, DashMap};
 use serde::Deserialize;
 
 use anyhow::ensure;
@@ -54,16 +54,14 @@ static CLOUDFLARE_TURNSTILE_URL: Lazy<Option<String>> =
 static TURNSTILE_SECRET_KEY: Lazy<Option<String>> =
     Lazy::new(|| std::env::var("TURNSTILE_SECRET_KEY").ok());
 
-type IPAddr = String;
-
 /// Keep track of every IP address' requests.
 #[derive(Debug)]
 struct RequestsManager {
-    pub data: Arc<DashMap<IPAddr, RequestInfo>>,
-    reset_time_interval_secs: u64,
+    data: Arc<DashMap<IpAddr, RequestInfo>>,
+    reset_time_interval: Duration,
     max_requests_per_ip: u64,
-    pub cloudflare_turnstile_url: String,
-    pub turnstile_secret_key: String,
+    cloudflare_turnstile_url: String,
+    turnstile_secret_key: String,
 }
 
 /// Request's metadata
@@ -87,13 +85,13 @@ impl RequestsManager {
     /// Initialize a new RequestsManager
     fn new(
         max_requests_per_ip: u64,
-        reset_time_interval_secs: u64,
+        reset_time_interval_secs: Duration,
         cloudflare_turnstile_url: String,
         turnstile_secret_key: String,
     ) -> Self {
         Self {
             data: Arc::new(DashMap::new()),
-            reset_time_interval_secs,
+            reset_time_interval: reset_time_interval_secs,
             max_requests_per_ip,
             cloudflare_turnstile_url,
             turnstile_secret_key,
@@ -108,11 +106,12 @@ impl RequestsManager {
         addr: SocketAddr,
         token: &str,
     ) -> Result<(), (StatusCode, FaucetError)> {
+        let ip = addr.ip();
         let req = reqwest::Client::new();
         let params = [
             ("secret", self.turnstile_secret_key.as_str()),
             ("response", token),
-            ("remoteip", &addr.ip().to_string()),
+            ("remoteip", &ip.to_string()),
         ];
 
         // Make the POST request
@@ -158,38 +157,33 @@ impl RequestsManager {
             ));
         }
 
-        let mut error = None;
-        self.data
-            .entry(addr.ip().to_string())
-            .and_modify(|token| {
-                if token.timestamp.elapsed().as_secs() >= self.reset_time_interval_secs {
+        match self.data.entry(ip) {
+            Entry::Vacant(entry) => {
+                entry.insert(RequestInfo {
+                    timestamp: Instant::now(),
+                    requests_used: 1,
+                });
+            }
+
+            Entry::Occupied(mut entry) => {
+                let token = entry.get_mut();
+                let elapsed = token.timestamp.elapsed();
+
+                if elapsed >= self.reset_time_interval {
                     token.timestamp = Instant::now();
                     token.requests_used = 1;
-                }
-                // reached the token limit and the reset time interval has not passed
-                else if token.requests_used >= self.max_requests_per_ip
-                    && token.timestamp.elapsed().as_secs() < self.reset_time_interval_secs
-                {
-                    error = Some((
+                } else if token.requests_used >= self.max_requests_per_ip {
+                    return Err((
                         StatusCode::TOO_MANY_REQUESTS,
                         FaucetError::TooManyRequests(format!(
                             "You can request a new token in {}",
-                            secs_to_human_readable(
-                                self.reset_time_interval_secs - token.timestamp.elapsed().as_secs()
-                            )
+                            secs_to_human_readable((self.reset_time_interval - elapsed).as_secs())
                         )),
                     ));
                 } else {
                     token.requests_used += 1;
                 }
-            })
-            .or_insert_with(|| RequestInfo {
-                timestamp: Instant::now(),
-                requests_used: 1,
-            });
-
-        if let Some((status_code, faucet_error)) = error {
-            return Err((status_code, faucet_error));
+            }
         }
 
         Ok(())
@@ -200,7 +194,7 @@ impl RequestsManager {
     fn cleanup_expired_tokens(&self) {
         // keep only those IP addresses that are still under time limit.
         self.data
-            .retain(|_, info| info.timestamp.elapsed().as_secs() < self.reset_time_interval_secs);
+            .retain(|_, info| info.timestamp.elapsed() < self.reset_time_interval);
     }
 }
 
@@ -234,7 +228,7 @@ pub async fn start_faucet(
 
     let token_manager = Arc::new(RequestsManager::new(
         max_requests_per_ip,
-        reset_time_interval_secs,
+        Duration::from_secs(reset_time_interval_secs),
         CLOUDFLARE_TURNSTILE_URL.as_ref().unwrap().to_string(),
         TURNSTILE_SECRET_KEY.as_ref().unwrap().to_string(),
     ));
@@ -555,10 +549,10 @@ async fn handle_error(error: BoxError) -> impl IntoResponse {
 }
 
 /// Format seconds to human readable format.
-fn secs_to_human_readable(total_seconds: u64) -> String {
-    let hours = total_seconds / 3600;
-    let minutes = (total_seconds % 3600) / 60;
-    let seconds = total_seconds % 60;
+fn secs_to_human_readable(seconds: u64) -> String {
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let seconds = seconds % 60;
 
     if hours > 0 {
         format!("{}h {}m {}s", hours, minutes, seconds)
@@ -574,11 +568,12 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::net::{IpAddr, Ipv4Addr};
+    use std::time::Duration;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     const MAX_REQUESTS_PER_IP: u64 = 3;
-    const RESET_TIME_INTERVAL_SECS: u64 = 5;
+    const RESET_TIME_INTERVAL: Duration = Duration::from_secs(5);
 
     async fn setup_mock_cloudflare() -> MockServer {
         let mock_server = MockServer::start().await;
@@ -600,7 +595,7 @@ mod tests {
         let mock_server = setup_mock_cloudflare().await;
         let manager = RequestsManager::new(
             MAX_REQUESTS_PER_IP,
-            RESET_TIME_INTERVAL_SECS,
+            RESET_TIME_INTERVAL,
             mock_server.uri(),
             "test_secret".to_string(),
         );
@@ -627,7 +622,7 @@ mod tests {
         let mock_server = setup_mock_cloudflare().await;
         let manager = RequestsManager::new(
             MAX_REQUESTS_PER_IP,
-            RESET_TIME_INTERVAL_SECS,
+            RESET_TIME_INTERVAL,
             mock_server.uri(),
             "test_secret".to_string(),
         );
@@ -647,7 +642,7 @@ mod tests {
         assert!(result.unwrap_err().0 == StatusCode::TOO_MANY_REQUESTS);
         assert!(!manager.data.is_empty());
 
-        tokio::time::sleep(Duration::from_secs(RESET_TIME_INTERVAL_SECS + 3)).await;
+        tokio::time::sleep(RESET_TIME_INTERVAL + Duration::from_secs(3)).await;
         // Trigger cleanup
         manager.cleanup_expired_tokens();
 
@@ -672,7 +667,7 @@ mod tests {
 
         let manager = RequestsManager::new(
             MAX_REQUESTS_PER_IP,
-            RESET_TIME_INTERVAL_SECS,
+            RESET_TIME_INTERVAL,
             mock_server.uri(),
             "test_secret".to_string(),
         );
@@ -688,7 +683,7 @@ mod tests {
         let mock_server = setup_mock_cloudflare().await;
         let manager = Arc::new(RequestsManager::new(
             MAX_REQUESTS_PER_IP,
-            RESET_TIME_INTERVAL_SECS,
+            RESET_TIME_INTERVAL,
             mock_server.uri(),
             "test_secret".to_string(),
         ));

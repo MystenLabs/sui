@@ -137,7 +137,8 @@ pub struct FaucetConfig {
 
     /// This is the amount of time to wait before adding one more quota to the rate limiter. Basically,
     /// it ensures that we're not allowing too many requests all at once. This is very specific to
-    /// governor and tower-governor crates. This is used for authenticated mode.
+    /// governor and tower-governor crates. This is used primarily for authenticated mode. A small
+    /// value will allow more requests to be processed in a short period of time.
     #[clap(long, default_value_t = 10)]
     pub replenish_quota_interval_ms: u64,
 
