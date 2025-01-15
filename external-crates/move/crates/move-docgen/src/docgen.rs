@@ -1140,20 +1140,18 @@ impl<'env> Docgen<'env> {
             move_compiler::naming::ast::Type_::Unit => "".to_owned(),
             _ => format!(": {}", model_display::type_(return_types)),
         };
+        let visibility_str = match func_env.info().visibility {
+            Visibility::Public(_) => "public ",
+            Visibility::Friend(_) => "public(friend) ",
+            Visibility::Package(_) => "public(package) ",
+            Visibility::Internal => "",
+        };
         let entry_str = if func_env.info().entry.is_some() {
             "entry "
         } else {
             ""
         };
-        format!(
-            "{}{}fun {}{}({}){}",
-            func_env.info().visibility,
-            entry_str,
-            name,
-            type_params,
-            params,
-            return_str
-        )
+        format!("{visibility_str}{entry_str}fun {name}{type_params}({params}){return_str}")
     }
 
     // ============================================================================================
@@ -1538,6 +1536,8 @@ impl<'env> Docgen<'env> {
             .unwrap_or(true)
         {
             "../../"
+        } else if !info.is_included {
+            "../"
         } else {
             ""
         };

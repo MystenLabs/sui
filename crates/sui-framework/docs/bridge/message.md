@@ -58,16 +58,16 @@ title: Module `bridge::message`
 -  [Function `peel_u64_be`](#bridge_message_peel_u64_be)
 
 
-<pre><code><b>use</b> <a href="bridge/chain_ids.md#bridge_chain_ids">bridge::chain_ids</a>;
-<b>use</b> <a href="bridge/message_types.md#bridge_message_types">bridge::message_types</a>;
-<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
-<b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
-<b>use</b> <a href="../sui/bcs.md#sui_bcs">sui::bcs</a>;
-<b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
+<pre><code><b>use</b> <a href="../bridge/chain_ids.md#bridge_chain_ids">bridge::chain_ids</a>;
+<b>use</b> <a href="../bridge/message_types.md#bridge_message_types">bridge::message_types</a>;
+<b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../../sui/address.md#sui_address">sui::address</a>;
+<b>use</b> <a href="../../sui/bcs.md#sui_bcs">sui::bcs</a>;
+<b>use</b> <a href="../../sui/hex.md#sui_hex">sui::hex</a>;
 </code></pre>
 
 
@@ -78,7 +78,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>public</b> <b>struct</b> <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -89,27 +89,27 @@ title: Module `bridge::message`
 
 <dl>
 <dt>
-<code><a href="bridge/message.md#bridge_message_message_type">message_type</a>: u8</code>
+<code><a href="../bridge/message.md#bridge_message_message_type">message_type</a>: u8</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_message_version">message_version</a>: u8</code>
+<code><a href="../bridge/message.md#bridge_message_message_version">message_version</a>: u8</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64</code>
+<code><a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8</code>
+<code><a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_payload">payload</a>: vector&lt;u8&gt;</code>
+<code><a href="../bridge/message.md#bridge_message_payload">payload</a>: vector&lt;u8&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -124,7 +124,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="bridge/message.md#bridge_message_BridgeMessageKey">BridgeMessageKey</a> <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>public</b> <b>struct</b> <a href="../bridge/message.md#bridge_message_BridgeMessageKey">BridgeMessageKey</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -135,12 +135,12 @@ title: Module `bridge::message`
 
 <dl>
 <dt>
-<code><a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8</code>
+<code><a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_message_type">message_type</a>: u8</code>
+<code><a href="../bridge/message.md#bridge_message_message_type">message_type</a>: u8</code>
 </dt>
 <dd>
 </dd>
@@ -160,7 +160,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a> <b>has</b> drop
+<pre><code><b>public</b> <b>struct</b> <a href="../bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a> <b>has</b> drop
 </code></pre>
 
 
@@ -186,7 +186,7 @@ title: Module `bridge::message`
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_token_type">token_type</a>: u8</code>
+<code><a href="../bridge/message.md#bridge_message_token_type">token_type</a>: u8</code>
 </dt>
 <dd>
 </dd>
@@ -206,7 +206,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="bridge/message.md#bridge_message_EmergencyOp">EmergencyOp</a> <b>has</b> drop
+<pre><code><b>public</b> <b>struct</b> <a href="../bridge/message.md#bridge_message_EmergencyOp">EmergencyOp</a> <b>has</b> drop
 </code></pre>
 
 
@@ -232,7 +232,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="bridge/message.md#bridge_message_Blocklist">Blocklist</a> <b>has</b> drop
+<pre><code><b>public</b> <b>struct</b> <a href="../bridge/message.md#bridge_message_Blocklist">Blocklist</a> <b>has</b> drop
 </code></pre>
 
 
@@ -243,7 +243,7 @@ title: Module `bridge::message`
 
 <dl>
 <dt>
-<code><a href="bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>: u8</code>
+<code><a href="../bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>: u8</code>
 </dt>
 <dd>
 </dd>
@@ -263,7 +263,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a> <b>has</b> drop
+<pre><code><b>public</b> <b>struct</b> <a href="../bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a> <b>has</b> drop
 </code></pre>
 
 
@@ -299,7 +299,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="bridge/message.md#bridge_message_UpdateAssetPrice">UpdateAssetPrice</a> <b>has</b> drop
+<pre><code><b>public</b> <b>struct</b> <a href="../bridge/message.md#bridge_message_UpdateAssetPrice">UpdateAssetPrice</a> <b>has</b> drop
 </code></pre>
 
 
@@ -330,7 +330,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a> <b>has</b> drop
+<pre><code><b>public</b> <b>struct</b> <a href="../bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a> <b>has</b> drop
 </code></pre>
 
 
@@ -346,17 +346,17 @@ title: Module `bridge::message`
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_token_ids">token_ids</a>: vector&lt;u8&gt;</code>
+<code><a href="../bridge/message.md#bridge_message_token_ids">token_ids</a>: vector&lt;u8&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_token_type_names">token_type_names</a>: vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;</code>
+<code><a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>: vector&lt;<a href="../../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_token_prices">token_prices</a>: vector&lt;u64&gt;</code>
+<code><a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>: vector&lt;u64&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -371,7 +371,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="bridge/message.md#bridge_message_ParsedTokenTransferMessage">ParsedTokenTransferMessage</a> <b>has</b> drop
+<pre><code><b>public</b> <b>struct</b> <a href="../bridge/message.md#bridge_message_ParsedTokenTransferMessage">ParsedTokenTransferMessage</a> <b>has</b> drop
 </code></pre>
 
 
@@ -382,27 +382,27 @@ title: Module `bridge::message`
 
 <dl>
 <dt>
-<code><a href="bridge/message.md#bridge_message_message_version">message_version</a>: u8</code>
+<code><a href="../bridge/message.md#bridge_message_message_version">message_version</a>: u8</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64</code>
+<code><a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8</code>
+<code><a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="bridge/message.md#bridge_message_payload">payload</a>: vector&lt;u8&gt;</code>
+<code><a href="../bridge/message.md#bridge_message_payload">payload</a>: vector&lt;u8&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>parsed_payload: <a href="bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a></code>
+<code>parsed_payload: <a href="../bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a></code>
 </dt>
 <dd>
 </dd>
@@ -420,7 +420,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>const</b> <a href="bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>: u8 = 1;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>: u8 = 1;
 </code></pre>
 
 
@@ -429,7 +429,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>const</b> <a href="bridge/message.md#bridge_message_ECDSA_ADDRESS_LENGTH">ECDSA_ADDRESS_LENGTH</a>: u64 = 20;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_ECDSA_ADDRESS_LENGTH">ECDSA_ADDRESS_LENGTH</a>: u64 = 20;
 </code></pre>
 
 
@@ -438,7 +438,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>const</b> <a href="bridge/message.md#bridge_message_EEmptyList">EEmptyList</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EEmptyList">EEmptyList</a>: u64 = 2;
 </code></pre>
 
 
@@ -447,7 +447,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>const</b> <a href="bridge/message.md#bridge_message_EInvalidAddressLength">EInvalidAddressLength</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EInvalidAddressLength">EInvalidAddressLength</a>: u64 = 1;
 </code></pre>
 
 
@@ -456,7 +456,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>const</b> <a href="bridge/message.md#bridge_message_EInvalidEmergencyOpType">EInvalidEmergencyOpType</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EInvalidEmergencyOpType">EInvalidEmergencyOpType</a>: u64 = 4;
 </code></pre>
 
 
@@ -465,7 +465,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>const</b> <a href="bridge/message.md#bridge_message_EInvalidMessageType">EInvalidMessageType</a>: u64 = 3;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EInvalidMessageType">EInvalidMessageType</a>: u64 = 3;
 </code></pre>
 
 
@@ -474,7 +474,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>const</b> <a href="bridge/message.md#bridge_message_EInvalidPayloadLength">EInvalidPayloadLength</a>: u64 = 5;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EInvalidPayloadLength">EInvalidPayloadLength</a>: u64 = 5;
 </code></pre>
 
 
@@ -483,7 +483,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>const</b> <a href="bridge/message.md#bridge_message_EMustBeTokenMessage">EMustBeTokenMessage</a>: u64 = 6;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EMustBeTokenMessage">EMustBeTokenMessage</a>: u64 = 6;
 </code></pre>
 
 
@@ -492,7 +492,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>const</b> <a href="bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>: u64 = 0;
 </code></pre>
 
 
@@ -501,7 +501,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>const</b> <a href="bridge/message.md#bridge_message_PAUSE">PAUSE</a>: u8 = 0;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_PAUSE">PAUSE</a>: u8 = 0;
 </code></pre>
 
 
@@ -510,7 +510,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code><b>const</b> <a href="bridge/message.md#bridge_message_UNPAUSE">UNPAUSE</a>: u8 = 1;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_UNPAUSE">UNPAUSE</a>: u8 = 1;
 </code></pre>
 
 
@@ -521,7 +521,7 @@ title: Module `bridge::message`
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_extract_token_bridge_payload">extract_token_bridge_payload</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_token_bridge_payload">extract_token_bridge_payload</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a>
 </code></pre>
 
 
@@ -530,20 +530,20 @@ title: Module `bridge::message`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_extract_token_bridge_payload">extract_token_bridge_payload</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a> {
-    <b>let</b> <b>mut</b> bcs = bcs::new(<a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_payload">payload</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_token_bridge_payload">extract_token_bridge_payload</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a> {
+    <b>let</b> <b>mut</b> bcs = bcs::new(<a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_payload">payload</a>);
     <b>let</b> sender_address = bcs.peel_vec_u8();
     <b>let</b> target_chain = bcs.peel_u8();
     <b>let</b> target_address = bcs.peel_vec_u8();
-    <b>let</b> <a href="bridge/message.md#bridge_message_token_type">token_type</a> = bcs.peel_u8();
-    <b>let</b> amount = <a href="bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> bcs);
-    <a href="bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(target_chain);
-    <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
-    <a href="bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a> {
+    <b>let</b> <a href="../bridge/message.md#bridge_message_token_type">token_type</a> = bcs.peel_u8();
+    <b>let</b> amount = <a href="../bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> bcs);
+    <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(target_chain);
+    <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="../bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
+    <a href="../bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a> {
         sender_address,
         target_chain,
         target_address,
-        <a href="bridge/message.md#bridge_message_token_type">token_type</a>,
+        <a href="../bridge/message.md#bridge_message_token_type">token_type</a>,
         amount
     }
 }
@@ -560,7 +560,7 @@ title: Module `bridge::message`
 Emergency op payload is just a single byte
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_extract_emergency_op_payload">extract_emergency_op_payload</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="bridge/message.md#bridge_message_EmergencyOp">bridge::message::EmergencyOp</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_emergency_op_payload">extract_emergency_op_payload</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_EmergencyOp">bridge::message::EmergencyOp</a>
 </code></pre>
 
 
@@ -569,9 +569,9 @@ Emergency op payload is just a single byte
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_extract_emergency_op_payload">extract_emergency_op_payload</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="bridge/message.md#bridge_message_EmergencyOp">EmergencyOp</a> {
-    <b>assert</b>!(<a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_payload">payload</a>.length() == 1, <a href="bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
-    <a href="bridge/message.md#bridge_message_EmergencyOp">EmergencyOp</a> { op_type: <a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_payload">payload</a>[0] }
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_emergency_op_payload">extract_emergency_op_payload</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_EmergencyOp">EmergencyOp</a> {
+    <b>assert</b>!(<a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_payload">payload</a>.length() == 1, <a href="../bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
+    <a href="../bridge/message.md#bridge_message_EmergencyOp">EmergencyOp</a> { op_type: <a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_payload">payload</a>[0] }
 }
 </code></pre>
 
@@ -585,7 +585,7 @@ Emergency op payload is just a single byte
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_extract_blocklist_payload">extract_blocklist_payload</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="bridge/message.md#bridge_message_Blocklist">bridge::message::Blocklist</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_blocklist_payload">extract_blocklist_payload</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_Blocklist">bridge::message::Blocklist</a>
 </code></pre>
 
 
@@ -594,26 +594,26 @@ Emergency op payload is just a single byte
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_extract_blocklist_payload">extract_blocklist_payload</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="bridge/message.md#bridge_message_Blocklist">Blocklist</a> {
-    // blocklist <a href="bridge/message.md#bridge_message_payload">payload</a> should consist of one byte blocklist type, and list of 20 bytes evm addresses
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_blocklist_payload">extract_blocklist_payload</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_Blocklist">Blocklist</a> {
+    // blocklist <a href="../bridge/message.md#bridge_message_payload">payload</a> should consist of one byte blocklist type, and list of 20 bytes evm addresses
     // derived from ECDSA <b>public</b> keys
-    <b>let</b> <b>mut</b> bcs = bcs::new(<a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_payload">payload</a>);
-    <b>let</b> <a href="bridge/message.md#bridge_message_blocklist_type">blocklist_type</a> = bcs.peel_u8();
+    <b>let</b> <b>mut</b> bcs = bcs::new(<a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_payload">payload</a>);
+    <b>let</b> <a href="../bridge/message.md#bridge_message_blocklist_type">blocklist_type</a> = bcs.peel_u8();
     <b>let</b> <b>mut</b> address_count = bcs.peel_u8();
-    <b>assert</b>!(address_count != 0, <a href="bridge/message.md#bridge_message_EEmptyList">EEmptyList</a>);
+    <b>assert</b>!(address_count != 0, <a href="../bridge/message.md#bridge_message_EEmptyList">EEmptyList</a>);
     <b>let</b> <b>mut</b> validator_eth_addresses = vector[];
     <b>while</b> (address_count &gt; 0) {
         <b>let</b> (<b>mut</b> <b>address</b>, <b>mut</b> i) = (vector[], 0);
-        <b>while</b> (i &lt; <a href="bridge/message.md#bridge_message_ECDSA_ADDRESS_LENGTH">ECDSA_ADDRESS_LENGTH</a>) {
+        <b>while</b> (i &lt; <a href="../bridge/message.md#bridge_message_ECDSA_ADDRESS_LENGTH">ECDSA_ADDRESS_LENGTH</a>) {
             <b>address</b>.push_back(bcs.peel_u8());
             i = i + 1;
         };
         validator_eth_addresses.push_back(<b>address</b>);
         address_count = address_count - 1;
     };
-    <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
-    <a href="bridge/message.md#bridge_message_Blocklist">Blocklist</a> {
-        <a href="bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>,
+    <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="../bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
+    <a href="../bridge/message.md#bridge_message_Blocklist">Blocklist</a> {
+        <a href="../bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>,
         validator_eth_addresses
     }
 }
@@ -629,7 +629,7 @@ Emergency op payload is just a single byte
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_extract_update_bridge_limit">extract_update_bridge_limit</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="bridge/message.md#bridge_message_UpdateBridgeLimit">bridge::message::UpdateBridgeLimit</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_update_bridge_limit">extract_update_bridge_limit</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_UpdateBridgeLimit">bridge::message::UpdateBridgeLimit</a>
 </code></pre>
 
 
@@ -638,14 +638,14 @@ Emergency op payload is just a single byte
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_extract_update_bridge_limit">extract_update_bridge_limit</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a> {
-    <b>let</b> <b>mut</b> bcs = bcs::new(<a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_payload">payload</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_update_bridge_limit">extract_update_bridge_limit</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a> {
+    <b>let</b> <b>mut</b> bcs = bcs::new(<a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_payload">payload</a>);
     <b>let</b> sending_chain = bcs.peel_u8();
-    <b>let</b> limit = <a href="bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> bcs);
-    <a href="bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(sending_chain);
-    <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
-    <a href="bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a> {
-        receiving_chain: <a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>,
+    <b>let</b> limit = <a href="../bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> bcs);
+    <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(sending_chain);
+    <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="../bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
+    <a href="../bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a> {
+        receiving_chain: <a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>,
         sending_chain,
         limit
     }
@@ -662,7 +662,7 @@ Emergency op payload is just a single byte
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_extract_update_asset_price">extract_update_asset_price</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="bridge/message.md#bridge_message_UpdateAssetPrice">bridge::message::UpdateAssetPrice</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_update_asset_price">extract_update_asset_price</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_UpdateAssetPrice">bridge::message::UpdateAssetPrice</a>
 </code></pre>
 
 
@@ -671,12 +671,12 @@ Emergency op payload is just a single byte
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_extract_update_asset_price">extract_update_asset_price</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="bridge/message.md#bridge_message_UpdateAssetPrice">UpdateAssetPrice</a> {
-    <b>let</b> <b>mut</b> bcs = bcs::new(<a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_payload">payload</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_update_asset_price">extract_update_asset_price</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_UpdateAssetPrice">UpdateAssetPrice</a> {
+    <b>let</b> <b>mut</b> bcs = bcs::new(<a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_payload">payload</a>);
     <b>let</b> token_id = bcs.peel_u8();
-    <b>let</b> new_price = <a href="bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> bcs);
-    <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
-    <a href="bridge/message.md#bridge_message_UpdateAssetPrice">UpdateAssetPrice</a> {
+    <b>let</b> new_price = <a href="../bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> bcs);
+    <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="../bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
+    <a href="../bridge/message.md#bridge_message_UpdateAssetPrice">UpdateAssetPrice</a> {
         token_id,
         new_price
     }
@@ -693,7 +693,7 @@ Emergency op payload is just a single byte
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_extract_add_tokens_on_sui">extract_add_tokens_on_sui</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_add_tokens_on_sui">extract_add_tokens_on_sui</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>
 </code></pre>
 
 
@@ -702,24 +702,24 @@ Emergency op payload is just a single byte
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_extract_add_tokens_on_sui">extract_add_tokens_on_sui</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a> {
-    <b>let</b> <b>mut</b> bcs = bcs::new(<a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_payload">payload</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_extract_add_tokens_on_sui">extract_add_tokens_on_sui</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a> {
+    <b>let</b> <b>mut</b> bcs = bcs::new(<a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_payload">payload</a>);
     <b>let</b> native_token = bcs.peel_bool();
-    <b>let</b> <a href="bridge/message.md#bridge_message_token_ids">token_ids</a> = bcs.peel_vec_u8();
+    <b>let</b> <a href="../bridge/message.md#bridge_message_token_ids">token_ids</a> = bcs.peel_vec_u8();
     <b>let</b> token_type_names_bytes = bcs.peel_vec_vec_u8();
-    <b>let</b> <a href="bridge/message.md#bridge_message_token_prices">token_prices</a> = bcs.peel_vec_u64();
+    <b>let</b> <a href="../bridge/message.md#bridge_message_token_prices">token_prices</a> = bcs.peel_vec_u64();
     <b>let</b> <b>mut</b> n = 0;
-    <b>let</b> <b>mut</b> <a href="bridge/message.md#bridge_message_token_type_names">token_type_names</a> = vector[];
+    <b>let</b> <b>mut</b> <a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a> = vector[];
     <b>while</b> (n &lt; token_type_names_bytes.length()){
-        <a href="bridge/message.md#bridge_message_token_type_names">token_type_names</a>.push_back(ascii::string(*token_type_names_bytes.borrow(n)));
+        <a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>.push_back(ascii::string(*token_type_names_bytes.borrow(n)));
         n = n + 1;
     };
-    <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
-    <a href="bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a> {
+    <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="../bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
+    <a href="../bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a> {
         native_token,
-        <a href="bridge/message.md#bridge_message_token_ids">token_ids</a>,
-        <a href="bridge/message.md#bridge_message_token_type_names">token_type_names</a>,
-        <a href="bridge/message.md#bridge_message_token_prices">token_prices</a>
+        <a href="../bridge/message.md#bridge_message_token_ids">token_ids</a>,
+        <a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>,
+        <a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>
     }
 }
 </code></pre>
@@ -734,7 +734,7 @@ Emergency op payload is just a single byte
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_serialize_message">serialize_message</a>(<a href="bridge/message.md#bridge_message">message</a>: <a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): vector&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_serialize_message">serialize_message</a>(<a href="../bridge/message.md#bridge_message">message</a>: <a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): vector&lt;u8&gt;
 </code></pre>
 
 
@@ -743,23 +743,23 @@ Emergency op payload is just a single byte
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_serialize_message">serialize_message</a>(<a href="bridge/message.md#bridge_message">message</a>: <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): vector&lt;u8&gt; {
-    <b>let</b> <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-        <a href="bridge/message.md#bridge_message_message_type">message_type</a>,
-        <a href="bridge/message.md#bridge_message_message_version">message_version</a>,
-        <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>,
-        <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>,
-        <a href="bridge/message.md#bridge_message_payload">payload</a>
-    } = <a href="bridge/message.md#bridge_message">message</a>;
-    <b>let</b> <b>mut</b> <a href="bridge/message.md#bridge_message">message</a> = vector[
-        <a href="bridge/message.md#bridge_message_message_type">message_type</a>,
-        <a href="bridge/message.md#bridge_message_message_version">message_version</a>,
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_serialize_message">serialize_message</a>(<a href="../bridge/message.md#bridge_message">message</a>: <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): vector&lt;u8&gt; {
+    <b>let</b> <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+        <a href="../bridge/message.md#bridge_message_message_type">message_type</a>,
+        <a href="../bridge/message.md#bridge_message_message_version">message_version</a>,
+        <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>,
+        <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>,
+        <a href="../bridge/message.md#bridge_message_payload">payload</a>
+    } = <a href="../bridge/message.md#bridge_message">message</a>;
+    <b>let</b> <b>mut</b> <a href="../bridge/message.md#bridge_message">message</a> = vector[
+        <a href="../bridge/message.md#bridge_message_message_type">message_type</a>,
+        <a href="../bridge/message.md#bridge_message_message_version">message_version</a>,
     ];
     // bcs serializes u64 <b>as</b> 8 bytes
-    <a href="bridge/message.md#bridge_message">message</a>.append(<a href="bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bcs::to_bytes(&<a href="bridge/message.md#bridge_message_seq_num">seq_num</a>)));
-    <a href="bridge/message.md#bridge_message">message</a>.push_back(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>);
-    <a href="bridge/message.md#bridge_message">message</a>.append(<a href="bridge/message.md#bridge_message_payload">payload</a>);
-    <a href="bridge/message.md#bridge_message">message</a>
+    <a href="../bridge/message.md#bridge_message">message</a>.append(<a href="../bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bcs::to_bytes(&<a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>)));
+    <a href="../bridge/message.md#bridge_message">message</a>.push_back(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>);
+    <a href="../bridge/message.md#bridge_message">message</a>.append(<a href="../bridge/message.md#bridge_message_payload">payload</a>);
+    <a href="../bridge/message.md#bridge_message">message</a>
 }
 </code></pre>
 
@@ -785,7 +785,7 @@ Token Transfer Message Format:
 [amount:u64]
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_create_token_bridge_message">create_token_bridge_message</a>(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, sender_address: vector&lt;u8&gt;, target_chain: u8, target_address: vector&lt;u8&gt;, <a href="bridge/message.md#bridge_message_token_type">token_type</a>: u8, amount: u64): <a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_token_bridge_message">create_token_bridge_message</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, sender_address: vector&lt;u8&gt;, target_chain: u8, target_address: vector&lt;u8&gt;, <a href="../bridge/message.md#bridge_message_token_type">token_type</a>: u8, amount: u64): <a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
 </code></pre>
 
 
@@ -794,35 +794,35 @@ Token Transfer Message Format:
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_create_token_bridge_message">create_token_bridge_message</a>(
-    <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8,
-    <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_token_bridge_message">create_token_bridge_message</a>(
+    <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8,
+    <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
     sender_address: vector&lt;u8&gt;,
     target_chain: u8,
     target_address: vector&lt;u8&gt;,
-    <a href="bridge/message.md#bridge_message_token_type">token_type</a>: u8,
+    <a href="../bridge/message.md#bridge_message_token_type">token_type</a>: u8,
     amount: u64
-): <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-    <a href="bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>);
-    <a href="bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(target_chain);
-    <b>let</b> <b>mut</b> <a href="bridge/message.md#bridge_message_payload">payload</a> = vector[];
+): <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+    <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>);
+    <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(target_chain);
+    <b>let</b> <b>mut</b> <a href="../bridge/message.md#bridge_message_payload">payload</a> = vector[];
     // sender <b>address</b> should be less than 255 bytes so can fit into u8
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.push_back((vector::length(&sender_address) <b>as</b> u8));
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.append(sender_address);
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.push_back(target_chain);
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.push_back((vector::length(&sender_address) <b>as</b> u8));
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.append(sender_address);
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.push_back(target_chain);
     // target <b>address</b> should be less than 255 bytes so can fit into u8
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.push_back((vector::length(&target_address) <b>as</b> u8));
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.append(target_address);
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.push_back(<a href="bridge/message.md#bridge_message_token_type">token_type</a>);
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.push_back((vector::length(&target_address) <b>as</b> u8));
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.append(target_address);
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.push_back(<a href="../bridge/message.md#bridge_message_token_type">token_type</a>);
     // bcs serialzies u64 <b>as</b> 8 bytes
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.append(<a href="bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bcs::to_bytes(&amount)));
-    <b>assert</b>!(vector::length(&<a href="bridge/message.md#bridge_message_payload">payload</a>) == 64, <a href="bridge/message.md#bridge_message_EInvalidPayloadLength">EInvalidPayloadLength</a>);
-    <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-        <a href="bridge/message.md#bridge_message_message_type">message_type</a>: <a href="bridge/message_types.md#bridge_message_types_token">message_types::token</a>(),
-        <a href="bridge/message.md#bridge_message_message_version">message_version</a>: <a href="bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
-        <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>,
-        <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>,
-        <a href="bridge/message.md#bridge_message_payload">payload</a>,
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.append(<a href="../bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bcs::to_bytes(&amount)));
+    <b>assert</b>!(vector::length(&<a href="../bridge/message.md#bridge_message_payload">payload</a>) == 64, <a href="../bridge/message.md#bridge_message_EInvalidPayloadLength">EInvalidPayloadLength</a>);
+    <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+        <a href="../bridge/message.md#bridge_message_message_type">message_type</a>: <a href="../bridge/message_types.md#bridge_message_types_token">message_types::token</a>(),
+        <a href="../bridge/message.md#bridge_message_message_version">message_version</a>: <a href="../bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
+        <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>,
+        <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>,
+        <a href="../bridge/message.md#bridge_message_payload">payload</a>,
     }
 }
 </code></pre>
@@ -843,7 +843,7 @@ Emergency Op Message Format:
 [op_type: u8]
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_create_emergency_op_message">create_emergency_op_message</a>(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, op_type: u8): <a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_emergency_op_message">create_emergency_op_message</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, op_type: u8): <a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
 </code></pre>
 
 
@@ -852,18 +852,18 @@ Emergency Op Message Format:
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_create_emergency_op_message">create_emergency_op_message</a>(
-    <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8,
-    <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_emergency_op_message">create_emergency_op_message</a>(
+    <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8,
+    <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
     op_type: u8,
-): <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-    <a href="bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>);
-    <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-        <a href="bridge/message.md#bridge_message_message_type">message_type</a>: <a href="bridge/message_types.md#bridge_message_types_emergency_op">message_types::emergency_op</a>(),
-        <a href="bridge/message.md#bridge_message_message_version">message_version</a>: <a href="bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
-        <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>,
-        <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>,
-        <a href="bridge/message.md#bridge_message_payload">payload</a>: vector[op_type],
+): <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+    <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>);
+    <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+        <a href="../bridge/message.md#bridge_message_message_type">message_type</a>: <a href="../bridge/message_types.md#bridge_message_types_emergency_op">message_types::emergency_op</a>(),
+        <a href="../bridge/message.md#bridge_message_message_version">message_version</a>: <a href="../bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
+        <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>,
+        <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>,
+        <a href="../bridge/message.md#bridge_message_payload">payload</a>: vector[op_type],
     }
 }
 </code></pre>
@@ -886,7 +886,7 @@ Blocklist Message Format:
 [validator_ecdsa_addresses: byte[][]]
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_create_blocklist_message">create_blocklist_message</a>(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, <a href="bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>: u8, validator_ecdsa_addresses: vector&lt;vector&lt;u8&gt;&gt;): <a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_blocklist_message">create_blocklist_message</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, <a href="../bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>: u8, validator_ecdsa_addresses: vector&lt;vector&lt;u8&gt;&gt;): <a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
 </code></pre>
 
 
@@ -895,29 +895,29 @@ Blocklist Message Format:
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_create_blocklist_message">create_blocklist_message</a>(
-    <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8,
-    <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_blocklist_message">create_blocklist_message</a>(
+    <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8,
+    <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
     // 0: block, 1: unblock
-    <a href="bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>: u8,
+    <a href="../bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>: u8,
     validator_ecdsa_addresses: vector&lt;vector&lt;u8&gt;&gt;,
-): <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-    <a href="bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>);
+): <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+    <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>);
     <b>let</b> address_length = validator_ecdsa_addresses.length();
-    <b>let</b> <b>mut</b> <a href="bridge/message.md#bridge_message_payload">payload</a> = vector[<a href="bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>, (address_length <b>as</b> u8)];
+    <b>let</b> <b>mut</b> <a href="../bridge/message.md#bridge_message_payload">payload</a> = vector[<a href="../bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>, (address_length <b>as</b> u8)];
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; address_length) {
         <b>let</b> <b>address</b> = validator_ecdsa_addresses[i];
-        <b>assert</b>!(<b>address</b>.length() == <a href="bridge/message.md#bridge_message_ECDSA_ADDRESS_LENGTH">ECDSA_ADDRESS_LENGTH</a>, <a href="bridge/message.md#bridge_message_EInvalidAddressLength">EInvalidAddressLength</a>);
-        <a href="bridge/message.md#bridge_message_payload">payload</a>.append(<b>address</b>);
+        <b>assert</b>!(<b>address</b>.length() == <a href="../bridge/message.md#bridge_message_ECDSA_ADDRESS_LENGTH">ECDSA_ADDRESS_LENGTH</a>, <a href="../bridge/message.md#bridge_message_EInvalidAddressLength">EInvalidAddressLength</a>);
+        <a href="../bridge/message.md#bridge_message_payload">payload</a>.append(<b>address</b>);
         i = i + 1;
     };
-    <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-        <a href="bridge/message.md#bridge_message_message_type">message_type</a>: <a href="bridge/message_types.md#bridge_message_types_committee_blocklist">message_types::committee_blocklist</a>(),
-        <a href="bridge/message.md#bridge_message_message_version">message_version</a>: <a href="bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
-        <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>,
-        <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>,
-        <a href="bridge/message.md#bridge_message_payload">payload</a>,
+    <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+        <a href="../bridge/message.md#bridge_message_message_type">message_type</a>: <a href="../bridge/message_types.md#bridge_message_types_committee_blocklist">message_types::committee_blocklist</a>(),
+        <a href="../bridge/message.md#bridge_message_message_version">message_version</a>: <a href="../bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
+        <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>,
+        <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>,
+        <a href="../bridge/message.md#bridge_message_payload">payload</a>,
     }
 }
 </code></pre>
@@ -939,7 +939,7 @@ Update bridge limit Message Format:
 [new_limit: u64]
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_create_update_bridge_limit_message">create_update_bridge_limit_message</a>(receiving_chain: u8, <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, sending_chain: u8, new_limit: u64): <a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_update_bridge_limit_message">create_update_bridge_limit_message</a>(receiving_chain: u8, <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, sending_chain: u8, new_limit: u64): <a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
 </code></pre>
 
 
@@ -948,22 +948,22 @@ Update bridge limit Message Format:
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_create_update_bridge_limit_message">create_update_bridge_limit_message</a>(
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_update_bridge_limit_message">create_update_bridge_limit_message</a>(
     receiving_chain: u8,
-    <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
+    <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
     sending_chain: u8,
     new_limit: u64,
-): <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-    <a href="bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(receiving_chain);
-    <a href="bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(sending_chain);
-    <b>let</b> <b>mut</b> <a href="bridge/message.md#bridge_message_payload">payload</a> = vector[sending_chain];
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.append(<a href="bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bcs::to_bytes(&new_limit)));
-    <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-        <a href="bridge/message.md#bridge_message_message_type">message_type</a>: <a href="bridge/message_types.md#bridge_message_types_update_bridge_limit">message_types::update_bridge_limit</a>(),
-        <a href="bridge/message.md#bridge_message_message_version">message_version</a>: <a href="bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
-        <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>,
-        <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: receiving_chain,
-        <a href="bridge/message.md#bridge_message_payload">payload</a>,
+): <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+    <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(receiving_chain);
+    <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(sending_chain);
+    <b>let</b> <b>mut</b> <a href="../bridge/message.md#bridge_message_payload">payload</a> = vector[sending_chain];
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.append(<a href="../bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bcs::to_bytes(&new_limit)));
+    <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+        <a href="../bridge/message.md#bridge_message_message_type">message_type</a>: <a href="../bridge/message_types.md#bridge_message_types_update_bridge_limit">message_types::update_bridge_limit</a>(),
+        <a href="../bridge/message.md#bridge_message_message_version">message_version</a>: <a href="../bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
+        <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>,
+        <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: receiving_chain,
+        <a href="../bridge/message.md#bridge_message_payload">payload</a>,
     }
 }
 </code></pre>
@@ -985,7 +985,7 @@ Update asset price message
 [new_price:u64]
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_create_update_asset_price_message">create_update_asset_price_message</a>(token_id: u8, <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, new_price: u64): <a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_update_asset_price_message">create_update_asset_price_message</a>(token_id: u8, <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, new_price: u64): <a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
 </code></pre>
 
 
@@ -994,21 +994,21 @@ Update asset price message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_create_update_asset_price_message">create_update_asset_price_message</a>(
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_update_asset_price_message">create_update_asset_price_message</a>(
     token_id: u8,
-    <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8,
-    <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
+    <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8,
+    <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
     new_price: u64,
-): <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-    <a href="bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>);
-    <b>let</b> <b>mut</b> <a href="bridge/message.md#bridge_message_payload">payload</a> = vector[token_id];
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.append(<a href="bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bcs::to_bytes(&new_price)));
-    <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-        <a href="bridge/message.md#bridge_message_message_type">message_type</a>: <a href="bridge/message_types.md#bridge_message_types_update_asset_price">message_types::update_asset_price</a>(),
-        <a href="bridge/message.md#bridge_message_message_version">message_version</a>: <a href="bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
-        <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>,
-        <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>,
-        <a href="bridge/message.md#bridge_message_payload">payload</a>,
+): <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+    <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>);
+    <b>let</b> <b>mut</b> <a href="../bridge/message.md#bridge_message_payload">payload</a> = vector[token_id];
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.append(<a href="../bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bcs::to_bytes(&new_price)));
+    <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+        <a href="../bridge/message.md#bridge_message_message_type">message_type</a>: <a href="../bridge/message_types.md#bridge_message_types_update_asset_price">message_types::update_asset_price</a>(),
+        <a href="../bridge/message.md#bridge_message_message_version">message_version</a>: <a href="../bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
+        <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>,
+        <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>,
+        <a href="../bridge/message.md#bridge_message_payload">payload</a>,
     }
 }
 </code></pre>
@@ -1032,7 +1032,7 @@ Update Sui token message
 [token_prices:vector<u64>]
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_create_add_tokens_on_sui_message">create_add_tokens_on_sui_message</a>(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, native_token: bool, <a href="bridge/message.md#bridge_message_token_ids">token_ids</a>: vector&lt;u8&gt;, type_names: vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;, <a href="bridge/message.md#bridge_message_token_prices">token_prices</a>: vector&lt;u64&gt;): <a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_add_tokens_on_sui_message">create_add_tokens_on_sui_message</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, native_token: bool, <a href="../bridge/message.md#bridge_message_token_ids">token_ids</a>: vector&lt;u8&gt;, type_names: vector&lt;<a href="../../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;, <a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>: vector&lt;u64&gt;): <a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
 </code></pre>
 
 
@@ -1041,25 +1041,25 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_create_add_tokens_on_sui_message">create_add_tokens_on_sui_message</a>(
-    <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8,
-    <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_add_tokens_on_sui_message">create_add_tokens_on_sui_message</a>(
+    <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8,
+    <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
     native_token: bool,
-    <a href="bridge/message.md#bridge_message_token_ids">token_ids</a>: vector&lt;u8&gt;,
+    <a href="../bridge/message.md#bridge_message_token_ids">token_ids</a>: vector&lt;u8&gt;,
     type_names: vector&lt;String&gt;,
-    <a href="bridge/message.md#bridge_message_token_prices">token_prices</a>: vector&lt;u64&gt;,
-): <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-    <a href="bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>);
-    <b>let</b> <b>mut</b> <a href="bridge/message.md#bridge_message_payload">payload</a> = bcs::to_bytes(&native_token);
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.append(bcs::to_bytes(&<a href="bridge/message.md#bridge_message_token_ids">token_ids</a>));
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.append(bcs::to_bytes(&type_names));
-    <a href="bridge/message.md#bridge_message_payload">payload</a>.append(bcs::to_bytes(&<a href="bridge/message.md#bridge_message_token_prices">token_prices</a>));
-    <a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
-        <a href="bridge/message.md#bridge_message_message_type">message_type</a>: <a href="bridge/message_types.md#bridge_message_types_add_tokens_on_sui">message_types::add_tokens_on_sui</a>(),
-        <a href="bridge/message.md#bridge_message_message_version">message_version</a>: <a href="bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
-        <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>,
-        <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>,
-        <a href="bridge/message.md#bridge_message_payload">payload</a>,
+    <a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>: vector&lt;u64&gt;,
+): <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+    <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>);
+    <b>let</b> <b>mut</b> <a href="../bridge/message.md#bridge_message_payload">payload</a> = bcs::to_bytes(&native_token);
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.append(bcs::to_bytes(&<a href="../bridge/message.md#bridge_message_token_ids">token_ids</a>));
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.append(bcs::to_bytes(&type_names));
+    <a href="../bridge/message.md#bridge_message_payload">payload</a>.append(bcs::to_bytes(&<a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>));
+    <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+        <a href="../bridge/message.md#bridge_message_message_type">message_type</a>: <a href="../bridge/message_types.md#bridge_message_types_add_tokens_on_sui">message_types::add_tokens_on_sui</a>(),
+        <a href="../bridge/message.md#bridge_message_message_version">message_version</a>: <a href="../bridge/message.md#bridge_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
+        <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>,
+        <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>,
+        <a href="../bridge/message.md#bridge_message_payload">payload</a>,
     }
 }
 </code></pre>
@@ -1074,7 +1074,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_create_key">create_key</a>(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="bridge/message.md#bridge_message_message_type">message_type</a>: u8, bridge_seq_num: u64): <a href="bridge/message.md#bridge_message_BridgeMessageKey">bridge::message::BridgeMessageKey</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_key">create_key</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="../bridge/message.md#bridge_message_message_type">message_type</a>: u8, bridge_seq_num: u64): <a href="../bridge/message.md#bridge_message_BridgeMessageKey">bridge::message::BridgeMessageKey</a>
 </code></pre>
 
 
@@ -1083,8 +1083,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_create_key">create_key</a>(<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="bridge/message.md#bridge_message_message_type">message_type</a>: u8, bridge_seq_num: u64): <a href="bridge/message.md#bridge_message_BridgeMessageKey">BridgeMessageKey</a> {
-    <a href="bridge/message.md#bridge_message_BridgeMessageKey">BridgeMessageKey</a> { <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>, <a href="bridge/message.md#bridge_message_message_type">message_type</a>, bridge_seq_num }
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_key">create_key</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="../bridge/message.md#bridge_message_message_type">message_type</a>: u8, bridge_seq_num: u64): <a href="../bridge/message.md#bridge_message_BridgeMessageKey">BridgeMessageKey</a> {
+    <a href="../bridge/message.md#bridge_message_BridgeMessageKey">BridgeMessageKey</a> { <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>, <a href="../bridge/message.md#bridge_message_message_type">message_type</a>, bridge_seq_num }
 }
 </code></pre>
 
@@ -1098,7 +1098,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_key">key</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="bridge/message.md#bridge_message_BridgeMessageKey">bridge::message::BridgeMessageKey</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_key">key</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_BridgeMessageKey">bridge::message::BridgeMessageKey</a>
 </code></pre>
 
 
@@ -1107,8 +1107,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_key">key</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="bridge/message.md#bridge_message_BridgeMessageKey">BridgeMessageKey</a> {
-    <a href="bridge/message.md#bridge_message_create_key">create_key</a>(self.<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>, self.<a href="bridge/message.md#bridge_message_message_type">message_type</a>, self.<a href="bridge/message.md#bridge_message_seq_num">seq_num</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_key">key</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_BridgeMessageKey">BridgeMessageKey</a> {
+    <a href="../bridge/message.md#bridge_message_create_key">create_key</a>(self.<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>, self.<a href="../bridge/message.md#bridge_message_message_type">message_type</a>, self.<a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>)
 }
 </code></pre>
 
@@ -1122,7 +1122,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_message_version">message_version</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_message_version">message_version</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): u8
 </code></pre>
 
 
@@ -1131,8 +1131,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_message_version">message_version</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): u8 {
-    self.<a href="bridge/message.md#bridge_message_message_version">message_version</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_message_version">message_version</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): u8 {
+    self.<a href="../bridge/message.md#bridge_message_message_version">message_version</a>
 }
 </code></pre>
 
@@ -1146,7 +1146,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_message_type">message_type</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_message_type">message_type</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): u8
 </code></pre>
 
 
@@ -1155,8 +1155,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_message_type">message_type</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): u8 {
-    self.<a href="bridge/message.md#bridge_message_message_type">message_type</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_message_type">message_type</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): u8 {
+    self.<a href="../bridge/message.md#bridge_message_message_type">message_type</a>
 }
 </code></pre>
 
@@ -1170,7 +1170,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): u64
 </code></pre>
 
 
@@ -1179,8 +1179,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): u64 {
-    self.<a href="bridge/message.md#bridge_message_seq_num">seq_num</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): u64 {
+    self.<a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>
 }
 </code></pre>
 
@@ -1194,7 +1194,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): u8
 </code></pre>
 
 
@@ -1203,8 +1203,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): u8 {
-    self.<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): u8 {
+    self.<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>
 }
 </code></pre>
 
@@ -1218,7 +1218,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_payload">payload</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): vector&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_payload">payload</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): vector&lt;u8&gt;
 </code></pre>
 
 
@@ -1227,8 +1227,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_payload">payload</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): vector&lt;u8&gt; {
-    self.<a href="bridge/message.md#bridge_message_payload">payload</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_payload">payload</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): vector&lt;u8&gt; {
+    self.<a href="../bridge/message.md#bridge_message_payload">payload</a>
 }
 </code></pre>
 
@@ -1242,7 +1242,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_token_target_chain">token_target_chain</a>(self: &<a href="bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_target_chain">token_target_chain</a>(self: &<a href="../bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a>): u8
 </code></pre>
 
 
@@ -1251,7 +1251,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_token_target_chain">token_target_chain</a>(self: &<a href="bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a>): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_target_chain">token_target_chain</a>(self: &<a href="../bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a>): u8 {
     self.target_chain
 }
 </code></pre>
@@ -1266,7 +1266,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_token_target_address">token_target_address</a>(self: &<a href="bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a>): vector&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_target_address">token_target_address</a>(self: &<a href="../bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a>): vector&lt;u8&gt;
 </code></pre>
 
 
@@ -1275,7 +1275,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_token_target_address">token_target_address</a>(self: &<a href="bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a>): vector&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_target_address">token_target_address</a>(self: &<a href="../bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a>): vector&lt;u8&gt; {
     self.target_address
 }
 </code></pre>
@@ -1290,7 +1290,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_token_type">token_type</a>(self: &<a href="bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_type">token_type</a>(self: &<a href="../bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a>): u8
 </code></pre>
 
 
@@ -1299,8 +1299,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_token_type">token_type</a>(self: &<a href="bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a>): u8 {
-    self.<a href="bridge/message.md#bridge_message_token_type">token_type</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_type">token_type</a>(self: &<a href="../bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a>): u8 {
+    self.<a href="../bridge/message.md#bridge_message_token_type">token_type</a>
 }
 </code></pre>
 
@@ -1314,7 +1314,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_token_amount">token_amount</a>(self: &<a href="bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_amount">token_amount</a>(self: &<a href="../bridge/message.md#bridge_message_TokenTransferPayload">bridge::message::TokenTransferPayload</a>): u64
 </code></pre>
 
 
@@ -1323,7 +1323,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_token_amount">token_amount</a>(self: &<a href="bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_amount">token_amount</a>(self: &<a href="../bridge/message.md#bridge_message_TokenTransferPayload">TokenTransferPayload</a>): u64 {
     self.amount
 }
 </code></pre>
@@ -1338,7 +1338,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_emergency_op_type">emergency_op_type</a>(self: &<a href="bridge/message.md#bridge_message_EmergencyOp">bridge::message::EmergencyOp</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_emergency_op_type">emergency_op_type</a>(self: &<a href="../bridge/message.md#bridge_message_EmergencyOp">bridge::message::EmergencyOp</a>): u8
 </code></pre>
 
 
@@ -1347,7 +1347,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_emergency_op_type">emergency_op_type</a>(self: &<a href="bridge/message.md#bridge_message_EmergencyOp">EmergencyOp</a>): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_emergency_op_type">emergency_op_type</a>(self: &<a href="../bridge/message.md#bridge_message_EmergencyOp">EmergencyOp</a>): u8 {
     self.op_type
 }
 </code></pre>
@@ -1362,7 +1362,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>(self: &<a href="bridge/message.md#bridge_message_Blocklist">bridge::message::Blocklist</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>(self: &<a href="../bridge/message.md#bridge_message_Blocklist">bridge::message::Blocklist</a>): u8
 </code></pre>
 
 
@@ -1371,8 +1371,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>(self: &<a href="bridge/message.md#bridge_message_Blocklist">Blocklist</a>): u8 {
-    self.<a href="bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>(self: &<a href="../bridge/message.md#bridge_message_Blocklist">Blocklist</a>): u8 {
+    self.<a href="../bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>
 }
 </code></pre>
 
@@ -1386,7 +1386,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_blocklist_validator_addresses">blocklist_validator_addresses</a>(self: &<a href="bridge/message.md#bridge_message_Blocklist">bridge::message::Blocklist</a>): &vector&lt;vector&lt;u8&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_blocklist_validator_addresses">blocklist_validator_addresses</a>(self: &<a href="../bridge/message.md#bridge_message_Blocklist">bridge::message::Blocklist</a>): &vector&lt;vector&lt;u8&gt;&gt;
 </code></pre>
 
 
@@ -1395,7 +1395,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_blocklist_validator_addresses">blocklist_validator_addresses</a>(self: &<a href="bridge/message.md#bridge_message_Blocklist">Blocklist</a>): &vector&lt;vector&lt;u8&gt;&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_blocklist_validator_addresses">blocklist_validator_addresses</a>(self: &<a href="../bridge/message.md#bridge_message_Blocklist">Blocklist</a>): &vector&lt;vector&lt;u8&gt;&gt; {
     &self.validator_eth_addresses
 }
 </code></pre>
@@ -1410,7 +1410,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_update_bridge_limit_payload_sending_chain">update_bridge_limit_payload_sending_chain</a>(self: &<a href="bridge/message.md#bridge_message_UpdateBridgeLimit">bridge::message::UpdateBridgeLimit</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_update_bridge_limit_payload_sending_chain">update_bridge_limit_payload_sending_chain</a>(self: &<a href="../bridge/message.md#bridge_message_UpdateBridgeLimit">bridge::message::UpdateBridgeLimit</a>): u8
 </code></pre>
 
 
@@ -1419,7 +1419,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_update_bridge_limit_payload_sending_chain">update_bridge_limit_payload_sending_chain</a>(self: &<a href="bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a>): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_update_bridge_limit_payload_sending_chain">update_bridge_limit_payload_sending_chain</a>(self: &<a href="../bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a>): u8 {
     self.sending_chain
 }
 </code></pre>
@@ -1434,7 +1434,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_update_bridge_limit_payload_receiving_chain">update_bridge_limit_payload_receiving_chain</a>(self: &<a href="bridge/message.md#bridge_message_UpdateBridgeLimit">bridge::message::UpdateBridgeLimit</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_update_bridge_limit_payload_receiving_chain">update_bridge_limit_payload_receiving_chain</a>(self: &<a href="../bridge/message.md#bridge_message_UpdateBridgeLimit">bridge::message::UpdateBridgeLimit</a>): u8
 </code></pre>
 
 
@@ -1443,7 +1443,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_update_bridge_limit_payload_receiving_chain">update_bridge_limit_payload_receiving_chain</a>(self: &<a href="bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a>): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_update_bridge_limit_payload_receiving_chain">update_bridge_limit_payload_receiving_chain</a>(self: &<a href="../bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a>): u8 {
     self.receiving_chain
 }
 </code></pre>
@@ -1458,7 +1458,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_update_bridge_limit_payload_limit">update_bridge_limit_payload_limit</a>(self: &<a href="bridge/message.md#bridge_message_UpdateBridgeLimit">bridge::message::UpdateBridgeLimit</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_update_bridge_limit_payload_limit">update_bridge_limit_payload_limit</a>(self: &<a href="../bridge/message.md#bridge_message_UpdateBridgeLimit">bridge::message::UpdateBridgeLimit</a>): u64
 </code></pre>
 
 
@@ -1467,7 +1467,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_update_bridge_limit_payload_limit">update_bridge_limit_payload_limit</a>(self: &<a href="bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_update_bridge_limit_payload_limit">update_bridge_limit_payload_limit</a>(self: &<a href="../bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a>): u64 {
     self.limit
 }
 </code></pre>
@@ -1482,7 +1482,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_update_asset_price_payload_token_id">update_asset_price_payload_token_id</a>(self: &<a href="bridge/message.md#bridge_message_UpdateAssetPrice">bridge::message::UpdateAssetPrice</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_update_asset_price_payload_token_id">update_asset_price_payload_token_id</a>(self: &<a href="../bridge/message.md#bridge_message_UpdateAssetPrice">bridge::message::UpdateAssetPrice</a>): u8
 </code></pre>
 
 
@@ -1491,7 +1491,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_update_asset_price_payload_token_id">update_asset_price_payload_token_id</a>(self: &<a href="bridge/message.md#bridge_message_UpdateAssetPrice">UpdateAssetPrice</a>): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_update_asset_price_payload_token_id">update_asset_price_payload_token_id</a>(self: &<a href="../bridge/message.md#bridge_message_UpdateAssetPrice">UpdateAssetPrice</a>): u8 {
     self.token_id
 }
 </code></pre>
@@ -1506,7 +1506,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_update_asset_price_payload_new_price">update_asset_price_payload_new_price</a>(self: &<a href="bridge/message.md#bridge_message_UpdateAssetPrice">bridge::message::UpdateAssetPrice</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_update_asset_price_payload_new_price">update_asset_price_payload_new_price</a>(self: &<a href="../bridge/message.md#bridge_message_UpdateAssetPrice">bridge::message::UpdateAssetPrice</a>): u64
 </code></pre>
 
 
@@ -1515,7 +1515,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_update_asset_price_payload_new_price">update_asset_price_payload_new_price</a>(self: &<a href="bridge/message.md#bridge_message_UpdateAssetPrice">UpdateAssetPrice</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_update_asset_price_payload_new_price">update_asset_price_payload_new_price</a>(self: &<a href="../bridge/message.md#bridge_message_UpdateAssetPrice">UpdateAssetPrice</a>): u64 {
     self.new_price
 }
 </code></pre>
@@ -1530,7 +1530,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_is_native">is_native</a>(self: &<a href="bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_is_native">is_native</a>(self: &<a href="../bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>): bool
 </code></pre>
 
 
@@ -1539,7 +1539,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_is_native">is_native</a>(self: &<a href="bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_is_native">is_native</a>(self: &<a href="../bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a>): bool {
     self.native_token
 }
 </code></pre>
@@ -1554,7 +1554,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_token_ids">token_ids</a>(self: &<a href="bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>): vector&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_ids">token_ids</a>(self: &<a href="../bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>): vector&lt;u8&gt;
 </code></pre>
 
 
@@ -1563,8 +1563,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_token_ids">token_ids</a>(self: &<a href="bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a>): vector&lt;u8&gt; {
-    self.<a href="bridge/message.md#bridge_message_token_ids">token_ids</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_ids">token_ids</a>(self: &<a href="../bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a>): vector&lt;u8&gt; {
+    self.<a href="../bridge/message.md#bridge_message_token_ids">token_ids</a>
 }
 </code></pre>
 
@@ -1578,7 +1578,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_token_type_names">token_type_names</a>(self: &<a href="bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>): vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>(self: &<a href="../bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>): vector&lt;<a href="../../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;
 </code></pre>
 
 
@@ -1587,8 +1587,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_token_type_names">token_type_names</a>(self: &<a href="bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a>): vector&lt;String&gt; {
-    self.<a href="bridge/message.md#bridge_message_token_type_names">token_type_names</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>(self: &<a href="../bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a>): vector&lt;String&gt; {
+    self.<a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>
 }
 </code></pre>
 
@@ -1602,7 +1602,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_token_prices">token_prices</a>(self: &<a href="bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>): vector&lt;u64&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>(self: &<a href="../bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>): vector&lt;u64&gt;
 </code></pre>
 
 
@@ -1611,8 +1611,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_token_prices">token_prices</a>(self: &<a href="bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a>): vector&lt;u64&gt; {
-    self.<a href="bridge/message.md#bridge_message_token_prices">token_prices</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>(self: &<a href="../bridge/message.md#bridge_message_AddTokenOnSui">AddTokenOnSui</a>): vector&lt;u64&gt; {
+    self.<a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>
 }
 </code></pre>
 
@@ -1626,7 +1626,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_emergency_op_pause">emergency_op_pause</a>(): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_emergency_op_pause">emergency_op_pause</a>(): u8
 </code></pre>
 
 
@@ -1635,8 +1635,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_emergency_op_pause">emergency_op_pause</a>(): u8 {
-    <a href="bridge/message.md#bridge_message_PAUSE">PAUSE</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_emergency_op_pause">emergency_op_pause</a>(): u8 {
+    <a href="../bridge/message.md#bridge_message_PAUSE">PAUSE</a>
 }
 </code></pre>
 
@@ -1650,7 +1650,7 @@ Update Sui token message
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_emergency_op_unpause">emergency_op_unpause</a>(): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_emergency_op_unpause">emergency_op_unpause</a>(): u8
 </code></pre>
 
 
@@ -1659,8 +1659,8 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_emergency_op_unpause">emergency_op_unpause</a>(): u8 {
-    <a href="bridge/message.md#bridge_message_UNPAUSE">UNPAUSE</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_emergency_op_unpause">emergency_op_unpause</a>(): u8 {
+    <a href="../bridge/message.md#bridge_message_UNPAUSE">UNPAUSE</a>
 }
 </code></pre>
 
@@ -1675,7 +1675,7 @@ Update Sui token message
 Return the required signature threshold for the message, values are voting power in the scale of 10000
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_required_voting_power">required_voting_power</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_required_voting_power">required_voting_power</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): u64
 </code></pre>
 
 
@@ -1684,29 +1684,29 @@ Return the required signature threshold for the message, values are voting power
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_required_voting_power">required_voting_power</a>(self: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): u64 {
-    <b>let</b> <a href="bridge/message.md#bridge_message_message_type">message_type</a> = <a href="bridge/message.md#bridge_message_message_type">message_type</a>(self);
-    <b>if</b> (<a href="bridge/message.md#bridge_message_message_type">message_type</a> == <a href="bridge/message_types.md#bridge_message_types_token">message_types::token</a>()) {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_required_voting_power">required_voting_power</a>(self: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): u64 {
+    <b>let</b> <a href="../bridge/message.md#bridge_message_message_type">message_type</a> = <a href="../bridge/message.md#bridge_message_message_type">message_type</a>(self);
+    <b>if</b> (<a href="../bridge/message.md#bridge_message_message_type">message_type</a> == <a href="../bridge/message_types.md#bridge_message_types_token">message_types::token</a>()) {
         3334
-    } <b>else</b> <b>if</b> (<a href="bridge/message.md#bridge_message_message_type">message_type</a> == <a href="bridge/message_types.md#bridge_message_types_emergency_op">message_types::emergency_op</a>()) {
-        <b>let</b> <a href="bridge/message.md#bridge_message_payload">payload</a> = <a href="bridge/message.md#bridge_message_extract_emergency_op_payload">extract_emergency_op_payload</a>(self);
-        <b>if</b> (<a href="bridge/message.md#bridge_message_payload">payload</a>.op_type == <a href="bridge/message.md#bridge_message_PAUSE">PAUSE</a>) {
+    } <b>else</b> <b>if</b> (<a href="../bridge/message.md#bridge_message_message_type">message_type</a> == <a href="../bridge/message_types.md#bridge_message_types_emergency_op">message_types::emergency_op</a>()) {
+        <b>let</b> <a href="../bridge/message.md#bridge_message_payload">payload</a> = <a href="../bridge/message.md#bridge_message_extract_emergency_op_payload">extract_emergency_op_payload</a>(self);
+        <b>if</b> (<a href="../bridge/message.md#bridge_message_payload">payload</a>.op_type == <a href="../bridge/message.md#bridge_message_PAUSE">PAUSE</a>) {
             450
-        } <b>else</b> <b>if</b> (<a href="bridge/message.md#bridge_message_payload">payload</a>.op_type == <a href="bridge/message.md#bridge_message_UNPAUSE">UNPAUSE</a>) {
+        } <b>else</b> <b>if</b> (<a href="../bridge/message.md#bridge_message_payload">payload</a>.op_type == <a href="../bridge/message.md#bridge_message_UNPAUSE">UNPAUSE</a>) {
             5001
         } <b>else</b> {
-            <b>abort</b> <a href="bridge/message.md#bridge_message_EInvalidEmergencyOpType">EInvalidEmergencyOpType</a>
+            <b>abort</b> <a href="../bridge/message.md#bridge_message_EInvalidEmergencyOpType">EInvalidEmergencyOpType</a>
         }
-    } <b>else</b> <b>if</b> (<a href="bridge/message.md#bridge_message_message_type">message_type</a> == <a href="bridge/message_types.md#bridge_message_types_committee_blocklist">message_types::committee_blocklist</a>()) {
+    } <b>else</b> <b>if</b> (<a href="../bridge/message.md#bridge_message_message_type">message_type</a> == <a href="../bridge/message_types.md#bridge_message_types_committee_blocklist">message_types::committee_blocklist</a>()) {
         5001
-    } <b>else</b> <b>if</b> (<a href="bridge/message.md#bridge_message_message_type">message_type</a> == <a href="bridge/message_types.md#bridge_message_types_update_asset_price">message_types::update_asset_price</a>()) {
+    } <b>else</b> <b>if</b> (<a href="../bridge/message.md#bridge_message_message_type">message_type</a> == <a href="../bridge/message_types.md#bridge_message_types_update_asset_price">message_types::update_asset_price</a>()) {
         5001
-    } <b>else</b> <b>if</b> (<a href="bridge/message.md#bridge_message_message_type">message_type</a> == <a href="bridge/message_types.md#bridge_message_types_update_bridge_limit">message_types::update_bridge_limit</a>()) {
+    } <b>else</b> <b>if</b> (<a href="../bridge/message.md#bridge_message_message_type">message_type</a> == <a href="../bridge/message_types.md#bridge_message_types_update_bridge_limit">message_types::update_bridge_limit</a>()) {
         5001
-    } <b>else</b> <b>if</b> (<a href="bridge/message.md#bridge_message_message_type">message_type</a> == <a href="bridge/message_types.md#bridge_message_types_add_tokens_on_sui">message_types::add_tokens_on_sui</a>()) {
+    } <b>else</b> <b>if</b> (<a href="../bridge/message.md#bridge_message_message_type">message_type</a> == <a href="../bridge/message_types.md#bridge_message_types_add_tokens_on_sui">message_types::add_tokens_on_sui</a>()) {
         5001
     } <b>else</b> {
-        <b>abort</b> <a href="bridge/message.md#bridge_message_EInvalidMessageType">EInvalidMessageType</a>
+        <b>abort</b> <a href="../bridge/message.md#bridge_message_EInvalidMessageType">EInvalidMessageType</a>
     }
 }
 </code></pre>
@@ -1721,7 +1721,7 @@ Return the required signature threshold for the message, values are voting power
 
 
 
-<pre><code>publicfun <a href="bridge/message.md#bridge_message_to_parsed_token_transfer_message">to_parsed_token_transfer_message</a>(<a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="bridge/message.md#bridge_message_ParsedTokenTransferMessage">bridge::message::ParsedTokenTransferMessage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_to_parsed_token_transfer_message">to_parsed_token_transfer_message</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_ParsedTokenTransferMessage">bridge::message::ParsedTokenTransferMessage</a>
 </code></pre>
 
 
@@ -1730,17 +1730,17 @@ Return the required signature threshold for the message, values are voting power
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge/message.md#bridge_message_to_parsed_token_transfer_message">to_parsed_token_transfer_message</a>(
-    <a href="bridge/message.md#bridge_message">message</a>: &<a href="bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>,
-): <a href="bridge/message.md#bridge_message_ParsedTokenTransferMessage">ParsedTokenTransferMessage</a> {
-    <b>assert</b>!(<a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_message_type">message_type</a>() == <a href="bridge/message_types.md#bridge_message_types_token">message_types::token</a>(), <a href="bridge/message.md#bridge_message_EMustBeTokenMessage">EMustBeTokenMessage</a>);
-    <b>let</b> <a href="bridge/message.md#bridge_message_payload">payload</a> = <a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_extract_token_bridge_payload">extract_token_bridge_payload</a>();
-    <a href="bridge/message.md#bridge_message_ParsedTokenTransferMessage">ParsedTokenTransferMessage</a> {
-        <a href="bridge/message.md#bridge_message_message_version">message_version</a>: <a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_message_version">message_version</a>(),
-        <a href="bridge/message.md#bridge_message_seq_num">seq_num</a>: <a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_seq_num">seq_num</a>(),
-        <a href="bridge/message.md#bridge_message_source_chain">source_chain</a>: <a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_source_chain">source_chain</a>(),
-        <a href="bridge/message.md#bridge_message_payload">payload</a>: <a href="bridge/message.md#bridge_message">message</a>.<a href="bridge/message.md#bridge_message_payload">payload</a>(),
-        parsed_payload: <a href="bridge/message.md#bridge_message_payload">payload</a>,
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_to_parsed_token_transfer_message">to_parsed_token_transfer_message</a>(
+    <a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>,
+): <a href="../bridge/message.md#bridge_message_ParsedTokenTransferMessage">ParsedTokenTransferMessage</a> {
+    <b>assert</b>!(<a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_message_type">message_type</a>() == <a href="../bridge/message_types.md#bridge_message_types_token">message_types::token</a>(), <a href="../bridge/message.md#bridge_message_EMustBeTokenMessage">EMustBeTokenMessage</a>);
+    <b>let</b> <a href="../bridge/message.md#bridge_message_payload">payload</a> = <a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_extract_token_bridge_payload">extract_token_bridge_payload</a>();
+    <a href="../bridge/message.md#bridge_message_ParsedTokenTransferMessage">ParsedTokenTransferMessage</a> {
+        <a href="../bridge/message.md#bridge_message_message_version">message_version</a>: <a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_message_version">message_version</a>(),
+        <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: <a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>(),
+        <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: <a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>(),
+        <a href="../bridge/message.md#bridge_message_payload">payload</a>: <a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_payload">payload</a>(),
+        parsed_payload: <a href="../bridge/message.md#bridge_message_payload">payload</a>,
     }
 }
 </code></pre>
@@ -1755,7 +1755,7 @@ Return the required signature threshold for the message, values are voting power
 
 
 
-<pre><code><b>fun</b> <a href="bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bytes: vector&lt;u8&gt;): vector&lt;u8&gt;
+<pre><code><b>fun</b> <a href="../bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bytes: vector&lt;u8&gt;): vector&lt;u8&gt;
 </code></pre>
 
 
@@ -1764,7 +1764,7 @@ Return the required signature threshold for the message, values are voting power
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(<b>mut</b> bytes: vector&lt;u8&gt;): vector&lt;u8&gt; {
+<pre><code><b>fun</b> <a href="../bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(<b>mut</b> bytes: vector&lt;u8&gt;): vector&lt;u8&gt; {
     vector::reverse(&<b>mut</b> bytes);
     bytes
 }
@@ -1780,7 +1780,7 @@ Return the required signature threshold for the message, values are voting power
 
 
 
-<pre><code><b>fun</b> <a href="bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(bcs: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): u64
+<pre><code><b>fun</b> <a href="../bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(bcs: &<b>mut</b> <a href="../../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): u64
 </code></pre>
 
 
@@ -1789,7 +1789,7 @@ Return the required signature threshold for the message, values are voting power
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(bcs: &<b>mut</b> BCS): u64 {
+<pre><code><b>fun</b> <a href="../bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(bcs: &<b>mut</b> BCS): u64 {
     <b>let</b> (<b>mut</b> value, <b>mut</b> i) = (0u64, 64u8);
     <b>while</b> (i &gt; 0) {
         i = i - 8;
