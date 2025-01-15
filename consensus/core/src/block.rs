@@ -19,7 +19,10 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 
 use crate::{
-    commit::CommitVote, context::Context, ensure, error::ConsensusError, error::ConsensusResult,
+    commit::CommitVote,
+    context::Context,
+    ensure,
+    error::{ConsensusError, ConsensusResult},
 };
 
 /// Round number of a block.
@@ -636,6 +639,15 @@ impl fmt::Debug for VerifiedBlock {
             self.commit_votes().len(),
         )
     }
+}
+
+/// Block with extended additional information, such as
+/// local blocks that are excluded from the block's ancestors.
+/// The extended information do not need to be certified or forwarded to other authorities.
+#[derive(Clone, Debug)]
+pub(crate) struct ExtendedBlock {
+    pub block: VerifiedBlock,
+    pub excluded_ancestors: Vec<BlockRef>,
 }
 
 /// Generates the genesis blocks for the current Committee.
