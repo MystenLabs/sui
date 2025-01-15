@@ -287,10 +287,10 @@ fn finalize_ide_info(context: &mut Context) {
 fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Function {
     let N::Function {
         doc,
-        loc: full_loc,
         warning_filter,
         index,
         attributes,
+        loc,
         visibility,
         entry,
         macro_,
@@ -321,10 +321,10 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     context.pop_warning_filter_scope();
     T::Function {
         doc,
-        loc: full_loc,
         warning_filter,
         index,
         attributes,
+        loc,
         compiled_visibility,
         visibility,
         entry,
@@ -719,8 +719,8 @@ fn struct_def(context: &mut Context, sloc: Loc, s: &mut N::StructDefinition) {
     };
 
     // instantiate types and check constraints
-    for (_field_loc, _field, idx_ty) in field_map.iter() {
-        let (_idx, (_doc, ty)) = idx_ty;
+    for (_field_loc, _field, idx_doc_ty) in field_map.iter() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
         let loc = ty.loc;
         let inst_ty = core::instantiate(context, ty.clone());
         context.add_base_type_constraint(loc, "Invalid field type", inst_ty.clone());
@@ -736,8 +736,8 @@ fn struct_def(context: &mut Context, sloc: Loc, s: &mut N::StructDefinition) {
             .iter()
             .map(|tp| sp(tp.param.user_specified_name.loc, Type_::Anything)),
     );
-    for (_field_loc, _field, idx_ty) in field_map.iter() {
-        let (_idx, (_doc, ty)) = idx_ty;
+    for (_field_loc, _field, idx_doc_ty) in field_map.iter() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
         let loc = ty.loc;
         let subst_ty = core::subst_tparams(tparam_subst, ty.clone());
         for declared_ability in declared_abilities {
@@ -752,8 +752,8 @@ fn struct_def(context: &mut Context, sloc: Loc, s: &mut N::StructDefinition) {
     }
     core::solve_constraints(context);
 
-    for (_field_loc, _field_, idx_ty) in field_map.iter_mut() {
-        let (_idx, (_doc, ty)) = idx_ty;
+    for (_field_loc, _field_, idx_doc_ty) in field_map.iter_mut() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
         expand::type_(context, ty);
     }
     check_type_params_usage(context, &s.type_parameters, field_map);
@@ -794,8 +794,8 @@ fn variant_def(
     };
 
     // instantiate types and check constraints
-    for (_field_loc, _field, idx_ty) in field_map.iter() {
-        let (_idx, (_doc, ty)) = idx_ty;
+    for (_field_loc, _field, idx_doc_ty) in field_map.iter() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
         let loc = ty.loc;
         let inst_ty = core::instantiate(context, ty.clone());
         context.add_base_type_constraint(loc, "Invalid field type", inst_ty.clone());
@@ -810,8 +810,8 @@ fn variant_def(
             .iter()
             .map(|tp| sp(tp.param.user_specified_name.loc, Type_::Anything)),
     );
-    for (_field_loc, _field, idx_ty) in field_map.iter() {
-        let (_idx, (_doc, ty)) = idx_ty;
+    for (_field_loc, _field, idx_doc_ty) in field_map.iter() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
         let loc = ty.loc;
         let subst_ty = core::subst_tparams(tparam_subst, ty.clone());
         for declared_ability in enum_abilities {
@@ -826,8 +826,8 @@ fn variant_def(
     }
     core::solve_constraints(context);
 
-    for (_field_loc, _field_, idx_ty) in field_map.iter_mut() {
-        let (_idx, (_doc, ty)) = idx_ty;
+    for (_field_loc, _field_, idx_doc_ty) in field_map.iter_mut() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
         expand::type_(context, ty);
     }
     field_map
@@ -843,7 +843,7 @@ fn check_type_params_usage(
 ) {
     let has_unresolved = field_map
         .iter()
-        .any(|(_, _, (_, (_, ty)))| has_unresolved_error_type(ty));
+        .any(|(_loc, _n, (_idx, (_doc, ty)))| has_unresolved_error_type(ty));
 
     if has_unresolved {
         return;
@@ -858,8 +858,8 @@ fn check_type_params_usage(
         .filter(|ty_param| ty_param.is_phantom)
         .map(|param| param.param.id)
         .collect();
-    for (_, _, idx_ty) in field_map.iter() {
-        let (_, (_, ty)) = idx_ty;
+    for (_loc, _f, idx_doc_ty) in field_map {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
         visit_type_params(
             context,
             ty,
@@ -2908,7 +2908,7 @@ fn add_struct_field_types<T>(
             return fields.map(|f, (idx, x)| (idx, (context.error_type(f.loc()), x)));
         }
     };
-    for (_, f_, _) in &fields_ty {
+    for (_loc, f_, _idx_doc_ty) in &fields_ty {
         if fields.get_(f_).is_none() {
             let msg = format!("Missing {} for field '{}' in '{}::{}'", verb, f_, m, n);
             context.add_diag(diag!(TypeSafety::TooFewArguments, (loc, msg)))
@@ -2923,7 +2923,7 @@ fn add_struct_field_types<T>(
                 ));
                 context.error_type(f.loc())
             }
-            Some((_, (_, fty))) => fty,
+            Some((_idx, (_doc, fty))) => fty,
         };
         (idx, (fty, x))
     })
@@ -2956,7 +2956,7 @@ fn add_variant_field_types<T>(
             }
         }
     };
-    for (_, f_, _) in &fields_ty {
+    for (_loc, f_, _idx_doc_ty) in &fields_ty {
         if fields.get_(f_).is_none() {
             let msg = format!(
                 "Missing {} for field '{}' in '{}::{}::{}'",
@@ -2977,7 +2977,7 @@ fn add_variant_field_types<T>(
                 ));
                 context.error_type(f.loc())
             }
-            Some((_, (_, fty))) => fty,
+            Some((_idx, (_doc, fty))) => fty,
         };
         (idx, (fty, x))
     })

@@ -1425,8 +1425,6 @@ impl AstDebug for DocComment {
             w.writeln("/** ");
             w.writeln(s);
             w.writeln("**/");
-        } else {
-            w.writeln("/// <doc suppressed outside of verbose mode>");
         }
     }
 }

@@ -60,11 +60,11 @@ pub struct ModuleDefinition {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Constant {
-    pub loc: Loc,
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
+    pub loc: Loc,
     pub signature: BaseType,
     pub value: Option<MoveValue>,
 }
@@ -87,11 +87,11 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Function {
-    pub loc: Loc,
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
+    pub loc: Loc,
     /// The original, declared visibility as defined in the source file
     pub visibility: Visibility,
     /// We sometimes change the visibility of functions, e.g. `entry` is marked as `public` in
