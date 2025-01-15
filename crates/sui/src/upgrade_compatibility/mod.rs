@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[path = "unit_tests/upgrade_compatibility_tests.rs"]
+mod formatting;
+#[path = "../unit_tests/upgrade_compatibility_tests.rs"]
 #[cfg(test)]
 mod upgrade_compatibility_tests;
 
+use formatting::{format_list, format_param, singular_or_plural, FormattedField};
+
 use anyhow::{anyhow, Context, Error};
-use regex::Regex;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
@@ -47,19 +49,12 @@ use sui_sdk::SuiClient;
 use sui_types::move_package::UpgradePolicy;
 use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
 
-/// Errors that can occur during upgrade compatibility checks.
-/// one-to-one related to the underlying trait functions see: [`CompatibilityMode`]
-/// Except for the `ModuleMismatch` which is a special case for additive and dependency only policies and `ModuleMissing`
+/// Errors that can occur during upgrade compatibility checks,
+/// one-to-one related to the underlying trait functions see: [`CompatibilityMode`].
 #[derive(Debug, Clone)]
 pub(crate) enum UpgradeCompatibilityModeError {
     ModuleMissing {
         name: Identifier,
-    },
-    /// The upgrade is not compatible with the existing package due to the policy.
-    /// This error is used for additive and dependency only policies where modules
-    /// are either not allowed to add declarations or change them.
-    ModuleMismatch {
-        policy: UpgradePolicy,
     },
     StructMissing {
         name: Identifier,
@@ -164,14 +159,13 @@ pub(crate) enum UpgradeCompatibilityModeError {
     FriendMissing,
 }
 
-/// Check if a specifc error breaks 'compatible' upgrades
+/// Check if an `UpgradeCompatibilityModeError` variant breaks 'compatible' upgrades.
 fn breaks_compatibility(
     error: &UpgradeCompatibilityModeError,
     compatability: &Compatibility,
 ) -> bool {
     match error {
-        UpgradeCompatibilityModeError::ModuleMissing { .. }
-        | UpgradeCompatibilityModeError::ModuleMismatch { .. } => true,
+        UpgradeCompatibilityModeError::ModuleMissing { .. } => true,
 
         UpgradeCompatibilityModeError::StructAbilityMismatch { .. }
         | UpgradeCompatibilityModeError::StructTypeParamMismatch { .. }
@@ -219,7 +213,8 @@ fn breaks_compatibility(
     }
 }
 
-/// Check if a specifc error breaks inclusion checks for 'additive' (Subset) or 'dependency only' (Equal) upgrades
+/// Check if an `UpgradeCompatibilityModeError` variant breaks inclusion checks for 'additive' (Subset)
+/// or 'dependency only' (Equal) upgrades.
 fn breaks_inclusion_check(
     error: &UpgradeCompatibilityModeError,
     inclusion_check: &InclusionCheck,
@@ -236,7 +231,6 @@ fn breaks_inclusion_check(
         }
 
         UpgradeCompatibilityModeError::ModuleMissing { .. }
-        | UpgradeCompatibilityModeError::ModuleMismatch { .. }
         | UpgradeCompatibilityModeError::StructMissing { .. }
         | UpgradeCompatibilityModeError::StructAbilityMismatch { .. }
         | UpgradeCompatibilityModeError::StructTypeParamMismatch { .. }
@@ -262,7 +256,7 @@ fn breaks_inclusion_check(
     }
 }
 
-/// A compatibility mode that collects errors as a vector of enums which describe the error causes
+/// Compatibility mode used for 'compatible' upgrades, collects all errors and returns them as a single error.
 #[derive(Default)]
 pub(crate) struct CliCompatibilityMode {
     errors: Vec<UpgradeCompatibilityModeError>,
@@ -270,7 +264,7 @@ pub(crate) struct CliCompatibilityMode {
 
 impl CompatibilityMode for CliCompatibilityMode {
     type Error = Vec<UpgradeCompatibilityModeError>;
-    // ignored, address is not populated pre-tx
+    // Ignored, address is not populated pre-tx, `compare_packages` function prevents name mismatches
     fn module_id_mismatch(
         &mut self,
         _old_addr: &AccountAddress,
@@ -440,7 +434,8 @@ impl CompatibilityMode for CliCompatibilityMode {
     }
 }
 
-/// A Compatibility mode used for checking inclusion checks for 'additive' (Subset) or 'dependency only' (Equal) upgrades
+/// Compatibility mode used during inclusion checks: 'additive' (Subset) or 'dependency only' (Equal) upgrades,
+/// collects all errors and returns them as a single error.
 #[derive(Default)]
 struct CliInclusionCheckMode {
     errors: Vec<UpgradeCompatibilityModeError>,
@@ -449,13 +444,13 @@ struct CliInclusionCheckMode {
 impl InclusionCheckMode for CliInclusionCheckMode {
     type Error = Vec<UpgradeCompatibilityModeError>;
 
-    // ignored address is not populated pre-tx
+    // Ignored, address is not populated pre-tx, `compare_packages` function prevents name mismatches
     fn module_id_mismatch(
         &mut self,
-        old_address: &AccountAddress,
-        old_name: &IdentStr,
-        new_address: &AccountAddress,
-        new_name: &IdentStr,
+        _old_address: &AccountAddress,
+        _old_name: &IdentStr,
+        _new_address: &AccountAddress,
+        _new_name: &IdentStr,
     ) {
     }
 
@@ -483,7 +478,7 @@ impl InclusionCheckMode for CliInclusionCheckMode {
             });
     }
 
-    fn struct_missing(&mut self, name: &Identifier, old_struct: &Struct) {
+    fn struct_missing(&mut self, name: &Identifier, _old_struct: &Struct) {
         self.errors
             .push(UpgradeCompatibilityModeError::StructMissing { name: name.clone() });
     }
@@ -502,7 +497,7 @@ impl InclusionCheckMode for CliInclusionCheckMode {
         });
     }
 
-    fn enum_missing(&mut self, name: &Identifier, old_enum: &Enum) {
+    fn enum_missing(&mut self, name: &Identifier, _old_enum: &Enum) {
         self.errors
             .push(UpgradeCompatibilityModeError::EnumMissing { name: name.clone() });
     }
@@ -524,7 +519,7 @@ impl InclusionCheckMode for CliInclusionCheckMode {
             });
     }
 
-    fn function_missing(&mut self, name: &Identifier, old_func: &Function) {
+    fn function_missing(&mut self, name: &Identifier, _old_func: &Function) {
         self.errors
             .push(UpgradeCompatibilityModeError::FunctionMissing { name: name.clone() });
     }
@@ -559,7 +554,7 @@ struct IdentifierTableLookup {
     function_identifier_to_index: BTreeMap<Identifier, TableIndex>,
 }
 
-/// creates an index to allow looking up the table index of a struct, enum, or function by its identifier
+/// Creates an index to allow looking up the table index of a struct, enum, or function by its identifier.
 fn table_index(compiled_module: &CompiledModule) -> IdentifierTableLookup {
     // for each in compiled module
     let struct_identifier_to_index: BTreeMap<Identifier, TableIndex> = compiled_module
@@ -658,7 +653,6 @@ upgrade_codes!(
         AbilityMismatch: { msg: "ability mismatch" },
         FieldMismatch: { msg: "field mismatch" },
         TypeParamMismatch: { msg: "type parameter mismatch" },
-        ModuleMismatch: { msg: "module incompatible" },
         ModuleMissing: { msg: "module missing" },
         Missing: { msg: "missing declaration" },
         VersionMismatch: { msg: "file format version downgrade" },
@@ -840,24 +834,13 @@ fn modules_into_diags(
     Ok(diags)
 }
 
-fn errors_or_empty_vec(
-    name: Identifier,
-    result: Result<(), Vec<UpgradeCompatibilityModeError>>,
-) -> Vec<(Identifier, UpgradeCompatibilityModeError)> {
-    match result {
-        Ok(_) => vec![],
-        Err(errors) => errors.into_iter().map(|e| (name.clone(), e)).collect(),
-    }
-}
-
-/// Convert an error to a diagnostic using the specific error type's function.
+/// Convert an error to a vector of diagnostics using the error specific function.
 fn compatibility_diag_from_error(
     error: &UpgradeCompatibilityModeError,
     compiled_unit_with_source: &CompiledUnitWithSource,
     is_compatible: bool,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
-    let module_name = compiled_unit_with_source.unit.name.as_str();
     match error {
         UpgradeCompatibilityModeError::StructMissing { name, .. } => {
             missing_definition_diag("struct", name, is_compatible, compiled_unit_with_source)
@@ -993,11 +976,6 @@ fn compatibility_diag_from_error(
         UpgradeCompatibilityModeError::FunctionEntryCompatibility {
             name, old_function, ..
         } => function_entry_mismatch(name, old_function, compiled_unit_with_source, lookup),
-        // Specifically handles additive and dep only policies where modules
-        // are either not allowed to add declarations or change them.
-        UpgradeCompatibilityModeError::ModuleMismatch { policy } => {
-            module_compatibility_error_diag(*policy, compiled_unit_with_source)
-        }
         UpgradeCompatibilityModeError::ModuleMissing { .. } => {
             unreachable!("Module Missing should be handled by outer function")
         }
@@ -1048,45 +1026,7 @@ fn compatibility_diag_from_error(
     }
 }
 
-// give specifics about the declarations which do not match
-fn module_compatibility_error_diag(
-    policy: UpgradePolicy,
-    compiled_unit_with_source: &CompiledUnitWithSource,
-) -> Result<Diagnostics, Error> {
-    let mut diags = Diagnostics::new();
-
-    let loc = compiled_unit_with_source
-        .unit
-        .source_map
-        .definition_location;
-
-    diags.add(Diagnostic::new(
-        Declarations::ModuleMismatch,
-        (
-            loc,
-            format!(
-                "The upgrade is not compatible with the existing package due to {} policy.",
-                match policy {
-                    UpgradePolicy::Additive => "additive",
-                    UpgradePolicy::DepOnly => "dependency only",
-                    _ => unreachable!("Invalid upgrade policy for this error type"),
-                }
-            ),
-        ),
-        Vec::<(Loc, String)>::new(),
-        vec![
-            "The upgrade is not compatible with the existing package.".to_string(),
-            format!(
-                "The upgrade policy is set to '{}'.",
-                policy.to_string().to_lowercase()
-            ),
-        ],
-    ));
-
-    Ok(diags)
-}
-
-/// Return a diagnostic when a module is missing from a package.
+/// Returns a diagnostic when a module is missing from a package.
 fn missing_module_diag(
     module_name: &Identifier,
     move_toml_hash: &FileHash,
@@ -1120,7 +1060,7 @@ fn missing_module_diag(
     Ok(diags)
 }
 
-/// Return a diagnostic for a missing definition.
+/// Returns a diagnostic for a missing definition.
 fn missing_definition_diag(
     declaration_kind: &str,
     identifier_name: &Identifier,
@@ -1182,7 +1122,7 @@ fn missing_definition_diag(
     Ok(diags)
 }
 
-/// Return a diagnostic for a function which has lost its public visibility
+/// Returns a diagnostic for a function which has lost its public visibility.
 fn function_lost_public(
     function_name: &Identifier,
     compiled_unit_with_source: &CompiledUnitWithSource,
@@ -1224,39 +1164,9 @@ fn function_lost_public(
     Ok(diags)
 }
 
-fn format_param(
-    param: &Type,
-    type_params: Vec<SourceName>,
-    secondary: &mut Vec<(Loc, String)>,
-) -> Result<String, Error> {
-    Ok(match param {
-        Type::TypeParameter(t) => {
-            let type_param = type_params
-                .get(*t as usize)
-                .context("Unable to get type param location")?;
-
-            secondary.push((
-                type_param.1,
-                format!("Type parameter '{}' is defined here", &type_param.0),
-            ));
-            type_param.0.to_string()
-        }
-        Type::Vector(t) => {
-            format!("vector<{}>", format_param(t, type_params, secondary)?)
-        }
-        Type::MutableReference(t) => {
-            format!("&mut {}", format_param(t, type_params, secondary)?)
-        }
-        Type::Reference(t) => {
-            format!("&{}", format_param(t, type_params, secondary)?)
-        }
-        _ => format!("{}", param),
-    })
-}
-
-/// Return a diagnostic for a function signature mismatch.
-/// Start by checking the lengths of the parameters and returns and return a diagnostic if they are different.
-/// If the lengths are the same check each parameter piece wise and return a diagnostic for each mismatch.
+/// Returns diagnostics for each signature mismatch in the given function.
+/// Start by checking the lengths of the parameters and returns and add a diagnostic if they are different.
+/// If the lengths are the same check each parameter piece wise and add a diagnostic for each mismatch.
 fn function_signature_mismatch_diag(
     function_name: &Identifier,
     old_function: &Function,
@@ -1571,7 +1481,7 @@ fn function_entry_mismatch(
     Ok(diags)
 }
 
-/// Return a label string for an ability mismatch.
+/// Returns a label string for an ability mismatch.
 fn ability_mismatch_label(
     old_abilities: AbilitySet,
     new_abilities: AbilitySet,
@@ -1613,7 +1523,7 @@ fn ability_mismatch_label(
     }
 }
 
-/// Return a diagnostic for an ability mismatch.
+/// Returns a diagnostic for a given struct's ability mismatch.
 fn struct_ability_mismatch_diag(
     struct_name: &Identifier,
     old_struct: &Struct,
@@ -1682,63 +1592,43 @@ fn struct_ability_mismatch_diag(
 
     Ok(diags)
 }
+/// Returns an error code and label for the given field.
+fn field_mismatch_message(
+    old_field: &Field,
+    new_field: &Field,
+    type_params: Vec<SourceName>,
+) -> Result<(Declarations, String), Error> {
+    let old_ff = FormattedField::new(old_field, &type_params);
+    let new_ff = FormattedField::new(new_field, &type_params);
 
-/// Return a diagnostic for an ability mismatch. returns (full version, name, type)
-fn field_to_string(field: &Field) -> (String, String, String) {
-    let mut field_full = format!("'{}: {}'", field.name, field.type_);
-    let mut field_name = format!("'{}'", field.name);
-    let field_type = format!("'{}'", field.type_);
-
-    if let Some(pos_num) = Regex::new(r"^pos(\d)+$")
-        .ok()
-        .and_then(|r| r.captures(field.name.as_str()))
-        .and_then(|c| c.get(1))
-        .and_then(|m| m.as_str().parse::<u64>().ok())
-    {
-        field_name = format!("at position {}", pos_num);
-        field_full = format!("{} {}", field_type, field_name);
-    }
-
-    (field_full, field_name, field_type)
+    Ok(
+        match (
+            old_field.name != new_field.name,
+            old_field.type_ != new_field.type_,
+        ) {
+            (true, true) => (
+                Declarations::FieldMismatch,
+                format!("Mismatched field {new_ff}, expected {old_ff}."),
+            ),
+            (true, false) => (
+                Declarations::FieldMismatch,
+                format!("Mismatched field {new_ff:#}, expected {old_ff:#}."),
+            ),
+            (false, true) => (
+                Declarations::TypeMismatch,
+                format!(
+                    "Mismatched field type {}, expected {}.",
+                    new_ff.type_, old_ff.type_
+                ),
+            ),
+            (false, false) => unreachable!("Fields should not be the same"),
+        },
+    )
 }
 
-/// returns a message for the given field
-fn field_mismatch_message(old_field: &Field, new_field: &Field) -> (Declarations, String) {
-    let (old_field_full, old_field_name, old_field_type) = field_to_string(old_field);
-    let (new_field_full, new_field_name, new_field_type) = field_to_string(new_field);
-
-    match (
-        old_field.name != new_field.name,
-        old_field.type_ != new_field.type_,
-    ) {
-        (true, true) => (
-            Declarations::FieldMismatch,
-            format!(
-                "Mismatched field {}, expected {}.",
-                new_field_full, old_field_full
-            ),
-        ),
-        (true, false) => (
-            Declarations::FieldMismatch,
-            format!(
-                "Mismatched field name {}, expected {}.",
-                new_field_name, old_field_name
-            ),
-        ),
-        (false, true) => (
-            Declarations::TypeMismatch,
-            format!(
-                "Mismatched field type {}, expected {}.",
-                new_field_type, old_field_type
-            ),
-        ),
-        (false, false) => unreachable!("Fields should not be the same"),
-    }
-}
-
-/// Return a diagnostic for a field mismatch
-/// start by checking the lengths of the fields and return a diagnostic if they are different
-/// if the lengths are the same check each field piece wise and return a diagnostic for each mismatch
+/// Returns diagnostics for each field mismatch in the given struct.
+/// Start by checking the lengths of the fields and return a diagnostic if they are different.
+/// If the lengths are the same check each field piece wise and return a diagnostic for each mismatch.
 fn struct_field_mismatch_diag(
     struct_name: &Identifier,
     old_struct: &Struct,
@@ -1762,16 +1652,21 @@ fn struct_field_mismatch_diag(
 
     let def_loc = struct_sourcemap.definition_location;
 
+    let dummy_field = Field {
+        name: Identifier::new("dummy_field")
+            .context("unexpected error with identifier constructor")?,
+        type_: Type::Bool,
+    };
     let old_fields: Vec<&Field> = old_struct
         .fields
         .iter()
-        .filter(|f| f.name != Identifier::new("dummy_field").unwrap() && f.type_ != Type::Bool)
+        .filter(|f| f != &&dummy_field)
         .collect();
 
     let new_fields: Vec<&Field> = new_struct
         .fields
         .iter()
-        .filter(|f| f.name != Identifier::new("dummy_field").unwrap() && f.type_ != Type::Bool)
+        .filter(|f| f != &&dummy_field)
         .collect();
 
     let reason = if public_visibility_related_error {
@@ -1811,7 +1706,11 @@ fn struct_field_mismatch_diag(
                     .get(i)
                     .context("Unable to get field location")?;
 
-                let (code, label) = field_mismatch_message(old_field, new_field);
+                let (code, label) = field_mismatch_message(
+                    old_field,
+                    new_field,
+                    struct_sourcemap.type_parameters.clone(),
+                )?;
 
                 diags.add(Diagnostic::new(
                     code,
@@ -1833,9 +1732,9 @@ fn struct_field_mismatch_diag(
     Ok(diags)
 }
 
-/// Return a diagnostic for a type parameter mismatch
-/// start by checking the lengths of the type parameters and return a diagnostic if they are different
-/// if the lengths are the same check each type parameter piece wise and return a diagnostic for each mismatch
+/// Returns diagnostics for each type parameter mismatch in the given struct.
+/// Start by checking the lengths of the type parameters and return a diagnostic if they are different.
+/// If the lengths are the same check each type parameter piece wise and return a diagnostic for each mismatch.
 fn struct_type_param_mismatch_diag(
     name: &Identifier,
     old_struct: &Struct,
@@ -1868,7 +1767,7 @@ fn struct_type_param_mismatch_diag(
     )
 }
 
-/// Return a diagnostic for a new variant in an enum
+/// Returns a diagnostic for enum ability mismatches.
 fn enum_ability_mismatch_diag(
     enum_name: &Identifier,
     old_enum: &Enum,
@@ -1940,69 +1839,64 @@ fn enum_ability_mismatch_diag(
     Ok(diags)
 }
 
-/// Returns the error code and label for mismatched, missing, or unexpected variant
-fn enum_variant_field_error(
+/// Returns the error code and label for mismatched, missing, or unexpected variants.
+fn enum_variant_field_message(
     old_variant: &Variant,
     new_variant: &Variant,
-    variant_loc: Loc,
-    def_loc: Loc,
-) -> (DiagnosticInfo, Vec<String>) {
+) -> Result<Vec<(DiagnosticInfo, String)>, Error> {
     if old_variant.fields.len() != new_variant.fields.len() {
-        return (
+        return Ok(vec![(
             Declarations::FieldMismatch.into(),
-            vec![format!(
+            format!(
                 "Mismatched variant field count, expected {}, found {}.",
                 old_variant.fields.len(),
                 new_variant.fields.len()
-            )],
-        );
+            ),
+        )]);
     }
 
-    match (
-        old_variant.name != new_variant.name,
-        old_variant.fields != new_variant.fields,
-    ) {
-        (true, true) => (
-            Enums::VariantMismatch.into(),
-            vec![format!(
-                "Mismatched variant '{}', expected '{}'.",
-                new_variant.name, old_variant.name
+    Ok(
+        match (
+            old_variant.name != new_variant.name,
+            old_variant.fields != new_variant.fields,
+        ) {
+            (true, true) => vec![(
+                Enums::VariantMismatch.into(),
+                format!(
+                    "Mismatched variant '{}', expected '{}'.",
+                    new_variant.name, old_variant.name
+                ),
             )],
-        ),
-        (true, false) => (
-            Enums::VariantMismatch.into(),
-            vec![format!(
-                "Mismatched variant name '{}', expected '{}'.",
-                new_variant.name, old_variant.name
+            (true, false) => vec![(
+                Enums::VariantMismatch.into(),
+                format!(
+                    "Mismatched variant '{}', expected '{}'.",
+                    new_variant.name, old_variant.name
+                ),
             )],
-        ),
-        (false, true) => {
-            let mut errors: Vec<String> = vec![];
+            (false, true) => {
+                let mut errors: Vec<(DiagnosticInfo, String)> = vec![];
 
-            for (i, (old_field, new_field)) in old_variant
-                .fields
-                .iter()
-                .zip(new_variant.fields.iter())
-                .enumerate()
-            {
-                if old_field != new_field {
-                    errors.push(format!(
-                        "Mismatched field {}, expected {}.",
-                        field_to_string(old_field).0,
-                        field_to_string(new_field).2
-                    ));
+                for (old_field, new_field) in
+                    old_variant.fields.iter().zip(new_variant.fields.iter())
+                {
+                    if old_field != new_field {
+                        let (code, label) =
+                            field_mismatch_message(old_field, new_field, Vec::new())?;
+                        errors.push((code.into(), label));
+                    }
                 }
-            }
 
-            (Declarations::FieldMismatch.into(), errors)
-        }
-        (false, false) => unreachable!("Variants should not be the same"),
-    }
+                errors
+            }
+            (false, false) => unreachable!("Variants should not be the same"),
+        },
+    )
 }
 
-/// Return a diagnostic for a type parameter mismatch
-/// start by checking the lengths of the type parameters and return a diagnostic if they are different
-/// if the lengths are the same check each type parameter piece wise and return a diagnostic for each mismatch
+/// Returns diagnostics for each variant mismatch in the given enum.
+/// Start by checking the lengths of the variants and return a diagnostic if they are different.
+/// If the lengths are the same check each type parameter piece wise and return a diagnostic for each mismatch.
 fn enum_variant_mismatch_diag(
     enum_name: &Identifier,
     old_enum: &Enum,
@@ -2040,12 +1934,11 @@ fn enum_variant_mismatch_diag(
                 .0
                  .1;
 
-            let (code, labels) =
-                enum_variant_field_error(old_variant, new_variant, variant_loc, def_loc);
+            let messages = enum_variant_field_message(old_variant, new_variant)?;
 
-            for label in labels {
+            for (code, label) in messages {
                 diags.add(Diagnostic::new(
-                    code.clone(),
+                    code,
                     (variant_loc, label),
                     vec![(def_loc, "Enum definition".to_string())],
                     vec![
@@ -2072,7 +1965,7 @@ fn enum_variant_mismatch_diag(
     Ok(diags)
 }
 
-/// Return a diagnostic for a new variant in an enum
+/// Returns diagnostics for each new variant in an enum.
 fn enum_new_variant_diag(
     enum_name: &Identifier,
     old_enum: &Enum,
@@ -2134,7 +2027,7 @@ fn enum_new_variant_diag(
     Ok(diags)
 }
 
-/// Return a diagnostic for a missing variant in an enum
+/// Returns diagnostics for each missing variant in an enum.
 fn enum_variant_missing_diag(
     enum_name: &Identifier,
     old_enum: &Enum,
@@ -2182,6 +2075,7 @@ fn enum_variant_missing_diag(
     Ok(diags)
 }
 
+/// Returns a diagnostic for an unexpected struct.
 fn struct_new_diag(
     struct_name: &Identifier,
     compiled_unit_with_source: &CompiledUnitWithSource,
@@ -2211,6 +2105,7 @@ fn struct_new_diag(
     Ok(diags)
 }
 
+/// Returns a diagnostic for an unexpected struct changed.
 fn struct_changed_diag(
     struct_name: &Identifier,
     old_struct: &Struct,
@@ -2256,6 +2151,7 @@ fn struct_changed_diag(
     Ok(diags)
 }
 
+/// Returns a diagnostic for an unexpected new enum.
 fn enum_new_diag(
     enum_name: &Identifier,
     _new_enum: &Enum,
@@ -2286,6 +2182,7 @@ fn enum_new_diag(
     Ok(diags)
 }
 
+/// Returns a diagnostic for an unexpected enum change.
 fn enum_changed_diag(
     enum_name: &Identifier,
     old_enum: &Enum,
@@ -2331,6 +2228,7 @@ fn enum_changed_diag(
     Ok(diags)
 }
 
+/// Returns a diagnostic for an unexpected new function.
 fn function_new_diag(
     function_name: &Identifier,
     compiled_unit_with_source: &CompiledUnitWithSource,
@@ -2363,6 +2261,7 @@ fn function_new_diag(
     Ok(diags)
 }
 
+/// Returns a diagnostic for an unexpected function changed.
 fn function_changed_diag(
     function_name: &Identifier,
     old_function: &Function,
@@ -2386,7 +2285,7 @@ fn function_changed_diag(
     Ok(diags)
 }
 
-/// Return a diagnostic for a type parameter mismatch
+/// Returns a diagnostic for an enum type parameter mismatch.
 fn enum_type_param_mismatch(
     enum_name: &Identifier,
     old_enum: &Enum,
@@ -2419,7 +2318,7 @@ fn enum_type_param_mismatch(
     )
 }
 
-/// Return a diagnostic for a type parameter mismatch
+/// Returns a diagnostic for a type parameter mismatch.
 fn type_parameter_diag(
     declaration_kind: &str,
     name: &Identifier,
@@ -2437,7 +2336,7 @@ fn type_parameter_diag(
         .enumerate()
         .map(|(i, c)| {
             if i == 0 {
-                c.to_uppercase().next().unwrap()
+                c.to_uppercase().next().unwrap_or(c)
             } else {
                 c
             }
@@ -2523,7 +2422,7 @@ fn type_parameter_diag(
     Ok(diags)
 }
 
-/// Return a diagnostic for a type parameter constrant mismatch
+/// Returns a label for a type parameter constraint mismatch.
 fn type_param_constraint_labels(
     old_constraints: AbilitySet,
     new_constraints: AbilitySet,
@@ -2551,7 +2450,7 @@ fn type_param_constraint_labels(
     ))
 }
 
-/// Return a diagnostic for a type parameter phantom mismatch
+/// Returns a label for a type parameter phantom mismatch.
 fn type_param_phantom_labels(old_phantom: bool, new_phantom: bool) -> Option<(String, String)> {
     if old_phantom == new_phantom {
         return None;
@@ -2570,7 +2469,7 @@ fn type_param_phantom_labels(old_phantom: bool, new_phantom: bool) -> Option<(St
     })
 }
 
-/// Return a diagnostic for package file format version mismatch
+/// Returns a diagnostic for package file format version mismatch.
 fn file_format_version_downgrade_diag(
     old_version: &u32,
     new_version: &u32,
@@ -2602,7 +2501,7 @@ fn file_format_version_downgrade_diag(
     Ok(diags)
 }
 
-/// Return a diagnostic for a friend link mismatch
+/// Returns a diagnostic for a friend link mismatch.
 fn friend_link_diag(
     compiled_unit_with_source: &CompiledUnitWithSource,
 ) -> Result<Diagnostics, Error> {
@@ -2623,44 +2522,8 @@ fn friend_link_diag(
     Ok(diags)
 }
 
-/// Format a list of items into a human-readable string.
-fn format_list(
-    items: impl IntoIterator<Item = impl std::fmt::Display>,
-    noun_singular_plural: Option<(&str, &str)>,
-) -> String {
-    let items: Vec<_> = items.into_iter().map(|i| i.to_string()).collect();
-    let items_string = match items.len() {
-        0 => "none".to_string(),
-        1 => items[0].to_string(),
-        2 => format!("{} and {}", items[0], items[1]),
-        _ => {
-            let all_but_last = &items[..items.len() - 1].join(", ");
-            let last = items.last().unwrap();
-            format!("{}, and {}", all_but_last, last)
-        }
-    };
-    if let Some((singular, plural)) = noun_singular_plural {
-        format!(
-            "{}: {}",
-            singular_or_plural(items.len(), singular, plural),
-            items_string,
-        )
-    } else {
-        items_string
-    }
-}
-
-/// Return a string with the singular or plural form of a word.
-fn singular_or_plural(n: usize, singular: &str, plural: &str) -> String {
-    if n == 1 {
-        singular.to_string()
-    } else {
-        plural.to_string()
-    }
-}
-
-/// Helper function to determine if colors should be used in the output.
-/// disables colors in tests
+/// Helper function to determine if colors should be used in the output and
+/// disables colors in tests.
 fn use_colors() -> bool {
     #[cfg(test)]
     {

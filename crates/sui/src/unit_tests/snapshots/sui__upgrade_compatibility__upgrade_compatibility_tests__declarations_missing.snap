@@ -38,7 +38,7 @@ error[Compatibility E01001]: missing public declaration
   = structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = add missing struct 'StructToBeRemoved' back to the module 'struct_'.
 
-error[Compatibility E01007]: module missing
+error[Compatibility E01006]: module missing
   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/declaration_errors_v2/Move.toml:1:1
   │  
 1 │ ╭ [package]
