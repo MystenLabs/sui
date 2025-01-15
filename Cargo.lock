@@ -15141,15 +15141,20 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-benchmark"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "bb8 0.9.0",
  "bb8-postgres",
  "clap",
+ "dashmap",
+ "futures",
  "rand 0.8.5",
+ "sui-indexer-alt-framework",
+ "telemetry-subscribers",
  "tokio",
  "tokio-postgres",
+ "tracing",
 ]
 
 [[package]]

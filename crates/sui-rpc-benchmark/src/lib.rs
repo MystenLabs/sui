@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use tracing::info;
 
 use crate::direct::benchmark_config::BenchmarkConfig;
 use crate::direct::query_executor::QueryExecutor;
@@ -60,12 +61,12 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
             concurrency,
             duration_secs,
         } => {
-            println!("Running direct query benchmark against DB {}", db_url,);
+            info!("Running direct query benchmark against DB {}", db_url);
             let query_generator = QueryGenerator {
                 db_url: db_url.clone(),
             };
             let benchmark_queries = query_generator.generate_benchmark_queries().await?;
-            println!("Generated {} benchmark queries", benchmark_queries.len());
+            info!("Generated {} benchmark queries", benchmark_queries.len());
 
             let config = BenchmarkConfig {
                 concurrency,
@@ -74,12 +75,12 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
 
             let mut query_executor = QueryExecutor::new(&db_url, benchmark_queries, config).await?;
             let result = query_executor.run().await?;
-            println!("\n\nTotal queries: {}", result.total_queries);
-            println!("Total errors: {}", result.total_errors);
-            println!("Average latency: {:.2}ms", result.avg_latency_ms);
-            println!("\nPer-table statistics:");
+            info!("Total queries: {}", result.total_queries);
+            info!("Total errors: {}", result.total_errors);
+            info!("Average latency: {:.2}ms", result.avg_latency_ms);
+            info!("Per-table statistics:");
             for stat in &result.table_stats {
-                println!(
+                info!(
                     "  {:<30} queries: {:<8} errors: {:<8} avg latency: {:.2}ms",
                     stat.table_name, stat.queries, stat.errors, stat.avg_latency_ms
                 );
@@ -87,11 +88,11 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
             Ok(())
         }
         Command::JsonRpc { endpoint } => {
-            println!("Running JSON RPC benchmark against {}", endpoint);
+            info!("Running JSON RPC benchmark against {}", endpoint);
             todo!()
         }
         Command::GraphQL { endpoint } => {
-            println!("Running GraphQL benchmark against {}", endpoint);
+            info!("Running GraphQL benchmark against {}", endpoint);
             todo!()
         }
     }

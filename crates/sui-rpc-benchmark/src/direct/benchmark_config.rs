@@ -4,9 +4,9 @@
 use std::time::Duration;
 
 pub struct BenchmarkConfig {
-    // Number of concurrent clients
+    /// Number of concurrent clients
     pub concurrency: usize,
-    // Duration to run the benchmark in seconds
+    /// Duration to run the benchmark in seconds
     pub duration: Duration,
 }
 
