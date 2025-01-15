@@ -85,11 +85,11 @@ impl From<NitroAttestationVerifyError> for SuiError {
 }
 
 /// Given an attestation in bytes, parse it into signature, signed message and a parsed payload.
-pub fn parse_nitro_attestation_inner(
+pub fn parse_nitro_attestation(
     attestation_bytes: &[u8],
 ) -> SuiResult<(Vec<u8>, Vec<u8>, AttestationDocument)> {
     let cose_sign1 = CoseSign1::parse_and_validate(attestation_bytes)?;
-    let doc = AttestationDocument::parse_and_validate_payload(&cose_sign1.payload)?;
+    let doc = AttestationDocument::parse_payload(&cose_sign1.payload)?;
     let signature = cose_sign1.clone().signature;
     Ok((signature, cose_sign1.to_signed_message(), doc))
 }
@@ -97,14 +97,14 @@ pub fn parse_nitro_attestation_inner(
 /// Given the signature bytes, signed message and parsed payload, verify everything according to
 /// <https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html> and
 /// <https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md>.
-pub fn verify_nitro_attestation_inner(
-    signature: Vec<u8>,
-    signed_message: Vec<u8>,
-    payload: AttestationDocument,
+pub fn verify_nitro_attestation(
+    signature: &[u8],
+    signed_message: &[u8],
+    payload: &AttestationDocument,
     timestamp: u64,
 ) -> SuiResult<()> {
     // Extract public key from cert and signature as P384.
-    let signature = Signature::from_slice(&signature)
+    let signature = Signature::from_slice(signature)
         .map_err(|_| NitroAttestationVerifyError::InvalidSignature)?;
     let cert = X509Certificate::from_der(payload.certificate.as_slice())
         .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?;
@@ -117,7 +117,7 @@ pub fn verify_nitro_attestation_inner(
             let verifying_key = VerifyingKey::from_sec1_bytes(ec.data())
                 .map_err(|_| NitroAttestationVerifyError::InvalidPublicKey)?;
             verifying_key
-                .verify(&signed_message, &signature)
+                .verify(signed_message, &signature)
                 .map_err(|_| NitroAttestationVerifyError::SignatureFailedToVerify)?;
         }
         _ => {
@@ -125,7 +125,7 @@ pub fn verify_nitro_attestation_inner(
         }
     }
 
-    payload.validate_cert(timestamp)?;
+    payload.verify_cert(timestamp)?;
     Ok(())
 }
 
@@ -372,7 +372,7 @@ impl CoseSign1 {
     }
 }
 
-/// The AWS Nitro Attestation Document, see https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html#doc-def
+/// The AWS Nitro Attestation Document, see <https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html#doc-def>
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AttestationDocument {
@@ -389,8 +389,8 @@ pub struct AttestationDocument {
 
 impl AttestationDocument {
     /// Parse the payload of the attestation document, validate the cert based on timestamp, and the pcrs match.
-    /// Adapted from https://github.com/EternisAI/remote-attestation-verifier/blob/main/src/lib.rs
-    pub fn parse_and_validate_payload(
+    /// Adapted from <https://github.com/EternisAI/remote-attestation-verifier/blob/main/src/lib.rs>
+    pub fn parse_payload(
         payload: &Vec<u8>,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let document_data: ciborium::value::Value = ciborium::de::from_reader(payload.as_slice())
@@ -538,20 +538,37 @@ impl AttestationDocument {
     }
 
     /// Verify the certificate against AWS Nitro root of trust and checks expiry.
-    fn validate_cert(&self, now: u64) -> Result<(), NitroAttestationVerifyError> {
+    fn verify_cert(&self, now: u64) -> Result<(), NitroAttestationVerifyError> {
         // Create chain starting with leaf cert all the way to root.
         let mut chain = Vec::with_capacity(1 + self.cabundle.len());
         chain.push(self.certificate.as_slice());
         chain.extend(self.cabundle.iter().rev().map(|cert| cert.as_slice()));
-        validate_cert_chain(&chain, now)
+        verify_cert_chain(&chain, now)
+    }
+
+    /// Get the length of the certificate chain.
+    pub fn get_cert_chain_length(&self) -> usize {
+        self.cabundle.len()
+    }
+
+    /// Get the PCR meansurements.
+    pub fn get_pcrs(&self) -> &[Vec<u8>] {
+        &self.pcrs
+    }
+
+    /// Get the user data.
+    pub fn get_user_data(&self) -> Option<Vec<u8>> {
+        self.user_data.clone()
+    }
+
+    /// Get the nonce.
+    pub fn get_nonce(&self) -> Option<Vec<u8>> {
+        self.nonce.clone()
     }
 }
 
-/// Validate the certificate chain against the root of trust.
-fn validate_cert_chain(
-    cert_chain: &[&[u8]],
-    now_ms: u64,
-) -> Result<(), NitroAttestationVerifyError> {
+/// Verify the certificate chain against the root of trust.
+fn verify_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroAttestationVerifyError> {
     if cert_chain.is_empty() || cert_chain.len() > MAX_CERT_CHAIN_LENGTH {
         return Err(NitroAttestationVerifyError::InvalidCertificate(
             "invalid certificate chain length".to_string(),
