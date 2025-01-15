@@ -60,14 +60,14 @@ title: Module `bridge::message`
 
 <pre><code><b>use</b> <a href="../bridge/chain_ids.md#bridge_chain_ids">bridge::chain_ids</a>;
 <b>use</b> <a href="../bridge/message_types.md#bridge_message_types">bridge::message_types</a>;
-<b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
-<b>use</b> <a href="../../sui/address.md#sui_address">sui::address</a>;
-<b>use</b> <a href="../../sui/bcs.md#sui_bcs">sui::bcs</a>;
-<b>use</b> <a href="../../sui/hex.md#sui_hex">sui::hex</a>;
+<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
+<b>use</b> <a href="../sui/bcs.md#sui_bcs">sui::bcs</a>;
+<b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 </code></pre>
 
 
@@ -351,7 +351,7 @@ title: Module `bridge::message`
 <dd>
 </dd>
 <dt>
-<code><a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>: vector&lt;<a href="../../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;</code>
+<code><a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>: vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -1032,7 +1032,7 @@ Update Sui token message
 [token_prices:vector<u64>]
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_add_tokens_on_sui_message">create_add_tokens_on_sui_message</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, native_token: bool, <a href="../bridge/message.md#bridge_message_token_ids">token_ids</a>: vector&lt;u8&gt;, type_names: vector&lt;<a href="../../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;, <a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>: vector&lt;u64&gt;): <a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_add_tokens_on_sui_message">create_add_tokens_on_sui_message</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, native_token: bool, <a href="../bridge/message.md#bridge_message_token_ids">token_ids</a>: vector&lt;u8&gt;, type_names: vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;, <a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>: vector&lt;u64&gt;): <a href="../bridge/message.md#bridge_message_BridgeMessage">bridge::message::BridgeMessage</a>
 </code></pre>
 
 
@@ -1578,7 +1578,7 @@ Update Sui token message
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>(self: &<a href="../bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>): vector&lt;<a href="../../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>(self: &<a href="../bridge/message.md#bridge_message_AddTokenOnSui">bridge::message::AddTokenOnSui</a>): vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;
 </code></pre>
 
 
@@ -1780,7 +1780,7 @@ Return the required signature threshold for the message, values are voting power
 
 
 
-<pre><code><b>fun</b> <a href="../bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(bcs: &<b>mut</b> <a href="../../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): u64
+<pre><code><b>fun</b> <a href="../bridge/message.md#bridge_message_peel_u64_be">peel_u64_be</a>(bcs: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): u64
 </code></pre>
 
 

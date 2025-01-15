@@ -18,7 +18,7 @@ Priority queue implemented using a max heap.
 -  [Function `priorities`](#sui_priority_queue_priorities)
 
 
-<pre><code><b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 </code></pre>
 
 

@@ -21,11 +21,11 @@ title: Module `sui::config`
 -  [Function `read_setting_impl`](#sui_config_read_setting_impl)
 
 
-<pre><code><b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
@@ -79,7 +79,7 @@ title: Module `sui::config`
 
 <dl>
 <dt>
-<code>data: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/config.md#sui_config_SettingData">sui::config::SettingData</a>&lt;Value&gt;&gt;</code>
+<code>data: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/config.md#sui_config_SettingData">sui::config::SettingData</a>&lt;Value&gt;&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -110,12 +110,12 @@ title: Module `sui::config`
 <dd>
 </dd>
 <dt>
-<code>newer_value: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;</code>
+<code>newer_value: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>older_value_opt: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;</code>
+<code>older_value_opt: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -234,7 +234,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> add_for_next_epochWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> add_for_next_epochWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -303,7 +303,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> remove_for_next_epochWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> remove_for_next_epochWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -468,7 +468,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> read_setting_for_next_epochWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, name: Name): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> read_setting_for_next_epochWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, name: Name): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -502,7 +502,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> read_settingName, Value(<a href="../sui/config.md#sui_config">config</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, name: Name, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> read_settingName, Value(<a href="../sui/config.md#sui_config">config</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, name: Name, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -537,7 +537,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>fun</b> read_setting_implFieldSettingValue, SettingValue, SettingDataValue, Value(<a href="../sui/config.md#sui_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: u64): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>fun</b> read_setting_implFieldSettingValue, SettingValue, SettingDataValue, Value(<a href="../sui/config.md#sui_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: u64): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 

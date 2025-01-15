@@ -76,13 +76,13 @@ control over the currency which a simple open-loop system can't provide.
 -  [Function `key`](#sui_token_key)
 
 
-<pre><code><b>use</b> <a href="../../std/address.md#std_address">std::address</a>;
-<b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/type_name.md#std_type_name">std::type_name</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
+<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
@@ -213,7 +213,7 @@ action to succeed.
  but the <code>TreasuryCap</code> owner.
 </dd>
 <dt>
-<code><a href="../sui/token.md#sui_token_rules">rules</a>: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<a href="../../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;&gt;</code>
+<code><a href="../sui/token.md#sui_token_rules">rules</a>: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;&gt;</code>
 </dt>
 <dd>
  The set of rules that define what actions can be performed on the
@@ -245,7 +245,7 @@ or <code><a href="../sui/token.md#sui_token_confirm_request_mut">confirm_request
 
 <dl>
 <dt>
-<code>name: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code>name: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
  Name of the Action to look up in the Policy. Name can be one of the
@@ -265,20 +265,20 @@ or <code><a href="../sui/token.md#sui_token_confirm_request_mut">confirm_request
  Sender is a permanent field always
 </dd>
 <dt>
-<code><a href="../sui/token.md#sui_token_recipient">recipient</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;</code>
+<code><a href="../sui/token.md#sui_token_recipient">recipient</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;</code>
 </dt>
 <dd>
  Recipient is only available in <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> action.
 </dd>
 <dt>
-<code><a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;</code>
+<code><a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;</code>
 </dt>
 <dd>
  The balance to be "spent" in the <code><a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a></code>, only available
  in the <code><a href="../sui/token.md#sui_token_spend">spend</a></code> action.
 </dd>
 <dt>
-<code><a href="../sui/token.md#sui_token_approvals">approvals</a>: <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<a href="../../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;</code>
+<code><a href="../sui/token.md#sui_token_approvals">approvals</a>: <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;</code>
 </dt>
 <dd>
  Collected approvals (stamps) from completed <code>Rules</code>. They're matched
@@ -851,7 +851,7 @@ Create a new <code><a href="../sui/token.md#sui_token_ActionRequest">ActionReque
 Publicly available method to allow for custom actions.
 
 
-<pre><code><b>public</b> <b>fun</b> new_requestT(name: <a href="../../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/token.md#sui_token_amount">amount</a>: u64, <a href="../sui/token.md#sui_token_recipient">recipient</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;, <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> new_requestT(name: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/token.md#sui_token_amount">amount</a>: u64, <a href="../sui/token.md#sui_token_recipient">recipient</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;, <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;
 </code></pre>
 
 
@@ -898,7 +898,7 @@ Aborts if:
 - the <code><a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a></code> does not meet the <code><a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a></code> rules for the action
 
 
-<pre><code><b>public</b> <b>fun</b> confirm_requestT(policy: &<a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, request: <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../../std/string.md#std_string_String">std::string::String</a>, u64, <b>address</b>, <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;)
+<pre><code><b>public</b> <b>fun</b> confirm_requestT(policy: &<a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, request: <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../std/string.md#std_string_String">std::string::String</a>, u64, <b>address</b>, <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;)
 </code></pre>
 
 
@@ -953,7 +953,7 @@ spent balance it calls <code><a href="../sui/token.md#sui_token_confirm_request"
 See <code><a href="../sui/token.md#sui_token_confirm_request">confirm_request</a></code> for the list of abort conditions.
 
 
-<pre><code><b>public</b> <b>fun</b> confirm_request_mutT(policy: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, request: <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../../std/string.md#std_string_String">std::string::String</a>, u64, <b>address</b>, <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;)
+<pre><code><b>public</b> <b>fun</b> confirm_request_mutT(policy: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, request: <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../std/string.md#std_string_String">std::string::String</a>, u64, <b>address</b>, <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;)
 </code></pre>
 
 
@@ -991,7 +991,7 @@ Aborts if request contains <code><a href="../sui/token.md#sui_token_spent_balanc
 <code>TreasuryCap</code> is required (see <code><a href="../sui/token.md#sui_token_confirm_with_treasury_cap">confirm_with_treasury_cap</a></code>).
 
 
-<pre><code><b>public</b> <b>fun</b> confirm_with_policy_capT(_policy_cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, request: <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../../std/string.md#std_string_String">std::string::String</a>, u64, <b>address</b>, <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;)
+<pre><code><b>public</b> <b>fun</b> confirm_with_policy_capT(_policy_cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, request: <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../std/string.md#std_string_String">std::string::String</a>, u64, <b>address</b>, <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;)
 </code></pre>
 
 
@@ -1035,7 +1035,7 @@ Unlike <code><a href="../sui/token.md#sui_token_confirm_with_policy_cap">confirm
 to be consumed, decreasing the <code>total_supply</code> of the <code><a href="../sui/token.md#sui_token_Token">Token</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> confirm_with_treasury_capT(treasury_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, request: <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../../std/string.md#std_string_String">std::string::String</a>, u64, <b>address</b>, <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;)
+<pre><code><b>public</b> <b>fun</b> confirm_with_treasury_capT(treasury_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, request: <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../std/string.md#std_string_String">std::string::String</a>, u64, <b>address</b>, <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;)
 </code></pre>
 
 
@@ -1309,7 +1309,7 @@ empty set of <code>Rules</code> for the <code><a href="../sui/token.md#sui_token
 Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPolicyCap</a></code> is not matching the <code><a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> allowT(self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: <a href="../../std/string.md#std_string_String">std::string::String</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> allowT(self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1343,7 +1343,7 @@ from the <code><a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a>.<
 Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPolicyCap</a></code> is not matching the <code><a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> disallowT(self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: <a href="../../std/string.md#std_string_String">std::string::String</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> disallowT(self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1376,7 +1376,7 @@ Adds a Rule for an action with <code>name</code> in the <code><a href="../sui/to
 Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPolicyCap</a></code> is not matching the <code><a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> add_rule_for_actionT, Rule(self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: <a href="../../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> add_rule_for_actionT, Rule(self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1413,7 +1413,7 @@ the config object to be handled by the sender (or a Rule itself).
 Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPolicyCap</a></code> is not matching the <code><a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> remove_rule_for_actionT, Rule(self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: <a href="../../std/string.md#std_string_String">std::string::String</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> remove_rule_for_actionT, Rule(self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1529,7 +1529,7 @@ action is only available to the <code>TreasuryCap</code> owner.
 Check whether an action is present in the rules VecMap.
 
 
-<pre><code><b>public</b> <b>fun</b> is_allowedT(self: &<a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: &<a href="../../std/string.md#std_string_String">std::string::String</a>): bool
+<pre><code><b>public</b> <b>fun</b> is_allowedT(self: &<a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: &<a href="../std/string.md#std_string_String">std::string::String</a>): bool
 </code></pre>
 
 
@@ -1554,7 +1554,7 @@ Check whether an action is present in the rules VecMap.
 Returns the rules required for a specific action.
 
 
-<pre><code><b>public</b> <b>fun</b> rulesT(self: &<a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: &<a href="../../std/string.md#std_string_String">std::string::String</a>): <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<a href="../../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;
+<pre><code><b>public</b> <b>fun</b> rulesT(self: &<a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_action">action</a>: &<a href="../std/string.md#std_string_String">std::string::String</a>): <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;
 </code></pre>
 
 
@@ -1629,7 +1629,7 @@ Returns the <code><a href="../sui/balance.md#sui_balance">balance</a></code> of 
 Name of the Transfer action.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_transfer_action">transfer_action</a>(): <a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_transfer_action">transfer_action</a>(): <a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1655,7 +1655,7 @@ Name of the Transfer action.
 Name of the <code>Spend</code> action.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_spend_action">spend_action</a>(): <a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_spend_action">spend_action</a>(): <a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1681,7 +1681,7 @@ Name of the <code>Spend</code> action.
 Name of the <code>ToCoin</code> action.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_to_coin_action">to_coin_action</a>(): <a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_to_coin_action">to_coin_action</a>(): <a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1707,7 +1707,7 @@ Name of the <code>ToCoin</code> action.
 Name of the <code>FromCoin</code> action.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_from_coin_action">from_coin_action</a>(): <a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_from_coin_action">from_coin_action</a>(): <a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1733,7 +1733,7 @@ Name of the <code>FromCoin</code> action.
 The Action in the <code><a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> actionT(self: &<a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;): <a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> actionT(self: &<a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;): <a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1802,7 +1802,7 @@ Sender of the <code><a href="../sui/token.md#sui_token_ActionRequest">ActionRequ
 Recipient of the <code><a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> recipientT(self: &<a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;
+<pre><code><b>public</b> <b>fun</b> recipientT(self: &<a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;
 </code></pre>
 
 
@@ -1827,7 +1827,7 @@ Recipient of the <code><a href="../sui/token.md#sui_token_ActionRequest">ActionR
 Approvals of the <code><a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> approvalsT(self: &<a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;): <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<a href="../../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;
+<pre><code><b>public</b> <b>fun</b> approvalsT(self: &<a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;): <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;
 </code></pre>
 
 
@@ -1852,7 +1852,7 @@ Approvals of the <code><a href="../sui/token.md#sui_token_ActionRequest">ActionR
 Burned balance of the <code><a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> spentT(self: &<a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
+<pre><code><b>public</b> <b>fun</b> spentT(self: &<a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
 </code></pre>
 
 

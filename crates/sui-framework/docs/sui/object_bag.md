@@ -23,11 +23,11 @@ The difference is otherwise not observable from within Move.
 -  [Function `value_id`](#sui_object_bag_value_id)
 
 
-<pre><code><b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
@@ -367,7 +367,7 @@ Returns the ID of the object associated with the key if the bag has an entry wit
 Returns none otherwise
 
 
-<pre><code><b>public</b> <b>fun</b> value_idK(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>&gt;
+<pre><code><b>public</b> <b>fun</b> value_idK(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>&gt;
 </code></pre>
 
 

@@ -11,7 +11,7 @@ HEX (Base16) encoding utility.
 -  [Function `decode_byte`](#sui_hex_decode_byte)
 
 
-<pre><code><b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 </code></pre>
 
 

@@ -14,11 +14,11 @@ title: Module `sui::zklogin_verified_issuer`
 -  [Function `check_zklogin_issuer_internal`](#sui_zklogin_verified_issuer_check_zklogin_issuer_internal)
 
 
-<pre><code><b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
@@ -59,7 +59,7 @@ Possession of a VerifiedIssuer proves that the user's address was created using 
  The address this VerifiedID is associated with
 </dd>
 <dt>
-<code><a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_issuer">issuer</a>: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code><a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_issuer">issuer</a>: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
  The issuer
@@ -126,7 +126,7 @@ Returns the address associated with the given VerifiedIssuer
 Returns the issuer associated with the given VerifiedIssuer
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_issuer">issuer</a>(verified_issuer: &<a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_VerifiedIssuer">sui::zklogin_verified_issuer::VerifiedIssuer</a>): &<a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_issuer">issuer</a>(verified_issuer: &<a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_VerifiedIssuer">sui::zklogin_verified_issuer::VerifiedIssuer</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -180,7 +180,7 @@ with the issuers id transferred to the caller.
 Aborts with <code><a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_EInvalidProof">EInvalidProof</a></code> if the verification fails.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_verify_zklogin_issuer">verify_zklogin_issuer</a>(address_seed: u256, <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_issuer">issuer</a>: <a href="../../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_verify_zklogin_issuer">verify_zklogin_issuer</a>(address_seed: u256, <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_issuer">issuer</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -214,7 +214,7 @@ Aborts with <code><a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verifie
 Returns true if <code><b>address</b></code> was created using zklogin with the given issuer and address seed.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_check_zklogin_issuer">check_zklogin_issuer</a>(<b>address</b>: <b>address</b>, address_seed: u256, <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_issuer">issuer</a>: &<a href="../../std/string.md#std_string_String">std::string::String</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_check_zklogin_issuer">check_zklogin_issuer</a>(<b>address</b>: <b>address</b>, address_seed: u256, <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_issuer">issuer</a>: &<a href="../std/string.md#std_string_String">std::string::String</a>): bool
 </code></pre>
 
 

@@ -157,13 +157,13 @@ See <code><a href="../sui/transfer_policy.md#sui_transfer_policy">transfer_polic
 -  [Function `purchase_cap_min_price`](#sui_kiosk_purchase_cap_min_price)
 
 
-<pre><code><b>use</b> <a href="../../std/address.md#std_address">std::address</a>;
-<b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/type_name.md#std_type_name">std::type_name</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
+<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
@@ -1208,7 +1208,7 @@ allow the item for taking. Can only be returned to its <code><a href="../sui/kio
 Withdraw profits from the Kiosk.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_withdraw">withdraw</a>(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>, amount: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_withdraw">withdraw</a>(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>, amount: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;
 </code></pre>
 
 

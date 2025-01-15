@@ -28,11 +28,11 @@ removal
 -  [Function `drop`](#sui_linked_table_drop)
 
 
-<pre><code><b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
@@ -71,13 +71,13 @@ removal
  the number of key-value pairs in the table
 </dd>
 <dt>
-<code>head: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;</code>
+<code>head: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;</code>
 </dt>
 <dd>
  the front of the table, i.e. the key of the first entry
 </dd>
 <dt>
-<code>tail: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;</code>
+<code>tail: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;</code>
 </dt>
 <dd>
  the back of the table, i.e. the key of the last entry
@@ -104,13 +104,13 @@ removal
 
 <dl>
 <dt>
-<code><a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;</code>
+<code><a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;</code>
 </dt>
 <dd>
  the previous key
 </dd>
 <dt>
-<code><a href="../sui/linked_table.md#sui_linked_table_next">next</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;</code>
+<code><a href="../sui/linked_table.md#sui_linked_table_next">next</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;</code>
 </dt>
 <dd>
  the next key
@@ -186,7 +186,7 @@ Creates a new, empty table
 Returns the key for the first element in the table, or None if the table is empty
 
 
-<pre><code><b>public</b> <b>fun</b> frontK, V(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;K, V&gt;): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;
+<pre><code><b>public</b> <b>fun</b> frontK, V(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;K, V&gt;): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;
 </code></pre>
 
 
@@ -211,7 +211,7 @@ Returns the key for the first element in the table, or None if the table is empt
 Returns the key for the last element in the table, or None if the table is empty
 
 
-<pre><code><b>public</b> <b>fun</b> backK, V(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;K, V&gt;): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;
+<pre><code><b>public</b> <b>fun</b> backK, V(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;K, V&gt;): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;
 </code></pre>
 
 
@@ -382,7 +382,7 @@ Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesN
 that key <code>k: K</code>
 
 
-<pre><code><b>public</b> <b>fun</b> prevK, V(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;K, V&gt;, k: K): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;
+<pre><code><b>public</b> <b>fun</b> prevK, V(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;K, V&gt;, k: K): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;
 </code></pre>
 
 
@@ -410,7 +410,7 @@ Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesN
 that key <code>k: K</code>
 
 
-<pre><code><b>public</b> <b>fun</b> nextK, V(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;K, V&gt;, k: K): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;
+<pre><code><b>public</b> <b>fun</b> nextK, V(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;K, V&gt;, k: K): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;K&gt;
 </code></pre>
 
 

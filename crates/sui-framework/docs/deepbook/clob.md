@@ -48,33 +48,33 @@ title: Module `deepbook::clob`
 <pre><code><b>use</b> <a href="../deepbook/critbit.md#deepbook_critbit">deepbook::critbit</a>;
 <b>use</b> <a href="../deepbook/custodian.md#deepbook_custodian">deepbook::custodian</a>;
 <b>use</b> <a href="../deepbook/math.md#deepbook_math">deepbook::math</a>;
-<b>use</b> <a href="../../std/address.md#std_address">std::address</a>;
-<b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/type_name.md#std_type_name">std::type_name</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
-<b>use</b> <a href="../../sui/address.md#sui_address">sui::address</a>;
-<b>use</b> <a href="../../sui/bag.md#sui_bag">sui::bag</a>;
-<b>use</b> <a href="../../sui/balance.md#sui_balance">sui::balance</a>;
-<b>use</b> <a href="../../sui/clock.md#sui_clock">sui::clock</a>;
-<b>use</b> <a href="../../sui/coin.md#sui_coin">sui::coin</a>;
-<b>use</b> <a href="../../sui/config.md#sui_config">sui::config</a>;
-<b>use</b> <a href="../../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
-<b>use</b> <a href="../../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
-<b>use</b> <a href="../../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
-<b>use</b> <a href="../../sui/event.md#sui_event">sui::event</a>;
-<b>use</b> <a href="../../sui/hex.md#sui_hex">sui::hex</a>;
-<b>use</b> <a href="../../sui/linked_table.md#sui_linked_table">sui::linked_table</a>;
-<b>use</b> <a href="../../sui/object.md#sui_object">sui::object</a>;
-<b>use</b> <a href="../../sui/sui.md#sui_sui">sui::sui</a>;
-<b>use</b> <a href="../../sui/table.md#sui_table">sui::table</a>;
-<b>use</b> <a href="../../sui/transfer.md#sui_transfer">sui::transfer</a>;
-<b>use</b> <a href="../../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
-<b>use</b> <a href="../../sui/types.md#sui_types">sui::types</a>;
-<b>use</b> <a href="../../sui/url.md#sui_url">sui::url</a>;
-<b>use</b> <a href="../../sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
+<b>use</b> <a href="../std/address.md#std_address">std::address</a>;
+<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
+<b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
+<b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
+<b>use</b> <a href="../sui/clock.md#sui_clock">sui::clock</a>;
+<b>use</b> <a href="../sui/coin.md#sui_coin">sui::coin</a>;
+<b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
+<b>use</b> <a href="../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
+<b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
+<b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
+<b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
+<b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
+<b>use</b> <a href="../sui/linked_table.md#sui_linked_table">sui::linked_table</a>;
+<b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="../sui/sui.md#sui_sui">sui::sui</a>;
+<b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
+<b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
+<b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
+<b>use</b> <a href="../sui/types.md#sui_types">sui::types</a>;
+<b>use</b> <a href="../sui/url.md#sui_url">sui::url</a>;
+<b>use</b> <a href="../sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
 </code></pre>
 
 
@@ -97,18 +97,18 @@ Emitted when a new pool is created
 
 <dl>
 <dt>
-<code>pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  object ID of the newly created pool
 </dd>
 <dt>
-<code>base_asset: <a href="../../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a></code>
+<code>base_asset: <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a></code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>quote_asset: <a href="../../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a></code>
+<code>quote_asset: <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a></code>
 </dt>
 <dd>
 </dd>
@@ -155,7 +155,7 @@ Emitted when a maker order is injected into the order book.
 
 <dl>
 <dt>
-<code>pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  object ID of the pool the order was placed on
@@ -172,7 +172,7 @@ Emitted when a maker order is injected into the order book.
 <dd>
 </dd>
 <dt>
-<code>owner: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>owner: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  object ID of the <code>AccountCap</code> that placed the order
@@ -215,7 +215,7 @@ Emitted when a maker order is canceled.
 
 <dl>
 <dt>
-<code>pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  object ID of the pool the order was placed on
@@ -232,7 +232,7 @@ Emitted when a maker order is canceled.
 <dd>
 </dd>
 <dt>
-<code>owner: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>owner: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  object ID of the <code>AccountCap</code> that placed the order
@@ -270,7 +270,7 @@ Emitted only when a maker order is filled.
 
 <dl>
 <dt>
-<code>pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  object ID of the pool the order was placed on
@@ -287,7 +287,7 @@ Emitted only when a maker order is filled.
 <dd>
 </dd>
 <dt>
-<code>owner: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>owner: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  object ID of the <code>AccountCap</code> that placed the order
@@ -364,7 +364,7 @@ Emitted only when a maker order is filled.
 <dd>
 </dd>
 <dt>
-<code>owner: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>owner: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
 </dd>
@@ -400,7 +400,7 @@ Emitted only when a maker order is filled.
 <dd>
 </dd>
 <dt>
-<code>open_orders: <a href="../../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;u64, <a href="../deepbook/clob.md#deepbook_clob_Order">deepbook::clob::Order</a>&gt;</code>
+<code>open_orders: <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;u64, <a href="../deepbook/clob.md#deepbook_clob_Order">deepbook::clob::Order</a>&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -426,7 +426,7 @@ Emitted only when a maker order is filled.
 
 <dl>
 <dt>
-<code>id: <a href="../../sui/object.md#sui_object_UID">sui::object::UID</a></code>
+<code>id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a></code>
 </dt>
 <dd>
 </dd>
@@ -451,7 +451,7 @@ Emitted only when a maker order is filled.
 <dd>
 </dd>
 <dt>
-<code>usr_open_orders: <a href="../../sui/table.md#sui_table_Table">sui::table::Table</a>&lt;<a href="../../sui/object.md#sui_object_ID">sui::object::ID</a>, <a href="../../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;u64, u64&gt;&gt;</code>
+<code>usr_open_orders: <a href="../sui/table.md#sui_table_Table">sui::table::Table</a>&lt;<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;u64, u64&gt;&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -486,17 +486,17 @@ Emitted only when a maker order is filled.
 <dd>
 </dd>
 <dt>
-<code>creation_fee: <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;</code>
+<code>creation_fee: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>base_asset_trading_fees: <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;BaseAsset&gt;</code>
+<code>base_asset_trading_fees: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;BaseAsset&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>quote_asset_trading_fees: <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;</code>
+<code>quote_asset_trading_fees: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -523,7 +523,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 <dl>
 <dt>
-<code>pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  object ID of the pool the order was placed on
@@ -540,7 +540,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 <dd>
 </dd>
 <dt>
-<code>owner: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>owner: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  object ID of the <code>AccountCap</code> that placed the order
@@ -578,7 +578,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 <dl>
 <dt>
-<code>pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  object ID of the pool the order was placed on
@@ -595,7 +595,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 <dd>
 </dd>
 <dt>
-<code>owner: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>owner: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  object ID of the <code>AccountCap</code> that placed the order
@@ -853,7 +853,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_create_account">create_account</a>(_ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_create_account">create_account</a>(_ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>
 </code></pre>
 
 
@@ -877,7 +877,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> create_poolBaseAsset, QuoteAsset(_tick_size: u64, _lot_size: u64, _creation_fee: <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;<a href="../../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, _ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> create_poolBaseAsset, QuoteAsset(_tick_size: u64, _lot_size: u64, _creation_fee: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -906,7 +906,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> deposit_baseBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, coin: <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>)
+<pre><code><b>public</b> <b>fun</b> deposit_baseBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>)
 </code></pre>
 
 
@@ -939,7 +939,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> deposit_quoteBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, coin: <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>)
+<pre><code><b>public</b> <b>fun</b> deposit_quoteBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>)
 </code></pre>
 
 
@@ -972,7 +972,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> withdraw_baseBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;
+<pre><code><b>public</b> <b>fun</b> withdraw_baseBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;
 </code></pre>
 
 
@@ -1002,7 +1002,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> withdraw_quoteBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;
+<pre><code><b>public</b> <b>fun</b> withdraw_quoteBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;
 </code></pre>
 
 
@@ -1032,7 +1032,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> swap_exact_base_for_quoteBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, base_coin: <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, clock: &<a href="../../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, u64)
+<pre><code><b>public</b> <b>fun</b> swap_exact_base_for_quoteBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, base_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, u64)
 </code></pre>
 
 
@@ -1076,7 +1076,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> swap_exact_quote_for_baseBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, clock: &<a href="../../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, quote_coin: <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, u64)
+<pre><code><b>public</b> <b>fun</b> swap_exact_quote_for_baseBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, quote_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, u64)
 </code></pre>
 
 
@@ -1116,7 +1116,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>fun</b> match_bid_with_quote_quantityBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, price_limit: u64, current_timestamp: u64, quote_balance: <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;): (<a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;BaseAsset&gt;, <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;)
+<pre><code><b>fun</b> match_bid_with_quote_quantityBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, price_limit: u64, current_timestamp: u64, quote_balance: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;): (<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;BaseAsset&gt;, <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;)
 </code></pre>
 
 
@@ -1291,7 +1291,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>fun</b> match_bidBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, price_limit: u64, current_timestamp: u64, quote_balance: <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;): (<a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;BaseAsset&gt;, <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;)
+<pre><code><b>fun</b> match_bidBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, price_limit: u64, current_timestamp: u64, quote_balance: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;): (<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;BaseAsset&gt;, <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;)
 </code></pre>
 
 
@@ -1424,7 +1424,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>fun</b> match_askBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price_limit: u64, current_timestamp: u64, base_balance: <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;BaseAsset&gt;): (<a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;BaseAsset&gt;, <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;)
+<pre><code><b>fun</b> match_askBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price_limit: u64, current_timestamp: u64, base_balance: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;BaseAsset&gt;): (<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;BaseAsset&gt;, <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;QuoteAsset&gt;)
 </code></pre>
 
 
@@ -1556,7 +1556,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 Place a market order to the order book.
 
 
-<pre><code><b>public</b> <b>fun</b> place_market_orderBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, is_bid: bool, base_coin: <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, clock: &<a href="../../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;)
+<pre><code><b>public</b> <b>fun</b> place_market_orderBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, is_bid: bool, base_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;)
 </code></pre>
 
 
@@ -1635,7 +1635,7 @@ Injects a maker order to the order book.
 Returns the order id.
 
 
-<pre><code><b>fun</b> inject_limit_orderBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price: u64, quantity: u64, is_bid: bool, expire_timestamp: u64, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
+<pre><code><b>fun</b> inject_limit_orderBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price: u64, quantity: u64, is_bid: bool, expire_timestamp: u64, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
 </code></pre>
 
 
@@ -1720,7 +1720,7 @@ When the limit order is successfully placed, we return true to indicate that and
 So please check that boolean value first before using the order id.
 
 
-<pre><code><b>public</b> <b>fun</b> place_limit_orderBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price: u64, quantity: u64, is_bid: bool, expire_timestamp: u64, restriction: u8, clock: &<a href="../../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (u64, u64, bool, u64)
+<pre><code><b>public</b> <b>fun</b> place_limit_orderBaseAsset, QuoteAsset(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price: u64, quantity: u64, is_bid: bool, expire_timestamp: u64, restriction: u8, clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (u64, u64, bool, u64)
 </code></pre>
 
 
@@ -1874,7 +1874,7 @@ So please check that boolean value first before using the order id.
 
 
 
-<pre><code><b>fun</b> emit_order_canceledBaseAsset, QuoteAsset(pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a>, order: &<a href="../deepbook/clob.md#deepbook_clob_Order">deepbook::clob::Order</a>)
+<pre><code><b>fun</b> emit_order_canceledBaseAsset, QuoteAsset(pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, order: &<a href="../deepbook/clob.md#deepbook_clob_Order">deepbook::clob::Order</a>)
 </code></pre>
 
 
@@ -1908,7 +1908,7 @@ So please check that boolean value first before using the order id.
 
 
 
-<pre><code><b>fun</b> emit_order_filledBaseAsset, QuoteAsset(pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a>, order: &<a href="../deepbook/clob.md#deepbook_clob_Order">deepbook::clob::Order</a>, base_asset_quantity_filled: u64, taker_commission: u64, maker_rebates: u64)
+<pre><code><b>fun</b> emit_order_filledBaseAsset, QuoteAsset(pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, order: &<a href="../deepbook/clob.md#deepbook_clob_Order">deepbook::clob::Order</a>, base_asset_quantity_filled: u64, taker_commission: u64, maker_rebates: u64)
 </code></pre>
 
 
@@ -2008,7 +2008,7 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
 
 
 
-<pre><code><b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_remove_order">remove_order</a>(open_orders: &<b>mut</b> <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;<a href="../deepbook/clob.md#deepbook_clob_TickLevel">deepbook::clob::TickLevel</a>&gt;, usr_open_orders: &<b>mut</b> <a href="../../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;u64, u64&gt;, tick_index: u64, order_id: u64, user: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a>): <a href="../deepbook/clob.md#deepbook_clob_Order">deepbook::clob::Order</a>
+<pre><code><b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_remove_order">remove_order</a>(open_orders: &<b>mut</b> <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;<a href="../deepbook/clob.md#deepbook_clob_TickLevel">deepbook::clob::TickLevel</a>&gt;, usr_open_orders: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;u64, u64&gt;, tick_index: u64, order_id: u64, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): <a href="../deepbook/clob.md#deepbook_clob_Order">deepbook::clob::Order</a>
 </code></pre>
 
 
@@ -2289,7 +2289,7 @@ The previous is a list of all valid prices
 The latter is the corresponding depth list
 
 
-<pre><code><b>public</b> <b>fun</b> get_level2_book_status_bid_sideBaseAsset, QuoteAsset(pool: &<a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price_low: u64, price_high: u64, clock: &<a href="../../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): (vector&lt;u64&gt;, vector&lt;u64&gt;)
+<pre><code><b>public</b> <b>fun</b> get_level2_book_status_bid_sideBaseAsset, QuoteAsset(pool: &<a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price_low: u64, price_high: u64, clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): (vector&lt;u64&gt;, vector&lt;u64&gt;)
 </code></pre>
 
 
@@ -2343,7 +2343,7 @@ The previous is a list of all valid prices
 The latter is the corresponding depth list
 
 
-<pre><code><b>public</b> <b>fun</b> get_level2_book_status_ask_sideBaseAsset, QuoteAsset(pool: &<a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price_low: u64, price_high: u64, clock: &<a href="../../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): (vector&lt;u64&gt;, vector&lt;u64&gt;)
+<pre><code><b>public</b> <b>fun</b> get_level2_book_status_ask_sideBaseAsset, QuoteAsset(pool: &<a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price_low: u64, price_high: u64, clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): (vector&lt;u64&gt;, vector&lt;u64&gt;)
 </code></pre>
 
 

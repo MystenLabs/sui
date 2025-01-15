@@ -20,8 +20,8 @@ title: Module `sui::vec_set`
 -  [Function `get_idx`](#sui_vec_set_get_idx)
 
 
-<pre><code><b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 </code></pre>
 
 
@@ -352,7 +352,7 @@ Find the index of <code>key</code> in <code>self</code>. Return <code>None</code
 Note that keys are stored in insertion order, *not* sorted.
 
 
-<pre><code><b>fun</b> get_idx_optK(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;K&gt;, key: &K): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
+<pre><code><b>fun</b> get_idx_optK(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;K&gt;, key: &K): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
 </code></pre>
 
 

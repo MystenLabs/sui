@@ -28,8 +28,8 @@ title: Module `sui::vec_map`
 -  [Function `remove_entry_by_idx`](#sui_vec_map_remove_entry_by_idx)
 
 
-<pre><code><b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 </code></pre>
 
 
@@ -334,7 +334,7 @@ Return Some(V) if the value exists, None otherwise.
 Only works for a "copyable" value as references cannot be stored in <code>vector</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> try_getK, V(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;K, V&gt;, key: &K): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;V&gt;
+<pre><code><b>public</b> <b>fun</b> try_getK, V(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;K, V&gt;, key: &K): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;V&gt;
 </code></pre>
 
 
@@ -576,7 +576,7 @@ Find the index of <code>key</code> in <code>self</code>. Return <code>None</code
 Note that map entries are stored in insertion order, *not* sorted by key.
 
 
-<pre><code><b>public</b> <b>fun</b> get_idx_optK, V(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;K, V&gt;, key: &K): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
+<pre><code><b>public</b> <b>fun</b> get_idx_optK, V(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;K, V&gt;, key: &K): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
 </code></pre>
 
 

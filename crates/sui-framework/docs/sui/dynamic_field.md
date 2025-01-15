@@ -30,11 +30,11 @@ building block for core collection types
 -  [Function `has_child_object_with_ty`](#sui_dynamic_field_has_child_object_with_ty)
 
 
-<pre><code><b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
@@ -312,7 +312,7 @@ Returns true if and only if the <code><a href="../sui/object.md#sui_object">obje
 Removes the dynamic field if it exists. Returns the <code>some(Value)</code> if it exists or none otherwise.
 
 
-<pre><code><b>public</b> <b>fun</b> remove_if_existsName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b> <b>fun</b> remove_if_existsName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 

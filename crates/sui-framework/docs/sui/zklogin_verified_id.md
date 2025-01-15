@@ -17,11 +17,11 @@ title: Module `sui::zklogin_verified_id`
 -  [Function `check_zklogin_id_internal`](#sui_zklogin_verified_id_check_zklogin_id_internal)
 
 
-<pre><code><b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
@@ -60,25 +60,25 @@ Possession of a VerifiedID proves that the user's address was created using zklo
  The address this VerifiedID is associated with
 </dd>
 <dt>
-<code><a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_key_claim_name">key_claim_name</a>: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code><a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_key_claim_name">key_claim_name</a>: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
  The name of the key claim
 </dd>
 <dt>
-<code><a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_key_claim_value">key_claim_value</a>: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code><a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_key_claim_value">key_claim_value</a>: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
  The value of the key claim
 </dd>
 <dt>
-<code><a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_issuer">issuer</a>: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code><a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_issuer">issuer</a>: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
  The issuer
 </dd>
 <dt>
-<code><a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_audience">audience</a>: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code><a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_audience">audience</a>: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
  The audience (wallet)
@@ -134,7 +134,7 @@ Returns the address associated with the given VerifiedID
 Returns the name of the key claim associated with the given VerifiedID
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_key_claim_name">key_claim_name</a>(verified_id: &<a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_VerifiedID">sui::zklogin_verified_id::VerifiedID</a>): &<a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_key_claim_name">key_claim_name</a>(verified_id: &<a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_VerifiedID">sui::zklogin_verified_id::VerifiedID</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -159,7 +159,7 @@ Returns the name of the key claim associated with the given VerifiedID
 Returns the value of the key claim associated with the given VerifiedID
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_key_claim_value">key_claim_value</a>(verified_id: &<a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_VerifiedID">sui::zklogin_verified_id::VerifiedID</a>): &<a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_key_claim_value">key_claim_value</a>(verified_id: &<a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_VerifiedID">sui::zklogin_verified_id::VerifiedID</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -184,7 +184,7 @@ Returns the value of the key claim associated with the given VerifiedID
 Returns the issuer associated with the given VerifiedID
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_issuer">issuer</a>(verified_id: &<a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_VerifiedID">sui::zklogin_verified_id::VerifiedID</a>): &<a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_issuer">issuer</a>(verified_id: &<a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_VerifiedID">sui::zklogin_verified_id::VerifiedID</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -209,7 +209,7 @@ Returns the issuer associated with the given VerifiedID
 Returns the audience (wallet) associated with the given VerifiedID
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_audience">audience</a>(verified_id: &<a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_VerifiedID">sui::zklogin_verified_id::VerifiedID</a>): &<a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_audience">audience</a>(verified_id: &<a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_VerifiedID">sui::zklogin_verified_id::VerifiedID</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -261,7 +261,7 @@ Delete a VerifiedID
 This function has been disabled.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_verify_zklogin_id">verify_zklogin_id</a>(_key_claim_name: <a href="../../std/string.md#std_string_String">std::string::String</a>, _key_claim_value: <a href="../../std/string.md#std_string_String">std::string::String</a>, _issuer: <a href="../../std/string.md#std_string_String">std::string::String</a>, _audience: <a href="../../std/string.md#std_string_String">std::string::String</a>, _pin_hash: u256, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_verify_zklogin_id">verify_zklogin_id</a>(_key_claim_name: <a href="../std/string.md#std_string_String">std::string::String</a>, _key_claim_value: <a href="../std/string.md#std_string_String">std::string::String</a>, _issuer: <a href="../std/string.md#std_string_String">std::string::String</a>, _audience: <a href="../std/string.md#std_string_String">std::string::String</a>, _pin_hash: u256, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -293,7 +293,7 @@ This function has been disabled.
 This function has been disabled.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_check_zklogin_id">check_zklogin_id</a>(_address: <b>address</b>, _key_claim_name: &<a href="../../std/string.md#std_string_String">std::string::String</a>, _key_claim_value: &<a href="../../std/string.md#std_string_String">std::string::String</a>, _issuer: &<a href="../../std/string.md#std_string_String">std::string::String</a>, _audience: &<a href="../../std/string.md#std_string_String">std::string::String</a>, _pin_hash: u256): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_id.md#sui_zklogin_verified_id_check_zklogin_id">check_zklogin_id</a>(_address: <b>address</b>, _key_claim_name: &<a href="../std/string.md#std_string_String">std::string::String</a>, _key_claim_value: &<a href="../std/string.md#std_string_String">std::string::String</a>, _issuer: &<a href="../std/string.md#std_string_String">std::string::String</a>, _audience: &<a href="../std/string.md#std_string_String">std::string::String</a>, _pin_hash: u256): bool
 </code></pre>
 
 

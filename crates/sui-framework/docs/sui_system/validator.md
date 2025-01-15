@@ -92,32 +92,32 @@ title: Module `sui_system::validator`
 -  [Function `new_from_metadata`](#sui_system_validator_new_from_metadata)
 
 
-<pre><code><b>use</b> <a href="../../std/address.md#std_address">std::address</a>;
-<b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/type_name.md#std_type_name">std::type_name</a>;
-<b>use</b> <a href="../../std/u64.md#std_u64">std::u64</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
-<b>use</b> <a href="../../sui/address.md#sui_address">sui::address</a>;
-<b>use</b> <a href="../../sui/bag.md#sui_bag">sui::bag</a>;
-<b>use</b> <a href="../../sui/balance.md#sui_balance">sui::balance</a>;
-<b>use</b> <a href="../../sui/coin.md#sui_coin">sui::coin</a>;
-<b>use</b> <a href="../../sui/config.md#sui_config">sui::config</a>;
-<b>use</b> <a href="../../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
-<b>use</b> <a href="../../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
-<b>use</b> <a href="../../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
-<b>use</b> <a href="../../sui/event.md#sui_event">sui::event</a>;
-<b>use</b> <a href="../../sui/hex.md#sui_hex">sui::hex</a>;
-<b>use</b> <a href="../../sui/object.md#sui_object">sui::object</a>;
-<b>use</b> <a href="../../sui/sui.md#sui_sui">sui::sui</a>;
-<b>use</b> <a href="../../sui/table.md#sui_table">sui::table</a>;
-<b>use</b> <a href="../../sui/transfer.md#sui_transfer">sui::transfer</a>;
-<b>use</b> <a href="../../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
-<b>use</b> <a href="../../sui/types.md#sui_types">sui::types</a>;
-<b>use</b> <a href="../../sui/url.md#sui_url">sui::url</a>;
-<b>use</b> <a href="../../sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
+<pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
+<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
+<b>use</b> <a href="../std/u64.md#std_u64">std::u64</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
+<b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
+<b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
+<b>use</b> <a href="../sui/coin.md#sui_coin">sui::coin</a>;
+<b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
+<b>use</b> <a href="../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
+<b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
+<b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
+<b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
+<b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
+<b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="../sui/sui.md#sui_sui">sui::sui</a>;
+<b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
+<b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
+<b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
+<b>use</b> <a href="../sui/types.md#sui_types">sui::types</a>;
+<b>use</b> <a href="../sui/url.md#sui_url">sui::url</a>;
+<b>use</b> <a href="../sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
 <b>use</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool">sui_system::staking_pool</a>;
 <b>use</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap">sui_system::validator_cap</a>;
 </code></pre>
@@ -174,94 +174,94 @@ title: Module `sui_system::validator`
  This is a proof that the validator has ownership of the private key
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_name">name</a>: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code><a href="../sui_system/validator.md#sui_system_validator_name">name</a>: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
  A unique human-readable name of this validator.
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_description">description</a>: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code><a href="../sui_system/validator.md#sui_system_validator_description">description</a>: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_image_url">image_url</a>: <a href="../../sui/url.md#sui_url_Url">sui::url::Url</a></code>
+<code><a href="../sui_system/validator.md#sui_system_validator_image_url">image_url</a>: <a href="../sui/url.md#sui_url_Url">sui::url::Url</a></code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_project_url">project_url</a>: <a href="../../sui/url.md#sui_url_Url">sui::url::Url</a></code>
+<code><a href="../sui_system/validator.md#sui_system_validator_project_url">project_url</a>: <a href="../sui/url.md#sui_url_Url">sui::url::Url</a></code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>net_address: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code>net_address: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
  The network address of the validator (could also contain extra info such as port, DNS and etc.).
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code><a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
  The address of the validator used for p2p activities such as state sync (could also contain extra info such as port, DNS and etc.).
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code><a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
  The address of the narwhal primary
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code><a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
  The address of the narwhal worker
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_protocol_pubkey_bytes">next_epoch_protocol_pubkey_bytes</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;</code>
+<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_protocol_pubkey_bytes">next_epoch_protocol_pubkey_bytes</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;</code>
 </dt>
 <dd>
  "next_epoch" metadata only takes effects in the next epoch.
  If none, current value will stay unchanged.
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_proof_of_possession">next_epoch_proof_of_possession</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;</code>
+<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_proof_of_possession">next_epoch_proof_of_possession</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_pubkey_bytes">next_epoch_network_pubkey_bytes</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;</code>
+<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_pubkey_bytes">next_epoch_network_pubkey_bytes</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_pubkey_bytes">next_epoch_worker_pubkey_bytes</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;</code>
+<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_pubkey_bytes">next_epoch_worker_pubkey_bytes</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>next_epoch_net_address: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;</code>
+<code>next_epoch_net_address: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;</code>
+<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_primary_address">next_epoch_primary_address</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;</code>
+<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_primary_address">next_epoch_primary_address</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_address">next_epoch_worker_address</a>: <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;</code>
+<code><a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_address">next_epoch_worker_address</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;</code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>extra_fields: <a href="../../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
+<code>extra_fields: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
 </dt>
 <dd>
  Any extra fields that's not defined statically.
@@ -301,7 +301,7 @@ title: Module `sui_system::validator`
  stake amount.
 </dd>
 <dt>
-<code><a href="../sui_system/validator.md#sui_system_validator_operation_cap_id">operation_cap_id</a>: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code><a href="../sui_system/validator.md#sui_system_validator_operation_cap_id">operation_cap_id</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  The ID of this validator's current valid <code>UnverifiedValidatorOperationCap</code>
@@ -343,7 +343,7 @@ title: Module `sui_system::validator`
  The commission rate of the validator starting the next epoch, in basis point.
 </dd>
 <dt>
-<code>extra_fields: <a href="../../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
+<code>extra_fields: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
 </dt>
 <dd>
  Any extra fields that's not defined statically.
@@ -371,7 +371,7 @@ Event emitted when a new stake request is received.
 
 <dl>
 <dt>
-<code>pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
 </dd>
@@ -418,7 +418,7 @@ Event emitted when a new unstake request is received.
 
 <dl>
 <dt>
-<code>pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
 </dd>
@@ -475,7 +475,7 @@ Event emitted when a staked SUI is converted to a fungible staked SUI.
 
 <dl>
 <dt>
-<code>pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
 </dd>
@@ -517,7 +517,7 @@ Event emitted when a fungible staked SUI is redeemed.
 
 <dl>
 <dt>
-<code>pool_id: <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
 </dd>
@@ -735,7 +735,7 @@ Max gas price a validator can set is 100K MIST.
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_new_metadata">new_metadata</a>(<a href="../sui_system/validator.md#sui_system_validator_sui_address">sui_address</a>: <b>address</b>, <a href="../sui_system/validator.md#sui_system_validator_protocol_pubkey_bytes">protocol_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_network_pubkey_bytes">network_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_worker_pubkey_bytes">worker_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_proof_of_possession">proof_of_possession</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_name">name</a>: <a href="../../std/string.md#std_string_String">std::string::String</a>, <a href="../sui_system/validator.md#sui_system_validator_description">description</a>: <a href="../../std/string.md#std_string_String">std::string::String</a>, <a href="../sui_system/validator.md#sui_system_validator_image_url">image_url</a>: <a href="../../sui/url.md#sui_url_Url">sui::url::Url</a>, <a href="../sui_system/validator.md#sui_system_validator_project_url">project_url</a>: <a href="../../sui/url.md#sui_url_Url">sui::url::Url</a>, net_address: <a href="../../std/string.md#std_string_String">std::string::String</a>, <a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>: <a href="../../std/string.md#std_string_String">std::string::String</a>, <a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>: <a href="../../std/string.md#std_string_String">std::string::String</a>, <a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>: <a href="../../std/string.md#std_string_String">std::string::String</a>, extra_fields: <a href="../../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>): <a href="../sui_system/validator.md#sui_system_validator_ValidatorMetadata">sui_system::validator::ValidatorMetadata</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_new_metadata">new_metadata</a>(<a href="../sui_system/validator.md#sui_system_validator_sui_address">sui_address</a>: <b>address</b>, <a href="../sui_system/validator.md#sui_system_validator_protocol_pubkey_bytes">protocol_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_network_pubkey_bytes">network_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_worker_pubkey_bytes">worker_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_proof_of_possession">proof_of_possession</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_name">name</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui_system/validator.md#sui_system_validator_description">description</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui_system/validator.md#sui_system_validator_image_url">image_url</a>: <a href="../sui/url.md#sui_url_Url">sui::url::Url</a>, <a href="../sui_system/validator.md#sui_system_validator_project_url">project_url</a>: <a href="../sui/url.md#sui_url_Url">sui::url::Url</a>, net_address: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, extra_fields: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>): <a href="../sui_system/validator.md#sui_system_validator_ValidatorMetadata">sui_system::validator::ValidatorMetadata</a>
 </code></pre>
 
 
@@ -798,7 +798,7 @@ Max gas price a validator can set is 100K MIST.
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_new">new</a>(<a href="../sui_system/validator.md#sui_system_validator_sui_address">sui_address</a>: <b>address</b>, <a href="../sui_system/validator.md#sui_system_validator_protocol_pubkey_bytes">protocol_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_network_pubkey_bytes">network_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_worker_pubkey_bytes">worker_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_proof_of_possession">proof_of_possession</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_name">name</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_description">description</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_image_url">image_url</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_project_url">project_url</a>: vector&lt;u8&gt;, net_address: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_gas_price">gas_price</a>: u64, <a href="../sui_system/validator.md#sui_system_validator_commission_rate">commission_rate</a>: u64, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_new">new</a>(<a href="../sui_system/validator.md#sui_system_validator_sui_address">sui_address</a>: <b>address</b>, <a href="../sui_system/validator.md#sui_system_validator_protocol_pubkey_bytes">protocol_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_network_pubkey_bytes">network_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_worker_pubkey_bytes">worker_pubkey_bytes</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_proof_of_possession">proof_of_possession</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_name">name</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_description">description</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_image_url">image_url</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_project_url">project_url</a>: vector&lt;u8&gt;, net_address: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>: vector&lt;u8&gt;, <a href="../sui_system/validator.md#sui_system_validator_gas_price">gas_price</a>: u64, <a href="../sui_system/validator.md#sui_system_validator_commission_rate">commission_rate</a>: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
 </code></pre>
 
 
@@ -951,7 +951,7 @@ Process pending stake and pending withdraws, and update the gas price.
 Request to add stake to the validator's staking pool, processed at the end of the epoch.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_request_add_stake">request_add_stake</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, stake: <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, staker_address: <b>address</b>, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_request_add_stake">request_add_stake</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, stake: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, staker_address: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>
 </code></pre>
 
 
@@ -998,7 +998,7 @@ Request to add stake to the validator's staking pool, processed at the end of th
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_convert_to_fungible_staked_sui">convert_to_fungible_staked_sui</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, staked_sui: <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui_system/staking_pool.md#sui_system_staking_pool_FungibleStakedSui">sui_system::staking_pool::FungibleStakedSui</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_convert_to_fungible_staked_sui">convert_to_fungible_staked_sui</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, staked_sui: <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui_system/staking_pool.md#sui_system_staking_pool_FungibleStakedSui">sui_system::staking_pool::FungibleStakedSui</a>
 </code></pre>
 
 
@@ -1037,7 +1037,7 @@ Request to add stake to the validator's staking pool, processed at the end of th
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_redeem_fungible_staked_sui">redeem_fungible_staked_sui</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, fungible_staked_sui: <a href="../sui_system/staking_pool.md#sui_system_staking_pool_FungibleStakedSui">sui_system::staking_pool::FungibleStakedSui</a>, ctx: &<a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_redeem_fungible_staked_sui">redeem_fungible_staked_sui</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, fungible_staked_sui: <a href="../sui_system/staking_pool.md#sui_system_staking_pool_FungibleStakedSui">sui_system::staking_pool::FungibleStakedSui</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -1076,7 +1076,7 @@ Request to add stake to the validator's staking pool, processed at the end of th
 Request to add stake to the validator's staking pool at genesis
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_request_add_stake_at_genesis">request_add_stake_at_genesis</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, stake: <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, staker_address: <b>address</b>, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_request_add_stake_at_genesis">request_add_stake_at_genesis</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, stake: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, staker_address: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1117,7 +1117,7 @@ Request to add stake to the validator's staking pool at genesis
 Request to withdraw stake from the validator's staking pool, processed at the end of the epoch.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_request_withdraw_stake">request_withdraw_stake</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, staked_sui: <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>, ctx: &<a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_request_withdraw_stake">request_withdraw_stake</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, staked_sui: <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -1283,7 +1283,7 @@ Set new commission rate for the candidate validator.
 Deposit stakes rewards into the validator's staking pool, called at the end of the epoch.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_deposit_stake_rewards">deposit_stake_rewards</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, reward: <a href="../../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_deposit_stake_rewards">deposit_stake_rewards</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, reward: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;)
 </code></pre>
 
 
@@ -1309,7 +1309,7 @@ Deposit stakes rewards into the validator's staking pool, called at the end of t
 Process pending stakes and withdraws, called at the end of the epoch.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, ctx: &<a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1408,7 +1408,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_name">name</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_name">name</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1432,7 +1432,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_description">description</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_description">description</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1456,7 +1456,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_image_url">image_url</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../sui/url.md#sui_url_Url">sui::url::Url</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_image_url">image_url</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../sui/url.md#sui_url_Url">sui::url::Url</a>
 </code></pre>
 
 
@@ -1480,7 +1480,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_project_url">project_url</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../sui/url.md#sui_url_Url">sui::url::Url</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_project_url">project_url</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../sui/url.md#sui_url_Url">sui::url::Url</a>
 </code></pre>
 
 
@@ -1504,7 +1504,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_network_address">network_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_network_address">network_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1528,7 +1528,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1552,7 +1552,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1576,7 +1576,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1696,7 +1696,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_address">next_epoch_network_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_address">next_epoch_network_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;
 </code></pre>
 
 
@@ -1720,7 +1720,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;
 </code></pre>
 
 
@@ -1744,7 +1744,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_primary_address">next_epoch_primary_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_primary_address">next_epoch_primary_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;
 </code></pre>
 
 
@@ -1768,7 +1768,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_address">next_epoch_worker_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_address">next_epoch_worker_address</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;
 </code></pre>
 
 
@@ -1792,7 +1792,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_protocol_pubkey_bytes">next_epoch_protocol_pubkey_bytes</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_protocol_pubkey_bytes">next_epoch_protocol_pubkey_bytes</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;
 </code></pre>
 
 
@@ -1816,7 +1816,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_proof_of_possession">next_epoch_proof_of_possession</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_proof_of_possession">next_epoch_proof_of_possession</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;
 </code></pre>
 
 
@@ -1840,7 +1840,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_pubkey_bytes">next_epoch_network_pubkey_bytes</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_pubkey_bytes">next_epoch_network_pubkey_bytes</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;
 </code></pre>
 
 
@@ -1864,7 +1864,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_pubkey_bytes">next_epoch_worker_pubkey_bytes</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_pubkey_bytes">next_epoch_worker_pubkey_bytes</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;vector&lt;u8&gt;&gt;
 </code></pre>
 
 
@@ -1888,7 +1888,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_operation_cap_id">operation_cap_id</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../../sui/object.md#sui_object_ID">sui::object::ID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_operation_cap_id">operation_cap_id</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): &<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>
 </code></pre>
 
 
@@ -2179,7 +2179,7 @@ Set the voting power of this validator, called only from validator_set.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_staking_pool_id">staking_pool_id</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): <a href="../../sui/object.md#sui_object_ID">sui::object::ID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_staking_pool_id">staking_pool_id</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>
 </code></pre>
 
 
@@ -2259,7 +2259,7 @@ Set the voting power of this validator, called only from validator_set.
 
 
 
-<pre><code><b>fun</b> is_equal_some_and_valueT(a: &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;, b: &T): bool
+<pre><code><b>fun</b> is_equal_some_and_valueT(a: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;, b: &T): bool
 </code></pre>
 
 
@@ -2287,7 +2287,7 @@ Set the voting power of this validator, called only from validator_set.
 
 
 
-<pre><code><b>fun</b> is_equal_someT(a: &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;, b: &<a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;): bool
+<pre><code><b>fun</b> is_equal_someT(a: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;, b: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;): bool
 </code></pre>
 
 
@@ -2317,7 +2317,7 @@ Create a new <code>UnverifiedValidatorOperationCap</code>, transfer to the valid
 and registers it, thus revoking the previous cap's permission.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -3001,7 +3001,7 @@ Aborts if validator metadata is valid
 Create a new validator from the given <code><a href="../sui_system/validator.md#sui_system_validator_ValidatorMetadata">ValidatorMetadata</a></code>, called by both <code><a href="../sui_system/validator.md#sui_system_validator_new">new</a></code> and <code>new_for_testing</code>.
 
 
-<pre><code><b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_new_from_metadata">new_from_metadata</a>(<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>: <a href="../sui_system/validator.md#sui_system_validator_ValidatorMetadata">sui_system::validator::ValidatorMetadata</a>, <a href="../sui_system/validator.md#sui_system_validator_gas_price">gas_price</a>: u64, <a href="../sui_system/validator.md#sui_system_validator_commission_rate">commission_rate</a>: u64, ctx: &<b>mut</b> <a href="../../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+<pre><code><b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_new_from_metadata">new_from_metadata</a>(<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>: <a href="../sui_system/validator.md#sui_system_validator_ValidatorMetadata">sui_system::validator::ValidatorMetadata</a>, <a href="../sui_system/validator.md#sui_system_validator_gas_price">gas_price</a>: u64, <a href="../sui_system/validator.md#sui_system_validator_commission_rate">commission_rate</a>: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
 </code></pre>
 
 

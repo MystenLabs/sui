@@ -246,7 +246,6 @@ fn relocate_docs(files: &[(String, String)], output: &mut BTreeMap<String, Strin
     //```
     let re = regex::Regex::new(r"(?s).*\n#\s+(.*?)\n").unwrap();
     for (file_name, file_content) in files {
-        println!("{file_name}");
         if file_name.contains("dependencies") {
             // we don't need to keep the dependency version of each doc since it will be generated
             // on its own
@@ -256,6 +255,7 @@ fn relocate_docs(files: &[(String, String)], output: &mut BTreeMap<String, Strin
             re.replace_all(
                 &file_content
                     .replace("../../dependencies/", "../")
+                    .replace("../dependencies/", "../")
                     .replace("dependencies/", "../"),
                 "---\ntitle: $1\n---\n",
             )

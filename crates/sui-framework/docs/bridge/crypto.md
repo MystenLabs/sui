@@ -7,8 +7,8 @@ title: Module `bridge::crypto`
 -  [Function `ecdsa_pub_key_to_eth_address`](#bridge_crypto_ecdsa_pub_key_to_eth_address)
 
 
-<pre><code><b>use</b> <a href="../../sui/ecdsa_k1.md#sui_ecdsa_k1">sui::ecdsa_k1</a>;
-<b>use</b> <a href="../../sui/hash.md#sui_hash">sui::hash</a>;
+<pre><code><b>use</b> <a href="../sui/ecdsa_k1.md#sui_ecdsa_k1">sui::ecdsa_k1</a>;
+<b>use</b> <a href="../sui/hash.md#sui_hash">sui::hash</a>;
 </code></pre>
 
 

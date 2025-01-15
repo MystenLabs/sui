@@ -17,11 +17,11 @@ title: Module `sui::address`
 -  [Function `max`](#sui_address_max)
 
 
-<pre><code><b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 </code></pre>
 
@@ -165,7 +165,7 @@ Convert <code>a</code> into BCS-encoded bytes.
 Convert <code>a</code> to a hex-encoded ASCII string
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/address.md#sui_address_to_ascii_string">to_ascii_string</a>(a: <b>address</b>): <a href="../../std/ascii.md#std_ascii_String">std::ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/address.md#sui_address_to_ascii_string">to_ascii_string</a>(a: <b>address</b>): <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 
@@ -190,7 +190,7 @@ Convert <code>a</code> to a hex-encoded ASCII string
 Convert <code>a</code> to a hex-encoded string
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/address.md#sui_address_to_string">to_string</a>(a: <b>address</b>): <a href="../../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/address.md#sui_address_to_string">to_string</a>(a: <b>address</b>): <a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
