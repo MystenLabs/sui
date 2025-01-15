@@ -4,10 +4,10 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use aws_config::timeout::TimeoutConfig;
+use aws_sdk_dynamodb::config::{Credentials, Region};
 use aws_sdk_dynamodb::error::SdkError;
 use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::Client;
-use aws_sdk_s3::config::{Credentials, Region};
 use std::str::FromStr;
 use std::time::Duration;
 use sui_data_ingestion_core::ProgressStore;
