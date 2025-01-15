@@ -12,9 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    metrics::IndexerMetrics,
-    pipeline::logging::{LoggerWatermark, WatermarkLogger},
-    watermarks::PrunerWatermark,
+    metrics::IndexerMetrics, pipeline::logging::WatermarkLogger, watermarks::PrunerWatermark,
 };
 
 use super::{Handler, PrunerConfig};
@@ -54,16 +52,12 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
         let mut poll = interval(config.interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        // The pruner task will periodically output a log message at a higher log level to
-        // demonstrate that it is making progress.
-        let mut logger = WatermarkLogger::new("pruner", LoggerWatermark::default());
-
-        'outer: loop {
-            // (1) Get the latest pruning bounds from the database.
-            let mut watermark = tokio::select! {
+        // Initialize the pruner watermark.
+        let mut watermark = loop {
+            tokio::select! {
                 _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received");
-                    break;
+                    info!(pipeline = H::NAME, "Shutdown received while initializing pruner watermark");
+                    return;
                 }
 
                 _ = poll.tick() => {
@@ -80,7 +74,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                     match PrunerWatermark::get(&mut conn, H::NAME, config.delay()).await {
                         Ok(Some(current)) => {
                             guard.stop_and_record();
-                            current
+                            break current;
                         }
 
                         Ok(None) => {
@@ -96,9 +90,15 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                         }
                     }
                 }
-            };
+            }
+        };
 
-            // (2) Wait until this information can be acted upon.
+        // The pruner task will periodically output a log message at a higher log level to
+        // demonstrate that it is making progress.
+        let mut logger = WatermarkLogger::new("pruner", &watermark);
+
+        'outer: loop {
+            // (1) Wait until this information can be acted upon.
             if let Some(wait_for) = watermark.wait_for() {
                 debug!(pipeline = H::NAME, ?wait_for, "Waiting to prune");
                 tokio::select! {
@@ -110,7 +110,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                 }
             }
 
-            // (3) Prune chunk by chunk to avoid the task waiting on a long-running database
+            // (2) Prune chunk by chunk to avoid the task waiting on a long-running database
             // transaction, between tests for cancellation.
             while let Some((from, to_exclusive)) = watermark.next_chunk(config.max_chunk_size) {
                 if cancel.is_cancelled() {
@@ -166,7 +166,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                     .set(watermark.pruner_hi);
             }
 
-            // (4) Update the pruner watermark
+            // (3) Update the pruner watermark
             let guard = metrics
                 .watermark_pruner_write_latency
                 .with_label_values(&[H::NAME])
