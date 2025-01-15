@@ -20,7 +20,7 @@ title: Module `bridge::chain_ids`
 -  [Function `get_route`](#bridge_chain_ids_get_route)
 
 
-<pre><code><b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 </code></pre>
 
 

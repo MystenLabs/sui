@@ -32,13 +32,13 @@ More entry functions might be added in the future depending on the use cases.
 -  [Function `add_internal`](#sui_display_add_internal)
 
 
-<pre><code><b>use</b> <a href="../../std/address.md#std_address">std::address</a>;
-<b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/type_name.md#std_type_name">std::type_name</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
+<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
@@ -95,7 +95,7 @@ the property names have a priority over their types.
 <dd>
 </dd>
 <dt>
-<code><a href="../sui/display.md#sui_display_fields">fields</a>: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>, <a href="../../std/string.md#std_string_String">std::string::String</a>&gt;</code>
+<code><a href="../sui/display.md#sui_display_fields">fields</a>: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../std/string.md#std_string_String">std::string::String</a>&gt;</code>
 </dt>
 <dd>
  Contains fields for display. Currently supported
@@ -172,7 +172,7 @@ Version of Display got updated -
 <dd>
 </dd>
 <dt>
-<code><a href="../sui/display.md#sui_display_fields">fields</a>: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>, <a href="../../std/string.md#std_string_String">std::string::String</a>&gt;</code>
+<code><a href="../sui/display.md#sui_display_fields">fields</a>: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../std/string.md#std_string_String">std::string::String</a>&gt;</code>
 </dt>
 <dd>
 </dd>
@@ -241,7 +241,7 @@ with data right away via cheaper <code>set_owned</code> method.
 Create a new Display<T> object with a set of fields.
 
 
-<pre><code><b>public</b> <b>fun</b> new_with_fieldsT(pub: &<a href="../sui/package.md#sui_package_Publisher">sui::package::Publisher</a>, <a href="../sui/display.md#sui_display_fields">fields</a>: vector&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;, values: vector&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> new_with_fieldsT(pub: &<a href="../sui/package.md#sui_package_Publisher">sui::package::Publisher</a>, <a href="../sui/display.md#sui_display_fields">fields</a>: vector&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;, values: vector&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;
 </code></pre>
 
 
@@ -334,7 +334,7 @@ Manually bump the version and emit an event with the updated version's contents.
 Sets a custom <code>name</code> field with the <code>value</code>.
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> addT(self: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, name: <a href="../../std/string.md#std_string_String">std::string::String</a>, value: <a href="../../std/string.md#std_string_String">std::string::String</a>)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> addT(self: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>, value: <a href="../std/string.md#std_string_String">std::string::String</a>)
 </code></pre>
 
 
@@ -359,7 +359,7 @@ Sets a custom <code>name</code> field with the <code>value</code>.
 Sets multiple <code><a href="../sui/display.md#sui_display_fields">fields</a></code> with <code>values</code>.
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> add_multipleT(self: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, <a href="../sui/display.md#sui_display_fields">fields</a>: vector&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;, values: vector&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>&gt;)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> add_multipleT(self: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, <a href="../sui/display.md#sui_display_fields">fields</a>: vector&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;, values: vector&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;)
 </code></pre>
 
 
@@ -395,7 +395,7 @@ Change the value of the field.
 TODO (long run): version changes;
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> editT(self: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, name: <a href="../../std/string.md#std_string_String">std::string::String</a>, value: <a href="../../std/string.md#std_string_String">std::string::String</a>)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> editT(self: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>, value: <a href="../std/string.md#std_string_String">std::string::String</a>)
 </code></pre>
 
 
@@ -421,7 +421,7 @@ TODO (long run): version changes;
 Remove the key from the Display.
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> removeT(self: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, name: <a href="../../std/string.md#std_string_String">std::string::String</a>)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> removeT(self: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>)
 </code></pre>
 
 
@@ -496,7 +496,7 @@ Read the <code><a href="../sui/display.md#sui_display_version">version</a></code
 Read the <code><a href="../sui/display.md#sui_display_fields">fields</a></code> field.
 
 
-<pre><code><b>public</b> <b>fun</b> fieldsT(d: &<a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;): &<a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../../std/string.md#std_string_String">std::string::String</a>, <a href="../../std/string.md#std_string_String">std::string::String</a>&gt;
+<pre><code><b>public</b> <b>fun</b> fieldsT(d: &<a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;): &<a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../std/string.md#std_string_String">std::string::String</a>&gt;
 </code></pre>
 
 
@@ -554,7 +554,7 @@ Internal function to create a new <code><a href="../sui/display.md#sui_display_D
 Private method for inserting fields without security checks.
 
 
-<pre><code><b>fun</b> add_internalT(<a href="../sui/display.md#sui_display">display</a>: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, name: <a href="../../std/string.md#std_string_String">std::string::String</a>, value: <a href="../../std/string.md#std_string_String">std::string::String</a>)
+<pre><code><b>fun</b> add_internalT(<a href="../sui/display.md#sui_display">display</a>: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>, value: <a href="../std/string.md#std_string_String">std::string::String</a>)
 </code></pre>
 
 

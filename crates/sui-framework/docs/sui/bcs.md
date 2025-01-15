@@ -68,11 +68,11 @@ let leftovers = prepared.into_remainder_bytes();
 -  [Function `peel_option_u256`](#sui_bcs_peel_option_u256)
 
 
-<pre><code><b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 </code></pre>
@@ -704,7 +704,7 @@ Peel a vector of <code>u256</code> from serialized bytes.
 Peel <code>Option&lt;<b>address</b>&gt;</code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_address">peel_option_address</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_address">peel_option_address</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;
 </code></pre>
 
 
@@ -729,7 +729,7 @@ Peel <code>Option&lt;<b>address</b>&gt;</code> from serialized bytes.
 Peel <code>Option&lt;bool&gt;</code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_bool">peel_option_bool</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;bool&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_bool">peel_option_bool</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;bool&gt;
 </code></pre>
 
 
@@ -754,7 +754,7 @@ Peel <code>Option&lt;bool&gt;</code> from serialized bytes.
 Peel <code>Option&lt;u8&gt;</code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u8">peel_option_u8</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u8">peel_option_u8</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -779,7 +779,7 @@ Peel <code>Option&lt;u8&gt;</code> from serialized bytes.
 Peel <code>Option&lt;u16&gt;</code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u16">peel_option_u16</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;u16&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u16">peel_option_u16</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u16&gt;
 </code></pre>
 
 
@@ -804,7 +804,7 @@ Peel <code>Option&lt;u16&gt;</code> from serialized bytes.
 Peel <code>Option&lt;u32&gt;</code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u32">peel_option_u32</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;u32&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u32">peel_option_u32</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u32&gt;
 </code></pre>
 
 
@@ -829,7 +829,7 @@ Peel <code>Option&lt;u32&gt;</code> from serialized bytes.
 Peel <code>Option&lt;u64&gt;</code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u64">peel_option_u64</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u64">peel_option_u64</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
 </code></pre>
 
 
@@ -854,7 +854,7 @@ Peel <code>Option&lt;u64&gt;</code> from serialized bytes.
 Peel <code>Option&lt;u128&gt;</code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u128">peel_option_u128</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;u128&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u128">peel_option_u128</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u128&gt;
 </code></pre>
 
 
@@ -879,7 +879,7 @@ Peel <code>Option&lt;u128&gt;</code> from serialized bytes.
 Peel <code>Option&lt;u256&gt;</code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u256">peel_option_u256</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option_u256">peel_option_u256</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;
 </code></pre>
 
 

@@ -38,13 +38,13 @@ Functions for operating on Move packages from within Move:
 -  [Function `restrict`](#sui_package_restrict)
 
 
-<pre><code><b>use</b> <a href="../../std/address.md#std_address">std::address</a>;
-<b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/type_name.md#std_type_name">std::type_name</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
+<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
@@ -81,12 +81,12 @@ a type originated from.
 <dd>
 </dd>
 <dt>
-<code><a href="../sui/package.md#sui_package">package</a>: <a href="../../std/ascii.md#std_ascii_String">std::ascii::String</a></code>
+<code><a href="../sui/package.md#sui_package">package</a>: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a></code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>module_name: <a href="../../std/ascii.md#std_ascii_String">std::ascii::String</a></code>
+<code>module_name: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a></code>
 </dt>
 <dd>
 </dd>
@@ -467,7 +467,7 @@ Check whether a type belongs to the same module as the publisher object.
 Read the name of the module.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_published_module">published_module</a>(self: &<a href="../sui/package.md#sui_package_Publisher">sui::package::Publisher</a>): &<a href="../../std/ascii.md#std_ascii_String">std::ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_published_module">published_module</a>(self: &<a href="../sui/package.md#sui_package_Publisher">sui::package::Publisher</a>): &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 
@@ -492,7 +492,7 @@ Read the name of the module.
 Read the package address string.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_published_package">published_package</a>(self: &<a href="../sui/package.md#sui_package_Publisher">sui::package::Publisher</a>): &<a href="../../std/ascii.md#std_ascii_String">std::ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_published_package">published_package</a>(self: &<a href="../sui/package.md#sui_package_Publisher">sui::package::Publisher</a>): &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 

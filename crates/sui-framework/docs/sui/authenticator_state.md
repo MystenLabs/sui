@@ -25,12 +25,12 @@ title: Module `sui::authenticator_state`
 -  [Function `get_active_jwks`](#sui_authenticator_state_get_active_jwks)
 
 
-<pre><code><b>use</b> <a href="../../std/ascii.md#std_ascii">std::ascii</a>;
-<b>use</b> <a href="../../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../../std/option.md#std_option">std::option</a>;
-<b>use</b> <a href="../../std/string.md#std_string">std::string</a>;
-<b>use</b> <a href="../../std/u64.md#std_u64">std::u64</a>;
-<b>use</b> <a href="../../std/vector.md#std_vector">std::vector</a>;
+<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/option.md#std_option">std::option</a>;
+<b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/u64.md#std_u64">std::u64</a>;
+<b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
@@ -125,22 +125,22 @@ Must match the JWK struct in fastcrypto-zkp
 
 <dl>
 <dt>
-<code>kty: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code>kty: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>e: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code>e: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>n: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code>n: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>alg: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code>alg: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
 </dd>
@@ -167,12 +167,12 @@ Must match the JwkId struct in fastcrypto-zkp
 
 <dl>
 <dt>
-<code>iss: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code>iss: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code>kid: <a href="../../std/string.md#std_string_String">std::string::String</a></code>
+<code>kid: <a href="../std/string.md#std_string_String">std::string::String</a></code>
 </dt>
 <dd>
 </dd>
@@ -341,7 +341,7 @@ Sender is not @0x0 the system address.
 
 
 
-<pre><code><b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_string_bytes_lt">string_bytes_lt</a>(a: &<a href="../../std/string.md#std_string_String">std::string::String</a>, b: &<a href="../../std/string.md#std_string_String">std::string::String</a>): bool
+<pre><code><b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_string_bytes_lt">string_bytes_lt</a>(a: &<a href="../std/string.md#std_string_String">std::string::String</a>, b: &<a href="../std/string.md#std_string_String">std::string::String</a>): bool
 </code></pre>
 
 
