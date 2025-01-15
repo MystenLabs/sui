@@ -1,0 +1,91 @@
+---
+source: crates/sui-move/tests/cli_tests.rs
+info:
+  program: bash
+  args:
+    - new_basic.sh
+  env:
+    PATH: "/bin:/usr/bin:../bin"
+---
+success: true
+exit_code: 0
+----- stdout -----
+==== files in project ====
+Move.toml
+sources
+tests
+==== files in sources ====
+myproj.move
+==== files in tests =====
+myproj_tests.move
+==== myproj/Move.toml ====
+[package]
+name = "myproj"
+edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+# license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
+# authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+
+# For remote import, use the `{ git = "...", subdir = "...", rev = "..." }`.
+# Revision can be a branch, a tag, and a commit hash.
+# MyRemotePackage = { git = "https://some.remote/host.git", subdir = "remote/path", rev = "main" }
+
+# For local dependencies use `local = path`. Path is relative to the package root
+# Local = { local = "../path/to" }
+
+# To resolve a version conflict and force a specific version for dependency
+# override use `override = true`
+# Override = { local = "../conflicting/version", override = true }
+
+[addresses]
+myproj = "0x0"
+
+# Named addresses will be accessible in Move as `@name`. They're also exported:
+# for example, `std = "0x1"` is exported by the Standard Library.
+# alice = "0xA11CE"
+
+[dev-dependencies]
+# The dev-dependencies section allows overriding dependencies for `--test` and
+# `--dev` modes. You can introduce test-only dependencies here.
+# Local = { local = "../path/to/dev-build" }
+
+[dev-addresses]
+# The dev-addresses section allows overwriting named addresses for the `--test`
+# and `--dev` modes.
+# alice = "0xB0B"
+
+==== myproj/.gitignore ====
+build/*
+==== myproj/sources/myproj.move ====
+/*
+/// Module: myproj
+module myproj::myproj;
+*/
+
+// For Move coding conventions, see
+// https://docs.sui.io/concepts/sui-move-concepts/conventions
+
+
+==== myproj/tests/myproj_tests.move ====
+/*
+#[test_only]
+module myproj::myproj_tests;
+// uncomment this line to import the module
+// use myproj::myproj;
+
+const ENotImplemented: u64 = 0;
+
+#[test]
+fun test_myproj() {
+    // pass
+}
+
+#[test, expected_failure(abort_code = ::myproj::myproj_tests::ENotImplemented)]
+fun test_myproj_fail() {
+    abort ENotImplemented
+}
+*/
+
+----- stderr -----
