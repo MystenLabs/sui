@@ -232,6 +232,13 @@ pub async fn start_faucet(
         ..
     } = app_state.config;
 
+    let token_manager = Arc::new(RequestsManager::new(
+        max_requests_per_ip,
+        reset_time_interval_secs,
+        CLOUDFLARE_TURNSTILE_URL.as_ref().unwrap().to_string(),
+        TURNSTILE_SECRET_KEY.as_ref().unwrap().to_string(),
+    ));
+
     let governor_cfg = Arc::new(
         GovernorConfigBuilder::default()
             .const_per_millisecond(replenish_quota_interval_ms)
@@ -240,13 +247,9 @@ pub async fn start_faucet(
             .finish()
             .unwrap(),
     );
-    let token_manager = Arc::new(RequestsManager::new(
-        max_requests_per_ip,
-        reset_time_interval_secs,
-        CLOUDFLARE_TURNSTILE_URL.as_ref().unwrap().to_string(),
-        TURNSTILE_SECRET_KEY.as_ref().unwrap().to_string(),
-    ));
 
+    // these routes have a more aggressive rate limit to reduce the number of reqs per second as
+    // per the governor config above.
     let global_limited_routes = Router::new()
         .route("/gas", post(request_gas))
         .route("/v1/gas", post(batch_request_gas))
@@ -258,9 +261,9 @@ pub async fn start_faucet(
     let faucet_web_routes = Router::new().route("/v1/faucet_web_gas", post(batch_faucet_web_gas));
     // Routes with no rate limit
     let unrestricted_routes = Router::new()
-        .route("/batch_get_status/:id", get(request_status))
         .route("/", get(redirect))
-        .route("/health", get(health));
+        .route("/health", get(health))
+        .route("/v1/status/:task_id", get(request_status));
 
     // Combine all routes
     let app = Router::new()
@@ -313,7 +316,8 @@ async fn health() -> &'static str {
     "OK"
 }
 
-/// Redirect to faucet.sui.io/?network if it's testnet/devnet network
+/// Redirect to faucet.sui.io/?network if it's testnet/devnet network. For local network, keep the
+/// previous behavior to return health status.
 async fn redirect(Host(host): Host) -> Response {
     let url = FAUCET_WEB_APP_URL.to_string();
     if host.contains("testnet") {
@@ -327,6 +331,7 @@ async fn redirect(Host(host): Host) -> Response {
     }
 }
 
+/// Handler for requests coming from the frontend faucet web app.
 async fn batch_faucet_web_gas(
     headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
