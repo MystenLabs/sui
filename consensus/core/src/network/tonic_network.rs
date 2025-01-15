@@ -32,7 +32,7 @@ use super::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
     },
-    BlockStream, NetworkClient, NetworkManager, NetworkService,
+    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
@@ -129,7 +129,10 @@ impl NetworkClient for TonicClient {
             .take_while(|b| futures::future::ready(b.is_ok()))
             .filter_map(move |b| async move {
                 match b {
-                    Ok(response) => Some(response.block),
+                    Ok(response) => Some(ExtendedSerializedBlock {
+                        block: response.block,
+                        excluded_ancestors: response.excluded_ancestors,
+                    }),
                     Err(e) => {
                         debug!("Network error received from {}: {e:?}", peer);
                         None
@@ -448,6 +451,10 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
         let block = request.into_inner().block;
+        let block = ExtendedSerializedBlock {
+            block,
+            excluded_ancestors: vec![],
+        };
         self.service
             .handle_send_block(peer_index, block)
             .await
@@ -488,7 +495,12 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             .handle_subscribe_blocks(peer_index, first_request.last_received_round)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
-            .map(|block| Ok(SubscribeBlocksResponse { block }));
+            .map(|block| {
+                Ok(SubscribeBlocksResponse {
+                    block: block.block,
+                    excluded_ancestors: block.excluded_ancestors,
+                })
+            });
         let rate_limited_stream =
             tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
                 .boxed();
@@ -1032,6 +1044,9 @@ pub(crate) struct SubscribeBlocksRequest {
 pub(crate) struct SubscribeBlocksResponse {
     #[prost(bytes = "bytes", tag = "1")]
     block: Bytes,
+    // Serialized BlockRefs that are excluded from the blocks ancestors.
+    #[prost(bytes = "vec", repeated, tag = "2")]
+    excluded_ancestors: Vec<Vec<u8>>,
 }
 
 #[derive(Clone, prost::Message)]
