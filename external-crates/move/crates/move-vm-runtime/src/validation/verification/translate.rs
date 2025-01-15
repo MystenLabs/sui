@@ -1,10 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use crate::{
-    natives::functions::NativeFunctions, validation::deserialization::ast as D,
+    natives::functions::NativeFunctions, validation::deserialization::ast as Input,
     validation::verification::ast,
 };
 
@@ -17,6 +15,8 @@ use move_bytecode_verifier::script_signature;
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::runtime::VMConfig;
 
+use std::collections::BTreeMap;
+
 struct Context<'natives, 'config> {
     natives: &'natives NativeFunctions,
     vm_config: &'config VMConfig,
@@ -25,9 +25,9 @@ struct Context<'natives, 'config> {
 pub(crate) fn package(
     natives: &NativeFunctions,
     vm_config: &VMConfig,
-    pkg: D::Package,
+    pkg: Input::Package,
 ) -> VMResult<ast::Package> {
-    let D::Package {
+    let Input::Package {
         runtime_id,
         modules: in_modules,
         storage_id,

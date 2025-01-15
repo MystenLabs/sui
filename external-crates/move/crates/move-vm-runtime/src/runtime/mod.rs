@@ -105,7 +105,6 @@ impl MoveRuntime {
         let packages = package_resolution::resolve_packages(
             &self.cache,
             &self.natives,
-            &self.vm_config,
             &data_cache,
             &link_context,
             all_packages,
@@ -172,7 +171,6 @@ impl MoveRuntime {
         let pkg_dependencies = package_resolution::resolve_packages(
             &self.cache,
             &self.natives,
-            &self.vm_config,
             &data_cache,
             &link_context,
             link_context.all_package_dependencies_except(pkg.storage_id)?,
