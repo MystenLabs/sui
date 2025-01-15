@@ -445,6 +445,10 @@ impl<'env> Docgen<'env> {
     /// and if so attempts to locate already generated documentation for it.
     fn compute_output_file(&mut self, module_env: model::Module<'_>) -> String {
         let output_path = PathBuf::from(&self.options.output_directory);
+        let package_name = match module_env.package().name() {
+            Some(name) => name.to_string(),
+            None => module_env.id().0.to_string(),
+        };
         let file_name = PathBuf::from(module_env.source_path().as_str())
             .with_extension("md")
             .file_name()
@@ -470,10 +474,6 @@ impl<'env> Docgen<'env> {
                     })
                 })
                 .unwrap_or_else(|| {
-                    let package_name = match module_env.package().name() {
-                        Some(name) => name.to_string(),
-                        None => module_env.id().0.to_string(),
-                    };
                     format!(
                         "dependencies/{}/{}",
                         package_name,
@@ -482,7 +482,11 @@ impl<'env> Docgen<'env> {
                 })
         } else {
             // We will generate this file in the provided output directory.
-            file_name.to_string_lossy().to_string()
+            format!(
+                "{}/{}",
+                package_name,
+                file_name.to_string_lossy().to_string()
+            )
         }
     }
 
