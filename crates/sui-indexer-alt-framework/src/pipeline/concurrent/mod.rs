@@ -228,6 +228,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let collector = collector::<H>(
         committer_config.clone(),
+        initial_commit_watermark.clone(),
         collector_rx,
         collector_tx,
         metrics.clone(),

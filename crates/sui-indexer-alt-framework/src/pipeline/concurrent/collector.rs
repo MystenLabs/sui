@@ -16,7 +16,7 @@ use crate::{
     pipeline::{CommitterConfig, IndexedCheckpoint, WatermarkPart},
 };
 
-use super::{BatchedRows, Handler};
+use super::{BatchedRows, CommitterWatermark, Handler};
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.
@@ -81,6 +81,7 @@ impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
 /// closed.
 pub(super) fn collector<H: Handler + 'static>(
     config: CommitterConfig,
+    initial_commit_watermark: Option<CommitterWatermark<'static>>,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::Sender<BatchedRows<H>>,
     metrics: Arc<IndexerMetrics>,
@@ -180,6 +181,12 @@ pub(super) fn collector<H: Handler + 'static>(
                         .total_collector_checkpoints_received
                         .with_label_values(&[H::NAME])
                         .inc();
+
+                    if let Some(initial_commit_watermark) = &initial_commit_watermark {
+                        if indexed.watermark.checkpoint_hi_inclusive < initial_commit_watermark.checkpoint_hi_inclusive {
+                            continue;
+                        }
+                    }
 
                     pending_rows += indexed.len();
                     pending.insert(indexed.checkpoint(), indexed.into());
