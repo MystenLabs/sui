@@ -1,1 +1,0 @@
-cat example/data
