@@ -2,7 +2,7 @@
 source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
 expression: output
 ---
-error[Compatibility E01007]: module missing
+error[Compatibility E01006]: module missing
   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/missing_module_toml/addresses_first/Move.toml:4:1
   │  
 4 │ ╭ [package]

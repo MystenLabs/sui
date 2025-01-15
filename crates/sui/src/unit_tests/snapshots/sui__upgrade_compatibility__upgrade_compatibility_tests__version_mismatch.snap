@@ -2,7 +2,7 @@
 source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
 expression: normalize_path(result.unwrap_err().to_string())
 ---
-error[Compatibility E01009]: file format version downgrade
+error[Compatibility E01008]: file format version downgrade
   ┌─ /fixtures/upgrade_errors/deponly_errors_v2/sources/UpgradeErrors.move:4:18
   │
 4 │ module upgrades::upgrades {
