@@ -708,6 +708,8 @@ mod tests {
     use tokio::sync::broadcast;
     use tokio::time::sleep;
 
+    use super::TrustedCommit;
+
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
     }
@@ -725,6 +727,7 @@ mod tests {
     }
 
     #[async_trait]
+    #[async_trait]
     impl CoreThreadDispatcher for FakeCoreThreadDispatcher {
         async fn add_blocks(
             &self,
@@ -740,6 +743,14 @@ mod tests {
             _block_refs: Vec<BlockRef>,
         ) -> Result<BTreeSet<BlockRef>, CoreError> {
             Ok(BTreeSet::new())
+        }
+
+        async fn add_commit(
+            &self,
+            _commit: TrustedCommit,
+            _blocks: Vec<VerifiedBlock>,
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
+            todo!()
         }
 
         async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {

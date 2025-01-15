@@ -84,6 +84,8 @@ impl BlockManager {
     /// Tries to accept the provided blocks assuming that all their causal history exists. The method
     /// returns all the blocks that have been successfully processed in round ascending order, that includes also previously
     /// suspended blocks that have now been able to get accepted. Method also returns a set with the missing ancestor blocks.
+    /// When the `commit_sync_gc_round_override` is > 0 then the method will skip any missing ancestors that are <= `commit_sync_gc_round_override` round. This
+    /// is a special handling case when we are processing blocks via the committed sub dags.
     pub(crate) fn try_accept_blocks(
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
@@ -91,10 +93,6 @@ impl BlockManager {
         let _s = monitored_scope("BlockManager::try_accept_blocks");
 
         blocks.sort_by_key(|b| b.round());
-        debug!(
-            "Trying to accept blocks: {}",
-            blocks.iter().map(|b| b.reference().to_string()).join(",")
-        );
 
         let mut accepted_blocks = vec![];
         let mut missing_blocks = BTreeSet::new();
@@ -126,19 +124,7 @@ impl BlockManager {
             accepted_blocks.extend(blocks_to_accept);
         }
 
-        let metrics = &self.context.metrics.node_metrics;
-        metrics
-            .missing_blocks_total
-            .inc_by(missing_blocks.len() as u64);
-        metrics
-            .block_manager_suspended_blocks
-            .set(self.suspended_blocks.len() as i64);
-        metrics
-            .block_manager_missing_ancestors
-            .set(self.missing_ancestors.len() as i64);
-        metrics
-            .block_manager_missing_blocks
-            .set(self.missing_blocks.len() as i64);
+        self.update_stats(missing_blocks.len() as u64);
 
         // Figure out the new missing blocks
         (accepted_blocks, missing_blocks)
@@ -544,10 +530,61 @@ impl BlockManager {
         );
     }
 
+    // Tries to accept blocks that have been committed. Returns all the blocks that have been accepted, both from the ones
+    // provided and any children blocks.
+    pub(crate) fn try_accept_committed_blocks(
+        &mut self,
+        mut blocks: Vec<VerifiedBlock>,
+    ) -> Vec<VerifiedBlock> {
+        // Just accept the blocks
+        let _s = monitored_scope("BlockManager::try_accept_committed_blocks");
+        blocks.sort_by_key(|b| b.round());
+
+        let mut accepted_blocks = vec![];
+
+        for block in blocks {
+            self.update_block_received_metrics(&block);
+
+            // Remove the block from missing and suspended blocks
+            self.missing_blocks.remove(&block.reference());
+            self.suspended_blocks.remove(&block.reference());
+
+            // Accept this block before any unsuspended children blocks
+            self.dag_state.write().accept_blocks(vec![block.clone()]);
+
+            // Try to unsuspend its children blocks if any and accept them
+            let unsuspended_blocks = self.try_unsuspend_children_blocks(block.reference());
+
+            // Verify block timestamps
+            let blocks_to_accept = self.verify_block_timestamps_and_accept(unsuspended_blocks);
+
+            accepted_blocks.push(block);
+            accepted_blocks.extend(blocks_to_accept);
+        }
+
+        self.update_stats(0);
+
+        accepted_blocks
+    }
+
     /// Returns all the blocks that are currently missing and needed in order to accept suspended
     /// blocks.
     pub(crate) fn missing_blocks(&self) -> BTreeSet<BlockRef> {
         self.missing_blocks.clone()
+    }
+
+    fn update_stats(&mut self, missing_blocks: u64) {
+        let metrics = &self.context.metrics.node_metrics;
+        metrics.missing_blocks_total.inc_by(missing_blocks);
+        metrics
+            .block_manager_suspended_blocks
+            .set(self.suspended_blocks.len() as i64);
+        metrics
+            .block_manager_missing_ancestors
+            .set(self.missing_ancestors.len() as i64);
+        metrics
+            .block_manager_missing_blocks
+            .set(self.missing_blocks.len() as i64);
     }
 
     fn update_block_received_metrics(&mut self, block: &VerifiedBlock) {

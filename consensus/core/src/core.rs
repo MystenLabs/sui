@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, iter, sync::Arc, time::Duration, vec};
+use std::{collections::BTreeSet, iter, mem, sync::Arc, time::Duration, vec};
 
 #[cfg(test)]
 use consensus_config::{local_committee_and_keys, Stake};
@@ -25,7 +25,7 @@ use crate::{
         Slot, VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
-    commit::CommittedSubDag,
+    commit::{CommitAPI, CommittedSubDag, TrustedCommit},
     commit_observer::CommitObserver,
     context::Context,
     dag_state::DagState,
@@ -209,7 +209,7 @@ impl Core {
         }
 
         // Try to commit and propose, since they may not have run after the last storage write.
-        self.try_commit().unwrap();
+        self.try_commit(vec![]).unwrap();
 
         let last_proposed_block = if let Some(last_proposed_block) = self.try_propose(true).unwrap()
         {
@@ -265,7 +265,6 @@ impl Core {
             .core_add_blocks_batch_size
             .observe(blocks.len() as f64);
 
-        // Try to accept them via the block manager
         let (accepted_blocks, missing_block_refs) = self.block_manager.try_accept_blocks(blocks);
 
         if !accepted_blocks.is_empty() {
@@ -278,7 +277,7 @@ impl Core {
             );
 
             // Try to commit the new blocks if possible.
-            self.try_commit()?;
+            self.try_commit(vec![])?;
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
@@ -328,8 +327,44 @@ impl Core {
                 missing_block_refs.iter().map(|b| b.to_string()).join(", ")
             );
         }
-
         Ok(missing_block_refs)
+    }
+
+    // Adds blocks that have been synced via the commit syncer. We do a special handling here as it's possible due to GC to have pruned causal history
+    // that might not be present in earlier committed sub dags, but still needed in order to be able to advance the commits. However, this history in practice is not essential
+    // for safety (never committed as part of any sub dag) but only for liveness and even in this case only temporarily needed until commits advance.
+    pub(crate) fn add_commit(
+        &mut self,
+        commit: TrustedCommit,
+        blocks: Vec<VerifiedBlock>,
+    ) -> ConsensusResult<BTreeSet<BlockRef>> {
+        let _scope = monitored_scope("Core::add_commit");
+
+        // Just accept all the blocks - maybe do some basic timestamp validation?
+        let accepted_blocks = self.block_manager.try_accept_committed_blocks(blocks);
+
+        if !accepted_blocks.is_empty() {
+            debug!(
+                "Accepted blocks via add_commit: {}",
+                accepted_blocks
+                    .iter()
+                    .map(|b| b.reference().to_string())
+                    .join(",")
+            );
+
+            // Try to commit the new blocks. Take into account the trusted commit that has been provided.
+            self.try_commit(vec![commit])?;
+
+            // Try to propose now since there are new blocks accepted.
+            self.try_propose(false)?;
+
+            // Now set up leader timeout if needed.
+            // This needs to be called after try_commit() and try_propose(), which may
+            // have advanced the threshold clock round.
+            self.try_signal_new_round();
+        };
+
+        Ok(BTreeSet::new())
     }
 
     /// If needed, signals a new clock round and sets up leader timeout.
@@ -391,7 +426,7 @@ impl Core {
             fail_point!("consensus-after-propose");
 
             // The new block may help commit.
-            self.try_commit()?;
+            self.try_commit(vec![])?;
             return Ok(Some(extended_block.block));
         }
         Ok(None)
@@ -616,8 +651,12 @@ impl Core {
         })
     }
 
-    /// Runs commit rule to attempt to commit additional blocks from the DAG.
-    fn try_commit(&mut self) -> ConsensusResult<Vec<CommittedSubDag>> {
+    /// Runs commit rule to attempt to commit additional blocks from the DAG. If any `synced_commits` are provided, then
+    /// it will attempt to commit those first before trying to commit any further leaders.
+    fn try_commit(
+        &mut self,
+        mut synced_commits: Vec<TrustedCommit>,
+    ) -> ConsensusResult<Vec<CommittedSubDag>> {
         let _s = self
             .context
             .metrics
@@ -625,6 +664,13 @@ impl Core {
             .scope_processing_time
             .with_label_values(&["Core::try_commit"])
             .start_timer();
+
+        if !synced_commits.is_empty() {
+            info!(
+                "Will try to commit synced commits first : {:?}",
+                synced_commits
+            );
+        }
 
         let mut committed_sub_dags = Vec::new();
         // TODO: Add optimization to abort early without quorum for a round.
@@ -636,8 +682,9 @@ impl Core {
             let mut commits_until_update = self
                 .leader_schedule
                 .commits_until_leader_schedule_update(self.dag_state.clone());
+            let last_commit_index = self.dag_state.read().last_commit_index();
+
             if commits_until_update == 0 {
-                let last_commit_index = self.dag_state.read().last_commit_index();
                 tracing::info!(
                     "Leader schedule change triggered at commit index {last_commit_index}"
                 );
@@ -669,29 +716,80 @@ impl Core {
             }
             assert!(commits_until_update > 0);
 
-            // TODO: limit commits by commits_until_update, which may be needed when leader schedule length
-            // is reduced.
-            let decided_leaders = self.committer.try_decide(self.last_decided_leader);
+            // If there are synced committed leaders, check that the first synced committed leader which is higher than the last decided one has not gaps.
+            while !synced_commits.is_empty() {
+                let synced_commit = synced_commits
+                    .first()
+                    .expect("Synced commits should not be empty");
+                if synced_commit.index() <= last_commit_index {
+                    info!("Skip commit for index {} as it is already committed with last commit index {}", synced_commit.index(), last_commit_index);
+                    synced_commits.remove(0);
+                } else {
+                    // Make sure that the first we do find is the next one in line and there is no gap.
+                    if synced_commit.index() != last_commit_index + 1 {
+                        panic!("Gap found between the synced commits and the last committed index. Expected next commit index to be {}, but found {}", last_commit_index + 1, synced_commit.index());
+                    }
 
-            let Some(last_decided) = decided_leaders.last().cloned() else {
-                break;
-            };
-            tracing::debug!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", decided_leaders.len());
+                    // now break as we want to process the rest of the committed leaders
+                    break;
+                }
+            }
 
-            let mut sequenced_leaders = decided_leaders
-                .into_iter()
-                .filter_map(|leader| leader.into_committed_block())
-                .collect::<Vec<_>>();
+            // If the synced_commits is not empty, then we should process them first and then try to decide any further leaders.
+            let sequenced_leaders = if !synced_commits.is_empty() {
+                // We keep only the number of leaders that can be committed before the next leader schedule change.
+                let to_commit = if synced_commits.len() >= commits_until_update {
+                    // Now keep only the leaders that can be committed before the next leader schedule change, and just leave the rest so we can process them in the next iteration.
+                    synced_commits
+                        .drain(..commits_until_update)
+                        .collect::<Vec<_>>()
+                } else {
+                    // Otherwise just take all of them and leave the `synced_commits` empty.
+                    mem::take(&mut synced_commits)
+                };
 
-            // If the sequenced leaders are truncated to fit the leader schedule, use the last sequenced leader
-            // as the last decided leader. Otherwise, use the last decided leader from try_commit().
-            let sequenced_leaders = if sequenced_leaders.len() >= commits_until_update {
-                let _ = sequenced_leaders.split_off(commits_until_update);
+                let dag_state = self.dag_state.read();
+                let sequenced_leaders = to_commit
+                    .into_iter()
+                    .map(|commit| dag_state.get_block(&commit.leader()).unwrap())
+                    .collect::<Vec<_>>();
+
+                tracing::info!(
+                    "Decided {} synced leaders: {}",
+                    sequenced_leaders.len(),
+                    sequenced_leaders
+                        .iter()
+                        .map(|b| b.reference().to_string())
+                        .join(",")
+                );
+
                 self.last_decided_leader = sequenced_leaders.last().unwrap().slot();
                 sequenced_leaders
             } else {
-                self.last_decided_leader = last_decided.slot();
-                sequenced_leaders
+                // TODO: limit commits by commits_until_update, which may be needed when leader schedule length
+                // is reduced.
+                let decided_leaders = self.committer.try_decide(self.last_decided_leader);
+
+                let Some(last_decided) = decided_leaders.last().cloned() else {
+                    break;
+                };
+                tracing::debug!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", decided_leaders.len());
+
+                let mut sequenced_leaders = decided_leaders
+                    .into_iter()
+                    .filter_map(|leader| leader.into_committed_block())
+                    .collect::<Vec<_>>();
+
+                // If the sequenced leaders are truncated to fit the leader schedule, use the last sequenced leader
+                // as the last decided leader. Otherwise, use the last decided leader from try_commit().
+                if sequenced_leaders.len() >= commits_until_update {
+                    let _ = sequenced_leaders.split_off(commits_until_update);
+                    self.last_decided_leader = sequenced_leaders.last().unwrap().slot();
+                    sequenced_leaders
+                } else {
+                    self.last_decided_leader = last_decided.slot();
+                    sequenced_leaders
+                }
             };
 
             self.context
@@ -1304,7 +1402,6 @@ mod test {
     use crate::{
         block::{genesis_blocks, TestBlock},
         block_verifier::NoopBlockVerifier,
-        commit::CommitAPI as _,
         leader_scoring::ReputationScores,
         storage::{mem_store::MemStore, Store, WriteBatch},
         test_dag_builder::DagBuilder,
@@ -1541,7 +1638,7 @@ mod test {
         }
 
         // Run commit rule.
-        core.try_commit().ok();
+        core.try_commit(vec![]).ok();
         let last_commit = store
             .read_last_commit()
             .unwrap()

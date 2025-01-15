@@ -90,7 +90,7 @@ pub(crate) struct CommitSyncer<C: NetworkClient> {
     // Additional ranges of commits to fetch.
     pending_fetches: BTreeSet<CommitRange>,
     // Fetched commits and blocks by commit range.
-    fetched_ranges: BTreeMap<CommitRange, Vec<VerifiedBlock>>,
+    fetched_ranges: BTreeMap<CommitRange, (Vec<TrustedCommit>, Vec<VerifiedBlock>)>,
     // Highest commit index among inflight and pending fetches.
     // Used to determine the start of new ranges to be fetched.
     highest_scheduled_index: Option<CommitIndex>,
@@ -100,6 +100,7 @@ pub(crate) struct CommitSyncer<C: NetworkClient> {
     // The commit index that is the max of highest local commit index and commit index inflight to Core.
     // Used to determine if fetched blocks can be sent to Core without gaps.
     synced_commit_index: CommitIndex,
+    last_processed_commit: Option<TrustedCommit>,
 }
 
 impl<C: NetworkClient> CommitSyncer<C> {
@@ -130,6 +131,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             highest_scheduled_index: None,
             highest_fetched_commit_index: 0,
             synced_commit_index,
+            last_processed_commit: None,
         }
     }
 
@@ -271,13 +273,15 @@ impl<C: NetworkClient> CommitSyncer<C> {
         // Only add new blocks if at least some of them are not already synced.
         if self.synced_commit_index < commit_end {
             self.fetched_ranges
-                .insert((commit_start..=commit_end).into(), blocks);
+                .insert((commit_start..=commit_end).into(), (commits, blocks));
         }
         // Try to process as many fetched blocks as possible.
-        while let Some((fetched_commit_range, _blocks)) = self.fetched_ranges.first_key_value() {
+        while let Some((fetched_commit_range, (_commits, _blocks))) =
+            self.fetched_ranges.first_key_value()
+        {
             // Only pop fetched_ranges if there is no gap with blocks already synced.
             // Note: start, end and synced_commit_index are all inclusive.
-            let (fetched_commit_range, blocks) =
+            let (fetched_commit_range, (commits, blocks)) =
                 if fetched_commit_range.start() <= self.synced_commit_index + 1 {
                     self.fetched_ranges.pop_first().unwrap()
                 } else {
@@ -296,24 +300,66 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 fetched_commit_range,
                 blocks.iter().map(|b| b.reference().to_string()).join(","),
             );
-            // If core thread cannot handle the incoming blocks, it is ok to block here.
-            // Also it is possible to have missing ancestors because an equivocating validator
-            // may produce blocks that are not included in commits but are ancestors to other blocks.
-            // Synchronizer is needed to fill in the missing ancestors in this case.
-            match self.inner.core_thread_dispatcher.add_blocks(blocks).await {
-                Ok(missing) => {
-                    if !missing.is_empty() {
-                        warn!(
-                            "Fetched blocks have missing ancestors: {:?} for commit range {:?}",
-                            missing, fetched_commit_range
-                        );
+
+            // Identify the blocks to include according to the commits
+            let mut blocks_map = BTreeMap::new();
+            for block in blocks {
+                blocks_map.insert(block.reference(), block);
+            }
+
+            let mut commits_with_blocks = Vec::new();
+            for commit in commits {
+                let mut blocks = Vec::new();
+                for block_ref in commit.blocks() {
+                    let block = blocks_map.remove(block_ref).expect("Block should exist");
+                    blocks.push(block);
+                }
+                commits_with_blocks.push((commit, blocks));
+            }
+
+            for (commit, blocks) in commits_with_blocks {
+                // Find the last commit if exists. If not it's ok.
+                let last_committed_leader = self.last_processed_commit.as_ref().map(|c| c.leader());
+
+                debug!(
+                    "Will process certified blocks with leader{:?}: {:?}",
+                    last_committed_leader,
+                    blocks.iter().map(|b| b.reference().to_string()).join(","),
+                );
+
+                // If core thread cannot handle the incoming blocks, it is ok to block here.
+                // Also it is possible to have missing ancestors because an equivocating validator
+                // may produce blocks that are not included in commits but are ancestors to other blocks.
+                // Synchronizer is needed to fill in the missing ancestors in this case.
+                match self
+                    .inner
+                    .core_thread_dispatcher
+                    .add_commit(commit.clone(), blocks)
+                    .await
+                {
+                    Ok(missing) => {
+                        if !missing.is_empty() {
+                            warn!(
+                                "Fetched blocks have missing ancestors: {:?} for commit range {:?}",
+                                missing, fetched_commit_range
+                            );
+                        }
                     }
-                }
-                Err(e) => {
-                    info!("Failed to add blocks, shutting down: {}", e);
-                    return;
-                }
-            };
+                    Err(e) => {
+                        info!("Failed to add blocks, shutting down: {}", e);
+                        return;
+                    }
+                };
+
+                info!(
+                    "Processed synced commit {} with previous leader {:?}.",
+                    commit.index(),
+                    last_committed_leader
+                );
+
+                // Every time we finish processing we update the last processed committed leader
+                self.last_processed_commit = Some(commit);
+            }
             // Once commits and blocks are sent to Core, ratchet up synced_commit_index
             self.synced_commit_index = self.synced_commit_index.max(fetched_commit_range.end());
         }
@@ -629,7 +675,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
     }
 
     #[cfg(test)]
-    fn fetched_ranges(&self) -> BTreeMap<CommitRange, Vec<VerifiedBlock>> {
+    fn fetched_ranges(&self) -> BTreeMap<CommitRange, (Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
         self.fetched_ranges.clone()
     }
 
