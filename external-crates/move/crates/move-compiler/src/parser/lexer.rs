@@ -489,14 +489,9 @@ impl<'input> Lexer<'input> {
         Ok((first, second))
     }
 
-    // Matches the doc comments after the last token (or the beginning of the file) to the position
-    // of the current token. This moves the comments out of `doc_comments` and
-    // into `matched_doc_comments`. At the end of parsing, if `doc_comments` is not empty, errors
-    // for stale doc comments will be produced.
-    //
-    // Calling this function during parsing effectively marks a valid point for documentation
-    // comments. The documentation comments are not stored in the AST, but can be retrieved by
-    // using the start position of an item as an index into `matched_doc_comments`.
+    // Takes the doc comment of the current token, if there is one. It modifies the lexer state to
+    // and removes the doc comment, so this should be used just prior to `advance`, i.e. it should
+    // not be used with peek or lookahead.
     pub fn take_doc_comment(&mut self) -> Option<(u32, u32, String)> {
         self.current_doc_comment.take()
     }
