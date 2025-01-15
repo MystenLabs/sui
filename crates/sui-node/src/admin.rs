@@ -80,6 +80,7 @@ const NODE_CONFIG: &str = "/node-config";
 const RANDOMNESS_PARTIAL_SIGS_ROUTE: &str = "/randomness-partial-sigs";
 const RANDOMNESS_INJECT_PARTIAL_SIGS_ROUTE: &str = "/randomness-inject-partial-sigs";
 const RANDOMNESS_INJECT_FULL_SIG_ROUTE: &str = "/randomness-inject-full-sig";
+const RECONFIGURE_TRAFFIC_CONTROL: &str = "/reconfigure-traffic-control";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -118,6 +119,10 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, tracing_handle: Tra
         .route(
             RANDOMNESS_INJECT_FULL_SIG_ROUTE,
             post(randomness_inject_full_sig),
+        )
+        .route(
+            RECONFIGURE_TRAFFIC_CONTROL,
+            post(reconfigure_traffic_control),
         )
         .with_state(Arc::new(app_state));
 
@@ -440,6 +445,32 @@ async fn randomness_inject_full_sig(
     match rx_result.await {
         Ok(Ok(())) => (StatusCode::OK, "full signature injected\n".to_string()),
         Ok(Err(e)) => (StatusCode::BAD_REQUEST, e.to_string()),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct TrafficControlConfig {
+    error_threshold: Option<u64>,
+    spam_threshold: Option<u64>,
+    dry_run: Option<bool>,
+}
+
+async fn reconfigure_traffic_control(
+    State(state): State<Arc<AppState>>,
+    args: Query<TrafficControlConfig>,
+) -> (StatusCode, String) {
+    let Query(TrafficControlConfig {
+        error_threshold,
+        spam_threshold,
+        dry_run,
+    }) = args;
+    match state
+        .node
+        .state()
+        .reconfigure_traffic_control(error_threshold, spam_threshold, dry_run)
+    {
+        Ok(()) => (StatusCode::OK, "traffic control configured\n".to_string()),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     }
 }
