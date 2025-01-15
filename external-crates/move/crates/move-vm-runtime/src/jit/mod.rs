@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod execution;
+pub mod optimization;
 
 use crate::{
     jit::execution::ast::Package, natives::functions::NativeFunctions,

@@ -648,20 +648,23 @@ fn bytecode(context: &mut FunctionContext, bytecode: &FF::Bytecode) -> PartialVM
         FF::Bytecode::CopyLoc(ndx) => Bytecode::CopyLoc(*ndx),
         FF::Bytecode::MoveLoc(ndx) => Bytecode::MoveLoc(*ndx),
         FF::Bytecode::StLoc(ndx) => Bytecode::StLoc(*ndx),
-        FF::Bytecode::Pack(ndx) => Bytecode::Pack(*ndx),
-        FF::Bytecode::PackGeneric(ndx) => Bytecode::PackGeneric(*ndx),
-        FF::Bytecode::Unpack(ndx) => Bytecode::Unpack(*ndx),
-        FF::Bytecode::UnpackGeneric(ndx) => Bytecode::UnpackGeneric(*ndx),
         FF::Bytecode::ReadRef => Bytecode::ReadRef,
         FF::Bytecode::WriteRef => Bytecode::WriteRef,
         FF::Bytecode::FreezeRef => Bytecode::FreezeRef,
         FF::Bytecode::MutBorrowLoc(ndx) => Bytecode::MutBorrowLoc(*ndx),
         FF::Bytecode::ImmBorrowLoc(ndx) => Bytecode::ImmBorrowLoc(*ndx),
+
+        // Structs and Fields
+        FF::Bytecode::Pack(ndx) => Bytecode::Pack(*ndx),
+        FF::Bytecode::PackGeneric(ndx) => Bytecode::PackGeneric(*ndx),
+        FF::Bytecode::Unpack(ndx) => Bytecode::Unpack(*ndx),
+        FF::Bytecode::UnpackGeneric(ndx) => Bytecode::UnpackGeneric(*ndx),
         FF::Bytecode::MutBorrowField(ndx) => Bytecode::MutBorrowField(*ndx),
         FF::Bytecode::MutBorrowFieldGeneric(ndx) => Bytecode::MutBorrowFieldGeneric(*ndx),
         FF::Bytecode::ImmBorrowField(ndx) => Bytecode::ImmBorrowField(*ndx),
         FF::Bytecode::ImmBorrowFieldGeneric(ndx) => Bytecode::ImmBorrowFieldGeneric(*ndx),
 
+        // Math Operations
         FF::Bytecode::Add => Bytecode::Add,
         FF::Bytecode::Sub => Bytecode::Sub,
         FF::Bytecode::Mul => Bytecode::Mul,
@@ -724,7 +727,6 @@ fn bytecode(context: &mut FunctionContext, bytecode: &FF::Bytecode) -> PartialVM
             check_vector_type(context, si)?;
             Bytecode::VecSwap(*si)
         }
-        // Structs and Fields
 
         // Enums and Variants
         FF::Bytecode::PackVariant(ndx) => Bytecode::PackVariant(*ndx),

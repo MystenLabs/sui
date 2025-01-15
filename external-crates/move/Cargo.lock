@@ -2382,6 +2382,7 @@ dependencies = [
  "hex",
  "lasso",
  "memory-stats",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-compiler",
