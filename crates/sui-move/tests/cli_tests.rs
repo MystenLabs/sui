@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use insta_cmd::assert_cmd_snapshot;
+use insta_cmd::{assert_cmd_snapshot, get_cargo_bin};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -21,11 +21,12 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     // copy files into temporary directory
     let srcdir = path.parent().unwrap();
     let tmpdir = tempfile::tempdir()?;
+    let sandbox = tmpdir.path().join("sandbox");
 
     for entry in WalkDir::new(srcdir) {
         let entry = entry.unwrap();
         let srcfile = entry.path();
-        let dstfile = tmpdir.path().join(srcfile.strip_prefix(srcdir)?);
+        let dstfile = sandbox.join(srcfile.strip_prefix(srcdir)?);
         if srcfile.is_dir() {
             fs::create_dir_all(dstfile)?;
         } else {
@@ -33,12 +34,21 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
         }
     }
 
+    // Note: we need to create a symlink instead of just adding the bin dir to the path to prevent
+    // local pathnames from leaking into the snapshot files.
+    std::os::unix::fs::symlink(
+        get_cargo_bin("sui-move").parent().unwrap(),
+        tmpdir.path().join("bin"),
+    )?;
+
     // set up command
     let mut shell = Command::new("bash");
     shell
-        .env("PATH", format!("/bin:/usr/bin:{}", cargo_bin_path()))
-        .current_dir(tmpdir.path())
-        .arg(path.canonicalize()?);
+        .env("PATH", "/bin:/usr/bin:../bin")
+        .current_dir(sandbox)
+        .arg(path.file_name().unwrap());
+
+    println!("{shell:?}");
 
     // run it!
     let snapshot_name: String = path
