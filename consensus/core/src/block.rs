@@ -638,6 +638,38 @@ impl fmt::Debug for VerifiedBlock {
     }
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct FilteredBlock {
+    pub block: VerifiedBlock,
+    pub excluded_ancestors: Vec<BlockRef>,
+}
+
+impl From<FilteredBlock> for StreamBlock {
+    fn from(filtered_block: FilteredBlock) -> Self {
+        Self {
+            block: filtered_block.block.serialized().clone(),
+            excluded_ancestors: filtered_block
+                .excluded_ancestors
+                .iter()
+                .filter_map(|r| match bcs::to_bytes(r) {
+                    Ok(serialized) => Some(serialized),
+                    Err(e) => {
+                        tracing::debug!("Failed to serialize block ref {:?}: {e:?}", r);
+                        None
+                    }
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) struct StreamBlock {
+    pub block: Bytes,
+    // Serialized BlockRefs that are excluded from the blocks ancestors.
+    pub excluded_ancestors: Vec<Vec<u8>>,
+}
+
 /// Generates the genesis blocks for the current Committee.
 /// The blocks are returned in authority index order.
 pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {

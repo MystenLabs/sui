@@ -15,7 +15,7 @@ use super::{
     NetworkClient, NetworkManager,
 };
 use crate::{
-    block::{TestBlock, VerifiedBlock},
+    block::{StreamBlock, TestBlock, VerifiedBlock},
     context::Context,
     Round,
 };
@@ -52,8 +52,11 @@ impl ManagerBuilder for TonicManagerBuilder {
     }
 }
 
-fn block_for_round(round: Round) -> Bytes {
-    Bytes::from(vec![round as u8; 16])
+fn block_for_round(round: Round) -> StreamBlock {
+    StreamBlock {
+        block: Bytes::from(vec![round as u8; 16]),
+        excluded_ancestors: vec![],
+    }
 }
 
 fn service_with_own_blocks() -> Arc<Mutex<TestService>> {
@@ -76,6 +79,8 @@ fn service_with_own_blocks() -> Arc<Mutex<TestService>> {
 async fn send_and_receive_blocks_with_auth(
     #[values(AnemoManagerBuilder {}, TonicManagerBuilder {})] manager_builder: impl ManagerBuilder,
 ) {
+    use crate::block::StreamBlock;
+
     let (context, keys) = Context::new_for_test(4);
 
     let context_0 = Arc::new(
@@ -125,13 +130,19 @@ async fn send_and_receive_blocks_with_auth(
     assert_eq!(service_0.lock().handle_send_block[0].0.value(), 1);
     assert_eq!(
         service_0.lock().handle_send_block[0].1,
-        test_block_1.serialized(),
+        StreamBlock {
+            block: test_block_1.serialized().clone(),
+            excluded_ancestors: vec![],
+        },
     );
     assert_eq!(service_1.lock().handle_send_block.len(), 1);
     assert_eq!(service_1.lock().handle_send_block[0].0.value(), 0);
     assert_eq!(
         service_1.lock().handle_send_block[0].1,
-        test_block_0.serialized(),
+        StreamBlock {
+            block: test_block_0.serialized().clone(),
+            excluded_ancestors: vec![],
+        },
     );
 
     // `Committee` is generated with the same random seed in Context::new_for_test(),

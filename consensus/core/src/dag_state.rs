@@ -611,13 +611,15 @@ impl DagState {
     /// The method is guaranteed to return results only when the `end_round` is not earlier of the
     /// available cached data for each authority (evicted round + 1), otherwise the method will panic.
     /// It's the caller's responsibility to ensure that is not requesting for earlier rounds.
-    /// In case of equivocation for an authority's last slot only one block will be returned (the last in order).
+    /// In case of equivocation for an authority's last slot, one block will be returned (the last in order)
+    /// and the other equivocating blocks will be returned.
     pub(crate) fn get_last_cached_block_per_authority(
         &self,
         end_round: Round,
-    ) -> Vec<VerifiedBlock> {
-        // init with the genesis blocks as fallback
+    ) -> Vec<(VerifiedBlock, Vec<BlockRef>)> {
+        // Initialize with the genesis blocks as fallback
         let mut blocks = self.genesis.values().cloned().collect::<Vec<_>>();
+        let mut equivocating_blocks = vec![vec![]; self.context.committee.size()];
 
         if end_round == GENESIS_ROUND {
             panic!(
@@ -626,7 +628,7 @@ impl DagState {
         }
 
         if end_round == GENESIS_ROUND + 1 {
-            return blocks;
+            return blocks.into_iter().map(|b| (b, vec![])).collect();
         }
 
         for (authority_index, block_refs) in self.recent_refs_by_authority.iter().enumerate() {
@@ -641,27 +643,42 @@ impl DagState {
                 panic!("Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}", );
             }
 
-            if let Some(block_ref) = block_refs
-                .range((
-                    Included(BlockRef::new(
-                        last_evicted_round + 1,
-                        authority_index,
-                        BlockDigest::MIN,
-                    )),
-                    Excluded(BlockRef::new(end_round, authority_index, BlockDigest::MIN)),
-                ))
-                .next_back()
-            {
+            let mut last_block_ref = None;
+
+            let mut block_iter = block_refs.range((
+                Included(BlockRef::new(
+                    last_evicted_round + 1,
+                    authority_index,
+                    BlockDigest::MIN,
+                )),
+                Excluded(BlockRef::new(end_round, authority_index, BlockDigest::MIN)),
+            ));
+
+            if let Some(block_ref) = block_iter.next_back() {
+                last_block_ref = Some(*block_ref);
+            }
+
+            if let Some(last_ref) = last_block_ref {
                 let block_info = self
                     .recent_blocks
-                    .get(block_ref)
+                    .get(&last_ref)
                     .expect("Block should exist in recent blocks");
 
                 blocks[authority_index] = block_info.block.clone();
+
+                while let Some(block_ref) = block_iter.next_back() {
+                    if block_ref.round == last_ref.round {
+                        if block_ref != &last_ref {
+                            equivocating_blocks[authority_index].push(*block_ref);
+                        }
+                    } else {
+                        break;
+                    }
+                }
             }
         }
 
-        blocks.into_iter().collect()
+        blocks.into_iter().zip(equivocating_blocks).collect()
     }
 
     /// Checks whether a block exists in the slot. The method checks only against the cached data.
@@ -2215,7 +2232,7 @@ mod test {
         // THEN
         let last_blocks = dag_state.get_last_cached_block_per_authority(end_round);
         assert_eq!(
-            last_blocks.iter().map(|b| b.round()).collect::<Vec<_>>(),
+            last_blocks.iter().map(|b| b.0.round()).collect::<Vec<_>>(),
             expected_rounds
         );
 
@@ -2264,7 +2281,7 @@ mod test {
         // THEN
         let last_blocks = dag_state.get_last_cached_block_per_authority(end_round);
         assert_eq!(
-            last_blocks.iter().map(|b| b.round()).collect::<Vec<_>>(),
+            last_blocks.iter().map(|b| b.0.round()).collect::<Vec<_>>(),
             expected_rounds
         );
 

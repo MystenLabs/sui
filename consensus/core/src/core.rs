@@ -21,8 +21,8 @@ use tracing::{debug, info, trace, warn};
 use crate::{
     ancestor::{AncestorState, AncestorStateManager},
     block::{
-        Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock, Slot,
-        VerifiedBlock, GENESIS_ROUND,
+        Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, FilteredBlock, Round, SignedBlock,
+        Slot, VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
     commit::CommittedSubDag,
@@ -198,7 +198,7 @@ impl Core {
             .get_last_cached_block_per_authority(Round::MAX);
         let max_ancestor_timestamp = ancestor_blocks
             .iter()
-            .fold(0, |ts, b| ts.max(b.timestamp_ms()));
+            .fold(0, |ts, (b, _)| ts.max(b.timestamp_ms()));
         let wait_ms = max_ancestor_timestamp.saturating_sub(self.context.clock.timestamp_utc_ms());
         if wait_ms > 0 {
             warn!(
@@ -222,7 +222,12 @@ impl Core {
             }
 
             // if no new block proposed then just re-broadcast the last proposed one to ensure liveness.
-            self.signals.new_block(last_proposed_block.clone()).unwrap();
+            self.signals
+                .new_block(FilteredBlock {
+                    block: last_proposed_block.clone(),
+                    excluded_ancestors: vec![],
+                })
+                .unwrap();
             last_proposed_block
         };
 
@@ -348,21 +353,21 @@ impl Core {
         if !self.should_propose() {
             return Ok(None);
         }
-        if let Some(block) = self.try_new_block(force) {
-            self.signals.new_block(block.clone())?;
+        if let Some(filtered_block) = self.try_new_block(force) {
+            self.signals.new_block(filtered_block.clone())?;
 
             fail_point!("consensus-after-propose");
 
             // The new block may help commit.
             self.try_commit()?;
-            return Ok(Some(block));
+            return Ok(Some(filtered_block.block));
         }
         Ok(None)
     }
 
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
-    fn try_new_block(&mut self, force: bool) -> Option<VerifiedBlock> {
+    fn try_new_block(&mut self, force: bool) -> Option<FilteredBlock> {
         let _s = self
             .context
             .metrics
@@ -404,7 +409,7 @@ impl Core {
 
         // Determine the ancestors to be included in proposal.
         // Smart ancestor selection requires distributed scoring to be enabled.
-        let ancestors = if self
+        let (ancestors, excluded_ancestors) = if self
             .context
             .protocol_config
             .consensus_distributed_vote_scoring_strategy()
@@ -413,7 +418,8 @@ impl Core {
                 .protocol_config
                 .consensus_smart_ancestor_selection()
         {
-            let ancestors = self.smart_ancestors_to_propose(clock_round, !force);
+            let (ancestors, excluded_and_equivocating_ancestors) =
+                self.smart_ancestors_to_propose(clock_round, !force);
 
             // If we did not find enough good ancestors to propose, continue to wait before proposing.
             if ancestors.is_empty() {
@@ -423,9 +429,9 @@ impl Core {
                 );
                 return None;
             }
-            ancestors
+            (ancestors, excluded_and_equivocating_ancestors)
         } else {
-            self.ancestors_to_propose(clock_round)
+            (self.ancestors_to_propose(clock_round), vec![])
         };
 
         // Update the last included ancestor block refs
@@ -559,7 +565,10 @@ impl Core {
             .with_label_values(&[&force.to_string()])
             .inc();
 
-        Some(verified_block)
+        Some(FilteredBlock {
+            block: verified_block,
+            excluded_ancestors,
+        })
     }
 
     /// Runs commit rule to attempt to commit additional blocks from the DAG.
@@ -818,20 +827,20 @@ impl Core {
 
         // Propose only ancestors of higher rounds than what has already been proposed.
         // And always include own last proposed block first among ancestors.
-        let last_proposed_block = ancestors[self.context.own_index].clone();
+        let (last_proposed_block, _) = ancestors[self.context.own_index].clone();
         assert_eq!(last_proposed_block.author(), self.context.own_index);
         let ancestors = iter::once(last_proposed_block)
             .chain(
                 ancestors
                     .into_iter()
-                    .filter(|block| block.author() != self.context.own_index)
-                    .filter(|block| {
+                    .filter(|(block, _)| block.author() != self.context.own_index)
+                    .filter(|(block, _)| {
                         if gc_enabled && gc_round > GENESIS_ROUND {
                             return block.round() > gc_round;
                         }
                         true
                     })
-                    .flat_map(|block| {
+                    .flat_map(|(block, _)| {
                         if let Some(last_block_ref) = self.last_included_ancestors[block.author()] {
                             return (last_block_ref.round < block.round()).then_some(block);
                         }
@@ -860,7 +869,7 @@ impl Core {
         &mut self,
         clock_round: Round,
         smart_select: bool,
-    ) -> Vec<VerifiedBlock> {
+    ) -> (Vec<VerifiedBlock>, Vec<BlockRef>) {
         let node_metrics = &self.context.metrics.node_metrics;
         let _s = node_metrics
             .scope_processing_time
@@ -886,6 +895,7 @@ impl Core {
         let quorum_round = clock_round.saturating_sub(1);
 
         let mut temp_excluded_ancestors = Vec::new();
+        let mut excluded_and_equivocating_ancestors = Vec::new();
 
         // Propose only ancestors of higher rounds than what has already been proposed.
         // And always include own last proposed block first among ancestors.
@@ -895,10 +905,12 @@ impl Core {
             .chain(
                 ancestors
                     .into_iter()
-                    .filter(|ancestor| ancestor.author() != self.context.own_index)
-                    .flat_map(|ancestor| {
-
+                    .filter(|(ancestor, _)| ancestor.author() != self.context.own_index)
+                    .flat_map(|(ancestor, equivocating_ancestors)| {
                         let ancestor_state = ancestor_state_map[ancestor.author()];
+
+                        // We will never include equivocating ancestors so add them immediately
+                        excluded_and_equivocating_ancestors.extend(equivocating_ancestors);
 
                         match ancestor_state {
                             AncestorState::Include => {
@@ -934,7 +946,7 @@ impl Core {
         if smart_select && !parent_round_quorum.reached_threshold(&self.context.committee) {
             node_metrics.smart_selection_wait.inc();
             debug!("Only found {} stake of good ancestors to include for round {clock_round}, will wait for more.", parent_round_quorum.stake());
-            return vec![];
+            return (vec![], vec![]);
         }
 
         // Sort scores descending so we can include the best of the temp excluded
@@ -957,6 +969,7 @@ impl Core {
                     .with_label_values(&[block_hostname, "timeout"])
                     .inc();
             } else {
+                excluded_and_equivocating_ancestors.push(ancestor.reference());
                 excluded_ancestors.push((score, ancestor));
             }
         }
@@ -985,6 +998,7 @@ impl Core {
                     "Excluded low score ancestor {} with score {score} to propose for round {clock_round}: last included round {} >= accepted low quorum round {}",
                     ancestor.reference(), last_included_round, accepted_low_quorum_round,
                 );
+                excluded_and_equivocating_ancestors.push(ancestor.reference());
                 node_metrics
                     .excluded_proposal_ancestors_count_by_authority
                     .with_label_values(&[block_hostname])
@@ -996,6 +1010,9 @@ impl Core {
             let ancestor = if ancestor.round() == accepted_low_quorum_round {
                 ancestor.clone()
             } else {
+                // The excluded ancestor's ancestor may be included but this specific
+                // ancestor will remain excluded so we should add it to the list.
+                excluded_and_equivocating_ancestors.push(ancestor.reference());
                 // Only cached blocks need to be propagated. Committed and GC'ed blocks do not need to be propagated.
                 let Some(ancestor) = self.dag_state.read().get_last_cached_block_in_range(
                     excluded_author,
@@ -1023,12 +1040,12 @@ impl Core {
         assert!(parent_round_quorum.reached_threshold(&self.context.committee), "Fatal error, quorum not reached for parent round when proposing for round {clock_round}. Possible mismatch between DagState and Core.");
 
         info!(
-            "Included {} ancestors & excluded {} ancestors for proposal in round {clock_round}",
+            "Included {} ancestors & excluded {} low performing or equivocating ancestors for proposal in round {clock_round}",
             ancestors_to_propose.len(),
-            excluded_ancestors.len()
+            excluded_and_equivocating_ancestors.len()
         );
 
-        ancestors_to_propose
+        (ancestors_to_propose, excluded_and_equivocating_ancestors)
     }
 
     /// Checks whether all the leaders of the round exist.
@@ -1077,7 +1094,7 @@ impl Core {
 
 /// Senders of signals from Core, for outputs and events (ex new block produced).
 pub(crate) struct CoreSignals {
-    tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
+    tx_block_broadcast: broadcast::Sender<FilteredBlock>,
     new_round_sender: watch::Sender<Round>,
     context: Arc<Context>,
 }
@@ -1087,7 +1104,7 @@ impl CoreSignals {
         // Blocks buffered in broadcast channel should be roughly equal to thosed cached in dag state,
         // since the underlying blocks are ref counted so a lower buffer here will not reduce memory
         // usage significantly.
-        let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel::<VerifiedBlock>(
+        let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel::<FilteredBlock>(
             context.parameters.dag_state_cached_rounds as usize,
         );
         let (new_round_sender, new_round_receiver) = watch::channel(0);
@@ -1108,21 +1125,23 @@ impl CoreSignals {
 
     /// Sends a signal to all the waiters that a new block has been produced. The method will return
     /// true if block has reached even one subscriber, false otherwise.
-    pub(crate) fn new_block(&self, block: VerifiedBlock) -> ConsensusResult<()> {
+    pub(crate) fn new_block(&self, filtered_block: FilteredBlock) -> ConsensusResult<()> {
         // When there is only one authority in committee, it is unnecessary to broadcast
         // the block which will fail anyway without subscribers to the signal.
         if self.context.committee.size() > 1 {
-            if block.round() == GENESIS_ROUND {
+            if filtered_block.block.round() == GENESIS_ROUND {
                 debug!("Ignoring broadcasting genesis block to peers");
                 return Ok(());
             }
 
-            if let Err(err) = self.tx_block_broadcast.send(block) {
+            if let Err(err) = self.tx_block_broadcast.send(filtered_block) {
                 warn!("Couldn't broadcast the block to any receiver: {err}");
                 return Err(ConsensusError::Shutdown);
             }
         } else {
-            debug!("Did not broadcast block {block:?} to receivers as committee size is <= 1");
+            debug!(
+                "Did not broadcast block {filtered_block:?} to receivers as committee size is <= 1"
+            );
         }
         Ok(())
     }
@@ -1137,12 +1156,12 @@ impl CoreSignals {
 /// Receivers of signals from Core.
 /// Intentionally un-clonable. Comonents should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
-    rx_block_broadcast: broadcast::Receiver<VerifiedBlock>,
+    rx_block_broadcast: broadcast::Receiver<FilteredBlock>,
     new_round_receiver: watch::Receiver<Round>,
 }
 
 impl CoreSignalsReceivers {
-    pub(crate) fn block_broadcast_receiver(&self) -> broadcast::Receiver<VerifiedBlock> {
+    pub(crate) fn block_broadcast_receiver(&self) -> broadcast::Receiver<FilteredBlock> {
         self.rx_block_broadcast.resubscribe()
     }
 
@@ -1169,7 +1188,7 @@ pub(crate) fn create_cores(context: Context, authorities: Vec<Stake>) -> Vec<Cor
 pub(crate) struct CoreTextFixture {
     pub core: Core,
     pub signal_receivers: CoreSignalsReceivers,
-    pub block_receiver: broadcast::Receiver<VerifiedBlock>,
+    pub block_receiver: broadcast::Receiver<FilteredBlock>,
     #[allow(unused)]
     pub commit_receiver: UnboundedReceiver<CommittedSubDag>,
     pub store: Arc<MemStore>,
@@ -1355,8 +1374,8 @@ mod test {
             .recv()
             .await
             .expect("A block should have been created");
-        assert_eq!(proposed_block.round(), 5);
-        let ancestors = proposed_block.ancestors();
+        assert_eq!(proposed_block.block.round(), 5);
+        let ancestors = proposed_block.block.ancestors();
 
         // Only ancestors of round 4 should be included.
         assert_eq!(ancestors.len(), 4);
@@ -1478,8 +1497,8 @@ mod test {
             .recv()
             .await
             .expect("A block should have been created");
-        assert_eq!(proposed_block.round(), 4);
-        let ancestors = proposed_block.ancestors();
+        assert_eq!(proposed_block.block.round(), 4);
+        let ancestors = proposed_block.block.ancestors();
 
         assert_eq!(ancestors.len(), 4);
         for ancestor in ancestors {
@@ -1577,18 +1596,18 @@ mod test {
         }
 
         // a new block should have been created during recovery.
-        let block = block_receiver
+        let filtered_block = block_receiver
             .recv()
             .await
             .expect("A new block should have been created");
 
         // A new block created - assert the details
-        assert_eq!(block.round(), 1);
-        assert_eq!(block.author().value(), 0);
-        assert_eq!(block.ancestors().len(), 4);
+        assert_eq!(filtered_block.block.round(), 1);
+        assert_eq!(filtered_block.block.author().value(), 0);
+        assert_eq!(filtered_block.block.ancestors().len(), 4);
 
         let mut total = 0;
-        for (i, transaction) in block.transactions().iter().enumerate() {
+        for (i, transaction) in filtered_block.block.transactions().iter().enumerate() {
             total += transaction.data().len() as u64;
             let transaction: String = bcs::from_bytes(transaction.data()).unwrap();
             assert_eq!(format!("Transaction {i}"), transaction);
@@ -1598,7 +1617,7 @@ mod test {
         // genesis blocks should be referenced
         let all_genesis = genesis_blocks(context);
 
-        for ancestor in block.ancestors() {
+        for ancestor in filtered_block.block.ancestors() {
             all_genesis
                 .iter()
                 .find(|block| block.reference() == *ancestor)
@@ -2454,15 +2473,18 @@ mod test {
                 assert_eq!(new_round, round);
 
                 // Check that a new block has been proposed.
-                let block = tokio::time::timeout(
+                let filtered_block = tokio::time::timeout(
                     Duration::from_secs(1),
                     core_fixture.block_receiver.recv(),
                 )
                 .await
                 .unwrap()
                 .unwrap();
-                assert_eq!(block.round(), round);
-                assert_eq!(block.author(), core_fixture.core.context.own_index);
+                assert_eq!(filtered_block.block.round(), round);
+                assert_eq!(
+                    filtered_block.block.author(),
+                    core_fixture.core.context.own_index
+                );
 
                 // append the new block to this round blocks
                 this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
@@ -2579,15 +2601,18 @@ mod test {
                 assert_eq!(new_round, round);
 
                 // Check that a new block has been proposed.
-                let block = tokio::time::timeout(
+                let filtered_block = tokio::time::timeout(
                     Duration::from_secs(1),
                     core_fixture.block_receiver.recv(),
                 )
                 .await
                 .unwrap()
                 .unwrap();
-                assert_eq!(block.round(), round);
-                assert_eq!(block.author(), core_fixture.core.context.own_index);
+                assert_eq!(filtered_block.block.round(), round);
+                assert_eq!(
+                    filtered_block.block.author(),
+                    core_fixture.core.context.own_index
+                );
 
                 // append the new block to this round blocks
                 this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
@@ -2713,15 +2738,18 @@ mod test {
                 assert_eq!(new_round, round);
 
                 // Check that a new block has been proposed.
-                let block = tokio::time::timeout(
+                let filtered_block = tokio::time::timeout(
                     Duration::from_secs(1),
                     core_fixture.block_receiver.recv(),
                 )
                 .await
                 .unwrap()
                 .unwrap();
-                assert_eq!(block.round(), round);
-                assert_eq!(block.author(), core_fixture.core.context.own_index);
+                assert_eq!(filtered_block.block.round(), round);
+                assert_eq!(
+                    filtered_block.block.author(),
+                    core_fixture.core.context.own_index
+                );
 
                 // append the new block to this round blocks
                 this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
@@ -2865,15 +2893,18 @@ mod test {
                 assert_eq!(new_round, round);
 
                 // Check that a new block has been proposed.
-                let block = tokio::time::timeout(
+                let filtered_block = tokio::time::timeout(
                     Duration::from_secs(1),
                     core_fixture.block_receiver.recv(),
                 )
                 .await
                 .unwrap()
                 .unwrap();
-                assert_eq!(block.round(), round);
-                assert_eq!(block.author(), core_fixture.core.context.own_index);
+                assert_eq!(filtered_block.block.round(), round);
+                assert_eq!(
+                    filtered_block.block.author(),
+                    core_fixture.core.context.own_index
+                );
 
                 // append the new block to this round blocks
                 this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
@@ -2997,15 +3028,18 @@ mod test {
                 assert_eq!(new_round, round);
 
                 // Check that a new block has been proposed.
-                let block = tokio::time::timeout(
+                let filtered_block = tokio::time::timeout(
                     Duration::from_secs(1),
                     core_fixture.block_receiver.recv(),
                 )
                 .await
                 .unwrap()
                 .unwrap();
-                assert_eq!(block.round(), round);
-                assert_eq!(block.author(), core_fixture.core.context.own_index);
+                assert_eq!(filtered_block.block.round(), round);
+                assert_eq!(
+                    filtered_block.block.author(),
+                    core_fixture.core.context.own_index
+                );
 
                 // append the new block to this round blocks
                 this_round_blocks.push(core_fixture.core.last_proposed_block().clone());

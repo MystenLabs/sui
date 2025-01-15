@@ -38,7 +38,7 @@ use super::{
     BlockStream, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
-    block::{BlockRef, VerifiedBlock},
+    block::{BlockRef, StreamBlock, VerifiedBlock},
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
@@ -297,8 +297,12 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
             )
         })?;
         let block = request.into_body().block;
+        let stream_block = StreamBlock {
+            block,
+            excluded_ancestors: vec![],
+        };
         self.service
-            .handle_send_block(index, block)
+            .handle_send_block(index, stream_block)
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(

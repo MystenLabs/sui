@@ -24,7 +24,7 @@ use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use futures::Stream;
 
 use crate::{
-    block::{BlockRef, VerifiedBlock},
+    block::{BlockRef, StreamBlock, VerifiedBlock},
     commit::{CommitRange, TrustedCommit},
     context::Context,
     error::ConsensusResult,
@@ -54,8 +54,8 @@ pub(crate) mod test_network;
 pub(crate) mod tonic_network;
 mod tonic_tls;
 
-/// A stream of serialized blocks returned over the network.
-pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = Bytes> + Send>>;
+/// A stream of serialized filtered blocks returned over the network.
+pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = StreamBlock> + Send>>;
 
 /// Network client for communicating with peers.
 ///
@@ -132,7 +132,13 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
     /// Handles the block sent from the peer via either unicast RPC or subscription stream.
     /// Peer value can be trusted to be a valid authority index.
     /// But serialized_block must be verified before its contents are trusted.
-    async fn handle_send_block(&self, peer: AuthorityIndex, block: Bytes) -> ConsensusResult<()>;
+    /// Excluded ancestors are also included as part of an effort to further propagate
+    /// blocks to peers despite the current exclusion.
+    async fn handle_send_block(
+        &self,
+        peer: AuthorityIndex,
+        block: StreamBlock,
+    ) -> ConsensusResult<()>;
 
     /// Handles the subscription request from the peer.
     /// A stream of newly proposed blocks is returned to the peer.
