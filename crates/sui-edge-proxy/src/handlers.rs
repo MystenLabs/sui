@@ -12,8 +12,7 @@ use axum::{
 };
 use bytes::Bytes;
 use rand::Rng;
-use std::{sync::Arc, time::Instant};
-use tokio::sync::Mutex;
+use std::time::Instant;
 use tracing::{debug, warn};
 
 #[derive(Debug)]
@@ -38,7 +37,6 @@ pub struct AppState {
     execution_peer: PeerConfig,
     metrics: AppMetrics,
     logging_config: LoggingConfig,
-    log_file_lock: Arc<Mutex<()>>,
 }
 
 impl AppState {
@@ -55,7 +53,6 @@ impl AppState {
             execution_peer,
             metrics,
             logging_config,
-            log_file_lock: Arc::new(Mutex::new(())),
         }
     }
 }
@@ -213,29 +210,16 @@ async fn proxy_request(
         }
     }
 
-    // Only log read requests, check sampling
     if matches!(peer_type, PeerRole::Read) {
         let rate = state.logging_config.read_request_sample_rate;
         if rand::thread_rng().gen::<f64>() < rate {
-            let log_entry = format!(
-                "HEADERS: {:?}\nBODY: {:?}\nPEER_TYPE: {:?}\n\n",
-                parts.headers, body_bytes, peer_type
+            tracing::info!(
+                headers = ?parts.headers,
+                body = ?body_bytes,
+                peer_type = ?peer_type,
+                "Sampled read request"
             );
-
-            let _guard = state.log_file_lock.lock().await;
-            if let Err(e) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&state.logging_config.log_file_path)
-                .and_then(|mut file| {
-                    use std::io::Write;
-                    file.write_all(log_entry.as_bytes())
-                })
-            {
-                warn!("Failed to write read request log: {}", e);
-            }
         }
     }
-
     Ok(resp)
 }

@@ -10,4 +10,3 @@ read-peer:
 
 logging:
   read-request-sample-rate: 1.0
-  log-file-path: "sui-read-requests.log"
