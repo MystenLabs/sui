@@ -115,6 +115,31 @@ async fn proxy_request(
         body_bytes.len(),
         peer_type
     );
+    if matches!(peer_type, PeerRole::Read) {
+        let user_agent = parts
+            .headers
+            .get("user-agent")
+            .and_then(|h| h.to_str().ok());
+        let is_health_check = matches!(user_agent, Some(ua) if ua.contains("GoogleHC/1.0"));
+        let is_grafana_agent = matches!(user_agent, Some(ua) if ua.contains("GrafanaAgent"));
+        let is_grpc = parts
+            .headers
+            .get("content-type")
+            .and_then(|h| h.to_str().ok())
+            .map(|ct| ct.contains("grpc"))
+            .unwrap_or(false);
+
+        let should_sample = !is_health_check && !is_grafana_agent && !is_grpc;
+        let rate = state.logging_config.read_request_sample_rate;
+        if should_sample && rand::thread_rng().gen::<f64>() < rate {
+            tracing::info!(
+                headers = ?parts.headers,
+                body = ?body_bytes,
+                peer_type = ?peer_type,
+                "Sampled read request"
+            );
+        }
+    }
 
     let metrics = &state.metrics;
     let peer_type_str = peer_type.as_str();
@@ -210,16 +235,5 @@ async fn proxy_request(
         }
     }
 
-    if matches!(peer_type, PeerRole::Read) {
-        let rate = state.logging_config.read_request_sample_rate;
-        if rand::thread_rng().gen::<f64>() < rate {
-            tracing::info!(
-                headers = ?parts.headers,
-                body = ?body_bytes,
-                peer_type = ?peer_type,
-                "Sampled read request"
-            );
-        }
-    }
     Ok(resp)
 }
