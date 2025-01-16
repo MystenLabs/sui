@@ -641,6 +641,8 @@ impl fmt::Debug for VerifiedBlock {
     }
 }
 
+/// Block extended additional information which do not need to be certified, including:
+/// - Local blocks that are excluded from the block's ancestors.
 #[derive(Clone, Debug)]
 pub(crate) struct ExtendedBlock {
     pub block: VerifiedBlock,
