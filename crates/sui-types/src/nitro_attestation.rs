@@ -480,7 +480,8 @@ impl AttestationDocument {
         {
             Some((_, ciborium::value::Value::Map(pcr_map))) => {
                 let mut pcr_vec = Vec::new();
-                for i in 0..pcr_map.len() {
+                // Valid PCR indices are 0, 1, 2, 3, 4, 8 for AWS.
+                for i in [0, 1, 2, 3, 4, 8] {
                     if let Some((_, ciborium::value::Value::Bytes(val))) = pcr_map.iter().find(
                         |(k, _)| matches!(k, ciborium::value::Value::Integer(n) if *n == i.into()),
                     ) {
