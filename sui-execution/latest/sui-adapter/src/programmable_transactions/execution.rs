@@ -46,6 +46,7 @@ mod checked {
             RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
         },
         coin::Coin,
+        digests::TransactionDigest,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},
         id::{RESOLVED_SUI_ID, UID},
         metrics::LimitsMetrics,
@@ -789,12 +790,31 @@ mod checked {
         tx_context_kind: TxContextKind,
         mut serialized_arguments: Vec<Vec<u8>>,
     ) -> Result<SerializedReturnValues, ExecutionError> {
+        let is_txctx_native = context.protocol_config.transaction_context_native();
+
         match tx_context_kind {
             TxContextKind::None => (),
             TxContextKind::Mutable | TxContextKind::Immutable => {
-                serialized_arguments.push(context.tx_context.to_vec());
+                // build a TxContext for Move.
+                // When TxContext is native, it just pushes a zero'd out value
+                let tx_context = if is_txctx_native {
+                    // zero out TxContext move value. TxContext API is native
+                    TxContext::new_from_components(
+                        &SuiAddress::ZERO,
+                        &TransactionDigest::ZERO,
+                        &0u64,
+                        0u64,
+                    )
+                    .to_vec()
+                } else {
+                    // legacy TxContext model. Copied on every move call
+                    context.tx_context.to_vec()
+                };
+                // write the TxContext value either in native or non native mode
+                serialized_arguments.push(tx_context);
             }
         }
+
         // script visibility checked manually for entry points
         let mut result = context
             .execute_function_bypass_visibility(
@@ -813,15 +833,27 @@ mod checked {
         // Move VM (e.g. to account for the number of created
         // objects).
         if tx_context_kind == TxContextKind::Mutable {
+            // pop the TxContext value if there
             let Some((_, ctx_bytes, _)) = result.mutable_reference_outputs.pop() else {
                 invariant_violation!("Missing TxContext in reference outputs");
             };
-            let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).map_err(|e| {
-                ExecutionError::invariant_violation(format!(
-                    "Unable to deserialize TxContext bytes. {e}"
-                ))
-            })?;
-            context.tx_context.update_state(updated_ctx)?;
+            if is_txctx_native {
+                // TODO(dario): copy out the context into the extension
+                let tx_context = context.native_tx_context_mut();
+                let sender = tx_context.sender;
+                let digest = tx_context.digest;
+                let ids_created = tx_context.ids_created;
+                context
+                    .tx_context
+                    .update_fresh_ids(&sender, &digest, ids_created)?;
+            } else {
+                let updated_ctx = bcs::from_bytes(&ctx_bytes).map_err(|e| {
+                    ExecutionError::invariant_violation(format!(
+                        "Unable to deserialize TxContext bytes. {e}"
+                    ))
+                })?;
+                context.tx_context.update_state(updated_ctx)?;
+            }
         }
         Ok(result)
     }

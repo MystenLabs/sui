@@ -207,6 +207,8 @@ const MAX_PROTOCOL_VERSION: u64 = 72;
 // Version 72: Fix issue where `convert_type_argument_error` wasn't being used in all cases.
 //             Max gas budget moved to 50_000 SUI
 //             Max gas price moved to 50 SUI
+//             Framework natives for transaction context and protocol config
+//             feature flag to turn it on/off
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -600,6 +602,10 @@ struct FeatureFlags {
     // Properly convert certain type argument errors in the execution layer.
     #[serde(skip_serializing_if = "is_false")]
     convert_type_argument_error: bool,
+
+    // Make transaction context native and zero out the Move struct
+    #[serde(skip_serializing_if = "is_false")]
+    transaction_context_native: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1756,6 +1762,10 @@ impl ProtocolConfig {
 
     pub fn convert_type_argument_error(&self) -> bool {
         self.feature_flags.convert_type_argument_error
+    }
+        
+    pub fn transaction_context_native(&self) -> bool {
+        self.feature_flags.transaction_context_native
     }
 }
 
@@ -3138,6 +3148,8 @@ impl ProtocolConfig {
                     cfg.max_tx_gas = Some(50_000_000_000_000);
                     // max gas price is in MIST and an absolute value 50 SUI
                     cfg.max_gas_price = Some(50_000_000_000);
+
+                    cfg.feature_flags.transaction_context_native = false;
                 }
                 // Use this template when making changes:
                 //
