@@ -411,6 +411,13 @@ mod test {
             unimplemented!()
         }
 
+        async fn find_excluded_blocks(
+            &self,
+            _block_refs: Vec<BlockRef>,
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
+            unimplemented!()
+        }
+
         async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
             unimplemented!()
         }

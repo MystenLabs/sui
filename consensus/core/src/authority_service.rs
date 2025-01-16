@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, pin::Pin, sync::Arc, time::Duration};
+use std::{pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -168,7 +168,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             });
         }
 
-        let mut missing_excluded_ancestors = BTreeSet::new();
         for excluded_ancestor in &excluded_ancestors {
             let excluded_ancestor_hostname = &self
                 .context
@@ -181,10 +180,13 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .network_excluded_ancestors_count_by_authority
                 .with_label_values(&[excluded_ancestor_hostname])
                 .inc();
-            if !self.dag_state.read().contains_block(excluded_ancestor) {
-                missing_excluded_ancestors.insert(*excluded_ancestor);
-            }
         }
+
+        let missing_excluded_ancestors = self
+            .core_dispatcher
+            .find_excluded_blocks(excluded_ancestors)
+            .await
+            .map_err(|_| ConsensusError::Shutdown)?;
 
         if !missing_excluded_ancestors.is_empty() {
             self.context
@@ -728,6 +730,13 @@ mod tests {
             let block_refs = blocks.iter().map(|b| b.reference()).collect();
             self.blocks.lock().extend(blocks);
             Ok(block_refs)
+        }
+
+        async fn find_excluded_blocks(
+            &self,
+            _block_refs: Vec<BlockRef>,
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
+            Ok(BTreeSet::new())
         }
 
         async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {

@@ -246,7 +246,6 @@ impl Core {
 
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
     /// The method returns:
-    /// - The references of accepted blocks
     /// - The references of ancestors missing their block
     pub(crate) fn add_blocks(
         &mut self,
@@ -289,6 +288,41 @@ impl Core {
             // have advanced the threshold clock round.
             self.try_signal_new_round();
         };
+
+        if !missing_block_refs.is_empty() {
+            trace!(
+                "Missing block refs: {}",
+                missing_block_refs.iter().map(|b| b.to_string()).join(", ")
+            );
+        }
+
+        Ok(missing_block_refs)
+    }
+
+    /// Processes the provided excluded blocks refs and sends back the missing block refs
+    /// if not found in DagState.
+    /// The method returns:
+    /// - The references of missing blocks
+    pub(crate) fn find_excluded_blocks(
+        &mut self,
+        block_refs: Vec<BlockRef>,
+    ) -> ConsensusResult<BTreeSet<BlockRef>> {
+        let _scope = monitored_scope("Core::find_excluded_blocks");
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::find_excluded_blocks"])
+            .start_timer();
+        self.context
+            .metrics
+            .node_metrics
+            .core_find_excluded_blocks_batch_size
+            .observe(block_refs.len() as f64);
+
+        // Try to find them via the block manager
+        let missing_block_refs = self.block_manager.try_find_blocks(block_refs);
 
         if !missing_block_refs.is_empty() {
             trace!(

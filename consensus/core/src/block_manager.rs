@@ -144,6 +144,53 @@ impl BlockManager {
         (accepted_blocks, missing_blocks)
     }
 
+    /// Tries to find the provided block_refs in DagState and adds any missing
+    /// blocks to the missing_blocks list
+    pub(crate) fn try_find_blocks(&mut self, mut block_refs: Vec<BlockRef>) -> BTreeSet<BlockRef> {
+        let _s = monitored_scope("BlockManager::try_find_blocks");
+
+        block_refs.sort_by_key(|b| b.round);
+        debug!(
+            "Trying to find blocks: {}",
+            block_refs.iter().map(|b| b.to_string()).join(",")
+        );
+
+        let mut missing_blocks = BTreeSet::new();
+
+        for (found, block_ref) in self
+            .dag_state
+            .read()
+            .contains_blocks(block_refs.clone())
+            .into_iter()
+            .zip(block_refs.iter())
+        {
+            let block_ref_hostname = &self.context.committee.authority(block_ref.author).hostname;
+            if !found {
+                debug!("Block {block_ref} not found in DagState");
+                if self.missing_blocks.insert(*block_ref) {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .block_manager_missing_blocks_by_authority
+                        .with_label_values(&[block_ref_hostname])
+                        .inc();
+                }
+                missing_blocks.insert(*block_ref);
+            }
+        }
+
+        let metrics = &self.context.metrics.node_metrics;
+        metrics
+            .missing_blocks_total
+            .inc_by(missing_blocks.len() as u64);
+        metrics
+            .block_manager_missing_blocks
+            .set(self.missing_blocks.len() as i64);
+
+        // Go fetch the missing blocks
+        missing_blocks
+    }
+
     // TODO: remove once timestamping is refactored to the new approach.
     // Verifies each block's timestamp based on its ancestors, and persists in store all the valid blocks that should be accepted. Method
     // returns the accepted and persisted blocks.
