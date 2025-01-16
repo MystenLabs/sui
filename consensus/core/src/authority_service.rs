@@ -108,6 +108,13 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             )
             .collect::<Vec<BlockRef>>();
 
+        self.context
+            .metrics
+            .node_metrics
+            .network_received_excluded_ancestors_from_authority
+            .with_label_values(&[peer_hostname])
+            .inc_by(excluded_ancestors.len() as u64);
+
         // Reject blocks not produced by the peer.
         if peer != signed_block.author() {
             self.context
@@ -166,12 +173,30 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         let mut missing_excluded_ancestors = BTreeSet::new();
         for excluded_ancestor in &excluded_ancestors {
+            let excluded_ancestor_hostname = &self
+                .context
+                .committee
+                .authority(excluded_ancestor.author)
+                .hostname;
+            self.context
+                .metrics
+                .node_metrics
+                .network_excluded_ancestors_count_by_authority
+                .with_label_values(&[excluded_ancestor_hostname])
+                .inc();
             if !self.dag_state.read().contains_block(excluded_ancestor) {
                 missing_excluded_ancestors.insert(*excluded_ancestor);
             }
         }
 
         if !missing_excluded_ancestors.is_empty() {
+            self.context
+                .metrics
+                .node_metrics
+                .network_excluded_ancestors_sent_to_fetch
+                .with_label_values(&[peer_hostname])
+                .inc_by(missing_excluded_ancestors.len() as u64);
+
             let synchronizer = self.synchronizer.clone();
             tokio::spawn(async move {
                 // schedule the fetching of them from this peer in the background
