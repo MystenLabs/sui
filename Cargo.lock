@@ -1981,8 +1981,14 @@ version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0700ddab506f33b20a03b13996eccd309a48e5ff77d0d95926aa0210fb4e95f1"
 dependencies = [
- "bit-vec",
+ "bit-vec 0.6.3",
 ]
+
+[[package]]
+name = "bit-vec"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02b4ff8b16e6076c3e14220b39fbc1fabb6737522281a388998046859400895f"
 
 [[package]]
 name = "bit-vec"
@@ -2113,6 +2119,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a90ec2df9600c28a01c56c4784c9207a96d2451833aeceb8cc97e4c9548bb78"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "bloom"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d00ac8e5056d6d65376a3c1aa5c7c34850d6949ace17f0266953a254eb3d6fe8"
+dependencies = [
+ "bit-vec 0.4.4",
 ]
 
 [[package]]
@@ -7320,7 +7335,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/andll/tidehunter.git?rev=f662dab3c2c33bdda7e609e0adc092b52a48bbe3#f662dab3c2c33bdda7e609e0adc092b52a48bbe3"
+source = "git+https://github.com/andll/tidehunter.git?rev=4c5ff56c0f956b074736be0105e14874e76a849b#4c5ff56c0f956b074736be0105e14874e76a849b"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -11424,7 +11439,7 @@ dependencies = [
  "aes",
  "async-trait",
  "bcrypt-pbkdf",
- "bit-vec",
+ "bit-vec 0.6.3",
  "block-padding 0.3.2",
  "byteorder",
  "cbc",
@@ -16516,9 +16531,10 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/andll/tidehunter.git?rev=f662dab3c2c33bdda7e609e0adc092b52a48bbe3#f662dab3c2c33bdda7e609e0adc092b52a48bbe3"
+source = "git+https://github.com/andll/tidehunter.git?rev=4c5ff56c0f956b074736be0105e14874e76a849b#4c5ff56c0f956b074736be0105e14874e76a849b"
 dependencies = [
  "bincode",
+ "bloom",
  "bytes",
  "crc32fast",
  "memmap2 0.7.1",
@@ -18451,7 +18467,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e17bb3549cc1321ae1296b9cdc2698e2b6cb1992adfa19a8c72e5b7a738f44cd"
 dependencies = [
- "bit-vec",
+ "bit-vec 0.6.3",
  "num-bigint 0.4.4",
  "time",
 ]
