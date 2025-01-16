@@ -9,7 +9,9 @@ use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::sui_serde::BigInt;
 
-use super::{rpc_module::RpcModule, Reader};
+use crate::data::reader::Reader;
+
+use super::rpc_module::RpcModule;
 
 #[open_rpc(namespace = "suix", tag = "Governance API")]
 #[rpc(server, namespace = "suix")]
