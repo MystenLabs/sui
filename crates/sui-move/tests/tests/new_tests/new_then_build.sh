@@ -3,6 +3,12 @@
 
 # tests that sui-move new followed by sui-move build succeeds
 
-# TODO [DVX-678]: sui-move build output is non-deterministic
-# sui-move new example
-# cd example && sui-move build
+sui-move new example
+cd example && sui-move build 2>&1 | awk '
+  # TODO [DVX-678]: sui-move build is non-deterministic, so this is ugly.
+  # We snip out everything between "UPDATING" and "INCLUDING"
+  BEGIN { snip = 0 }
+  /UPDATING/ { snip = 1; print $0; print "  ... snip ..." }
+  /INCLUDING/ { snip = 0 }
+  { if (snip == 0) print $0 }
+'

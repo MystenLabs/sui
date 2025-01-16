@@ -5,5 +5,10 @@ description: tests/tests/new_tests/new_then_test.sh
 success: true
 exit_code: 0
 ----- stdout -----
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING example
+Running Move unit tests
+Test result: OK. Total tests: 0; passed: 0; failed: 0
 
 ----- stderr -----
