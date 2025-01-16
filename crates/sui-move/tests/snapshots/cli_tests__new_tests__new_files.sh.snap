@@ -1,11 +1,6 @@
 ---
 source: crates/sui-move/tests/cli_tests.rs
-info:
-  program: bash
-  args:
-    - new_files.sh
-  env:
-    PATH: "/bin:/usr/bin:../bin"
+description: tests/tests/new_tests/new_files.sh
 ---
 success: true
 exit_code: 0

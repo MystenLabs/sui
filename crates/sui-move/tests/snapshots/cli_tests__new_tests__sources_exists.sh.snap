@@ -1,11 +1,6 @@
 ---
 source: crates/sui-move/tests/cli_tests.rs
-info:
-  program: bash
-  args:
-    - sources_exists.sh
-  env:
-    PATH: "/bin:/usr/bin:../bin"
+description: tests/tests/new_tests/sources_exists.sh
 ---
 success: true
 exit_code: 0

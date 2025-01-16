@@ -34,30 +34,42 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
         }
     }
 
-    // set up path
-    // Note: we need to create a symlink instead of just adding the bin dir to the path to prevent
-    // local pathnames from leaking into the snapshot files.
-    std::os::unix::fs::symlink(
-        get_cargo_bin("sui-move").parent().unwrap(),
-        tmpdir.path().join("bin"),
-    )?;
-
     // set up command
     let mut shell = Command::new("bash");
     shell
-        .env("PATH", "/bin:/usr/bin:../bin")
+        .env("PATH", format!("/bin:/usr/bin:{}", get_sui_move_path()))
         .current_dir(sandbox)
         .arg(path.file_name().unwrap());
 
-    // run it!
+    // run it; snapshot test output
+    let output = shell.output()?;
+    let result = format!(
+        "success: {:?}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
+        output.status.success(),
+        output.status.code().unwrap_or(!0),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
     let snapshot_name: String = path
         .strip_prefix("tests/tests")?
         .to_string_lossy()
         .to_string();
 
-    assert_cmd_snapshot!(snapshot_name, shell);
+    insta::with_settings!({description => path.to_string_lossy(), omit_expression => true}, {
+        insta::assert_snapshot!(snapshot_name, result);
+    });
 
     Ok(())
+}
+
+fn get_sui_move_path() -> String {
+    get_cargo_bin("sui-move")
+        .parent()
+        .unwrap()
+        .to_str()
+        .expect("directory name is valid UTF-8")
+        .to_owned()
 }
 
 datatest_stable::harness!(test_shell_snapshot, TEST_DIR, TEST_PATTERN);

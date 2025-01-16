@@ -1,17 +1,12 @@
 ---
 source: crates/sui-move/tests/cli_tests.rs
-info:
-  program: bash
-  args:
-    - dummy.sh
-  env:
-    PATH: "/bin:/usr/bin:../bin"
+description: tests/tests/dummy/dummy.sh
 ---
 success: true
 exit_code: 0
 ----- stdout -----
 dummy test
-../bin/sui-move
+sui-move is in the path
 some dummy data
 
 ----- stderr -----
