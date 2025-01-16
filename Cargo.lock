@@ -13681,15 +13681,19 @@ dependencies = [
  "axum 0.7.5",
  "bin-version",
  "clap",
+ "dashmap",
  "eyre",
  "futures",
  "http 1.1.0",
  "mysten-metrics",
  "mysten-network",
+ "once_cell",
  "parking_lot 0.12.1",
  "prometheus",
+ "reqwest 0.12.5",
  "scopeguard",
  "serde",
+ "serde_json",
  "shared-crypto",
  "sui-config",
  "sui-json-rpc-types",
@@ -13710,6 +13714,7 @@ dependencies = [
  "ttl_cache",
  "typed-store",
  "uuid 1.2.2",
+ "wiremock",
 ]
 
 [[package]]

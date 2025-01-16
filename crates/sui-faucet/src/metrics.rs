@@ -213,5 +213,8 @@ pub fn normalize_path(path: &str) -> &str {
 /// Determines whether the given path should be tracked for metrics collection.
 /// Only specified paths relevant to monitoring are included.
 pub fn is_path_tracked(path: &str) -> bool {
-    matches!(path, "/v1/gas" | "/gas" | "/v1/status")
+    matches!(
+        path,
+        "/v1/gas" | "/gas" | "/v1/status" | "/v1/faucet_web_gas"
+    )
 }
