@@ -851,7 +851,7 @@ module sui_system::validator {
         validate_metadata(&self.metadata);
     }
 
-    /// Effectutate all staged next epoch metadata for this validator.
+    /// Effectuate all staged next epoch metadata for this validator.
     /// NOTE: this function SHOULD ONLY be called by validator_set when
     /// advancing an epoch.
     public(package) fun effectuate_staged_metadata(self: &mut Validator) {

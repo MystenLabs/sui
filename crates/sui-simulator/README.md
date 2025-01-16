@@ -249,7 +249,7 @@ And see how often if passes/fails.
 Note which seeds cause the test to pass, and which cause it to fail - it may be helpful to compare log output from passing and failing runs to see how they differ, and between pairs of passing or failing runs to see how they are alike.
 
 **Do not forget that the test may not be to blame!**
-Your code may be just be buggy!
+Your code may just be buggy!
 In other words, flaky code may also cause flaky tests.
 
 It's impossible to list every possible cause of flakiness in a document, but the best place to start looking is at anything timing related, especially hard-coded delays in the test.
