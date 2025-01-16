@@ -89,7 +89,7 @@ const frameworkPlugin = (context, options) => {
           let reMarkdown = markdown
             .replace(/<a\s+(.*?)\.md(.*?)>/g, `<a $1$2>`)
             .replace(
-              /(title: .*)Module `(0x[1-9a-f]{1,4}::)(.*)`/g,
+              /(title: .*)Module `(.*::)(.*)`/g,
               `$1 Module $2$3\nsidebar_label: $3`,
             )
             .replace(/(?<!<pre>)<code>(.*?)<\/code>/gs, `$1`)
