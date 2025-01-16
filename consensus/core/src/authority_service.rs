@@ -14,10 +14,7 @@ use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{
-        BlockAPI as _, BlockRef, FilteredBlock, SignedBlock, StreamBlock, VerifiedBlock,
-        GENESIS_ROUND,
-    },
+    block::{BlockAPI as _, BlockRef, ExtendedBlock, SignedBlock, VerifiedBlock, GENESIS_ROUND},
     block_verifier::BlockVerifier,
     commit::{CommitAPI as _, CommitRange, TrustedCommit},
     commit_vote_monitor::CommitVoteMonitor,
@@ -25,7 +22,7 @@ use crate::{
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::{BlockStream, NetworkService},
+    network::{BlockStream, ExtendedSerializedBlock, NetworkService},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
     synchronizer::SynchronizerHandle,
@@ -41,7 +38,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     block_verifier: Arc<dyn BlockVerifier>,
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
-    rx_block_broadcaster: broadcast::Receiver<FilteredBlock>,
+    rx_block_broadcaster: broadcast::Receiver<ExtendedBlock>,
     subscription_counter: Arc<SubscriptionCounter>,
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
@@ -54,7 +51,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
-        rx_block_broadcaster: broadcast::Receiver<FilteredBlock>,
+        rx_block_broadcaster: broadcast::Receiver<ExtendedBlock>,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
@@ -81,7 +78,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
     async fn handle_send_block(
         &self,
         peer: AuthorityIndex,
-        serialized_block: StreamBlock,
+        serialized_block: ExtendedSerializedBlock,
     ) -> ConsensusResult<()> {
         fail_point_async!("consensus-rpc-response");
 
@@ -310,7 +307,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             dag_state
                 .get_cached_blocks(self.context.own_index, last_received + 1)
                 .into_iter()
-                .map(|block| StreamBlock {
+                .map(|block| ExtendedSerializedBlock {
                     block: block.serialized().clone(),
                     excluded_ancestors: vec![],
                 }),
@@ -323,9 +320,9 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         );
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
-        Ok(Box::pin(
-            missed_blocks.chain(broadcasted_blocks.map(StreamBlock::from)),
-        ))
+        Ok(Box::pin(missed_blocks.chain(
+            broadcasted_blocks.map(ExtendedSerializedBlock::from),
+        )))
     }
 
     async fn handle_fetch_blocks(
@@ -586,7 +583,7 @@ impl SubscriptionCounter {
 
 /// Each broadcasted block stream wraps a broadcast receiver for blocks.
 /// It yields blocks that are broadcasted after the stream is created.
-type BroadcastedBlockStream = BroadcastStream<FilteredBlock>;
+type BroadcastedBlockStream = BroadcastStream<ExtendedBlock>;
 
 /// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
 /// this tolerates lags with only logging, without yielding errors.
@@ -682,14 +679,14 @@ async fn make_recv_future<T: Clone>(
 mod tests {
     use crate::{
         authority_service::AuthorityService,
-        block::{BlockAPI, BlockRef, SignedBlock, StreamBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, BlockRef, SignedBlock, TestBlock, VerifiedBlock},
         commit::CommitRange,
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
         dag_state::DagState,
         error::ConsensusResult,
-        network::{BlockStream, NetworkClient, NetworkService},
+        network::{BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkService},
         round_prober::QuorumRound,
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
@@ -866,17 +863,14 @@ mod tests {
         );
 
         let service = authority_service.clone();
-        let stream_block = StreamBlock {
+        let serialized = ExtendedSerializedBlock {
             block: input_block.serialized().clone(),
             excluded_ancestors: vec![],
         };
 
         tokio::spawn(async move {
             service
-                .handle_send_block(
-                    context.committee.to_authority_index(0).unwrap(),
-                    stream_block,
-                )
+                .handle_send_block(context.committee.to_authority_index(0).unwrap(), serialized)
                 .await
                 .unwrap();
         });

@@ -32,10 +32,10 @@ use super::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
     },
-    BlockStream, NetworkClient, NetworkManager, NetworkService,
+    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
-    block::{BlockRef, StreamBlock, VerifiedBlock},
+    block::{BlockRef, VerifiedBlock},
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
@@ -129,7 +129,7 @@ impl NetworkClient for TonicClient {
             .take_while(|b| futures::future::ready(b.is_ok()))
             .filter_map(move |b| async move {
                 match b {
-                    Ok(response) => Some(StreamBlock {
+                    Ok(response) => Some(ExtendedSerializedBlock {
                         block: response.block,
                         excluded_ancestors: response.excluded_ancestors,
                     }),
@@ -451,12 +451,12 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
         let block = request.into_inner().block;
-        let stream_block = StreamBlock {
+        let block = ExtendedSerializedBlock {
             block,
             excluded_ancestors: vec![],
         };
         self.service
-            .handle_send_block(peer_index, stream_block)
+            .handle_send_block(peer_index, block)
             .await
             .map_err(|e| tonic::Status::invalid_argument(format!("{e:?}")))?;
         Ok(Response::new(SendBlockResponse {}))

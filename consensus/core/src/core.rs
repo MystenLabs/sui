@@ -21,7 +21,7 @@ use tracing::{debug, info, trace, warn};
 use crate::{
     ancestor::{AncestorState, AncestorStateManager},
     block::{
-        Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, FilteredBlock, Round, SignedBlock,
+        Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, ExtendedBlock, Round, SignedBlock,
         Slot, VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
@@ -223,7 +223,7 @@ impl Core {
 
             // if no new block proposed then just re-broadcast the last proposed one to ensure liveness.
             self.signals
-                .new_block(FilteredBlock {
+                .new_block(ExtendedBlock {
                     block: last_proposed_block.clone(),
                     excluded_ancestors: vec![],
                 })
@@ -353,21 +353,21 @@ impl Core {
         if !self.should_propose() {
             return Ok(None);
         }
-        if let Some(filtered_block) = self.try_new_block(force) {
-            self.signals.new_block(filtered_block.clone())?;
+        if let Some(extended_block) = self.try_new_block(force) {
+            self.signals.new_block(extended_block.clone())?;
 
             fail_point!("consensus-after-propose");
 
             // The new block may help commit.
             self.try_commit()?;
-            return Ok(Some(filtered_block.block));
+            return Ok(Some(extended_block.block));
         }
         Ok(None)
     }
 
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
-    fn try_new_block(&mut self, force: bool) -> Option<FilteredBlock> {
+    fn try_new_block(&mut self, force: bool) -> Option<ExtendedBlock> {
         let _s = self
             .context
             .metrics
@@ -565,7 +565,7 @@ impl Core {
             .with_label_values(&[&force.to_string()])
             .inc();
 
-        Some(FilteredBlock {
+        Some(ExtendedBlock {
             block: verified_block,
             excluded_ancestors,
         })
@@ -1094,7 +1094,7 @@ impl Core {
 
 /// Senders of signals from Core, for outputs and events (ex new block produced).
 pub(crate) struct CoreSignals {
-    tx_block_broadcast: broadcast::Sender<FilteredBlock>,
+    tx_block_broadcast: broadcast::Sender<ExtendedBlock>,
     new_round_sender: watch::Sender<Round>,
     context: Arc<Context>,
 }
@@ -1104,7 +1104,7 @@ impl CoreSignals {
         // Blocks buffered in broadcast channel should be roughly equal to thosed cached in dag state,
         // since the underlying blocks are ref counted so a lower buffer here will not reduce memory
         // usage significantly.
-        let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel::<FilteredBlock>(
+        let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel::<ExtendedBlock>(
             context.parameters.dag_state_cached_rounds as usize,
         );
         let (new_round_sender, new_round_receiver) = watch::channel(0);
@@ -1125,22 +1125,22 @@ impl CoreSignals {
 
     /// Sends a signal to all the waiters that a new block has been produced. The method will return
     /// true if block has reached even one subscriber, false otherwise.
-    pub(crate) fn new_block(&self, filtered_block: FilteredBlock) -> ConsensusResult<()> {
+    pub(crate) fn new_block(&self, extended_block: ExtendedBlock) -> ConsensusResult<()> {
         // When there is only one authority in committee, it is unnecessary to broadcast
         // the block which will fail anyway without subscribers to the signal.
         if self.context.committee.size() > 1 {
-            if filtered_block.block.round() == GENESIS_ROUND {
+            if extended_block.block.round() == GENESIS_ROUND {
                 debug!("Ignoring broadcasting genesis block to peers");
                 return Ok(());
             }
 
-            if let Err(err) = self.tx_block_broadcast.send(filtered_block) {
+            if let Err(err) = self.tx_block_broadcast.send(extended_block) {
                 warn!("Couldn't broadcast the block to any receiver: {err}");
                 return Err(ConsensusError::Shutdown);
             }
         } else {
             debug!(
-                "Did not broadcast block {filtered_block:?} to receivers as committee size is <= 1"
+                "Did not broadcast block {extended_block:?} to receivers as committee size is <= 1"
             );
         }
         Ok(())
@@ -1156,12 +1156,12 @@ impl CoreSignals {
 /// Receivers of signals from Core.
 /// Intentionally un-clonable. Comonents should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
-    rx_block_broadcast: broadcast::Receiver<FilteredBlock>,
+    rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
     new_round_receiver: watch::Receiver<Round>,
 }
 
 impl CoreSignalsReceivers {
-    pub(crate) fn block_broadcast_receiver(&self) -> broadcast::Receiver<FilteredBlock> {
+    pub(crate) fn block_broadcast_receiver(&self) -> broadcast::Receiver<ExtendedBlock> {
         self.rx_block_broadcast.resubscribe()
     }
 
@@ -1188,7 +1188,7 @@ pub(crate) fn create_cores(context: Context, authorities: Vec<Stake>) -> Vec<Cor
 pub(crate) struct CoreTextFixture {
     pub core: Core,
     pub signal_receivers: CoreSignalsReceivers,
-    pub block_receiver: broadcast::Receiver<FilteredBlock>,
+    pub block_receiver: broadcast::Receiver<ExtendedBlock>,
     #[allow(unused)]
     pub commit_receiver: UnboundedReceiver<CommittedSubDag>,
     pub store: Arc<MemStore>,
@@ -1596,18 +1596,18 @@ mod test {
         }
 
         // a new block should have been created during recovery.
-        let filtered_block = block_receiver
+        let extended_block = block_receiver
             .recv()
             .await
             .expect("A new block should have been created");
 
         // A new block created - assert the details
-        assert_eq!(filtered_block.block.round(), 1);
-        assert_eq!(filtered_block.block.author().value(), 0);
-        assert_eq!(filtered_block.block.ancestors().len(), 4);
+        assert_eq!(extended_block.block.round(), 1);
+        assert_eq!(extended_block.block.author().value(), 0);
+        assert_eq!(extended_block.block.ancestors().len(), 4);
 
         let mut total = 0;
-        for (i, transaction) in filtered_block.block.transactions().iter().enumerate() {
+        for (i, transaction) in extended_block.block.transactions().iter().enumerate() {
             total += transaction.data().len() as u64;
             let transaction: String = bcs::from_bytes(transaction.data()).unwrap();
             assert_eq!(format!("Transaction {i}"), transaction);
@@ -1617,7 +1617,7 @@ mod test {
         // genesis blocks should be referenced
         let all_genesis = genesis_blocks(context);
 
-        for ancestor in filtered_block.block.ancestors() {
+        for ancestor in extended_block.block.ancestors() {
             all_genesis
                 .iter()
                 .find(|block| block.reference() == *ancestor)
@@ -2473,16 +2473,16 @@ mod test {
                 assert_eq!(new_round, round);
 
                 // Check that a new block has been proposed.
-                let filtered_block = tokio::time::timeout(
+                let extended_block = tokio::time::timeout(
                     Duration::from_secs(1),
                     core_fixture.block_receiver.recv(),
                 )
                 .await
                 .unwrap()
                 .unwrap();
-                assert_eq!(filtered_block.block.round(), round);
+                assert_eq!(extended_block.block.round(), round);
                 assert_eq!(
-                    filtered_block.block.author(),
+                    extended_block.block.author(),
                     core_fixture.core.context.own_index
                 );
 
@@ -2601,16 +2601,16 @@ mod test {
                 assert_eq!(new_round, round);
 
                 // Check that a new block has been proposed.
-                let filtered_block = tokio::time::timeout(
+                let extended_block = tokio::time::timeout(
                     Duration::from_secs(1),
                     core_fixture.block_receiver.recv(),
                 )
                 .await
                 .unwrap()
                 .unwrap();
-                assert_eq!(filtered_block.block.round(), round);
+                assert_eq!(extended_block.block.round(), round);
                 assert_eq!(
-                    filtered_block.block.author(),
+                    extended_block.block.author(),
                     core_fixture.core.context.own_index
                 );
 
@@ -2738,16 +2738,16 @@ mod test {
                 assert_eq!(new_round, round);
 
                 // Check that a new block has been proposed.
-                let filtered_block = tokio::time::timeout(
+                let extended_block = tokio::time::timeout(
                     Duration::from_secs(1),
                     core_fixture.block_receiver.recv(),
                 )
                 .await
                 .unwrap()
                 .unwrap();
-                assert_eq!(filtered_block.block.round(), round);
+                assert_eq!(extended_block.block.round(), round);
                 assert_eq!(
-                    filtered_block.block.author(),
+                    extended_block.block.author(),
                     core_fixture.core.context.own_index
                 );
 
@@ -2893,16 +2893,16 @@ mod test {
                 assert_eq!(new_round, round);
 
                 // Check that a new block has been proposed.
-                let filtered_block = tokio::time::timeout(
+                let extended_block = tokio::time::timeout(
                     Duration::from_secs(1),
                     core_fixture.block_receiver.recv(),
                 )
                 .await
                 .unwrap()
                 .unwrap();
-                assert_eq!(filtered_block.block.round(), round);
+                assert_eq!(extended_block.block.round(), round);
                 assert_eq!(
-                    filtered_block.block.author(),
+                    extended_block.block.author(),
                     core_fixture.core.context.own_index
                 );
 
@@ -3028,16 +3028,16 @@ mod test {
                 assert_eq!(new_round, round);
 
                 // Check that a new block has been proposed.
-                let filtered_block = tokio::time::timeout(
+                let extended_block = tokio::time::timeout(
                     Duration::from_secs(1),
                     core_fixture.block_receiver.recv(),
                 )
                 .await
                 .unwrap()
                 .unwrap();
-                assert_eq!(filtered_block.block.round(), round);
+                assert_eq!(extended_block.block.round(), round);
                 assert_eq!(
-                    filtered_block.block.author(),
+                    extended_block.block.author(),
                     core_fixture.core.context.own_index
                 );
 

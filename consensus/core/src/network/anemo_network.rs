@@ -35,10 +35,10 @@ use super::{
     connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle},
     epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY},
     metrics_layer::{MetricsCallbackMaker, MetricsResponseCallback, SizedRequest, SizedResponse},
-    BlockStream, NetworkClient, NetworkManager, NetworkService,
+    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
-    block::{BlockRef, StreamBlock, VerifiedBlock},
+    block::{BlockRef, VerifiedBlock},
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
@@ -297,12 +297,12 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
             )
         })?;
         let block = request.into_body().block;
-        let stream_block = StreamBlock {
+        let block = ExtendedSerializedBlock {
             block,
             excluded_ancestors: vec![],
         };
         self.service
-            .handle_send_block(index, stream_block)
+            .handle_send_block(index, block)
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(

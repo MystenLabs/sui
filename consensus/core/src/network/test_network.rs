@@ -8,19 +8,21 @@ use futures::stream;
 use parking_lot::Mutex;
 
 use crate::{
-    block::{BlockRef, StreamBlock, VerifiedBlock},
+    block::{BlockRef, VerifiedBlock},
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
     network::{BlockStream, NetworkService},
     Round,
 };
 
+use super::ExtendedSerializedBlock;
+
 pub(crate) struct TestService {
-    pub(crate) handle_send_block: Vec<(AuthorityIndex, StreamBlock)>,
+    pub(crate) handle_send_block: Vec<(AuthorityIndex, ExtendedSerializedBlock)>,
     pub(crate) handle_fetch_blocks: Vec<(AuthorityIndex, Vec<BlockRef>)>,
     pub(crate) handle_subscribe_blocks: Vec<(AuthorityIndex, Round)>,
     pub(crate) handle_fetch_commits: Vec<(AuthorityIndex, CommitRange)>,
-    pub(crate) own_blocks: Vec<StreamBlock>,
+    pub(crate) own_blocks: Vec<ExtendedSerializedBlock>,
 }
 
 impl TestService {
@@ -35,7 +37,7 @@ impl TestService {
     }
 
     #[cfg_attr(msim, allow(dead_code))]
-    pub(crate) fn add_own_blocks(&mut self, blocks: Vec<StreamBlock>) {
+    pub(crate) fn add_own_blocks(&mut self, blocks: Vec<ExtendedSerializedBlock>) {
         self.own_blocks.extend(blocks);
     }
 }
@@ -45,7 +47,7 @@ impl NetworkService for Mutex<TestService> {
     async fn handle_send_block(
         &self,
         peer: AuthorityIndex,
-        block: StreamBlock,
+        block: ExtendedSerializedBlock,
     ) -> ConsensusResult<()> {
         let mut state = self.lock();
         state.handle_send_block.push((peer, block));

@@ -197,7 +197,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
 
             'stream: loop {
                 match blocks.next().await {
-                    Some(stream_block) => {
+                    Some(block) => {
                         context
                             .metrics
                             .node_metrics
@@ -205,7 +205,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                             .with_label_values(&[peer_hostname])
                             .inc();
                         let result = authority_service
-                            .handle_send_block(peer, stream_block.clone())
+                            .handle_send_block(peer, block.clone())
                             .await;
                         if let Err(e) = result {
                             match e {
@@ -248,10 +248,10 @@ mod test {
 
     use super::*;
     use crate::{
-        block::{BlockRef, StreamBlock},
+        block::BlockRef,
         commit::CommitRange,
         error::ConsensusResult,
-        network::{test_network::TestService, BlockStream},
+        network::{test_network::TestService, BlockStream, ExtendedSerializedBlock},
         storage::mem_store::MemStore,
         VerifiedBlock,
     };
@@ -285,7 +285,7 @@ mod test {
         ) -> ConsensusResult<BlockStream> {
             let block_stream = stream::unfold((), |_| async {
                 sleep(Duration::from_millis(1)).await;
-                let block = StreamBlock {
+                let block = ExtendedSerializedBlock {
                     block: Bytes::from(vec![1u8; 8]),
                     excluded_ancestors: vec![],
                 };
@@ -367,7 +367,7 @@ mod test {
             assert_eq!(*p, peer);
             assert_eq!(
                 *block,
-                StreamBlock {
+                ExtendedSerializedBlock {
                     block: Bytes::from(vec![1u8; 8]),
                     excluded_ancestors: vec![]
                 }
