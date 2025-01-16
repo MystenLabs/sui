@@ -399,7 +399,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .with_policy_config(self.fullnode_policy_config)
             .with_data_ingestion_dir(ingest_data)
             .with_fw_config(self.fullnode_fw_config)
-            .with_disable_pruning(self.disable_fullnode_pruning);
+            .with_disable_pruning(true);
 
         if let Some(spvc) = &self.fullnode_supported_protocol_versions_config {
             let supported_versions = match spvc {

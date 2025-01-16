@@ -626,13 +626,6 @@ async fn start(
     no_full_node: bool,
     committee_size: Option<usize>,
 ) -> Result<(), anyhow::Error> {
-    if force_regenesis {
-        ensure!(
-            config.is_none(),
-            "Cannot pass `--force-regenesis` and `--network.config` at the same time."
-        );
-    }
-
     let IndexerArgs {
         mut with_indexer,
         with_graphql,
@@ -674,12 +667,20 @@ async fn start(
             None => NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES),
         }
         .ok_or_else(|| anyhow!("Committee size must be at least 1."))?;
+        let config_dir = if let Some(config_dir) = config {
+            swarm_builder = swarm_builder.dir(config_dir.join("sui").join("db"));
+            let dir = config_dir.join("sui").join("config");
+            fs::create_dir_all(&dir)?;
+            dir
+        } else {
+            tempdir()?.into_path()
+        };
         swarm_builder = swarm_builder.committee_size(committee_size);
         let genesis_config = GenesisConfig::custom_genesis(1, 100);
         swarm_builder = swarm_builder.with_genesis_config(genesis_config);
         let epoch_duration_ms = epoch_duration_ms.unwrap_or(DEFAULT_EPOCH_DURATION_MS);
         swarm_builder = swarm_builder.with_epoch_duration_ms(epoch_duration_ms);
-        tempdir()?.into_path()
+        config_dir
     } else {
         // If the config path looks like a YAML file, it is treated as if it is the network.yaml
         // overriding the network.yaml found in the sui config directry. Otherwise it is treated as

@@ -167,6 +167,8 @@ impl ValidatorConfigBuilder {
         };
 
         let mut pruning_config = AuthorityStorePruningConfig::default();
+        pruning_config.set_num_epochs_to_retain(u64::MAX);
+        pruning_config.set_num_epochs_to_retain_for_checkpoints(None);
         if self.force_unpruned_checkpoints {
             pruning_config.set_num_epochs_to_retain_for_checkpoints(None);
         }
