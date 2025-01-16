@@ -665,7 +665,7 @@ impl OptsWithGas {
     }
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 struct FaucetResponse {
     error: Option<String>,
 }
@@ -1444,6 +1444,10 @@ impl SuiClientCommands {
             SuiClientCommands::Faucet { address, url } => {
                 let address = get_identity_address(address, context)?;
                 let url = if let Some(url) = url {
+                    ensure!(
+                        !url.starts_with("https://faucet.testnet.sui.io"),
+                        "For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}"
+                    );
                     url
                 } else {
                     let active_env = context.config.get_active_env();
@@ -1451,7 +1455,9 @@ impl SuiClientCommands {
                     if let Ok(env) = active_env {
                         let network = match env.rpc.as_str() {
                             SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v1/gas",
-                            SUI_TESTNET_URL => "https://faucet.testnet.sui.io/v1/gas",
+                            SUI_TESTNET_URL => {
+                                bail!("For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}");
+                            }
                             SUI_LOCAL_NETWORK_URL | SUI_LOCAL_NETWORK_URL_0 => "http://127.0.0.1:9123/gas",
                             _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
                         };
@@ -2567,6 +2573,12 @@ pub async fn request_tokens_from_faucet(
                 bail!("Faucet request was unsuccessful: {err}")
             } else {
                 println!("Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.");
+            }
+        }
+        StatusCode::BAD_REQUEST => {
+            let faucet_resp: FaucetResponse = resp.json().await?;
+            if let Some(err) = faucet_resp.error {
+                bail!("Faucet request was unsuccessful. {err}");
             }
         }
         StatusCode::TOO_MANY_REQUESTS => {
