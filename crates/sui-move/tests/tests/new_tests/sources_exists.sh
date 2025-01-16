@@ -1,3 +1,6 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 # sui-move new example when example/sources exists should not generate any new example source but should otherwise
 # operate normally
 

@@ -1,3 +1,6 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 # sui-move new example when example/Move.toml exists should fail and not touch any files
 
 # TODO [DVX-486]: implement this functionality
