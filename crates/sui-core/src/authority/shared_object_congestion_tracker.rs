@@ -134,7 +134,11 @@ impl SharedObjectCongestionTracker {
             .expect("There must be at least one object in shared_input_objects.")
     }
 
-    pub fn get_tx_cost(&self, cert: &VerifiedExecutableTransaction) -> Option<u64> {
+    pub fn get_tx_cost(
+        &self,
+        execution_time_estimator: &ExecutionTimeEstimator,
+        cert: &VerifiedExecutableTransaction,
+    ) -> Option<u64> {
         match self.mode {
             PerObjectCongestionControlMode::None => None,
             PerObjectCongestionControlMode::TotalGasBudget => Some(cert.gas_budget()),
@@ -142,17 +146,21 @@ impl SharedObjectCongestionTracker {
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
                 Some(std::cmp::min(cert.gas_budget(), self.get_tx_cost_cap(cert)))
             }
+            PerObjectCongestionControlMode::ExecutionTimeEstimate => {
+                Some(execution_time_estimator.get_estimate(cert.transaction_data()))
+            }
         }
     }
 
     // Given a transaction, returns the deferral key and the congested objects if the transaction should be deferred.
     pub fn should_defer_due_to_object_congestion(
         &self,
+        execution_time_estimator: &ExecutionTimeEstimator,
         cert: &VerifiedExecutableTransaction,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         commit_round: Round,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
-        let tx_cost = self.get_tx_cost(cert)?;
+        let tx_cost = self.get_tx_cost(execution_time_estimator, cert)?;
 
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         if shared_input_objects.is_empty() {

@@ -44,6 +44,7 @@ pub trait Executor {
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
+        // Vec<(ExecutionTimeObservationKey, Duration)>,
         Result<(), ExecutionError>,
     );
 

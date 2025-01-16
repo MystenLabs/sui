@@ -4,11 +4,13 @@
 use crate::base_types::{AuthorityName, ConsensusObjectSequenceKey, ObjectRef, TransactionDigest};
 use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::digests::ConsensusCommitDigest;
+use crate::execution::ExecutionTimeObservationKey;
 use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
 use crate::supported_protocol_versions::{
     Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
 };
 use crate::transaction::{CertifiedTransaction, Transaction};
+use crate::type_input::TypeInput;
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
@@ -20,7 +22,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The index of an authority in the consensus committee.
 /// The value should be the same in Sui committee.
@@ -298,6 +300,9 @@ pub enum ConsensusTransactionKind {
     CapabilityNotificationV2(AuthorityCapabilitiesV2),
 
     UserTransaction(Box<Transaction>),
+
+    // TODO-DNS comment
+    ExecutionTimeObservation(Vec<(ExecutionTimeObservationKey, Duration)>),
 }
 
 impl ConsensusTransactionKind {

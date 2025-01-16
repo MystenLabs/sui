@@ -212,6 +212,7 @@ pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
 pub mod epoch_start_configuration;
+pub mod execution_time_estimator;
 pub mod shared_object_congestion_tracker;
 pub mod shared_object_version_manager;
 pub mod test_authority_builder;
@@ -1241,6 +1242,7 @@ impl AuthorityState {
             expected_effects_digest = epoch_store.get_signed_effects_digest(tx_digest)?;
         }
 
+        // TODO-DNS measure overhead here
         self.process_certificate(
             tx_guard,
             certificate,
@@ -1250,6 +1252,9 @@ impl AuthorityState {
         )
         .await
         .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
+
+        // TODO-DNS implement
+        // epoch_store.execution_time_estimator().record_local_observations(todo!());
     }
 
     pub fn read_objects_for_execution(

@@ -9,6 +9,7 @@ use crate::{
     object::{Data, Object, Owner},
     storage::{BackingPackageStore, ObjectChange},
     transaction::Argument,
+    type_input::TypeInput,
 };
 use move_core_types::language_storage::TypeTag;
 use once_cell::sync::Lazy;
@@ -168,6 +169,22 @@ impl ExecutionResultsV2 {
             obj.previous_transaction = prev_tx;
         }
     }
+}
+
+// TODO-DNS is there already a type for this?
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum ExecutionTimeObservationKey {
+    EntryPoint {
+        /// The package containing the module and function.
+        package: ObjectID,
+        /// The specific module in the package containing the function.
+        module: String,
+        /// The function to be called.
+        function: String,
+        /// The type arguments to the function.
+        type_arguments: Vec<TypeInput>,
+    },
+    // extensible to also measure overhead times
 }
 
 /// If a transaction digest shows up in this list, when executing such transaction,
