@@ -18,10 +18,12 @@ use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
 use tracing::info;
 
-use crate::api::{governance::Governance, Reader};
+use crate::api::governance::Governance;
+use crate::data::reader::Reader;
 
 mod api;
 pub mod args;
+mod data;
 mod metrics;
 
 #[derive(clap::Args, Debug, Clone)]
