@@ -47,6 +47,7 @@ use crate::tables::{
 use crate::writers::csv_writer::CSVWriter;
 use crate::writers::parquet_writer::ParquetWriter;
 use crate::writers::AnalyticsWriter;
+use gcp_bigquery_client::model::query_response::ResultSet;
 
 pub mod analytics_metrics;
 pub mod analytics_processor;
@@ -252,13 +253,14 @@ impl BQMaxCheckpointReader {
 #[async_trait::async_trait]
 impl MaxCheckpointReader for BQMaxCheckpointReader {
     async fn max_checkpoint(&self) -> Result<i64> {
-        let mut result = self
+        let result = self
             .client
             .job()
             .query(&self.project_id, QueryRequest::new(&self.query))
             .await?;
-        if result.next_row() {
-            let max_checkpoint = result.get_i64(0)?.ok_or(anyhow!("No rows returned"))?;
+        let mut result_set = ResultSet::new_from_query_response(result);
+        if result_set.next_row() {
+            let max_checkpoint = result_set.get_i64(0)?.ok_or(anyhow!("No rows returned"))?;
             Ok(max_checkpoint)
         } else {
             Ok(-1)
