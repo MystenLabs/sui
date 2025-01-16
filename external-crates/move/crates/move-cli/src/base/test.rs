@@ -199,7 +199,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     let mut warning_diags = None;
     build_plan.compile_with_driver(writer, |compiler| {
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
-        let (_, compiler) =
+        let compiler =
             diagnostics::unwrap_or_report_pass_diagnostics(&files, comments_and_compiler_res);
         let (compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();

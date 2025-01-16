@@ -18,7 +18,8 @@ use crate::{
         TypeName, TypeName_, Type_, UseFun, UseFunKind, Var,
     },
     parser::ast::{
-        Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
+        Ability_, ConstantName, DatatypeName, DocComment, Field, FunctionName, VariantName,
+        ENTRY_MODIFIER,
     },
     shared::{
         ide::{AutocompleteMethod, IDEAnnotation, IDEInfo},
@@ -338,6 +339,7 @@ impl<'env> Context<'env> {
             let unused = methods.iter().filter(|(_, _, uf)| !uf.used);
             for (_, method, use_fun) in unused {
                 let N::UseFun {
+                    doc: _,
                     loc,
                     kind,
                     attributes: _,
@@ -869,12 +871,14 @@ impl<'env> Context<'env> {
                             fields
                                 .iter()
                                 .enumerate()
-                                .map(|(idx, (_, _, (_, t)))| (format!("{}", idx).into(), t.clone()))
+                                .map(|(idx, (_, _, (_, (_, t))))| {
+                                    (format!("{}", idx).into(), t.clone())
+                                })
                                 .collect::<Vec<_>>()
                         } else {
                             fields
                                 .key_cloned_iter()
-                                .map(|(k, (_, t))| (k.value(), t.clone()))
+                                .map(|(k, (_, (_, t)))| (k.value(), t.clone()))
                                 .collect::<Vec<_>>()
                         }
                     }
@@ -1276,7 +1280,11 @@ pub fn make_struct_field_types(
         N::StructFields::Native(loc) => N::StructFields::Native(*loc),
         N::StructFields::Defined(positional, m) => N::StructFields::Defined(
             *positional,
-            m.ref_map(|_, (idx, field_ty)| (*idx, subst_tparams(tparam_subst, field_ty.clone()))),
+            m.ref_map(|_, (idx, (_, field_ty))| {
+                let doc = DocComment::empty();
+                let ty = subst_tparams(tparam_subst, field_ty.clone());
+                (*idx, (doc, ty))
+            }),
         ),
     }
 }
@@ -1312,7 +1320,7 @@ pub fn make_struct_field_type(
             ));
             context.error_type(loc)
         }
-        Some((_, field_ty)) => {
+        Some((_, (_, field_ty))) => {
             let tparam_subst = &make_tparam_subst(
                 context
                     .struct_definition(m, n)
@@ -1392,7 +1400,11 @@ pub fn make_variant_field_types(
         N::VariantFields::Empty => N::VariantFields::Empty,
         N::VariantFields::Defined(is_positional, m) => N::VariantFields::Defined(
             *is_positional,
-            m.ref_map(|_, (idx, field_ty)| (*idx, subst_tparams(tparam_subst, field_ty.clone()))),
+            m.ref_map(|_, (idx, (_, field_ty))| {
+                let doc = DocComment::empty();
+                let ty = subst_tparams(tparam_subst, field_ty.clone());
+                (*idx, (doc, ty))
+            }),
         ),
     }
 }
@@ -1411,6 +1423,7 @@ pub fn make_constant_type(
     context.emit_warning_if_deprecated(m, c.0, None);
     let (defined_loc, signature) = {
         let ConstantInfo {
+            doc: _,
             attributes: _,
             defined_loc,
             signature,

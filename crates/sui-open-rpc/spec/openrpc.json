@@ -1364,6 +1364,7 @@
                 "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
                 "validate_identifier_inputs": false,
+                "variant_nodes": false,
                 "verify_legacy_zklogin_address": false,
                 "zklogin_auth": false
               },

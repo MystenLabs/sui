@@ -19,7 +19,7 @@ use move_compiler::{
     Flags,
 };
 use move_core_types::account_address::AccountAddress;
-use move_model::model::GlobalEnv;
+use move_model_2::source_model;
 use resolution::{dependency_graph::DependencyGraphBuilder, resolution_graph::ResolvedGraph};
 use serde::{Deserialize, Serialize};
 use source_package::{
@@ -34,9 +34,7 @@ use std::{
 };
 
 use crate::{
-    compilation::{
-        build_plan::BuildPlan, compiled_package::CompiledPackage, model_builder::ModelBuilder,
-    },
+    compilation::{build_plan::BuildPlan, compiled_package::CompiledPackage, model_builder},
     lock_file::schema::update_compiler_toolchain,
     package_lock::PackageLock,
 };
@@ -174,22 +172,13 @@ impl From<LintLevel> for LintFlag {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
-pub struct ModelConfig {
-    /// If set, also files which are in dependent packages are considered as targets.
-    pub all_files_as_targets: bool,
-    /// If set, a string how targets are filtered. A target is included if its file name
-    /// contains this string. This is similar as the `cargo test <string>` idiom.
-    pub target_filter: Option<String>,
-}
-
 impl BuildConfig {
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure.
     pub fn compile_package<W: Write>(self, path: &Path, writer: &mut W) -> Result<CompiledPackage> {
         let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
-        BuildPlan::create(resolved_graph)?.compile(writer)
+        BuildPlan::create(resolved_graph)?.compile(writer, |compiler| compiler)
     }
 
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
@@ -212,7 +201,7 @@ impl BuildConfig {
         // } else {
         //     build_plan.compile(writer)
         // }
-        build_plan.compile(writer)
+        build_plan.compile(writer, |compiler| compiler)
     }
 
     /// Compile the package at `path` or the containing Move package. Do not exit process on warning
@@ -224,7 +213,7 @@ impl BuildConfig {
     ) -> Result<CompiledPackage> {
         let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
-        BuildPlan::create(resolved_graph)?.compile_no_exit(writer)
+        BuildPlan::create(resolved_graph)?.compile_no_exit(writer, |compiler| compiler)
     }
 
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
@@ -250,16 +239,16 @@ impl BuildConfig {
     // across all packages and build the Move model from that.
     // TODO: In the future we will need a better way to do this to support renaming in packages
     // where we want to support building a Move model.
-    pub fn move_model_for_package(
+    pub fn move_model_for_package<W: Write>(
         self,
         path: &Path,
-        model_config: ModelConfig,
-    ) -> Result<GlobalEnv> {
+        writer: &mut W,
+    ) -> Result<source_model::Model> {
         // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
         // vector as the writer
-        let resolved_graph = self.resolution_graph_for_package(path, None, &mut Vec::new())?;
+        let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
-        ModelBuilder::create(resolved_graph, model_config).build_model()
+        model_builder::build(resolved_graph, writer)
     }
 
     pub fn download_deps_for_package<W: Write>(&self, path: &Path, writer: &mut W) -> Result<()> {

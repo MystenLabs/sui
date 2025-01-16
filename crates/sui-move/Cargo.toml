@@ -23,7 +23,6 @@ move-compiler.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
 move-package.workspace = true
-move-prover.workspace = true
 move-bytecode-source-map.workspace = true
 move-unit-test.workspace = true
 telemetry-subscribers.workspace = true

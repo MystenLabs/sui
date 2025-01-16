@@ -76,6 +76,7 @@ feature_flags:
   consensus_round_prober_probe_accepted_rounds: true
   native_charging_v2: true
   convert_type_argument_error: true
+  variant_nodes: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

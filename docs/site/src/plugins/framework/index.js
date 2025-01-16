@@ -15,11 +15,11 @@ const BRIDGE_PATH = path.join(
 );
 const FRAMEWORK_PATH = path.join(
   __dirname,
-  "../../../../../crates/sui-framework/docs/sui-framework",
+  "../../../../../crates/sui-framework/docs/sui",
 );
 const STDLIB_PATH = path.join(
   __dirname,
-  "../../../../../crates/sui-framework/docs/move-stdlib",
+  "../../../../../crates/sui-framework/docs/std",
 );
 const DEEPBOOK_PATH = path.join(
   __dirname,
@@ -27,7 +27,7 @@ const DEEPBOOK_PATH = path.join(
 );
 const SUISYS_PATH = path.join(
   __dirname,
-  "../../../../../crates/sui-framework/docs/sui-system",
+  "../../../../../crates/sui-framework/docs/sui_system",
 );
 const DOCS_PATH = path.join(
   __dirname,
@@ -89,7 +89,7 @@ const frameworkPlugin = (context, options) => {
           let reMarkdown = markdown
             .replace(/<a\s+(.*?)\.md(.*?)>/g, `<a $1$2>`)
             .replace(
-              /(title: .*)Module `(0x[1-9a-f]{1,4}::)(.*)`/g,
+              /(title: .*)Module `(.*::)(.*)`/g,
               `$1 Module $2$3\nsidebar_label: $3`,
             )
             .replace(/(?<!<pre>)<code>(.*?)<\/code>/gs, `$1`)
