@@ -65,3 +65,6 @@ normal = ["jemalloc-ctl"]
 [[test]]
 name = "cli_tests"
 harness = false
+
+[lints]
+workspace = true
