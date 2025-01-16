@@ -1,7 +1,7 @@
 # sui-move new example when example/sources exists should not generate any new example source but should otherwise
 # operate normally
 
-# TODO: implement this functionality (https://linear.app/mysten-labs/issue/DVX-486/sui-move-new-will-clobber-existing-files)
+# TODO [DVX-486] implement this functionality
 # mkdir -p example/sources
 # echo "existing_ignore" >> example/.gitignore
 #
