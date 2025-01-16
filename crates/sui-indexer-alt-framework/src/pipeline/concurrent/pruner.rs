@@ -1,10 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use sui_pg_db::Db;
 use tokio::{
+    sync::Semaphore,
     task::JoinHandle,
     time::{interval, MissedTickBehavior},
 };
@@ -18,6 +21,66 @@ use crate::{
 };
 
 use super::{Handler, PrunerConfig};
+
+struct PendingRanges {
+    /// The maximum number of ranges that can be pending at once.
+    max_pending: usize,
+    /// Maps from from to to_exclusive for all the ranges that are ready to be pruned.
+    ranges: BTreeMap<u64, u64>,
+    /// The last `from` of the range that has been scheduled for pruning.
+    last_scheduled_from: Option<u64>,
+}
+
+impl PendingRanges {
+    pub fn new(max_pending: usize) -> Self {
+        Self {
+            max_pending,
+            ranges: BTreeMap::new(),
+            last_scheduled_from: None,
+        }
+    }
+
+    /// Schedule a new range to be pruned.
+    /// If the range is already scheduled in the past, ignore it.
+    /// This avoids double pruning, which will not work since pruning
+    /// may not be idempotent for some pipelines.
+    /// For instance, if handler holds processed data needed for pruning,
+    /// the pruning step may remove those data once done.
+    fn schedule(&mut self, from: u64, to_exclusive: u64) {
+        if let Some(last_scheduled_from) = self.last_scheduled_from {
+            if from <= last_scheduled_from {
+                return;
+            }
+        }
+        self.ranges.insert(from, to_exclusive);
+        self.last_scheduled_from = Some(from);
+    }
+
+    /// Ensures that we don't grow the pending_prune_ranges too large,
+    /// if for some reason the pruner is blocked by missing processed data.
+    fn is_full(&self) -> bool {
+        self.ranges.len() >= self.max_pending
+    }
+
+    fn len(&self) -> usize {
+        self.ranges.len()
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (u64, u64)> + '_ {
+        self.ranges
+            .iter()
+            .map(|(from, to_exclusive)| (*from, *to_exclusive))
+    }
+
+    /// Remove the range from the pending_prune_ranges.
+    /// Returns the current pruner_hi watermark, i.e. the first checkpoint that has not yet been pruned.
+    /// This can be derived from the first key in the pending_prune_ranges map.
+    /// If the map is empty, then pruner_hi is the last checkpoint that has been pruned.
+    fn remove(&mut self, from: &u64) -> u64 {
+        let to_exclusive = self.ranges.remove(from).unwrap();
+        self.ranges.keys().next().cloned().unwrap_or(to_exclusive)
+    }
+}
 
 /// The pruner task is responsible for deleting old data from the database. It will periodically
 /// check the `watermarks` table to see if there is any data that should be pruned between the
@@ -53,6 +116,8 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
             "Starting pruner with config: {:?}", config
         );
 
+        let prune_concurrency = config.prune_concurrency as usize;
+
         // The pruner can pause for a while, waiting for the delay imposed by the
         // `pruner_timestamp` to expire. In that case, the period between ticks should not be
         // compressed to make up for missed ticks.
@@ -63,7 +128,14 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
         // demonstrate that it is making progress.
         let mut logger = WatermarkLogger::new("pruner", LoggerWatermark::default());
 
-        'outer: loop {
+        // Maintains the list of chunks that are ready to be pruned but not yet pruned.
+        // This map can contain ranges that were attempted to be pruned in previous iterations,
+        // but failed due to errors.
+        // Add a multiple of the prune_concurrency to the max_pending to allow more tasks to be
+        // scheduled in parallel for better efficiency.
+        let mut pending_prune_ranges = PendingRanges::new(prune_concurrency * 3);
+
+        loop {
             // (1) Get the latest pruning bounds from the database.
             let mut watermark = tokio::select! {
                 _ = cancel.cancelled() => {
@@ -115,65 +187,74 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                 }
             }
 
+            // Keep a copy of the watermark for the db_watermark.
+            // This is because we can only advance db_watermark when all checkpoints
+            // up to it have been pruned.
+            let mut db_watermark = watermark.clone();
+
+            // (3) Collect all the new chunks that are ready to be pruned.
+            // This will also advance the watermark.
+            while !pending_prune_ranges.is_full() {
+                if let Some((from, to_exclusive)) = watermark.next_chunk(config.max_chunk_size) {
+                    pending_prune_ranges.schedule(from, to_exclusive);
+                } else {
+                    break;
+                }
+            }
+
+            debug!(
+                pipeline = H::NAME,
+                "Number of chunks to prune: {}",
+                pending_prune_ranges.len()
+            );
+
             // (3) Prune chunk by chunk to avoid the task waiting on a long-running database
             // transaction, between tests for cancellation.
-            while let Some((from, to_exclusive)) = watermark.next_chunk(config.max_chunk_size) {
-                if cancel.is_cancelled() {
-                    info!(pipeline = H::NAME, "Shutdown received");
-                    break 'outer;
-                }
+            // Spawn all tasks in parallel, but limit the number of concurrent tasks.
+            let semaphore = Arc::new(Semaphore::new(prune_concurrency));
+            let mut tasks = FuturesUnordered::new();
+            for (from, to_exclusive) in pending_prune_ranges.iter() {
+                let semaphore = semaphore.clone();
+                let cancel = cancel.child_token();
+                let db = db.clone();
+                let metrics = metrics.clone();
+                let handler = handler.clone();
 
-                metrics
-                    .total_pruner_chunks_attempted
-                    .with_label_values(&[H::NAME])
-                    .inc();
+                tasks.push(tokio::spawn(async move {
+                    let _permit = tokio::select! {
+                        permit = semaphore.acquire() => {
+                            permit.unwrap()
+                        }
+                        _ = cancel.cancelled() => {
+                            return ((from, to_exclusive), Err(anyhow::anyhow!("Cancelled")));
+                        }
+                    };
+                    let result = prune_task_impl(metrics, db, handler, from, to_exclusive).await;
+                    ((from, to_exclusive), result)
+                }));
+            }
 
-                let guard = metrics
-                    .pruner_delete_latency
-                    .with_label_values(&[H::NAME])
-                    .start_timer();
-
-                let Ok(mut conn) = db.connect().await else {
-                    warn!(
-                        pipeline = H::NAME,
-                        "Pruner failed to connect, while pruning"
-                    );
-                    break;
-                };
-
-                debug!(
-                    pipeline = H::NAME,
-                    "Pruning from {} to {}", from, to_exclusive
-                );
-
-                let affected = match handler.prune(from, to_exclusive, &mut conn).await {
-                    Ok(affected) => {
-                        guard.stop_and_record();
-                        watermark.pruner_hi = to_exclusive as i64;
-                        affected
+            // (4) Wait for all tasks to finish.
+            // For each task, if it succeeds, remove the range from the pending_prune_ranges.
+            // Otherwise the range will remain in the map and will be retried in the next iteration.
+            while let Some(r) = tasks.next().await {
+                let ((from, to_exclusive), result) = r.unwrap();
+                match result {
+                    Ok(()) => {
+                        let pruner_hi = pending_prune_ranges.remove(&from) as i64;
+                        db_watermark.pruner_hi = pruner_hi;
+                        metrics
+                            .watermark_pruner_hi
+                            .with_label_values(&[H::NAME])
+                            .set(db_watermark.pruner_hi);
                     }
-
                     Err(e) => {
-                        guard.stop_and_record();
-                        error!(pipeline = H::NAME, "Failed to prune data: {e}");
-                        break;
+                        error!(
+                            pipeline = H::NAME,
+                            "Failed to prune data for range: {from} to {to_exclusive}: {e}"
+                        );
                     }
-                };
-
-                metrics
-                    .total_pruner_chunks_deleted
-                    .with_label_values(&[H::NAME])
-                    .inc();
-
-                metrics
-                    .total_pruner_rows_deleted
-                    .with_label_values(&[H::NAME])
-                    .inc_by(affected as u64);
-
-                metrics
-                    .watermark_pruner_hi
-                    .with_label_values(&[H::NAME])
-                    .set(watermark.pruner_hi);
+                }
             }
 
             // (4) Update the pruner watermark
@@ -190,7 +271,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                 continue;
             };
 
-            match watermark.update(&mut conn).await {
+            match db_watermark.update(&mut conn).await {
                 Err(e) => {
                     let elapsed = guard.stop_and_record();
                     error!(
@@ -202,17 +283,71 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
                 Ok(true) => {
                     let elapsed = guard.stop_and_record();
-                    logger.log::<H>(&watermark, elapsed);
+                    logger.log::<H>(&db_watermark, elapsed);
 
                     metrics
                         .watermark_pruner_hi_in_db
                         .with_label_values(&[H::NAME])
-                        .set(watermark.pruner_hi);
+                        .set(db_watermark.pruner_hi);
                 }
                 Ok(false) => {}
+            }
+
+            // If the scheduling watermark is the same as the db_watermark,
+            // it means we have successfully pruned all the scheduled ranges,
+            // and we can make more progress without waiting for the next tick.
+            // Reset the tick immediately.
+            if watermark == db_watermark {
+                poll.reset();
             }
         }
 
         info!(pipeline = H::NAME, "Stopping pruner");
     })
+}
+
+async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
+    metrics: Arc<IndexerMetrics>,
+    db: Db,
+    handler: Arc<H>,
+    from: u64,
+    to_exclusive: u64,
+) -> Result<(), anyhow::Error> {
+    metrics
+        .total_pruner_chunks_attempted
+        .with_label_values(&[H::NAME])
+        .inc();
+
+    let guard = metrics
+        .pruner_delete_latency
+        .with_label_values(&[H::NAME])
+        .start_timer();
+
+    let mut conn = db.connect().await?;
+
+    debug!(pipeline = H::NAME, "Pruning from {from} to {to_exclusive}");
+
+    let affected = match handler.prune(from, to_exclusive, &mut conn).await {
+        Ok(affected) => {
+            guard.stop_and_record();
+            affected
+        }
+
+        Err(e) => {
+            guard.stop_and_record();
+            return Err(e);
+        }
+    };
+
+    metrics
+        .total_pruner_chunks_deleted
+        .with_label_values(&[H::NAME])
+        .inc();
+
+    metrics
+        .total_pruner_rows_deleted
+        .with_label_values(&[H::NAME])
+        .inc_by(affected as u64);
+
+    Ok(())
 }
