@@ -14,6 +14,7 @@ import {
     TraceInstructionKind,
     readTrace,
 } from './trace_utils';
+import { ModuleInfo } from './utils';
 
 /**
  * Describes the runtime variable scope (e.g., local variables
@@ -102,13 +103,21 @@ interface IRuntimeStackFrame {
      */
     name: string;
     /**
-     *  Path to the file containing currently executing instruction.
-     */
+    * Module where the frame function is defined.
+    */
+    modInfo: ModuleInfo;
+    /**
+    *  Path to the file containing currently executing instruction.
+    */
     file: string;
     /**
      *  File hash of the file containing currently executing instruction.
      */
     fileHash: string;
+    /**
+     * Program counter (PC) of the currently executing instruction.
+     */
+    pc: number;
     /**
      * Current line in the file corresponding to currently viewed instruction.
      */
@@ -134,7 +143,11 @@ interface IRuntimeStackFrame {
     /**
      * Lines that are not present in the source map.
      */
-    optimizedLines: number[]
+    optimizedLines: number[];
+    /**
+     * Disassembly view is shown for this frame.
+     */
+    showDisassembly: boolean;
 }
 
 /**
@@ -217,6 +230,23 @@ export class Runtime extends EventEmitter {
     private lineBreakpoints = new Map<string, Set<number>>();
 
     /**
+     * Map of file hashes to files representing disassembled bytecode.
+     */
+    private bytecodeFilesMap = new Map<string, IFileInfo>();
+
+    /**
+     * Map of source maps for disassembled bytecode, keyed
+     * on stringified ModuleInfo.
+     */
+    private bytecodeMapsModMap = new Map<string, ISourceMap>();
+
+    /**
+     * A Move file currently opened in the editor window that
+     * corresponds to one of the frames on the stack.
+     */
+    private currentMoveFile: string | undefined = undefined;
+
+    /**
      * Start a trace viewing session and set up the initial state of the runtime.
      *
      * @param source  path to the Move source file whose traces are to be viewed.
@@ -238,11 +268,11 @@ export class Runtime extends EventEmitter {
             throw Error(`Cannot find package name in manifest file: ${manifest_path}`);
         }
 
-        // create file maps for all files in the `build` directory, including both package source
+        // create file maps for all files in the `sources` directory, including both package source
         // files and source files for dependencies
-        this.hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'sources'));
+        hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'sources'), this.filesMap, '.move');
         // update with files from the actual "sources" directory rather than from the "build" directory
-        this.hashToFileMap(path.join(pkgRoot, 'sources'));
+        hashToFileMap(path.join(pkgRoot, 'sources'), this.filesMap, '.move');
 
         // create source maps for all modules in the `build` directory
         const sourceMapsModMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'source_maps'), this.filesMap);
@@ -254,6 +284,14 @@ export class Runtime extends EventEmitter {
         const sourceMapsHashMap = new Map<string, ISourceMap>;
         for (const [_, sourceMap] of sourceMapsModMap) {
             sourceMapsHashMap.set(sourceMap.fileHash, sourceMap);
+        }
+
+        const disassemblyDir = path.join(pkgRoot, 'build', pkg_name, 'disassembly');
+        if (fs.existsSync(disassemblyDir)) {
+            // create file maps for all bytecode files in the `disassembly` directory
+            hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'disassembly'), this.bytecodeFilesMap, '.mvb');
+            // created bytecode maps for disassembled bytecode files
+            this.bytecodeMapsModMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'disassembly'), this.bytecodeFilesMap);
         }
 
         this.trace = readTrace(traceFilePath, sourceMapsModMap, sourceMapsHashMap, this.filesMap);
@@ -270,6 +308,7 @@ export class Runtime extends EventEmitter {
             this.newStackFrame(
                 currentEvent.id,
                 currentEvent.name,
+                currentEvent.modInfo,
                 currentEvent.fileHash,
                 currentEvent.localsTypes,
                 currentEvent.localsNames,
@@ -453,6 +492,7 @@ export class Runtime extends EventEmitter {
                 this.newStackFrame(
                     currentEvent.id,
                     currentEvent.name,
+                    currentEvent.modInfo,
                     currentEvent.fileHash,
                     currentEvent.localsTypes,
                     currentEvent.localsNames,
@@ -675,6 +715,7 @@ export class Runtime extends EventEmitter {
             currentFrame.lastCallInstructionLine = loc.line;
         }
 
+        currentFrame.pc = instructionEvent.pc;
         if (loc.line === currentFrame.line) {
             // so that instructions on the same line can be bypassed
             return [true, loc.line];
@@ -684,6 +725,65 @@ export class Runtime extends EventEmitter {
         }
     }
 
+    /**
+     * Given a path to afile, sets the currently opened Move file to that path
+     * if this file that corresponds to one of the frames on the stack.
+     *
+     * @param filePath path to the currently opened Move file.
+     * @returns path to newly modified currently opened Move file
+     * or `undefined` if the file cannot be found.
+     */
+    public setCurrentMoveFileFromPath(filePath: string): string | undefined {
+        if (this.frameStack.frames.find(frame => frame.file === filePath)) {
+            this.currentMoveFile = filePath;
+        } else {
+            this.currentMoveFile = undefined;
+        }
+        return this.currentMoveFile;
+    }
+
+    /**
+     * Given a frame ID, sets the currently opened Move file to the file
+     * corresponding to the frame with that ID.
+     *
+     * @param frameId frame identifier.
+     *
+     * @returns path to newly modified currently opened Move file
+     * or `undefined` if the file cannot be found.
+     */
+    public setCurrentMoveFileFromFrame(frameId: number): string | undefined {
+        const frame = this.frameStack.frames.find(frame => frame.id === frameId);
+        if (frame) {
+            this.currentMoveFile = frame.file;
+        } else {
+            this.currentMoveFile = undefined;
+        }
+        return this.currentMoveFile;
+    }
+
+    /**
+     * Toggles disassembly view for all frames on the stack whose
+     * source is the currently opened Move file.
+     */
+    public toggleDisassembly(): void {
+        if (this.currentMoveFile) {
+            this.frameStack.frames.forEach(frame => {
+                if (frame.file === this.currentMoveFile) {
+                    frame.showDisassembly = true;
+                }
+            });
+        }
+    }
+
+    public toggleSource(): void {
+        if (this.currentMoveFile) {
+            this.frameStack.frames.forEach(frame => {
+                if (frame.file === this.currentMoveFile) {
+                    frame.showDisassembly = false;
+                }
+            });
+        }
+    }
 
     /**
      * Creates a new runtime stack frame based on info from the `OpenFrame` trace event.
@@ -700,6 +800,7 @@ export class Runtime extends EventEmitter {
     private newStackFrame(
         frameID: number,
         funName: string,
+        modInfo: ModuleInfo,
         fileHash: string,
         localsTypes: string[],
         localsNames: string[],
@@ -717,14 +818,17 @@ export class Runtime extends EventEmitter {
         const stackFrame: IRuntimeStackFrame = {
             id: frameID,
             name: funName,
+            modInfo,
             file: currentFile.path,
             fileHash,
             line: 0, // line will be updated when next event (Instruction) is processed
+            pc: 0, // PC will be updated when next event (Instruction) is processed
             localsTypes,
             localsNames,
             locals,
             lastCallInstructionLine: undefined,
-            optimizedLines
+            optimizedLines,
+            showDisassembly: false
         };
 
         if (this.trace.events.length <= this.eventIndex + 1 ||
@@ -746,34 +850,6 @@ export class Runtime extends EventEmitter {
         setTimeout(() => {
             this.emit(event, ...args);
         }, 0);
-    }
-
-    /**
-     * Creates a map from a file hash to file information for all Move source files in a directory.
-     *
-     * @param directory path to the directory containing Move source files.
-     * @param filesMap map to update with file information.
-     */
-    private hashToFileMap(directory: string): void {
-        const processDirectory = (dir: string) => {
-            const files = fs.readdirSync(dir);
-            for (const f of files) {
-                const filePath = path.join(dir, f);
-                const stats = fs.statSync(filePath);
-                if (stats.isDirectory()) {
-                    processDirectory(filePath);
-                } else if (path.extname(f) === '.move') {
-                    const content = fs.readFileSync(filePath, 'utf8');
-                    const numFileHash = computeFileHash(content);
-                    const lines = content.split('\n');
-                    const fileInfo = { path: filePath, content, lines };
-                    const fileHash = Buffer.from(numFileHash).toString('base64');
-                    this.filesMap.set(fileHash, fileInfo);
-                }
-            }
-        };
-
-        processDirectory(directory);
     }
 
     //
@@ -955,6 +1031,39 @@ export class Runtime extends EventEmitter {
         return res;
     }
 }
+
+/**
+ * Creates a map from a file hash to file information for all Move source files in a directory.
+ *
+ * @param directory path to the directory containing Move source files.
+ * @param filesMap map to update with file information.
+ */
+function hashToFileMap(
+    directory: string,
+    filesMap: Map<string, IFileInfo>,
+    extension: String
+): void {
+    const processDirectory = (dir: string) => {
+        const files = fs.readdirSync(dir);
+        for (const f of files) {
+            const filePath = path.join(dir, f);
+            const stats = fs.statSync(filePath);
+            if (stats.isDirectory()) {
+                processDirectory(filePath);
+            } else if (path.extname(f) === extension) {
+                const content = fs.readFileSync(filePath, 'utf8');
+                const numFileHash = computeFileHash(content);
+                const lines = content.split('\n');
+                const fileInfo = { path: filePath, content, lines };
+                const fileHash = Buffer.from(numFileHash).toString('base64');
+                filesMap.set(fileHash, fileInfo);
+            }
+        }
+    };
+
+    processDirectory(directory);
+}
+
 
 /**
  * Handles a write to a local variable in a stack frame.

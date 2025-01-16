@@ -18,8 +18,6 @@ import {
     Runtime,
     RuntimeEvents,
     RuntimeValueType,
-    IRuntimeVariableLoc,
-    IRuntimeGlobalLoc,
     IRuntimeVariableScope,
     CompoundType,
     IRuntimeRefValue,
@@ -96,6 +94,8 @@ export class MoveDebugSession extends LoggingDebugSession {
      */
     private variableHandles: Handles<IRuntimeVariableScope | CompoundType>;
 
+    private count: number = 0;
+
     public constructor() {
         super();
         this.setDebuggerLinesStartAt1(false);
@@ -169,7 +169,8 @@ export class MoveDebugSession extends LoggingDebugSession {
         // make VS Code send setExpression request
         response.body.supportsSetExpression = false;
 
-        // make VS Code send disassemble request
+        // make VS Code send disassemble request (it's false
+        // as we handle this differently through custom commands)
         response.body.supportsDisassembleRequest = false;
         response.body.supportsSteppingGranularity = false;
         response.body.supportsInstructionBreakpoints = false;
@@ -185,6 +186,27 @@ export class MoveDebugSession extends LoggingDebugSession {
 
         this.sendResponse(response);
         this.sendEvent(new InitializedEvent());
+    }
+
+    /**
+     * Intercepts all requests sent to the debug adapter to handle custom ones.
+     *
+     * @param request request to be dispatched.
+     */
+    protected dispatchRequest(request: DebugProtocol.Request): void {
+        if (request.command === 'toggleDisassembly') {
+            this.runtime.toggleDisassembly();
+            this.sendEvent(new StoppedEvent('toggle disassembly', MoveDebugSession.THREAD_ID));
+        } else if (request.command === 'toggleSource') {
+            this.runtime.toggleSource();
+            this.sendEvent(new StoppedEvent('toggle source', MoveDebugSession.THREAD_ID));
+        } else if (request.command === 'fileChanged') {
+            const newFile = String(request.arguments);
+            const changedFile = this.runtime.setCurrentMoveFileFromPath(newFile);
+            logger.log('Current Move file changed to ' + changedFile);
+        } else {
+            super.dispatchRequest(request);
+        }
     }
 
     protected async launchRequest(
@@ -223,12 +245,32 @@ export class MoveDebugSession extends LoggingDebugSession {
             response.body = {
                 stackFrames: runtimeStack.frames.map(frame => {
                     const fileName = path.basename(frame.file);
-                    return new StackFrame(frame.id, frame.name, new Source(fileName, frame.file), frame.line);
+                    const frameSource = new Source(fileName, frame.file);
+                    if (frame.showDisassembly) {
+                        frameSource.sourceReference = 7;
+                    }
+                    return new StackFrame(frame.id, frame.name, frameSource, frame.line);
                 }).reverse(),
                 totalFrames: stack_height,
                 optimized_lines: stack_height > 0
                     ? runtimeStack.frames[stack_height - 1].optimizedLines
                     : []
+            };
+        } catch (err) {
+            response.success = false;
+            response.message = err instanceof Error ? err.message : String(err);
+        }
+        this.sendResponse(response);
+    }
+
+    protected sourceRequest(
+        response: DebugProtocol.SourceResponse,
+        args: DebugProtocol.SourceArguments
+    ): void {
+        const content = 'mock disassembly content';
+        try {
+            response.body = {
+                content
             };
         } catch (err) {
             response.success = false;
@@ -273,6 +315,11 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         try {
             const scopes = this.getScopes(args.frameId);
+            const changedFile = this.runtime.setCurrentMoveFileFromFrame(args.frameId);
+            logger.log('Current Move file changed to '
+                + changedFile
+                + ' for frame id '
+                + args.frameId);
             response.body = {
                 scopes
             };
@@ -280,7 +327,6 @@ export class MoveDebugSession extends LoggingDebugSession {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
         }
-
         this.sendResponse(response);
     }
 
@@ -565,7 +611,6 @@ export class MoveDebugSession extends LoggingDebugSession {
         }
         this.sendResponse(response);
     }
-
 
     protected disconnectRequest(
         response: DebugProtocol.DisconnectResponse,

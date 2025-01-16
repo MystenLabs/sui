@@ -23,6 +23,18 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "commands": [
+        {
+          "command": "move.toggleDisassembly",
+          "title": "Toggle disassembly view",
+          "category": "Move"
+        },
+        {
+          "command": "move.toggleSource",
+          "title": "Toggle source view",
+          "category": "Move"
+        }
+    ],
     "breakpoints": [{ "language": "move" }],
     "debuggers": [
       {
@@ -70,6 +82,16 @@
             }
           }
         }
+      }
+    ]
+  },
+  "menus": {
+    "commandPalette": [
+      {
+        "command": "move.toggleDisassembly"
+      },
+      {
+        "command": "move.toggleSource"
       }
     ]
   },

@@ -12,7 +12,6 @@ import {
     IRuntimeRefValue
 } from './runtime';
 import { ISourceMap, IFileLoc, IFileInfo, ILoc, ISourceMapFunction } from './source_map_utils';
-import { logger } from '@vscode/debugadapter';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -237,6 +236,7 @@ export type TraceEvent =
         type: TraceEventKind.OpenFrame,
         id: number,
         name: string,
+        modInfo: ModuleInfo,
         fileHash: string
         isNative: boolean,
         localsTypes: string[],
@@ -314,8 +314,12 @@ interface ITraceGenFrameInfo {
      */
     funName: string;
     /**
-     * Source map information for a given function.
+     * Module where the frame function is defined.
      */
+    modInfo: ModuleInfo;
+    /**
+    * Source map information for a given function.
+    */
     funEntry: ISourceMapFunction;
 }
 
@@ -418,6 +422,7 @@ export function readTrace(
                 type: TraceEventKind.OpenFrame,
                 id: frame.frame_id,
                 name: frame.function_name,
+                modInfo,
                 fileHash: sourceMap.fileHash,
                 isNative: frame.is_native,
                 localsTypes,
@@ -437,6 +442,7 @@ export function readTrace(
                 fileHash: sourceMap.fileHash,
                 optimizedLines: sourceMap.optimizedLines,
                 funName: frame.function_name,
+                modInfo,
                 funEntry
             });
         } else if (event.CloseFrame) {
@@ -675,6 +681,7 @@ function processInstructionIfMacro(
                     localsTypes: [],
                     localsNames: [],
                     paramValues: [],
+                    modInfo: frameInfo.modInfo,
                     optimizedLines: sourceMap.optimizedLines
                 });
             }
@@ -687,6 +694,7 @@ function processInstructionIfMacro(
                 optimizedLines: sourceMap.optimizedLines,
                 // same function name and source map as before since we are in the same function
                 funName: frameInfo.funName,
+                modInfo: frameInfo.modInfo,
                 funEntry: frameInfo.funEntry
             });
         }
@@ -728,6 +736,7 @@ function processInstructionIfMacro(
                     localsTypes: [],
                     localsNames: [],
                     paramValues: [],
+                    modInfo: frameInfo.modInfo,
                     optimizedLines: frameInfo.optimizedLines
                 });
                 // we get a lot of data for the new frame info from the current on
@@ -739,6 +748,7 @@ function processInstructionIfMacro(
                     fileHash: instLoc.fileHash,
                     optimizedLines: frameInfo.optimizedLines,
                     funName: frameInfo.funName,
+                    modInfo: frameInfo.modInfo,
                     funEntry: frameInfo.funEntry
                 });
             } // else we are already in an inlined frame, so we don't need to do anything
