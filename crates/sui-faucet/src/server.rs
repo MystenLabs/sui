@@ -203,10 +203,18 @@ pub async fn start_faucet(
     concurrency_limit: usize,
     prometheus_registry: &Registry,
 ) -> Result<(), anyhow::Error> {
-    if app_state.config.authenticated {
+    let (cloudflare_turnstile_url, turnstile_secret_key) = if app_state.config.authenticated {
         ensure!(TURNSTILE_SECRET_KEY.is_some() && CLOUDFLARE_TURNSTILE_URL.is_some(),
                 "Both CLOUDFLARE_TURNSTILE_URL and TURNSTILE_SECRET_KEY env vars must be set for testnet deployment (--authenticated flag was set)");
-    }
+
+        (
+            CLOUDFLARE_TURNSTILE_URL.as_ref().unwrap().to_string(),
+            TURNSTILE_SECRET_KEY.as_ref().unwrap().to_string(),
+        )
+    } else {
+        ("".to_string(), "".to_string())
+    };
+
     // TODO: restrict access if needed
     let cors = CorsLayer::new()
         .allow_methods(vec![Method::GET, Method::POST])
@@ -229,8 +237,8 @@ pub async fn start_faucet(
     let token_manager = Arc::new(RequestsManager::new(
         max_requests_per_ip,
         Duration::from_secs(reset_time_interval_secs),
-        CLOUDFLARE_TURNSTILE_URL.as_ref().unwrap().to_string(),
-        TURNSTILE_SECRET_KEY.as_ref().unwrap().to_string(),
+        cloudflare_turnstile_url,
+        turnstile_secret_key,
     ));
 
     let governor_cfg = Arc::new(
