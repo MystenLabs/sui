@@ -13,10 +13,9 @@ use crate::consensus_adapter::ConsensusAdapterMetrics;
 use crate::consensus_adapter::{ConnectionMonitorStatusForTests, MockConsensusClient};
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
-use crate::test_utils::make_transfer_object_transaction;
-use crate::test_utils::{
+use crate::test_utils::{make_transfer_object_move_transaction, make_transfer_object_transaction};
+use crate::unit_test_utils::{
     init_local_authorities, init_local_authorities_with_overload_thresholds,
-    make_transfer_object_move_transaction,
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::error::SuiError;
@@ -349,7 +348,7 @@ async fn test_execution_with_dependencies() {
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx2)
             .await;
     executed_owned_certs.push(cert);
-    let (mut shared_counter_ref, owner) = effects2.created()[0];
+    let (mut shared_counter_ref, owner) = effects2.created()[0].clone();
     let shared_counter_initial_version = if let Owner::Shared {
         initial_shared_version,
     } = owner
@@ -533,7 +532,7 @@ async fn test_per_object_overload() {
         .await
         .pop()
         .unwrap();
-    let (shared_counter_ref, owner) = create_counter_effects.created()[0];
+    let (shared_counter_ref, owner) = create_counter_effects.created()[0].clone();
     let Owner::Shared {
         initial_shared_version: shared_counter_initial_version,
     } = owner
@@ -666,7 +665,7 @@ async fn test_txn_age_overload() {
         .await
         .pop()
         .unwrap();
-    let (shared_counter_ref, owner) = create_counter_effects.created()[0];
+    let (shared_counter_ref, owner) = create_counter_effects.created()[0].clone();
     let Owner::Shared {
         initial_shared_version: shared_counter_initial_version,
     } = owner

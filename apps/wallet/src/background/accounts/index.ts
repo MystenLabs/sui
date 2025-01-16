@@ -264,7 +264,7 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 				newSerializedAccounts.push(await LedgerAccount.createNew({ ...aLedgerAccount, password }));
 			}
 		} else if (type === 'zkLogin') {
-			newSerializedAccounts.push(await ZkLoginAccount.createNew(payload.args));
+			newSerializedAccounts.push(...(await ZkLoginAccount.createNew(payload.args)));
 		} else {
 			throw new Error(`Unknown accounts type to create ${type}`);
 		}

@@ -27,7 +27,6 @@ import Annotation from './cst/annotation';
 
 export type MoveOptions = ParserOptions & {
 	wrapComments: boolean;
-	alwaysBreakFunctions: boolean;
 	alwaysBreakConditionals: boolean;
 	alwaysBreakStructDefinition: boolean;
 	useModuleLabel: boolean;

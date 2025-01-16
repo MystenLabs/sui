@@ -5,6 +5,12 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{Context, Result};
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_schema::{
+    schema::tx_balance_changes,
+    transactions::{BalanceChange, StoredTxBalanceChange},
+};
+use sui_pg_db as db;
 use sui_types::{
     coin::Coin,
     effects::TransactionEffectsAPI,
@@ -12,15 +18,7 @@ use sui_types::{
     gas_coin::GAS,
 };
 
-use crate::{
-    db,
-    models::transactions::{BalanceChange, StoredTxBalanceChange},
-    pipeline::concurrent::Handler,
-    pipeline::Processor,
-    schema::tx_balance_changes,
-};
-
-pub struct TxBalanceChanges;
+pub(crate) struct TxBalanceChanges;
 
 impl Processor for TxBalanceChanges {
     const NAME: &'static str = "tx_balance_changes";
@@ -58,7 +56,6 @@ impl Processor for TxBalanceChanges {
 #[async_trait::async_trait]
 impl Handler for TxBalanceChanges {
     const MIN_EAGER_ROWS: usize = 100;
-    const MAX_CHUNK_ROWS: usize = 1000;
     const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
@@ -97,7 +94,7 @@ fn balance_changes(transaction: &CheckpointTransaction) -> Result<Vec<BalanceCha
     Ok(changes
         .into_iter()
         .map(|((owner, coin_type), amount)| BalanceChange::V1 {
-            owner: *owner,
+            owner: owner.clone(),
             coin_type: coin_type.to_canonical_string(/* with_prefix */ true),
             amount,
         })

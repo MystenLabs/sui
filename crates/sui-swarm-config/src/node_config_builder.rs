@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
-use crate::network_config::NetworkConfig;
-use fastcrypto::encoding::{Encoding, Hex};
-use fastcrypto::traits::KeyPair;
-use narwhal_config::{NetworkAdminServerParameters, PrometheusMetricsParameters};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
+
+use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::traits::KeyPair;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
@@ -28,6 +26,9 @@ use sui_types::multiaddr::Multiaddr;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
+use crate::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
+use crate::network_config::NetworkConfig;
+
 /// This builder contains information that's not included in ValidatorGenesisConfig for building
 /// a validator NodeConfig. It can be used to build either a genesis validator or a new validator.
 #[derive(Clone, Default)]
@@ -37,6 +38,7 @@ pub struct ValidatorConfigBuilder {
     force_unpruned_checkpoints: bool,
     jwk_fetch_interval: Option<Duration>,
     authority_overload_config: Option<AuthorityOverloadConfig>,
+    execution_cache_config: Option<ExecutionCacheConfig>,
     data_ingestion_dir: Option<PathBuf>,
     policy_config: Option<PolicyConfig>,
     firewall_config: Option<RemoteFirewallConfig>,
@@ -80,6 +82,11 @@ impl ValidatorConfigBuilder {
 
     pub fn with_authority_overload_config(mut self, config: AuthorityOverloadConfig) -> Self {
         self.authority_overload_config = Some(config);
+        self
+    }
+
+    pub fn with_execution_cache_config(mut self, config: ExecutionCacheConfig) -> Self {
+        self.execution_cache_config = Some(config);
         self
     }
 
@@ -130,31 +137,15 @@ impl ValidatorConfigBuilder {
             .join(key_path.clone());
 
         let network_address = validator.network_address;
-        let consensus_address = validator.consensus_address;
         let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(key_path);
         let localhost = local_ip_utils::localhost_for_testing();
         let consensus_config = ConsensusConfig {
-            address: consensus_address,
             db_path: consensus_db_path,
             db_retention_epochs: None,
             db_pruner_period_secs: None,
             max_pending_transactions: None,
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
-            narwhal_config: narwhal_config::Parameters {
-                network_admin_server: NetworkAdminServerParameters {
-                    primary_network_admin_server_port: local_ip_utils::get_available_port(
-                        &localhost,
-                    ),
-                    worker_network_admin_server_base_port: local_ip_utils::get_available_port(
-                        &localhost,
-                    ),
-                },
-                prometheus_metrics: PrometheusMetricsParameters {
-                    socket_addr: validator.narwhal_metrics_address,
-                },
-                ..Default::default()
-            },
             parameters: Default::default(),
         };
 
@@ -226,9 +217,8 @@ impl ValidatorConfigBuilder {
             indexer_max_subscriptions: Default::default(),
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: None,
-            enable_experimental_rest_api: true,
-            rest: Some(sui_rest_api::Config {
-                enable_unstable_apis: Some(true),
+            rpc: Some(sui_rpc_api::Config {
+                enable_experimental_rest_api: Some(true),
                 ..Default::default()
             }),
             jwk_fetch_interval_seconds: self
@@ -237,11 +227,11 @@ impl ValidatorConfigBuilder {
                 .unwrap_or(3600),
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: self.authority_overload_config.unwrap_or_default(),
+            execution_cache: self.execution_cache_config.unwrap_or_default(),
             run_with_range: None,
             jsonrpc_server_type: None,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
-            execution_cache: ExecutionCacheConfig::default(),
             state_accumulator_v2: self.state_accumulator_v2,
             enable_soft_bundle: true,
             enable_validator_tx_finalizer: true,
@@ -528,9 +518,9 @@ impl FullnodeConfigBuilder {
             indexer_max_subscriptions: Default::default(),
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: Default::default(),
-            enable_experimental_rest_api: true,
-            rest: Some(sui_rest_api::Config {
-                enable_unstable_apis: Some(true),
+            rpc: Some(sui_rpc_api::Config {
+                enable_experimental_rest_api: Some(true),
+                enable_indexing: Some(true),
                 ..Default::default()
             }),
             // note: not used by fullnodes.

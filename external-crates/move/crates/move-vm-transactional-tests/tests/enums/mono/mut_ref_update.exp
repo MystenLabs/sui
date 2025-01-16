@@ -5,13 +5,13 @@ task 0, lines 3-50:
 // Move bytecode v7
 module 6.MonomorphicEnums {
 
-
 enum EnumWithTwoVariants has drop {
 	One { x: u64 },
 	Two { x: u64, y: u64 }
 }
 
 public f(Arg0: u64): EnumWithTwoVariants {
+L1:	loc0: u64
 B0:
 	0: LdU64(0)
 	1: StLoc[1](loc0: u64)
@@ -19,9 +19,11 @@ B0:
 	3: MoveLoc[1](loc0: u64)
 	4: PackVariant(VariantHandleIndex(0))
 	5: Ret
-
 }
+
 public mutate(Arg0: &mut EnumWithTwoVariants, Arg1: u64) {
+L2:	loc0: &mut u64
+L3:	loc1: &mut u64
 B0:
 	0: CopyLoc[0](Arg0: &mut EnumWithTwoVariants)
 	1: FreezeRef
@@ -49,8 +51,10 @@ Jump tables:
 		Variant1 => jump 10
 	}
 }
+
 public get(Arg0: &EnumWithTwoVariants): &u64 {
-L0:	loc1: &u64
+L1:	loc0: &u64
+L2:	loc1: &u64
 B0:
 	0: CopyLoc[0](Arg0: &EnumWithTwoVariants)
 	1: VariantSwitch(VariantJumpTableIndex(0))
@@ -73,4 +77,6 @@ Jump tables:
 		Variant1 => jump 7
 	}
 }
+
 }
+

@@ -14,58 +14,82 @@ certain changes to the parser may break the plugin (e.g., if parse tree node typ
 
 ## Prerequisites
 
-In order to use the plugin, you need to install `npm` command (`brew install npm` on a
-Mac). You can use the plugin to format Move files (`.move` extension) both on the command line and
-using Prettier's VSCode
-[extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode). When the
-plugin is complete, we will make it available directly from Move's VSCode extension.
+Requires [nodejs 18+](https://nodejs.org/en) installed.
 
-## Installation
+## Usage (Global, CLI)
 
-The plugin can be installed via npm:
-
-```
-npm i @mysten/prettier-plugin-move
-```
-
-## Usage
-
-Go to the root directory of the Move package whose files you'd like to format (i.e., the directory
-containing the Move.toml manifest file for this package) and run the following command:
+For CLI usage, you can install the plugin globally by running the following command:
 
 ```bash
-npm install prettier@3.1.1 "$SUI"/external-crates/move/crates/move-analyzer/prettier-plugin
+npm i -g prettier @mysten/prettier-plugin-move
 ```
 
-This will install both the prettier formatter and the plugin in the `./node_modules` directory.
-
-# Command-line Usage
-
-You can format Move files in the package where you completed the installation [step](#installation) by running the
-following command:
+Then there will be a registered executable `prettier-move` which works exactly like a regular `prettier` one, except that it automatically inserts the path to the plugin as an argument.
 
 ```bash
-./node_modules/.bin/prettier --plugin=prettier-plugin-move "$PATH_TO_MOVE_FILE"
+prettier-move -c sources/example.move # to check
+prettier-move -w sources/example.move # to write
 ```
 
-# VSCode integration
+This command is identical to the following:
 
-In order to use the plugin in VSCode you first need to install Prettier's VSCode
-[extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode).
-
-Then, in the root directory of the package where you completed the installation [step](#installation) you need to place the `.prettierrc` file containing the following configuration:
-
+```bash
+prettier --plugin /path/to/local/npm/node_modules/@mysten/prettier-plugin-move/out/index.js -c sources/example.move # to check
+prettier --plugin /path/to/local/npm/node_modules/@mysten/prettier-plugin-move/out/index.js -w sources/example.move # to write
 ```
+
+## Installation (Per-Project)
+
+If you decide to use the plugin per-project, you can install it in the project's directory. This way,
+the plugin will be available via `prettier` call in the project's directory.
+
+```bash
+# install as a dev-dependency
+npm i -D prettier @mysten/prettier-plugin-move
+```
+
+Add the `.prettierrc` or a similar configuration file (see [all supported formats](https://prettier.io/docs/en/configuration.html)):
+
+```json
 {
-"plugins": [
-    "prettier-plugin-move"
-  ]
+	"printWidth": 100,
+	"tabWidth": 4,
+	"useModuleLabel": true,
+	"autoGroupImports": "module",
+	"plugins": ["@mysten/prettier-plugin-move"]
 }
 ```
 
-After completing these steps, if you open the root directory of the package where you completed the
-installation [step](#installation) and choose any of the Move source files in this package, you will
-be able to format them by choosing `Format Code` command from VSCode's command palette.
+Then you can run prettier either via adding a script to `package.json`:
+
+```json
+{
+	"scripts": {
+		"prettier": "prettier --write ."
+	}
+}
+```
+
+```bash
+npm run prettier -w sources/example.move
+```
+
+Or, if you have prettier installed globally, you can run it directly:
+
+```bash
+prettier --write sources/example.move
+```
+
+## VSCode integration
+
+There is a bundled [Move Formatter](https://marketplace.visualstudio.com/items?itemName=mysten.prettier-move) extension for VSCode. It will detect prettier configuration for the workspace and use
+the plugin automatically.
+
+Alternatively, if you follow the per-project installation, [regular Pretter extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) should work as well.
+
+## Known Integrations
+
+- Neovim: see [this commit](https://github.com/amnn/nvim/commit/26236dc08162b61f95f689e232a5df2418708339) for configuration
 
 ## Contribute
 

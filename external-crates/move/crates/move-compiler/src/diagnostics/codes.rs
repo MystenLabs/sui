@@ -290,7 +290,7 @@ codes!(
         InvalidTransfer: { msg: "invalid transfer of references", severity: NonblockingError },
         AmbiguousVariableUsage: { msg: "ambiguous usage of variable", severity: NonblockingError },
     ],
-    BytecodeGeneration: [
+    CodeGeneration: [
         UnfoldableConstant: { msg: "cannot compute constant value", severity: NonblockingError },
     ],
     // errors for any unused code or items

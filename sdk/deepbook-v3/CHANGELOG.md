@@ -1,5 +1,76 @@
 # @mysten/deepbook-v3
 
+## 0.12.22
+
+### Patch Changes
+
+- Updated dependencies [4f012b9]
+- Updated dependencies [85bd9e4]
+- Updated dependencies [5e3709d]
+- Updated dependencies [b2928a9]
+- Updated dependencies [dc0e21e]
+- Updated dependencies [85bd9e4]
+- Updated dependencies [a872b97]
+  - @mysten/sui@1.18.0
+
+## 0.12.21
+
+### Patch Changes
+
+- 7237686: DRF pool
+
+## 0.12.20
+
+### Patch Changes
+
+- 50d0edb: DRF token
+
+## 0.12.19
+
+### Patch Changes
+
+- Updated dependencies [20af12d]
+  - @mysten/sui@1.17.0
+
+## 0.12.18
+
+### Patch Changes
+
+- Updated dependencies [100207f]
+  - @mysten/sui@1.16.2
+
+## 0.12.17
+
+### Patch Changes
+
+- @mysten/sui@1.16.1
+
+## 0.12.16
+
+### Patch Changes
+
+- f78d42a: AUSD pool support
+
+## 0.12.15
+
+### Patch Changes
+
+- Updated dependencies [ec2dc7f]
+- Updated dependencies [ec2dc7f]
+  - @mysten/sui@1.16.0
+
+## 0.12.14
+
+### Patch Changes
+
+- @mysten/sui@1.15.1
+
+## 0.12.13
+
+### Patch Changes
+
+- 9c0987c: AUSD Coin
+
 ## 0.12.12
 
 ### Patch Changes

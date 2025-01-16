@@ -42,11 +42,11 @@ use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Coin, DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, DynamicFieldPage,
-    SuiCoinMetadata, SuiData, SuiExecutionStatus, SuiObjectData, SuiObjectDataOptions,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData, SuiProtocolConfigValue, SuiRawData,
-    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    Coin, DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, DynamicFieldInfo,
+    DynamicFieldPage, SuiCoinMetadata, SuiData, SuiExecutionStatus, SuiObjectData,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData,
+    SuiProtocolConfigValue, SuiRawData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
@@ -66,7 +66,6 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
-    dynamic_field::DynamicFieldInfo,
     error::SuiError,
     gas::GasCostSummary,
     gas_coin::GasCoin,
@@ -99,6 +98,8 @@ use tracing::{debug, info};
 #[path = "unit_tests/profiler_tests.rs"]
 #[cfg(test)]
 mod profiler_tests;
+
+static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 /// Only to be used within CLI
 pub const GAS_SAFE_OVERHEAD: u64 = 1000;
@@ -873,6 +874,8 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let chain_id = client.read_api().get_chain_identifier().await.ok();
 
+                check_protocol_version_and_warn(&client).await?;
+
                 let package_path =
                     package_path
                         .canonicalize()
@@ -980,6 +983,8 @@ impl SuiClientCommands {
                 let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
                 let chain_id = client.read_api().get_chain_identifier().await.ok();
+
+                check_protocol_version_and_warn(&client).await?;
 
                 let package_path =
                     package_path
@@ -2409,7 +2414,7 @@ impl From<&SuiObjectData> for ObjectOutput {
             version: obj.version,
             digest: obj.digest.to_string(),
             obj_type,
-            owner: obj.owner,
+            owner: obj.owner.clone(),
             prev_tx: obj.previous_transaction,
             storage_rebate: obj.storage_rebate,
             content: obj.content.clone(),
@@ -2548,7 +2553,8 @@ pub async fn request_tokens_from_faucet(
     let client = reqwest::Client::new();
     let resp = client
         .post(&url)
-        .header("Content-Type", "application/json")
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .header(http::header::USER_AGENT, USER_AGENT)
         .json(&json_body)
         .send()
         .await?;
@@ -2759,18 +2765,20 @@ pub async fn estimate_gas_budget(
     sponsor: Option<SuiAddress>,
 ) -> Result<u64, anyhow::Error> {
     let client = context.get_client().await?;
-    let Ok(SuiClientCommandResult::DryRun(dry_run)) =
-        execute_dry_run(context, signer, kind, None, gas_price, gas_payment, sponsor).await
-    else {
-        bail!("Could not automatically determine the gas budget. Please supply one using the --gas-budget flag.")
-    };
-
-    let rgp = client.read_api().get_reference_gas_price().await?;
-
-    Ok(estimate_gas_budget_from_gas_cost(
-        dry_run.effects.gas_cost_summary(),
-        rgp,
-    ))
+    let dry_run =
+        execute_dry_run(context, signer, kind, None, gas_price, gas_payment, sponsor).await;
+    if let Ok(SuiClientCommandResult::DryRun(dry_run)) = dry_run {
+        let rgp = client.read_api().get_reference_gas_price().await?;
+        return Ok(estimate_gas_budget_from_gas_cost(
+            dry_run.effects.gas_cost_summary(),
+            rgp,
+        ));
+    } else {
+        bail!(
+            "Could not determine the gas budget. Error: {}",
+            dry_run.unwrap_err()
+        )
+    }
 }
 
 pub fn estimate_gas_budget_from_gas_cost(
@@ -2991,4 +2999,28 @@ pub(crate) async fn prerender_clever_errors(
             *error = rendered;
         }
     }
+}
+
+/// Warn the user if the CLI falls behind more than 2 protocol versions.
+async fn check_protocol_version_and_warn(client: &SuiClient) -> Result<(), anyhow::Error> {
+    let protocol_cfg = client.read_api().get_protocol_config(None).await?;
+    let on_chain_protocol_version = protocol_cfg.protocol_version.as_u64();
+    let cli_protocol_version = ProtocolVersion::MAX.as_u64();
+    if (cli_protocol_version + 2) < on_chain_protocol_version {
+        eprintln!(
+            "{}",
+            format!(
+                "[warning] CLI's protocol version is {cli_protocol_version}, but the active \
+                network's protocol version is {on_chain_protocol_version}. \
+                \n Consider installing the latest version of the CLI - \
+                https://docs.sui.io/guides/developer/getting-started/sui-install \n\n \
+                If publishing/upgrading returns a dependency verification error, then install the \
+                latest CLI version."
+            )
+            .yellow()
+            .bold()
+        );
+    }
+
+    Ok(())
 }

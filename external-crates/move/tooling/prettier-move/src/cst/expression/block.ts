@@ -5,7 +5,7 @@ import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, doc } from 'prettier';
 import { block, shouldBreakFirstChild } from '../../utilities';
-const { group, indent, join, hardlineWithoutBreakParent } = doc.builders;
+const { group, indent, join, conditionalGroup, hardlineWithoutBreakParent } = doc.builders;
 
 /** The type of the node implemented in this file */
 const NODE_TYPE = 'block';
@@ -65,5 +65,8 @@ export function printBreakableBlock(
  * Print `block` node.
  */
 export function printBlock(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	return printNonBreakingBlock(path, options, print);
+	return conditionalGroup([
+		printBreakableBlock(path, options, print),
+		printNonBreakingBlock(path, options, print),
+	]);
 }

@@ -33,7 +33,6 @@ that characters are valid ASCII, and that strings consist of only valid ASCII ch
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
-<b>use</b> <a href="../move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
 </code></pre>
 
 
@@ -108,7 +107,7 @@ An ASCII character.
 An invalid ASCII character was encountered when creating an ASCII string.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/ascii.md#0x1_ascii_EInvalidASCIICharacter">EInvalidASCIICharacter</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 65536;
+<pre><code><b>const</b> <a href="../move-stdlib/ascii.md#0x1_ascii_EInvalidASCIICharacter">EInvalidASCIICharacter</a>: u64 = 65536;
 </code></pre>
 
 
@@ -118,7 +117,7 @@ An invalid ASCII character was encountered when creating an ASCII string.
 An invalid index was encountered when creating a substring.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/ascii.md#0x1_ascii_EInvalidIndex">EInvalidIndex</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 65537;
+<pre><code><b>const</b> <a href="../move-stdlib/ascii.md#0x1_ascii_EInvalidIndex">EInvalidIndex</a>: u64 = 65537;
 </code></pre>
 
 
@@ -289,7 +288,7 @@ Pop a <code><a href="../move-stdlib/ascii.md#0x1_ascii_Char">Char</a></code> fro
 Returns the length of the <code><a href="../move-stdlib/string.md#0x1_string">string</a></code> in bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): u64
 </code></pre>
 
 
@@ -298,7 +297,7 @@ Returns the length of the <code><a href="../move-stdlib/string.md#0x1_string">st
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): u64 {
     <a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>().<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>()
 }
 </code></pre>
@@ -339,7 +338,7 @@ Append the <code>other</code> string to the end of <code><a href="../move-stdlib
 Insert the <code>other</code> string at the <code>at</code> index of <code><a href="../move-stdlib/string.md#0x1_string">string</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_insert">insert</a>(s: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, at: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, o: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_insert">insert</a>(s: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, at: u64, o: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>)
 </code></pre>
 
 
@@ -348,7 +347,7 @@ Insert the <code>other</code> string at the <code>at</code> index of <code><a hr
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_insert">insert</a>(s: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, at: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, o: <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>) {
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_insert">insert</a>(s: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, at: u64, o: <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>) {
     <b>assert</b>!(at &lt;= s.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(), <a href="../move-stdlib/ascii.md#0x1_ascii_EInvalidIndex">EInvalidIndex</a>);
     o.<a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">into_bytes</a>().destroy!(|e| s.bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_insert">insert</a>(e, at));
 }
@@ -365,7 +364,7 @@ Insert the <code>other</code> string at the <code>at</code> index of <code><a hr
 Copy the slice of the <code><a href="../move-stdlib/string.md#0x1_string">string</a></code> from <code>i</code> to <code>j</code> into a new <code><a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_substring">substring</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, j: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_substring">substring</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, i: u64, j: u64): <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
 </code></pre>
 
 
@@ -374,7 +373,7 @@ Copy the slice of the <code><a href="../move-stdlib/string.md#0x1_string">string
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_substring">substring</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, j: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_substring">substring</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, i: u64, j: u64): <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> {
     <b>assert</b>!(i &lt;= j && j &lt;= <a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(), <a href="../move-stdlib/ascii.md#0x1_ascii_EInvalidIndex">EInvalidIndex</a>);
     <b>let</b> <b>mut</b> bytes = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     i.range_do!(j, |i| bytes.push_back(<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i]));
@@ -602,7 +601,7 @@ Returns the length of the <code><a href="../move-stdlib/string.md#0x1_string">st
 Returns 0 if the <code>substr</code> is empty.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_index_of">index_of</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, substr: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_index_of">index_of</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, substr: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): u64
 </code></pre>
 
 
@@ -611,7 +610,7 @@ Returns 0 if the <code>substr</code> is empty.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_index_of">index_of</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, substr: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_index_of">index_of</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, substr: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): u64 {
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> (n, m) = (<a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(), substr.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>());
     <b>if</b> (n &lt; m) <b>return</b> n;

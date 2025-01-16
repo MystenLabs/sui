@@ -96,7 +96,10 @@ impl ObjectLocks {
         };
 
         if prev_lock != new_lock {
-            debug!("lock conflict detected: {:?} != {:?}", prev_lock, new_lock);
+            debug!(
+                "lock conflict detected for {:?}: {:?} != {:?}",
+                obj_ref, prev_lock, new_lock
+            );
             Err(SuiError::ObjectLockConflict {
                 obj_ref: *obj_ref,
                 pending_transaction: prev_lock,

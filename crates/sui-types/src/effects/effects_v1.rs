@@ -133,7 +133,19 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)> {
-        self.modified_at_versions.clone()
+        self.modified_at_versions
+            .iter()
+            // V1 transaction effects "modified_at_versions" includes unwrapped_then_deleted
+            // objects, so in order to have parity with the V2 transaction effects semantics of
+            // "modified_at_versions", filter out any objects that are unwrapped_then_deleted'ed
+            .filter(|(object_id, _)| {
+                !self
+                    .unwrapped_then_deleted
+                    .iter()
+                    .any(|(deleted_id, _, _)| deleted_id == object_id)
+            })
+            .cloned()
+            .collect()
     }
 
     fn lamport_version(&self) -> SequenceNumber {
@@ -252,7 +264,7 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn gas_object(&self) -> (ObjectRef, Owner) {
-        self.gas_object
+        self.gas_object.clone()
     }
     fn events_digest(&self) -> Option<&TransactionEventsDigest> {
         self.events_digest.as_ref()

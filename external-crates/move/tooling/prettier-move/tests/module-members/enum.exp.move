@@ -22,7 +22,7 @@ public enum Test {
 }
 
 // abilities do not break
-public enum Test has store, copy, drop {
+public enum Test has copy, drop, store {
     A,
 }
 
@@ -30,7 +30,7 @@ public enum Test has store, copy, drop {
 // supported
 public enum Test {
     A,
-} has store, copy, drop;
+} has copy, drop, store;
 
 // type parameters can break
 public enum LongEnum<

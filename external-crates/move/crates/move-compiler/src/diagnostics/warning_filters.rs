@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
     diagnostics::{
         codes::{Category, DiagnosticInfo, ExternalPrefix, Severity, UnusedItem},

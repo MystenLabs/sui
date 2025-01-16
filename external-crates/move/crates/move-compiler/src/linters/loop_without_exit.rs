@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Detects empty loop expressions, including `while(true) {}` and `loop {}` without exit mechanisms, highlighting potential infinite loops.
 //! Aims to identify and warn against loops that may lead to hangs or excessive resource consumption due to lack of content.
 //! Encourages adding meaningful logic within loops or ensuring proper exit conditions to improve code reliability and maintainability.

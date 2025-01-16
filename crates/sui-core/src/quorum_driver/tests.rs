@@ -8,7 +8,7 @@ use crate::quorum_driver::{
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_authority_clients::LocalAuthorityClientFaultConfig;
 use crate::test_utils::make_transfer_sui_transaction;
-use crate::{quorum_driver::QuorumDriverMetrics, test_utils::init_local_authorities};
+use crate::{quorum_driver::QuorumDriverMetrics, unit_test_utils::init_local_authorities};
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};

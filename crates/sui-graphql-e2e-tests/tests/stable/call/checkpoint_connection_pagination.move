@@ -39,7 +39,10 @@
     }
     edges {
       cursor
-      node { sequenceNumber }
+      node { 
+        sequenceNumber 
+        bcs
+      }
     }
   }
 }

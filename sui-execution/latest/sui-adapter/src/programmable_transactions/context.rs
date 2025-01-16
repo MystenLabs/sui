@@ -1245,26 +1245,27 @@ mod checked {
             // protected by transaction input checker
             invariant_violation!("Object {} does not exist yet", id);
         };
-        // override_as_immutable ==> Owner::Shared
+        // override_as_immutable ==> Owner::Shared or Owner::ConsensusV2
         assert_invariant!(
-            !override_as_immutable || matches!(obj.owner, Owner::Shared { .. }),
-            "override_as_immutable should only be set for shared objects"
+            !override_as_immutable
+                || matches!(obj.owner, Owner::Shared { .. } | Owner::ConsensusV2 { .. }),
+            "override_as_immutable should only be set for consensus objects"
         );
         let is_mutable_input = match obj.owner {
             Owner::AddressOwner(_) => true,
-            Owner::Shared { .. } => !override_as_immutable,
+            Owner::Shared { .. } | Owner::ConsensusV2 { .. } => !override_as_immutable,
             Owner::Immutable => false,
             Owner::ObjectOwner(_) => {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
             }
         };
-        let owner = obj.owner;
+        let owner = obj.owner.clone();
         let version = obj.version();
         let object_metadata = InputObjectMetadata::InputObject {
             id,
             is_mutable_input,
-            owner,
+            owner: owner.clone(),
             version,
         };
         let obj_value = value_from_object(protocol_config, vm, linkage_view, new_packages, obj)?;

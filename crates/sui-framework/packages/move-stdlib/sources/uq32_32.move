@@ -26,6 +26,11 @@ const EOverflow: vector<u8> = b"Overflow from an arithmetic operation";
 #[error]
 const EDivisionByZero: vector<u8> = b"Division by zero";
 
+/// The total number of bits in the fixed-point number. Used in `macro` invocations.
+const TOTAL_BITS: u8 = 64;
+/// The number of fractional bits in the fixed-point number. Used in `macro` invocations.
+const FRACTIONAL_BITS: u8 = 32;
+
 /// A fixed-point numeric type with 32 integer bits and 32 fractional bits, represented by an
 /// underlying 64 bit value. This is a binary representation, so decimal values may not be exactly
 /// representable, but it provides more than 9 decimal digits of precision both before and after the
@@ -41,42 +46,39 @@ public struct UQ32_32(u64) has copy, drop, store;
 /// than 2^{-32}.
 /// Aborts if the input is too large, e.g. larger than or equal to 2^32.
 public fun from_quotient(numerator: u64, denominator: u64): UQ32_32 {
-    assert!(denominator != 0, EDenominator);
-
-    // Scale the numerator to have 64 fractional bits and the denominator to have 32 fractional
-    // bits, so that the quotient will have 32 fractional bits.
-    let scaled_numerator = numerator as u128 << 64;
-    let scaled_denominator = denominator as u128 << 32;
-    let quotient = scaled_numerator / scaled_denominator;
-
-    // The quotient can only be zero if the numerator is also zero.
-    assert!(quotient != 0 || numerator == 0, EQuotientTooSmall);
-
-    // Return the quotient as a fixed-point number. We first need to check whether the cast
-    // can succeed.
-    assert!(quotient <= std::u64::max_value!() as u128, EQuotientTooLarge);
-    UQ32_32(quotient as u64)
+    UQ32_32(std::macros::uq_from_quotient!<u64, u128>(
+        numerator,
+        denominator,
+        std::u64::max_value!(),
+        TOTAL_BITS,
+        FRACTIONAL_BITS,
+        abort EDenominator,
+        abort EQuotientTooSmall,
+        abort EQuotientTooLarge,
+    ))
 }
 
 /// Create a fixed-point value from an integer.
 /// `from_int` and `from_quotient` should be preferred over using `from_raw`.
 public fun from_int(integer: u32): UQ32_32 {
-    UQ32_32((integer as u64) << 32)
+    UQ32_32(std::macros::uq_from_int!(integer, FRACTIONAL_BITS))
 }
 
 /// Add two fixed-point numbers, `a + b`.
 /// Aborts if the sum overflows.
 public fun add(a: UQ32_32, b: UQ32_32): UQ32_32 {
-    let sum = a.0 as u128 + (b.0 as u128);
-    assert!(sum <= std::u64::max_value!() as u128, EOverflow);
-    UQ32_32(sum as u64)
+    UQ32_32(std::macros::uq_add!<u64, u128>(
+        a.0,
+        b.0,
+        std::u64::max_value!(),
+        abort EOverflow,
+    ))
 }
 
 /// Subtract two fixed-point numbers, `a - b`.
 /// Aborts if `a < b`.
 public fun sub(a: UQ32_32, b: UQ32_32): UQ32_32 {
-    assert!(a.0 >= b.0, EOverflow);
-    UQ32_32(a.0 - b.0)
+    UQ32_32(std::macros::uq_sub!(a.0, b.0, abort EOverflow))
 }
 
 /// Multiply two fixed-point numbers, truncating any fractional part of the product.
@@ -94,37 +96,33 @@ public fun div(a: UQ32_32, b: UQ32_32): UQ32_32 {
 
 /// Convert a fixed-point number to an integer, truncating any fractional part.
 public fun to_int(a: UQ32_32): u32 {
-    (a.0 >> 32) as u32
+    std::macros::uq_to_int!(a.0, FRACTIONAL_BITS)
 }
 
 /// Multiply a `u64` integer by a fixed-point number, truncating any fractional part of the product.
 /// Aborts if the product overflows.
 public fun int_mul(val: u64, multiplier: UQ32_32): u64 {
-    // The product of two 64 bit values has 128 bits, so perform the
-    // multiplication with u128 types and keep the full 128 bit product
-    // to avoid losing accuracy.
-    let unscaled_product = val as u128 * (multiplier.0 as u128);
-    // The unscaled product has 32 fractional bits (from the multiplier)
-    // so rescale it by shifting away the low bits.
-    let product = unscaled_product >> 32;
-    // Check whether the value is too large.
-    assert!(product <= std::u64::max_value!() as u128, EOverflow);
-    product as u64
+    std::macros::uq_int_mul!<u64, u128>(
+        val,
+        multiplier.0,
+        std::u64::max_value!(),
+        FRACTIONAL_BITS,
+        abort EOverflow,
+    )
 }
 
 /// Divide a `u64` integer by a fixed-point number, truncating any fractional part of the quotient.
 /// Aborts if the divisor is zero.
 /// Aborts if the quotient overflows.
 public fun int_div(val: u64, divisor: UQ32_32): u64 {
-    // Check for division by zero.
-    assert!(divisor.0 != 0, EDivisionByZero);
-    // First convert to 128 bits and then shift left to
-    // add 32 fractional zero bits to the dividend.
-    let scaled_value = val as u128 << 32;
-    let quotient = scaled_value / (divisor.0 as u128);
-    // Check whether the value is too large.
-    assert!(quotient <= std::u64::max_value!() as u128, EOverflow);
-    quotient as u64
+    std::macros::uq_int_div!<u64, u128>(
+        val,
+        divisor.0,
+        std::u64::max_value!(),
+        FRACTIONAL_BITS,
+        abort EDivisionByZero,
+        abort EOverflow,
+    )
 }
 
 /// Less than or equal to. Returns `true` if and only if `a <= a`.

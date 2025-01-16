@@ -112,6 +112,7 @@ pub const SUI_LOCAL_NETWORK_URL_0: &str = "http://0.0.0.0:9000";
 pub const SUI_LOCAL_NETWORK_GAS_URL: &str = "http://127.0.0.1:5003/gas";
 pub const SUI_DEVNET_URL: &str = "https://fullnode.devnet.sui.io:443";
 pub const SUI_TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
+pub const SUI_MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";
 
 /// A Sui client builder for connecting to the Sui network
 ///
@@ -230,13 +231,15 @@ impl SuiClientBuilder {
 
         let ws = if let Some(url) = self.ws_url {
             let mut builder = WsClientBuilder::default()
-                .max_request_body_size(2 << 30)
+                .max_request_size(2 << 30)
                 .max_concurrent_requests(self.max_concurrent_requests)
                 .set_headers(headers.clone())
                 .request_timeout(self.request_timeout);
 
             if let Some(duration) = self.ws_ping_interval {
-                builder = builder.ping_interval(duration)
+                builder = builder.enable_ws_ping(
+                    jsonrpsee::ws_client::PingConfig::new().ping_interval(duration),
+                );
             }
 
             builder.build(url).await.ok()
@@ -245,7 +248,7 @@ impl SuiClientBuilder {
         };
 
         let http = HttpClientBuilder::default()
-            .max_request_body_size(2 << 30)
+            .max_request_size(2 << 30)
             .max_concurrent_requests(self.max_concurrent_requests)
             .set_headers(headers.clone())
             .request_timeout(self.request_timeout)
@@ -342,6 +345,29 @@ impl SuiClientBuilder {
     /// ```
     pub async fn build_testnet(self) -> SuiRpcResult<SuiClient> {
         self.build(SUI_TESTNET_URL).await
+    }
+
+    /// Returns a [SuiClient] object that is ready to interact with the Sui mainnet.
+    ///
+    /// For connecting to a custom URI, use the `build` function instead.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use sui_sdk::SuiClientBuilder;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default()
+    ///         .build_mainnet()
+    ///         .await?;
+    ///
+    ///     println!("{:?}", sui.api_version());
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn build_mainnet(self) -> SuiRpcResult<SuiClient> {
+        self.build(SUI_MAINNET_URL).await
     }
 
     /// Return the server information as a `ServerInfo` structure.

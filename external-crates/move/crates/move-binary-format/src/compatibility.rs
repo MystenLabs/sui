@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::inclusion_mode::{InclusionCheckExecutionMode, InclusionCheckMode};
 use crate::{
     compatibility_mode::{CompatibilityMode, ExecutionCompatibilityMode},
     errors::{PartialVMError, PartialVMResult},
@@ -360,98 +361,134 @@ pub enum InclusionCheck {
 }
 
 impl InclusionCheck {
+    pub fn check(&self, old_module: &Module, new_module: &Module) -> PartialVMResult<()> {
+        self.check_with_mode::<InclusionCheckExecutionMode>(old_module, new_module)
+            .map_err(|_| PartialVMError::new(StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE))
+    }
+
     // Check that all code in `old_module` is included `new_module`. If `Exact` no new code can be
     // in `new_module` (Note: `new_module` may have larger pools, but they are not accessed by the
     // code).
-    pub fn check(&self, old_module: &Module, new_module: &Module) -> PartialVMResult<()> {
-        let err = Err(PartialVMError::new(
-            StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-        ));
+    pub fn check_with_mode<M: InclusionCheckMode>(
+        &self,
+        old_module: &Module,
+        new_module: &Module,
+    ) -> Result<(), M::Error> {
+        let mut context = M::default();
 
         // Module checks
-        if old_module.address != new_module.address
-            || old_module.name != new_module.name
-            || old_module.file_format_version > new_module.file_format_version
-        {
-            return err;
+        if old_module.name != new_module.name {
+            context.module_name_mismatch(&old_module.name, &new_module.name);
         }
 
-        // If we're checking exactness we make sure there's an inclusion, and that the size of all
-        // of the tables are the exact same except for constants.
-        if (self == &Self::Equal)
-            && (old_module.structs.len() != new_module.structs.len()
-                || old_module.enums.len() != new_module.enums.len()
-                || old_module.functions.len() != new_module.functions.len()
-                || old_module.friends.len() != new_module.friends.len())
-        {
-            return err;
+        if old_module.address != new_module.address {
+            context.module_address_mismatch(&old_module.address, &new_module.address);
         }
 
-        // Struct checks
-        for (name, old_struct) in &old_module.structs {
-            match new_module.structs.get(name) {
-                Some(new_struct) if old_struct == new_struct => (),
-                _ => {
-                    return err;
-                }
-            };
+        if old_module.file_format_version > new_module.file_format_version {
+            context.file_format_version_downgrade(
+                old_module.file_format_version,
+                new_module.file_format_version,
+            );
         }
 
-        // Enum checks
-        for (name, old_enum) in &old_module.enums {
-            let Some(new_enum) = new_module.enums.get(name) else {
-                return err;
-            };
-
-            if old_enum.abilities != new_enum.abilities {
-                return err;
-            }
-            if old_enum.type_parameters != new_enum.type_parameters {
-                return err;
-            }
-            if old_enum.variants.len() > new_enum.variants.len() {
-                return err;
-            }
-
-            // NB: In the future if we allow adding new variants to enums in subset mode
-            // remove this if statement. This check is somewhat redundant with the one
-            // below, the one below should be kept if we allow adding variants in subset
-            // mode.
-            if old_enum.variants.len() != new_enum.variants.len() {
-                return err;
-            }
-
-            if self == &Self::Equal && old_enum.variants.len() != new_enum.variants.len() {
-                return err;
-            }
-            // NB: We are using the fact that the variants are sorted by tag, that we've
-            // already ensured that the old variants are >= new variants, and the fact
-            // that zip will truncate the second iterator if there are extra there to allow
-            // adding new variants to enums in `Self::Subset` compatibility mode.
-            if !old_enum
-                .variants
-                .iter()
-                .zip(&new_enum.variants)
-                .all(|(old, new)| old == new)
-            {
-                return err;
-            }
-        }
-
-        // Function checks
-        for (name, old_func) in &old_module.functions {
-            match new_module
-                .functions
-                .get(name)
-                .or_else(|| new_module.functions.get(name))
-            {
-                Some(new_func) if old_func == new_func => (),
-                _ => {
-                    return err;
+        // Since the structs are sorted we can iterate through each list to find the differences using two pointers
+        for mark in compare_ord_iters(old_module.structs.iter(), new_module.structs.iter()) {
+            match mark {
+                Mark::New(name, new) => context.struct_new(name, new),
+                Mark::Missing(name, old) => context.struct_missing(name, old),
+                Mark::Existing(name, old, new) => {
+                    if old != new {
+                        context.struct_change(name, old, new);
+                    }
                 }
             }
         }
 
-        Ok(())
+        // enum checks
+        for mark in compare_ord_iters(old_module.enums.iter(), new_module.enums.iter()) {
+            match mark {
+                Mark::New(name, new) => context.enum_new(name, new),
+                Mark::Missing(name, old) => context.enum_missing(name, old),
+                Mark::Existing(name, old, new) => {
+                    if old != new {
+                        context.enum_change(name, old);
+                    }
+                }
+            }
+        }
+
+        // function checks
+        for mark in compare_ord_iters(old_module.functions.iter(), new_module.functions.iter()) {
+            match mark {
+                Mark::New(name, new) => context.function_new(name, new),
+                Mark::Missing(name, old) => context.function_missing(name, old),
+                Mark::Existing(name, old, new) => {
+                    if old != new {
+                        context.function_change(name, old);
+                    }
+                }
+            }
+        }
+
+        // friend checks, keeping in line with the previous implementation only checking for length differences.
+        // will need followup work and a protocol version for more detailed friend checks.
+        if old_module.friends.len() != new_module.friends.len() {
+            context.friend_mismatch(old_module.friends.len(), new_module.friends.len());
+        }
+
+        context.finish(self)
     }
+}
+
+#[derive(PartialEq, Debug)]
+pub(crate) enum Mark<'a, K, V>
+where
+    K: Ord,
+{
+    New(&'a K, &'a V),
+    Missing(&'a K, &'a V),
+    Existing(&'a K, &'a V, &'a V), // Old and new values for existing keys
+}
+
+pub(crate) fn compare_ord_iters<'a, I, J, K, V>(
+    old: I,
+    new: J,
+) -> impl Iterator<Item = Mark<'a, K, V>> + 'a
+where
+    K: Ord + 'a,
+    V: 'a,
+    I: Iterator<Item = (&'a K, &'a V)> + 'a,
+    J: Iterator<Item = (&'a K, &'a V)> + 'a,
+{
+    // Peeks are needed to prevent advancing the iterators when we don't need to
+    let mut old = old.peekable();
+    let mut new = new.peekable();
+    std::iter::from_fn(move || match (old.peek(), new.peek()) {
+        (Some((old_key, _old_value)), Some((new_key, _new_value))) => match old_key.cmp(new_key) {
+            std::cmp::Ordering::Equal => {
+                // Unwrap is safe because we know there is a next element since we just peeked it.
+                let (old_key, old_value) = old.next().unwrap();
+                let (_, new_value) = new.next().unwrap();
+                Some(Mark::Existing(old_key, old_value, new_value))
+            }
+            std::cmp::Ordering::Less => {
+                let (old_key, old_value) = old.next().unwrap();
+                Some(Mark::Missing(old_key, old_value))
+            }
+            std::cmp::Ordering::Greater => {
+                let (new_key, new_value) = new.next().unwrap();
+                Some(Mark::New(new_key, new_value))
+            }
+        },
+        (Some((_old_key, _old_value)), None) => {
+            let (key, value) = old.next().unwrap();
+            Some(Mark::Missing(key, value))
+        }
+        (None, Some((_new_key, _new_value))) => {
+            let (key, value) = new.next().unwrap();
+            Some(Mark::New(key, value))
+        }
+        (None, None) => None,
+    })
 }

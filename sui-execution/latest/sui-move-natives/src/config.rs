@@ -164,7 +164,7 @@ fn unpack_struct<const N: usize>(s: Value) -> PartialVMResult<[Value; N]> {
     let s: Struct = s.value_as()?;
     s.unpack()?.collect::<Vec<_>>().try_into().map_err(|e| {
         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-            .with_message(format!("struct expected to have have {N} fields: {e:?}"))
+            .with_message(format!("struct expected to have {N} fields: {e:?}"))
     })
 }
 

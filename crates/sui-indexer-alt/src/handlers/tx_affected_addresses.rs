@@ -6,16 +6,16 @@ use std::sync::Arc;
 use anyhow::Result;
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
+use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_schema::{
+    schema::tx_affected_addresses, transactions::StoredTxAffectedAddress,
+};
+use sui_pg_db as db;
 use sui_types::{full_checkpoint_content::CheckpointData, object::Owner};
 
-use crate::{
-    db, models::transactions::StoredTxAffectedAddress, pipeline::concurrent::Handler,
-    pipeline::Processor, schema::tx_affected_addresses,
-};
+pub(crate) struct TxAffectedAddresses;
 
-pub struct TxAffectedAddress;
-
-impl Processor for TxAffectedAddress {
+impl Processor for TxAffectedAddresses {
     const NAME: &'static str = "tx_affected_addresses";
 
     type Value = StoredTxAffectedAddress;
@@ -58,9 +58,8 @@ impl Processor for TxAffectedAddress {
 }
 
 #[async_trait::async_trait]
-impl Handler for TxAffectedAddress {
+impl Handler for TxAffectedAddresses {
     const MIN_EAGER_ROWS: usize = 100;
-    const MAX_CHUNK_ROWS: usize = 1000;
     const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {

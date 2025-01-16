@@ -35,6 +35,7 @@ const OBJECTS_TABLE: &str = "objects";
 const TRANSACTIONS_TABLE: &str = "transactions";
 const CHECKPOINTS_TABLE: &str = "checkpoints";
 const CHECKPOINTS_BY_DIGEST_TABLE: &str = "checkpoints_by_digest";
+const WATERMARK_TABLE: &str = "watermark";
 
 const COLUMN_FAMILY_NAME: &str = "sui";
 const DEFAULT_COLUMN_QUALIFIER: &str = "";
@@ -128,6 +129,15 @@ impl KeyValueStoreWriter for BigTableClient {
                 checkpoint.checkpoint_summary.digest().inner().to_vec(),
                 vec![(DEFAULT_COLUMN_QUALIFIER, key)],
             )],
+        )
+        .await
+    }
+
+    async fn save_watermark(&mut self, watermark: CheckpointSequenceNumber) -> Result<()> {
+        let key = watermark.to_be_bytes().to_vec();
+        self.multi_set(
+            WATERMARK_TABLE,
+            [(key, vec![(DEFAULT_COLUMN_QUALIFIER, vec![])])],
         )
         .await
     }
@@ -239,7 +249,7 @@ impl KeyValueStoreReader for BigTableClient {
     async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber> {
         let upper_limit = u64::MAX.to_be_bytes().to_vec();
         match self
-            .reversed_scan(CHECKPOINTS_TABLE, upper_limit)
+            .reversed_scan(WATERMARK_TABLE, upper_limit)
             .await?
             .pop()
         {

@@ -15,7 +15,7 @@ use super::display::{Display, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
-use super::owner::OwnerImpl;
+use super::owner::{Authenticator, OwnerImpl};
 use super::stake::StakedSui;
 use super::sui_address::addr;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
@@ -30,6 +30,7 @@ use crate::data::package_resolver::PackageResolver;
 use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::raw_query::RawQuery;
+use crate::types::address::Address;
 use crate::types::base64::Base64;
 use crate::types::intersect;
 use crate::{filter, or_filter};
@@ -129,7 +130,9 @@ pub(crate) struct ObjectFilter {
     /// Filter for live objects by their IDs.
     pub object_ids: Option<Vec<SuiAddress>>,
 
-    /// Filter for live or potentially historical objects by their ID and version.
+    /// Filter for live objects by their ID and version. NOTE:  this input filter has been
+    /// deprecated in favor of `multiGetObjects` query as it does not make sense to query for live
+    /// objects by their versions. This filter will be removed with v1.42.0 release.
     pub object_keys: Option<Vec<ObjectKey>>,
 }
 
@@ -146,6 +149,7 @@ pub(crate) enum ObjectOwner {
     Shared(Shared),
     Parent(Parent),
     Address(AddressOwner),
+    ConsensusV2(ConsensusV2),
 }
 
 /// An immutable object is an object that can't be mutated, transferred, or deleted.
@@ -179,6 +183,15 @@ pub(crate) struct Parent {
 #[derive(SimpleObject, Clone)]
 pub(crate) struct AddressOwner {
     owner: Option<Owner>,
+}
+
+/// A ConsensusV2 object is an object that is automatically versioned by the consensus protocol
+/// and allows different authentication modes based on the chosen authenticator.
+/// (Initially, only single-owner authentication is supported.)
+#[derive(SimpleObject, Clone)]
+pub(crate) struct ConsensusV2 {
+    start_version: UInt53,
+    authenticator: Option<Authenticator>,
 }
 
 /// Filter for a point query of an Object.
@@ -588,9 +601,9 @@ impl ObjectImpl<'_> {
 
         let native = self.0.native_impl()?;
 
-        match native.owner {
+        match &native.owner {
             O::AddressOwner(address) => {
-                let address = SuiAddress::from(address);
+                let address = SuiAddress::from(*address);
                 Some(ObjectOwner::Address(AddressOwner {
                     owner: Some(Owner {
                         address,
@@ -601,7 +614,7 @@ impl ObjectImpl<'_> {
             }
             O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
             O::ObjectOwner(address) => {
-                let address = SuiAddress::from(address);
+                let address = SuiAddress::from(*address);
                 Some(ObjectOwner::Parent(Parent {
                     parent: Some(Owner {
                         address,
@@ -614,6 +627,16 @@ impl ObjectImpl<'_> {
                 initial_shared_version,
             } => Some(ObjectOwner::Shared(Shared {
                 initial_shared_version: initial_shared_version.value().into(),
+            })),
+            O::ConsensusV2 {
+                start_version,
+                authenticator,
+            } => Some(ObjectOwner::ConsensusV2(ConsensusV2 {
+                start_version: start_version.value().into(),
+                authenticator: Some(Authenticator::SingleOwner(Address {
+                    address: SuiAddress::from(*authenticator.as_single_owner()),
+                    checkpoint_viewed_at: self.0.checkpoint_viewed_at,
+                })),
             })),
         }
     }
@@ -778,6 +801,40 @@ impl Object {
     /// Check [`Object::root_version`] for details.
     pub(crate) fn root_version(&self) -> u64 {
         self.root_version
+    }
+
+    /// Fetch objects by their id and version. If you need to query for live objects, use the
+    /// `objects` field.
+    pub(crate) async fn query_many(
+        ctx: &Context<'_>,
+        keys: Vec<ObjectKey>,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Vec<Self>, Error> {
+        let DataLoader(loader) = &ctx.data_unchecked();
+
+        let keys: Vec<PointLookupKey> = keys
+            .into_iter()
+            .map(|key| PointLookupKey {
+                id: key.object_id,
+                version: key.version.into(),
+            })
+            .collect();
+
+        let data = loader.load_many(keys).await?;
+        let objects: Vec<_> = data
+            .into_iter()
+            .filter_map(|(lookup_key, bcs)| {
+                Object::new_serialized(
+                    lookup_key.id,
+                    lookup_key.version,
+                    bcs,
+                    checkpoint_viewed_at,
+                    lookup_key.version,
+                )
+            })
+            .collect();
+
+        Ok(objects)
     }
 
     /// Query the database for a `page` of objects, optionally `filter`-ed.

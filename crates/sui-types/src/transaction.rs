@@ -105,9 +105,9 @@ impl CallArg {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum ObjectArg {
-    // A Move object, either immutable, or owned mutable.
+    // A Move object from fastpath.
     ImmOrOwnedObject(ObjectRef),
-    // A Move object that's shared.
+    // A Move object from consensus (historically consensus objects were always shared).
     // SharedObject::mutable controls whether caller asks for a mutable reference to shared object.
     SharedObject {
         id: ObjectID,
@@ -1184,6 +1184,10 @@ impl SharedInputObject {
         self.id
     }
 
+    pub fn id_and_version(&self) -> (ObjectID, SequenceNumber) {
+        (self.id, self.initial_shared_version)
+    }
+
     pub fn into_id_and_version(self) -> (ObjectID, SequenceNumber) {
         (self.id, self.initial_shared_version)
     }
@@ -1837,6 +1841,10 @@ impl TransactionData {
                 Owner::AddressOwner(_) => ObjectArg::ImmOrOwnedObject(upgrade_capability),
                 Owner::Shared {
                     initial_shared_version,
+                }
+                | Owner::ConsensusV2 {
+                    start_version: initial_shared_version,
+                    authenticator: _,
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.0,
                     initial_shared_version,
@@ -2359,7 +2367,12 @@ impl SenderSignedData {
     }
 
     /// Validate untrusted user transaction, including its size, input count, command count, etc.
-    pub fn validity_check(&self, config: &ProtocolConfig, epoch: EpochId) -> SuiResult {
+    /// Returns the certificate serialised bytes size.
+    pub fn validity_check(
+        &self,
+        config: &ProtocolConfig,
+        epoch: EpochId,
+    ) -> Result<usize, SuiError> {
         // Check that the features used by the user signatures are enabled on the network.
         self.check_user_signature_protocol_compatibility(config)?;
 
@@ -2402,7 +2415,7 @@ impl SenderSignedData {
             .validity_check(config)
             .map_err(Into::<SuiError>::into)?;
 
-        Ok(())
+        Ok(tx_size)
     }
 }
 
@@ -2589,7 +2602,7 @@ impl VerifiedTransaction {
         round: u64,
         commit_timestamp_ms: CheckpointTimestamp,
         consensus_commit_digest: ConsensusCommitDigest,
-        cancelled_txn_version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
+        consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
     ) -> Self {
         ConsensusCommitPrologueV3 {
             epoch,
@@ -2598,10 +2611,7 @@ impl VerifiedTransaction {
             sub_dag_index: None,
             commit_timestamp_ms,
             consensus_commit_digest,
-            consensus_determined_version_assignments:
-                ConsensusDeterminedVersionAssignments::CancelledTransactions(
-                    cancelled_txn_version_assignment,
-                ),
+            consensus_determined_version_assignments,
         }
         .pipe(TransactionKind::ConsensusCommitPrologueV3)
         .pipe(Self::new_system_transaction)
@@ -3184,7 +3194,10 @@ impl InputObjects {
                         if object.is_immutable() {
                             None
                         } else {
-                            Some((object_ref.0, ((object_ref.1, object_ref.2), object.owner)))
+                            Some((
+                                object_ref.0,
+                                ((object_ref.1, object_ref.2), object.owner.clone()),
+                            ))
                         }
                     }
                     (
@@ -3203,7 +3216,7 @@ impl InputObjects {
                     ) => {
                         if *mutable {
                             let oref = object.compute_object_reference();
-                            Some((oref.0, ((oref.1, oref.2), object.owner)))
+                            Some((oref.0, ((oref.1, oref.2), object.owner.clone())))
                         } else {
                             None
                         }

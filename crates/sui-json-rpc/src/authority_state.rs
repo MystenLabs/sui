@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use arc_swap::Guard;
 use async_trait::async_trait;
 use move_core_types::language_storage::TypeTag;
@@ -17,15 +16,14 @@ use sui_json_rpc_types::{
     SuiObjectDataFilter, TransactionFilter,
 };
 use sui_storage::key_value_store::{
-    KVStoreCheckpointData, KVStoreTransactionData, TransactionKeyValueStore,
-    TransactionKeyValueStoreTrait,
+    KVStoreTransactionData, TransactionKeyValueStore, TransactionKeyValueStoreTrait,
 };
 use sui_types::base_types::{
     MoveObjectType, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
 };
 use sui_types::bridge::Bridge;
 use sui_types::committee::{Committee, EpochId};
-use sui_types::digests::{ChainIdentifier, TransactionDigest, TransactionEventsDigest};
+use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::effects::TransactionEffects;
 use sui_types::error::{SuiError, UserInputError};
@@ -58,16 +56,7 @@ pub trait StateRead: Send + Sync {
         &self,
         transactions: &[TransactionDigest],
         effects: &[TransactionDigest],
-        events: &[TransactionEventsDigest],
     ) -> StateReadResult<KVStoreTransactionData>;
-
-    async fn multi_get_checkpoints(
-        &self,
-        checkpoint_summaries: &[CheckpointSequenceNumber],
-        checkpoint_contents: &[CheckpointSequenceNumber],
-        checkpoint_summaries_by_digest: &[CheckpointDigest],
-        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
-    ) -> StateReadResult<KVStoreCheckpointData>;
 
     fn get_object_read(&self, object_id: &ObjectID) -> StateReadResult<ObjectRead>;
 
@@ -244,33 +233,12 @@ impl StateRead for AuthorityState {
         &self,
         transactions: &[TransactionDigest],
         effects: &[TransactionDigest],
-        events: &[TransactionEventsDigest],
     ) -> StateReadResult<KVStoreTransactionData> {
         Ok(
             <AuthorityState as TransactionKeyValueStoreTrait>::multi_get(
                 self,
                 transactions,
                 effects,
-                events,
-            )
-            .await?,
-        )
-    }
-
-    async fn multi_get_checkpoints(
-        &self,
-        checkpoint_summaries: &[CheckpointSequenceNumber],
-        checkpoint_contents: &[CheckpointSequenceNumber],
-        checkpoint_summaries_by_digest: &[CheckpointDigest],
-        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
-    ) -> StateReadResult<KVStoreCheckpointData> {
-        Ok(
-            <AuthorityState as TransactionKeyValueStoreTrait>::multi_get_checkpoints(
-                self,
-                checkpoint_summaries,
-                checkpoint_contents,
-                checkpoint_summaries_by_digest,
-                checkpoint_contents_by_digest,
             )
             .await?,
         )
@@ -562,9 +530,7 @@ impl StateRead for AuthorityState {
     }
 
     fn get_chain_identifier(&self) -> StateReadResult<ChainIdentifier> {
-        Ok(self
-            .get_chain_identifier()
-            .ok_or(anyhow!("Chain identifier not found"))?)
+        Ok(self.get_chain_identifier())
     }
 }
 

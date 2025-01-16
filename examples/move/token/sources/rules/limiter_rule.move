@@ -5,13 +5,7 @@
 /// operation. Can be used to limit any action (eg transfer, toCoin, fromCoin).
 module examples::limiter_rule {
     use std::string::String;
-    use sui::vec_map::{Self, VecMap};
-    use sui::token::{
-        Self,
-        TokenPolicy,
-        TokenPolicyCap,
-        ActionRequest
-    };
+    use sui::{token::{Self, TokenPolicy, TokenPolicyCap, ActionRequest}, vec_map::{Self, VecMap}};
 
     /// Trying to perform an action that exceeds the limit.
     const ELimitExceeded: u64 = 0;
@@ -22,7 +16,7 @@ module examples::limiter_rule {
     /// The Config object for the `lo
     public struct Config has store, drop {
         /// Mapping of Action -> Limit
-        limits: VecMap<String, u64>
+        limits: VecMap<String, u64>,
     }
 
     /// Verifies that the request does not exceed the limit and adds an approval
@@ -30,7 +24,7 @@ module examples::limiter_rule {
     public fun verify<T>(
         policy: &TokenPolicy<T>,
         request: &mut ActionRequest<T>,
-        ctx: &mut TxContext
+        ctx: &mut TxContext,
     ) {
         if (!token::has_rule_config<T, Limiter>(policy)) {
             return token::add_approval(Limiter {}, request, ctx)
@@ -53,7 +47,7 @@ module examples::limiter_rule {
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
         limits: VecMap<String, u64>,
-        ctx: &mut TxContext
+        ctx: &mut TxContext,
     ) {
         // if there's no stored config for the rule, add a new one
         if (!token::has_rule_config<T, Limiter>(policy)) {
@@ -73,13 +67,9 @@ module examples::limiter_rule {
 
 #[test_only]
 module examples::limiter_rule_tests {
-    use std::string::utf8;
-    use std::option::{none, /* some */};
-    use sui::token;
-    use sui::vec_map;
-    use sui::token_test_utils::{Self as test, TEST};
-
     use examples::limiter_rule::{Self as limiter, Limiter};
+    use std::{option::none, string::utf8};
+    use sui::{token, token_test_utils::{Self as test, TEST}, vec_map};
 
     #[test]
     // Scenario: add a limiter rule for 100 tokens per operation, verify that

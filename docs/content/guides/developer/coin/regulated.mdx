@@ -3,9 +3,9 @@ title: Regulated Coin and Deny List
 description: You can create regulated coins on Sui, such as stablecoins. These coins are similar to other coins like SUI, but include the ability to control access to the coin using a deny list.
 ---
 
-The Sui [Coin](../../../standards/coin.mdx) standard provides a `create_regulated_currency` function to create coins. This function is different than `create_currency` in that it generates a coin that you can block certain addresses from being able to use those coins in transactions. This ability is a requirement for assets like stablecoins.
+The Sui [Coin](../../../standards/coin.mdx) standard provides a `create_regulated_currency_v2` function to create coins. This function is different than `create_currency` in that it generates a coin that you can block certain addresses from being able to use those coins in transactions. This ability is a requirement for assets like stablecoins.
 
-Behind the scenes, `create_regulated_currency` uses the `create_currency` function to create the coin, but also produces a `DenyCap` object that allows its bearer to control access to the coin's deny list in a `DenyList` object. Consequently, the way to create a coin using `create_regulated_currency` is similar to the previous example, with the addition of a transfer of the `DenyCap` object to the module publisher.
+Behind the scenes, `create_regulated_currency` uses the `create_currency` function to create the coin, but also produces a `DenyCapV2` object that allows its bearer to control access to the coin's deny list in a `DenyList` object. Consequently, the way to create a coin using `create_regulated_currency_v2` is similar to the previous example, with the addition of a transfer of the `DenyCapV2` object to the module publisher.
 
 {@inject: examples/move/coin/sources/regcoin.move#regulate}
 
@@ -57,13 +57,13 @@ Created Objects:
 ...
 ```
 
-As you might have noticed, the publish action creates a `RegulatedCoinMetadata` object along with the standard `CoinMetadata` object. You don't need to explicitly call the `freeze_object` on the `RegulatedCoinMetadata` object, however, because `create_regulated_currency` automatically performs this action.
+As you might have noticed, the publish action creates a `RegulatedCoinMetadata` object along with the standard `CoinMetadata` object. You don't need to explicitly call the `freeze_object` on the `RegulatedCoinMetadata` object, however, because `create_regulated_currency_v2` automatically performs this action.
 
-The output also shows the three objects that the publisher now owns: `UpgradeCap` for [package upgrades](../../../concepts/sui-move-concepts/packages/upgrade.mdx), `TreasuryCap` for minting or burning coins, and the `DenyCap` for adding or removing addresses to or from the deny list for this coin.
+The output also shows the three objects that the publisher now owns: `UpgradeCap` for [package upgrades](../../../concepts/sui-move-concepts/packages/upgrade.mdx), `TreasuryCap` for minting or burning coins, and the `DenyCapV2` for adding or removing addresses to or from the deny list for this coin.
 
 ## DenyList
 
-The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCap` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins. 
+The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCapV2` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins. 
 
 :::info
 

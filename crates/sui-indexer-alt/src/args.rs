@@ -1,16 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::path::PathBuf;
 
-use crate::db::DbConfig;
-use crate::IndexerConfig;
+#[cfg(feature = "benchmark")]
+use crate::benchmark::BenchmarkArgs;
+use crate::IndexerArgs;
 use clap::Subcommand;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_pg_db::DbArgs;
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
     #[command(flatten)]
-    pub db_config: DbConfig,
+    pub db_args: DbArgs,
 
     #[command(subcommand)]
     pub command: Command,
@@ -22,30 +25,25 @@ pub enum Command {
     /// Run the indexer.
     Indexer {
         #[command(flatten)]
-        indexer: IndexerConfig,
+        client_args: ClientArgs,
 
-        /// How often to check whether write-ahead logs related to the consistent range can be
-        /// pruned.
-        #[arg(
-            long,
-            default_value = "300",
-            value_name = "SECONDS",
-            value_parser = |s: &str| s.parse().map(Duration::from_secs),
-        )]
-        consistent_pruning_interval: Duration,
+        #[command(flatten)]
+        indexer_args: IndexerArgs,
 
-        /// How long to wait before honouring reader low watermarks.
-        #[arg(
-            long,
-            default_value = "120",
-            value_name = "SECONDS",
-            value_parser = |s: &str| s.parse().map(Duration::from_secs),
-        )]
-        pruner_delay: Duration,
+        /// Path to the indexer's configuration TOML file.
+        #[arg(long)]
+        config: PathBuf,
+    },
 
-        /// Number of checkpoints to delay indexing summary tables for.
-        #[clap(long)]
-        consistent_range: Option<u64>,
+    /// Output the contents of the default configuration to STDOUT.
+    GenerateConfig,
+
+    /// Combine the configuration held across multiple files into one and output it to STDOUT. When
+    /// two configurations set the same field, the last write wins.
+    MergeConfigs {
+        /// Path to a TOML file to be merged
+        #[arg(long, required = true, action = clap::ArgAction::Append)]
+        config: Vec<PathBuf>,
     },
 
     /// Wipe the database of its contents
@@ -54,5 +52,19 @@ pub enum Command {
         /// That is, no tables will exist in the DB after the reset.
         #[clap(long, default_value_t = false)]
         skip_migrations: bool,
+    },
+
+    /// Run the benchmark. It will load ingestion data from the given path and run the pipelines.
+    /// The first and last checkpoint will be determined automatically based on the ingestion data.
+    /// Note that the indexer will not be bootstrapped from genesis, and hence will
+    /// skip any pipelines that rely on genesis data.
+    #[cfg(feature = "benchmark")]
+    Benchmark {
+        #[command(flatten)]
+        benchmark_args: BenchmarkArgs,
+
+        /// Path to the indexer's configuration TOML file.
+        #[arg(long)]
+        config: PathBuf,
     },
 }

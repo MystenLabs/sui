@@ -9,7 +9,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt::Display, time::Duration};
-use sui_graphql_config::GraphQLConfig;
+use sui_default_config::DefaultConfig;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 
@@ -19,17 +19,15 @@ pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 // Move Registry constants
 pub(crate) const MOVE_REGISTRY_MODULE: &IdentStr = ident_str!("name");
 pub(crate) const MOVE_REGISTRY_TYPE: &IdentStr = ident_str!("Name");
-// TODO(manos): Replace with actual package id on mainnet.
 const MOVE_REGISTRY_PACKAGE: &str =
-    "0x1a841abe817c38221596856bc975b3b84f2f68692191e9247e185213d3d02fd8";
-// TODO(manos): Replace with actual registry table id on mainnet.
+    "0x62c1f5b1cb9e3bfc3dd1f73c95066487b662048a6358eabdbf67f6cdeca6db4b";
 const MOVE_REGISTRY_TABLE_ID: &str =
-    "0x250b60446b8e7b8d9d7251600a7228dbfda84ccb4b23a56a700d833e221fae4f";
+    "0xe8417c530cde59eddf6dfb760e8a0e3e2c6f17c69ddaab5a73dd6a6e65fc463b";
 const DEFAULT_PAGE_LIMIT: u16 = 50;
 
 /// The combination of all configurations for the GraphQL service.
-#[GraphQLConfig]
-#[derive(Default)]
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
 pub struct ServerConfig {
     pub service: ServiceConfig,
     pub connection: ConnectionConfig,
@@ -41,8 +39,8 @@ pub struct ServerConfig {
 /// Configuration for connections for the RPC, passed in as command-line arguments. This configures
 /// specific connections between this service and other services, and might differ from instance to
 /// instance of the GraphQL service.
-#[GraphQLConfig]
-#[derive(clap::Args, Clone, Eq, PartialEq)]
+#[DefaultConfig]
+#[derive(clap::Args, Clone, Eq, PartialEq, Debug)]
 pub struct ConnectionConfig {
     /// Port to bind the server to
     #[clap(short, long, default_value_t = ConnectionConfig::default().port)]
@@ -71,8 +69,8 @@ pub struct ConnectionConfig {
 /// Configuration on features supported by the GraphQL service, passed in a TOML-based file. These
 /// configurations are shared across fleets of the service, i.e. all testnet services will have the
 /// same `ServiceConfig`.
-#[GraphQLConfig]
-#[derive(Default)]
+#[DefaultConfig]
+#[derive(Clone, Default, Eq, PartialEq, Debug)]
 pub struct ServiceConfig {
     pub limits: Limits,
     pub disabled_features: BTreeSet<FunctionalGroup>,
@@ -83,7 +81,8 @@ pub struct ServiceConfig {
     pub move_registry: MoveRegistryConfig,
 }
 
-#[GraphQLConfig]
+#[DefaultConfig]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Limits {
     /// Maximum depth of nodes in the requests.
     pub max_query_depth: u32,
@@ -123,20 +122,22 @@ pub struct Limits {
     pub max_move_value_depth: u32,
     /// Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
     pub max_transaction_ids: u32,
+    /// Maximum number of keys that can be passed to a `multiGetObjects` query.
+    pub max_multi_get_objects_keys: u32,
     /// Maximum number of candidates to scan when gathering a page of results.
     pub max_scan_limit: u32,
 }
 
-#[GraphQLConfig]
-#[derive(Copy)]
+#[DefaultConfig]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct BackgroundTasksConfig {
     /// How often the watermark task checks the indexer database to update the checkpoint and epoch
     /// watermarks.
     pub watermark_update_ms: u64,
 }
 
-#[GraphQLConfig]
-#[derive(Clone)]
+#[DefaultConfig]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct MoveRegistryConfig {
     pub(crate) external_api_url: Option<String>,
     pub(crate) resolution_type: ResolutionType,
@@ -185,16 +186,16 @@ impl Version {
     }
 }
 
-#[GraphQLConfig]
-#[derive(clap::Args)]
+#[DefaultConfig]
+#[derive(clap::Args, Clone, Debug)]
 pub struct Ide {
     /// The title to display at the top of the web-based GraphiQL IDE.
     #[clap(short, long, default_value_t = Ide::default().ide_title)]
     pub ide_title: String,
 }
 
-#[GraphQLConfig]
-#[derive(Default)]
+#[DefaultConfig]
+#[derive(Clone, Default, Eq, PartialEq, Debug)]
 pub struct Experiments {
     // Add experimental flags here, to provide access to them through-out the GraphQL
     // implementation.
@@ -202,7 +203,8 @@ pub struct Experiments {
     test_flag: bool,
 }
 
-#[GraphQLConfig]
+#[DefaultConfig]
+#[derive(Clone, Debug)]
 pub struct InternalFeatureConfig {
     pub(crate) query_limits_checker: bool,
     pub(crate) directive_checker: bool,
@@ -215,16 +217,16 @@ pub struct InternalFeatureConfig {
     pub(crate) open_telemetry: bool,
 }
 
-#[GraphQLConfig]
-#[derive(clap::Args, Default)]
+#[DefaultConfig]
+#[derive(clap::Args, Clone, Default, Debug)]
 pub struct TxExecFullNodeConfig {
     /// RPC URL for the fullnode to send transactions to execute and dry-run.
     #[clap(long)]
     pub(crate) node_rpc_url: Option<String>,
 }
 
-#[GraphQLConfig]
-#[derive(Default)]
+#[DefaultConfig]
+#[derive(Clone, Default, Eq, PartialEq, Debug)]
 pub struct ZkLoginConfig {
     pub env: ZkLoginEnv,
 }
@@ -341,6 +343,11 @@ impl ServiceConfig {
     /// Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
     async fn max_transaction_ids(&self) -> u32 {
         self.limits.max_transaction_ids
+    }
+
+    /// Maximum number of keys that can be passed to a `multiGetObjects` query.
+    async fn max_multi_get_objects_keys(&self) -> u32 {
+        self.limits.max_multi_get_objects_keys
     }
 
     /// Maximum number of candidates to scan when gathering a page of results.
@@ -510,6 +517,7 @@ impl Default for Limits {
             // Filter-specific limits, such as the number of transaction ids that can be specified
             // for the `TransactionBlockFilter`.
             max_transaction_ids: 1000,
+            max_multi_get_objects_keys: 500,
             max_scan_limit: 100_000_000,
             // This value is set to be the size of the max transaction bytes allowed + base64
             // overhead (roughly 1/3 of the original string). This is rounded up.
@@ -594,6 +602,7 @@ mod tests {
                 max-type-nodes = 128
                 max-move-value-depth = 256
                 max-transaction-ids = 11
+                max-multi-get-objects-keys = 11
                 max-scan-limit = 50
             "#,
         )
@@ -616,6 +625,7 @@ mod tests {
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
                 max_transaction_ids: 11,
+                max_multi_get_objects_keys: 11,
                 max_scan_limit: 50,
             },
             ..Default::default()
@@ -682,6 +692,7 @@ mod tests {
                 max-type-nodes = 128
                 max-move-value-depth = 256
                 max-transaction-ids = 42
+                max-multi-get-objects-keys = 42
                 max-scan-limit = 420
 
                 [experiments]
@@ -707,6 +718,7 @@ mod tests {
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
                 max_transaction_ids: 42,
+                max_multi_get_objects_keys: 42,
                 max_scan_limit: 420,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),

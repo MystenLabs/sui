@@ -272,7 +272,7 @@ function findTracedFunctions(pkgRoot: string, pkgModules: string[]): string[] {
         try {
             return fs.readdirSync(tracesDir);
         } catch (err) {
-            throw new Error(`Error accessing 'trace' directory for package at '${pkgRoot}'`);
+            throw new Error(`Error accessing 'traces' directory for package at '${pkgRoot}'`);
         }
     }
     const tracesDir = path.join(pkgRoot, 'traces');

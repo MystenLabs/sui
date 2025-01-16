@@ -458,15 +458,6 @@ title: Module `0xb::bridge`
 
 
 
-<a name="0xb_bridge_CURRENT_VERSION"></a>
-
-
-
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
-</code></pre>
-
-
-
 <a name="0xb_bridge_EInvalidBridgeRoute"></a>
 
 
@@ -481,6 +472,15 @@ title: Module `0xb::bridge`
 
 
 <pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EMustBeTokenMessage">EMustBeTokenMessage</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 17;
+</code></pre>
+
+
+
+<a name="0xb_bridge_CURRENT_VERSION"></a>
+
+
+
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -883,7 +883,7 @@ title: Module `0xb::bridge`
     <b>let</b> <a href="message.md#0xb_message">message</a> = <a href="message.md#0xb_message_create_token_bridge_message">message::create_token_bridge_message</a>(
         inner.chain_id,
         bridge_seq_num,
-        address::to_bytes(ctx.sender()),
+        <a href="../sui-framework/address.md#0x2_address_to_bytes">address::to_bytes</a>(ctx.sender()),
         target_chain,
         target_address,
         token_id,
@@ -908,7 +908,7 @@ title: Module `0xb::bridge`
         <a href="bridge.md#0xb_bridge_TokenDepositedEvent">TokenDepositedEvent</a> {
             seq_num: bridge_seq_num,
             source_chain: inner.chain_id,
-            sender_address: address::to_bytes(ctx.sender()),
+            sender_address: <a href="../sui-framework/address.md#0x2_address_to_bytes">address::to_bytes</a>(ctx.sender()),
             target_chain,
             target_address,
             token_type: token_id,
@@ -1323,7 +1323,7 @@ title: Module `0xb::bridge`
     // extract token <a href="message.md#0xb_message">message</a>
     <b>let</b> token_payload = record.<a href="message.md#0xb_message">message</a>.extract_token_bridge_payload();
     // get owner <b>address</b>
-    <b>let</b> owner = address::from_bytes(token_payload.token_target_address());
+    <b>let</b> owner = <a href="../sui-framework/address.md#0x2_address_from_bytes">address::from_bytes</a>(token_payload.token_target_address());
 
     // If already claimed, exit early
     <b>if</b> (record.claimed) {

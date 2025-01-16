@@ -10,7 +10,7 @@ services:
     hostname: validator1
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -39,7 +39,7 @@ services:
     hostname: validator2
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -68,7 +68,7 @@ services:
     hostname: validator3
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -97,7 +97,7 @@ services:
     hostname: validator4
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -126,7 +126,7 @@ services:
     container_name: fullnode1
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000

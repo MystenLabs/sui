@@ -7,7 +7,7 @@ import { AstPath, Doc, doc } from 'prettier';
 import { printIdentifier, printTrailingComment } from '../utilities';
 import * as VectorExpression from './expression/vector_expression';
 import { printBreakableBlock } from './expression/block';
-const { line, group, join, fill, ifBreak, softline, breakParent, indent, lineSuffix } = doc.builders;
+const { line, group, join, fill, ifBreak, softline, indent, lineSuffix } = doc.builders;
 
 /** The type of the node implemented in this file */
 export const NODE_TYPE = 'constant';
@@ -86,7 +86,9 @@ function prettyNumVector(path: AstPath<Node>, options: MoveOptions, print: print
 	let elType = path.node.nonFormattingChildren[0]?.type;
 	if (elType && ['num_literal', 'bool_literal'].includes(elType)) {
 		let allSameType = !path.node.nonFormattingChildren.some((e) => e.type !== elType);
-		let hasComments = path.node.namedChildren.some((e) => e.trailingComment || e.leadingComment.length > 0);
+		let hasComments = path.node.namedChildren.some(
+			(e) => e.trailingComment || e.leadingComment.length > 0,
+		);
 
 		if (allSameType && !hasComments) {
 			const literals = path.map(print, 'nonFormattingChildren');

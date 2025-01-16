@@ -9,7 +9,7 @@
 //! directly to avoid going through the BCS machinery.
 
 use fastcrypto::traits::ToFromBytes;
-use sui_sdk_types::types::*;
+use sui_sdk_types::*;
 use tap::Pipe;
 
 #[derive(Debug)]
@@ -132,6 +132,11 @@ impl From<crate::object::Owner> for Owner {
                 initial_shared_version,
             } => Self::Shared(initial_shared_version.value()),
             crate::object::Owner::Immutable => Self::Immutable,
+            // TODO: Corresponding types need to be added to sui-sdk-types.
+            crate::object::Owner::ConsensusV2 {
+                start_version: _,
+                authenticator: _,
+            } => todo!(),
         }
     }
 }

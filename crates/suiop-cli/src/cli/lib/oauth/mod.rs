@@ -20,7 +20,7 @@ use tokio::task;
 use tracing::{debug, info};
 
 // Okta client created for Mysten Labs
-// Contact #techops-suport for replacement
+// Contact #techops-support for replacement
 const CLIENT_ID: &str = "0oacw4bwt1BOV410t697";
 
 #[derive(Deserialize)]

@@ -131,10 +131,7 @@ impl Core {
         .with_pipeline(true)
         .build();
 
-        // Recover the last proposed block
-        let last_proposed_block = dag_state
-            .read()
-            .get_last_block_for_authority(context.own_index);
+        let last_proposed_block = dag_state.read().get_last_proposed_block();
 
         // Recover the last included ancestor rounds based on the last proposed block. That will allow
         // to perform the next block proposal by using ancestor blocks of higher rounds and avoid
@@ -207,10 +204,6 @@ impl Core {
                 "Waiting for {} ms while recovering ancestors from storage",
                 wait_ms
             );
-            println!(
-                "Waiting for {} ms while recovering ancestors from storage",
-                wait_ms
-            );
             std::thread::sleep(Duration::from_millis(wait_ms));
         }
         // Recover the last available quorum to correctly advance the threshold clock.
@@ -223,13 +216,10 @@ impl Core {
         {
             last_proposed_block
         } else {
-            let last_proposed_block = self
-                .dag_state
-                .read()
-                .get_last_block_for_authority(self.context.own_index);
+            let last_proposed_block = self.dag_state.read().get_last_proposed_block();
 
             if self.should_propose() {
-                assert!(last_proposed_block.round() > GENESIS_ROUND, "At minimum a block of round higher that genesis should have been produced during recovery");
+                assert!(last_proposed_block.round() > GENESIS_ROUND, "At minimum a block of round higher than genesis should have been produced during recovery");
             }
 
             // if no new block proposed then just re-broadcast the last proposed one to ensure liveness.
@@ -246,7 +236,9 @@ impl Core {
     }
 
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
-    /// The method returns the references of parents that are unknown and need to be fetched.
+    /// The method returns:
+    /// - The references of accepted blocks
+    /// - The references of ancestors missing their block
     pub(crate) fn add_blocks(
         &mut self,
         blocks: Vec<VerifiedBlock>,
@@ -266,7 +258,7 @@ impl Core {
             .observe(blocks.len() as f64);
 
         // Try to accept them via the block manager
-        let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);
+        let (accepted_blocks, missing_block_refs) = self.block_manager.try_accept_blocks(blocks);
 
         if !accepted_blocks.is_empty() {
             debug!(
@@ -284,13 +276,13 @@ impl Core {
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
+        };
+
+        if !missing_block_refs.is_empty() {
+            debug!("Missing block refs: {:?}", missing_block_refs);
         }
 
-        if !missing_blocks.is_empty() {
-            debug!("Missing blocks: {:?}", missing_blocks);
-        }
-
-        Ok(missing_blocks)
+        Ok(missing_block_refs)
     }
 
     /// Adds/processed all the newly `accepted_blocks`. We basically try to move the threshold clock and add them to the
@@ -471,7 +463,7 @@ impl Core {
 
         // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
         // the inclusion of transactions. Just let this be done in the end of the method.
-        let (transactions, ack_transactions) = self.transaction_consumer.next();
+        let (transactions, ack_transactions, _limit_reached) = self.transaction_consumer.next();
         self.context
             .metrics
             .node_metrics
@@ -691,16 +683,18 @@ impl Core {
         self.subscriber_exists = exists;
     }
 
-    /// Sets the delay by round for propagating blocks to a quorum and the
-    /// quorum round per authority for ancestor state manager.
+    /// Sets the delay by round for propagating blocks to a quorum and the received
+    /// & accepted quorum rounds per authority for ancestor state manager.
     pub(crate) fn set_propagation_delay_and_quorum_rounds(
         &mut self,
         delay: Round,
-        quorum_rounds: Vec<QuorumRound>,
+        received_quorum_rounds: Vec<QuorumRound>,
+        accepted_quorum_rounds: Vec<QuorumRound>,
     ) {
-        info!("Quorum round per authority in ancestor state manager set to: {quorum_rounds:?}");
+        info!("Received quorum round per authority in ancestor state manager set to: {received_quorum_rounds:?}");
+        info!("Accepted quorum round per authority in ancestor state manager set to: {accepted_quorum_rounds:?}");
         self.ancestor_state_manager
-            .set_quorum_round_per_authority(quorum_rounds);
+            .set_quorum_rounds_per_authority(received_quorum_rounds, accepted_quorum_rounds);
         info!("Propagation round delay set to: {delay}");
         self.propagation_delay = delay;
     }
@@ -997,9 +991,7 @@ impl Core {
     }
 
     fn last_proposed_block(&self) -> VerifiedBlock {
-        self.dag_state
-            .read()
-            .get_last_block_for_authority(self.context.own_index)
+        self.dag_state.read().get_last_proposed_block()
     }
 }
 
@@ -2332,7 +2324,7 @@ mod test {
         );
 
         // Use a large propagation delay to disable proposing.
-        core.set_propagation_delay_and_quorum_rounds(1000, vec![]);
+        core.set_propagation_delay_and_quorum_rounds(1000, vec![], vec![]);
 
         // Make propagation delay the only reason for not proposing.
         core.set_subscriber_exists(true);
@@ -2341,7 +2333,7 @@ mod test {
         assert!(core.try_propose(true).unwrap().is_none());
 
         // Let Core know there is no propagation delay.
-        core.set_propagation_delay_and_quorum_rounds(0, vec![]);
+        core.set_propagation_delay_and_quorum_rounds(0, vec![], vec![]);
 
         // Proposing now would succeed.
         assert!(core.try_propose(true).unwrap().is_some());

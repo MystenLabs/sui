@@ -15,7 +15,7 @@ use crate::{
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
     parser::ast::{ConstantName, FunctionName},
-    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv},
+    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, AstDebug, CompilationEnv},
     FullyCompiledProgram,
 };
 use cfgir::ast::LoopInfo;
@@ -43,6 +43,13 @@ enum NamedBlockType {
     Named,
 }
 
+pub(super) struct CFGIRDebugFlags {
+    #[allow(dead_code)]
+    pub(super) print_blocks: bool,
+    #[allow(dead_code)]
+    pub(super) print_optimized_blocks: bool,
+}
+
 struct Context<'env> {
     env: &'env CompilationEnv,
     info: &'env TypingProgramInfo,
@@ -52,6 +59,7 @@ struct Context<'env> {
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
     loop_bounds: BTreeMap<Label, G::LoopInfo>,
+    debug: CFGIRDebugFlags,
 }
 
 impl<'env> Context<'env> {
@@ -65,6 +73,10 @@ impl<'env> Context<'env> {
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
+            debug: CFGIRDebugFlags {
+                print_blocks: false,
+                print_optimized_blocks: false,
+            },
         }
     }
 
@@ -249,7 +261,7 @@ fn constants(
                 .collect::<Vec<_>>()
                 .join(", ");
             let mut diag = diag!(
-                BytecodeGeneration::UnfoldableConstant,
+                CodeGeneration::UnfoldableConstant,
                 (
                     *consts.get_loc(&scc[0]).unwrap(),
                     format!("Constant definitions form a circular dependency: {}", names),
@@ -275,7 +287,7 @@ fn constants(
             .collect();
         for node in neighbors {
             context.add_diag(diag!(
-                BytecodeGeneration::UnfoldableConstant,
+                CodeGeneration::UnfoldableConstant,
                 (
                     *consts.get_loc(&node).unwrap(),
                     format!(
@@ -517,6 +529,7 @@ fn constant_(
     );
     cfgir::optimize(
         context.env,
+        &context.reporter,
         context.current_package,
         &fake_signature,
         &locals,
@@ -526,7 +539,7 @@ fn constant_(
 
     if blocks.len() != 1 {
         context.add_diag(diag!(
-            BytecodeGeneration::UnfoldableConstant,
+            CodeGeneration::UnfoldableConstant,
             (full_loc, CANNOT_FOLD)
         ));
         return None;
@@ -538,7 +551,7 @@ fn constant_(
             C::IgnoreAndPop { exp, .. } => exp,
             _ => {
                 context.add_diag(diag!(
-                    BytecodeGeneration::UnfoldableConstant,
+                    CodeGeneration::UnfoldableConstant,
                     (*cloc, CANNOT_FOLD)
                 ));
                 continue;
@@ -560,7 +573,7 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
     match &e.exp.value {
         E::Value(_) => (),
         _ => context.add_diag(diag!(
-            BytecodeGeneration::UnfoldableConstant,
+            CodeGeneration::UnfoldableConstant,
             (e.exp.loc, CANNOT_FOLD)
         )),
     }
@@ -653,7 +666,15 @@ fn function_body(
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();
             let binfo = block_info.iter().map(destructure_tuple);
-
+            if context.debug.print_blocks {
+                for (lbl, block) in &blocks {
+                    println!("{lbl}:");
+                    for cmd in block {
+                        print!("    ");
+                        cmd.print_verbose();
+                    }
+                }
+            }
             let (mut cfg, infinite_loop_starts, diags) =
                 MutForwardCFG::new(start, &mut blocks, binfo);
             context.add_diags(diags);
@@ -677,12 +698,22 @@ fn function_body(
             if !context.env.has_errors() {
                 cfgir::optimize(
                     context.env,
+                    &context.reporter,
                     context.current_package,
                     signature,
                     &locals,
                     &UniqueMap::new(),
                     &mut cfg,
                 );
+                if context.debug.print_optimized_blocks {
+                    for (lbl, block) in &blocks {
+                        println!("{lbl}:");
+                        for cmd in block {
+                            print!("    ");
+                            cmd.print_verbose();
+                        }
+                    }
+                }
             }
             let block_info = block_info
                 .into_iter()

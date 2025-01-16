@@ -23,6 +23,7 @@ use sui::{
 
 fun calculate_pending_rewards<StakeCoin, RewardCoin>(
     acc: &Account<StakeCoin, RewardCoin>,
+    an_acc: &mut Account<StakeCoin, RewardCoin>,
     stake_factor: u64,
     accrued_rewards_per_share: u256,
 ): u64 {
@@ -45,8 +46,9 @@ fun compute_reward_adjustments(
     u64, // sum of storage fund reward adjustments
     VecMap<u64, u64>, // mapping of individual validator's storage fund reward adjustment from index -> amount
 ) {
-    let unadjusted_storage_fund_reward_amount =
-        unadjusted_storage_fund_reward_amounts[i];
+    let unadjusted_storage_fund_reward_amount = unadjusted_storage_fund_reward_amounts[
+        i,
+    ];
     let adjusted_storage_fund_reward_amount = // If the validator is one of the slashed ones, then subtract the adjustment.
     if (individual_storage_fund_reward_adjustments.contains(&i)) {
         let adjustment = individual_storage_fund_reward_adjustments[&i];

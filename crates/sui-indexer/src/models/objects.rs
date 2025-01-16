@@ -464,6 +464,64 @@ impl From<IndexedDeletedObject> for StoredFullHistoryObject {
     }
 }
 
+impl TryFrom<StoredHistoryObject> for StoredObject {
+    type Error = IndexerError;
+
+    fn try_from(o: StoredHistoryObject) -> Result<Self, Self::Error> {
+        // Return early if any required fields are None
+        if o.object_digest.is_none() || o.owner_type.is_none() || o.serialized_object.is_none() {
+            return Err(IndexerError::PostgresReadError(
+                "Missing required fields in StoredHistoryObject".to_string(),
+            ));
+        }
+
+        Ok(Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_digest: o.object_digest.unwrap(),
+            owner_type: o.owner_type.unwrap(),
+            owner_id: o.owner_id,
+            object_type: o.object_type,
+            object_type_package: o.object_type_package,
+            object_type_module: o.object_type_module,
+            object_type_name: o.object_type_name,
+            serialized_object: o.serialized_object.unwrap(),
+            coin_type: o.coin_type,
+            coin_balance: o.coin_balance,
+            df_kind: o.df_kind,
+        })
+    }
+}
+
+impl TryFrom<StoredObjectSnapshot> for StoredObject {
+    type Error = IndexerError;
+
+    fn try_from(o: StoredObjectSnapshot) -> Result<Self, Self::Error> {
+        // Return early if any required fields are None
+        if o.object_digest.is_none() || o.owner_type.is_none() || o.serialized_object.is_none() {
+            return Err(IndexerError::PostgresReadError(
+                "Missing required fields in StoredObjectSnapshot".to_string(),
+            ));
+        }
+
+        Ok(Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_digest: o.object_digest.unwrap(),
+            owner_type: o.owner_type.unwrap(),
+            owner_id: o.owner_id,
+            object_type: o.object_type,
+            object_type_package: o.object_type_package,
+            object_type_module: o.object_type_module,
+            object_type_name: o.object_type_name,
+            serialized_object: o.serialized_object.unwrap(),
+            coin_type: o.coin_type,
+            coin_balance: o.coin_balance,
+            df_kind: o.df_kind,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use move_core_types::{account_address::AccountAddress, language_storage::StructTag};

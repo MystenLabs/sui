@@ -238,7 +238,7 @@ impl NetworkClient for AnemoClient {
         &self,
         peer: AuthorityIndex,
         timeout: Duration,
-    ) -> ConsensusResult<Vec<Round>> {
+    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
         let mut client = self.get_client(peer, timeout).await?;
         let request = GetLatestRoundsRequest {};
         let response = client
@@ -254,7 +254,7 @@ impl NetworkClient for AnemoClient {
                 }
             })?;
         let body = response.into_body();
-        Ok(body.highest_received)
+        Ok((body.highest_received, body.highest_accepted))
     }
 }
 
@@ -440,7 +440,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 "peer not found",
             )
         })?;
-        let highest_received = self
+        let (highest_received, highest_accepted) = self
             .service
             .handle_get_latest_rounds(index)
             .await
@@ -450,7 +450,10 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                     format!("{e}"),
                 )
             })?;
-        Ok(Response::new(GetLatestRoundsResponse { highest_received }))
+        Ok(Response::new(GetLatestRoundsResponse {
+            highest_received,
+            highest_accepted,
+        }))
     }
 }
 
@@ -722,12 +725,12 @@ impl MakeCallbackHandler for MetricsCallbackMaker {
 }
 
 impl ResponseHandler for MetricsResponseCallback {
-    fn on_response(self, response: &anemo::Response<bytes::Bytes>) {
-        self.on_response(response)
+    fn on_response(mut self, response: &anemo::Response<bytes::Bytes>) {
+        MetricsResponseCallback::on_response(&mut self, response)
     }
 
-    fn on_error<E>(self, err: &E) {
-        self.on_error(err)
+    fn on_error<E>(mut self, err: &E) {
+        MetricsResponseCallback::on_error(&mut self, err)
     }
 }
 
@@ -784,5 +787,7 @@ pub(crate) struct GetLatestRoundsRequest {}
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct GetLatestRoundsResponse {
     // Highest received round per authority.
-    highest_received: Vec<u32>,
+    highest_received: Vec<Round>,
+    // Highest accepted round per authority.
+    highest_accepted: Vec<Round>,
 }

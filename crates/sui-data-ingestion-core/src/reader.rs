@@ -16,7 +16,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{collections::BTreeMap, sync::Arc};
-use sui_rest_api::Client;
+use sui_rpc_api::Client;
 use sui_storage::blob::Blob;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -71,8 +71,8 @@ impl Default for ReaderOptions {
 
 enum RemoteStore {
     ObjectStore(Box<dyn ObjectStore>),
-    Rest(sui_rest_api::Client),
-    Hybrid(Box<dyn ObjectStore>, sui_rest_api::Client),
+    Rest(sui_rpc_api::Client),
+    Hybrid(Box<dyn ObjectStore>, sui_rpc_api::Client),
 }
 
 impl CheckpointReader {
@@ -187,9 +187,9 @@ impl CheckpointReader {
                 self.options.timeout_secs,
             )
             .expect("failed to create remote store client");
-            RemoteStore::Hybrid(object_store, sui_rest_api::Client::new(fn_url))
+            RemoteStore::Hybrid(object_store, sui_rpc_api::Client::new(fn_url).unwrap())
         } else if url.ends_with("/rest") {
-            RemoteStore::Rest(sui_rest_api::Client::new(url))
+            RemoteStore::Rest(sui_rpc_api::Client::new(url).unwrap())
         } else {
             let object_store = create_remote_store_client(
                 url,
@@ -333,7 +333,7 @@ impl CheckpointReader {
         let (exit_sender, exit_receiver) = oneshot::channel();
         let reader = Self {
             path,
-            remote_store_url,
+            remote_store_url: remote_store_url.map(transform_ingestion_url),
             remote_store_options,
             current_checkpoint_number: starting_checkpoint_number,
             last_pruned_watermark: starting_checkpoint_number,
@@ -427,5 +427,16 @@ impl DataLimiter {
         }
         self.queue = self.queue.split_off(&watermark);
         self.in_progress = self.queue.values().sum();
+    }
+}
+
+fn transform_ingestion_url(ingestion_url: String) -> String {
+    // temporary code to redirect ingestion traffic directly to the bucket
+    if ingestion_url.contains("checkpoints.mainnet.sui.io") {
+        "https://storage.googleapis.com/mysten-mainnet-checkpoints".to_string()
+    } else if ingestion_url.contains("checkpoints.testnet.sui.io") {
+        "https://storage.googleapis.com/mysten-testnet-checkpoints".to_string()
+    } else {
+        ingestion_url
     }
 }

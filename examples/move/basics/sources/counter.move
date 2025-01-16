@@ -11,7 +11,7 @@ module basics::counter {
     public struct Counter has key {
         id: UID,
         owner: address,
-        value: u64
+        value: u64,
     }
 
     public fun owner(counter: &Counter): address {
@@ -27,7 +27,7 @@ module basics::counter {
         transfer::share_object(Counter {
             id: object::new(ctx),
             owner: tx_context::sender(ctx),
-            value: 0
+            value: 0,
         })
     }
 
@@ -50,15 +50,15 @@ module basics::counter {
     /// Delete counter (only runnable by the Counter owner)
     public fun delete(counter: Counter, ctx: &TxContext) {
         assert!(counter.owner == ctx.sender(), 0);
-        let Counter {id, owner:_, value:_} = counter;
+        let Counter { id, owner: _, value: _ } = counter;
         id.delete();
     }
 }
 
 #[test_only]
 module basics::counter_test {
-    use sui::test_scenario as ts;
     use basics::counter::{Self, Counter};
+    use sui::test_scenario as ts;
 
     #[test]
     fun test_counter() {

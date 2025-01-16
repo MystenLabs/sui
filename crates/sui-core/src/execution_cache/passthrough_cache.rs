@@ -364,6 +364,31 @@ impl ExecutionCacheCommit for PassthroughCache {
         // Nothing needs to be done since they were already committed in write_transaction_outputs
         ready(()).boxed()
     }
+
+    fn approximate_pending_transaction_count(&self) -> u64 {
+        0
+    }
+}
+
+impl StateSyncAPI for PassthroughCache {
+    fn insert_transaction_and_effects(
+        &self,
+        transaction: &VerifiedTransaction,
+        transaction_effects: &TransactionEffects,
+    ) {
+        self.store
+            .insert_transaction_and_effects(transaction, transaction_effects)
+            .expect("db error");
+    }
+
+    fn multi_insert_transaction_and_effects(
+        &self,
+        transactions_and_effects: &[VerifiedExecutionData],
+    ) {
+        self.store
+            .multi_insert_transaction_and_effects(transactions_and_effects.iter())
+            .expect("db error");
+    }
 }
 
 implement_passthrough_traits!(PassthroughCache);

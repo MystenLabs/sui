@@ -22,11 +22,9 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::StructTag,
 };
-use move_disassembler::disassembler::Disassembler;
-use move_ir_types::location::Spanned;
+use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::Bytes;
 use std::collections::{BTreeMap, BTreeSet};
@@ -41,6 +39,21 @@ pub const PACKAGE_MODULE_NAME: &IdentStr = ident_str!("package");
 pub const UPGRADECAP_STRUCT_NAME: &IdentStr = ident_str!("UpgradeCap");
 pub const UPGRADETICKET_STRUCT_NAME: &IdentStr = ident_str!("UpgradeTicket");
 pub const UPGRADERECEIPT_STRUCT_NAME: &IdentStr = ident_str!("UpgradeReceipt");
+
+// Default max bound for disassembled code size is 1MB
+const DEFAULT_MAX_DISASSEMBLED_MODULE_SIZE: Option<usize> = Some(1024 * 1024);
+
+const MAX_DISASSEMBLED_MODULE_SIZE_ENV: &str = "MAX_DISASSEMBLED_MODULE_SIZE";
+pub static MAX_DISASSEMBLED_MODULE_SIZE: Lazy<Option<usize>> = Lazy::new(|| {
+    let max_bound_opt: Option<usize> = std::env::var(MAX_DISASSEMBLED_MODULE_SIZE_ENV)
+        .ok()
+        .and_then(|s| s.parse().ok());
+    match max_bound_opt {
+        Some(0) => None,
+        Some(max_bound) => Some(max_bound),
+        None => DEFAULT_MAX_DISASSEMBLED_MODULE_SIZE,
+    }
+});
 
 #[derive(Clone, Debug)]
 /// Additional information about a function
@@ -511,10 +524,6 @@ impl MovePackage {
         })
     }
 
-    pub fn disassemble(&self) -> SuiResult<BTreeMap<String, Value>> {
-        disassemble_modules(self.module_map.values())
-    }
-
     pub fn normalize(
         &self,
         binary_config: &BinaryConfig,
@@ -586,35 +595,6 @@ pub fn is_test_fun(name: &IdentStr, module: &CompiledModule, fn_info_map: &FnInf
         Some(fn_info) => fn_info.is_test,
         None => false,
     }
-}
-
-pub fn disassemble_modules<'a, I>(modules: I) -> SuiResult<BTreeMap<String, Value>>
-where
-    I: Iterator<Item = &'a Vec<u8>>,
-{
-    let mut disassembled = BTreeMap::new();
-    for bytecode in modules {
-        // this function is only from JSON RPC - it is OK to deserialize with max Move binary
-        // version
-        let module = CompiledModule::deserialize_with_defaults(bytecode).map_err(|error| {
-            SuiError::ModuleDeserializationFailure {
-                error: error.to_string(),
-            }
-        })?;
-        let d =
-            Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
-                SuiError::ObjectSerializationError {
-                    error: e.to_string(),
-                }
-            })?;
-        let bytecode_str = d
-            .disassemble()
-            .map_err(|e| SuiError::ObjectSerializationError {
-                error: e.to_string(),
-            })?;
-        disassembled.insert(module.name().to_string(), Value::String(bytecode_str));
-    }
-    Ok(disassembled)
 }
 
 pub fn normalize_modules<'a, I>(

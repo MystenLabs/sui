@@ -1,5 +1,17 @@
 # Change Log
 
+## 1.2.0
+
+### Minor Changes
+
+- ad24b95: Verify hex string is valid hex in `fromHex`
+
+## 1.1.1
+
+### Patch Changes
+
+- 1dd7713: Accept arrays of numbers when serializing bcs.bytes()
+
 ## 1.1.0
 
 ### Minor Changes

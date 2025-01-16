@@ -42,7 +42,7 @@ impl EffectsObjectChange {
                 if o.is_package() {
                     ObjectOut::PackageWrite((o.version(), o.digest()))
                 } else {
-                    ObjectOut::ObjectWrite((o.digest(), o.owner))
+                    ObjectOut::ObjectWrite((o.digest(), o.owner.clone()))
                 }
             }),
             id_operation: if id_created {

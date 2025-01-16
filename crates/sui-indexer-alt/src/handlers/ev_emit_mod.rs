@@ -5,13 +5,12 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use anyhow::Result;
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_schema::{events::StoredEvEmitMod, schema::ev_emit_mod};
+use sui_pg_db as db;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{
-    db, models::events::StoredEvEmitMod, pipeline::concurrent::Handler, pipeline::Processor,
-    schema::ev_emit_mod,
-};
-pub struct EvEmitMod;
+pub(crate) struct EvEmitMod;
 
 impl Processor for EvEmitMod {
     const NAME: &'static str = "ev_emit_mod";
@@ -49,7 +48,6 @@ impl Processor for EvEmitMod {
 #[async_trait::async_trait]
 impl Handler for EvEmitMod {
     const MIN_EAGER_ROWS: usize = 100;
-    const MAX_CHUNK_ROWS: usize = 1000;
     const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {

@@ -18,8 +18,7 @@ Priority queue implemented using a max heap.
 -  [Function `priorities`](#0x2_priority_queue_priorities)
 
 
-<pre><code><b>use</b> <a href="../move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
-</code></pre>
+<pre><code></code></pre>
 
 
 

@@ -1,5 +1,82 @@
 # @mysten/sui.js
 
+## 1.18.0
+
+### Minor Changes
+
+- 4f012b9: Improve typing for the return type of splitCoins and update the splitCoins result type to
+  have a concrete size
+- 85bd9e4: Add a new `address` options on methods that verify signatures that ensures the signature
+  is valid for the provided address
+- 5e3709d: remove dependency on tweetnacl
+- b2928a9: Update generated openrpc types which removes deprecated/non-functional filters for events
+- 85bd9e4: Add a new `publicKey.verifyAddress` method on PublicKey instances
+- a872b97: Add `latest` as an exported graphql schema
+
+### Patch Changes
+
+- dc0e21e: Remove duplicate applyEffects in serial transaction executor
+
+## 1.17.0
+
+### Minor Changes
+
+- 20af12d: add passkey sdk
+
+## 1.16.2
+
+### Patch Changes
+
+- 100207f: Fixes replacements on `namedPackagesPlugin` to only replace the package target if it is a
+  mvr name.
+
+## 1.16.1
+
+### Patch Changes
+
+- Updated dependencies [ad24b95]
+  - @mysten/bcs@1.2.0
+
+## 1.16.0
+
+### Minor Changes
+
+- ec2dc7f: Add legacyAddress flag to zklogin methods that generate addresses
+- ec2dc7f: All functionality from `@mysten/zklogin` has been moved to `@mysten/sui/zklogin`
+
+  For most methods, simply replace the `@mysten/zklogin` import with `@mysten/sui/zklogin`
+
+  2 Methods require one small additional change:
+
+  `computeZkLoginAddress` and `jwtToAddress` have new `legacyAddress` flags which must be set to
+  true for backwards compatibility:
+
+  ```diff
+  - import { computeZkLoginAddress, jwtToAddress } from '@mysten/zklogin';
+  + import { computeZkLoginAddress, jwtToAddress } from '@mysten/sui/zklogin';
+
+    const address = jwtToAddress(
+     jwtAsString,
+     salt,
+  +  true
+    );
+    const address = computeZkLoginAddress({
+  	claimName,
+  	claimValue,
+  	iss,
+  	aud,
+  	userSalt: BigInt(salt),
+  +	legacyAddress: true,
+    });
+  ```
+
+## 1.15.1
+
+### Patch Changes
+
+- Updated dependencies [1dd7713]
+  - @mysten/bcs@1.1.1
+
 ## 1.15.0
 
 ### Minor Changes

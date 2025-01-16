@@ -12,7 +12,7 @@ use crate::committee::EpochId;
 use crate::error::{ExecutionError, SuiError};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use crate::move_package::MovePackage;
-use crate::transaction::{SenderSignedData, TransactionDataAPI, TransactionKey};
+use crate::transaction::{SenderSignedData, TransactionDataAPI};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
@@ -27,7 +27,8 @@ pub use read_store::CoinInfo;
 pub use read_store::DynamicFieldIndexInfo;
 pub use read_store::DynamicFieldKey;
 pub use read_store::ReadStore;
-pub use read_store::RestStateReader;
+pub use read_store::RpcIndexes;
+pub use read_store::RpcStateReader;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 pub use shared_in_memory_store::SharedInMemoryStore;
@@ -591,11 +592,4 @@ where
     fn as_object_store(&self) -> &dyn ObjectStore {
         self
     }
-}
-
-pub trait GetSharedLocks: Send + Sync {
-    fn get_shared_locks(
-        &self,
-        key: &TransactionKey,
-    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>>;
 }

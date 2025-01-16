@@ -6,7 +6,7 @@ use crate::{
     debug_display, debug_display_verbose, diag,
     diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
     editions::{FeatureGate, Flavor},
-    expansion::ast::{self as E, Fields, ModuleIdent, Mutability, TargetKind},
+    expansion::ast::{self as E, Fields, ModuleIdent, Mutability},
     hlir::{
         ast::{self as H, Block, BlockLabel, MoveOpAnnotation, UnpackType},
         detect_dead_code::program as detect_dead_code_analysis,
@@ -15,7 +15,8 @@ use crate::{
     ice,
     naming::ast as N,
     parser::ast::{
-        Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, VariantName,
+        Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, TargetKind,
+        VariantName,
     },
     shared::{
         matching::{new_match_var_name, MatchContext, MATCH_TEMP_PREFIX},
@@ -126,8 +127,6 @@ pub(super) struct HLIRDebugFlags {
     #[allow(dead_code)]
     pub(super) match_specialization: bool,
     #[allow(dead_code)]
-    pub(super) match_work_queue: bool,
-    #[allow(dead_code)]
     pub(super) function_translation: bool,
     #[allow(dead_code)]
     pub(super) eval_order: bool,
@@ -161,7 +160,6 @@ impl<'env> Context<'env> {
             eval_order: false,
             match_translation: false,
             match_specialization: false,
-            match_work_queue: false,
         };
         let reporter = env.diagnostic_reporter_at_top_level();
         Context {
@@ -479,7 +477,7 @@ fn function_body(
             let (locals, body) = function_body_defined(context, sig, loc, seq);
             debug_print!(context.debug.function_translation,
                          (msg "--------"),
-                         (lines "body" => &body));
+                         (lines "body" => &body; verbose));
             HB::Defined { locals, body }
         }
         TB::Macro => unreachable!("ICE macros filtered above"),
@@ -871,10 +869,11 @@ fn tail(
         E::Match(subject, arms) => {
             debug_print!(context.debug.match_translation,
                 ("subject" => subject),
+                ("type" => in_type),
                 (lines "arms" => &arms.value)
             );
             let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
-            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            debug_print!(context.debug.match_translation, ("compiled" => compiled; verbose));
             let result = tail(context, block, expected_type, compiled);
             debug_print!(context.debug.match_variant_translation,
                          (lines "block" => block; verbose),
@@ -1203,10 +1202,11 @@ fn value(
         E::Match(subject, arms) => {
             debug_print!(context.debug.match_translation,
                 ("subject" => subject),
+                ("type" => in_type),
                 (lines "arms" => &arms.value)
             );
             let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
-            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            debug_print!(context.debug.match_translation, ("compiled" => compiled; verbose));
             let result = value(context, block, None, compiled);
             debug_print!(context.debug.match_variant_translation, ("result" => &result));
             result
@@ -1848,7 +1848,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             );
             let subject_type = subject.ty.clone();
             let compiled = match_compilation::compile_match(context, &subject_type, *subject, arms);
-            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            debug_print!(context.debug.match_translation, ("compiled" => compiled; verbose));
             statement(context, block, compiled);
             debug_print!(context.debug.match_variant_translation, (lines "block" => block));
         }

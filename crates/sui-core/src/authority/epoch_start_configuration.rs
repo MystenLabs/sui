@@ -39,6 +39,11 @@ pub trait EpochStartConfigTrait {
             ExecutionCacheConfigType::PassthroughCache
         }
     }
+
+    fn use_version_assignment_tables_v3(&self) -> bool {
+        self.flags()
+            .contains(&EpochFlag::UseVersionAssignmentTablesV3)
+    }
 }
 
 // IMPORTANT: Assign explicit values to each variant to ensure that the values are stable.
@@ -67,6 +72,8 @@ pub enum EpochFlag {
     StateAccumulatorV2EnabledMainnet = 6,
 
     ExecutedInEpochTable = 7,
+
+    UseVersionAssignmentTablesV3 = 8,
 }
 
 impl EpochFlag {
@@ -84,6 +91,7 @@ impl EpochFlag {
             EpochFlag::ExecutedInEpochTable,
             EpochFlag::StateAccumulatorV2EnabledTestnet,
             EpochFlag::StateAccumulatorV2EnabledMainnet,
+            EpochFlag::UseVersionAssignmentTablesV3,
         ];
 
         if matches!(
@@ -120,6 +128,9 @@ impl fmt::Display for EpochFlag {
             }
             EpochFlag::StateAccumulatorV2EnabledMainnet => {
                 write!(f, "StateAccumulatorV2EnabledMainnet")
+            }
+            EpochFlag::UseVersionAssignmentTablesV3 => {
+                write!(f, "UseVersionAssignmentTablesV3")
             }
         }
     }

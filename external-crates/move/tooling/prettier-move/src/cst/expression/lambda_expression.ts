@@ -32,35 +32,25 @@ export default function (path: AstPath<Node>): treeFn | null {
  */
 function printLambdaExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
 	const children = path.node.nonFormattingChildren;
-	const printCb = (path: AstPath<Node>) => {
-		if (path.node.type === 'block') {
-			return conditionalGroup([
-				printBreakableBlock(path, options, print),
-				printNonBreakingBlock(path, options, print)
-			]);
-		}
-
-		return print(path);
-	};
 
 	// just bindings
 	if (children.length === 1) {
-		return path.call(printCb, 'nonFormattingChildren', 0);
+		return path.call(print, 'nonFormattingChildren', 0);
 	}
 
 	// bindings, expression or bindings, return type
 	if (children.length === 2) {
-		return join(' ', path.map(printCb, 'nonFormattingChildren'));
+		return join(' ', path.map(print, 'nonFormattingChildren'));
 	}
 
 	// bindings, return type, expression
 	if (children.length === 3) {
 		return [
-			path.call(printCb, 'nonFormattingChildren', 0), // bindings
+			path.call(print, 'nonFormattingChildren', 0), // bindings
 			' -> ',
-			path.call(printCb, 'nonFormattingChildren', 1), // return type
+			path.call(print, 'nonFormattingChildren', 1), // return type
 			' ',
-			path.call(printCb, 'nonFormattingChildren', 2), // expression
+			path.call(print, 'nonFormattingChildren', 2), // expression
 		];
 	}
 

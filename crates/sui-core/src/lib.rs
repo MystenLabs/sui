@@ -28,7 +28,7 @@ pub mod overload_monitor;
 mod par_index_live_object_set;
 pub(crate) mod post_consensus_tx_reorder;
 pub mod quorum_driver;
-pub mod rest_index;
+pub mod rpc_index;
 pub mod safe_client;
 mod scoring_decision;
 mod stake_aggregator;
@@ -73,6 +73,9 @@ mod transfer_to_object_tests;
 #[cfg(test)]
 #[path = "unit_tests/type_param_tests.rs"]
 mod type_param_tests;
+#[cfg(test)]
+#[path = "unit_tests/unit_test_utils.rs"]
+mod unit_test_utils;
 
 pub mod signature_verifier;
 
