@@ -65,9 +65,9 @@ pub struct IdVersion {
 
 #[derive(Clone)]
 enum CursorMode {
-    // Continue on a specific checkpoint and query all objects within that checkpoint after the
+    // Continue within a specific checkpoint and query all objects within that checkpoint after the
     // cursor object ID.
-    ContinueOnCheckpoint(i64, Vec<u8>),
+    ContinueWithinCheckpoint(i64, Vec<u8>),
     // Continue after a specific checkpoint, i.e. query all objects whose checkpoint number is
     // bounded by the cursor checkpoint number.
     ContinueAfterCheckpoint(i64),
@@ -130,7 +130,6 @@ impl ObjectFilterQueryBuilder {
         self
     }
 
-    // TODO: Double check that this function is not prone to SQL injection.
     pub fn build(self, limit: usize, cursor_mode: Option<CursorMode>) -> String {
         let Self {
             package,
@@ -155,6 +154,8 @@ impl ObjectFilterQueryBuilder {
             ));
         }
 
+        // FIXME: Adding module and name as strings is prone to SQL injection.
+        // We will fix them when we move to a better way of building raw SQL queries.
         if let Some(module) = module {
             filter_conditions.push(format!("module = '{}'", module));
         }
@@ -172,7 +173,7 @@ impl ObjectFilterQueryBuilder {
 
         if let Some(cursor_mode) = cursor_mode {
             match cursor_mode {
-                CursorMode::ContinueOnCheckpoint(checkpoint, object_id) => {
+                CursorMode::ContinueWithinCheckpoint(checkpoint, object_id) => {
                     filter_conditions.push(format!("cp_sequence_number = {}", checkpoint));
                     filter_conditions.push(format!(
                         "object_id > '\\x{}'::bytea",
@@ -255,6 +256,8 @@ pub async fn query_objects_with_filters(
     } else {
         None
     };
+    // The obj_info table only tracks ownership or presence changes for objects.
+    // To get the latest object versions that cover all mutations, we need to query the obj_versions table.
     let object_versions =
         query_latest_object_versions(&mut conn, &object_ids, view_checkpoint).await?;
     Ok((object_versions, next_cursor))
@@ -285,7 +288,7 @@ fn build_object_ids_query(
         // filters is usually small.
         let query1 = builder.clone().build(
             limit,
-            Some(CursorMode::ContinueOnCheckpoint(
+            Some(CursorMode::ContinueWithinCheckpoint(
                 cursor.checkpoint,
                 cursor.object_id,
             )),
