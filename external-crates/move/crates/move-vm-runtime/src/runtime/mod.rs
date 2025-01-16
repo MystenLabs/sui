@@ -15,10 +15,7 @@ use move_binary_format::errors::VMResult;
 use move_core_types::resolver::{MoveResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 // FIXME(cswords): This is only public for testing...
 pub mod package_resolution;
@@ -167,7 +164,7 @@ impl MoveRuntime {
         let data_cache = TransactionDataCache::new(data_cache);
         let link_context = LinkageContext::new(
             pkg.storage_id,
-            HashMap::from_iter(pkg.linkage_table.clone()),
+            BTreeMap::from_iter(pkg.linkage_table.clone()),
         );
 
         // Verify a provided serialized package. This will validate the provided serialized

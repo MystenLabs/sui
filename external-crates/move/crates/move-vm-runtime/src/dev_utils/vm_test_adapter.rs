@@ -13,7 +13,7 @@ use crate::{
 };
 use move_binary_format::{errors::VMResult, file_format::CompiledModule};
 use move_core_types::resolver::{MoveResolver, SerializedPackage};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 // FIXME(cswords): support gas
 
@@ -78,7 +78,7 @@ pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
         let pkg = self.get_package_from_store(&package_id)?;
         Ok(LinkageContext::new(
             package_id,
-            HashMap::from_iter(pkg.linkage_table),
+            BTreeMap::from_iter(pkg.linkage_table),
         ))
     }
 

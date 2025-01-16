@@ -14,7 +14,7 @@ use move_vm_runtime::{
     runtime::MoveRuntime,
     shared::{linkage_context::LinkageContext, types::PackageStorageId},
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub fn publish(
     natives: impl IntoIterator<Item = NativeFunctionRecord>,
@@ -55,7 +55,7 @@ pub fn publish(
         .collect::<Vec<_>>();
 
     // Build the dependency map from the package
-    let mut dependency_map = HashMap::new();
+    let mut dependency_map = BTreeMap::new();
     for (name, unit) in package.deps_compiled_units.iter() {
         let unit_address = *unit.unit.module.self_id().address();
         if let Some(other) = dependency_map.insert(unit_address, unit_address) {

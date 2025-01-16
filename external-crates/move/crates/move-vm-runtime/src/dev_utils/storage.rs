@@ -15,7 +15,7 @@ use move_core_types::{
     language_storage::ModuleId,
     resolver::{ModuleResolver, MoveResolver, SerializedPackage, TypeOrigin},
 };
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -71,7 +71,7 @@ impl StoredPackage {
     fn empty(storage_id: AccountAddress) -> Self {
         Self {
             modules: BTreeMap::new(),
-            linkage_context: LinkageContext::new(storage_id, HashMap::new()),
+            linkage_context: LinkageContext::new(storage_id, BTreeMap::new()),
             type_origin_table: vec![],
         }
     }
@@ -83,7 +83,7 @@ impl StoredPackage {
         assert!(!modules.is_empty());
         // Map the modules in this package to `storage_id` and generate the identity linkage for
         // all deps.
-        let mut linkage_table = HashMap::new();
+        let mut linkage_table = BTreeMap::new();
         let type_origin_table = generate_type_origins(storage_id, &modules);
         let modules: BTreeMap<_, _> = modules
             .into_iter()

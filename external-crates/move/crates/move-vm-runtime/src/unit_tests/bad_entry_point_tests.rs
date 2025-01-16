@@ -18,14 +18,14 @@ use move_core_types::{
     runtime_value::{serialize_values, MoveValue},
     vm_status::StatusType,
 };
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
 
 #[test]
 fn call_non_existent_module() {
     let adapter = InMemoryTestAdapter::new();
-    let linkage = LinkageContext::new(TEST_ADDR, HashMap::new());
+    let linkage = LinkageContext::new(TEST_ADDR, BTreeMap::new());
     let mut vm = adapter.make_vm(linkage).unwrap();
 
     let module_id = ModuleId::new(TEST_ADDR, Identifier::new("M").unwrap());

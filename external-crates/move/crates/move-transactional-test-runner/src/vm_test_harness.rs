@@ -41,11 +41,7 @@ use move_vm_runtime::{
 };
 use once_cell::sync::Lazy;
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::Path,
-    sync::Arc,
-};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
@@ -219,7 +215,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
                 let sender = *move_stdlib.first().unwrap().self_id().address();
                 println!("generating stdlib linkage");
                 let linkage_context =
-                    LinkageContext::new(sender, HashMap::from([(sender, sender)]));
+                    LinkageContext::new(sender, BTreeMap::from([(sender, sender)]));
                 println!("calling stdlib publish with address {sender:?}");
                 let pkg = StoredPackage::from_module_for_testing_with_linkage(
                     sender,

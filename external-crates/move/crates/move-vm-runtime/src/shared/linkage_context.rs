@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMResult};
 use move_core_types::{
@@ -25,13 +25,13 @@ pub struct LinkageContext {
     // All calls to P in the root package will call 0xCAFE as the Runtime ID, but during loading
     // and JIT compilation we need to rewrite these. The linkage table here will redirect 0xCAFE to
     // 0xDEAD for this purpose.
-    pub linkage_table: HashMap<RuntimePackageId, PackageStorageId>,
+    pub linkage_table: BTreeMap<RuntimePackageId, PackageStorageId>,
 }
 
 impl LinkageContext {
     pub fn new(
         root_package: PackageStorageId,
-        linkage_table: HashMap<RuntimePackageId, PackageStorageId>,
+        linkage_table: BTreeMap<RuntimePackageId, PackageStorageId>,
     ) -> Self {
         Self {
             root_package,
