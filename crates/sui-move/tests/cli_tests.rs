@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use insta_cmd::{assert_cmd_snapshot, get_cargo_bin};
+use insta_cmd::get_cargo_bin;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
