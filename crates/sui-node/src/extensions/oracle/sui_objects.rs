@@ -41,7 +41,7 @@ pub fn deserialize_object<'a, T: Deserialize<'a>>(
 ) -> anyhow::Result<T> {
     let object = store
         .get_object(&ObjectID::from_address(address))
-        .context("Fetching the object")?;
+        .context("Fetching the object ")?;
 
     match object.as_inner().data.clone() {
         Data::Move(o) => {
