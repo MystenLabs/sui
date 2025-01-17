@@ -20,6 +20,11 @@ module a::m {
     public fun r(p: &mut UID, s: Receiving<other::S>): other::S {
         transfer::public_receive(p, s)
     }
+
+    public fun m(s: other::S, p: vector<address>) {
+        transfer::public_multiparty_transfer(s, p)
+    }
+
 }
 
 module a::other {
@@ -44,6 +49,14 @@ module sui::transfer {
     }
 
     public fun public_transfer<T: key + store>(_: T, _: address) {
+        abort 0
+    }
+
+    public fun multiparty_transfer<T: key>(_: T, _: vector<address>) {
+        abort 0
+    }
+
+    public fun public_multiparty_transfer<T: key + store>(_: T, _: vector<address>) {
         abort 0
     }
 
