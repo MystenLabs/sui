@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg_attr(msim, ignore)]
+#![cfg(not(msim))]
 
 use insta_cmd::get_cargo_bin;
 use std::fs;
