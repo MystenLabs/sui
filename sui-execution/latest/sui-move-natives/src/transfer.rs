@@ -162,7 +162,7 @@ pub fn multiparty_transfer_internal(
 
     let transfer_multiparty_transfer_internal_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .transfer_multiparty_transfer_internal_cost_params
         .clone();
 
