@@ -66,6 +66,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
     let start = env::var("START").unwrap_or_else(|_| "now-1h".to_string());
     let end = env::var("END").unwrap_or_else(|_| "now".to_string());
+
     let client = reqwest::Client::new();
     let mut query_params = vec![
         ("query", query.as_str()),
@@ -95,6 +96,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
     let logs: Vec<GrafanaLog> = resp.json().await?;
     info!("Found {} logs.", logs.len());
+
     let mut method_map: HashMap<String, Vec<String>> = HashMap::new();
     for log_entry in logs {
         if let Some(body_content) = extract_body_from_message(&log_entry.message) {

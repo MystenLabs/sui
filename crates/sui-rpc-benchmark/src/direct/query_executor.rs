@@ -11,7 +11,7 @@ use sui_indexer_alt_framework::task::TrySpawnStreamExt;
 use tokio_postgres::{types::ToSql, types::Type, NoTls, Row};
 use tracing::info;
 
-use crate::direct::benchmark_config::BenchmarkConfig;
+use crate::config::BenchmarkConfig;
 use crate::direct::metrics::{BenchmarkResult, MetricsCollector};
 use crate::direct::query_generator::BenchmarkQuery;
 
