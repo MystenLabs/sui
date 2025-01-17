@@ -295,9 +295,12 @@ impl Core {
         Ok(missing_block_refs)
     }
 
-    /// Tries to set up leader timeout if needed.
+    /// If needed, signals a new clock round and sets up leader timeout.
     fn try_signal_new_round(&mut self) {
         // Signal only when the threshold clock round is more advanced than the last signaled round.
+        //
+        // NOTE: a signal is still sent even when a block has been proposed at the new round.
+        // We can consider changing this in the future.
         let new_clock_round = self.dag_state.read().threshold_clock_round();
         if new_clock_round <= self.last_signaled_round {
             return;
