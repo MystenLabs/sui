@@ -12,6 +12,9 @@ clap = { workspace = true, features = ["derive"] }
 dashmap.workspace = true
 futures.workspace = true
 rand.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 sui-indexer-alt-framework.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true
