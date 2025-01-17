@@ -587,57 +587,71 @@ impl Operations {
         false
     }
 
+    /// Add balance-change with zero amount if the gas owner does not have an entry.
+    /// An entry is required for gas owner because the balance would be adjusted.
+    fn add_missing_gas_owner(operations: &mut Vec<Operation>, gas_owner: SuiAddress) {
+        if operations
+            .iter()
+            .find(|operation| {
+                if let Some(amount) = &operation.amount {
+                    if let Some(account) = &operation.account {
+                        if account.address == gas_owner && amount.currency == *SUI {
+                            return true;
+                        }
+                    }
+                }
+                false
+            })
+            .is_none()
+        {
+            operations.push(Operation::balance_change(
+                Some(OperationStatus::Success),
+                gas_owner,
+                0,
+                SUI.clone(),
+            ));
+        }
+    }
+
     /// If GasCoin is transferred as a part of transferObjects, operations need to be
     /// updated such that:
     /// 1) gas owner needs to be assigned back to the previous owner
     /// 2) SuiBalanceChange type needs to be converted to PaySui for
     ///    previous and new gas owners and their balances need to be adjusted for the gas
     fn process_gascoin_transfer(
-        coin_change_operations: &mut impl Iterator<Item = crate::operations::Operation>,
+        coin_change_operations: &mut impl Iterator<Item = Operation>,
         tx: SuiTransactionBlockKind,
         prev_gas_owner: SuiAddress,
         new_gas_owner: SuiAddress,
         gas_used: i128,
     ) -> Result<Vec<Operation>, anyhow::Error> {
-        let mut gascoin_transfer_operations = vec![];
+        let mut operations = vec![];
         if Self::is_gascoin_transfer(tx) {
-            for operation in coin_change_operations.into_iter() {
+            operations = coin_change_operations.collect();
+            Self::add_missing_gas_owner(&mut operations, prev_gas_owner);
+            Self::add_missing_gas_owner(&mut operations, new_gas_owner);
+            for operation in &mut operations {
                 match operation.type_ {
                     OperationType::Gas => {
                         // change gas account back to the previous owner as it is the one
                         // who paid for the txn (this is the format Rosetta wants to process)
-                        gascoin_transfer_operations.push(Operation::gas(prev_gas_owner, gas_used))
+                        operation.account = Some(prev_gas_owner.into())
                     }
                     OperationType::SuiBalanceChange => {
                         let account = operation
                             .account
+                            .as_ref()
                             .ok_or_else(|| anyhow!("Missing account for a balance-change"))?;
-                        let mut amount = operation
+                        let amount = operation
                             .amount
+                            .as_mut()
                             .ok_or_else(|| anyhow!("Missing amount for a balance-change"))?;
-                        let mut is_convert_to_pay_sui = false;
                         if account.address == prev_gas_owner && amount.currency == *SUI {
                             // previous owner's balance needs to be adjusted for gas
                             amount.value -= gas_used;
-                            is_convert_to_pay_sui = true;
                         } else if account.address == new_gas_owner && amount.currency == *SUI {
                             // new owner's balance needs to be adjusted for gas
                             amount.value += gas_used;
-                            is_convert_to_pay_sui = true;
-                        }
-                        if is_convert_to_pay_sui {
-                            gascoin_transfer_operations.push(Operation::pay_sui(
-                                operation.status,
-                                account.address,
-                                amount.value,
-                            ));
-                        } else {
-                            gascoin_transfer_operations.push(Operation::balance_change(
-                                operation.status,
-                                account.address,
-                                amount.value,
-                                amount.currency,
-                            ));
                         }
                     }
                     _ => {
@@ -649,7 +663,7 @@ impl Operations {
                 }
             }
         }
-        Ok(gascoin_transfer_operations)
+        Ok(operations)
     }
 }
 
