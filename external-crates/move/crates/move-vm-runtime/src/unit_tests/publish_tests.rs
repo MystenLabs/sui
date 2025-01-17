@@ -7,16 +7,13 @@
 
 use crate::{
     dev_utils::{
-        compilation_utils::compile_packages_in_file,
-        in_memory_test_adapter::InMemoryTestAdapter,
+        compilation_utils::compile_packages_in_file, in_memory_test_adapter::InMemoryTestAdapter,
         vm_test_adapter::VMTestAdapter,
     },
     shared::gas::UnmeteredGasMeter,
 };
 use move_core_types::{
-    account_address::AccountAddress,
-    identifier::Identifier,
-    language_storage::ModuleId,
+    account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
 };
 
 #[test]

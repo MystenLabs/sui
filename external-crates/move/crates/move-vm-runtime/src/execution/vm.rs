@@ -26,10 +26,14 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     vm_status::StatusCode,
 };
+use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::runtime::VMConfig;
 use std::{borrow::Borrow, sync::Arc};
 
-use super::dispatch_tables::{IntraPackageKey, VirtualTableKey};
+use super::{
+    dispatch_tables::{IntraPackageKey, VirtualTableKey},
+    tracing::tracer::VMTracer,
+};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -105,6 +109,7 @@ impl<'extensions> MoveVM<'extensions> {
             function_name,
             ty_args,
             args,
+            None,
             gas_meter,
             bypass_declared_entry_check,
         )
@@ -137,6 +142,47 @@ impl<'extensions> MoveVM<'extensions> {
             function_name,
             ty_args,
             args,
+            None,
+            gas_meter,
+            bypass_declared_entry_check,
+        )
+    }
+
+    /// Similar to execute_entry_function, but it bypasses visibility checks and accepts a tracer
+    pub fn execute_function_bypass_visibility_with_tracer_if_enabled(
+        &mut self,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<Type>,
+        args: Vec<impl Borrow<[u8]>>,
+        tracer: Option<&mut MoveTraceBuilder>,
+        gas_meter: &mut impl GasMeter,
+    ) -> VMResult<SerializedReturnValues> {
+        move_vm_profiler::tracing_feature_enabled! {
+            use move_vm_profiler::GasProfiler;
+            if gas_meter.get_profiler_mut().is_none() {
+                gas_meter.set_profiler(GasProfiler::init_default_cfg(
+                    function_name.to_string(),
+                    gas_meter.remaining_gas().into(),
+                ));
+            }
+        }
+
+        let tracer = if cfg!(feature = "tracing") {
+            tracer
+        } else {
+            None
+        };
+
+        dbg_println!("running {module}::{function_name}");
+        dbg_println!("tables: {:#?}", self.virtual_tables.loaded_packages);
+        let bypass_declared_entry_check = true;
+        self.execute_function(
+            module,
+            function_name,
+            ty_args,
+            args,
+            tracer,
             gas_meter,
             bypass_declared_entry_check,
         )
@@ -163,6 +209,7 @@ impl<'extensions> MoveVM<'extensions> {
         function_name: &IdentStr,
         type_arguments: Vec<Type>,
         serialized_args: Vec<impl Borrow<[u8]>>,
+        tracer: Option<&mut MoveTraceBuilder>,
         gas_meter: &mut impl GasMeter,
         bypass_declared_entry_check: bool,
     ) -> VMResult<SerializedReturnValues> {
@@ -187,6 +234,7 @@ impl<'extensions> MoveVM<'extensions> {
             parameters,
             return_type,
             serialized_args,
+            &mut tracer.map(VMTracer::new),
             gas_meter,
         )
     }
@@ -255,6 +303,7 @@ impl<'extensions> MoveVM<'extensions> {
         param_types: Vec<Type>,
         return_types: Vec<Type>,
         serialized_args: Vec<impl Borrow<[u8]>>,
+        tracer: &mut Option<VMTracer<'_>>,
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
         let arg_types = param_types
@@ -289,13 +338,14 @@ impl<'extensions> MoveVM<'extensions> {
             .map_err(|err| err.finish(Location::Undefined))?;
 
         let return_values = interpreter::run(
-            func,
-            ty_args,
-            deserialized_args,
             &self.virtual_tables,
             self.vm_config.clone(),
             &mut self.native_extensions,
+            tracer,
             gas_meter,
+            func,
+            ty_args,
+            deserialized_args,
         )?;
 
         let serialized_return_values = serialize_return_values(

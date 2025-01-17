@@ -66,12 +66,12 @@ pub fn run(
             .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
         move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;
-            use move_vm_types::gas::GasMeter;
+            use move_vm_runtime::shared::gas::GasMeter;
 
             let gas_rem: u64 = gas_status.remaining_gas().into();
             gas_status.set_profiler(GasProfiler::init(
-                &session.vm_config().profiler_config,
-                function_name.to_owned(),
+                &runtime.vm_config().profiler_config,
+                function.to_owned(),
                 gas_rem,
             ));
         }

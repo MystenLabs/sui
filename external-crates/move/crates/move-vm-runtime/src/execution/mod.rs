@@ -3,5 +3,6 @@
 
 pub mod dispatch_tables;
 pub mod interpreter;
+pub mod tracing;
 pub mod values;
 pub mod vm;

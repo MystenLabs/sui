@@ -61,25 +61,25 @@ macro_rules! debug_writeln {
 /// An `MachineState` instance is a stand alone execution context for a function.
 /// It mimics execution on a single thread, with an call stack and an operand stack.
 pub(crate) struct MachineState {
-    pub(super) call_stack: CallStack,
+    pub(crate) call_stack: CallStack,
     /// Operand stack, where Move `Value`s are stored for stack operations.
-    pub(super) operand_stack: ValueStack,
+    pub(crate) operand_stack: ValueStack,
 }
 
 /// The operand stack.
-pub(super) struct ValueStack {
-    pub(super) value: Vec<Value>,
+pub(crate) struct ValueStack {
+    pub(crate) value: Vec<Value>,
 }
 
 /// A call stack.
 // #[derive(Debug)]
-pub(super) struct CallStack {
+pub(crate) struct CallStack {
     /// The current frame we are computing in.
-    pub(super) current_frame: CallFrame,
+    pub(crate) current_frame: CallFrame,
     /// The current heap.
-    pub(super) heap: MachineHeap,
+    pub(crate) heap: MachineHeap,
     /// The stack of active functions.
-    pub(super) frames: Vec<CallFrame>,
+    pub(crate) frames: Vec<CallFrame>,
 }
 
 // A Resolver is a simple and small structure allocated on the stack and used by the
@@ -93,12 +93,12 @@ pub(crate) struct ModuleDefinitionResolver {
 /// A `Frame` is the execution context for a function. It holds the locals of the function and
 /// the function itself.
 #[derive(Debug)]
-pub(super) struct CallFrame {
-    pub(super) pc: u16,
-    pub(super) function: VMPointer<Function>,
-    pub(super) resolver: ModuleDefinitionResolver,
-    pub(super) stack_frame: StackFrame,
-    pub(super) ty_args: Vec<Type>,
+pub(crate) struct CallFrame {
+    pub(crate) pc: u16,
+    pub(crate) function: VMPointer<Function>,
+    pub(crate) resolver: ModuleDefinitionResolver,
+    pub(crate) stack_frame: StackFrame,
+    pub(crate) ty_args: Vec<Type>,
 }
 
 pub(super) struct ResolvableType<'a, 'b> {
@@ -425,6 +425,14 @@ impl ValueStack {
         }
         Ok(self.value[(self.value.len() - n)..].iter())
     }
+
+    pub(crate) fn len(&self) -> usize {
+        self.value.len()
+    }
+
+    pub(crate) fn value_at(&self, n: usize) -> Option<&Value> {
+        self.value.get(n)
+    }
 }
 
 impl CallStack {
@@ -546,6 +554,10 @@ impl ModuleDefinitionResolver {
     pub(crate) fn function_from_instantiation(&self, idx: FunctionInstantiationIndex) -> &CallType {
         &self.module.function_instantiation_at(idx.0).handle
     }
+
+    //
+    // Type lookup and instantiation
+    //
 
     pub(crate) fn instantiate_generic_function(
         &self,

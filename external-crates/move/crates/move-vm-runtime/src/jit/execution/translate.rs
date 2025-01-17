@@ -561,12 +561,18 @@ fn alloc_function(
         .map(|tok| make_type(module, tok))
         .collect::<PartialVMResult<Vec<_>>>()?;
     // Native functions do not have a code unit
-    let (locals_len, jump_tables) = match &def.code {
+    let (locals_len, locals, jump_tables) = match &def.code {
         Some(code) => (
             parameters.len() + module.signature_at(code.locals).0.len(),
+            module
+                .signature_at(code.locals)
+                .0
+                .iter()
+                .map(|tok| make_type(module, tok))
+                .collect::<PartialVMResult<Vec<_>>>()?,
             code.jump_tables.clone(),
         ),
-        None => (0, vec![]),
+        None => (0, vec![], vec![]),
     };
     let return_ = module
         .signature_at(handle.return_)
@@ -581,6 +587,7 @@ fn alloc_function(
         is_entry,
         code: vm_pointer::null_ptr(),
         parameters,
+        locals,
         return_,
         type_parameters,
         native,

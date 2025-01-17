@@ -5,6 +5,7 @@ use crate::{
     execution::{
         dispatch_tables::VMDispatchTables,
         interpreter::state::{CallStack, MachineState, ModuleDefinitionResolver},
+        tracing::trace,
         values::Value,
     },
     jit::execution::ast::{Function, Type},
@@ -23,19 +24,29 @@ pub(crate) mod state;
 /// Entrypoint into the interpreter. All external calls need to be routed through this
 /// function.
 pub(crate) fn run(
-    function: VMPointer<Function>,
-    ty_args: Vec<Type>,
-    args: Vec<Value>,
     vtables: &VMDispatchTables,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,
+    tracer: &mut Option<VMTracer<'_>>,
     gas_meter: &mut impl GasMeter,
+    function: VMPointer<Function>,
+    ty_args: Vec<Type>,
+    args: Vec<Value>,
 ) -> VMResult<Vec<Value>> {
     let fun_ref = function.to_ref();
+    trace(tracer, |tracer| {
+        tracer.enter_initial_frame(
+            vtables,
+            &gas_meter.remaining_gas().into(),
+            function.ptr_clone().to_ref(),
+            &ty_args,
+            &args,
+        )
+    });
     profile_open_frame!(gas_meter, fun_ref.pretty_string());
 
     if fun_ref.is_native() {
-        let return_values = eval::call_native_with_args(
+        let return_result = eval::call_native_with_args(
             None,
             vtables,
             gas_meter,
@@ -48,11 +59,12 @@ pub(crate) fn run(
         .map_err(|e| {
             e.at_code_offset(fun_ref.index(), 0)
                 .finish(Location::Module(fun_ref.module_id().clone()))
-        })?;
-
+        });
+        trace(tracer, |tracer| {
+            tracer.exit_initial_native_frame(&return_result, &gas_meter.remaining_gas().into())
+        });
         profile_close_frame!(gas_meter, fun_ref.pretty_string());
-
-        Ok(return_values.into_iter().collect())
+        return_result.map(|values| values.into_iter().collect())
     } else {
         let module_id = function.to_ref().module_id();
         let resolver = ModuleDefinitionResolver::new(vtables, module_id)
@@ -62,7 +74,7 @@ pub(crate) fn run(
                 .finish(Location::Module(fun_ref.module_id().clone()))
         })?;
         let state = MachineState::new(call_stack);
-        eval::run(state, vtables, vm_config, extensions, gas_meter)
+        eval::run(state, vtables, vm_config, extensions, tracer, gas_meter)
     }
 }
 
@@ -75,3 +87,5 @@ macro_rules! set_err_info {
 }
 
 pub(crate) use set_err_info;
+
+use super::tracing::tracer::VMTracer;
