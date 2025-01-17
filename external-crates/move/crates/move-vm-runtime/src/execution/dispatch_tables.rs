@@ -11,7 +11,9 @@ use crate::{
     cache::identifier_interner::IdentifierKey,
     jit::execution::ast::{Datatype, EnumType, Function, Module, Package, StructType, Type},
     shared::{
-        constants::{MAX_TYPE_INSTANTIATION_NODES, MAX_TYPE_TO_LAYOUT_NODES, VALUE_DEPTH_MAX},
+        constants::{
+            HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, VALUE_DEPTH_MAX,
+        },
         types::RuntimePackageId,
         vm_pointer::VMPointer,
     },
@@ -30,6 +32,7 @@ use move_core_types::{
 
 use move_binary_format::file_format::DatatypeTyParameter;
 use move_core_types::{annotated_value as A, identifier::Identifier, runtime_value as R};
+use move_vm_config::runtime::VMConfig;
 use parking_lot::RwLock;
 
 use std::{collections::BTreeMap, sync::Arc};
@@ -52,6 +55,7 @@ use tracing::error;
 /// vtable/cross-package function resolution but we will keep it simple for now.
 #[derive(Debug, Clone)]
 pub struct VMDispatchTables {
+    pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) loaded_packages: BTreeMap<RuntimePackageId, Arc<Package>>,
 }
 
@@ -142,8 +146,14 @@ pub struct DepthFormula {
 impl VMDispatchTables {
     /// Create a new RuntimeVTables instance.
     /// NOTE: This assumes linkage has already occured.
-    pub fn new(loaded_packages: BTreeMap<RuntimePackageId, Arc<Package>>) -> VMResult<Self> {
-        Ok(Self { loaded_packages })
+    pub fn new(
+        vm_config: Arc<VMConfig>,
+        loaded_packages: BTreeMap<RuntimePackageId, Arc<Package>>,
+    ) -> VMResult<Self> {
+        Ok(Self {
+            vm_config,
+            loaded_packages,
+        })
     }
 
     pub fn get_package(&self, id: &RuntimePackageId) -> PartialVMResult<Arc<Package>> {
@@ -654,7 +664,12 @@ impl VMDispatchTables {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
-        if *count > MAX_TYPE_TO_LAYOUT_NODES {
+        if *count
+            > self
+                .vm_config
+                .max_type_to_layout_nodes
+                .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES)
+        {
             return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
         }
         if depth > VALUE_DEPTH_MAX {
@@ -795,7 +810,12 @@ impl VMDispatchTables {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
-        if *count > MAX_TYPE_TO_LAYOUT_NODES {
+        if *count
+            > self
+                .vm_config
+                .max_type_to_layout_nodes
+                .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES)
+        {
             return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
         }
         if depth > VALUE_DEPTH_MAX {

@@ -120,7 +120,7 @@ impl MoveRuntime {
             .map(|pkg| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
             .collect::<BTreeMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
 
-        let virtual_tables = VMDispatchTables::new(runtime_packages)?;
+        let virtual_tables = VMDispatchTables::new(self.vm_config.clone(), runtime_packages)?;
 
         let base_heap = BaseHeap::new();
 
@@ -200,7 +200,7 @@ impl MoveRuntime {
             .map(|pkg| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
             .collect::<BTreeMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
 
-        let virtual_tables = VMDispatchTables::new(runtime_packages)?;
+        let virtual_tables = VMDispatchTables::new(self.vm_config.clone(), runtime_packages)?;
 
         let base_heap = BaseHeap::new();
 
