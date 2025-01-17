@@ -33,7 +33,6 @@ use crate::{
     leader_schedule::LeaderSchedule,
     round_prober::QuorumRound,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    threshold_clock::ThresholdClock,
     transaction::TransactionConsumer,
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
@@ -51,8 +50,6 @@ const MAX_COMMIT_VOTES_PER_BLOCK: usize = 100;
 
 pub(crate) struct Core {
     context: Arc<Context>,
-    /// The threshold clock that is used to keep track of the current round
-    threshold_clock: ThresholdClock,
     /// The consumer to use in order to pull transactions to be included for the next proposals
     transaction_consumer: TransactionConsumer,
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
@@ -72,6 +69,8 @@ pub(crate) struct Core {
 
     /// Used to make commit decisions for leader blocks in the dag.
     committer: UniversalCommitter,
+    /// The last new round for which core has sent out a signal.
+    last_signaled_round: Round,
     /// The blocks of the last included ancestors per authority. This vector is basically used as a
     /// watermark in order to include in the next block proposal only ancestors of higher rounds.
     /// By default, is initialised with `None` values.
@@ -133,6 +132,8 @@ impl Core {
 
         let last_proposed_block = dag_state.read().get_last_proposed_block();
 
+        let last_signaled_round = last_proposed_block.round();
+
         // Recover the last included ancestor rounds based on the last proposed block. That will allow
         // to perform the next block proposal by using ancestor blocks of higher rounds and avoid
         // re-including blocks that have been already included in the last (or earlier) block proposal.
@@ -162,8 +163,8 @@ impl Core {
         ancestor_state_manager.set_propagation_scores(propagation_scores);
 
         Self {
-            context: context.clone(),
-            threshold_clock: ThresholdClock::new(0, context.clone()),
+            context,
+            last_signaled_round,
             last_included_ancestors,
             last_decided_leader,
             leader_schedule,
@@ -206,9 +207,7 @@ impl Core {
             );
             std::thread::sleep(Duration::from_millis(wait_ms));
         }
-        // Recover the last available quorum to correctly advance the threshold clock.
-        let last_quorum = self.dag_state.read().last_quorum();
-        self.add_accepted_blocks(last_quorum);
+
         // Try to commit and propose, since they may not have run after the last storage write.
         self.try_commit().unwrap();
 
@@ -226,6 +225,11 @@ impl Core {
             self.signals.new_block(last_proposed_block.clone()).unwrap();
             last_proposed_block
         };
+
+        // Try to set up leader timeout if needed.
+        // This needs to be called after try_commit() and try_propose(), which may
+        // have advanced the threshold clock round.
+        self.try_signal_new_round();
 
         info!(
             "Core recovery completed with last proposed block {:?}",
@@ -269,13 +273,16 @@ impl Core {
                     .join(",")
             );
 
-            // Now add accepted blocks to the threshold clock and pending ancestors list.
-            self.add_accepted_blocks(accepted_blocks);
-
+            // Try to commit the new blocks if possible.
             self.try_commit()?;
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
+
+            // Now set up leader timeout if needed.
+            // This needs to be called after try_commit() and try_propose(), which may
+            // have advanced the threshold clock round.
+            self.try_signal_new_round();
         };
 
         if !missing_block_refs.is_empty() {
@@ -288,24 +295,26 @@ impl Core {
         Ok(missing_block_refs)
     }
 
-    /// Adds/processed all the newly `accepted_blocks`. We basically try to move the threshold clock and add them to the
-    /// pending ancestors list.
-    fn add_accepted_blocks(&mut self, accepted_blocks: Vec<VerifiedBlock>) {
-        // Advance the threshold clock. If advanced to a new round then send a signal that a new quorum has been received.
-        if let Some(new_round) = self
-            .threshold_clock
-            .add_blocks(accepted_blocks.iter().map(|b| b.reference()).collect())
-        {
-            // notify that threshold clock advanced to new round
-            self.signals.new_round(new_round);
+    /// If needed, signals a new clock round and sets up leader timeout.
+    fn try_signal_new_round(&mut self) {
+        // Signal only when the threshold clock round is more advanced than the last signaled round.
+        //
+        // NOTE: a signal is still sent even when a block has been proposed at the new round.
+        // We can consider changing this in the future.
+        let new_clock_round = self.dag_state.read().threshold_clock_round();
+        if new_clock_round <= self.last_signaled_round {
+            return;
         }
+        // Then send a signal to set up leader timeout.
+        self.signals.new_round(new_clock_round);
+        self.last_signaled_round = new_clock_round;
 
         // Report the threshold clock round
         self.context
             .metrics
             .node_metrics
             .threshold_clock_round
-            .set(self.threshold_clock.get_round() as i64);
+            .set(new_clock_round as i64);
     }
 
     /// Creating a new block for the dictated round. This is used when a leader timeout occurs, either
@@ -324,7 +333,10 @@ impl Core {
                 .leader_timeout_total
                 .with_label_values(&[&format!("{force}")])
                 .inc();
-            return self.try_propose(force);
+            let result = self.try_propose(force);
+            // The threshold clock round may have advanced, so a signal needs to be sent.
+            self.try_signal_new_round();
+            return result;
         }
         Ok(None)
     }
@@ -359,13 +371,18 @@ impl Core {
             .with_label_values(&["Core::try_new_block"])
             .start_timer();
 
-        let clock_round = self.threshold_clock.get_round();
-        if clock_round <= self.last_proposed_round() {
-            return None;
-        }
+        // Ensure the new block has a higher round than the last proposed block.
+        let clock_round = {
+            let dag_state = self.dag_state.read();
+            let clock_round = dag_state.threshold_clock_round();
+            if clock_round <= dag_state.get_last_proposed_block().round() {
+                return None;
+            }
+            clock_round
+        };
 
         // There must be a quorum of blocks from the previous round.
-        let quorum_round = self.threshold_clock.get_round().saturating_sub(1);
+        let quorum_round = clock_round.saturating_sub(1);
 
         // Create a new block either because we want to "forcefully" propose a block due to a leader timeout,
         // or because we are actually ready to produce the block (leader exists and min delay has passed).
@@ -428,7 +445,7 @@ impl Core {
             .with_label_values(&[leader_authority])
             .inc_by(
                 Instant::now()
-                    .saturating_duration_since(self.threshold_clock.get_quorum_ts())
+                    .saturating_duration_since(self.dag_state.read().threshold_clock_quorum_ts())
                     .as_millis() as u64,
             );
         self.context
@@ -526,9 +543,6 @@ impl Core {
             .try_accept_blocks(vec![verified_block.clone()]);
         assert_eq!(accepted_blocks.len(), 1);
         assert!(missing.is_empty());
-
-        // Internally accept the block to move the threshold clock etc
-        self.add_accepted_blocks(vec![verified_block.clone()]);
 
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
         self.dag_state.write().flush();
@@ -736,7 +750,7 @@ impl Core {
 
     /// Whether the core should propose new blocks.
     pub(crate) fn should_propose(&self) -> bool {
-        let clock_round = self.threshold_clock.get_round();
+        let clock_round = self.dag_state.read().threshold_clock_round();
         let core_skipped_proposals = &self.context.metrics.node_metrics.core_skipped_proposals;
 
         if !self.subscriber_exists {
@@ -1388,7 +1402,7 @@ mod test {
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
 
-            // For round 4 only produce f+1 blocks only skip our validator and that of position 1 from creating blocks.
+            // For round 4 only produce f+1 blocks. Skip our validator 0 and that of position 1 from creating blocks.
             let authorities_to_skip = if round == 4 {
                 context.committee.validity_threshold() as usize
             } else {
@@ -1454,11 +1468,12 @@ mod test {
             false,
         );
 
-        // New round should be 4
+        // Clock round should have advanced to 5 during recovery because
+        // a quorum has formed in round 4.
         let mut new_round = signal_receivers.new_round_receiver();
-        assert_eq!(*new_round.borrow_and_update(), 4);
+        assert_eq!(*new_round.borrow_and_update(), 5);
 
-        // When trying to propose now we should propose block for round 4
+        // During recovery, round 4 block should have been proposed.
         let proposed_block = block_receiver
             .recv()
             .await
