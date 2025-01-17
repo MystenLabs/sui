@@ -83,24 +83,30 @@ impl Linkage {
                 .add_entry(*runtime_id, *storage_id)
                 .map_err(|err| err.finish(Location::Undefined))?;
         }
-        // Remap the root address if it is in the linkage table since it may be overriden
-        existing_linkage.root_package = existing_linkage
-            .linkage_table
-            .get(&existing_linkage.root_package)
-            .unwrap_or(&existing_linkage.root_package)
-            .clone();
         Ok(existing_linkage)
     }
 }
 
 impl PublishLinkageArgs {
     pub fn overlay(&self, existing_linkage: LinkageContext) -> VMResult<LinkageContext> {
-        let mut linkage = self.linkage.overlay(existing_linkage)?;
-        if let Some(location) = self.location {
-            linkage.root_package = location;
-        }
+        self.linkage.overlay(existing_linkage)
+    }
 
-        Ok(linkage)
+    pub fn resolve_publication_location(
+        &self,
+        sender: AccountAddress,
+        linkage: &LinkageContext,
+    ) -> AccountAddress {
+        // 1. Use location if specified; otherwise
+        // 2. Use the sender address (remapped if it exists in the linkage table); otherwise
+        // 3. Use the sender address
+        self.location.unwrap_or(
+            linkage
+                .linkage_table
+                .get(&sender)
+                .copied()
+                .unwrap_or(sender),
+        )
     }
 }
 
@@ -214,8 +220,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
                 let move_stdlib = MOVE_STDLIB_COMPILED.to_vec();
                 let sender = *move_stdlib.first().unwrap().self_id().address();
                 println!("generating stdlib linkage");
-                let linkage_context =
-                    LinkageContext::new(sender, BTreeMap::from([(sender, sender)]));
+                let linkage_context = LinkageContext::new(BTreeMap::from([(sender, sender)]));
                 println!("calling stdlib publish with address {sender:?}");
                 let pkg = StoredPackage::from_module_for_testing_with_linkage(
                     sender,
@@ -267,16 +272,19 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
             sender,
             &pub_modules,
         )?)?;
+        let storage_id = extra_args.resolve_publication_location(sender, &linkage_context);
         println!("linkage: {linkage_context:#?}");
+        println!("publication location: {storage_id}");
         println!("doing publish");
         let pkg = StoredPackage::from_module_for_testing_with_linkage(
-            sender,
+            storage_id,
             linkage_context,
             pub_modules.clone(),
         )?;
+        let runtime_id = pkg.runtime_id();
         let publish_result = self.perform_action(gas_budget, |inner_adapter, _gas_status| {
             let pkg = pkg.into_serialized_package();
-            inner_adapter.publish_package(sender, pkg)?;
+            inner_adapter.publish_package(runtime_id, pkg)?;
             println!("done");
             Ok(())
         });
@@ -318,18 +326,21 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
             sender,
             &pub_modules,
         )?)?;
+        let storage_id = extra_args.resolve_publication_location(sender, &linkage_context);
         println!("linkage: {linkage_context:#?}");
+        println!("publication location: {storage_id}");
         let mut gas_meter = Self::make_gas_status(gas_budget);
         println!("doing verification");
         let pkg = StoredPackage::from_module_for_testing_with_linkage(
-            sender,
+            storage_id,
             linkage_context,
             pub_modules.clone(),
         )?;
+        let runtime_id = pkg.runtime_id();
         let pkg = pkg.into_serialized_package();
         let (verif_pkg, mut publish_vm) = self
             .perform_action_with_gas(&mut gas_meter, |inner_adapter, _gas_status| {
-                inner_adapter.verify_package(sender, pkg)
+                inner_adapter.verify_package(runtime_id, pkg)
             })?;
         println!("doing calls");
         let signers: Vec<_> = signers

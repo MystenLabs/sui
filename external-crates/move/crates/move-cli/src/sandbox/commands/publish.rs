@@ -77,7 +77,7 @@ pub fn publish(
     let mut gas_status = get_gas_status(cost_table, None)?;
 
     // Create a `LinkageContext`
-    let linkage_context = LinkageContext::new(package_storage_id, dependency_map);
+    let linkage_context = LinkageContext::new(dependency_map);
 
     // Serialize the modules into a package to prepare them for publishing
     let pkg = StoredPackage::from_module_for_testing_with_linkage(

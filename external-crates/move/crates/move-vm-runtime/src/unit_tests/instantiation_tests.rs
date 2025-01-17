@@ -521,7 +521,6 @@ fn make_module(
     let module_id = module.self_id();
     let mut pkg = StoredPackage::from_modules_for_testing(addr, vec![module.clone()]).unwrap();
     pkg.linkage_context = LinkageContext::new(
-        addr,
         [(addr, addr)]
             .into_iter()
             .chain(module.module_handles().iter().map(|mhandle| {

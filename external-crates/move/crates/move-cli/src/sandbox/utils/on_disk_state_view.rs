@@ -411,7 +411,6 @@ impl OnDiskStateView {
             "Found circular dependencies during dependency generation."
         );
         let linkage_context = LinkageContext::new(
-            *package_address,
             all_dependencies
                 .into_iter()
                 .map(|id| (id, id))

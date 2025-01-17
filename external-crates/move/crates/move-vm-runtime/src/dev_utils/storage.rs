@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    shared::{linkage_context::LinkageContext, types::PackageStorageId},
+    shared::{
+        linkage_context::LinkageContext,
+        types::{PackageStorageId, RuntimePackageId},
+    },
     validation::verification::ast as verif_ast,
 };
 use anyhow::Result;
@@ -36,6 +39,8 @@ pub struct DeltaStorage<'a, 'b, S> {
 /// Simple in-memory representation of packages
 #[derive(Debug, Clone)]
 pub struct StoredPackage {
+    /// The package ID (address) for this package.
+    pub package_id: PackageStorageId,
     pub modules: BTreeMap<Identifier, Vec<u8>>,
     /// For each dependency (including transitive dependencies), maps runtime package ID to the
     /// storage ID of the package that is to be used for the linkage rooted at this package.
@@ -70,14 +75,15 @@ impl<'a, 'b, S: MoveResolver> DeltaStorage<'a, 'b, S> {
 impl StoredPackage {
     fn empty(storage_id: AccountAddress) -> Self {
         Self {
+            package_id: storage_id,
             modules: BTreeMap::new(),
-            linkage_context: LinkageContext::new(storage_id, BTreeMap::new()),
+            linkage_context: LinkageContext::new(BTreeMap::new()),
             type_origin_table: vec![],
         }
     }
 
     pub fn from_modules_for_testing(
-        storage_id: AccountAddress,
+        storage_id: PackageStorageId,
         modules: Vec<CompiledModule>,
     ) -> Result<Self> {
         assert!(!modules.is_empty());
@@ -104,14 +110,15 @@ impl StoredPackage {
             .collect::<Result<_>>()?;
 
         Ok(Self {
+            package_id: storage_id,
             modules,
-            linkage_context: LinkageContext::new(storage_id, linkage_table),
+            linkage_context: LinkageContext::new(linkage_table),
             type_origin_table,
         })
     }
 
     pub fn from_module_for_testing_with_linkage(
-        storage_id: AccountAddress,
+        storage_id: PackageStorageId,
         linkage_context: LinkageContext,
         modules: Vec<CompiledModule>,
     ) -> Result<Self> {
@@ -126,6 +133,7 @@ impl StoredPackage {
             .collect::<Result<_>>()?;
 
         Ok(Self {
+            package_id: storage_id,
             modules,
             linkage_context,
             type_origin_table,
@@ -134,6 +142,7 @@ impl StoredPackage {
 
     pub fn from_verified_package(verified_package: verif_ast::Package) -> Self {
         Self {
+            package_id: verified_package.storage_id,
             modules: verified_package
                 .as_modules()
                 .into_iter()
@@ -147,7 +156,6 @@ impl StoredPackage {
                 })
                 .collect(),
             linkage_context: LinkageContext::new(
-                verified_package.storage_id,
                 verified_package.linkage_table.into_iter().collect(),
             ),
             type_origin_table: verified_package.type_origin_table,
@@ -156,11 +164,25 @@ impl StoredPackage {
 
     pub fn into_serialized_package(self) -> SerializedPackage {
         SerializedPackage {
-            storage_id: self.linkage_context.root_package(),
+            storage_id: self.package_id,
             modules: self.modules.into_values().collect(),
             linkage_table: self.linkage_context.linkage_table.into_iter().collect(),
             type_origin_table: self.type_origin_table,
         }
+    }
+
+    pub fn runtime_id(&self) -> RuntimePackageId {
+        self.linkage_context
+            .linkage_table
+            .iter()
+            .find_map(|(k, v)| {
+                if *v == self.package_id {
+                    Some(*k)
+                } else {
+                    None
+                }
+            })
+            .expect("address not found in linkage table")
     }
 }
 
@@ -206,10 +228,8 @@ impl InMemoryStorage {
     }
 
     pub fn publish_package(&mut self, stored_package: StoredPackage) {
-        self.accounts.insert(
-            stored_package.linkage_context.root_package(),
-            stored_package,
-        );
+        self.accounts
+            .insert(stored_package.package_id, stored_package);
     }
 
     pub fn publish_or_overwrite_module(

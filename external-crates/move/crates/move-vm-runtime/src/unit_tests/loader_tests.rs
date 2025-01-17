@@ -120,7 +120,7 @@ impl Adapter {
         let vm = Arc::new(RwLock::new(
             InMemoryTestAdapter::new_with_runtime_and_storage(runtime, store),
         ));
-        let linkage = LinkageContext::new(ADDR2, BTreeMap::new());
+        let linkage = LinkageContext::new(BTreeMap::new());
         Self {
             store: {
                 RelinkingStore {
@@ -134,14 +134,12 @@ impl Adapter {
 
     fn with_linkage(
         &self,
-        context: PackageStorageId,
         linkage: BTreeMap<RuntimePackageId, PackageStorageId>,
         type_origin: Vec<((&IdentStr, &IdentStr), PackageStorageId)>,
     ) -> Self {
         Self {
             store: {
                 let linkage = LinkageContext {
-                    root_package: context,
                     linkage_table: linkage,
                 };
                 let type_origin = type_origin
@@ -161,20 +159,6 @@ impl Adapter {
         }
     }
 
-    fn runtime_id_for_link_context(link_ctx: &LinkageContext) -> RuntimePackageId {
-        link_ctx
-            .linkage_table
-            .iter()
-            .find_map(|(k, v)| {
-                if *v == link_ctx.root_package() {
-                    Some(*k)
-                } else {
-                    None
-                }
-            })
-            .expect("address not found in linkage table")
-    }
-
     fn publish_package(&mut self, mut pkg: StoredPackage) {
         if !self.store.linkage.linkage_table.is_empty() {
             pkg.linkage_context = self.store.linkage.clone();
@@ -182,7 +166,7 @@ impl Adapter {
         if !self.store.type_origin.is_empty() {
             pkg.type_origin_table = self.store.type_origin.clone();
         }
-        let runtime_id = Self::runtime_id_for_link_context(&pkg.linkage_context);
+        let runtime_id = pkg.runtime_id();
         self.runtime_adapter
             .write()
             .publish_package(runtime_id, pkg.into_serialized_package())
@@ -196,7 +180,7 @@ impl Adapter {
         if !self.store.type_origin.is_empty() {
             pkg.type_origin_table = self.store.type_origin.clone();
         }
-        let runtime_id = Self::runtime_id_for_link_context(&pkg.linkage_context);
+        let runtime_id = pkg.runtime_id();
         self.runtime_adapter
             .write()
             .publish_package(runtime_id, pkg.into_serialized_package())
@@ -329,7 +313,8 @@ fn get_depth_tests_modules() -> StoredPackage {
 }
 
 fn get_relinker_tests_modules_with_deps<'s>(
-    root_account_addr: RuntimePackageId,
+    runtime_addr: RuntimePackageId,
+    storage_addr: PackageStorageId,
     module: &'s str,
     deps: impl IntoIterator<Item = &'s str>,
 ) -> anyhow::Result<StoredPackage> {
@@ -346,9 +331,9 @@ fn get_relinker_tests_modules_with_deps<'s>(
     .build_and_report()?;
 
     let modules = expect_modules(units)
-        .filter(|m| *m.self_id().address() == root_account_addr)
+        .filter(|m| *m.self_id().address() == runtime_addr)
         .collect();
-    Ok(StoredPackage::from_modules_for_testing(root_account_addr, modules).unwrap())
+    Ok(StoredPackage::from_modules_for_testing(storage_addr, modules).unwrap())
 }
 
 #[test]
@@ -356,7 +341,7 @@ fn load() {
     let data_store = InMemoryStorage::new();
 
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
     let pkg = get_loader_tests_modules();
     adapter.publish_package(pkg);
     // calls all functions sequentially
@@ -367,7 +352,7 @@ fn load() {
 fn test_depth() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
     let modules = get_depth_tests_modules();
     let structs = vec![
         (
@@ -570,7 +555,7 @@ fn test_depth() {
 fn load_concurrent() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
     let modules = get_loader_tests_modules();
     adapter.publish_package(modules);
     // makes 15 threads
@@ -581,7 +566,7 @@ fn load_concurrent() {
 fn load_concurrent_many() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
     let modules = get_loader_tests_modules();
     adapter.publish_package(modules);
     // makes 150 threads
@@ -592,41 +577,34 @@ fn load_concurrent_many() {
 fn relink() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let a0 = ModuleId::new(ADDR4, ident_str!("a").to_owned());
     let b0 = ModuleId::new(ADDR3, ident_str!("b").to_owned());
     let c0 = ModuleId::new(ADDR2, ident_str!("c").to_owned());
     let c1 = ModuleId::new(ADDR5, ident_str!("c").to_owned());
 
-    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v0", []).unwrap();
-    let c1_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v1", []).unwrap();
-    let b0_modules = get_relinker_tests_modules_with_deps(ADDR3, "b_v0", ["c_v0"]).unwrap();
-    let a0_modules = get_relinker_tests_modules_with_deps(ADDR4, "a_v0", ["b_v0", "c_v1"]).unwrap();
+    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, ADDR2, "c_v0", []).unwrap();
+    let c1_modules =
+        get_relinker_tests_modules_with_deps(ADDR2, *c1.address(), "c_v1", []).unwrap();
+    let b0_modules = get_relinker_tests_modules_with_deps(ADDR3, ADDR3, "b_v0", ["c_v0"]).unwrap();
+    let a0_modules =
+        get_relinker_tests_modules_with_deps(ADDR4, ADDR4, "a_v0", ["b_v0", "c_v1"]).unwrap();
 
     // Publish the first version of C, and B which is published depending on it.
     adapter.publish_package(c0_modules);
     adapter
-        .with_linkage(
-            ADDR3,
-            BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
-            vec![],
-        )
+        .with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![])
         .publish_package(b0_modules);
 
     assert_eq!(
         vec![MoveValue::U64(42 + 1)],
         adapter
-            .with_linkage(
-                ADDR3,
-                BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3),]),
-                vec![],
-            )
+            .with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3),]), vec![],)
             .call_function_with_return(&b0, ident_str!("b")),
     );
 
     let mut adapter = adapter.with_linkage(
-        ADDR5,
         /* linkage */ BTreeMap::from_iter([(ADDR2, ADDR5)]),
         /* type origin */
         vec![
@@ -639,7 +617,6 @@ fn relink() {
     // B will be relinked to use C when executed in the adapter relinking against A.
     adapter.publish_package(c1_modules);
     let mut adapter = adapter.with_linkage(
-        ADDR4,
         BTreeMap::from([(ADDR2, ADDR5), (ADDR3, ADDR3), (ADDR4, ADDR4)]),
         vec![],
     );
@@ -655,17 +632,16 @@ fn relink() {
 fn relink_publish_err() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
 
-    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v0", []).unwrap();
-    let b1_modules = get_relinker_tests_modules_with_deps(ADDR3, "b_v1", ["c_v1"]).unwrap();
+    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, ADDR2, "c_v0", []).unwrap();
+    let b1_modules = get_relinker_tests_modules_with_deps(ADDR3, ADDR2, "b_v1", ["c_v1"]).unwrap();
 
     // B was built against the later version of C but published against the earlier version,
     // which should fail because a function is missing.
     adapter.publish_package(c0_modules);
     adapter
         .with_linkage(
-            ADDR3,
             BTreeMap::from_iter([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
             vec![],
         )
@@ -682,21 +658,18 @@ fn relink_load_err() {
     let c0 = ModuleId::new(ADDR2, ident_str!("c").to_owned());
     let c1 = ModuleId::new(ADDR5, ident_str!("c").to_owned());
 
-    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v0", []).unwrap();
-    let c1_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v1", []).unwrap();
-    let b0_modules = get_relinker_tests_modules_with_deps(ADDR3, "b_v0", ["c_v0"]).unwrap();
-    let b1_modules = get_relinker_tests_modules_with_deps(ADDR3, "b_v1", ["c_v1"]).unwrap();
+    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, ADDR2, "c_v0", []).unwrap();
+    let c1_modules =
+        get_relinker_tests_modules_with_deps(ADDR2, *c1.address(), "c_v1", []).unwrap();
+    let b0_modules = get_relinker_tests_modules_with_deps(ADDR3, ADDR3, "b_v0", ["c_v0"]).unwrap();
+    let b1_modules =
+        get_relinker_tests_modules_with_deps(ADDR3, *b1.address(), "b_v1", ["c_v1"]).unwrap();
 
     // B v0 works with C v0
     adapter
-        .with_linkage(
-            *c0.address(),
-            BTreeMap::from([(*c0.address(), *c0.address())]),
-            vec![],
-        )
+        .with_linkage(BTreeMap::from([(*c0.address(), *c0.address())]), vec![])
         .publish_package(c0_modules);
     let mut adapter = adapter.with_linkage(
-        *b0.address(),
         BTreeMap::from([
             (*c0.address(), *c0.address()),
             (*b0.address(), *b0.address()),
@@ -712,7 +685,6 @@ fn relink_load_err() {
 
     adapter
         .with_linkage(
-            *c1.address(),
             /* linkage */
             BTreeMap::from_iter([(*c0.address(), *c1.address())]),
             /* type origin */
@@ -725,7 +697,6 @@ fn relink_load_err() {
 
     // B v1 works with C v1
     let mut adapter = adapter.with_linkage(
-        *b1.address(),
         /* linkage */
         BTreeMap::from_iter([
             (*b0.address(), *b1.address()),
@@ -748,7 +719,6 @@ fn relink_load_err() {
     // But B v1 *does not* work with C v0
     adapter
         .with_linkage(
-            *b1.address(),
             /* linkage */
             BTreeMap::from_iter([
                 (*b0.address(), *b1.address()),
@@ -773,21 +743,19 @@ fn relink_type_identity() {
     let c0 = ModuleId::new(ADDR2, ident_str!("c").to_owned());
     let b1 = ModuleId::new(ADDR6, ident_str!("b").to_owned());
     let c1 = ModuleId::new(ADDR5, ident_str!("c").to_owned());
-    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v0", []).unwrap();
-    let c1_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v1", []).unwrap();
-    let b1_modules = get_relinker_tests_modules_with_deps(ADDR3, "b_v1", ["c_v1"]).unwrap();
+    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, ADDR2, "c_v0", []).unwrap();
+    let c1_modules =
+        get_relinker_tests_modules_with_deps(ADDR2, *c1.address(), "c_v1", []).unwrap();
+    let b1_modules =
+        get_relinker_tests_modules_with_deps(ADDR3, *b1.address(), "b_v1", ["c_v1"]).unwrap();
 
-    let mut adapter = adapter.with_linkage(
-        *c0.address(),
-        BTreeMap::from([(*c0.address(), *c0.address())]),
-        vec![],
-    );
+    let mut adapter =
+        adapter.with_linkage(BTreeMap::from([(*c0.address(), *c0.address())]), vec![]);
     adapter.publish_package(c0_modules);
     let c0_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
 
     adapter
         .with_linkage(
-            *c1.address(),
             /* linkage */
             BTreeMap::from_iter([(*c0.address(), *c1.address())]),
             /* type origin */
@@ -799,7 +767,6 @@ fn relink_type_identity() {
         .publish_package(c1_modules);
 
     let mut adapter = adapter.with_linkage(
-        *b1.address(),
         /* linkage */
         BTreeMap::from_iter([
             (*b0.address(), *b1.address()),
@@ -821,7 +788,6 @@ fn relink_type_identity() {
     assert_ne!(c1_s, b1_s);
 }
 
-/// XXX/TODO(vm-rework): need to fix defining IDs for types for this test to pass
 #[test]
 fn relink_defining_module_successive() {
     let c0 = ModuleId::new(ADDR2, ident_str!("c").to_owned());
@@ -830,20 +796,20 @@ fn relink_defining_module_successive() {
     // This test simulates building up a sequence of upgraded packages over a number of publishes
     let data_store = InMemoryStorage::new();
     let mut adapter = Adapter::new(data_store).with_linkage(
-        *c0.address(),
         BTreeMap::from([(ADDR2, ADDR2)]),
         vec![((c0.name(), ident_str!("S")), *c0.address())],
     );
 
-    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v0", []).unwrap();
-    let c1_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v1", []).unwrap();
-    let c2_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v2", []).unwrap();
+    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, ADDR2, "c_v0", []).unwrap();
+    let c1_modules =
+        get_relinker_tests_modules_with_deps(ADDR2, *c1.address(), "c_v1", []).unwrap();
+    let c2_modules =
+        get_relinker_tests_modules_with_deps(ADDR2, *c2.address(), "c_v2", []).unwrap();
 
     adapter.publish_package(c0_modules);
     let c0_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
 
     let mut adapter = adapter.with_linkage(
-        *c1.address(),
         /* linkage */ BTreeMap::from_iter([(*c0.address(), *c1.address())]),
         /* type origin */
         vec![
@@ -857,7 +823,6 @@ fn relink_defining_module_successive() {
     let c1_r = adapter.load_type(&TypeTag::from_str("0x2::c::R").unwrap());
 
     let mut adapter = adapter.with_linkage(
-        *c2.address(),
         /* linkage */ BTreeMap::from_iter([(*c0.address(), *c2.address())]),
         /* type origin */
         vec![
@@ -895,7 +860,6 @@ fn relink_defining_module_successive() {
     assert_eq!(st.module_id(), c2);
 }
 
-/// XXX/TODO(vm-rework): need to fix defining IDs for types for this test to pass
 #[test]
 fn relink_defining_module_oneshot() {
     // Simulates the loader being made aware of the final package in a sequence of upgrades (perhaps
@@ -909,10 +873,10 @@ fn relink_defining_module_oneshot() {
     let c1 = ModuleId::new(ADDR5, ident_str!("c").to_owned());
     let c2 = ModuleId::new(ADDR6, ident_str!("c").to_owned());
 
-    let c2_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v2", []).unwrap();
+    let c2_modules =
+        get_relinker_tests_modules_with_deps(ADDR2, *c2.address(), "c_v2", []).unwrap();
 
     let mut adapter = Adapter::new(data_store).with_linkage(
-        *c2.address(),
         /* linkage */ BTreeMap::from_iter([(*c0.address(), *c2.address())]),
         /* type origin */
         vec![
@@ -956,8 +920,8 @@ fn relink_defining_module_oneshot() {
 //     let b1 = ModuleId::new(ADDR6, ident_str!("b").to_owned());
 //
 //     let adapter = Adapter::new(data_store);
-//     let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v0", []).unwrap();
-//     let b1_modules = get_relinker_tests_modules_with_deps(ADDR3, "b_v1", ["c_v1"]).unwrap();
+//     let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, ADDR2, "c_v0", []).unwrap();
+//     let b1_modules = get_relinker_tests_modules_with_deps(ADDR3, *b1.address(), "b_v1", ["c_v1"]).unwrap();
 //
 //     // B was built against the later version of C but published against the earlier version,
 //     // which should fail because a function is missing.
@@ -1001,24 +965,20 @@ fn publish_bundle_and_load() {
     let adapter = Adapter::new(data_store);
 
     let a0 = ModuleId::new(ADDR4, ident_str!("a").to_owned());
-    let c1_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v1", []).unwrap();
-    let b0_modules = get_relinker_tests_modules_with_deps(ADDR3, "b_v0", ["c_v0"]).unwrap();
-    let a0_modules = get_relinker_tests_modules_with_deps(ADDR4, "a_v0", ["b_v0", "c_v1"]).unwrap();
+    let c1_modules = get_relinker_tests_modules_with_deps(ADDR2, ADDR2, "c_v1", []).unwrap();
+    let b0_modules = get_relinker_tests_modules_with_deps(ADDR3, ADDR3, "b_v0", ["c_v0"]).unwrap();
+    let a0_modules =
+        get_relinker_tests_modules_with_deps(ADDR4, ADDR4, "a_v0", ["b_v0", "c_v1"]).unwrap();
 
     adapter
-        .with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![])
+        .with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![])
         .publish_package(c1_modules);
 
     adapter
-        .with_linkage(
-            ADDR3,
-            BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
-            vec![],
-        )
+        .with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![])
         .publish_package(b0_modules);
 
     let mut adapter = adapter.with_linkage(
-        ADDR4,
         BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3), (ADDR4, ADDR4)]),
         vec![],
     );
@@ -1033,31 +993,26 @@ fn publish_bundle_and_load() {
 #[test]
 fn publish_bundle_with_err_retry() {
     let data_store = InMemoryStorage::new();
-    let adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+    let adapter = Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let a0 = ModuleId::new(ADDR4, ident_str!("a").to_owned());
-    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v0", []).unwrap();
-    let c1_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v1", []).unwrap();
-    let b0_modules = get_relinker_tests_modules_with_deps(ADDR3, "b_v0", ["c_v0"]).unwrap();
-    let a0_modules = get_relinker_tests_modules_with_deps(ADDR4, "a_v0", ["b_v0", "c_v1"]).unwrap();
+    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, ADDR2, "c_v0", []).unwrap();
+    let c1_modules = get_relinker_tests_modules_with_deps(ADDR2, ADDR5, "c_v1", []).unwrap();
+    let b0_modules = get_relinker_tests_modules_with_deps(ADDR3, ADDR3, "b_v0", ["c_v0"]).unwrap();
+    let a0_modules =
+        get_relinker_tests_modules_with_deps(ADDR4, ADDR4, "a_v0", ["b_v0", "c_v1"]).unwrap();
 
     adapter
-        .with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![])
+        .with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![])
         .publish_package(c0_modules);
 
     adapter
-        .with_linkage(
-            ADDR3,
-            BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
-            vec![],
-        )
+        .with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![])
         .publish_package(b0_modules);
 
     // Publishing the bundle should fail, because `a0` should not link with `c0`.
     adapter
         .with_linkage(
-            ADDR4,
             BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3), (ADDR4, ADDR4)]),
             vec![],
         )
@@ -1065,11 +1020,10 @@ fn publish_bundle_with_err_retry() {
 
     // publish the upgrade of c0 to ADDR5
     adapter
-        .with_linkage(ADDR5, BTreeMap::from([(ADDR2, ADDR5)]), vec![])
+        .with_linkage(BTreeMap::from([(ADDR2, ADDR5)]), vec![])
         .publish_package(c1_modules);
 
     let mut adapter = adapter.with_linkage(
-        ADDR4,
         BTreeMap::from([(ADDR2, ADDR5), (ADDR3, ADDR3), (ADDR4, ADDR4)]),
         vec![],
     );
@@ -1088,7 +1042,7 @@ fn publish_bundle_with_err_retry() {
 fn deep_dependency_list_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1098,11 +1052,8 @@ fn deep_dependency_list_0() {
     let pkg = StoredPackage::from_modules_for_testing(ADDR2, modules).unwrap();
     adapter.publish_package(pkg);
 
-    let mut adapter = adapter.with_linkage(
-        ADDR3,
-        BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
-        vec![],
-    );
+    let mut adapter =
+        adapter.with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![]);
     let name = format!("A{}", max);
     let dep_name = format!("A{}", max - 1);
     let deps = vec![dep_name];
@@ -1115,7 +1066,7 @@ fn deep_dependency_list_0() {
 fn deep_dependency_list_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1125,11 +1076,8 @@ fn deep_dependency_list_1() {
     let pkg = StoredPackage::from_modules_for_testing(ADDR2, modules).unwrap();
     adapter.publish_package(pkg);
 
-    let mut adapter = adapter.with_linkage(
-        ADDR3,
-        BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
-        vec![],
-    );
+    let mut adapter =
+        adapter.with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![]);
     let name = format!("A{}", max);
     let dep_name = format!("A{}", max - 1);
     let deps = vec![dep_name];
@@ -1142,7 +1090,7 @@ fn deep_dependency_list_1() {
 fn deep_dependency_list_ok_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1152,11 +1100,8 @@ fn deep_dependency_list_ok_0() {
     let pkg = StoredPackage::from_modules_for_testing(ADDR2, modules).unwrap();
     adapter.publish_package(pkg);
 
-    let mut adapter = adapter.with_linkage(
-        ADDR3,
-        BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
-        vec![],
-    );
+    let mut adapter =
+        adapter.with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![]);
     let name = format!("A{}", max);
     let dep_name = format!("A{}", max - 1);
     let deps = vec![dep_name];
@@ -1169,7 +1114,7 @@ fn deep_dependency_list_ok_0() {
 fn deep_dependency_list_ok_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1179,11 +1124,8 @@ fn deep_dependency_list_ok_1() {
     let pkg = StoredPackage::from_modules_for_testing(ADDR2, modules).unwrap();
     adapter.publish_package(pkg);
 
-    let mut adapter = adapter.with_linkage(
-        ADDR3,
-        BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
-        vec![],
-    );
+    let mut adapter =
+        adapter.with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![]);
     let name = format!("A{}", max);
     let dep_name = format!("A{}", max - 1);
     let deps = vec![dep_name];
@@ -1196,7 +1138,7 @@ fn deep_dependency_list_ok_1() {
 fn deep_dependency_tree_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1208,11 +1150,8 @@ fn deep_dependency_tree_0() {
     adapter.publish_package(pkg);
 
     // use one of the module in the tree
-    let mut adapter = adapter.with_linkage(
-        ADDR3,
-        BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
-        vec![],
-    );
+    let mut adapter =
+        adapter.with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![]);
     let name = "ASome".to_string();
     let dep_name = format!("A_{}_{}", height - 1, width - 1);
     let deps = vec![dep_name];
@@ -1225,7 +1164,7 @@ fn deep_dependency_tree_0() {
 fn deep_dependency_tree_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1237,11 +1176,8 @@ fn deep_dependency_tree_1() {
     adapter.publish_package(pkg);
 
     // use one of the module in the tree
-    let mut adapter = adapter.with_linkage(
-        ADDR3,
-        BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
-        vec![],
-    );
+    let mut adapter =
+        adapter.with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![]);
     let name = "ASome".to_string();
     let dep_name = format!("A_{}_{}", height - 1, width - 1);
     let deps = vec![dep_name];
@@ -1254,7 +1190,7 @@ fn deep_dependency_tree_1() {
 fn deep_dependency_tree_ok_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1266,11 +1202,8 @@ fn deep_dependency_tree_ok_0() {
     adapter.publish_package(pkg);
 
     // use one of the module in the tree
-    let mut adapter = adapter.with_linkage(
-        ADDR3,
-        BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
-        vec![],
-    );
+    let mut adapter =
+        adapter.with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![]);
     let name = "ASome".to_string();
     let dep_name = format!("A_{}_{}", height - 1, width - 1);
     let deps = vec![dep_name];
@@ -1283,7 +1216,7 @@ fn deep_dependency_tree_ok_0() {
 fn deep_dependency_tree_ok_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).with_linkage(ADDR2, BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1295,11 +1228,8 @@ fn deep_dependency_tree_ok_1() {
     adapter.publish_package(pkg);
 
     // use one of the module in the tree
-    let mut adapter = adapter.with_linkage(
-        ADDR3,
-        BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
-        vec![],
-    );
+    let mut adapter =
+        adapter.with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![]);
     let name = "ASome".to_string();
     let dep_name = format!("A_{}_{}", height - 1, width - 1);
     let deps = vec![dep_name];

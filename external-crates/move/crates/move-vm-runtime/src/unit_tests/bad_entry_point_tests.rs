@@ -25,7 +25,7 @@ const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGT
 #[test]
 fn call_non_existent_module() {
     let adapter = InMemoryTestAdapter::new();
-    let linkage = LinkageContext::new(TEST_ADDR, BTreeMap::new());
+    let linkage = LinkageContext::new(BTreeMap::new());
     let mut vm = adapter.make_vm(linkage).unwrap();
 
     let module_id = ModuleId::new(TEST_ADDR, Identifier::new("M").unwrap());

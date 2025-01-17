@@ -162,10 +162,7 @@ impl MoveRuntime {
         dbg_println!("\n\nPublishing module at {storage_id} (=> {pkg_runtime_id})\n\n");
 
         let data_cache = TransactionDataCache::new(data_cache);
-        let link_context = LinkageContext::new(
-            pkg.storage_id,
-            BTreeMap::from_iter(pkg.linkage_table.clone()),
-        );
+        let link_context = LinkageContext::new(BTreeMap::from_iter(pkg.linkage_table.clone()));
 
         // Verify a provided serialized package. This will validate the provided serialized
         // package, including attempting to jit-compile the package and verify linkage with its
@@ -178,7 +175,7 @@ impl MoveRuntime {
             &self.vm_config,
             &data_cache,
             &link_context,
-            link_context.all_package_dependencies()?,
+            link_context.all_package_dependencies_except(pkg.storage_id)?,
         )?;
         let verified_pkg = {
             let deps = pkg_dependencies
