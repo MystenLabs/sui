@@ -37,6 +37,10 @@ const EUnableToReceiveObject: u64 = 3;
 /// Shared object operations such as wrapping, freezing, and converting to owned are not allowed.
 const ESharedObjectOperationNotSupported: u64 = 4;
 
+#[error]
+const EInvalidMultipartySize: vector<u8> =
+    b"Multiparty transfer is currently limited to one party.";
+
 /// Transfer ownership of `obj` to `recipient`. `obj` must have the `key` attribute,
 /// which (in turn) ensures that `obj` has a globally unique ID. Note that if the recipient
 /// address represents an object ID, the `obj` sent will be inaccessible after the transfer
@@ -55,6 +59,30 @@ public fun transfer<T: key>(obj: T, recipient: address) {
 /// The object must have `store` to be transferred outside of its module.
 public fun public_transfer<T: key + store>(obj: T, recipient: address) {
     transfer_impl(obj, recipient)
+}
+
+/// Transfer ownership of `obj` to the `party_members`. This transfer behaves similar to both
+/// `transfer` and `share_object`. It is similar to `transfer` in that the object be authenticated
+/// only by the recipient(s), in this case the `party_members`. This means that only the members
+/// can use the object as an input to a transaction. It is similar to `share_object` in that the
+/// object must be used in consensus and cannot be used in the fast path.
+/// This function has custom rules performed by the Sui Move bytecode verifier that ensures that `T`
+/// is an object defined in the module where `transfer` is invoked. Use `public_multiparty_transfer`
+/// to transfer an object with `store` outside of its module.
+public fun multiparty_transfer<T: key>(obj: T, party_members: vector<address>) {
+    assert!(party_members.length() == 1, EInvalidMultipartySize);
+    multiparty_transfer_impl(obj, party_members)
+}
+
+/// Transfer ownership of `obj` to the `party_members`. This transfer behaves similar to both
+/// `transfer` and `share_object`. It is similar to `transfer` in that the object be authenticated
+/// only by the recipient(s), in this case the `party_members`. This means that only the members
+/// can use the object as an input to a transaction. It is similar to `share_object` in that the
+/// object must be used in consensus and cannot be used in the fast path.
+/// The object must have `store` to be transferred outside of its module.
+public fun public_multiparty_transfer<T: key + store>(obj: T, party_members: vector<address>) {
+    assert!(party_members.length() == 1, EInvalidMultipartySize);
+    multiparty_transfer_impl(obj, party_members)
 }
 
 /// Freeze `obj`. After freezing `obj` becomes immutable and can no longer be transferred or
@@ -121,6 +149,8 @@ public fun receiving_object_id<T: key>(receiving: &Receiving<T>): ID {
 public(package) native fun freeze_object_impl<T: key>(obj: T);
 
 public(package) native fun share_object_impl<T: key>(obj: T);
+
+public(package) native fun multiparty_transfer_impl<T: key>(obj: T, party_members: vector<address>);
 
 public(package) native fun transfer_impl<T: key>(obj: T, recipient: address);
 

@@ -1058,6 +1058,8 @@ pub struct ProtocolConfig {
     // Transfer
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
     transfer_transfer_internal_cost_base: Option<u64>,
+    // Cost params for the Move native function `multiparty_transfer_impl<T: key>(obj: T, party_members: vector<address>)`
+    transfer_multiparty_transfer_internal_cost_base: Option<u64>,
     // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
     transfer_freeze_object_cost_base: Option<u64>,
     // Cost params for the Move native function `share_object<T: key>(obj: T)`
@@ -2049,6 +2051,8 @@ impl ProtocolConfig {
             // `transfer` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
             transfer_transfer_internal_cost_base: Some(52),
+            // Cost params for the Move native function `multiparty_transfer_impl<T: key>(obj: T, party_members: vector<address>)`
+            transfer_multiparty_transfer_internal_cost_base: Some(52),
             // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
             transfer_freeze_object_cost_base: Some(52),
             // Cost params for the Move native function `share_object<T: key>(obj: T)`
