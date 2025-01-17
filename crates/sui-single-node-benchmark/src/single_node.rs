@@ -206,7 +206,7 @@ impl SingleValidator {
         )
         .unwrap();
         let (kind, signer, gas) = executable.transaction_data().execution_parts();
-        let (inner_temp_store, _, effects, _) =
+        let (inner_temp_store, _, effects, _timings, _) =
             self.epoch_store.executor().execute_transaction_to_effects(
                 &store,
                 self.epoch_store.protocol_config(),
