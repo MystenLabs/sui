@@ -41,6 +41,7 @@ pub struct StoredTransaction {
     pub raw_transaction: Vec<u8>,
     pub raw_effects: Vec<u8>,
     pub events: Vec<u8>,
+    pub user_signatures: Vec<u8>,
 }
 
 #[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
