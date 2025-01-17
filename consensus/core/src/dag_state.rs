@@ -2212,8 +2212,15 @@ mod test {
 
         let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag");
 
+        // Add equivocating block for round 2 authority 3
+        let block = VerifiedBlock::new_for_test(TestBlock::new(2, 2).build());
+
         // Accept all blocks
-        for block in dag_builder.all_blocks() {
+        for block in dag_builder
+            .all_blocks()
+            .into_iter()
+            .chain(std::iter::once(block))
+        {
             dag_state.accept_block(block);
         }
 
@@ -2228,12 +2235,16 @@ mod test {
         // WHEN search for the latest blocks
         let end_round = 4;
         let expected_rounds = vec![0, 1, 2, 3];
-
+        let expected_excluded_and_equivocating_blocks = vec![0, 0, 1, 0];
         // THEN
         let last_blocks = dag_state.get_last_cached_block_per_authority(end_round);
         assert_eq!(
             last_blocks.iter().map(|b| b.0.round()).collect::<Vec<_>>(),
             expected_rounds
+        );
+        assert_eq!(
+            last_blocks.iter().map(|b| b.1.len()).collect::<Vec<_>>(),
+            expected_excluded_and_equivocating_blocks
         );
 
         // THEN

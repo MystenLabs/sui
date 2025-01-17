@@ -1003,7 +1003,6 @@ impl Core {
                     .with_label_values(&[block_hostname, "timeout"])
                     .inc();
             } else {
-                excluded_and_equivocating_ancestors.push(ancestor.reference());
                 excluded_ancestors.push((score, ancestor));
             }
         }
