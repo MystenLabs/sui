@@ -15,7 +15,7 @@ use move_core_types::account_address::AccountAddress;
 use sui_exex::{ExExContext, ExExEvent, ExExNotification};
 use sui_types::{base_types::ObjectID, messages_checkpoint::CheckpointSequenceNumber};
 
-const REGISTRY_ID: &str = "c1f6d875d562097b58bae7eb8341aa59428b7b793d1b3b4fe34b8dce0c82dbf6";
+const REGISTRY_ID: &str = "bf7650be85eebef7852b70005c9ba885baff38b575b3b3a1cc6f0e74b48e3845";
 
 pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
     tracing::info!("[Oracle ExEx] 🧩 ExEx initiated!");

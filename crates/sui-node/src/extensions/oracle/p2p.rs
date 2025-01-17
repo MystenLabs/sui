@@ -24,7 +24,7 @@ const ORACLE_TOPIC: &str = "pragma/defi_protocol_name";
 /// Runs the P2P node and returns the handle (used to broadcast price to the network
 /// or stop the P2P node) along with the receiver of the consensus prices, mainly used
 /// in the API so we can update the price of the asset.
-pub async fn start_p2p() -> Result<(P2PBroadcaster, mpsc::Receiver<MedianPrice>)> {
+pub async fn start_p2p() -> Result<(P2PBroadcaster, mpsc::Receiver<(MedianPrice, Vec<SignedData<MedianPrice>>)>)> {
     let (consensus_tx, consensus_rx) = mpsc::channel(1024);
     let (mut node, command_tx) = P2PNode::new(consensus_tx).await?;
     tracing::info!("[Oracle ExEx] 👤 Joined the Oracle P2P network");
@@ -63,7 +63,7 @@ pub struct P2PNode {
     /// History of the prices received in the network. Used to establish a quorum.
     network_prices: NetworkPricesPerCheckpoint,
     /// Allows to send prices that reached a quorum to the API.
-    quorum_sender: mpsc::Sender<MedianPrice>,
+    quorum_sender: mpsc::Sender<(MedianPrice, Vec<SignedData<MedianPrice>>)>,
     /// Channel used to retrieve aggregated median prices for a given checkpoint.
     command_rx: mpsc::UnboundedReceiver<BroadcastedPrice>,
     /// Peers currently connected.
@@ -72,7 +72,7 @@ pub struct P2PNode {
 
 impl P2PNode {
     pub async fn new(
-        quorum_sender: mpsc::Sender<MedianPrice>,
+        quorum_sender: mpsc::Sender<(MedianPrice, Vec<SignedData<MedianPrice>>)>,
     ) -> Result<(Self, mpsc::UnboundedSender<BroadcastedPrice>)> {
         let keypair = Keypair::generate_ed25519();
         let peer_id = PeerId::from(keypair.public());
@@ -266,7 +266,7 @@ impl NetworkPricesPerCheckpoint {
         &mut self,
         signed_price: SignedData<MedianPrice>,
         current_number_of_peers: usize,
-    ) -> Option<MedianPrice> {
+    ) -> Option<(MedianPrice, Vec<SignedData<MedianPrice>>)> {
         let Some(median_price) = signed_price.price.median_price else {
             return None;
         };
@@ -294,8 +294,9 @@ impl NetworkPricesPerCheckpoint {
                 timestamp: checkpoint_data.get_latest_timestamp(),
                 checkpoint: Some(signed_price.checkpoint),
             };
+            let peers_data: Vec<SignedData<MedianPrice>> = self.0.get_mut(&signed_price.checkpoint).unwrap().peer_prices.iter().map(|(_, v)| v.clone()).collect();
             self.cleanup_old_checkpoints(signed_price.checkpoint);
-            Some(consensus_price)
+            Some((consensus_price, peers_data))
         } else {
             None
         }
@@ -315,6 +316,7 @@ impl NetworkPricesPerCheckpoint {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SignedData<T: Serialize> {
     pub peer_id: String,
+    pub publickey: Vec<u8>,
     pub signature: Vec<u8>,
     pub checkpoint: u64,
     pub price: T,
@@ -327,6 +329,7 @@ impl<T: Serialize> SignedData<T> {
     {
         Ok(SignedData {
             peer_id: signer.public().to_peer_id().to_string(),
+            publickey: signer.public().try_into_ed25519()?.to_bytes().to_vec(),
             signature: signer.sign(&bcs::to_bytes(data)?)?,
             checkpoint,
             price: data.clone(),

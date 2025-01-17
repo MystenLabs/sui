@@ -9,6 +9,8 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::mpsc::Receiver;
 use tower_http::cors::{Any, CorsLayer};
 
+use super::SignedData;
+
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct MedianPrice {
     pub pair: String,
@@ -21,18 +23,18 @@ const DEFAULT_API_PORT: u16 = 3000;
 
 #[derive(Debug, Clone, Default)]
 pub struct AppState {
-    pub price_data: Arc<Mutex<MedianPrice>>,
+    pub price_data: Arc<Mutex<(MedianPrice, Vec<SignedData<MedianPrice>>)>>,
 }
 
 #[derive(Debug)]
 pub struct Api {
     state: Arc<AppState>,
     address: SocketAddr,
-    quorum_rx: Receiver<MedianPrice>,
+    quorum_rx: Receiver<(MedianPrice, Vec<SignedData<MedianPrice>>)>,
 }
 
 impl Api {
-    pub fn new(host: [u8; 4], quorum_rx: Receiver<MedianPrice>) -> Self {
+    pub fn new(host: [u8; 4], quorum_rx: Receiver<(MedianPrice, Vec<SignedData<MedianPrice>>)>) -> Self {
         let api_port = std::env::var("API_PORT")
             .ok()
             .and_then(|p| p.parse().ok())
@@ -71,13 +73,13 @@ impl Api {
         axum::serve(listener, app).await.unwrap();
     }
 
-    async fn get_price(State(state): State<Arc<AppState>>) -> Json<MedianPrice> {
+    async fn get_price(State(state): State<Arc<AppState>>) -> Json<(MedianPrice, Vec<SignedData<MedianPrice>>)> {
         let price_data = state.price_data.lock().unwrap();
         Json(price_data.clone())
     }
 
     /// Updates the exposed price in the API.
-    async fn update_exposed_price(state: Arc<AppState>, consensus_price: MedianPrice) {
+    async fn update_exposed_price(state: Arc<AppState>, consensus_price: (MedianPrice, Vec<SignedData<MedianPrice>>)) {
         let mut price_data = state.price_data.lock().expect("Poisoned lock");
         *price_data = consensus_price;
     }
