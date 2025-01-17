@@ -1261,6 +1261,12 @@ transfer
 public_transfer
 	public fun
 	0x2::transfer
+multiparty_transfer
+	public fun
+	0x2::transfer
+public_multiparty_transfer
+	public fun
+	0x2::transfer
 freeze_object
 	public fun
 	0x2::transfer
@@ -1286,6 +1292,9 @@ freeze_object_impl
 	public(package) fun
 	0x2::transfer
 share_object_impl
+	public(package) fun
+	0x2::transfer
+multiparty_transfer_impl
 	public(package) fun
 	0x2::transfer
 transfer_impl
