@@ -40,11 +40,11 @@ use self::{
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
-use crate::crypto::group_ops;
 use crate::crypto::group_ops::GroupOpsCostParams;
 use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
+use crate::{crypto::group_ops, transfer::MultipartyTransferInternalCostParams};
 use better_any::{Tid, TidAble};
 use crypto::nitro_attestation::{self, NitroAttestationCostParams};
 use crypto::vdf::{self, VDFCostParams};
@@ -119,6 +119,7 @@ pub struct NativesCostTable {
 
     // Transfer
     pub transfer_transfer_internal_cost_params: TransferInternalCostParams,
+    pub transfer_multiparty_transfer_internal_cost_params: MultipartyTransferInternalCostParams,
     pub transfer_freeze_object_cost_params: TransferFreezeObjectCostParams,
     pub transfer_share_object_cost_params: TransferShareObjectCostParams,
 
@@ -350,6 +351,12 @@ impl NativesCostTable {
                     .transfer_transfer_internal_cost_base()
                     .into(),
             },
+            transfer_multiparty_transfer_internal_cost_params:
+                MultipartyTransferInternalCostParams {
+                    transfer_multiparty_transfer_internal_cost_base: protocol_config
+                        .transfer_multiparty_transfer_internal_cost_base()
+                        .into(),
+                },
             transfer_freeze_object_cost_params: TransferFreezeObjectCostParams {
                 transfer_freeze_object_cost_base: protocol_config
                     .transfer_freeze_object_cost_base()
@@ -1094,6 +1101,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "transfer",
             "transfer_impl",
             make_native!(transfer::transfer_internal),
+        ),
+        (
+            "transfer",
+            "multiparty_transfer_impl",
+            make_native!(transfer::multiparty_transfer_internal),
         ),
         (
             "transfer",

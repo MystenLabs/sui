@@ -19,7 +19,7 @@ use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
-    object::Owner,
+    object::{Authenticator, Owner},
 };
 
 const E_SHARED_NON_NEW_OBJECT: u64 = 0;
@@ -137,6 +137,57 @@ pub fn transfer_internal(
     let obj = args.pop_back().unwrap();
 
     let owner = Owner::AddressOwner(recipient.into());
+    object_runtime_transfer(context, owner, ty, obj)?;
+    let cost = context.gas_used();
+    Ok(NativeResult::ok(cost, smallvec![]))
+}
+
+#[derive(Clone, Debug)]
+pub struct MultipartyTransferInternalCostParams {
+    pub transfer_multiparty_transfer_internal_cost_base: InternalGas,
+}
+/***************************************************************************************************
+* native fun multi_partytransfer_impl
+* Implementation of the Move native function
+*   `multiparty_transfer_impl<T: key>(obj: T, recipient: address)`
+*   gas cost: transfer_multiparty_transfer_internal_cost_base                  |  covers various fixed costs in the oper
+**************************************************************************************************/
+pub fn multiparty_transfer_internal(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 2);
+
+    let transfer_multiparty_transfer_internal_cost_params = context
+        .extensions_mut()
+        .get::<NativesCostTable>()
+        .transfer_multiparty_transfer_internal_cost_params
+        .clone();
+
+    native_charge_gas_early_exit!(
+        context,
+        transfer_multiparty_transfer_internal_cost_params
+            .transfer_multiparty_transfer_internal_cost_base
+    );
+
+    let ty = ty_args.pop().unwrap();
+    let party_members = pop_arg!(args, Vec<AccountAddress>);
+    let Ok([party_member]): Result<[AccountAddress; 1], _> = party_members.try_into() else {
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("Multiparty transfer only supports one party member".to_string()),
+        );
+    };
+    let obj = args.pop_back().unwrap();
+
+    // Dummy version, to be filled with the correct initial version when the effects of the
+    // transaction are written to storage.
+    let owner = Owner::ConsensusV2 {
+        start_version: SequenceNumber::new(),
+        authenticator: Box::new(Authenticator::SingleOwner(party_member.into())),
+    };
     object_runtime_transfer(context, owner, ty, obj)?;
     let cost = context.gas_used();
     Ok(NativeResult::ok(cost, smallvec![]))
