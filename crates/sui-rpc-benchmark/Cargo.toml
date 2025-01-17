@@ -8,11 +8,15 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+chrono.workspace = true
 clap = { workspace = true, features = ["derive"] }
 dashmap.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
 rand.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 sui-indexer-alt-framework.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true
