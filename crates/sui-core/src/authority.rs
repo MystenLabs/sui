@@ -61,6 +61,7 @@ use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::task::JoinHandle;
+use tracing::trace;
 use tracing::{debug, error, info, instrument, warn};
 
 use self::authority_store::ExecutionLockWriteGuard;
@@ -1150,7 +1151,7 @@ impl AuthorityState {
                 .execute_certificate_latency_single_writer
                 .start_timer()
         };
-        debug!("execute_certificate");
+        trace!("execute_certificate");
 
         self.metrics.total_cert_attempts.inc();
 
@@ -1213,7 +1214,6 @@ impl AuthorityState {
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
-        debug!("execute_certificate_internal");
 
         let tx_digest = certificate.digest();
 
@@ -1249,7 +1249,8 @@ impl AuthorityState {
             epoch_store,
         )
         .await
-        .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
+        .tap_err(|e| info!("process_certificate failed: {e}"))
+        .tap_ok(|_| debug!("process_certificate succeeded"))
     }
 
     pub fn read_objects_for_execution(
