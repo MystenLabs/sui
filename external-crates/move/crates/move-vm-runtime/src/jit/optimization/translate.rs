@@ -1,18 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    validation::verification::ast as Input,
-    jit::optimization::ast,
-};
+use crate::{jit::optimization::ast, validation::verification::ast as Input};
 
 use move_binary_format::file_format::{self as FF, FunctionDefinition};
 
 use std::collections::{BTreeMap, BTreeSet};
 
-pub(crate) fn package(
-    pkg: Input::Package,
-) -> ast::Package {
+pub(crate) fn package(pkg: Input::Package) -> ast::Package {
     let Input::Package {
         runtime_id,
         modules: in_modules,
@@ -34,17 +29,31 @@ pub(crate) fn package(
 }
 
 fn module(m: Input::Module) -> ast::Module {
-    let Input::Module { value: module } = m;
-    let functions = module.function_defs().iter().enumerate().map(|(ndx, fun)| {
-        let index = ndx as u16;
-        (FF::FunctionDefinitionIndex::new(index), function(fun))
-    }).collect();
-    ast::Module { value: module , functions }
+    let Input::Module {
+        value: compiled_module,
+    } = m;
+    let functions = compiled_module
+        .function_defs()
+        .iter()
+        .enumerate()
+        .map(|(ndx, fun)| {
+            let index = ndx as u16;
+            (FF::FunctionDefinitionIndex::new(index), function(fun))
+        })
+        .collect();
+    ast::Module {
+        compiled_module,
+        functions,
+    }
 }
 
 fn function(fun: &FunctionDefinition) -> Option<ast::Code> {
     let Some(code) = &fun.code else { return None };
-    let FF::CodeUnit { locals: _, code, jump_tables  } = code;
+    let FF::CodeUnit {
+        locals: _,
+        code,
+        jump_tables,
+    } = code;
 
     let code = generate_basic_blocks(code, jump_tables);
 
@@ -55,19 +64,30 @@ fn function(fun: &FunctionDefinition) -> Option<ast::Code> {
 // NB: We use this instead of the VMControlFlowGraph because it reduces the number of labels
 // generated in some cases, overall reducing the number of blocks for a more-optimized form to work
 // over.
-fn generate_basic_blocks(input: &[FF::Bytecode], jump_tables: &[FF::VariantJumpTable]) -> BTreeMap<ast::Label, Vec<ast::Bytecode>> {
+fn generate_basic_blocks(
+    input: &[FF::Bytecode],
+    jump_tables: &[FF::VariantJumpTable],
+) -> BTreeMap<ast::Label, Vec<ast::Bytecode>> {
     use ast::Bytecode;
 
     // Write down the heads of the basic blocks.
     let mut labels = BTreeSet::from([0]);
-    for FF::VariantJumpTable { head_enum: _, jump_table } in jump_tables {
+    for FF::VariantJumpTable {
+        head_enum: _,
+        jump_table,
+    } in jump_tables
+    {
         match jump_table {
-            FF::JumpTableInner::Full(entries) => entries.iter().for_each(|entry| { labels.insert(*entry); }),
+            FF::JumpTableInner::Full(entries) => entries.iter().for_each(|entry| {
+                labels.insert(*entry);
+            }),
         }
     }
     for instr in input {
         match instr {
-            FF::Bytecode::BrTrue(entry) | FF::Bytecode::BrFalse(entry) | FF::Bytecode::Branch(entry) => {
+            FF::Bytecode::BrTrue(entry)
+            | FF::Bytecode::BrFalse(entry)
+            | FF::Bytecode::Branch(entry) => {
                 labels.insert(*entry);
             }
             _ => (),
@@ -77,14 +97,14 @@ fn generate_basic_blocks(input: &[FF::Bytecode], jump_tables: &[FF::VariantJumpT
     // Split the code into blocks based on all possible target heads.
     let mut blocks = BTreeMap::new();
 
-    if input.is_empty() { return blocks };
+    // TODO: this is probably an invariant violation
+    if input.is_empty() {
+        return blocks;
+    };
 
-    let mut iter = input.iter().enumerate().rev();
-    let Some((_, last)) = iter.next() else { panic!("Empty code block") };
+    let mut current_block: Vec<Bytecode> = vec![];
 
-    let mut current_block: Vec<Bytecode> = vec![bytecode(last)];
-
-    for (i, instr) in iter {
+    for (i, instr) in input.iter().enumerate().rev() {
         current_block.push(bytecode(instr));
         if labels.contains(&(i as u16)) {
             let mut block = std::mem::replace(&mut current_block, vec![]);
@@ -139,7 +159,6 @@ fn bytecode(code: &FF::Bytecode) -> ast::Bytecode {
         FF::Bytecode::ImmBorrowField(ndx) => Bytecode::ImmBorrowField(*ndx),
         FF::Bytecode::ImmBorrowFieldGeneric(ndx) => Bytecode::ImmBorrowFieldGeneric(*ndx),
 
-
         FF::Bytecode::Add => Bytecode::Add,
         FF::Bytecode::Sub => Bytecode::Sub,
         FF::Bytecode::Mul => Bytecode::Mul,
@@ -170,30 +189,14 @@ fn bytecode(code: &FF::Bytecode) -> ast::Bytecode {
         FF::Bytecode::CastU8 => Bytecode::CastU8,
 
         // Vectors
-        FF::Bytecode::VecPack(si, size) => {
-            Bytecode::VecPack(*si, *size)
-        }
-        FF::Bytecode::VecLen(si) => {
-            Bytecode::VecLen(*si)
-        }
-        FF::Bytecode::VecImmBorrow(si) => {
-            Bytecode::VecImmBorrow(*si)
-        }
-        FF::Bytecode::VecMutBorrow(si) => {
-            Bytecode::VecMutBorrow(*si)
-        }
-        FF::Bytecode::VecPushBack(si) => {
-            Bytecode::VecPushBack(*si)
-        }
-        FF::Bytecode::VecPopBack(si) => {
-            Bytecode::VecPopBack(*si)
-        }
-        FF::Bytecode::VecUnpack(si, size) => {
-            Bytecode::VecUnpack(*si, *size)
-        }
-        FF::Bytecode::VecSwap(si) => {
-            Bytecode::VecSwap(*si)
-        }
+        FF::Bytecode::VecPack(si, size) => Bytecode::VecPack(*si, *size),
+        FF::Bytecode::VecLen(si) => Bytecode::VecLen(*si),
+        FF::Bytecode::VecImmBorrow(si) => Bytecode::VecImmBorrow(*si),
+        FF::Bytecode::VecMutBorrow(si) => Bytecode::VecMutBorrow(*si),
+        FF::Bytecode::VecPushBack(si) => Bytecode::VecPushBack(*si),
+        FF::Bytecode::VecPopBack(si) => Bytecode::VecPopBack(*si),
+        FF::Bytecode::VecUnpack(si, size) => Bytecode::VecUnpack(*si, *size),
+        FF::Bytecode::VecSwap(si) => Bytecode::VecSwap(*si),
 
         FF::Bytecode::PackVariant(ndx) => Bytecode::PackVariant(*ndx),
         FF::Bytecode::PackVariantGeneric(ndx) => Bytecode::PackVariantGeneric(*ndx),

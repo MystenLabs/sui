@@ -2,18 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Debug print code for development. Remove when moving into production mode.
-pub const DEBUG_PRINT: bool = false;
+pub const DEBUG_PRINT: bool = true;
 
 pub struct DebugFlags {
     pub function_list_sizes: bool,
     pub function_resolution: bool,
     pub eval_step: bool,
+    pub optimizer: bool,
 }
 
 pub const DEBUG_FLAGS: DebugFlags = DebugFlags {
-    function_list_sizes: true,
-    function_resolution: true,
-    eval_step: true,
+    function_list_sizes: false,
+    function_resolution: false,
+    eval_step: false,
+    optimizer: true,
 };
 
 #[cfg(debug_assertions)]

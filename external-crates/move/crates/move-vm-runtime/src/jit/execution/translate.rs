@@ -10,6 +10,7 @@ use crate::{
         values::Value,
     },
     jit::execution::ast::*,
+    jit::optimization::ast as input,
     natives::functions::NativeFunctions,
     shared::{
         binary_cache::BinaryCache,
@@ -18,7 +19,6 @@ use crate::{
         vm_pointer::{self, VMPointer},
     },
     string_interner,
-    validation::verification,
 };
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
@@ -98,7 +98,7 @@ impl PackageContext<'_> {
 pub fn package(
     natives: &NativeFunctions,
     link_context: &LinkageContext,
-    verified_package: verification::ast::Package,
+    verified_package: input::Package,
 ) -> PartialVMResult<Package> {
     let storage_id = verified_package.storage_id;
     let runtime_id = verified_package.runtime_id;
@@ -134,12 +134,14 @@ pub fn package(
 
     // Load modules in dependency order within the package. Needed for both static call
     // resolution and type caching.
-    while let Some(input_module) = package_modules.pop() {
+    while let Some(mut input_module) = package_modules.pop() {
         let mut immediate_dependencies = input_module
-            .value
+            .compiled_module
             .immediate_dependencies()
             .into_iter()
-            .filter(|dep| module_ids_in_pkg.contains(dep) && dep != &input_module.value.self_id());
+            .filter(|dep| {
+                module_ids_in_pkg.contains(dep) && dep != &input_module.compiled_module.self_id()
+            });
 
         // If we haven't processed the immediate dependencies yet, push the module back onto
         // the front and process other modules first.
@@ -156,15 +158,15 @@ pub fn package(
             &mut package_context,
             link_context,
             storage_id,
-            &input_module.value,
+            &mut input_module,
         )?;
 
         package_context
             .loaded_modules
             .insert(loaded_module.id.name().to_owned(), loaded_module)?;
         package_context.compiled_modules.insert(
-            input_module.value.self_id().name().to_owned(),
-            input_module.value,
+            input_module.compiled_module.self_id().name().to_owned(),
+            input_module.compiled_module,
         )?;
     }
 
@@ -195,9 +197,9 @@ fn module(
     package_context: &mut PackageContext<'_>,
     link_context: &LinkageContext,
     package_id: PackageStorageId,
-    module: &CompiledModule,
+    module: &mut input::Module,
 ) -> PartialVMResult<Module> {
-    let self_id = module.self_id();
+    let self_id = module.compiled_module.self_id();
     dbg_println!("Loading module: {}", self_id);
 
     // Load module types
@@ -206,33 +208,43 @@ fn module(
         link_context,
         package_context.runtime_id,
         package_id,
-        module,
+        &module.compiled_module,
     )?;
     dbg_println!("Module types loaded");
 
     // Initialize module data
-    let type_refs = initialize_type_refs(module)?;
+    let type_refs = initialize_type_refs(&module.compiled_module)?;
 
     let mut instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>> = BTreeMap::new();
 
-    let structs = structs(package_context, module, &type_refs)?;
-    let enums = enums(package_context, module, &type_refs)?;
+    let structs = structs(package_context, &module.compiled_module, &type_refs)?;
+    let enums = enums(package_context, &module.compiled_module, &type_refs)?;
 
-    let struct_instantiations =
-        struct_instantiations(&mut instantiation_signatures, module, &structs)?;
-    let enum_instantiations = enum_instantiations(&mut instantiation_signatures, module, &enums)?;
+    let struct_instantiations = struct_instantiations(
+        &mut instantiation_signatures,
+        &module.compiled_module,
+        &structs,
+    )?;
+    let enum_instantiations = enum_instantiations(
+        &mut instantiation_signatures,
+        &module.compiled_module,
+        &enums,
+    )?;
 
     // Process functions and function instantiations
     // Function loading is effectful; they all go into the arena.
     let single_signature_token_map = functions(package_context, module)?;
-    let function_instantiations =
-        function_instantiations(package_context, &mut instantiation_signatures, module)?;
+    let function_instantiations = function_instantiations(
+        package_context,
+        &mut instantiation_signatures,
+        &module.compiled_module,
+    )?;
 
     // Process field handles and instantiations
-    let field_handles = field_handles(module, &structs);
-    let field_instantiations = field_instantiations(module, &field_handles);
+    let field_handles = field_handles(&module.compiled_module, &structs);
+    let field_instantiations = field_instantiations(&module.compiled_module, &field_handles);
 
-    let constants = constants(module)?;
+    let constants = constants(&module.compiled_module)?;
 
     // Build and return the module
     Ok(Module {
@@ -247,8 +259,11 @@ fn module(
         field_instantiations,
         single_signature_token_map,
         instantiation_signatures,
-        variant_handles: module.variant_handles().to_vec(),
-        variant_instantiation_handles: module.variant_instantiation_handles().to_vec(),
+        variant_handles: module.compiled_module.variant_handles().to_vec(),
+        variant_instantiation_handles: module
+            .compiled_module
+            .variant_instantiation_handles()
+            .to_vec(),
         constants,
     })
 }
@@ -454,8 +469,12 @@ fn cache_signatures(
 
 fn functions(
     package_context: &mut PackageContext,
-    module: &CompiledModule,
+    module: &mut input::Module,
 ) -> PartialVMResult<BTreeMap<SignatureIndex, Type>> {
+    let input::Module {
+        compiled_module: module,
+        functions: optimized_fns,
+    } = module;
     let self_id = module.self_id().name().to_owned();
 
     dbg_println!(flag: function_list_sizes, "pushing {} functions", module.function_defs().len());
@@ -491,12 +510,19 @@ fn functions(
         single_signature_token_map: BTreeMap::new(),
     };
 
-    for (alloc, fun) in vm_pointer::to_mut_ref_slice(loaded_functions)
+    for (alloc, _) in vm_pointer::to_mut_ref_slice(loaded_functions)
         .iter_mut()
         .zip(module.function_defs())
     {
-        if let Some(code_unit) = &fun.code {
-            alloc.code = code(&mut module_context, &code_unit.code)?;
+        let Some(code_unit) = optimized_fns.remove(&alloc.index) else {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    "failed to find module function in optimized function list".to_string(),
+                ),
+            );
+        };
+        if let Some(code_unit) = code_unit {
+            alloc.code = code(&mut module_context, code_unit.code)?;
         }
     }
 
@@ -602,10 +628,12 @@ fn alloc_function(
 
 fn code(
     context: &mut FunctionContext,
-    code: &[FF::Bytecode],
+    blocks: BTreeMap<u16, Vec<input::Bytecode>>,
 ) -> PartialVMResult<*const [Bytecode]> {
+    let function_bytecode = flatten_and_renumber_blocks(blocks);
     let result: *mut [Bytecode] = context.package_context.package_arena.alloc_slice(
-        code.iter()
+        function_bytecode
+            .iter()
             .map(|bc| bytecode(context, bc))
             .collect::<PartialVMResult<Vec<Bytecode>>>()?
             .into_iter(),
@@ -613,10 +641,47 @@ fn code(
     Ok(result as *const [Bytecode])
 }
 
-fn bytecode(context: &mut FunctionContext, bytecode: &FF::Bytecode) -> PartialVMResult<Bytecode> {
+fn flatten_and_renumber_blocks(
+    blocks: BTreeMap<u16, Vec<input::Bytecode>>,
+) -> Vec<input::Bytecode> {
+    dbg_println!("Input: {:#?}", blocks);
+    let mut offset_map = BTreeMap::new(); // Map line name (u16) -> new bytecode offset
+    let mut concatenated = Vec::new();
+
+    // Calculate new offsets and build concatenated bytecode
+    let mut current_offset = 0;
+    for (line_name, bytecodes) in &blocks {
+        offset_map.insert(*line_name, current_offset);
+        current_offset += bytecodes.len() as u16;
+        concatenated.extend_from_slice(bytecodes);
+    }
+    dbg_println!("Concatenated: {:#?}", concatenated);
+
+    // Rewrite branch instructions with new offsets
+    concatenated
+        .into_iter()
+        .map(|bytecode| match bytecode {
+            input::Bytecode::BrFalse(target) => {
+                input::Bytecode::BrFalse(*offset_map.get(&target).expect("Invalid branch target"))
+            }
+            input::Bytecode::BrTrue(target) => {
+                input::Bytecode::BrTrue(*offset_map.get(&target).expect("Invalid branch target"))
+            }
+            input::Bytecode::Branch(target) => {
+                input::Bytecode::Branch(*offset_map.get(&target).expect("Invalid branch target"))
+            }
+            other => other,
+        })
+        .collect()
+}
+
+fn bytecode(
+    context: &mut FunctionContext,
+    bytecode: &input::Bytecode,
+) -> PartialVMResult<Bytecode> {
     let bytecode = match bytecode {
         // Calls -- these get compiled to something more-direct here
-        FF::Bytecode::Call(ndx) => {
+        input::Bytecode::Call(ndx) => {
             let call_type = call(context.package_context, context.module, *ndx)?;
             match call_type {
                 CallType::Direct(func) => Bytecode::DirectCall(func),
@@ -625,133 +690,123 @@ fn bytecode(context: &mut FunctionContext, bytecode: &FF::Bytecode) -> PartialVM
         }
 
         // For now, generic calls retain an index so we can look up their signature as well.
-        FF::Bytecode::CallGeneric(ndx) => Bytecode::CallGeneric(*ndx),
+        input::Bytecode::CallGeneric(ndx) => Bytecode::CallGeneric(*ndx),
 
         // Standard Codes
-        FF::Bytecode::Pop => Bytecode::Pop,
-        FF::Bytecode::Ret => Bytecode::Ret,
-        FF::Bytecode::BrTrue(n) => Bytecode::BrTrue(*n),
-        FF::Bytecode::BrFalse(n) => Bytecode::BrFalse(*n),
-        FF::Bytecode::Branch(n) => Bytecode::Branch(*n),
+        input::Bytecode::Pop => Bytecode::Pop,
+        input::Bytecode::Ret => Bytecode::Ret,
+        input::Bytecode::BrTrue(n) => Bytecode::BrTrue(*n),
+        input::Bytecode::BrFalse(n) => Bytecode::BrFalse(*n),
+        input::Bytecode::Branch(n) => Bytecode::Branch(*n),
 
-        FF::Bytecode::LdU256(n) => Bytecode::LdU256(n.clone()),
-        FF::Bytecode::LdU128(n) => Bytecode::LdU128(n.clone()),
-        FF::Bytecode::LdU16(n) => Bytecode::LdU16(*n),
-        FF::Bytecode::LdU32(n) => Bytecode::LdU32(*n),
-        FF::Bytecode::LdU64(n) => Bytecode::LdU64(*n),
-        FF::Bytecode::LdU8(n) => Bytecode::LdU8(*n),
+        input::Bytecode::LdU256(n) => Bytecode::LdU256(n.clone()),
+        input::Bytecode::LdU128(n) => Bytecode::LdU128(n.clone()),
+        input::Bytecode::LdU16(n) => Bytecode::LdU16(*n),
+        input::Bytecode::LdU32(n) => Bytecode::LdU32(*n),
+        input::Bytecode::LdU64(n) => Bytecode::LdU64(*n),
+        input::Bytecode::LdU8(n) => Bytecode::LdU8(*n),
 
-        FF::Bytecode::LdConst(ndx) => Bytecode::LdConst(*ndx),
-        FF::Bytecode::LdTrue => Bytecode::LdTrue,
-        FF::Bytecode::LdFalse => Bytecode::LdFalse,
+        input::Bytecode::LdConst(ndx) => Bytecode::LdConst(*ndx),
+        input::Bytecode::LdTrue => Bytecode::LdTrue,
+        input::Bytecode::LdFalse => Bytecode::LdFalse,
 
-        FF::Bytecode::CopyLoc(ndx) => Bytecode::CopyLoc(*ndx),
-        FF::Bytecode::MoveLoc(ndx) => Bytecode::MoveLoc(*ndx),
-        FF::Bytecode::StLoc(ndx) => Bytecode::StLoc(*ndx),
-        FF::Bytecode::ReadRef => Bytecode::ReadRef,
-        FF::Bytecode::WriteRef => Bytecode::WriteRef,
-        FF::Bytecode::FreezeRef => Bytecode::FreezeRef,
-        FF::Bytecode::MutBorrowLoc(ndx) => Bytecode::MutBorrowLoc(*ndx),
-        FF::Bytecode::ImmBorrowLoc(ndx) => Bytecode::ImmBorrowLoc(*ndx),
+        input::Bytecode::CopyLoc(ndx) => Bytecode::CopyLoc(*ndx),
+        input::Bytecode::MoveLoc(ndx) => Bytecode::MoveLoc(*ndx),
+        input::Bytecode::StLoc(ndx) => Bytecode::StLoc(*ndx),
+        input::Bytecode::ReadRef => Bytecode::ReadRef,
+        input::Bytecode::WriteRef => Bytecode::WriteRef,
+        input::Bytecode::FreezeRef => Bytecode::FreezeRef,
+        input::Bytecode::MutBorrowLoc(ndx) => Bytecode::MutBorrowLoc(*ndx),
+        input::Bytecode::ImmBorrowLoc(ndx) => Bytecode::ImmBorrowLoc(*ndx),
 
         // Structs and Fields
-        FF::Bytecode::Pack(ndx) => Bytecode::Pack(*ndx),
-        FF::Bytecode::PackGeneric(ndx) => Bytecode::PackGeneric(*ndx),
-        FF::Bytecode::Unpack(ndx) => Bytecode::Unpack(*ndx),
-        FF::Bytecode::UnpackGeneric(ndx) => Bytecode::UnpackGeneric(*ndx),
-        FF::Bytecode::MutBorrowField(ndx) => Bytecode::MutBorrowField(*ndx),
-        FF::Bytecode::MutBorrowFieldGeneric(ndx) => Bytecode::MutBorrowFieldGeneric(*ndx),
-        FF::Bytecode::ImmBorrowField(ndx) => Bytecode::ImmBorrowField(*ndx),
-        FF::Bytecode::ImmBorrowFieldGeneric(ndx) => Bytecode::ImmBorrowFieldGeneric(*ndx),
+        input::Bytecode::Pack(ndx) => Bytecode::Pack(*ndx),
+        input::Bytecode::PackGeneric(ndx) => Bytecode::PackGeneric(*ndx),
+        input::Bytecode::Unpack(ndx) => Bytecode::Unpack(*ndx),
+        input::Bytecode::UnpackGeneric(ndx) => Bytecode::UnpackGeneric(*ndx),
+        input::Bytecode::MutBorrowField(ndx) => Bytecode::MutBorrowField(*ndx),
+        input::Bytecode::MutBorrowFieldGeneric(ndx) => Bytecode::MutBorrowFieldGeneric(*ndx),
+        input::Bytecode::ImmBorrowField(ndx) => Bytecode::ImmBorrowField(*ndx),
+        input::Bytecode::ImmBorrowFieldGeneric(ndx) => Bytecode::ImmBorrowFieldGeneric(*ndx),
 
         // Math Operations
-        FF::Bytecode::Add => Bytecode::Add,
-        FF::Bytecode::Sub => Bytecode::Sub,
-        FF::Bytecode::Mul => Bytecode::Mul,
-        FF::Bytecode::Mod => Bytecode::Mod,
-        FF::Bytecode::Div => Bytecode::Div,
-        FF::Bytecode::BitOr => Bytecode::BitOr,
-        FF::Bytecode::BitAnd => Bytecode::BitAnd,
-        FF::Bytecode::Xor => Bytecode::Xor,
-        FF::Bytecode::Or => Bytecode::Or,
-        FF::Bytecode::And => Bytecode::And,
-        FF::Bytecode::Not => Bytecode::Not,
-        FF::Bytecode::Eq => Bytecode::Eq,
-        FF::Bytecode::Neq => Bytecode::Neq,
-        FF::Bytecode::Lt => Bytecode::Lt,
-        FF::Bytecode::Gt => Bytecode::Gt,
-        FF::Bytecode::Le => Bytecode::Le,
-        FF::Bytecode::Ge => Bytecode::Ge,
-        FF::Bytecode::Abort => Bytecode::Abort,
-        FF::Bytecode::Nop => Bytecode::Nop,
-        FF::Bytecode::Shl => Bytecode::Shl,
-        FF::Bytecode::Shr => Bytecode::Shr,
+        input::Bytecode::Add => Bytecode::Add,
+        input::Bytecode::Sub => Bytecode::Sub,
+        input::Bytecode::Mul => Bytecode::Mul,
+        input::Bytecode::Mod => Bytecode::Mod,
+        input::Bytecode::Div => Bytecode::Div,
+        input::Bytecode::BitOr => Bytecode::BitOr,
+        input::Bytecode::BitAnd => Bytecode::BitAnd,
+        input::Bytecode::Xor => Bytecode::Xor,
+        input::Bytecode::Or => Bytecode::Or,
+        input::Bytecode::And => Bytecode::And,
+        input::Bytecode::Not => Bytecode::Not,
+        input::Bytecode::Eq => Bytecode::Eq,
+        input::Bytecode::Neq => Bytecode::Neq,
+        input::Bytecode::Lt => Bytecode::Lt,
+        input::Bytecode::Gt => Bytecode::Gt,
+        input::Bytecode::Le => Bytecode::Le,
+        input::Bytecode::Ge => Bytecode::Ge,
+        input::Bytecode::Abort => Bytecode::Abort,
+        input::Bytecode::Nop => Bytecode::Nop,
+        input::Bytecode::Shl => Bytecode::Shl,
+        input::Bytecode::Shr => Bytecode::Shr,
 
-        FF::Bytecode::CastU256 => Bytecode::CastU256,
-        FF::Bytecode::CastU128 => Bytecode::CastU128,
-        FF::Bytecode::CastU16 => Bytecode::CastU16,
-        FF::Bytecode::CastU32 => Bytecode::CastU32,
-        FF::Bytecode::CastU64 => Bytecode::CastU64,
-        FF::Bytecode::CastU8 => Bytecode::CastU8,
+        input::Bytecode::CastU256 => Bytecode::CastU256,
+        input::Bytecode::CastU128 => Bytecode::CastU128,
+        input::Bytecode::CastU16 => Bytecode::CastU16,
+        input::Bytecode::CastU32 => Bytecode::CastU32,
+        input::Bytecode::CastU64 => Bytecode::CastU64,
+        input::Bytecode::CastU8 => Bytecode::CastU8,
 
         // Vectors
-        FF::Bytecode::VecPack(si, size) => {
+        input::Bytecode::VecPack(si, size) => {
             check_vector_type(context, si)?;
             Bytecode::VecPack(*si, *size)
         }
-        FF::Bytecode::VecLen(si) => {
+        input::Bytecode::VecLen(si) => {
             check_vector_type(context, si)?;
             Bytecode::VecLen(*si)
         }
-        FF::Bytecode::VecImmBorrow(si) => {
+        input::Bytecode::VecImmBorrow(si) => {
             check_vector_type(context, si)?;
             Bytecode::VecImmBorrow(*si)
         }
-        FF::Bytecode::VecMutBorrow(si) => {
+        input::Bytecode::VecMutBorrow(si) => {
             check_vector_type(context, si)?;
             Bytecode::VecMutBorrow(*si)
         }
-        FF::Bytecode::VecPushBack(si) => {
+        input::Bytecode::VecPushBack(si) => {
             check_vector_type(context, si)?;
             Bytecode::VecPushBack(*si)
         }
-        FF::Bytecode::VecPopBack(si) => {
+        input::Bytecode::VecPopBack(si) => {
             check_vector_type(context, si)?;
             Bytecode::VecPopBack(*si)
         }
-        FF::Bytecode::VecUnpack(si, size) => {
+        input::Bytecode::VecUnpack(si, size) => {
             check_vector_type(context, si)?;
             Bytecode::VecUnpack(*si, *size)
         }
-        FF::Bytecode::VecSwap(si) => {
+        input::Bytecode::VecSwap(si) => {
             check_vector_type(context, si)?;
             Bytecode::VecSwap(*si)
         }
 
         // Enums and Variants
-        FF::Bytecode::PackVariant(ndx) => Bytecode::PackVariant(*ndx),
-        FF::Bytecode::PackVariantGeneric(ndx) => Bytecode::PackVariantGeneric(*ndx),
-        FF::Bytecode::UnpackVariant(ndx) => Bytecode::UnpackVariant(*ndx),
-        FF::Bytecode::UnpackVariantImmRef(ndx) => Bytecode::UnpackVariantImmRef(*ndx),
-        FF::Bytecode::UnpackVariantMutRef(ndx) => Bytecode::UnpackVariantMutRef(*ndx),
-        FF::Bytecode::UnpackVariantGeneric(ndx) => Bytecode::UnpackVariantGeneric(*ndx),
-        FF::Bytecode::UnpackVariantGenericImmRef(ndx) => Bytecode::UnpackVariantGenericImmRef(*ndx),
-        FF::Bytecode::UnpackVariantGenericMutRef(ndx) => Bytecode::UnpackVariantGenericMutRef(*ndx),
-        FF::Bytecode::VariantSwitch(ndx) => Bytecode::VariantSwitch(*ndx),
-
-        // Deprecated bytecodes -- bail
-        FF::Bytecode::ExistsDeprecated(_)
-        | FF::Bytecode::ExistsGenericDeprecated(_)
-        | FF::Bytecode::MoveFromDeprecated(_)
-        | FF::Bytecode::MoveFromGenericDeprecated(_)
-        | FF::Bytecode::MoveToDeprecated(_)
-        | FF::Bytecode::MoveToGenericDeprecated(_)
-        | FF::Bytecode::MutBorrowGlobalDeprecated(_)
-        | FF::Bytecode::MutBorrowGlobalGenericDeprecated(_)
-        | FF::Bytecode::ImmBorrowGlobalDeprecated(_)
-        | FF::Bytecode::ImmBorrowGlobalGenericDeprecated(_) => {
-            unreachable!("Global bytecodes deprecated")
+        input::Bytecode::PackVariant(ndx) => Bytecode::PackVariant(*ndx),
+        input::Bytecode::PackVariantGeneric(ndx) => Bytecode::PackVariantGeneric(*ndx),
+        input::Bytecode::UnpackVariant(ndx) => Bytecode::UnpackVariant(*ndx),
+        input::Bytecode::UnpackVariantImmRef(ndx) => Bytecode::UnpackVariantImmRef(*ndx),
+        input::Bytecode::UnpackVariantMutRef(ndx) => Bytecode::UnpackVariantMutRef(*ndx),
+        input::Bytecode::UnpackVariantGeneric(ndx) => Bytecode::UnpackVariantGeneric(*ndx),
+        input::Bytecode::UnpackVariantGenericImmRef(ndx) => {
+            Bytecode::UnpackVariantGenericImmRef(*ndx)
         }
+        input::Bytecode::UnpackVariantGenericMutRef(ndx) => {
+            Bytecode::UnpackVariantGenericMutRef(*ndx)
+        }
+        input::Bytecode::VariantSwitch(ndx) => Bytecode::VariantSwitch(*ndx),
     };
     Ok(bytecode)
 }

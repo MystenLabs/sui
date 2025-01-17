@@ -5,7 +5,7 @@ pub mod execution;
 pub mod optimization;
 
 use crate::{
-    jit::execution::ast::Package, natives::functions::NativeFunctions,
+    jit::execution::ast::Package, jit::optimization::optimize, natives::functions::NativeFunctions,
     shared::linkage_context::LinkageContext, validation::verification,
 };
 use move_binary_format::errors::PartialVMResult;
@@ -15,5 +15,7 @@ pub fn translate_package(
     link_context: &LinkageContext,
     loaded_package: verification::ast::Package,
 ) -> PartialVMResult<Package> {
-    execution::translate::package(natives, link_context, loaded_package)
+    // TODO: Take the VM config to toggle optimizations
+    let opt_package = optimize(loaded_package);
+    execution::translate::package(natives, link_context, opt_package)
 }
