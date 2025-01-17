@@ -20,12 +20,16 @@ impl Processor for KvCheckpoints {
 
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let sequence_number = checkpoint.checkpoint_summary.sequence_number as i64;
+        let checkpoint_summary = checkpoint.checkpoint_summary.data();
+        let signatures = checkpoint.checkpoint_summary.auth_sig();
         Ok(vec![StoredCheckpoint {
             sequence_number,
-            certified_checkpoint: bcs::to_bytes(&checkpoint.checkpoint_summary)
-                .with_context(|| format!("Serializing checkpoint {sequence_number} summary"))?,
             checkpoint_contents: bcs::to_bytes(&checkpoint.checkpoint_contents)
                 .with_context(|| format!("Serializing checkpoint {sequence_number} contents"))?,
+            checkpoint_summary: bcs::to_bytes(checkpoint_summary)
+                .with_context(|| format!("Serializing checkpoint {sequence_number} summary"))?,
+            validator_signatures: bcs::to_bytes(signatures)
+                .with_context(|| format!("Serializing checkpoint {sequence_number} signatures"))?,
         }])
     }
 }
