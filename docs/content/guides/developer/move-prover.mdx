@@ -6,9 +6,19 @@ The Sui Move Prover is a tool for verifying the correctness of Move smart contra
 
 ## Installation
 
-For now, the Sui Move Prover lives in the [Move Nursery](https://github.com/MystenLabs/move-nursery) as a fork of the Sui framework.
+_We are working on making the Move Prover a standalone tool, as part of the [Move Nursery](https://github.com/MystenLabs/move-nursery)._
 
-TODO: Add instructions for installing the Sui Move Prover.
+_In the meantime, you can install the Move Prover by building our fork of the Sui framework:_
+
+_https://github.com/MystenLabs/sui/pull/20339_
+
+_To avoid building the entire Sui framework, use the following command:_
+
+```bash
+cargo install --features "build" --locked --path crates/sui-move-prover
+```
+
+_The above creates a binary called `sui-move` that you can use to run the Move Prover._
 
 ## Basic usage
 
@@ -158,12 +168,10 @@ To run the Move Prover, you need to have the Move Prover installed and configure
 Use the following command to run the Move Prover:
 
 ```
-sui move build --generate-boogie
+sui-move build --generate-boogie
 ```
 
 When the specifications are correct, the output is empty. On error, the Move Prover will print a message and the location of the source of the error.
-
-TODO: update the documentation once we create a better way to run the prover
 
 ## Using ghost variables
 
