@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use anyhow::anyhow;
 use rand::rngs::OsRng;
 use rand::seq::IteratorRandom;
@@ -8,9 +9,11 @@ use rosetta_client::start_rosetta_test_server;
 use serde_json::json;
 use shared_crypto::intent::Intent;
 use std::num::NonZeroUsize;
+use std::str::FromStr;
 use std::time::Duration;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockResponseOptions,
+    SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
@@ -647,15 +650,514 @@ async fn test_transfer_single_gas_coin() {
     println!("operations: {operations:#?}");
 
     let mut balance = 0;
-    operations
-        .into_iter()
-        .for_each(|op| {
-            if op.type_ == OperationType::Gas {
-                assert_eq!(op.account.unwrap().address, sender);
-            }
-            if op.type_ == OperationType::PaySui {
-                balance += op.amount.unwrap().value;
-            }
-        });
+    operations.into_iter().for_each(|op| {
+        if op.type_ == OperationType::Gas {
+            assert_eq!(op.account.unwrap().address, sender);
+        }
+        if op.type_ == OperationType::PaySui {
+            balance += op.amount.unwrap().value;
+        }
+    });
     assert_eq!(balance, 0);
+}
+
+/// The below SuiTransactionBlockResponse is created by using the below contract:
+/// ```move
+/// module vault::vault;
+///
+/// use sui::balance::Balance;
+/// use sui::coin::Coin;
+/// use sui::sui::SUI;
+///
+/// public struct Vault has key, store {
+///     id: UID,
+///     balance: Balance<SUI>
+/// }
+///
+/// public fun from_coin(coin: Coin<SUI>, ctx: &mut TxContext): Vault {
+///     Vault {
+///         id: object::new(ctx),
+///         balance: coin.into_balance()
+///     }
+/// }
+///
+/// public fun to_coin(self: Vault, ctx: &mut TxContext): Coin<SUI> {
+///     let Vault { id, balance } = self;
+///     id.delete();
+///     balance.into_coin(ctx)
+/// }
+/// ```
+/// And this ptb:
+/// ```bash
+/// res=$(sui client ptb \
+///     --move-call $PACKAGE_ID::vault::to_coin \
+///         @$VAULT_ID \
+///     --assign coin \
+///     --merge-coins \
+///         gas [coin] \
+///     --transfer-objects \
+///         [gas] @$RECIPIENT \
+///     --json)
+/// ```
+/// The sender has a `Vault` under their account and they convert to a `Coin`, merge it with gas
+/// and transfer it to recipient.
+#[tokio::test]
+async fn test_balance_from_obj_merge_to_gas() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    const SENDER: &str = "0x6293e2b4434265fa60ac8ed96342b7a288c0e43ffe737ba40feb24f06fed305d";
+    const RECIPIENT: &str = "0x0e3225553e3b945b4cde5621a980297c45b96002f33c95d3306e58013129ee7c";
+    // let sender = test_cluster.get_address_0();
+    // let recipient = test_cluster.get_address_1();
+    let client = test_cluster.wallet.get_client().await.unwrap();
+    let response: SuiTransactionBlockResponse = serde_json::from_value(json!({
+      "digest": "GL2e3C8M1XGXfbyTbNmWcEhXg3kKF1fJViYwEzFdd8iu",
+      "transaction": {
+        "data": {
+          "messageVersion": "v1",
+          "transaction": {
+            "kind": "ProgrammableTransaction",
+            "inputs": [
+              {
+                "type": "object",
+                "objectType": "immOrOwnedObject",
+                "objectId": "0xa76de9d9d988767d1270d02d2f8b45bc40b28a799098a5ebf140607554a9f2da",
+                "version": "4",
+                "digest": "EbZmBogfdPBd6CTouNC4RaUZbdMWaa4q2a6MkV95xZMn"
+              },
+              {
+                "type": "pure",
+                "valueType": "address",
+                "value": RECIPIENT.to_string()
+              }
+            ],
+            "transactions": [
+              {
+                "MoveCall": {
+                  "package": "0x7c7013e15389d54789b47c89b2d060d3746721683d79a18cf09f874d701637b2",
+                  "module": "vault",
+                  "function": "to_coin",
+                  "arguments": [{ "Input": 0 }]
+                }
+              },
+              { "MergeCoins": ["GasCoin", [{ "Result": 0 }]] },
+              { "TransferObjects": [["GasCoin"], { "Input": 1 }] }
+            ]
+          },
+          "sender": SENDER.to_string(),
+          "gasData": {
+            "payment": [
+              {
+                "objectId": "0x711383f7388293866353c15fbafd0b090c770d37b159935e940eccf09d391399",
+                "version": 4,
+                "digest": "F4JRxU2qgKeg8z3gsXp5tsNs2uWRpLxR5EeozcbYKSf7"
+              }
+            ],
+            "owner": SENDER.to_string(),
+            "price": "1000",
+            "budget": "2000000"
+          }
+        },
+        "txSignatures": [
+          "ACtIeuoCR2EAIPHLGHamujxvc3kAGwtRGanXDmn6iEKudgB8qecuYzjGDN4LPI7yNjWKafMCi456eBmeKPej2AL589qPpNA4UtrgRxrvXTsL64E1icYH7AIY2gKw4XfuIg=="
+        ]
+      },
+      "effects": {
+        "messageVersion": "v1",
+        "status": { "status": "success" },
+        "executedEpoch": "5",
+        "gasUsed": {
+          "computationCost": "1000000",
+          "storageCost": "988000",
+          "storageRebate": "2294820",
+          "nonRefundableStorageFee": "23180"
+        },
+        "modifiedAtVersions": [
+          {
+            "objectId": "0x711383f7388293866353c15fbafd0b090c770d37b159935e940eccf09d391399",
+            "sequenceNumber": "4"
+          },
+          {
+            "objectId": "0xa76de9d9d988767d1270d02d2f8b45bc40b28a799098a5ebf140607554a9f2da",
+            "sequenceNumber": "4"
+          }
+        ],
+        "transactionDigest": "GL2e3C8M1XGXfbyTbNmWcEhXg3kKF1fJViYwEzFdd8iu",
+        "mutated": [
+          {
+            "owner": {
+              "AddressOwner": RECIPIENT.to_string()
+            },
+            "reference": {
+              "objectId": "0x711383f7388293866353c15fbafd0b090c770d37b159935e940eccf09d391399",
+              "version": 5,
+              "digest": "BWV7YtQYETvxcV5Sbrweznkf2znLT58Vjvmrd5jjnDnG"
+            }
+          }
+        ],
+        "deleted": [
+          {
+            "objectId": "0xa76de9d9d988767d1270d02d2f8b45bc40b28a799098a5ebf140607554a9f2da",
+            "version": 5,
+            "digest": "7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz"
+          }
+        ],
+        "gasObject": {
+          "owner": {
+            "AddressOwner": RECIPIENT.to_string()
+          },
+          "reference": {
+            "objectId": "0x711383f7388293866353c15fbafd0b090c770d37b159935e940eccf09d391399",
+            "version": 5,
+            "digest": "BWV7YtQYETvxcV5Sbrweznkf2znLT58Vjvmrd5jjnDnG"
+          }
+        },
+        "dependencies": [
+          "8HCYRvLPvCHYWFCpFdSTpaDV4B435YbWoM6iZwCNeMkL",
+          "GMXnbvXQDMqu5bRsqmu2BeGodnfL4QuPA2yB3aGpwakh"
+        ]
+      },
+      "events": [],
+      "objectChanges": [
+        {
+          "type": "mutated",
+          "sender": SENDER.to_string(),
+          "owner": {
+            "AddressOwner": RECIPIENT.to_string()
+          },
+          "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+          "objectId": "0x711383f7388293866353c15fbafd0b090c770d37b159935e940eccf09d391399",
+          "version": "5",
+          "previousVersion": "4",
+          "digest": "BWV7YtQYETvxcV5Sbrweznkf2znLT58Vjvmrd5jjnDnG"
+        }
+      ],
+      "balanceChanges": [
+        {
+          "owner": {
+            "AddressOwner": RECIPIENT.to_string()
+          },
+          "coinType": "0x2::sui::SUI",
+          "amount": "399990912780"
+        },
+        {
+          "owner": {
+            "AddressOwner": SENDER.to_string()
+          },
+          "coinType": "0x2::sui::SUI",
+          "amount": "-199990605960"
+        }
+      ],
+      "timestampMs": "1736865290221",
+      "confirmedLocalExecution": true,
+      "checkpoint": "1607"
+    })).unwrap();
+
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let operations = Operations::try_from_response(response, &coin_cache)
+        .await
+        .unwrap();
+    println!(
+        "operations: {}",
+        serde_json::to_string_pretty(&operations).unwrap()
+    );
+    let pay_sui_sender = operations
+        .clone()
+        .into_iter()
+        .find(|op| {
+            op.type_ == OperationType::PaySui
+                && op.account
+                    == Some(AccountIdentifier::from(
+                        SuiAddress::from_str(SENDER).unwrap(),
+                    ))
+        })
+        .unwrap();
+    let pay_sui_recipient = operations
+        .into_iter()
+        .find(|op| {
+            op.type_ == OperationType::PaySui
+                && op.account
+                    == Some(AccountIdentifier::from(
+                        SuiAddress::from_str(RECIPIENT).unwrap(),
+                    ))
+        })
+        .unwrap();
+    assert_eq!(
+        -pay_sui_sender.amount.unwrap().value,
+        pay_sui_recipient.amount.unwrap().value
+    );
+}
+
+/// Similar to `test_balance_from_obj_merge_to_gas` test, but `Vault` splits balance to extract
+/// amount double the gas-cost. Then gas-object is merged with the coin equal to gas-cost and is
+/// returned to sender.
+/// This should result to the sender paying the recipient equal to gas-cost, but having no
+/// balance-change on their account.
+/// ```move
+/// public fun amount_to_coin(self: &mut Vault, amount: u64, ctx: &mut TxContext): Coin<SUI> {
+///     self.balance.split(amount).into_coin(ctx)
+/// }
+/// ```
+/// ptb:
+/// ```bash
+/// gas_cost=$((1000000+4294000-2294820))
+/// amount=$((2*$gas_cost))
+///
+/// res=$(sui client ptb \
+///     --move-call $PACKAGE_ID::vault::amount_to_coin \
+///         @$VAULT_ID \
+///         $amount \
+///     --assign coin \
+///     --split-coins coin [$gas_cost] \
+///     --assign coin_to_transfer \
+///     --transfer-objects \
+///         [coin_to_transfer] @$RECIPIENT \
+///     --transfer-objects \
+///         [gas, coin] @$sender \
+///     --json)
+/// ```
+#[tokio::test]
+async fn test_balance_from_obj_paid_eq_gas() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    const SENDER: &str = "0x6293e2b4434265fa60ac8ed96342b7a288c0e43ffe737ba40feb24f06fed305d";
+    const RECIPIENT: &str = "0x0e3225553e3b945b4cde5621a980297c45b96002f33c95d3306e58013129ee7c";
+    const AMOUNT: i128 = 2999180;
+    // let sender = test_cluster.get_address_0();
+    // let recipient = test_cluster.get_address_1();
+    let client = test_cluster.wallet.get_client().await.unwrap();
+    let response: SuiTransactionBlockResponse = serde_json::from_value(json!({
+      "digest": "HavKhwo1K4QNXvvRPE8AhSYKEJSS7tmVq66Eb5Woj4ut",
+      "transaction": {
+        "data": {
+          "messageVersion": "v1",
+          "transaction": {
+            "kind": "ProgrammableTransaction",
+            "inputs": [
+              {
+                "type": "object",
+                "objectType": "immOrOwnedObject",
+                "objectId": "0x955d40be131c17f64f8ce3fc68be7282258593833b531375b255c6059c2759f9",
+                "version": "8",
+                "digest": "Ana1Z9uhqLK22qm3mb6j5cExpcfahrJnSuZX3BCcV1wR"
+              },
+              { "type": "pure", "valueType": "u64", "value": "5998360" },
+              { "type": "pure", "valueType": "u64", "value": "2999180" },
+              {
+                "type": "pure",
+                "valueType": "address",
+                "value": RECIPIENT.to_string()
+              },
+              {
+                "type": "pure",
+                "valueType": "address",
+                "value": SENDER.to_string()
+              }
+            ],
+            "transactions": [
+              {
+                "MoveCall": {
+                  "package": "0x9dd221ac5b546c26e49a03b5e5b02954079a0fe3b9f2aae997959a991e994d4f",
+                  "module": "vault",
+                  "function": "amount_to_coin",
+                  "arguments": [{ "Input": 0 }, { "Input": 1 }]
+                }
+              },
+              { "SplitCoins": [{ "Result": 0 }, [{ "Input": 2 }]] },
+              { "TransferObjects": [[{ "Result": 1 }], { "Input": 3 }] },
+              { "TransferObjects": [["GasCoin", { "Result": 0 }], { "Input": 4 }] }
+            ]
+          },
+          "sender": SENDER.to_string(),
+          "gasData": {
+            "payment": [
+              {
+                "objectId": "0x08d6f5f85a55933fff977c94a2d1d94e8e2fff241c19c20bc5c032e0989f16a4",
+                "version": 8,
+                "digest": "dsk2WjBAbXh8oEppwavnwWmEsqRbBkSGDmVZGBaZHY6"
+              }
+            ],
+            "owner": SENDER.to_string(),
+            "price": "1000",
+            "budget": "4977300"
+          }
+        },
+        "txSignatures": [
+          "AOQLgpQE05d+haNrM90QVvSihxywvwCDm34ovJUk9POVQtqT6OUC5FhWzdG2PP1Xt5/sGn8pJZ++YgVf3NplTQ3589qPpNA4UtrgRxrvXTsL64E1icYH7AIY2gKw4XfuIg=="
+        ]
+      },
+      "effects": {
+        "messageVersion": "v1",
+        "status": { "status": "success" },
+        "executedEpoch": "4",
+        "gasUsed": {
+          "computationCost": "1000000",
+          "storageCost": "4294000",
+          "storageRebate": "2294820",
+          "nonRefundableStorageFee": "23180"
+        },
+        "modifiedAtVersions": [
+          {
+            "objectId": "0x08d6f5f85a55933fff977c94a2d1d94e8e2fff241c19c20bc5c032e0989f16a4",
+            "sequenceNumber": "8"
+          },
+          {
+            "objectId": "0x955d40be131c17f64f8ce3fc68be7282258593833b531375b255c6059c2759f9",
+            "sequenceNumber": "8"
+          }
+        ],
+        "transactionDigest": "HavKhwo1K4QNXvvRPE8AhSYKEJSS7tmVq66Eb5Woj4ut",
+        "created": [
+          {
+            "owner": {
+              "AddressOwner": SENDER.to_string()
+            },
+            "reference": {
+              "objectId": "0x2cdc782a9d96099e2c81d0a6da4894010ce4a46497e1099d12e8b36eca686afe",
+              "version": 9,
+              "digest": "6o2P3rp4jzYtvxtwpcENgP3eQNofpD77XtiAS8LZY18g"
+            }
+          },
+          {
+            "owner": {
+              "AddressOwner": RECIPIENT.to_string()
+            },
+            "reference": {
+              "objectId": "0xd0416564dd8e4cb54cc4151c229546484f22053a721297bafd326e1049c49d47",
+              "version": 9,
+              "digest": "3fo2kTR6tpe2c9dkHtLFGH8eVTTq2BKRNpJ19ognTmCe"
+            }
+          }
+        ],
+        "mutated": [
+          {
+            "owner": {
+              "AddressOwner": SENDER.to_string()
+            },
+            "reference": {
+              "objectId": "0x08d6f5f85a55933fff977c94a2d1d94e8e2fff241c19c20bc5c032e0989f16a4",
+              "version": 9,
+              "digest": "5fwFSzUqrKQbJZsfPLmPN8B3Vws3ffjpvRctEzbnaZTN"
+            }
+          },
+          {
+            "owner": {
+              "AddressOwner": SENDER.to_string()
+            },
+            "reference": {
+              "objectId": "0x955d40be131c17f64f8ce3fc68be7282258593833b531375b255c6059c2759f9",
+              "version": 9,
+              "digest": "5woEdEXorj4m6mU9pC5iBSkLZeww25dHz211NdkwwVPC"
+            }
+          }
+        ],
+        "gasObject": {
+          "owner": {
+            "AddressOwner": SENDER.to_string()
+          },
+          "reference": {
+            "objectId": "0x08d6f5f85a55933fff977c94a2d1d94e8e2fff241c19c20bc5c032e0989f16a4",
+            "version": 9,
+            "digest": "5fwFSzUqrKQbJZsfPLmPN8B3Vws3ffjpvRctEzbnaZTN"
+          }
+        },
+        "dependencies": [
+          "68nRw3jK2b6KJ8bhXMbc56suzKid3sdMbALpvo4kP8Lk",
+          "HhqouwLJ3f9NChqun49pgfeSVVJXVBbYEnKGM1EigXzh"
+        ]
+      },
+      "events": [],
+      "objectChanges": [
+        {
+          "type": "mutated",
+          "sender": SENDER.to_string(),
+          "owner": {
+            "AddressOwner": SENDER.to_string()
+          },
+          "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+          "objectId": "0x08d6f5f85a55933fff977c94a2d1d94e8e2fff241c19c20bc5c032e0989f16a4",
+          "version": "9",
+          "previousVersion": "8",
+          "digest": "5fwFSzUqrKQbJZsfPLmPN8B3Vws3ffjpvRctEzbnaZTN"
+        },
+        {
+          "type": "mutated",
+          "sender": SENDER.to_string(),
+          "owner": {
+            "AddressOwner": SENDER.to_string()
+          },
+          "objectType": "0x9dd221ac5b546c26e49a03b5e5b02954079a0fe3b9f2aae997959a991e994d4f::vault::Vault",
+          "objectId": "0x955d40be131c17f64f8ce3fc68be7282258593833b531375b255c6059c2759f9",
+          "version": "9",
+          "previousVersion": "8",
+          "digest": "5woEdEXorj4m6mU9pC5iBSkLZeww25dHz211NdkwwVPC"
+        },
+        {
+          "type": "created",
+          "sender": SENDER.to_string(),
+          "owner": {
+            "AddressOwner": SENDER.to_string()
+          },
+          "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+          "objectId": "0x2cdc782a9d96099e2c81d0a6da4894010ce4a46497e1099d12e8b36eca686afe",
+          "version": "9",
+          "digest": "6o2P3rp4jzYtvxtwpcENgP3eQNofpD77XtiAS8LZY18g"
+        },
+        {
+          "type": "created",
+          "sender": SENDER.to_string(),
+          "owner": {
+            "AddressOwner": RECIPIENT.to_string()
+          },
+          "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+          "objectId": "0xd0416564dd8e4cb54cc4151c229546484f22053a721297bafd326e1049c49d47",
+          "version": "9",
+          "digest": "3fo2kTR6tpe2c9dkHtLFGH8eVTTq2BKRNpJ19ognTmCe"
+        }
+      ],
+      "balanceChanges": [
+        {
+          "owner": {
+            "AddressOwner": RECIPIENT.to_string()
+          },
+          "coinType": "0x2::sui::SUI",
+          "amount": AMOUNT.to_string()
+        }
+      ],
+      "timestampMs": "1736949830409",
+      "confirmedLocalExecution": true,
+      "checkpoint": "1300"
+    })).unwrap();
+
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let operations = Operations::try_from_response(response, &coin_cache)
+        .await
+        .unwrap();
+    println!(
+        "operations: {}",
+        serde_json::to_string_pretty(&operations).unwrap()
+    );
+
+    let mut balance_changes: HashMap<SuiAddress, i128> = HashMap::new();
+    operations.into_iter().for_each(|op| {
+        let Some(account) = op.account else { return };
+        let addr = account.address;
+        let value = op.amount.map(|a| a.value).unwrap_or(0);
+        if let Some(v) = balance_changes.get_mut(&addr) {
+            *v += value;
+            return;
+        };
+        balance_changes.insert(account.address.into(), value);
+    });
+
+    assert_eq!(
+        *balance_changes
+            .get(&SuiAddress::from_str(RECIPIENT).unwrap())
+            .unwrap(),
+        AMOUNT
+    );
+    assert_eq!(
+        *balance_changes
+            .get(&SuiAddress::from_str(SENDER).unwrap())
+            .unwrap_or(&0),
+        0
+    );
 }
