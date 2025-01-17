@@ -1,0 +1,5 @@
+full_node_url: "https://fullnode.testnet.sui.io:443"
+checkpoint_summary_dir: "testnet_checkpoints_dir"
+genesis_filename: "genesis.blob"
+object_store_url: "https://checkpoints.testnet.sui.io"
+graphql_url: "https://sui-testnet.mystenlabs.com/graphql"
