@@ -8,7 +8,7 @@ cd example && sui-move build 2>&1 | awk '
   # TODO [DVX-678]: sui-move build is non-deterministic, so this is ugly.
   # We snip out everything between "UPDATING" and "INCLUDING"
   BEGIN { snip = 0 }
-  /UPDATING/ { snip = 1; print $0; print "  ... snip ..." }
+  /GIT DEPENDENCY/ { snip = 1; print "  ... snipped git commands ..." }
   /INCLUDING/ { snip = 0 }
   { if (snip == 0) print $0 }
 '

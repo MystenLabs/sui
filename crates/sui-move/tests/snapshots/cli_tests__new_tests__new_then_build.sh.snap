@@ -5,8 +5,7 @@ description: tests/tests/new_tests/new_then_build.sh
 success: true
 exit_code: 0
 ----- stdout -----
-UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
-  ... snip ...
+  ... snipped git commands ...
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
