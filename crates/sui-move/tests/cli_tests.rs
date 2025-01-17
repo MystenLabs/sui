@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(not(msim))]
-
 use insta_cmd::get_cargo_bin;
 use std::fs;
 use std::path::Path;
@@ -74,4 +72,8 @@ fn get_sui_move_path() -> String {
         .to_owned()
 }
 
+#[cfg(not(msim))]
 datatest_stable::harness!(test_shell_snapshot, TEST_DIR, TEST_PATTERN);
+
+#[cfg(msim)]
+fn main() {}
