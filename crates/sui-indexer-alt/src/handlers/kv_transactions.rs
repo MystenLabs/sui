@@ -30,7 +30,8 @@ impl Processor for KvTransactions {
         let mut values = Vec::with_capacity(transactions.len());
         for (i, tx) in transactions.iter().enumerate() {
             let tx_digest = tx.transaction.digest();
-            let transaction = &tx.transaction.data().intent_message().value;
+            let transaction = &tx.transaction.data().transaction_data();
+            let signatures = &tx.transaction.data().tx_signatures();
 
             let effects = &tx.effects;
             let events: Vec<_> = tx.events.iter().flat_map(|e| e.data.iter()).collect();
@@ -47,6 +48,9 @@ impl Processor for KvTransactions {
                 })?,
                 events: bcs::to_bytes(&events).with_context(|| {
                     format!("Serializing events for transaction {tx_digest} (cp {cp_sequence_number}, tx {i})")
+                })?,
+                user_signatures: bcs::to_bytes(signatures).with_context(|| {
+                    format!("Serializing signatures for transaction {tx_digest} (cp {cp_sequence_number}, tx {i})")
                 })?,
             });
         }
