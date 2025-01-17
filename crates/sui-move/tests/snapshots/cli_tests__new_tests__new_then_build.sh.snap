@@ -5,9 +5,8 @@ description: tests/tests/new_tests/new_then_build.sh
 success: true
 exit_code: 0
 ----- stdout -----
-  ... snipped git commands ...
+
+----- stderr -----
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
-
------ stderr -----
