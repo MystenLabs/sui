@@ -63,3 +63,8 @@ $ sui-light-client --config light_client.yaml object -o 0xa514c85e1844189a54f4bf
 ```
 
 The object ID is represented in Hex as displayed in explorers. If the object exists in the latest state it is printed out in JSON, otherwise an error is printed. 
+
+## Known issues
+
+- Throws an error if `checkpoints.yaml` file is not there. We can probably fix this for situations when someone is starting from scratch.
+- Throw a better error if `genesis.blob` is not found

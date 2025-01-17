@@ -11,9 +11,10 @@ use sui_types::{
     base_types::ObjectID,
     committee::Committee,
     crypto::AuthorityQuorumSignInfo,
-    digests::{Digest, TransactionDigest},
+    digests::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     event::{Event, EventID},
+    id::UID,
     message_envelope::Envelope,
     messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData},
     object::{bounded_visitor::BoundedVisitor, Data, MoveObject, Object},
@@ -113,6 +114,10 @@ enum SCommands {
         /// Event stream ID
         #[arg(short, long, value_name = "EID")]
         eid: String,
+
+        /// Stream head object ID. Ideally, we would deterministically derive it from eid.
+        #[arg(short, long, value_name = "OID")]
+        oid: String,
     },
 }
 
@@ -157,9 +162,10 @@ async fn query_last_checkpoint_of_epoch(config: &Config, epoch_id: u64) -> anyho
 
     // Parse the JSON response to get the last checkpoint of the epoch
     let v: Value = serde_json::from_str(resp.as_str()).expect("Incorrect JSON response");
+    // println!("epoch {} value {:?}", epoch_id, v);
     let checkpoint_number = v["data"]["epoch"]["checkpoints"]["nodes"][0]["sequenceNumber"]
         .as_u64()
-        .unwrap();
+        .ok_or(anyhow!("Cannot parse checkpoint number"))?;
 
     Ok(checkpoint_number)
 }
@@ -526,38 +532,98 @@ async fn get_verified_object(config: &Config, id: ObjectID) -> anyhow::Result<Ob
         .expect("Cannot make into object data");
     let object: Object = object.try_into().expect("Cannot reconstruct object");
 
-    // Need to authenticate this object
-    let (effects, _) = get_verified_effects_and_events(config, object.previous_transaction)
-        .await
-        .expect("Cannot get effects and events");
+    // ------------
+    // Note: Skipping auth until graphql testnet issue is resolved and we can auth the object.
+    // ------------
 
-    // check that this object ID, version and hash is in the effects
-    let target_object_ref = object.compute_object_reference();
-    effects
-        .all_changed_objects()
-        .iter()
-        .find(|object_ref| object_ref.0 == target_object_ref)
-        .ok_or(anyhow!("Object not found"))
-        .expect("Object not found");
+    // Need to authenticate this object
+    // let (effects, _) = get_verified_effects_and_events(config, object.previous_transaction)
+    //     .await
+    //     .expect("Cannot get effects and events");
+
+    // // check that this object ID, version and hash is in the effects
+    // let target_object_ref = object.compute_object_reference();
+    // effects
+    //     .all_changed_objects()
+    //     .iter()
+    //     .find(|object_ref| object_ref.0 == target_object_ref)
+    //     .ok_or(anyhow!("Object not found"))
+    //     .expect("Object not found");
 
     Ok(object)
 }
 
-// TODO: Replace with H(event_type)
 fn derive_stream_head_object_id_from_event_type(_event_type: &StructTag) -> ObjectID {
-    return ObjectID::random();
+    todo!("Implement this")
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Deserialize)]
 struct StreamHead {
-    digest: Digest,
-    last_event_id: EventID,
+    id: UID,
+    stream_id: String,
+    digest: Vec<u8>,
+    most_recent_event_digest: Vec<u8>,
     count: u64,
 }
 
 // Deserialize the contents of the stream head
-async fn deserialize_stream_head_contents(config: &Config, object: &Object) -> anyhow::Result<StreamHead> {
-    todo!("Implement this function");
+fn deserialize_stream_head(object: &Object) -> anyhow::Result<StreamHead> {
+    if let Data::Move(move_object) = &object.data {
+        let result: StreamHead =
+            bcs::from_bytes(&move_object.contents()).expect("Unable to deserialize StreamHead");
+        Ok(result)
+    } else {
+        // Throw
+        Err(anyhow!("Unexpected"))
+    }
+}
+
+use sha3::{Digest as OtherDigest, Sha3_256};
+
+fn hash(bytes: &[u8]) -> Vec<u8> {
+    let mut hasher = Sha3_256::new();
+    hasher.update(&bytes);
+    return hasher.finalize().to_vec();
+}
+
+fn hash_two(left: &[u8], right: &[u8]) -> Vec<u8> {
+    let mut hasher = Sha3_256::new();
+    hasher.update(left);
+    hasher.update(right);
+    return hasher.finalize().to_vec();
+}
+
+async fn get_rpc_cursor(
+    config: &Config,
+    eid: &StructTag,
+    event_digest: &[u8],
+) -> anyhow::Result<EventID> {
+    println!("Getting RPC cursor for {:?}", event_digest);
+    let client = SuiClientBuilder::default()
+        .build(config.full_node_url.as_str())
+        .await?;
+    let event_api = client.event_api();
+
+    let events_page = event_api
+        .query_events(
+            EventFilter::MoveEventType(eid.clone()),
+            None,
+            None,
+            true, // latest first
+        )
+        .await?;
+
+    for event in events_page.data {
+        if hash(&event.bcs.bytes()) == event_digest {
+            return Ok(event.id);
+        }
+    }
+
+    if events_page.has_next_page {
+        todo!("Implement logic to fetch the next page!")
+    }
+
+    Err(anyhow!("Did not find event digest!"))
 }
 
 /// Gets the specified number of events starting from cursor
@@ -572,42 +638,36 @@ async fn get_new_stream_events(
         .await?;
     let event_api = client.event_api();
 
-    let mut all_events = Vec::new();
-    let mut cursor = cursor.clone();
-    let mut num_remaining = num_new_events;
-    loop {
-        let events_page = event_api
-            .query_events(
-                EventFilter::MoveEventType(eid.clone()),
-                Some(cursor),
-                Some(num_remaining as usize),
-                false, // oldest first
-            )
-            .await?;
-
-        if events_page.data.len() == 0 && num_remaining != 0 {
-            return Err(anyhow!("No more events found"));
-        }
-
-        num_remaining -= events_page.data.len() as u64;
-        all_events.extend(events_page.data);
-        if !events_page.has_next_page {
-            break;
-        }
-        cursor = events_page.next_cursor.unwrap();
+    // We will have to introduce a new RPC call to get events from the new cursor.
+    let events_page = event_api
+        .query_events(
+            EventFilter::MoveEventType(eid.clone()),
+            Some(cursor.clone()),
+            Some(num_new_events as usize),
+            false, // oldest first
+        )
+        .await?;
+    if events_page.data.len() != num_new_events as usize {
+        return Err(anyhow!(
+            "Expected {} events, found {}",
+            num_new_events,
+            events_page.data.len()
+        ));
     }
-
-    assert_eq!(all_events[all_events.len() - 1].id, cursor);
-
-    Ok(all_events)
+    println!("Events page: {:?}", events_page);
+    // if events_page.has_next_page {
+    //     assert_eq!(events_page.data[events_page.data.len() - 1].id, events_page.next_cursor.unwrap());
+    // }
+    Ok(events_page.data)
 }
 
-fn authenticate_new_events(
-    events: &[SuiEvent],
-    last_digest: &Digest,
-    new_digest: &Digest,
-) -> anyhow::Result<()> {
-    todo!("Implement this function");
+fn authenticate_new_events(events: &[SuiEvent], last_digest: &[u8], new_digest: &[u8]) {
+    let mut cur_digest = last_digest.to_vec();
+    for event in events {
+        let event_digest = hash(&event.bcs.bytes());
+        cur_digest = hash_two(&cur_digest, &event_digest);
+    }
+    assert_eq!(cur_digest, new_digest);
 }
 
 #[tokio::main]
@@ -707,40 +767,40 @@ pub async fn main() {
                 .expect("Failed to sync checkpoints");
         }
 
-        Some(SCommands::EventStream { eid }) => {
+        Some(SCommands::EventStream { eid, oid }) => {
             let eid = StructTag::from_str(&eid).unwrap();
             println!("Event: {}", eid);
 
-            let oid = derive_stream_head_object_id_from_event_type(&eid);
+            // TODO: Uncomment once we determinstically derive stream head's object ID
+            // let oid = derive_stream_head_object_id_from_event_type(&eid);
+            let oid = ObjectID::from_str(&oid).unwrap();
             println!("Stream head's object ID: {}", oid);
 
             // NOTE: This function downloads one full checkpoint data to verify the object's contents
-            let mut cur_object = get_verified_object(&config, oid)
-                .await
-                .unwrap();
+            let mut cur_object = get_verified_object(&config, oid).await.unwrap();
 
-            let mut cur_head = deserialize_stream_head_contents(&config, &cur_object)
-                .await
-                .unwrap();
-            let mut cur_cursor = cur_head.last_event_id;
+            let mut cur_head = deserialize_stream_head(&cur_object).unwrap();
             println!("Latest head: {:?}", cur_head);
 
+            // Get the RPC-friendly cursor from given the digest of the event
+            let mut cur_cursor = get_rpc_cursor(&config, &eid, &cur_head.most_recent_event_digest)
+                .await
+                .unwrap();
+            println!("Latest cursor: {:?}", cur_cursor);
+
             // How often do you want to check for new events?
-            let sleep_duration = Duration::from_secs(5);
+            let sleep_duration = Duration::from_secs(15);
             loop {
                 sleep(sleep_duration);
-                let new_object = get_verified_object(&config, oid)
-                    .await
-                    .unwrap();
+                println!("Checking if there are any updates!");
+                let new_object = get_verified_object(&config, oid).await.unwrap();
                 if new_object.version() == cur_object.version() {
-                    // No updates
+                    println!("No updates. Sleeping for {:?}", sleep_duration);
                     continue;
                 }
                 // Object modified! So we now fetch new events starting from the last fetched event
                 println!("Stream head modified!");
-                let new_head = deserialize_stream_head_contents(&config, &new_object)
-                    .await
-                    .unwrap();
+                let new_head = deserialize_stream_head(&new_object).unwrap();
                 let num_new_events = new_head.count - cur_head.count;
 
                 // Fetch new events
@@ -749,9 +809,10 @@ pub async fn main() {
                     .unwrap();
 
                 // Match the new events against the verified latest head
+                // Note that we do not need to authenticate the cursor position as the raw event data will be directly authenticated next.
                 let new_cursor = new_events[new_events.len() - 1].id;
-                assert_eq!(new_cursor, new_head.last_event_id);
-                authenticate_new_events(&new_events, &cur_head.digest, &new_head.digest).unwrap();
+
+                authenticate_new_events(&new_events, &cur_head.digest, &new_head.digest);
 
                 // Update the stream head
                 cur_head = new_head;
@@ -909,5 +970,34 @@ mod tests {
             TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk").unwrap(),
         )
         .is_err());
+    }
+
+    #[tokio::test]
+    async fn test_get_new_stream_events() {
+        let config = Config {
+            full_node_url: "https://fullnode.mainnet.sui.io:443".to_string(),
+            checkpoint_summary_dir: PathBuf::from(""),
+            genesis_filename: PathBuf::from(""),
+            object_store_url: "".to_string(),
+            graphql_url: "".to_string(),
+        };
+        let eid = StructTag::from_str(
+            "0x1efaf509c9b7e986ee724596f526a22b474b15c376136772c00b8452f204d2d1::game::ClaimToken",
+        )
+        .unwrap();
+        let cur_cursor = EventID {
+            tx_digest: TransactionDigest::from_str("DhN2M1aPWeTX1t5HxrnPxC36nS2NNVg4fNvK2Xgcz5rt")
+                .unwrap(),
+            event_seq: 0,
+        };
+        let num_new_events = 10;
+
+        let events = get_new_stream_events(&config, &eid, &cur_cursor, num_new_events)
+            .await
+            .unwrap();
+
+        for event in events {
+            println!("Event: {:?}, {:?}", event.id, event.timestamp_ms);
+        }
     }
 }

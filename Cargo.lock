@@ -14304,6 +14304,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
+ "sha3 0.10.6",
  "sui-config",
  "sui-json-rpc-types",
  "sui-package-resolver",
