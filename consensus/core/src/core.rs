@@ -1167,7 +1167,27 @@ impl CoreSignals {
                 return Ok(());
             }
 
-            if let Err(err) = self.tx_block_broadcast.send(extended_block) {
+            let excluded_ancestors_limit = self.context.committee.size() * 2;
+            let excluded_ancestors = extended_block.excluded_ancestors;
+            let (excluded_ancestors, dropped_excluded_ancestors) =
+                if excluded_ancestors.len() > excluded_ancestors_limit {
+                    let (valid, dropped) = excluded_ancestors.split_at(excluded_ancestors_limit);
+                    (valid.to_vec(), dropped.to_vec())
+                } else {
+                    (excluded_ancestors, vec![])
+                };
+
+            if !dropped_excluded_ancestors.is_empty() {
+                warn!(
+                        "Dropped {} excluded ancestor(s) due to size limit: {dropped_excluded_ancestors:?}",
+                        dropped_excluded_ancestors.len()
+                    );
+            }
+
+            if let Err(err) = self.tx_block_broadcast.send(ExtendedBlock {
+                block: extended_block.block,
+                excluded_ancestors,
+            }) {
                 warn!("Couldn't broadcast the block to any receiver: {err}");
                 return Err(ConsensusError::Shutdown);
             }
