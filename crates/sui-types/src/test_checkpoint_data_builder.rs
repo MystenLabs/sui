@@ -5,9 +5,13 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use move_core_types::{ident_str, language_storage::TypeTag};
 use sui_protocol_config::ProtocolConfig;
+use tap::Pipe;
 
 use crate::{
-    base_types::{dbg_addr, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    base_types::{
+        dbg_addr, random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber,
+        SuiAddress,
+    },
     coin::Coin,
     committee::Committee,
     digests::TransactionDigest,
@@ -16,10 +20,14 @@ use crate::{
     full_checkpoint_content::{CheckpointData, CheckpointTransaction},
     gas_coin::GAS,
     message_envelope::Message,
-    messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary},
+    messages_checkpoint::{
+        CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, EndOfEpochData,
+    },
     object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{SenderSignedData, Transaction, TransactionData, TransactionKind},
+    transaction::{
+        EndOfEpochTransactionKind, SenderSignedData, Transaction, TransactionData, TransactionKind,
+    },
 };
 
 /// A builder for creating test checkpoint data.
@@ -490,6 +498,54 @@ impl TestCheckpointDataBuilder {
             checkpoint_contents: contents,
             transactions,
         }
+    }
+
+    /// Build the checkpoint data with a transaction that advances the epoch in addition to all the
+    /// transactions added to the builder so far. This increments the stored checkpoint sequence
+    /// number and epoch.
+    pub fn advance_epoch(&mut self) -> CheckpointData {
+        let (committee, _) = Committee::new_simple_test_committee();
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let tx_kind = EndOfEpochTransactionKind::new_change_epoch(
+            self.checkpoint_builder.epoch + 1,
+            protocol_config.version,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        );
+        let end_of_epoch_tx = TransactionData::new(
+            TransactionKind::EndOfEpochTransaction(vec![tx_kind]),
+            SuiAddress::default(),
+            random_object_ref(),
+            1,
+            1,
+        )
+        .pipe(|data| SenderSignedData::new(data, vec![]))
+        .pipe(Transaction::new);
+
+        self.checkpoint_builder
+            .transactions
+            .push(CheckpointTransaction {
+                transaction: end_of_epoch_tx,
+                effects: Default::default(),
+                events: None,
+                input_objects: vec![],
+                output_objects: vec![],
+            });
+
+        let mut checkpoint = self.build_checkpoint();
+        let end_of_epoch_data = EndOfEpochData {
+            next_epoch_committee: committee.voting_rights.clone(),
+            next_epoch_protocol_version: protocol_config.version,
+            epoch_commitments: vec![],
+        };
+        checkpoint.checkpoint_summary.end_of_epoch_data = Some(end_of_epoch_data);
+
+        self.checkpoint_builder.epoch += 1;
+        checkpoint
     }
 
     /// Derive an object ID from an index. This is used to conveniently represent an object's ID.
