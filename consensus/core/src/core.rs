@@ -950,8 +950,10 @@ impl Core {
             .chain(
                 all_ancestors
                     .into_iter()
-                    .filter(|(ancestor, _)| ancestor.author() != self.context.own_index)
                     .flat_map(|(ancestor, equivocating_ancestors)| {
+                        if ancestor.author() == self.context.own_index {
+                            return None;
+                        }
                         if let Some(last_block_ref) =
                             self.last_included_ancestors[ancestor.author()]
                         {
@@ -1002,13 +1004,12 @@ impl Core {
 
         let mut ancestors_to_propose = included_ancestors;
         let mut excluded_ancestors = Vec::new();
-
         for (score, ancestor) in score_and_pending_excluded_ancestors.into_iter() {
             let block_hostname = &self.context.committee.authority(ancestor.author()).hostname;
             if !parent_round_quorum.reached_threshold(&self.context.committee)
                 && ancestor.round() == quorum_round
             {
-                debug!("Including temporarily excluded strong link ancestor {ancestor} with score {score} to propose for round {clock_round}");
+                debug!("Including temporarily excluded parent round ancestor {ancestor} with score {score} to propose for round {clock_round}");
                 parent_round_quorum.add(ancestor.author(), &self.context.committee);
                 ancestors_to_propose.push(ancestor);
                 node_metrics
@@ -1021,8 +1022,8 @@ impl Core {
         }
 
         // Include partially propagated blocks from excluded authorities, to help propagate the blocks
-        // across the network with less latency impact.
-        // TODO: use a separate mechanism to propagate excluded ancestor blocks and remove this logic.
+        // across the network with less latency impact. Other excluded ancestors are not included in the block
+        // but still broadcasted to peers.
         for (score, ancestor) in excluded_ancestors.iter() {
             let excluded_author = ancestor.author();
             let block_hostname = &self.context.committee.authority(excluded_author).hostname;
@@ -1040,7 +1041,7 @@ impl Core {
                 .map(|block_ref| block_ref.round)
                 .unwrap_or(GENESIS_ROUND);
             if ancestor.round() <= last_included_round {
-                // This should have been filtered when filtering all_ancestors.
+                // This should have already been filtered out when filtering all_ancestors.
                 // Still, ensure previously included ancestors are filtered out.
                 continue;
             }
@@ -1056,7 +1057,7 @@ impl Core {
                 continue;
             }
 
-            // Include the ancestor block as it has been seen & accepted by a strong quorum.
+            // Otherwise, include the ancestor block as it has been seen & accepted by a strong quorum.
             // Only cached blocks need to be propagated. Committed and GC'ed blocks do not need to be propagated.
             self.last_included_ancestors[excluded_author] = Some(ancestor.reference());
             ancestors_to_propose.push(ancestor.clone());

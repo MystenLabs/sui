@@ -164,22 +164,20 @@ impl BlockManager {
             .into_iter()
             .zip(block_refs.iter())
         {
-            if !found
-                && !self.suspended_blocks.contains_key(block_ref)
-                && !self.missing_blocks.contains(block_ref)
-            {
-                let block_ref_hostname =
-                    &self.context.committee.authority(block_ref.author).hostname;
-                if self.missing_blocks.insert(*block_ref) {
-                    self.context
-                        .metrics
-                        .node_metrics
-                        .block_manager_missing_blocks_by_authority
-                        .with_label_values(&[block_ref_hostname])
-                        .inc();
-                }
-                missing_blocks.insert(*block_ref);
+            if found || self.suspended_blocks.contains_key(block_ref) {
+                continue;
             }
+            // Fetches the block if it is not in dag state or suspended.
+            missing_blocks.insert(*block_ref);
+            self.missing_blocks.insert(*block_ref);
+            let block_ref_hostname = &self.context.committee.authority(block_ref.author).hostname;
+            // Always count the missing block even if it is already known.
+            self.context
+                .metrics
+                .node_metrics
+                .block_manager_missing_blocks_by_authority
+                .with_label_values(&[block_ref_hostname])
+                .inc();
         }
 
         let metrics = &self.context.metrics.node_metrics;
@@ -363,15 +361,16 @@ impl BlockManager {
                 // Add the ancestor to the missing blocks set only if it doesn't already exist in the suspended blocks - meaning
                 // that we already have its payload.
                 if !self.suspended_blocks.contains_key(ancestor) {
+                    // Fetches the block if it is not in dag state or suspended.
                     ancestors_to_fetch.insert(*ancestor);
-                    if self.missing_blocks.insert(*ancestor) {
-                        self.context
-                            .metrics
-                            .node_metrics
-                            .block_manager_missing_blocks_by_authority
-                            .with_label_values(&[ancestor_hostname])
-                            .inc();
-                    }
+                    self.missing_blocks.insert(*ancestor);
+                    // Always count the missing block even if it is already known.
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .block_manager_missing_blocks_by_authority
+                        .with_label_values(&[ancestor_hostname])
+                        .inc();
                 }
             }
         }
