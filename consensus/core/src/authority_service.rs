@@ -88,46 +88,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let signed_block: SignedBlock =
             bcs::from_bytes(&serialized_block.block).map_err(ConsensusError::MalformedBlock)?;
 
-        let excluded_ancestors = serialized_block
-            .excluded_ancestors
-            .into_iter()
-            .filter_map(
-                |serialized| match bcs::from_bytes::<BlockRef>(&serialized) {
-                    Ok(r) => Some(r),
-                    Err(e) => {
-                        debug!(
-                            "Failed to deserialize excluded ancestor block ref {:?}: {e:?}",
-                            serialized
-                        );
-                        None
-                    }
-                },
-            )
-            .collect::<Vec<BlockRef>>();
-
-        let excluded_ancestors_limit = self.context.committee.size() * 2;
-        let (excluded_ancestors, dropped_excluded_ancestors) =
-            if excluded_ancestors.len() > excluded_ancestors_limit {
-                let (valid, dropped) = excluded_ancestors.split_at(excluded_ancestors_limit);
-                (valid.to_vec(), dropped.to_vec())
-            } else {
-                (excluded_ancestors, vec![])
-            };
-
-        if !dropped_excluded_ancestors.is_empty() {
-            warn!(
-                "Dropped {} excluded ancestor(s) due to size limit: {dropped_excluded_ancestors:?}",
-                dropped_excluded_ancestors.len()
-            );
-        }
-
-        self.context
-            .metrics
-            .node_metrics
-            .network_received_excluded_ancestors_from_authority
-            .with_label_values(&[peer_hostname])
-            .inc_by(excluded_ancestors.len() as u64);
-
         // Reject blocks not produced by the peer.
         if peer != signed_block.author() {
             self.context
@@ -181,48 +141,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     verified_block.timestamp_ms(),
                     now
                 ),
-            });
-        }
-
-        for excluded_ancestor in &excluded_ancestors {
-            let excluded_ancestor_hostname = &self
-                .context
-                .committee
-                .authority(excluded_ancestor.author)
-                .hostname;
-            self.context
-                .metrics
-                .node_metrics
-                .network_excluded_ancestors_count_by_authority
-                .with_label_values(&[excluded_ancestor_hostname])
-                .inc();
-        }
-
-        let missing_excluded_ancestors = self
-            .core_dispatcher
-            .find_excluded_blocks(excluded_ancestors)
-            .await
-            .map_err(|_| ConsensusError::Shutdown)?;
-
-        if !missing_excluded_ancestors.is_empty() {
-            self.context
-                .metrics
-                .node_metrics
-                .network_excluded_ancestors_sent_to_fetch
-                .with_label_values(&[peer_hostname])
-                .inc_by(missing_excluded_ancestors.len() as u64);
-
-            let synchronizer = self.synchronizer.clone();
-            tokio::spawn(async move {
-                // schedule the fetching of them from this peer in the background
-                if let Err(err) = synchronizer
-                    .fetch_blocks(missing_excluded_ancestors, peer)
-                    .await
-                {
-                    warn!(
-                        "Errored while trying to fetch missing excluded ancestors via synchronizer: {err}"
-                    );
-                }
             });
         }
 
@@ -305,6 +223,75 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             {
                 warn!("Errored while trying to fetch missing ancestors via synchronizer: {err}");
             }
+        }
+
+        // ------------ After processing the block, process the excluded ancestors ------------
+
+        let mut excluded_ancestors = serialized_block
+            .excluded_ancestors
+            .into_iter()
+            .map(|serialized| bcs::from_bytes::<BlockRef>(&serialized))
+            .collect::<Result<Vec<BlockRef>, bcs::Error>>()
+            .map_err(ConsensusError::MalformedBlock)?;
+
+        let excluded_ancestors_limit = self.context.committee.size() * 2;
+        if excluded_ancestors.len() > excluded_ancestors_limit {
+            debug!(
+                "Dropping {} excluded ancestor(s) from {} {} due to size limit",
+                excluded_ancestors.len() - excluded_ancestors_limit,
+                peer,
+                peer_hostname,
+            );
+            excluded_ancestors.truncate(excluded_ancestors_limit);
+        }
+
+        self.context
+            .metrics
+            .node_metrics
+            .network_received_excluded_ancestors_from_authority
+            .with_label_values(&[peer_hostname])
+            .inc_by(excluded_ancestors.len() as u64);
+
+        for excluded_ancestor in &excluded_ancestors {
+            let excluded_ancestor_hostname = &self
+                .context
+                .committee
+                .authority(excluded_ancestor.author)
+                .hostname;
+            self.context
+                .metrics
+                .node_metrics
+                .network_excluded_ancestors_count_by_authority
+                .with_label_values(&[excluded_ancestor_hostname])
+                .inc();
+        }
+
+        let missing_excluded_ancestors = self
+            .core_dispatcher
+            .check_block_refs(excluded_ancestors)
+            .await
+            .map_err(|_| ConsensusError::Shutdown)?;
+
+        if !missing_excluded_ancestors.is_empty() {
+            self.context
+                .metrics
+                .node_metrics
+                .network_excluded_ancestors_sent_to_fetch
+                .with_label_values(&[peer_hostname])
+                .inc_by(missing_excluded_ancestors.len() as u64);
+
+            let synchronizer = self.synchronizer.clone();
+            tokio::spawn(async move {
+                // schedule the fetching of them from this peer in the background
+                if let Err(err) = synchronizer
+                    .fetch_blocks(missing_excluded_ancestors, peer)
+                    .await
+                {
+                    warn!(
+                            "Errored while trying to fetch missing excluded ancestors via synchronizer: {err}"
+                        );
+                }
+            });
         }
 
         Ok(())
@@ -748,7 +735,7 @@ mod tests {
             Ok(block_refs)
         }
 
-        async fn find_excluded_blocks(
+        async fn check_block_refs(
             &self,
             _block_refs: Vec<BlockRef>,
         ) -> Result<BTreeSet<BlockRef>, CoreError> {

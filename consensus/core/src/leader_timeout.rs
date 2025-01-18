@@ -157,7 +157,7 @@ mod tests {
             todo!()
         }
 
-        async fn find_excluded_blocks(
+        async fn check_block_refs(
             &self,
             _block_refs: Vec<BlockRef>,
         ) -> Result<BTreeSet<BlockRef>, CoreError> {

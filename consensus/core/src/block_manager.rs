@@ -144,7 +144,7 @@ impl BlockManager {
         (accepted_blocks, missing_blocks)
     }
 
-    /// Tries to find the provided block_refs in DagState and adds any missing
+    /// Tries to find the provided block_refs in DagState, and adds any missing
     /// blocks to the missing_blocks list
     pub(crate) fn try_find_blocks(&mut self, mut block_refs: Vec<BlockRef>) -> BTreeSet<BlockRef> {
         let _s = monitored_scope("BlockManager::try_find_blocks");
@@ -164,12 +164,12 @@ impl BlockManager {
             .into_iter()
             .zip(block_refs.iter())
         {
-            let block_ref_hostname = &self.context.committee.authority(block_ref.author).hostname;
             if !found
                 && !self.suspended_blocks.contains_key(block_ref)
                 && !self.missing_blocks.contains(block_ref)
             {
-                debug!("Block {block_ref} not found in dag state or suspended/missing blocks list");
+                let block_ref_hostname =
+                    &self.context.committee.authority(block_ref.author).hostname;
                 if self.missing_blocks.insert(*block_ref) {
                     self.context
                         .metrics

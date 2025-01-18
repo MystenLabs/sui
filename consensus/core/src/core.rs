@@ -299,26 +299,24 @@ impl Core {
         Ok(missing_block_refs)
     }
 
-    /// Processes the provided excluded blocks refs and sends back the missing block refs
-    /// if not found in DagState.
-    /// The method returns:
-    /// - The references of missing blocks
-    pub(crate) fn find_excluded_blocks(
+    /// Checks if provided block refs have been accepted. If not, missing block refs are kept for synchronizations.
+    /// Returns the references of missing blocks among the input blocks.
+    pub(crate) fn check_block_refs(
         &mut self,
         block_refs: Vec<BlockRef>,
     ) -> ConsensusResult<BTreeSet<BlockRef>> {
-        let _scope = monitored_scope("Core::find_excluded_blocks");
+        let _scope = monitored_scope("Core::check_block_refs");
         let _s = self
             .context
             .metrics
             .node_metrics
             .scope_processing_time
-            .with_label_values(&["Core::find_excluded_blocks"])
+            .with_label_values(&["Core::check_block_refs"])
             .start_timer();
         self.context
             .metrics
             .node_metrics
-            .core_find_excluded_blocks_batch_size
+            .core_check_block_refs_batch_size
             .observe(block_refs.len() as f64);
 
         // Try to find them via the block manager

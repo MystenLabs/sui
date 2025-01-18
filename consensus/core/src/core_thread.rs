@@ -59,7 +59,7 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn add_blocks(&self, blocks: Vec<VerifiedBlock>)
         -> Result<BTreeSet<BlockRef>, CoreError>;
 
-    async fn find_excluded_blocks(
+    async fn check_block_refs(
         &self,
         block_refs: Vec<BlockRef>,
     ) -> Result<BTreeSet<BlockRef>, CoreError>;
@@ -130,7 +130,7 @@ impl CoreThread {
                         }
                         CoreThreadCommand::FindExcludedBlocks(blocks, sender) => {
                             let _scope = monitored_scope("CoreThread::loop::find_excluded_blocks");
-                            let missing_block_refs = self.core.find_excluded_blocks(blocks)?;
+                            let missing_block_refs = self.core.check_block_refs(blocks)?;
                             sender.send(missing_block_refs).ok();
                         }
                         CoreThreadCommand::NewBlock(round, sender, force) => {
@@ -295,7 +295,7 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         Ok(missing_block_refs)
     }
 
-    async fn find_excluded_blocks(
+    async fn check_block_refs(
         &self,
         block_refs: Vec<BlockRef>,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
@@ -407,7 +407,7 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
         Ok(BTreeSet::new())
     }
 
-    async fn find_excluded_blocks(
+    async fn check_block_refs(
         &self,
         _block_refs: Vec<BlockRef>,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {

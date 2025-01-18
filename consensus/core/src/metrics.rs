@@ -112,7 +112,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
     pub(crate) core_add_blocks_batch_size: Histogram,
-    pub(crate) core_find_excluded_blocks_batch_size: Histogram,
+    pub(crate) core_check_block_refs_batch_size: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
     pub(crate) core_skipped_proposals: IntCounterVec,
@@ -290,8 +290,8 @@ impl NodeMetrics {
                 NUM_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
-            core_find_excluded_blocks_batch_size: register_histogram_with_registry!(
-                "core_find_excluded_blocks_batch_size",
+            core_check_block_refs_batch_size: register_histogram_with_registry!(
+                "core_check_block_refs_batch_size",
                 "The number of excluded blocks received from Core for search on a single batch",
                 NUM_BUCKETS.to_vec(),
                 registry,
