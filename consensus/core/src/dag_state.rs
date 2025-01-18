@@ -644,38 +644,32 @@ impl DagState {
                 panic!("Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}", );
             }
 
-            let mut last_block_ref = None;
+            let block_ref_iter = block_refs
+                .range((
+                    Included(BlockRef::new(
+                        last_evicted_round + 1,
+                        authority_index,
+                        BlockDigest::MIN,
+                    )),
+                    Excluded(BlockRef::new(end_round, authority_index, BlockDigest::MIN)),
+                ))
+                .rev();
 
-            let mut block_iter = block_refs.range((
-                Included(BlockRef::new(
-                    last_evicted_round + 1,
-                    authority_index,
-                    BlockDigest::MIN,
-                )),
-                Excluded(BlockRef::new(end_round, authority_index, BlockDigest::MIN)),
-            ));
-
-            if let Some(block_ref) = block_iter.next_back() {
-                last_block_ref = Some(*block_ref);
-            }
-
-            if let Some(last_ref) = last_block_ref {
-                let block_info = self
-                    .recent_blocks
-                    .get(&last_ref)
-                    .expect("Block should exist in recent blocks");
-
-                blocks[authority_index] = block_info.block.clone();
-
-                while let Some(block_ref) = block_iter.next_back() {
-                    if block_ref.round == last_ref.round {
-                        if block_ref != &last_ref {
-                            equivocating_blocks[authority_index].push(*block_ref);
-                        }
-                    } else {
-                        break;
-                    }
+            let mut last_round = 0;
+            for block_ref in block_ref_iter {
+                if last_round == 0 {
+                    last_round = block_ref.round;
+                    let block_info = self
+                        .recent_blocks
+                        .get(block_ref)
+                        .expect("Block should exist in recent blocks");
+                    blocks[authority_index] = block_info.block.clone();
+                    continue;
                 }
+                if block_ref.round < last_round {
+                    break;
+                }
+                equivocating_blocks[authority_index].push(*block_ref);
             }
         }
 
