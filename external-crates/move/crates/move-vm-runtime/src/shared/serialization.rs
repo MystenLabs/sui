@@ -14,7 +14,6 @@ use move_binary_format::{
     file_format::LocalIndex,
 };
 use move_core_types::{runtime_value::MoveTypeLayout, vm_status::StatusCode};
-use move_vm_config::runtime::VMConfig;
 
 use tracing::warn;
 
@@ -68,7 +67,6 @@ pub fn deserialize_value(
 /// Returns the list of mutable references plus the vector of values.
 pub fn deserialize_args(
     vtables: &VMDispatchTables,
-    _vm_config: &VMConfig,
     heap: &mut BaseHeap,
     arg_tys: Vec<Type>,
     serialized_args: Vec<impl Borrow<[u8]>>,
@@ -106,7 +104,6 @@ pub fn deserialize_args(
 
 pub fn serialize_return_value(
     vtables: &VMDispatchTables,
-    vm_config: &VMConfig,
     ty: &Type,
     value: Value,
 ) -> PartialVMResult<(Vec<u8>, MoveTypeLayout)> {
@@ -123,7 +120,7 @@ pub fn serialize_return_value(
         _ => (ty, value),
     };
 
-    let layout = if vm_config.rethrow_serialization_type_layout_errors {
+    let layout = if vtables.vm_config.rethrow_serialization_type_layout_errors {
         vtables.type_to_type_layout(ty)?
     } else {
         vtables.type_to_type_layout(ty).map_err(|_err| {
@@ -142,7 +139,6 @@ pub fn serialize_return_value(
 
 pub fn serialize_return_values(
     vtables: &VMDispatchTables,
-    vm_config: &VMConfig,
     return_types: &[Type],
     return_values: Vec<Value>,
 ) -> PartialVMResult<Vec<(Vec<u8>, MoveTypeLayout)>> {
@@ -161,6 +157,6 @@ pub fn serialize_return_values(
     return_types
         .iter()
         .zip(return_values)
-        .map(|(ty, value)| serialize_return_value(vtables, vm_config, ty, value))
+        .map(|(ty, value)| serialize_return_value(vtables, ty, value))
         .collect()
 }
