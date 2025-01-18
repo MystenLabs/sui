@@ -461,7 +461,20 @@ impl Core {
                 );
                 return None;
             }
-            (ancestors, excluded_and_equivocating_ancestors)
+
+            let excluded_ancestors_limit = self.context.committee.size() * 2;
+            if excluded_and_equivocating_ancestors.len() > excluded_ancestors_limit {
+                debug!(
+                    "Dropping {} excluded ancestor(s) during proposal due to size limit",
+                    excluded_and_equivocating_ancestors.len() - excluded_ancestors_limit,
+                );
+            }
+            let excluded_ancestors = excluded_and_equivocating_ancestors
+                .into_iter()
+                .take(excluded_ancestors_limit)
+                .collect();
+
+            (ancestors, excluded_ancestors)
         } else {
             (self.ancestors_to_propose(clock_round), vec![])
         };
@@ -901,7 +914,7 @@ impl Core {
         &mut self,
         clock_round: Round,
         smart_select: bool,
-    ) -> (Vec<VerifiedBlock>, Vec<BlockRef>) {
+    ) -> (Vec<VerifiedBlock>, BTreeSet<BlockRef>) {
         let node_metrics = &self.context.metrics.node_metrics;
         let _s = node_metrics
             .scope_processing_time
@@ -909,13 +922,13 @@ impl Core {
             .start_timer();
 
         // Now take the ancestors before the clock_round (excluded) for each authority.
-        let ancestors = self
+        let all_ancestors = self
             .dag_state
             .read()
             .get_last_cached_block_per_authority(clock_round);
 
         assert_eq!(
-            ancestors.len(),
+            all_ancestors.len(),
             self.context.committee.size(),
             "Fatal error, number of returned ancestors don't match committee size."
         );
@@ -926,8 +939,8 @@ impl Core {
 
         let quorum_round = clock_round.saturating_sub(1);
 
-        let mut temp_excluded_ancestors = Vec::new();
-        let mut excluded_and_equivocating_ancestors = Vec::new();
+        let mut score_and_pending_excluded_ancestors = Vec::new();
+        let mut excluded_and_equivocating_ancestors = BTreeSet::new();
 
         // Propose only ancestors of higher rounds than what has already been proposed.
         // And always include own last proposed block first among ancestors.
@@ -935,31 +948,33 @@ impl Core {
         // will be included in a second pass below.
         let included_ancestors = iter::once(self.last_proposed_block().clone())
             .chain(
-                ancestors
+                all_ancestors
                     .into_iter()
                     .filter(|(ancestor, _)| ancestor.author() != self.context.own_index)
                     .flat_map(|(ancestor, equivocating_ancestors)| {
-                        let ancestor_state = ancestor_state_map[ancestor.author()];
+                        if let Some(last_block_ref) =
+                            self.last_included_ancestors[ancestor.author()]
+                        {
+                            if last_block_ref.round >= ancestor.round() {
+                                return None;
+                            }
+                        }
 
                         // We will never include equivocating ancestors so add them immediately
                         excluded_and_equivocating_ancestors.extend(equivocating_ancestors);
 
+                        let ancestor_state = ancestor_state_map[ancestor.author()];
                         match ancestor_state {
                             AncestorState::Include => {
                                 trace!("Found ancestor {ancestor} with INCLUDE state for round {clock_round}");
                             }
                             AncestorState::Exclude(score) => {
                                 trace!("Added ancestor {ancestor} with EXCLUDE state with score {score} to temporary excluded ancestors for round {clock_round}");
-                                temp_excluded_ancestors.push((score, ancestor));
+                                score_and_pending_excluded_ancestors.push((score, ancestor));
                                 return None;
                             }
                         }
 
-                        if let Some(last_block_ref) =
-                            self.last_included_ancestors[ancestor.author()]
-                        {
-                            return (last_block_ref.round < ancestor.round()).then_some(ancestor);
-                        }
                         Some(ancestor)
                     }),
             )
@@ -978,17 +993,17 @@ impl Core {
         if smart_select && !parent_round_quorum.reached_threshold(&self.context.committee) {
             node_metrics.smart_selection_wait.inc();
             debug!("Only found {} stake of good ancestors to include for round {clock_round}, will wait for more.", parent_round_quorum.stake());
-            return (vec![], vec![]);
+            return (vec![], BTreeSet::new());
         }
 
-        // Sort scores descending so we can include the best of the temp excluded
+        // Sort scores descending so we can include the best of the pending excluded
         // ancestors first until we reach the threshold.
-        temp_excluded_ancestors.sort_by(|a, b| b.0.cmp(&a.0));
+        score_and_pending_excluded_ancestors.sort_by(|a, b| b.0.cmp(&a.0));
 
         let mut ancestors_to_propose = included_ancestors;
-        let mut excluded_ancestors = Vec::new();
+        let mut final_excluded_ancestors = Vec::new();
 
-        for (score, ancestor) in temp_excluded_ancestors.into_iter() {
+        for (score, ancestor) in score_and_pending_excluded_ancestors.into_iter() {
             let block_hostname = &self.context.committee.authority(ancestor.author()).hostname;
             if !parent_round_quorum.reached_threshold(&self.context.committee)
                 && ancestor.round() == quorum_round
@@ -1001,14 +1016,14 @@ impl Core {
                     .with_label_values(&[block_hostname, "timeout"])
                     .inc();
             } else {
-                excluded_ancestors.push((score, ancestor));
+                final_excluded_ancestors.push((score, ancestor));
             }
         }
 
         // Include partially propagated blocks from excluded authorities, to help propagate the blocks
         // across the network with less latency impact.
         // TODO: use a separate mechanism to propagate excluded ancestor blocks and remove this logic.
-        for (score, ancestor) in excluded_ancestors.iter() {
+        for (score, ancestor) in final_excluded_ancestors.iter() {
             let excluded_author = ancestor.author();
             let block_hostname = &self.context.committee.authority(excluded_author).hostname;
             // A quorum of validators reported to have accepted blocks from the excluded_author up to the low quorum round.
@@ -1024,12 +1039,16 @@ impl Core {
             let last_included_round = self.last_included_ancestors[excluded_author]
                 .map(|block_ref| block_ref.round)
                 .unwrap_or(GENESIS_ROUND);
-            if last_included_round >= accepted_low_quorum_round {
-                trace!(
-                    "Excluded low score ancestor {} with score {score} to propose for round {clock_round}: last included round {} >= accepted low quorum round {}",
-                    ancestor.reference(), last_included_round, accepted_low_quorum_round,
-                );
-                excluded_and_equivocating_ancestors.push(ancestor.reference());
+            if ancestor.round() <= last_included_round {
+                // This should have been filtered when computing score_and_pending_excluded_ancestors.
+                // Still, ensure previously included ancestors are filtered out.
+                continue;
+            }
+
+            // This ancestor has not propagated well, so it cannot be included / voted on.
+            if ancestor.round() > accepted_low_quorum_round {
+                excluded_and_equivocating_ancestors.insert(ancestor.reference());
+                trace!("Excluded low score ancestor {} with score {score} to propose for round {clock_round}: too few validators have seen it", ancestor.reference());
                 node_metrics
                     .excluded_proposal_ancestors_count_by_authority
                     .with_label_values(&[block_hostname])
@@ -1038,27 +1057,7 @@ impl Core {
             }
 
             // Include the ancestor block as it has been seen & accepted by a strong quorum.
-            let ancestor = if ancestor.round() == accepted_low_quorum_round {
-                ancestor.clone()
-            } else {
-                // The excluded ancestor's ancestor may be included but this specific
-                // ancestor will remain excluded so we should add it to the list.
-                excluded_and_equivocating_ancestors.push(ancestor.reference());
-                // Only cached blocks need to be propagated. Committed and GC'ed blocks do not need to be propagated.
-                let Some(ancestor) = self.dag_state.read().get_last_cached_block_in_range(
-                    excluded_author,
-                    last_included_round + 1,
-                    accepted_low_quorum_round + 1,
-                ) else {
-                    trace!("Excluded low score ancestor {} with score {score} to propose for round {clock_round}: no suitable block found", ancestor.reference());
-                    node_metrics
-                        .excluded_proposal_ancestors_count_by_authority
-                        .with_label_values(&[block_hostname])
-                        .inc();
-                    continue;
-                };
-                ancestor
-            };
+            // Only cached blocks need to be propagated. Committed and GC'ed blocks do not need to be propagated.
             self.last_included_ancestors[excluded_author] = Some(ancestor.reference());
             ancestors_to_propose.push(ancestor.clone());
             trace!("Included low scoring ancestor {} with score {score} seen at accepted low quorum round {accepted_low_quorum_round} to propose for round {clock_round}", ancestor.reference());
@@ -1165,27 +1164,7 @@ impl CoreSignals {
                 return Ok(());
             }
 
-            let excluded_ancestors_limit = self.context.committee.size() * 2;
-            let excluded_ancestors = extended_block.excluded_ancestors;
-            let (excluded_ancestors, dropped_excluded_ancestors) =
-                if excluded_ancestors.len() > excluded_ancestors_limit {
-                    let (valid, dropped) = excluded_ancestors.split_at(excluded_ancestors_limit);
-                    (valid.to_vec(), dropped.to_vec())
-                } else {
-                    (excluded_ancestors, vec![])
-                };
-
-            if !dropped_excluded_ancestors.is_empty() {
-                warn!(
-                        "Dropped {} excluded ancestor(s) due to size limit: {dropped_excluded_ancestors:?}",
-                        dropped_excluded_ancestors.len()
-                    );
-            }
-
-            if let Err(err) = self.tx_block_broadcast.send(ExtendedBlock {
-                block: extended_block.block,
-                excluded_ancestors,
-            }) {
+            if let Err(err) = self.tx_block_broadcast.send(extended_block) {
                 warn!("Couldn't broadcast the block to any receiver: {err}");
                 return Err(ConsensusError::Shutdown);
             }
