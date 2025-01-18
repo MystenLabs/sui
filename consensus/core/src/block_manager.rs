@@ -144,8 +144,8 @@ impl BlockManager {
         (accepted_blocks, missing_blocks)
     }
 
-    /// Tries to find the provided block_refs in DagState, and adds any missing
-    /// blocks to the missing_blocks list
+    /// Tries to find the provided block_refs in DagState and BlockManager,
+    /// and returns missing block refs.
     pub(crate) fn try_find_blocks(&mut self, mut block_refs: Vec<BlockRef>) -> BTreeSet<BlockRef> {
         let _s = monitored_scope("BlockManager::try_find_blocks");
 

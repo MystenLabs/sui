@@ -36,8 +36,8 @@ const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
 enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
     AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
-    /// Finds excluded blocks from the network to be synced if missing.
-    FindExcludedBlocks(Vec<BlockRef>, oneshot::Sender<BTreeSet<BlockRef>>),
+    /// Checks if block refs exist locally and sync missing ones.
+    CheckBlockRefs(Vec<BlockRef>, oneshot::Sender<BTreeSet<BlockRef>>),
     /// Called when the min round has passed or the leader timeout occurred and a block should be produced.
     /// When the command is called with `force = true`, then the block will be created for `round` skipping
     /// any checks (ex leader existence of previous round). More information can be found on the `Core` component.
@@ -128,7 +128,7 @@ impl CoreThread {
                             let missing_block_refs = self.core.add_blocks(blocks)?;
                             sender.send(missing_block_refs).ok();
                         }
-                        CoreThreadCommand::FindExcludedBlocks(blocks, sender) => {
+                        CoreThreadCommand::CheckBlockRefs(blocks, sender) => {
                             let _scope = monitored_scope("CoreThread::loop::find_excluded_blocks");
                             let missing_block_refs = self.core.check_block_refs(blocks)?;
                             sender.send(missing_block_refs).ok();
@@ -300,7 +300,7 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         block_refs: Vec<BlockRef>,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
         let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::FindExcludedBlocks(
+        self.send(CoreThreadCommand::CheckBlockRefs(
             block_refs.clone(),
             sender,
         ))

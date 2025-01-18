@@ -1001,7 +1001,7 @@ impl Core {
         score_and_pending_excluded_ancestors.sort_by(|a, b| b.0.cmp(&a.0));
 
         let mut ancestors_to_propose = included_ancestors;
-        let mut final_excluded_ancestors = Vec::new();
+        let mut excluded_ancestors = Vec::new();
 
         for (score, ancestor) in score_and_pending_excluded_ancestors.into_iter() {
             let block_hostname = &self.context.committee.authority(ancestor.author()).hostname;
@@ -1016,14 +1016,14 @@ impl Core {
                     .with_label_values(&[block_hostname, "timeout"])
                     .inc();
             } else {
-                final_excluded_ancestors.push((score, ancestor));
+                excluded_ancestors.push((score, ancestor));
             }
         }
 
         // Include partially propagated blocks from excluded authorities, to help propagate the blocks
         // across the network with less latency impact.
         // TODO: use a separate mechanism to propagate excluded ancestor blocks and remove this logic.
-        for (score, ancestor) in final_excluded_ancestors.iter() {
+        for (score, ancestor) in excluded_ancestors.iter() {
             let excluded_author = ancestor.author();
             let block_hostname = &self.context.committee.authority(excluded_author).hostname;
             // A quorum of validators reported to have accepted blocks from the excluded_author up to the low quorum round.
@@ -1040,7 +1040,7 @@ impl Core {
                 .map(|block_ref| block_ref.round)
                 .unwrap_or(GENESIS_ROUND);
             if ancestor.round() <= last_included_round {
-                // This should have been filtered when computing score_and_pending_excluded_ancestors.
+                // This should have been filtered when filtering all_ancestors.
                 // Still, ensure previously included ancestors are filtered out.
                 continue;
             }
