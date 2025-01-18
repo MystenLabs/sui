@@ -169,15 +169,16 @@ impl BlockManager {
             }
             // Fetches the block if it is not in dag state or suspended.
             missing_blocks.insert(*block_ref);
-            self.missing_blocks.insert(*block_ref);
-            let block_ref_hostname = &self.context.committee.authority(block_ref.author).hostname;
-            // Always count the missing block even if it is already known.
-            self.context
-                .metrics
-                .node_metrics
-                .block_manager_missing_blocks_by_authority
-                .with_label_values(&[block_ref_hostname])
-                .inc();
+            if self.missing_blocks.insert(*block_ref) {
+                let block_ref_hostname =
+                    &self.context.committee.authority(block_ref.author).hostname;
+                self.context
+                    .metrics
+                    .node_metrics
+                    .block_manager_missing_blocks_by_authority
+                    .with_label_values(&[block_ref_hostname])
+                    .inc();
+            }
         }
 
         let metrics = &self.context.metrics.node_metrics;
@@ -363,14 +364,14 @@ impl BlockManager {
                 if !self.suspended_blocks.contains_key(ancestor) {
                     // Fetches the block if it is not in dag state or suspended.
                     ancestors_to_fetch.insert(*ancestor);
-                    self.missing_blocks.insert(*ancestor);
-                    // Always count the missing block even if it is already known.
-                    self.context
-                        .metrics
-                        .node_metrics
-                        .block_manager_missing_blocks_by_authority
-                        .with_label_values(&[ancestor_hostname])
-                        .inc();
+                    if self.missing_blocks.insert(*ancestor) {
+                        self.context
+                            .metrics
+                            .node_metrics
+                            .block_manager_missing_blocks_by_authority
+                            .with_label_values(&[ancestor_hostname])
+                            .inc();
+                    }
                 }
             }
         }
