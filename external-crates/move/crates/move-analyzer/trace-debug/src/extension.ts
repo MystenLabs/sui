@@ -81,7 +81,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                         const editor = vscode.window.activeTextEditor;
                         if (editor) {
-                            const optimized_lines = stackTraceResponse.optimized_lines;
+                            const optimized_lines = stackTraceResponse.optimizedLines;
                             const document = editor.document;
                             let decorationsArray: vscode.DecorationOptions[] = [];
 

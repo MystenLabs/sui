@@ -4,6 +4,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ModuleInfo } from './utils';
+import { JSON_FILE_EXT } from './utils';
+
 
 // Data types corresponding to source map file JSON schema.
 
@@ -126,7 +128,7 @@ export function readAllSourceMaps(
             const stats = fs.statSync(filePath);
             if (stats.isDirectory()) {
                 processDirectory(filePath);
-            } else if (path.extname(f) === '.json') {
+            } else if (path.extname(f) === JSON_FILE_EXT) {
                 const sourceMap = readSourceMap(filePath, filesMap, allSourceMapLinesMap);
                 sourceMapsMap.set(JSON.stringify(sourceMap.modInfo), sourceMap);
             }

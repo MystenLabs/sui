@@ -38,7 +38,7 @@ interface CustomizedStackTraceResponse extends DebugProtocol.StackTraceResponse 
     body: {
         stackFrames: StackFrame[];
         totalFrames?: number;
-        optimized_lines: number[];
+        optimizedLines: number[];
     };
 }
 
@@ -244,33 +244,23 @@ export class MoveDebugSession extends LoggingDebugSession {
             const stack_height = runtimeStack.frames.length;
             response.body = {
                 stackFrames: runtimeStack.frames.map(frame => {
-                    const fileName = path.basename(frame.file);
-                    const frameSource = new Source(fileName, frame.file);
-                    if (frame.showDisassembly) {
-                        frameSource.sourceReference = 7;
-                    }
-                    return new StackFrame(frame.id, frame.name, frameSource, frame.line);
+                    const fileName = frame.showDisassembly
+                        ? path.basename(frame.bcodeFilePath!)
+                        : path.basename(frame.srcFilePath);
+                    const frameSource = frame.showDisassembly
+                        ? new Source(fileName, frame.bcodeFilePath!)
+                        : new Source(fileName, frame.srcFilePath);
+                    const currentLine = frame.showDisassembly
+                        ? frame.bcodeLine!
+                        : frame.srcLine;
+                    return new StackFrame(frame.id, frame.name, frameSource, currentLine);
                 }).reverse(),
                 totalFrames: stack_height,
-                optimized_lines: stack_height > 0
-                    ? runtimeStack.frames[stack_height - 1].optimizedLines
+                optimizedLines: stack_height > 0
+                    ? (runtimeStack.frames[stack_height - 1].showDisassembly
+                        ? runtimeStack.frames[stack_height - 1].optimizedBcodeLines!
+                        : runtimeStack.frames[stack_height - 1].optimizedSrcLines)
                     : []
-            };
-        } catch (err) {
-            response.success = false;
-            response.message = err instanceof Error ? err.message : String(err);
-        }
-        this.sendResponse(response);
-    }
-
-    protected sourceRequest(
-        response: DebugProtocol.SourceResponse,
-        args: DebugProtocol.SourceArguments
-    ): void {
-        const content = 'mock disassembly content';
-        try {
-            response.body = {
-                content
             };
         } catch (err) {
             response.success = false;
