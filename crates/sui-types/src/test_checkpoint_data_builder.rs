@@ -3,7 +3,11 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use move_core_types::{ident_str, language_storage::TypeTag};
+use move_core_types::{
+    ident_str,
+    language_storage::{StructTag, TypeTag},
+};
+use serde::Serialize;
 use sui_protocol_config::ProtocolConfig;
 use tap::Pipe;
 
@@ -16,7 +20,7 @@ use crate::{
     committee::Committee,
     digests::TransactionDigest,
     effects::{TestEffectsBuilder, TransactionEffectsAPI, TransactionEvents},
-    event::Event,
+    event::{Event, SystemEpochInfoEvent},
     full_checkpoint_content::{CheckpointData, CheckpointTransaction},
     gas_coin::GAS,
     message_envelope::Message,
@@ -25,9 +29,11 @@ use crate::{
     },
     object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
+    sui_system_state::SuiSystemStateWrapper,
     transaction::{
         EndOfEpochTransactionKind, SenderSignedData, Transaction, TransactionData, TransactionKind,
     },
+    SUI_SYSTEM_ADDRESS,
 };
 
 /// A builder for creating test checkpoint data.
@@ -503,7 +509,11 @@ impl TestCheckpointDataBuilder {
     /// Build the checkpoint data with a transaction that advances the epoch in addition to all the
     /// transactions added to the builder so far. This increments the stored checkpoint sequence
     /// number and epoch.
-    pub fn advance_epoch(&mut self) -> CheckpointData {
+    pub fn advance_epoch(&mut self, safe_mode: bool) -> CheckpointData {
+        // the input to `get_sui-system_state` from kv_epoch_starts is `&[Object]`
+        // the sui-system_state_object_id needs to be part of output objects ig
+        // and then get_dynamic_field_from_store(object_store, id, &wrapper.version)
+        // damn, why is this so involved?
         let (committee, _) = Committee::new_simple_test_committee();
         let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         let tx_kind = EndOfEpochTransactionKind::new_change_epoch(
@@ -516,6 +526,33 @@ impl TestCheckpointDataBuilder {
             Default::default(),
             Default::default(),
         );
+
+        // let wrapper = object from object store
+        // then try as move object
+        // and finally SuiSystemStateWrapper
+
+        // so we gotta go the other way by ... converting into a move object
+        // move_object.contents() = SuiSystemWrapper bcs::to_bytes
+        // and then tuck it into wrapper.data
+
+        // let data = Data::Move(MoveObject {
+        //     type_: TreasuryCap::type_(struct_tag).into(),
+        //     has_public_transfer: true,
+        //     version: OBJECT_START_VERSION,
+        //     contents: bcs::to_bytes(&treasury_cap).expect("Failed to serialize"),
+        // });
+        // let object: Object = ObjectInner {
+        //     owner: Owner::Immutable,
+        //     data,
+        //     previous_transaction: TransactionDigest::genesis_marker(),
+        //     storage_rebate: 0,
+        // }
+        // .into()
+
+        // let wrapper = SuiSystemStateWrapper::new(0, SUI_SYSTEM_STATE_OBJECT_ID, SuiSystemStateInnerV2::new(0, vec![]));
+        // let move_object = MoveObject::new_from_execution(SuiSystemStateWrapper::type_().into(), true, 0, bcs::to_bytes(&wrapper).unwrap(), &protocol_config).unwrap();
+        // let object = Object::new_move(move_object, Owner::Address(SUI_SYSTEM_STATE_OBJECT_ID), TransactionDigest::ZERO());
+
         let end_of_epoch_tx = TransactionData::new(
             TransactionKind::EndOfEpochTransaction(vec![tx_kind]),
             SuiAddress::default(),
@@ -526,14 +563,91 @@ impl TestCheckpointDataBuilder {
         .pipe(|data| SenderSignedData::new(data, vec![]))
         .pipe(Transaction::new);
 
+        // so basically htere needs to be two objects in the output_objects right
+        // the wrapper object
+        // and then the dynamic field object, the inner
+
+        // create fake sui system state object ...
+        // add it as output_objects somehow
+        // get_sui_system_state_wrapper
+        // needs to have SUI_SYSTEM_STATE_OBJECT_ID
+
+        // contenst are <Field<K, V>> = SuiSystemStateInnerV2? ah, K is wrapper.version
+        // So ... field: Field<u64, T>
+        // look at Self::advance_epoch_safe_mode_impl::<SuiSystemStateInnerV2>
+        // assumes move_object.contents() so ...
+
+        // let mut field: Field<u64, SuiSystemStateInnerV2> =
+        /*
+                let new_contents = bcs::to_bytes(&field).expect("bcs serialization should never fail");
+        move_object
+            .update_contents(new_contents, protocol_config)
+            .expect("Update sui system object content cannot fail since it should be small");
+
+         */
+
+        // let move_object = MoveObject::
+        // let object = Object::new_move(
+
+        // Matches the SystemEpochInfoEvent
+        #[derive(Serialize)]
+        pub struct TestSystemEpochInfoEvent {
+            pub epoch: u64,
+            pub protocol_version: u64,
+            pub reference_gas_price: u64,
+            pub total_stake: u64,
+            pub storage_fund_reinvestment: u64,
+            pub storage_charge: u64,
+            pub storage_rebate: u64,
+            pub storage_fund_balance: u64,
+            pub stake_subsidy_amount: u64,
+            pub total_gas_fees: u64,
+            pub total_stake_rewards_distributed: u64,
+            pub leftover_storage_fund_inflow: u64,
+        }
+
+        let events = if !safe_mode {
+            let system_epoch_info_event = TestSystemEpochInfoEvent {
+                epoch: self.checkpoint_builder.epoch,
+                protocol_version: protocol_config.version.as_u64(),
+                reference_gas_price: 0,
+                total_stake: 0,
+                storage_fund_reinvestment: 0,
+                storage_charge: 0,
+                storage_rebate: 0,
+                storage_fund_balance: 0,
+                stake_subsidy_amount: 0,
+                total_gas_fees: 0,
+                total_stake_rewards_distributed: 0,
+                leftover_storage_fund_inflow: 0,
+            };
+            let struct_tag = StructTag {
+                address: SUI_SYSTEM_ADDRESS,
+                module: ident_str!("sui_system_state_inner").to_owned(),
+                name: ident_str!("SystemEpochInfoEvent").to_owned(),
+                type_params: vec![],
+            };
+            Some(vec![Event::new(
+                &SUI_SYSTEM_ADDRESS,
+                ident_str!("sui_system_state_inner"),
+                TestCheckpointDataBuilder::derive_address(0),
+                struct_tag,
+                bcs::to_bytes(&system_epoch_info_event).unwrap(),
+            )])
+        } else {
+            None
+        };
+
+        let transaction_events = events.map(|events| TransactionEvents { data: events });
+
         self.checkpoint_builder
             .transactions
             .push(CheckpointTransaction {
                 transaction: end_of_epoch_tx,
                 effects: Default::default(),
-                events: None,
+                events: transaction_events,
                 input_objects: vec![],
-                output_objects: vec![],
+                output_objects: vec![], // over here I think?
             });
 
         let mut checkpoint = self.build_checkpoint();

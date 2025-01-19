@@ -19,6 +19,7 @@ use sui_types::{
     transaction::{TransactionDataAPI, TransactionKind},
 };
 
+#[derive(Default)]
 pub(crate) struct KvEpochEnds;
 
 impl Processor for KvEpochEnds {
@@ -148,5 +149,108 @@ impl Handler for KvEpochEnds {
         } else {
             Ok(0)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+    use sui_indexer_alt_framework::{handlers::cp_sequence_numbers::CpSequenceNumbers, Indexer};
+    use sui_indexer_alt_schema::MIGRATIONS;
+    use sui_pg_db::Connection;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
+
+    async fn get_all_kv_epoch_ends(conn: &mut Connection<'_>) -> Result<Vec<i64>> {
+        let result = kv_epoch_ends::table
+            .select(kv_epoch_ends::epoch)
+            .load(conn)
+            .await?;
+        Ok(result)
+    }
+
+    /// Epoch end table retention must be larger than one epoch's worth of checkpoints - otherwise
+    /// we'll prune the entry for the previous epoch at boundary shortly after writing it.
+    #[tokio::test]
+    pub async fn test_kv_epoch_ends_same_epoch() -> () {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.db().connect().await.unwrap();
+
+        let mut builder = TestCheckpointDataBuilder::new(0);
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = KvEpochEnds.process(&checkpoint).unwrap();
+        KvEpochEnds::commit(&values, &mut conn).await.unwrap();
+        assert_eq!(values.len(), 0);
+        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = KvEpochEnds.process(&checkpoint).unwrap();
+        KvEpochEnds::commit(&values, &mut conn).await.unwrap();
+        assert_eq!(values.len(), 0);
+        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+
+        let checkpoint = Arc::new(builder.advance_epoch(false));
+        let values = KvEpochEnds.process(&checkpoint).unwrap();
+        KvEpochEnds::commit(&values, &mut conn).await.unwrap();
+        assert_eq!(values.len(), 1);
+        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = KvEpochEnds.process(&checkpoint).unwrap();
+        KvEpochEnds::commit(&values, &mut conn).await.unwrap();
+        assert_eq!(values.len(), 0);
+        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = KvEpochEnds.process(&checkpoint).unwrap();
+        KvEpochEnds::commit(&values, &mut conn).await.unwrap();
+        assert_eq!(values.len(), 0);
+        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+
+        let epochs = get_all_kv_epoch_ends(&mut conn).await.unwrap();
+        assert_eq!(epochs, vec![0]);
+
+        let rows_pruned = KvEpochEnds.prune(0, 4, &mut conn).await.unwrap();
+        let epochs = get_all_kv_epoch_ends(&mut conn).await.unwrap();
+        assert_eq!(epochs.len(), 0);
+        assert_eq!(rows_pruned, 1);
+    }
+
+    #[tokio::test]
+    pub async fn test_kv_epoch_ends_advance_multiple_epochs() -> () {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.db().connect().await.unwrap();
+
+        let mut builder = TestCheckpointDataBuilder::new(0);
+        let checkpoint = Arc::new(builder.advance_epoch(false));
+        let values = KvEpochEnds.process(&checkpoint).unwrap();
+        KvEpochEnds::commit(&values, &mut conn).await.unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+
+        let checkpoint = Arc::new(builder.advance_epoch(false));
+        let values = KvEpochEnds.process(&checkpoint).unwrap();
+        KvEpochEnds::commit(&values, &mut conn).await.unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+
+        let checkpoint = Arc::new(builder.advance_epoch(false));
+        let values = KvEpochEnds.process(&checkpoint).unwrap();
+        KvEpochEnds::commit(&values, &mut conn).await.unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+
+        let epochs = get_all_kv_epoch_ends(&mut conn).await.unwrap();
+        assert_eq!(epochs, vec![0, 1, 2]);
+
+        let rows_pruned = KvEpochEnds.prune(0, 2, &mut conn).await.unwrap();
+        let epochs = get_all_kv_epoch_ends(&mut conn).await.unwrap();
+        assert_eq!(epochs, vec![2]);
+        assert_eq!(rows_pruned, 2);
     }
 }
