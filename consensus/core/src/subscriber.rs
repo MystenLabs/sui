@@ -248,11 +248,12 @@ mod test {
 
     use super::*;
     use crate::{
-        block::{BlockRef, VerifiedBlock},
+        block::BlockRef,
         commit::CommitRange,
         error::ConsensusResult,
-        network::{test_network::TestService, BlockStream},
+        network::{test_network::TestService, BlockStream, ExtendedSerializedBlock},
         storage::mem_store::MemStore,
+        VerifiedBlock,
     };
 
     struct SubscriberTestClient {}
@@ -284,7 +285,11 @@ mod test {
         ) -> ConsensusResult<BlockStream> {
             let block_stream = stream::unfold((), |_| async {
                 sleep(Duration::from_millis(1)).await;
-                Some((Bytes::from(vec![1u8; 8]), ()))
+                let block = ExtendedSerializedBlock {
+                    block: Bytes::from(vec![1u8; 8]),
+                    excluded_ancestors: vec![],
+                };
+                Some((block, ()))
             })
             .take(10);
             Ok(Box::pin(block_stream))
@@ -360,7 +365,13 @@ mod test {
         assert!(service.handle_send_block.len() >= 100);
         for (p, block) in service.handle_send_block.iter() {
             assert_eq!(*p, peer);
-            assert_eq!(*block, Bytes::from(vec![1u8; 8]));
+            assert_eq!(
+                *block,
+                ExtendedSerializedBlock {
+                    block: Bytes::from(vec![1u8; 8]),
+                    excluded_ancestors: vec![]
+                }
+            );
         }
     }
 }
