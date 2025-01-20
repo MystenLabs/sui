@@ -14039,12 +14039,15 @@ name = "sui-indexer-alt-jsonrpc"
 version = "1.42.0"
 dependencies = [
  "anyhow",
+ "async-graphql",
  "async-trait",
  "axum 0.7.5",
+ "bcs",
  "clap",
  "diesel",
  "diesel-async",
  "jsonrpsee",
+ "move-core-types",
  "pin-project-lite",
  "prometheus",
  "reqwest 0.12.5",
@@ -14053,6 +14056,7 @@ dependencies = [
  "sui-indexer-alt-schema",
  "sui-open-rpc",
  "sui-open-rpc-macros",
+ "sui-package-resolver",
  "sui-pg-db",
  "sui-types",
  "telemetry-subscribers",

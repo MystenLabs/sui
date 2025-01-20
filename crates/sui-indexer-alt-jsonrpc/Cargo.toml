@@ -12,8 +12,10 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+async-graphql = { workspace = true, features = ["dataloader"] }
 async-trait.workspace = true
 axum.workspace = true
+bcs.workspace = true
 clap.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
@@ -29,8 +31,11 @@ tower-layer.workspace = true
 tracing.workspace = true
 url.workspace = true
 
+move-core-types.workspace = true
+
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-schema.workspace = true
+sui-package-resolver.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
 sui-pg-db.workspace = true

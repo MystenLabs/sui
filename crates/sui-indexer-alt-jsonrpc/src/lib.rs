@@ -4,8 +4,9 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use anyhow::Context;
+use anyhow::Context as _;
 use api::rpc_module::RpcModule;
+use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use jsonrpsee::server::{RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
 use metrics::RpcMetrics;
@@ -19,11 +20,12 @@ use tower_layer::Identity;
 use tracing::info;
 
 use crate::api::governance::Governance;
-use crate::data::reader::Reader;
+use crate::context::Context;
 
 mod api;
 pub mod args;
-mod data;
+mod context;
+pub mod data;
 mod error;
 mod metrics;
 
@@ -182,20 +184,40 @@ impl Default for RpcArgs {
     }
 }
 
+/// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
+/// command-line). The service will continue to run until the cancellation token is triggered, and
+/// will signal cancellation on the token when it is shutting down.
+///
+/// The service may spin up auxilliary services (such as the system package task) to support
+/// itself, and will clean these up on shutdown as well.
 pub async fn start_rpc(
     db_args: DbArgs,
     rpc_args: RpcArgs,
+    system_package_task_args: SystemPackageTaskArgs,
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
-    let mut rpc =
-        RpcService::new(rpc_args, registry, cancel).context("Failed to create RPC service")?;
+    let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
+        .context("Failed to create RPC service")?;
 
-    let reader = Reader::new(db_args, rpc.metrics(), registry).await?;
+    let context = Context::new(db_args, rpc.metrics(), registry).await?;
 
-    rpc.add_module(Governance(reader.clone()))?;
+    let system_package_task = SystemPackageTask::new(
+        context.clone(),
+        system_package_task_args,
+        cancel.child_token(),
+    );
 
-    rpc.run().await.context("Failed to start RPC service")
+    rpc.add_module(Governance(context.clone()))?;
+
+    let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
+    let h_system_package_task = system_package_task.run();
+
+    Ok(tokio::spawn(async move {
+        let _ = h_rpc.await;
+        cancel.cancel();
+        let _ = h_system_package_task.await;
+    }))
 }
 
 #[cfg(test)]
