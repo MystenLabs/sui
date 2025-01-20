@@ -69,12 +69,12 @@ impl Reader {
 }
 
 impl<'p> Connection<'p> {
-    pub(crate) async fn first<'q, Q, U>(&mut self, query: Q) -> Result<U, ReadError>
+    pub(crate) async fn first<Q, U>(&mut self, query: Q) -> Result<U, ReadError>
     where
         U: Send,
-        Q: RunQueryDsl<db::ManagedConnection> + 'q,
+        Q: RunQueryDsl<db::ManagedConnection> + 'static,
         Q: LimitDsl,
-        Limit<Q>: LoadQuery<'q, db::ManagedConnection, U> + QueryFragment<Pg> + Send,
+        Limit<Q>: LoadQuery<'static, db::ManagedConnection, U> + QueryFragment<Pg> + Send,
     {
         let query = query.limit(1);
         debug!("{}", diesel::debug_query(&query));
