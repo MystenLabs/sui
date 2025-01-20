@@ -11,6 +11,7 @@ use diesel::{
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
+use models::watermarks::{CommitterWatermark, PrunerWatermark};
 use pipeline::{
     concurrent::{self, ConcurrentConfig},
     sequential::{self, SequentialConfig},
@@ -24,7 +25,6 @@ use tempfile::tempdir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
-use watermarks::{CommitterWatermark, PrunerWatermark};
 
 pub mod handlers;
 pub mod ingestion;
@@ -33,7 +33,6 @@ pub mod models;
 pub mod pipeline;
 pub mod schema;
 pub mod task;
-pub(crate) mod watermarks;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 

@@ -11,7 +11,7 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::{metrics::IndexerMetrics, watermarks::CommitterWatermark};
+use crate::{metrics::IndexerMetrics, models::watermarks::CommitterWatermark};
 
 use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
 
