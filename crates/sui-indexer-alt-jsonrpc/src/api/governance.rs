@@ -9,7 +9,7 @@ use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::sui_serde::BigInt;
 
-use crate::data::reader::Reader;
+use crate::{data::reader::Reader, error::internal_error};
 
 use super::rpc_module::RpcModule;
 
@@ -28,14 +28,15 @@ impl GovernanceApiServer for Governance {
     async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>> {
         use kv_epoch_starts::dsl as e;
 
-        let mut conn = self.0.connect().await?;
+        let mut conn = self.0.connect().await.map_err(internal_error)?;
         let rgp: i64 = conn
             .first(
                 e::kv_epoch_starts
                     .select(e::reference_gas_price)
                     .order(e::epoch.desc()),
             )
-            .await?;
+            .await
+            .map_err(internal_error)?;
 
         Ok((rgp as u64).into())
     }
