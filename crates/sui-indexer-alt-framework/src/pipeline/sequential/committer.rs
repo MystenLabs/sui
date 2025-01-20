@@ -15,8 +15,8 @@ use tracing::{debug, info, warn};
 
 use crate::{
     metrics::IndexerMetrics,
+    models::watermarks::CommitterWatermark,
     pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
-    watermarks::CommitterWatermark,
 };
 
 use super::{Handler, SequentialConfig};

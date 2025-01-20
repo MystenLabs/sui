@@ -5,9 +5,9 @@ use std::time::Instant;
 
 use tracing::{debug, info};
 
-use crate::watermarks::PrunerWatermark;
+use crate::models::watermarks::{CommitterWatermark, PrunerWatermark};
 
-use super::{CommitterWatermark, Processor};
+use super::Processor;
 
 /// Tracing message for the watermark update will be logged at info level at least this many
 /// checkpoints.
