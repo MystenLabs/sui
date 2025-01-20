@@ -111,6 +111,9 @@ pub struct PrunerConfig {
 
     /// The maximum range to try and prune in one request, measured in checkpoints.
     pub max_chunk_size: u64,
+
+    /// The max number of tasks to run in parallel for pruning.
+    pub prune_concurrency: u64,
 }
 
 /// Values ready to be written to the database. This is an internal type used to communicate
@@ -162,6 +165,7 @@ impl Default for PrunerConfig {
             delay_ms: 120_000,
             retention: 4_000_000,
             max_chunk_size: 2_000,
+            prune_concurrency: 1,
         }
     }
 }
