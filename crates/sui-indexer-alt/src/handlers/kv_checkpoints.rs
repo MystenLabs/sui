@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
 use sui_indexer_alt_schema::{checkpoints::StoredCheckpoint, schema::kv_checkpoints};
@@ -37,5 +38,17 @@ impl Handler for KvCheckpoints {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    async fn prune(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut db::Connection<'_>,
+    ) -> Result<usize> {
+        let filter = kv_checkpoints::table
+            .filter(kv_checkpoints::sequence_number.between(from as i64, to_exclusive as i64 - 1));
+
+        Ok(diesel::delete(filter).execute(conn).await?)
     }
 }

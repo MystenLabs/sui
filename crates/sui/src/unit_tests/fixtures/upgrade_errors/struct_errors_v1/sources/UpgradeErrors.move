@@ -90,4 +90,17 @@ module upgrades::upgrades {
     public struct ChangeNameNestedStruct {
         a: ChangeFieldA, // change to ChangeFieldB
     }
+
+    // nested struct type param field mismatch
+    public struct NamedBox<A> { x: A }
+    public struct NamedTwoBox<B, C> { x: B, y: C }
+
+    public struct NamedBoxInBox<D> { x: NamedBox<NamedBox<D>> }
+    public struct NamedBoxInTwoBox<E, F> { x: NamedTwoBox<NamedBox<E>, NamedBox<F>> }
+
+    public struct PositionalBox<G>(G)
+    public struct PositionalTwoBox<H, I>(H, I)
+
+    public struct PositionalBoxInBox<J>(PositionalBox<PositionalBox<J>>)
+    public struct PositionalBoxInTwoBox<K, L>(PositionalTwoBox<PositionalBox<K>, PositionalBox<L>>)
 }

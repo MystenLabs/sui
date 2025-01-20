@@ -35,7 +35,8 @@ use super::{Handler, PrunerConfig};
 ///
 /// The task will shutdown if the `cancel` token is signalled. If the `config` is `None`, the task
 /// will shutdown immediately.
-pub(super) fn pruner<H: Handler + 'static>(
+pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
+    handler: Arc<H>,
     config: Option<PrunerConfig>,
     db: Db,
     metrics: Arc<IndexerMetrics>,
@@ -46,6 +47,11 @@ pub(super) fn pruner<H: Handler + 'static>(
             info!(pipeline = H::NAME, "Skipping pruner task");
             return;
         };
+
+        info!(
+            pipeline = H::NAME,
+            "Starting pruner with config: {:?}", config
+        );
 
         // The pruner can pause for a while, waiting for the delay imposed by the
         // `pruner_timestamp` to expire. In that case, the period between ticks should not be
@@ -135,7 +141,12 @@ pub(super) fn pruner<H: Handler + 'static>(
                     break;
                 };
 
-                let affected = match H::prune(from, to_exclusive, &mut conn).await {
+                debug!(
+                    pipeline = H::NAME,
+                    "Pruning from {} to {}", from, to_exclusive
+                );
+
+                let affected = match handler.prune(from, to_exclusive, &mut conn).await {
                     Ok(affected) => {
                         guard.stop_and_record();
                         watermark.pruner_hi = to_exclusive as i64;

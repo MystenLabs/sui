@@ -38,7 +38,6 @@ exclude = [
     "external-crates/move/crates/move-model",
     "external-crates/move/crates/move-package",
     "external-crates/move/crates/move-proc-macros",
-    "external-crates/move/crates/move-prover",
     "external-crates/move/crates/move-prover-test-utils",
     "external-crates/move/crates/move-stackless-bytecode",
     "external-crates/move/crates/move-stdlib",
@@ -65,7 +64,6 @@ exclude = [
     "external-crates/move/move-execution/v2/crates/move-bytecode-verifier",
     "external-crates/move/move-execution/v2/crates/move-stdlib-natives",
     "external-crates/move/move-execution/v2/crates/move-vm-runtime",
-    "sdk/move-bytecode-template",
 ]
 
 members = [
@@ -115,10 +113,13 @@ members = [
     "crates/sui-graphql-rpc",
     "crates/sui-graphql-rpc-client",
     "crates/sui-graphql-rpc-headers",
+    "crates/sui-http",
     "crates/sui-indexer",
     "crates/sui-indexer-alt",
+    "crates/sui-indexer-alt-e2e-tests",
     "crates/sui-indexer-alt-framework",
     "crates/sui-indexer-alt-jsonrpc",
+    "crates/sui-indexer-alt-metrics",
     "crates/sui-indexer-alt-restorer",
     "crates/sui-indexer-alt-schema",
     "crates/sui-indexer-builder",
@@ -204,7 +205,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.41.0"
+version = "1.42.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -373,13 +374,7 @@ integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
 itertools = "0.13.0"
 jemalloc-ctl = "^0.5"
-jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
-    "server",
-    "macros",
-    "ws-client",
-    "http-client",
-    "jsonrpsee-core",
-] }
+jsonrpsee = { version = "0.24.7", features = ["server", "macros", "ws-client", "http-client", "jsonrpsee-core"] }
 json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
 leb128 = "0.2.5"
 lru = "0.10"
@@ -408,6 +403,7 @@ once_cell = "1.18.0"
 ouroboros = "0.17"
 parking_lot = "0.12.1"
 parquet = "52"
+pin-project-lite = "0.2.13"
 pkcs8 = { version = "0.9.0", features = ["std"] }
 pprof = { version = "0.14.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
@@ -545,7 +541,7 @@ webpki = { version = "0.102", package = "rustls-webpki", features = [
     "std",
 ] }
 wiremock = "0.5"
-x509-parser = "0.14.0"
+x509-parser = { version = "0.14.0", features = ["verify"] }
 zstd = "0.12.3"
 zeroize = "1.6.0"
 versions = "4.1.0"
@@ -572,7 +568,6 @@ move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
 move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
 move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
-move-prover = { path = "external-crates/move/crates/move-prover" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-interpreter" }
@@ -590,6 +585,9 @@ passkey-client = { version = "0.2.0" }
 passkey-authenticator = { version = "0.2.0" }
 coset = "0.3"
 p256 = { version = "0.13.2", features = ["ecdsa"] }
+
+p384 = { version = "0.13.0", default-features = false, features = ["ecdsa","sha384"] }
+ciborium = "0.2"
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
@@ -641,9 +639,12 @@ sui-graphql-rpc = { path = "crates/sui-graphql-rpc" }
 sui-graphql-rpc-client = { path = "crates/sui-graphql-rpc-client" }
 sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
+sui-http = { path = "crates/sui-http" }
 sui-indexer = { path = "crates/sui-indexer" }
+sui-indexer-alt = { path = "crates/sui-indexer-alt" }
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework" }
 sui-indexer-alt-jsonrpc = { path = "crates/sui-indexer-alt-jsonrpc" }
+sui-indexer-alt-metrics = { path = "crates/sui-indexer-alt-metrics" }
 sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }

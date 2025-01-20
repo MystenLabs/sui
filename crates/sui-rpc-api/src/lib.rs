@@ -80,7 +80,10 @@ impl RpcService {
         let metrics = self.metrics.clone();
 
         let mut router = {
-            let node_service = crate::proto::node::node_server::NodeServer::new(self.clone());
+            let node_service =
+                crate::proto::node::node_service_server::NodeServiceServer::new(self.clone());
+            // legacy node service
+            let node = crate::proto::node::node_server::NodeServer::new(self.clone());
 
             let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -112,6 +115,7 @@ impl RpcService {
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha)
                 .add_service(node_service)
+                .add_service(node)
                 .into_router()
         };
 

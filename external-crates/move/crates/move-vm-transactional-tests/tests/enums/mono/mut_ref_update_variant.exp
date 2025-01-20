@@ -28,7 +28,8 @@ B0:
 }
 
 public is_variant_two(Arg0: &EnumWithTwoVariants): bool {
-L0:	loc1: &u64
+L1:	loc0: &u64
+L2:	loc1: &u64
 B0:
 	0: CopyLoc[0](Arg0: &EnumWithTwoVariants)
 	1: VariantSwitch(VariantJumpTableIndex(0))

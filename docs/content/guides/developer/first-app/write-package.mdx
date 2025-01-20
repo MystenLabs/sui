@@ -5,7 +5,7 @@ description: The first step in getting a package on chain is to write the Move c
 
 To begin, open a terminal or console at the location you plan to store your package. Use the `sui move new` command to create an empty Move package with the name `my_first_package`:
 
-```shell
+```sh
 $ sui move new my_first_package
 ```
 
@@ -25,7 +25,7 @@ The manifest file contents include available sections of the manifest and commen
 
 You have a package now but it doesn't do anything. To make your package useful, you must add logic contained in `.move` source files that define _modules_. Use a text editor or the command line to create your first package source file named `my_module.move` in the `sources` directory of the package:
 
-```shell
+```sh
 $ touch my_first_package/sources/my_module.move
 ```
 

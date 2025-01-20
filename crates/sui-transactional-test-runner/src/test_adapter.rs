@@ -7,7 +7,7 @@ use crate::offchain_state::OffchainStateReader;
 use crate::simulator_persisted_store::PersistedStore;
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
 use crate::{TransactionalAdapter, ValidatorWithFullnode};
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
 use criterion::Criterion;
@@ -39,6 +39,8 @@ use move_transactional_test_runner::{
 use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use serde::Deserialize;
+use serde_json::Value;
 use std::fmt::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -66,6 +68,7 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionE
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
+use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ReadStore;
 use sui_types::storage::{ObjectStore, RpcStateReader};
@@ -621,8 +624,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
                     .await;
 
-                // wait_for_objects_snapshot_catchup(graphql_client, Duration::from_secs(180)).await;
-
                 if let Some(checkpoint_to_prune) = wait_for_checkpoint_pruned {
                     offchain_reader
                         .wait_for_pruned_checkpoint(checkpoint_to_prune, Duration::from_secs(60))
@@ -648,6 +649,49 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 output.push(format!("Response: {}", resp.response_body));
 
                 Ok(Some(output.join("\n")))
+            }
+            SuiSubcommand::RunJsonRpc(RunJsonRpcCommand { show_headers }) => {
+                let file = data.ok_or_else(|| anyhow::anyhow!("Missing JSON-RPC query"))?;
+                let contents = std::fs::read_to_string(file.path())?;
+
+                let offchain_reader = self
+                    .offchain_reader
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Offchain reader not set"))?;
+
+                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
+                offchain_reader
+                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
+                    .await;
+
+                let interpolated = self.interpolate_query(&contents, &[], highest_checkpoint)?;
+
+                #[derive(Deserialize)]
+                struct Query {
+                    method: String,
+                    params: Value,
+                }
+
+                let query: Query = serde_json::from_str(&interpolated)
+                    .context("Failed to parse JSON-RPC query")?;
+
+                let resp = offchain_reader
+                    .execute_jsonrpc(query.method, query.params)
+                    .await?;
+
+                let mut output = String::new();
+
+                if show_headers {
+                    write!(
+                        &mut output,
+                        "Headers: {:#?}\n\n",
+                        resp.http_headers.unwrap()
+                    )
+                    .unwrap();
+                }
+
+                write!(&mut output, "Response: {}", resp.response_body).unwrap();
+                Ok(Some(output))
             }
             SuiSubcommand::ViewCheckpoint => {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
@@ -768,7 +812,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     0,
                     timestamp_ms,
                     ConsensusCommitDigest::default(),
-                    Vec::new(),
+                    ConsensusDeterminedVersionAssignments::empty_for_testing(),
                 );
                 let summary = self.execute_txn(transaction.into()).await?;
                 let output = self.object_summary_output(&summary, /* summarize */ false);

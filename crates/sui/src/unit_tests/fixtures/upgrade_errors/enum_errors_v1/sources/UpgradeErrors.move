@@ -85,7 +85,7 @@ module upgrades::upgrades {
         A, // add u8
         B(u8), // to be changed to u16
         C(u8, u8), // remove u8
-        D(u8) // remove last u8
+        D(u8) // remove u8 from last variant
     }
 
     public struct ChangeFieldA {

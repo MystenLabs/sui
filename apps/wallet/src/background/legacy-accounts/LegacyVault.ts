@@ -44,6 +44,7 @@ export class LegacyVault {
 		let mnemonicSeedHex: string | null = null;
 		if (typeof data === 'string') {
 			entropy = mnemonicToEntropy(
+				// eslint-disable-next-line no-restricted-globals
 				Buffer.from(await decrypt<string>(password, data)).toString('utf-8'),
 			);
 		} else if (data.v === 1) {

@@ -706,7 +706,10 @@ mod test {
             let num_objs = thread_rng().gen_range(1..15);
             let mut assigned_object_versions = Vec::new();
             for _ in 0..num_objs {
-                assigned_object_versions.push((ObjectID::random(), SequenceNumber::CONGESTED));
+                assigned_object_versions.push((
+                    (ObjectID::random(), SequenceNumber::UNKNOWN),
+                    SequenceNumber::CONGESTED,
+                ));
             }
             additional_cancelled_txns.push((TransactionDigest::random(), assigned_object_versions));
         }
@@ -930,12 +933,7 @@ mod test {
             .await
             .into();
 
-        tokio::time::timeout(
-            Duration::from_secs(120),
-            test_simulated_load(test_cluster, 60),
-        )
-        .await
-        .expect("test_backpressure timed out");
+        test_simulated_load(test_cluster, 60).await;
     }
 
     fn handle_bool_failpoint(

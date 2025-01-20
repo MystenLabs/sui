@@ -126,7 +126,7 @@ module sui_system::sui_system_state_inner {
         /// Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
         /// This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
         /// It can be reset once we are able to successfully execute advance_epoch.
-        /// The rest of the fields starting with `safe_mode_` are accmulated during safe mode
+        /// The rest of the fields starting with `safe_mode_` are accumulated during safe mode
         /// when advance_epoch_safe_mode is executed. They will eventually be processed once we
         /// are out of safe mode.
         safe_mode: bool,
@@ -174,7 +174,7 @@ module sui_system::sui_system_state_inner {
         /// Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
         /// This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
         /// It can be reset once we are able to successfully execute advance_epoch.
-        /// The rest of the fields starting with `safe_mode_` are accmulated during safe mode
+        /// The rest of the fields starting with `safe_mode_` are accumulated during safe mode
         /// when advance_epoch_safe_mode is executed. They will eventually be processed once we
         /// are out of safe mode.
         safe_mode: bool,
@@ -341,7 +341,7 @@ module sui_system::sui_system_state_inner {
 
     // ==== public(package) functions ====
 
-    /// Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
+    /// Can be called by anyone who wishes to become a validator candidate and starts accruing delegated
     /// stakes in their staking pool. Once they have at least `MIN_VALIDATOR_JOINING_STAKE` amount of stake they
     /// can call `request_add_validator` to officially become an active validator at the next epoch.
     /// Aborts if the caller is already a pending or active validator, or a validator candidate.

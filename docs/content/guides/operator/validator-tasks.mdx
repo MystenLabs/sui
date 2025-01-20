@@ -21,20 +21,24 @@ There are pre-built container images available in [Docker Hub](https://hub.docke
 
 And pre built `linux/amd64` binaries available in S3 that you can fetch using one of the following methods:
 
-```shell
-wget https://releases.sui.io/$SUI_SHA/sui-node
+```sh
+$ wget https://releases.sui.io/$SUI_SHA/sui-node
 ```
 
-```shell
-curl https://releases.sui.io/$SUI_SHA/sui-node -o sui-node
+```sh
+$ curl https://releases.sui.io/$SUI_SHA/sui-node -o sui-node
 ```
 
 To build directly from source:
 
-```shell
-git clone https://github.com/MystenLabs/sui.git && cd sui
-git checkout [SHA|BRANCH|TAG]
-cargo build --release --bin sui-node
+```sh
+$ git clone https://github.com/MystenLabs/sui.git && cd sui
+```
+```sh
+$ git checkout [SHA|BRANCH|TAG]
+```
+```sh
+$ cargo build --release --bin sui-node
 ```
 
 Configuration and guides are available for the following deployment options:
@@ -72,40 +76,53 @@ We recommend increasing them using one of the following two methods:
 ### Option 1: With /etc/sysctl.d/
 These settings can be added to a new sysctl file specifically for the sui-node, or appended to an existing file.
 Modifications made in this way will persist across system restarts.
-```shell
-# Create a new sysctl file for the sui-node
-sudo nano /etc/sysctl.d/100-sui-node.conf
 
-# Add these lines to the file, overwriting existing settings if necessary.
+Create a new sysctl file for the sui-node:
+
+```sh
+$ sudo nano /etc/sysctl.d/100-sui-node.conf
+```
+
+Add these lines to the file, overwriting existing settings if necessary.
+
+```sh 
 net.core.rmem_max = 104857600
 net.core.wmem_max = 104857600
 net.ipv4.tcp_rmem = 8192 262144 104857600
 net.ipv4.tcp_wmem = 8192 262144 104857600
+```
 
-# Apply the settings immediately, before the next restart
-sudo sysctl --system
+Apply the settings immediately, before the next restart
+```sh
+$ sudo sysctl --system
 ```
 
 ### Option 2: With sysctl command
 These modifications do not persist across system restarts. Therefore, the commands should be run each time the host restarts.
-```shell
-sudo sysctl -w net.core.wmem_max=104857600
-sudo sysctl -w net.core.rmem_max=104857600
-sudo sysctl -w net.ipv4.tcp_rmem="8192 262144 104857600"
-sudo sysctl -w net.ipv4.tcp_wmem="8192 262144 104857600"
+```sh
+$ sudo sysctl -w net.core.wmem_max=104857600
+```
+```sh
+$ sudo sysctl -w net.core.rmem_max=104857600
+```
+```sh
+$ sudo sysctl -w net.ipv4.tcp_rmem="8192 262144 104857600"
+```
+```sh
+$ sudo sysctl -w net.ipv4.tcp_wmem="8192 262144 104857600"
 ```
 
 ### Verification
 To verify that the system settings have indeed been updated, check the output of the following command:
-```shell
-sudo sysctl -a | egrep [rw]mem
+```sh
+$ sudo sysctl -a | egrep [rw]mem
 ```
 
 ## Storage
 
 All Sui node related data is stored by default under `/opt/sui/db/`. This is controlled in the Sui node configuration file.
 
-```shell
+```sh
 $ cat /opt/sui/config/validator.yaml | grep db-path
   db-path: /opt/sui/db/authorities_db
   db-path: /opt/sui/db/consensus_db
@@ -115,17 +132,23 @@ Ensure that you have an appropriately sized disk mounted for the database to wri
 
 - To check the size of the local Sui node databases:
 
-```shell
-du -sh /opt/sui/db/
-du -sh /opt/sui/db/authorities_db
-du -sh /opt/sui/db/consensus_db
+```sh
+$ du -sh /opt/sui/db/
+```
+```sh
+$ du -sh /opt/sui/db/authorities_db
+```
+```sh
+$ du -sh /opt/sui/db/consensus_db
 ```
 
 - To delete the local Sui node databases:
 
-```shell
-sudo systemctl stop sui-node
-sudo rm -rf /opt/sui/db/authorities_db /opt/sui/db/consensus_db
+```sh
+$ sudo systemctl stop sui-node
+```
+```sh
+$ sudo rm -rf /opt/sui/db/authorities_db /opt/sui/db/consensus_db
 ```
 
 ## Key management
@@ -149,14 +172,14 @@ Sui node exposes metrics via a local HTTP interface. These can be scraped for us
 
 - View all metrics:
 
-```shell
-curl -s http://localhost:9184/metrics
+```sh
+$ curl -s http://localhost:9184/metrics
 ```
 
 - Search for a particular metric:
 
-```shell
-curl http://localhost:9184/metrics | grep <METRIC>
+```sh
+$ curl http://localhost:9184/metrics | grep <METRIC>
 ```
 
 Sui node also pushes metrics to a central Sui metrics proxy.
@@ -175,14 +198,14 @@ Depending on your deployment method, these are configured in the following place
 
 To view and follow the Sui node logs:
 
-```shell
-journalctl -u sui-node -f
+```sh
+$ journalctl -u sui-node -f
 ```
 
 To search for a particular match
 
-```shell
-journalctl -u sui-node -g <SEARCH_TERM>
+```sh
+$ journalctl -u sui-node -g <SEARCH_TERM>
 ```
 
 - If using Docker Compose, look at the examples in the [README](https://github.com/MystenLabs/sui/blob/main/nre/docker/README.md#logs).
@@ -191,14 +214,14 @@ It is possible to change the logging configuration while a node is running using
 
 To view the currently configured logging values:
 
-```shell
-curl localhost:1337/logging
+```sh
+$ curl localhost:1337/logging
 ```
 
 To change the currently configured logging values:
 
-```shell
-curl localhost:1337/logging -d "info"
+```sh
+$ curl localhost:1337/logging -d "info"
 ```
 
 ### Dashboards
@@ -224,7 +247,7 @@ Inter-validator state sync is always permitted however there are controls availa
 
 The default and recommended `max-concurrent-connections: 0` configuration does not affect inter-validator state sync, but will restrict all fullnodes from syncing. The Sui node [configuration](#configuration) can be modified to allow a known fullnode to sync from a validator:
 
-```shell
+```sh
 p2p-config:
   anemo-config:
     max-concurrent-connections: 0
@@ -239,14 +262,18 @@ p2p-config:
 
 The following chain operations are executed using the `sui` CLI. This binary is built and provided as a release similar to `sui-node`, examples:
 
-```shell
-wget https://releases.sui.io/$SUI_SHA/sui
-chmod +x sui
+```sh
+$ wget https://releases.sui.io/$SUI_SHA/sui
+```
+```sh
+$ chmod +x sui
 ```
 
-```shell
-curl https://releases.sui.io/$SUI_SHA/sui -o sui
-chmod +x sui
+```sh
+$ curl https://releases.sui.io/$SUI_SHA/sui -o sui
+```
+```sh
+$ chmod +x sui
 ```
 
 It is recommended and often required that the `sui` binary release/version matches that of the deployed network.
@@ -270,14 +297,14 @@ To update metadata, a validator makes a MoveCall transaction that interacts with
 
 {@include: ../../snippets/info-gas-budget.mdx}
 
-```bash
-sui client call --package 0x3 --module sui_system --function update_validator_name --args 0x5 \"new_validator_name\" --gas-budget 10000
+```sh
+$ sui client call --package 0x3 --module sui_system --function update_validator_name --args 0x5 \"new_validator_name\" --gas-budget 10000
 ```
 
 2. to update p2p address starting from next epoch to `/ip4/192.168.1.1`, use the Sui Client CLI to call `sui_system::update_validator_next_epoch_p2p_address`:
 
-```bash
-sui client call --package 0x3 --module sui_system --function update_validator_next_epoch_p2p_address --args 0x5 "[4, 192, 168, 1, 1]" --gas-budget 10000
+```sh
+$ sui client call --package 0x3 --module sui_system --function update_validator_next_epoch_p2p_address --args 0x5 "[4, 192, 168, 1, 1]" --gas-budget 10000
 ```
 
 See the [full list of metadata update functions here](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move#L267-L444).
@@ -290,8 +317,8 @@ Upon creating a `Validator`, an `UnverifiedValidatorOperationCap` is created as 
 
 To rotate the delegatee address or revoke the authorization, the current holder of `Cap` transfers it to another address. In the event of compromised or lost keys, the validator could create a new `Cap` object to invalidate the incumbent one. This is done by calling `sui_system::rotate_operation_cap`:
 
-```bash
-sui client call --package 0x3 --module sui_system --function rotate_operation_cap --args 0x5 --gas-budget 10000
+```sh
+$ sui client call --package 0x3 --module sui_system --function rotate_operation_cap --args 0x5 --gas-budget 10000
 ```
 
 By default the new `Cap` object is transferred to the validator address, which then could be transferred to the new delegatee address. At this point, the old `Cap` becomes invalidated and no longer represents eligibility.
@@ -302,16 +329,16 @@ To get the current valid `Cap` object's ID of a validator, use the Sui Client CL
 
 To update the gas price survey quote of a validator, which is used to calculate the reference gas price at the end of the epoch, the sender needs to hold a valid [`UnverifiedValidatorOperationCap`](#operation-cap). The sender could be the validator itself, or a trusted delegatee. To do so, call `sui_system::request_set_gas_price`:
 
-```bash
-sui client call --package 0x3 --module sui_system --function request_set_gas_price --args 0x5 {cap_object_id} {new_gas_price} --gas-budget 10000
+```sh
+$ sui client call --package 0x3 --module sui_system --function request_set_gas_price --args 0x5 {cap_object_id} {new_gas_price} --gas-budget 10000
 ```
 
 ### Reporting/un-reporting validators
 
 To report a validator or undo an existing reporting, the sender needs to hold a valid [`UnverifiedValidatorOperationCap`](#operation-cap). The sender could be the validator itself, or a trusted delegatee. To do so, call `sui_system::report_validator/undo_report_validator`:
 
-```bash
-sui client call --package 0x3 --module sui_system --function report_validator/undo_report_validator --args 0x5 {cap_object_id} {reportee_address} --gas-budget 10000
+```sh
+$ sui client call --package 0x3 --module sui_system --function report_validator/undo_report_validator --args 0x5 {cap_object_id} {reportee_address} --gas-budget 10000
 ```
 
 After a validator is reported by `2f + 1` other validators by voting power, their staking rewards will be slashed.
@@ -320,22 +347,22 @@ After a validator is reported by `2f + 1` other validators by voting power, thei
 
 In order for a Sui address to join the validator set, they need to first sign up as a validator candidate by calling `sui_system::request_add_validator_candidate` with their metadata and initial configs:
 
-```bash
-sui client call --package 0x3 --module sui_system --function request_add_validator_candidate --args 0x5 {protocol_pubkey_bytes} {network_pubkey_bytes} {worker_pubkey_bytes} {proof_of_possession} {name} {description} {image_url} {project_url} {net_address} {p2p_address} {primary_address} {worker_address} {gas_price} {commission_rate} --gas-budget 10000
+```sh
+$ sui client call --package 0x3 --module sui_system --function request_add_validator_candidate --args 0x5 {protocol_pubkey_bytes} {network_pubkey_bytes} {worker_pubkey_bytes} {proof_of_possession} {name} {description} {image_url} {project_url} {net_address} {p2p_address} {primary_address} {worker_address} {gas_price} {commission_rate} --gas-budget 10000
 ```
 
 After an address becomes a validator candidate, any address (including the candidate address itself) can start staking with the candidate's staking pool. Refer to our dedicated staking FAQ on how staking works. Once a candidate's staking pool has accumulated at least `sui_system::MIN_VALIDATOR_JOINING_STAKE` amount of stake, the candidate can call `sui_system::request_add_validator` to officially add themselves to next epoch's active validator set:
 
-```bash
-sui client call --package 0x3 --module sui_system --function request_add_validator --args 0x5 --gas-budget 10000000
+```sh
+$ sui client call --package 0x3 --module sui_system --function request_add_validator --args 0x5 --gas-budget 10000000
 ```
 
 ### Leaving the validator set
 
 To leave the validator set starting next epoch, the sender needs to be an active validator in the current epoch and should call `sui_system::request_remove_validator`:
 
-```bash
-sui client call --package 0x3 --module sui_system --function request_remove_validator --args 0x5 --gas-budget 10000
+```sh
+$ sui client call --package 0x3 --module sui_system --function request_remove_validator --args 0x5 --gas-budget 10000
 ```
 
 After the validator is removed at the next epoch change, the staking pool will become inactive and stakes can only be withdrawn from an inactive pool.

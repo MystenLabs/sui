@@ -15,12 +15,14 @@ anyhow.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
+dashmap.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
 futures.workspace = true
 hex.workspace = true
 itertools.workspace = true
+prometheus.workspace = true
 serde.workspace = true
 telemetry-subscribers.workspace = true
 tokio.workspace = true
@@ -31,6 +33,7 @@ tracing.workspace = true
 sui-default-config.workspace = true
 sui-field-count.workspace = true
 sui-indexer-alt-framework.workspace = true
+sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-schema.workspace = true
 sui-pg-db.workspace = true
 sui-protocol-config.workspace = true

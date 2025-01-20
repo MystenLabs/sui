@@ -44,7 +44,8 @@ impl WriteApiServer for WriteApi {
         let sui_transaction_response = self
             .fullnode
             .execute_transaction_block(tx_bytes, signatures, options.clone(), request_type)
-            .await?;
+            .await
+            .map_err(crate::errors::client_error_to_error_object)?;
         Ok(SuiTransactionBlockResponseWithOptions {
             response: sui_transaction_response,
             options: options.unwrap_or_default(),
@@ -69,13 +70,17 @@ impl WriteApiServer for WriteApi {
                 additional_args,
             )
             .await
+            .map_err(crate::errors::client_error_to_error_object)
     }
 
     async fn dry_run_transaction_block(
         &self,
         tx_bytes: Base64,
     ) -> RpcResult<DryRunTransactionBlockResponse> {
-        self.fullnode.dry_run_transaction_block(tx_bytes).await
+        self.fullnode
+            .dry_run_transaction_block(tx_bytes)
+            .await
+            .map_err(crate::errors::client_error_to_error_object)
     }
 }
 

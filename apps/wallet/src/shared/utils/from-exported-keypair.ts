@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type Keypair, type SignatureScheme } from '@mysten/sui/cryptography';
 import {
 	decodeSuiPrivateKey,
 	LEGACY_PRIVATE_KEY_SIZE,
 	PRIVATE_KEY_SIZE,
-} from '@mysten/sui/cryptography/keypair';
+	type Keypair,
+	type SignatureScheme,
+} from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Secp256k1Keypair } from '@mysten/sui/keypairs/secp256k1';
 import { Secp256r1Keypair } from '@mysten/sui/keypairs/secp256r1';

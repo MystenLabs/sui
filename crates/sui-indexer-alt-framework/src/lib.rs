@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc};
 
 use anyhow::{ensure, Context, Result};
 use diesel::{
@@ -10,31 +10,35 @@ use diesel::{
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
-use metrics::{IndexerMetrics, MetricsService};
+use metrics::IndexerMetrics;
 use pipeline::{
     concurrent::{self, ConcurrentConfig},
     sequential::{self, SequentialConfig},
     Processor,
 };
-use sui_pg_db::{Db, DbArgs};
+use prometheus::Registry;
+use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
+use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use task::graceful_shutdown;
+use tempfile::tempdir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
-use watermarks::CommitterWatermark;
+use watermarks::{CommitterWatermark, PrunerWatermark};
 
 pub mod handlers;
 pub mod ingestion;
 pub(crate) mod metrics;
+pub mod models;
 pub mod pipeline;
-pub(crate) mod schema;
+pub mod schema;
 pub mod task;
 pub(crate) mod watermarks;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 /// Command-line arguments for the indexer
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Default, Debug, Clone)]
 pub struct IndexerArgs {
     /// Override for the checkpoint to start ingestion from -- useful for backfills. By default,
     /// ingestion will start just after the lowest checkpoint watermark across all active
@@ -55,10 +59,6 @@ pub struct IndexerArgs {
     /// Don't write to the watermark tables for concurrent pipelines.
     #[arg(long)]
     pub skip_watermark: bool,
-
-    /// Address to serve Prometheus Metrics from.
-    #[arg(long, default_value_t = Self::default().metrics_address)]
-    pub metrics_address: SocketAddr,
 }
 
 pub struct Indexer {
@@ -67,9 +67,6 @@ pub struct Indexer {
 
     /// Prometheus Metrics.
     metrics: Arc<IndexerMetrics>,
-
-    /// Service for serving Prometheis metrics.
-    metrics_service: MetricsService,
 
     /// Service for downloading and disseminating checkpoint data.
     ingestion_service: IngestionService,
@@ -126,6 +123,7 @@ impl Indexer {
         client_args: ClientArgs,
         ingestion_config: IngestionConfig,
         migrations: &'static EmbeddedMigrations,
+        registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self> {
         let IndexerArgs {
@@ -133,7 +131,6 @@ impl Indexer {
             last_checkpoint,
             pipeline,
             skip_watermark,
-            metrics_address,
         } = indexer_args;
 
         let db = Db::for_write(db_args)
@@ -145,8 +142,11 @@ impl Indexer {
             .await
             .context("Failed to run pending migrations")?;
 
-        let (metrics, metrics_service) =
-            MetricsService::new(metrics_address, db.clone(), cancel.clone())?;
+        let metrics = IndexerMetrics::new(registry);
+        registry.register(Box::new(DbConnectionStatsCollector::new(
+            Some("indexer_db"),
+            db.clone(),
+        )))?;
 
         let ingestion_service = IngestionService::new(
             client_args,
@@ -158,7 +158,6 @@ impl Indexer {
         Ok(Self {
             db,
             metrics,
-            metrics_service,
             ingestion_service,
             first_checkpoint,
             last_checkpoint,
@@ -173,6 +172,26 @@ impl Indexer {
             first_checkpoint_from_watermark: u64::MAX,
             handles: vec![],
         })
+    }
+
+    pub async fn new_for_testing(migrations: &'static EmbeddedMigrations) -> (Self, TempDb) {
+        let temp_db = TempDb::new().unwrap();
+        let db_args = DbArgs::new_for_testing(temp_db.database().url().clone());
+        let indexer = Indexer::new(
+            db_args,
+            IndexerArgs::default(),
+            ClientArgs {
+                remote_store_url: None,
+                local_ingestion_path: Some(tempdir().unwrap().into_path()),
+            },
+            IngestionConfig::default(),
+            migrations,
+            &Registry::new(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        (indexer, temp_db)
     }
 
     /// The database connection pool used by the indexer.
@@ -196,7 +215,8 @@ impl Indexer {
         handler: H,
         config: ConcurrentConfig,
     ) -> Result<()> {
-        let Some(watermark) = self.add_pipeline::<H>().await? else {
+        let start_from_pruner_watermark = H::PRUNING_REQUIRES_PROCESSED_VALUES;
+        let Some(watermark) = self.add_pipeline::<H>(start_from_pruner_watermark).await? else {
             return Ok(());
         };
 
@@ -236,7 +256,7 @@ impl Indexer {
         handler: H,
         config: SequentialConfig,
     ) -> Result<()> {
-        let Some(watermark) = self.add_pipeline::<H>().await? else {
+        let Some(watermark) = self.add_pipeline::<H>(false).await? else {
             return Ok(());
         };
 
@@ -302,12 +322,6 @@ impl Indexer {
             );
         }
 
-        let metrics_handle = self
-            .metrics_service
-            .run()
-            .await
-            .context("Failed to start metrics service")?;
-
         // If an override has been provided, start ingestion from there, otherwise start ingestion
         // from just after the lowest committer watermark across all enabled pipelines.
         let first_checkpoint = self
@@ -327,19 +341,13 @@ impl Indexer {
         self.handles.push(regulator_handle);
         self.handles.push(broadcaster_handle);
 
-        let cancel = self.cancel.clone();
         Ok(tokio::spawn(async move {
             // Wait for the ingestion service and all its related tasks to wind down gracefully:
             // If ingestion has been configured to only handle a specific range of checkpoints, we
             // want to make sure that tasks are allowed to run to completion before shutting them
             // down.
             graceful_shutdown(self.handles, self.cancel).await;
-
             info!("Indexing pipeline gracefully shut down");
-
-            // Pick off any stragglers (in this case, just the metrics service).
-            cancel.cancel();
-            metrics_handle.await.unwrap();
         }))
     }
 
@@ -366,8 +374,13 @@ impl Indexer {
     /// handler `H` (as long as it's enabled). Returns `Ok(None)` if the pipeline is disabled,
     /// `Ok(Some(None))` if the pipeline is enabled but its watermark is not found, and
     /// `Ok(Some(Some(watermark)))` if the pipeline is enabled and the watermark is found.
+    ///
+    /// If `start_from_pruner_watermark` is true, the indexer will start ingestion from just after
+    /// the pruner watermark, so that the pruner have access to the processed values for any
+    /// unpruned checkpoints.
     async fn add_pipeline<P: Processor + 'static>(
         &mut self,
+        start_from_pruner_watermark: bool,
     ) -> Result<Option<Option<CommitterWatermark<'static>>>> {
         ensure!(
             self.added_pipelines.insert(P::NAME),
@@ -388,24 +401,156 @@ impl Indexer {
             .await
             .with_context(|| format!("Failed to get watermark for {}", P::NAME))?;
 
-        // TODO(amnn): Test this (depends on supporting migrations and tempdb).
-        self.first_checkpoint_from_watermark = watermark
-            .as_ref()
-            .map_or(0, |w| w.checkpoint_hi_inclusive as u64 + 1)
-            .min(self.first_checkpoint_from_watermark);
+        let expected_first_checkpoint = if start_from_pruner_watermark {
+            // If the pruner of this pipeline requires processed values in order to prune,
+            // we must start ingestion from just after the pruner watermark,
+            // so that we can process all values needed by the pruner.
+            PrunerWatermark::get(&mut conn, P::NAME, Default::default())
+                .await
+                .with_context(|| format!("Failed to get pruner watermark for {}", P::NAME))?
+                .map(|w| w.pruner_hi as u64)
+                .unwrap_or_default()
+        } else {
+            watermark
+                .as_ref()
+                .map(|w| w.checkpoint_hi_inclusive as u64 + 1)
+                .unwrap_or_default()
+        };
+
+        self.first_checkpoint_from_watermark =
+            expected_first_checkpoint.min(self.first_checkpoint_from_watermark);
 
         Ok(Some(watermark))
     }
 }
 
-impl Default for IndexerArgs {
-    fn default() -> Self {
-        Self {
-            first_checkpoint: None,
-            last_checkpoint: None,
-            pipeline: vec![],
-            skip_watermark: false,
-            metrics_address: "0.0.0.0:9184".parse().unwrap(),
-        }
+#[cfg(test)]
+mod tests {
+    use async_trait::async_trait;
+    use sui_field_count::FieldCount;
+    use sui_pg_db as db;
+    use sui_types::full_checkpoint_content::CheckpointData;
+
+    use super::*;
+
+    #[derive(FieldCount)]
+    struct V {
+        _v: u64,
+    }
+
+    macro_rules! define_test_concurrent_pipeline {
+        ($name:ident) => {
+            define_test_concurrent_pipeline!($name, false);
+        };
+        ($name:ident, $pruning_requires_processed_values:expr) => {
+            struct $name;
+            impl Processor for $name {
+                const NAME: &'static str = stringify!($name);
+                type Value = V;
+                fn process(
+                    &self,
+                    _checkpoint: &Arc<CheckpointData>,
+                ) -> anyhow::Result<Vec<Self::Value>> {
+                    todo!()
+                }
+            }
+
+            #[async_trait]
+            impl concurrent::Handler for $name {
+                const PRUNING_REQUIRES_PROCESSED_VALUES: bool = $pruning_requires_processed_values;
+                async fn commit(
+                    _values: &[Self::Value],
+                    _conn: &mut db::Connection<'_>,
+                ) -> anyhow::Result<usize> {
+                    todo!()
+                }
+            }
+        };
+    }
+
+    define_test_concurrent_pipeline!(ConcurrentPipeline1);
+    define_test_concurrent_pipeline!(ConcurrentPipeline2);
+    define_test_concurrent_pipeline!(ConcurrentPipeline3, true);
+
+    #[tokio::test]
+    async fn test_add_new_pipeline() {
+        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 0);
+    }
+
+    #[tokio::test]
+    async fn test_add_existing_pipeline() {
+        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let watermark = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
+        watermark
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap();
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 11);
+    }
+
+    #[tokio::test]
+    async fn test_add_multiple_pipelines() {
+        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let watermark1 = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
+        watermark1
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap();
+        let watermark2 = CommitterWatermark::new_for_testing(ConcurrentPipeline2::NAME, 20);
+        watermark2
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap();
+
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline2, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 21);
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 11);
+    }
+
+    #[tokio::test]
+    async fn test_add_multiple_pipelines_pruning_requires_processed_values() {
+        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let watermark1 = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
+        watermark1
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap();
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 11);
+
+        let watermark3 = CommitterWatermark::new_for_testing(ConcurrentPipeline3::NAME, 20);
+        watermark3
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap();
+        let pruner_watermark = PrunerWatermark::new_for_testing(ConcurrentPipeline3::NAME, 5);
+        assert!(pruner_watermark
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap());
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline3, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 5);
     }
 }

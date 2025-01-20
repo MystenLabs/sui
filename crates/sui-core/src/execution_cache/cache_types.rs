@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::{cmp::Ordering, hash::DefaultHasher};
 
 use moka::sync::Cache as MokaCache;
+use mysten_common::debug_fatal;
 use parking_lot::Mutex;
 use sui_types::base_types::SequenceNumber;
 
@@ -292,10 +293,12 @@ where
             let mut entry = entry.value().lock();
             check_ticket()?;
 
-            // Ticket expiry makes this assert impossible.
-            // TODO: relax to debug_assert?
-            assert!(!entry.is_newer_than(&value), "entry is newer than value");
-            *entry = value;
+            // Ticket expiry should make this assert impossible.
+            if entry.is_newer_than(&value) {
+                debug_fatal!("entry is newer than value");
+            } else {
+                *entry = value;
+            }
         }
 
         Ok(())

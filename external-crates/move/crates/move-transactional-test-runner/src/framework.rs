@@ -658,7 +658,7 @@ pub fn compile_source_units(
     // purpose and generating warnings for all of them does not make much sense (and there would be
     // a lot of them!) so let's suppress them function warnings, so let's suppress these
     let warning_filter = WarningFiltersBuilder::unused_warnings_filter_for_test();
-    let (mut files, comments_and_compiler_res) = move_compiler::Compiler::from_files(
+    let (mut files, compiler_res) = move_compiler::Compiler::from_files(
         None,
         vec![file_name.as_ref().to_str().unwrap().to_owned()],
         state.source_files().cloned().collect::<Vec<_>>(),
@@ -673,8 +673,7 @@ pub fn compile_source_units(
         ..PackageConfig::default()
     })
     .run::<PASS_COMPILATION>()?;
-    let units_or_diags = comments_and_compiler_res
-        .map(|(_comments, move_compiler)| move_compiler.into_compiled_units());
+    let units_or_diags = compiler_res.map(|move_compiler| move_compiler.into_compiled_units());
 
     match units_or_diags {
         Err((_pass, diags)) => {

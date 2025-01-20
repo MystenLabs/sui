@@ -24,6 +24,3 @@ CHANGELOG.md
 /crates/sui-core/src/consensus_adapter.rs @MystenLabs/consensus
 
 apps/ @MystenLabs/fe-and-apps
-sdk/ @MystenLabs/sdk-reviewers
-sdk/kiosk @MystenLabs/kiosk-sdk-reviewers
-sdk/wallet-standard @MystenLabs/wallet-kit-reviewers

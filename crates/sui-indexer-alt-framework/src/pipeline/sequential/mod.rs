@@ -106,7 +106,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
 
     let processor = processor(
-        handler,
+        Arc::new(handler),
         checkpoint_rx,
         processor_tx,
         metrics.clone(),

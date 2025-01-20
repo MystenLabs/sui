@@ -10,7 +10,7 @@ See [Sui Tokenomics](../concepts/tokenomics.mdx) to learn more about the SUI nat
 
 Although coins on Sui follow the Coin standard, they can offer specialized abilities. For example, you can create a regulated token that allows its creator to add specific addresses to a deny list, so that the identified addresses cannot use the token as inputs to transactions.
 
-See the [coin module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/coin.md) documentation for all available options when creating a coin-type token on Sui.
+See the [coin module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md) documentation for all available options when creating a coin-type token on Sui.
 
 ## Fungible tokens
 
@@ -44,11 +44,11 @@ The list of addresses that aren't able to use a particular regulated coin is hel
 
 ### Global pause switch
 
-Regulated coin objects include an `allow_global_pause` Boolean field. When set to `true`, the bearer of the `DenyCapV2` object for the coin type can use the `coin::deny_list_v2_enable_global_pause` function to pause coin activity indefinitely. Immediately upon the bearer initiating the pause, the network disallows the coin type as input for any transactions. At the start of the next epoch (epochs last ~24 hours), the network additionally disallows all addresses from receiving the coin type. 
+Regulated coin objects include an `allow_global_pause` Boolean field. When set to `true`, the bearer of the `DenyCapV2` object for the coin type can use the `coin::deny_list_v2_enable_global_pause` function to pause coin activity indefinitely. Immediately upon the bearer initiating the pause, the network disallows the coin type as input for any transactions. At the start of the next epoch (epochs last ~24 hours), the network additionally disallows all addresses from receiving the coin type.
 
-When the bearer of the `DenyCapV2` object for the coin type removes the pause using `coin::deny_list_v2_disable_global_pause`, the coins are immediately available to use again as transaction inputs. Addresses cannot receive the coin type, however, until the following epoch.  
+When the bearer of the `DenyCapV2` object for the coin type removes the pause using `coin::deny_list_v2_disable_global_pause`, the coins are immediately available to use again as transaction inputs. Addresses cannot receive the coin type, however, until the following epoch.
 
-The global pause functionality does not affect the deny list for the coin. After clearing the pause for the coin, any addresses included in the deny list are still unable to interact with the coin.  
+The global pause functionality does not affect the deny list for the coin. After clearing the pause for the coin, any addresses included in the deny list are still unable to interact with the coin.
 
 ## Coin metadata
 
@@ -71,10 +71,10 @@ The fields of the metadata objects include the following:
 
 #### RegulatedCoinMetadata
 
-| Name                   | Description                                                                                                                                  |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                   | The ID of the metadata object for the regulated token.                                                                                       |
-| `coin_metadata_object` | The ID of the underlying metadata object (`CoinMetadata`) for the regulated token.                                                           |
+| Name                   | Description                                                                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | The ID of the metadata object for the regulated token.                                                                                         |
+| `coin_metadata_object` | The ID of the underlying metadata object (`CoinMetadata`) for the regulated token.                                                             |
 | `deny_cap_object`      | The ID of the token's `DenyCapV2` object, which is necessary to maintain the deny list entries that controls who can and cannot use the token. |
 
 ## Minting and burning coins
@@ -180,7 +180,6 @@ let builder = ptb.finish();
 
 </Tabs>
 
-
 ## Globally pausing and unpausing regulated coin activity
 
 Globally pausing coin activity is only applicable to regulated coin types.
@@ -250,6 +249,6 @@ Check out the following content for more information about coins and tokens on S
 
 - [Create a Coin](../guides/developer/coin.mdx): Guide for creating coins and regulated coins in your smart contracts.
 - [Closed-Loop Token Standard](./closed-loop-token.mdx): Details the Token standard on Sui.
-- [`coin` module rustdoc documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/coin.md): Automated documentation output for the Sui framework `coin` module.
-- [`token` module rustdoc documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/token.md): Automated documentation output for the Sui framework `token` module.
+- [`coin` module rustdoc documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md): Automated documentation output for the Sui framework `coin` module.
+- [`token` module rustdoc documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/token.md): Automated documentation output for the Sui framework `token` module.
 - [Tokenomics](../concepts/tokenomics.mdx): Discover the Sui ecosystem and where SUI coins fit within it.

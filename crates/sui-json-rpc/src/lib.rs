@@ -3,20 +3,25 @@
 
 use std::env;
 use std::net::SocketAddr;
-use std::str::FromStr;
+use std::sync::Arc;
 
 use axum::body::Body;
+use axum::http;
 use hyper::header::HeaderName;
 use hyper::header::HeaderValue;
 use hyper::Method;
 use hyper::Request;
 use jsonrpsee::RpcModule;
+use metrics::Metrics;
+use metrics::MetricsLayer;
 use prometheus::Registry;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
+use sui_core::traffic_controller::TrafficController;
 use sui_types::traffic_control::PolicyConfig;
 use sui_types::traffic_control::RemoteFirewallConfig;
 use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
+use tower::ServiceBuilder;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::info;
@@ -29,13 +34,11 @@ use sui_json_rpc_api::{
     CLIENT_TARGET_API_VERSION_HEADER,
 };
 use sui_open_rpc::{Module, Project};
+use traffic_control::TrafficControllerService;
 
 use crate::error::Error;
-use crate::metrics::MetricsLogger;
-use crate::routing_layer::RpcRouter;
 
 pub mod authority_state;
-pub mod axum_router;
 mod balance_changes;
 pub mod bridge_api;
 pub mod coin_api;
@@ -48,7 +51,7 @@ pub mod move_utils;
 pub mod name_service;
 mod object_changes;
 pub mod read_api;
-mod routing_layer;
+mod traffic_control;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;
 
@@ -164,98 +167,89 @@ impl JsonRpcServerBuilder {
     }
 
     pub async fn to_router(&self, server_type: ServerType) -> Result<axum::Router, Error> {
-        let routing = self.rpc_doc.method_routing.clone();
-
-        let disable_routing = env::var("DISABLE_BACKWARD_COMPATIBILITY")
-            .ok()
-            .and_then(|v| bool::from_str(&v).ok())
-            .unwrap_or_default();
-        info!(
-            "Compatibility method routing {}.",
-            if disable_routing {
-                "disabled"
-            } else {
-                "enabled"
-            }
-        );
-        let rpc_router = RpcRouter::new(routing, disable_routing);
-
         let rpc_docs = self.rpc_doc.clone();
         let mut module = self.module.clone();
-        module.register_method("rpc.discover", move |_, _| Ok(rpc_docs.clone()))?;
+        module.register_method("rpc.discover", move |_, _, _| {
+            Ok::<_, jsonrpsee::types::ErrorObjectOwned>(rpc_docs.clone())
+        })?;
         let methods_names = module.method_names().collect::<Vec<_>>();
 
-        let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
+        let metrics = Arc::new(Metrics::new(&self.registry, &methods_names));
         let traffic_controller_metrics = TrafficControllerMetrics::new(&self.registry);
+        let traffic_controller = self.policy_config.clone().map(|policy| {
+            Arc::new(TrafficController::init(
+                policy,
+                traffic_controller_metrics,
+                self.firewall_config.clone(),
+            ))
+        });
+        let client_id_source = self
+            .policy_config
+            .clone()
+            .map(|policy| policy.client_id_source);
 
-        let middleware = tower::ServiceBuilder::new()
+        let metrics_clone = metrics.clone();
+        let middleware = ServiceBuilder::new()
             .layer(Self::trace_layer())
-            .layer(Self::cors()?);
+            .layer(Self::cors()?)
+            .map_request(move |mut request: http::Request<_>| {
+                metrics_clone.on_http_request(request.headers());
+                if let Some(client_id_source) = client_id_source.clone() {
+                    traffic_control::determine_client_ip(client_id_source, &mut request);
+                }
+                request
+            });
 
-        let service = crate::axum_router::JsonRpcService::new(
-            module.into(),
-            rpc_router,
-            metrics_logger,
-            self.firewall_config.clone(),
-            self.policy_config.clone(),
-            traffic_controller_metrics,
-        );
+        let (stop_handle, server_handle) = jsonrpsee::server::stop_channel();
+        std::mem::forget(server_handle);
+
+        let rpc_middleware = jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new()
+            .layer_fn(move |s| MetricsLayer::new(s, metrics.clone()))
+            .layer_fn(move |s| TrafficControllerService::new(s, traffic_controller.clone()));
+        let service_builder =
+            jsonrpsee::server::ServerBuilder::new().set_rpc_middleware(rpc_middleware);
 
         let mut router = axum::Router::new();
-
         match server_type {
             ServerType::WebSocket => {
+                let service = JsonRpcService(
+                    service_builder
+                        .ws_only()
+                        .to_service_builder()
+                        .build(module, stop_handle),
+                );
                 router = router
-                    .route(
-                        "/",
-                        axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
-                    )
-                    .route(
-                        "/subscribe",
-                        axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
-                    );
+                    .route("/", axum::routing::get_service(service.clone()))
+                    .route("/subscribe", axum::routing::get_service(service));
             }
             ServerType::Http => {
+                let service = JsonRpcService(
+                    service_builder
+                        .http_only()
+                        .to_service_builder()
+                        .build(module, stop_handle),
+                );
                 router = router
-                    .route(
-                        "/",
-                        axum::routing::post(crate::axum_router::json_rpc_handler),
-                    )
-                    .route(
-                        "/json-rpc",
-                        axum::routing::post(crate::axum_router::json_rpc_handler),
-                    )
-                    .route(
-                        "/public",
-                        axum::routing::post(crate::axum_router::json_rpc_handler),
-                    );
+                    .route("/", axum::routing::post_service(service.clone()))
+                    .route("/json-rpc", axum::routing::post_service(service.clone()))
+                    .route("/public", axum::routing::post_service(service));
             }
             ServerType::Both => {
+                let service = JsonRpcService(
+                    service_builder
+                        .to_service_builder()
+                        .build(module, stop_handle),
+                );
                 router = router
-                    .route(
-                        "/",
-                        axum::routing::post(crate::axum_router::json_rpc_handler),
-                    )
-                    .route(
-                        "/",
-                        axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
-                    )
-                    .route(
-                        "/subscribe",
-                        axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
-                    )
-                    .route(
-                        "/json-rpc",
-                        axum::routing::post(crate::axum_router::json_rpc_handler),
-                    )
-                    .route(
-                        "/public",
-                        axum::routing::post(crate::axum_router::json_rpc_handler),
-                    );
+                    .route("/", axum::routing::post_service(service.clone()))
+                    .route("/", axum::routing::get_service(service.clone()))
+                    .route("/subscribe", axum::routing::get_service(service.clone()))
+                    .route("/json-rpc", axum::routing::post_service(service.clone()))
+                    .route("/public", axum::routing::post_service(service));
             }
         }
 
-        let app = router.with_state(service).layer(middleware);
+        let app = router.layer(middleware);
 
         info!("Available JSON-RPC methods : {:?}", methods_names);
 
@@ -319,4 +313,45 @@ where
 {
     fn rpc(self) -> RpcModule<Self>;
     fn rpc_doc_module() -> Module;
+}
+
+use jsonrpsee::core::BoxError;
+
+#[derive(Clone)]
+struct JsonRpcService<S>(S);
+
+impl<S, RequestBody> tower::Service<http::Request<RequestBody>> for JsonRpcService<S>
+where
+    S: tower::Service<
+        http::Request<RequestBody>,
+        Error = BoxError,
+        Response = http::Response<jsonrpsee::server::HttpBody>,
+        Future: Send + 'static,
+    >,
+{
+    type Response = http::Response<jsonrpsee::server::HttpBody>;
+    type Error = std::convert::Infallible;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, request: http::Request<RequestBody>) -> Self::Future {
+        let fut = self.0.call(request);
+        Box::pin(async move {
+            match fut.await {
+                Ok(response) => Ok(response),
+                Err(e) => Ok(http::Response::builder()
+                    .status(http::status::StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(jsonrpsee::server::HttpBody::from(e.to_string()))
+                    .unwrap()),
+            }
+        })
+    }
 }

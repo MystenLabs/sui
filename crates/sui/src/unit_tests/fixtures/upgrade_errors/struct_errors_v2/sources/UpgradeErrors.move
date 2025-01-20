@@ -90,4 +90,17 @@ module upgrades::upgrades {
     public struct ChangeNameNestedStruct {
         a: ChangeFieldB, // changed to ChangeFieldB
     }
+
+
+    public struct NamedBox<A> { x: u32 }
+    public struct NamedTwoBox<B, C> { x: u32, y: u32 }
+
+    public struct NamedBoxInBox<D> { x: u32 }
+    public struct NamedBoxInTwoBox<E, F> { x: u32 }
+
+    public struct PositionalBox<G>(u32)
+    public struct PositionalTwoBox<H, I>(u32, u32)
+
+    public struct PositionalBoxInBox<J>(u32)
+    public struct PositionalBoxInTwoBox<K, L>(u32)
 }
