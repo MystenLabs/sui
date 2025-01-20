@@ -10,7 +10,6 @@ use diesel::query_dsl::methods::LimitDsl;
 use diesel::result::Error as DieselError;
 use diesel_async::methods::LoadQuery;
 use diesel_async::RunQueryDsl;
-use jsonrpsee::types::{error::INTERNAL_ERROR_CODE, ErrorObject};
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db as db;
@@ -90,23 +89,5 @@ impl<'p> Connection<'p> {
         }
 
         Ok(res?)
-    }
-}
-
-impl From<ReadError> for ErrorObject<'static> {
-    fn from(err: ReadError) -> Self {
-        match err {
-            ReadError::Create(err) => {
-                ErrorObject::owned(INTERNAL_ERROR_CODE, err.to_string(), None::<()>)
-            }
-
-            ReadError::Connect(err) => {
-                ErrorObject::owned(INTERNAL_ERROR_CODE, err.to_string(), None::<()>)
-            }
-
-            ReadError::RunQuery(err) => {
-                ErrorObject::owned(INTERNAL_ERROR_CODE, err.to_string(), None::<()>)
-            }
-        }
     }
 }

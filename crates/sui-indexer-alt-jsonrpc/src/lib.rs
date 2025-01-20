@@ -24,6 +24,7 @@ use crate::data::reader::Reader;
 mod api;
 pub mod args;
 mod data;
+mod error;
 mod metrics;
 
 #[derive(clap::Args, Debug, Clone)]
