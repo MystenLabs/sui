@@ -20,7 +20,9 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use sui_indexer_alt::{config::IndexerConfig, start_indexer};
 use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, IndexerArgs};
-use sui_indexer_alt_jsonrpc::{start_rpc, RpcArgs};
+use sui_indexer_alt_jsonrpc::{
+    data::system_package_task::SystemPackageTaskArgs, start_rpc, RpcArgs,
+};
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
     Db, DbArgs,
@@ -94,6 +96,12 @@ impl OffchainCluster {
             ..Default::default()
         };
 
+        // This configuration controls how often the RPC service checks for changes to system
+        // packages. The default polling interval is probably too slow for changes to get picked
+        // up, so tests that rely on this behaviour will always fail, but this is better than flaky
+        // behavior.
+        let system_package_task_args = SystemPackageTaskArgs::default();
+
         let with_genesis = true;
         let indexer = start_indexer(
             db_args.clone(),
@@ -107,9 +115,15 @@ impl OffchainCluster {
         .await
         .expect("Failed to start indexer");
 
-        let jsonrpc = start_rpc(db_args, rpc_args, &registry, cancel.child_token())
-            .await
-            .expect("Failed to start JSON-RPC server");
+        let jsonrpc = start_rpc(
+            db_args,
+            rpc_args,
+            system_package_task_args,
+            &registry,
+            cancel.child_token(),
+        )
+        .await
+        .expect("Failed to start JSON-RPC server");
 
         Self {
             rpc_listen_address,

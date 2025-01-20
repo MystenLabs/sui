@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use async_graphql::dataloader::DataLoader;
 use diesel::dsl::Limit;
 use diesel::pg::Pg;
 use diesel::query_builder::QueryFragment;
@@ -60,6 +61,11 @@ impl Reader {
         Ok(Self { db, metrics })
     }
 
+    /// Create a data loader backed by this reader.
+    pub(crate) fn as_data_loader(&self) -> DataLoader<Self> {
+        DataLoader::new(self.clone(), tokio::spawn)
+    }
+
     pub(crate) async fn connect(&self) -> Result<Connection<'_>, ReadError> {
         Ok(Connection {
             conn: self.db.connect().await.map_err(ReadError::Connect)?,
@@ -81,6 +87,26 @@ impl<'p> Connection<'p> {
 
         let _guard = self.metrics.db_latency.start_timer();
         let res = query.get_result(&mut self.conn).await;
+
+        if res.is_ok() {
+            self.metrics.db_requests_succeeded.inc();
+        } else {
+            self.metrics.db_requests_failed.inc();
+        }
+
+        Ok(res?)
+    }
+
+    pub(crate) async fn results<Q, U>(&mut self, query: Q) -> Result<Vec<U>, ReadError>
+    where
+        U: Send,
+        Q: RunQueryDsl<db::ManagedConnection> + 'static,
+        Q: LoadQuery<'static, db::ManagedConnection, U> + QueryFragment<Pg> + Send,
+    {
+        debug!("{}", diesel::debug_query(&query));
+
+        let _guard = self.metrics.db_latency.start_timer();
+        let res = query.get_results(&mut self.conn).await;
 
         if res.is_ok() {
             self.metrics.db_requests_succeeded.inc();
