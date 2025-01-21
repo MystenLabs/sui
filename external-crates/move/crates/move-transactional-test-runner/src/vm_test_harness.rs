@@ -98,14 +98,13 @@ impl PublishLinkageArgs {
         linkage: &LinkageContext,
     ) -> AccountAddress {
         // 1. Use location if specified; otherwise
-        // 2. Use the sender address (remapped if it exists in the linkage table); otherwise
-        // 3. Use the sender address
+        // 2. Use the sender address (remapped if it exists in the linkage table).
         self.location.unwrap_or(
             linkage
                 .linkage_table
                 .get(&sender)
                 .copied()
-                .unwrap_or(sender),
+                .expect("Sender address not found in linkage table"),
         )
     }
 }
