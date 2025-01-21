@@ -134,11 +134,7 @@ services:
       - ./dbs/fullnode1:/opt/sui/db:rw
       - ./logs/fullnode1:/opt/sui/logs
     command:
-      [
-        "/usr/local/bin/sui-node-inst",
-        "--config-path",
-        "/opt/sui/config/fullnode.yaml",
-      ]
+        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/fullnode.yaml >> /opt/sui/logs/full_logs.log 2>&1'"
     restart: on-failure
     logging:
       driver: "json-file"
