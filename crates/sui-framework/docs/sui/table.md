@@ -237,7 +237,7 @@ that key <code>k: K</code>.
 
 ## Function `contains`
 
-Returns true iff there is a value associated with the key <code>k: K</code> in table <code><a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/table.md#sui_table_Table">Table</a>&lt;K, V&gt;</code>
+Returns true if there is a value associated with the key <code>k: K</code> in table <code><a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/table.md#sui_table_Table">Table</a>&lt;K, V&gt;</code>
 
 
 <pre><code><b>public</b> <b>fun</b> containsK, V(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/table.md#sui_table_Table">sui::table::Table</a>&lt;K, V&gt;, k: K): bool
@@ -287,7 +287,7 @@ Returns the size of the table, the number of key-value pairs
 
 ## Function `is_empty`
 
-Returns true iff the table is empty (if <code><a href="../sui/table.md#sui_table_length">length</a></code> returns <code>0</code>)
+Returns true if the table is empty (if <code><a href="../sui/table.md#sui_table_length">length</a></code> returns <code>0</code>)
 
 
 <pre><code><b>public</b> <b>fun</b> is_emptyK, V(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/table.md#sui_table_Table">sui::table::Table</a>&lt;K, V&gt;): bool
