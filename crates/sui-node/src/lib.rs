@@ -142,6 +142,7 @@ use typed_store::DBMetrics;
 
 pub mod admin;
 pub mod extensions;
+pub mod builder;
 mod handle;
 pub mod metrics;
 
