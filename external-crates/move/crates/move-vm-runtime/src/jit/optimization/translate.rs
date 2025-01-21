@@ -3,12 +3,10 @@
 
 use crate::{jit::optimization::ast, validation::verification::ast as Input};
 
-use move_abstract_interpreter::control_flow_graph::{
-    BlockId, ControlFlowGraph, VMControlFlowGraph,
-};
+use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::file_format::{self as FF, FunctionDefinition, FunctionDefinitionIndex};
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 pub(crate) fn package(pkg: Input::Package) -> ast::Package {
     let Input::Package {
@@ -41,7 +39,7 @@ fn module(m: Input::Module) -> ast::Module {
         .enumerate()
         .map(|(ndx, fun)| {
             let index = FF::FunctionDefinitionIndex::new(ndx as u16);
-            (index.clone(), function(index, fun))
+            (index, function(index, fun))
         })
         .collect();
     ast::Module {
@@ -51,7 +49,9 @@ fn module(m: Input::Module) -> ast::Module {
 }
 
 fn function(ndx: FunctionDefinitionIndex, fun: &FunctionDefinition) -> ast::Function {
-    let Some(code) = &fun.code else { return ast::Function { ndx, code: None }};
+    let Some(code) = &fun.code else {
+        return ast::Function { ndx, code: None };
+    };
     let FF::CodeUnit {
         locals: _,
         code,
@@ -71,16 +71,17 @@ fn generate_basic_blocks(
     input: &[FF::Bytecode],
     jump_tables: &[FF::VariantJumpTable],
 ) -> BTreeMap<ast::Label, Vec<ast::Bytecode>> {
-
     let cfg = VMControlFlowGraph::new(input, jump_tables);
-    cfg.blocks().iter().map(|label| {
-        let start = cfg.block_start(*label) as usize;
-        let end = cfg.block_end(*label) as usize;
-        let label = *label as ast::Label;
-        let code = input[start..(end+1)].iter().map(|instr| bytecode(instr)).collect();
-        (label, code)
-    })
-    .collect::<BTreeMap<ast::Label, Vec<ast::Bytecode>>>()
+    cfg.blocks()
+        .iter()
+        .map(|label| {
+            let start = cfg.block_start(*label) as usize;
+            let end = cfg.block_end(*label) as usize;
+            let label = *label as ast::Label;
+            let code = input[start..(end + 1)].iter().map(bytecode).collect();
+            (label, code)
+        })
+        .collect::<BTreeMap<ast::Label, Vec<ast::Bytecode>>>()
 }
 
 fn bytecode(code: &FF::Bytecode) -> ast::Bytecode {

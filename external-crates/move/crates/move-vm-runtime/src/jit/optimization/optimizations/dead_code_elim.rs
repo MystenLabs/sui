@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::file_format::{VariantJumpTable, FunctionDefinitionIndex};
+use move_binary_format::file_format::{FunctionDefinitionIndex, VariantJumpTable};
 
 use crate::jit::optimization::ast;
 
@@ -16,8 +16,13 @@ pub(crate) fn package(pkg: &mut ast::Package) -> bool {
 }
 
 fn module(changed: &mut bool, m: &mut ast::Module) {
-    let ast::Module { functions , compiled_module: _ } = m;
-    functions.iter_mut().for_each(|(ndx, code)| function(changed, *ndx, code));
+    let ast::Module {
+        functions,
+        compiled_module: _,
+    } = m;
+    functions
+        .iter_mut()
+        .for_each(|(ndx, code)| function(changed, *ndx, code));
 }
 
 struct BlockContext<'changed, 'labels, 'tables> {
@@ -29,13 +34,20 @@ struct BlockContext<'changed, 'labels, 'tables> {
 fn function(changed: &mut bool, _ndx: FunctionDefinitionIndex, fun: &mut ast::Function) {
     let Some(code) = &mut fun.code else { return };
 
-    let ast::Code { jump_tables, code  } = code;
+    let ast::Code { jump_tables, code } = code;
     let mut live_labels = BTreeSet::new();
-    let mut context = BlockContext { changed, live_labels: &mut live_labels, jump_tables: &jump_tables  };
+    let mut context = BlockContext {
+        changed,
+        live_labels: &mut live_labels,
+        jump_tables,
+    };
     blocks(&mut context, code);
 }
 
-fn blocks(context: &mut BlockContext<'_, '_, '_>, blocks: &mut BTreeMap<ast::Label, Vec<ast::Bytecode>>) {
+fn blocks(
+    context: &mut BlockContext<'_, '_, '_>,
+    blocks: &mut BTreeMap<ast::Label, Vec<ast::Bytecode>>,
+) {
     // First, eliminate all of the intra-block dead code
     for (_, block_code) in blocks.iter_mut() {
         eliminate_unreachable(context, block_code);

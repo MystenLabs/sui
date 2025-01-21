@@ -6,9 +6,9 @@ use crate::shared::types::{PackageStorageId, RuntimePackageId};
 use move_binary_format::{
     file_format::{
         ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
-        FunctionHandleIndex, FunctionInstantiationIndex, LocalIndex, SignatureIndex,
-        StructDefInstantiationIndex, StructDefinitionIndex, VariantHandleIndex,
-        VariantInstantiationHandleIndex, VariantJumpTableIndex, VariantJumpTable, JumpTableInner,
+        FunctionHandleIndex, FunctionInstantiationIndex, JumpTableInner, LocalIndex,
+        SignatureIndex, StructDefInstantiationIndex, StructDefinitionIndex, VariantHandleIndex,
+        VariantInstantiationHandleIndex, VariantJumpTable, VariantJumpTableIndex,
     },
     CompiledModule,
 };
@@ -42,6 +42,7 @@ pub struct Module {
 #[derive(Debug, Clone)]
 pub struct Function {
     /// Original index in the compiled module
+    #[allow(unused)]
     pub(crate) ndx: FunctionDefinitionIndex,
     /// Optimized code
     pub(crate) code: Option<Code>,
@@ -239,89 +240,89 @@ impl ::std::fmt::Debug for Bytecode {
 impl Bytecode {
     pub fn branch_target(&self, tables: &[VariantJumpTable]) -> Option<Vec<Label>> {
         match self {
-            Bytecode::BrTrue(target) |
-            Bytecode::BrFalse(target) |
-            Bytecode::Branch(target) => Some(vec![*target as Label]),
+            Bytecode::BrTrue(target) | Bytecode::BrFalse(target) | Bytecode::Branch(target) => {
+                Some(vec![*target as Label])
+            }
             Bytecode::VariantSwitch(table) => {
                 let jump_table: &JumpTableInner = &tables.get(table.0 as usize)?.jump_table;
                 match jump_table {
                     JumpTableInner::Full(vec) => {
                         Some(vec.iter().map(|ndx| *ndx as Label).collect())
-                    },
+                    }
                 }
-            },
-            Bytecode::Pop |
-            Bytecode::Ret |
-            Bytecode::LdU8(_) |
-            Bytecode::LdU64(_) |
-            Bytecode::LdU128(_) |
-            Bytecode::CastU8 |
-            Bytecode::CastU64 |
-            Bytecode::CastU128 |
-            Bytecode::LdConst(_) |
-            Bytecode::LdTrue |
-            Bytecode::LdFalse |
-            Bytecode::CopyLoc(_) |
-            Bytecode::MoveLoc(_) |
-            Bytecode::StLoc(_) |
-            Bytecode::Call(_) |
-            Bytecode::CallGeneric(_) |
-            Bytecode::Pack(_) |
-            Bytecode::PackGeneric(_) |
-            Bytecode::Unpack(_) |
-            Bytecode::UnpackGeneric(_) |
-            Bytecode::ReadRef |
-            Bytecode::WriteRef |
-            Bytecode::FreezeRef |
-            Bytecode::MutBorrowLoc(_) |
-            Bytecode::ImmBorrowLoc(_) |
-            Bytecode::MutBorrowField(_) |
-            Bytecode::MutBorrowFieldGeneric(_) |
-            Bytecode::ImmBorrowField(_) |
-            Bytecode::ImmBorrowFieldGeneric(_) |
-            Bytecode::Add |
-            Bytecode::Sub |
-            Bytecode::Mul |
-            Bytecode::Mod |
-            Bytecode::Div |
-            Bytecode::BitOr |
-            Bytecode::BitAnd |
-            Bytecode::Xor |
-            Bytecode::Or |
-            Bytecode::And |
-            Bytecode::Not |
-            Bytecode::Eq |
-            Bytecode::Neq |
-            Bytecode::Lt |
-            Bytecode::Gt |
-            Bytecode::Le |
-            Bytecode::Ge |
-            Bytecode::Abort |
-            Bytecode::Nop |
-            Bytecode::Shl |
-            Bytecode::Shr |
-            Bytecode::VecPack(_, _) |
-            Bytecode::VecLen(_) |
-            Bytecode::VecImmBorrow(_) |
-            Bytecode::VecMutBorrow(_) |
-            Bytecode::VecPushBack(_) |
-            Bytecode::VecPopBack(_) |
-            Bytecode::VecUnpack(_, _) |
-            Bytecode::VecSwap(_) |
-            Bytecode::LdU16(_) |
-            Bytecode::LdU32(_) |
-            Bytecode::LdU256(_) |
-            Bytecode::CastU16 |
-            Bytecode::CastU32 |
-            Bytecode::CastU256 |
-            Bytecode::PackVariant(_) |
-            Bytecode::PackVariantGeneric(_) |
-            Bytecode::UnpackVariant(_) |
-            Bytecode::UnpackVariantImmRef(_) |
-            Bytecode::UnpackVariantMutRef(_) |
-            Bytecode::UnpackVariantGeneric(_) |
-            Bytecode::UnpackVariantGenericImmRef(_) |
-            Bytecode::UnpackVariantGenericMutRef(_) => None,
+            }
+            Bytecode::Pop
+            | Bytecode::Ret
+            | Bytecode::LdU8(_)
+            | Bytecode::LdU64(_)
+            | Bytecode::LdU128(_)
+            | Bytecode::CastU8
+            | Bytecode::CastU64
+            | Bytecode::CastU128
+            | Bytecode::LdConst(_)
+            | Bytecode::LdTrue
+            | Bytecode::LdFalse
+            | Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::Call(_)
+            | Bytecode::CallGeneric(_)
+            | Bytecode::Pack(_)
+            | Bytecode::PackGeneric(_)
+            | Bytecode::Unpack(_)
+            | Bytecode::UnpackGeneric(_)
+            | Bytecode::ReadRef
+            | Bytecode::WriteRef
+            | Bytecode::FreezeRef
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_)
+            | Bytecode::MutBorrowField(_)
+            | Bytecode::MutBorrowFieldGeneric(_)
+            | Bytecode::ImmBorrowField(_)
+            | Bytecode::ImmBorrowFieldGeneric(_)
+            | Bytecode::Add
+            | Bytecode::Sub
+            | Bytecode::Mul
+            | Bytecode::Mod
+            | Bytecode::Div
+            | Bytecode::BitOr
+            | Bytecode::BitAnd
+            | Bytecode::Xor
+            | Bytecode::Or
+            | Bytecode::And
+            | Bytecode::Not
+            | Bytecode::Eq
+            | Bytecode::Neq
+            | Bytecode::Lt
+            | Bytecode::Gt
+            | Bytecode::Le
+            | Bytecode::Ge
+            | Bytecode::Abort
+            | Bytecode::Nop
+            | Bytecode::Shl
+            | Bytecode::Shr
+            | Bytecode::VecPack(_, _)
+            | Bytecode::VecLen(_)
+            | Bytecode::VecImmBorrow(_)
+            | Bytecode::VecMutBorrow(_)
+            | Bytecode::VecPushBack(_)
+            | Bytecode::VecPopBack(_)
+            | Bytecode::VecUnpack(_, _)
+            | Bytecode::VecSwap(_)
+            | Bytecode::LdU16(_)
+            | Bytecode::LdU32(_)
+            | Bytecode::LdU256(_)
+            | Bytecode::CastU16
+            | Bytecode::CastU32
+            | Bytecode::CastU256
+            | Bytecode::PackVariant(_)
+            | Bytecode::PackVariantGeneric(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::UnpackVariantGeneric(_)
+            | Bytecode::UnpackVariantGenericImmRef(_)
+            | Bytecode::UnpackVariantGenericMutRef(_) => None,
         }
     }
 
@@ -330,79 +331,78 @@ impl Bytecode {
             Bytecode::Branch(_) | Bytecode::Abort | Bytecode::Ret => true,
             // True because verifier insists these are exhaustive
             Bytecode::VariantSwitch(_) => true,
-            Bytecode::Pop |
-            Bytecode::BrTrue(_) |
-            Bytecode::BrFalse(_) |
-            Bytecode::LdU8(_) |
-            Bytecode::LdU64(_) |
-            Bytecode::LdU128(_) |
-            Bytecode::CastU8 |
-            Bytecode::CastU64 |
-            Bytecode::CastU128 |
-            Bytecode::LdConst(_) |
-            Bytecode::LdTrue |
-            Bytecode::LdFalse |
-            Bytecode::CopyLoc(_) |
-            Bytecode::MoveLoc(_) |
-            Bytecode::StLoc(_) |
-            Bytecode::Call(_) |
-            Bytecode::CallGeneric(_) |
-            Bytecode::Pack(_) |
-            Bytecode::PackGeneric(_) |
-            Bytecode::Unpack(_) |
-            Bytecode::UnpackGeneric(_) |
-            Bytecode::ReadRef |
-            Bytecode::WriteRef |
-            Bytecode::FreezeRef |
-            Bytecode::MutBorrowLoc(_) |
-            Bytecode::ImmBorrowLoc(_) |
-            Bytecode::MutBorrowField(_) |
-            Bytecode::MutBorrowFieldGeneric(_) |
-            Bytecode::ImmBorrowField(_) |
-            Bytecode::ImmBorrowFieldGeneric(_) |
-            Bytecode::Add |
-            Bytecode::Sub |
-            Bytecode::Mul |
-            Bytecode::Mod |
-            Bytecode::Div |
-            Bytecode::BitOr |
-            Bytecode::BitAnd |
-            Bytecode::Xor |
-            Bytecode::Or |
-            Bytecode::And |
-            Bytecode::Not |
-            Bytecode::Eq |
-            Bytecode::Neq |
-            Bytecode::Lt |
-            Bytecode::Gt |
-            Bytecode::Le |
-            Bytecode::Ge |
-            Bytecode::Nop |
-            Bytecode::Shl |
-            Bytecode::Shr |
-            Bytecode::VecPack(_, _) |
-            Bytecode::VecLen(_) |
-            Bytecode::VecImmBorrow(_) |
-            Bytecode::VecMutBorrow(_) |
-            Bytecode::VecPushBack(_) |
-            Bytecode::VecPopBack(_) |
-            Bytecode::VecUnpack(_, _) |
-            Bytecode::VecSwap(_) |
-            Bytecode::LdU16(_) |
-            Bytecode::LdU32(_) |
-            Bytecode::LdU256(_) |
-            Bytecode::CastU16 |
-            Bytecode::CastU32 |
-            Bytecode::CastU256 |
-            Bytecode::PackVariant(_) |
-            Bytecode::PackVariantGeneric(_) |
-            Bytecode::UnpackVariant(_) |
-            Bytecode::UnpackVariantImmRef(_) |
-            Bytecode::UnpackVariantMutRef(_) |
-            Bytecode::UnpackVariantGeneric(_) |
-            Bytecode::UnpackVariantGenericImmRef(_) |
-            Bytecode::UnpackVariantGenericMutRef(_) => false,
+            Bytecode::Pop
+            | Bytecode::BrTrue(_)
+            | Bytecode::BrFalse(_)
+            | Bytecode::LdU8(_)
+            | Bytecode::LdU64(_)
+            | Bytecode::LdU128(_)
+            | Bytecode::CastU8
+            | Bytecode::CastU64
+            | Bytecode::CastU128
+            | Bytecode::LdConst(_)
+            | Bytecode::LdTrue
+            | Bytecode::LdFalse
+            | Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::Call(_)
+            | Bytecode::CallGeneric(_)
+            | Bytecode::Pack(_)
+            | Bytecode::PackGeneric(_)
+            | Bytecode::Unpack(_)
+            | Bytecode::UnpackGeneric(_)
+            | Bytecode::ReadRef
+            | Bytecode::WriteRef
+            | Bytecode::FreezeRef
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_)
+            | Bytecode::MutBorrowField(_)
+            | Bytecode::MutBorrowFieldGeneric(_)
+            | Bytecode::ImmBorrowField(_)
+            | Bytecode::ImmBorrowFieldGeneric(_)
+            | Bytecode::Add
+            | Bytecode::Sub
+            | Bytecode::Mul
+            | Bytecode::Mod
+            | Bytecode::Div
+            | Bytecode::BitOr
+            | Bytecode::BitAnd
+            | Bytecode::Xor
+            | Bytecode::Or
+            | Bytecode::And
+            | Bytecode::Not
+            | Bytecode::Eq
+            | Bytecode::Neq
+            | Bytecode::Lt
+            | Bytecode::Gt
+            | Bytecode::Le
+            | Bytecode::Ge
+            | Bytecode::Nop
+            | Bytecode::Shl
+            | Bytecode::Shr
+            | Bytecode::VecPack(_, _)
+            | Bytecode::VecLen(_)
+            | Bytecode::VecImmBorrow(_)
+            | Bytecode::VecMutBorrow(_)
+            | Bytecode::VecPushBack(_)
+            | Bytecode::VecPopBack(_)
+            | Bytecode::VecUnpack(_, _)
+            | Bytecode::VecSwap(_)
+            | Bytecode::LdU16(_)
+            | Bytecode::LdU32(_)
+            | Bytecode::LdU256(_)
+            | Bytecode::CastU16
+            | Bytecode::CastU32
+            | Bytecode::CastU256
+            | Bytecode::PackVariant(_)
+            | Bytecode::PackVariantGeneric(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::UnpackVariantGeneric(_)
+            | Bytecode::UnpackVariantGenericImmRef(_)
+            | Bytecode::UnpackVariantGenericMutRef(_) => false,
         }
     }
-
 }

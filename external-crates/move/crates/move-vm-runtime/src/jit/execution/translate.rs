@@ -23,9 +23,9 @@ use crate::{
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        self as FF, CompiledModule, EnumDefinitionIndex, FunctionDefinition,
-        FunctionDefinitionIndex, FunctionHandleIndex, SignatureIndex, SignatureToken,
-        StructDefinitionIndex, StructFieldInformation, TableIndex,
+        CompiledModule, EnumDefinitionIndex, FunctionDefinition, FunctionDefinitionIndex,
+        FunctionHandleIndex, SignatureIndex, SignatureToken, StructDefinitionIndex,
+        StructFieldInformation, TableIndex,
     },
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
@@ -521,7 +521,10 @@ fn functions(
                 ),
             );
         };
-        let input::Function { ndx: _, code: opt_code } = opt_fun;
+        let input::Function {
+            ndx: _,
+            code: opt_code,
+        } = opt_fun;
         if let Some(opt_code) = opt_code {
             alloc.code = code(&mut module_context, opt_code.code)?;
         }

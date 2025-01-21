@@ -2,22 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::move_cache::{MoveCache, Package},
     dev_utils::{
-        compilation_utils::{compile_packages, compile_packages_in_file},
-        in_memory_test_adapter::InMemoryTestAdapter,
+        compilation_utils::compile_packages_in_file, in_memory_test_adapter::InMemoryTestAdapter,
         vm_test_adapter::VMTestAdapter,
     },
     jit::optimization,
-    natives::functions::NativeFunctions,
-    runtime::{data_cache::TransactionDataCache, package_resolution::resolve_packages},
-    shared::{linkage_context::LinkageContext, types::PackageStorageId},
 };
-use move_binary_format::errors::VMResult;
-use move_core_types::{account_address::AccountAddress, resolver::MoveResolver};
-use move_vm_config::runtime::VMConfig;
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use move_core_types::account_address::AccountAddress;
 
 #[test]
 fn test_basic_blocks_0() {

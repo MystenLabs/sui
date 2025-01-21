@@ -24,17 +24,9 @@ fn load_linkage_packages_into_runtime<DataSource: MoveResolver + Send + Sync>(
 ) -> VMResult<BTreeMap<PackageStorageId, Arc<Package>>> {
     let cache = adapter.runtime().cache();
     let natives = adapter.runtime().natives();
-    let vm_config = adapter.runtime().vm_config();
     let all_packages = linkage.all_packages()?;
     let storage = TransactionDataCache::new(adapter.storage());
-    resolve_packages(
-        &cache,
-        &natives,
-        &vm_config,
-        &storage,
-        linkage,
-        all_packages,
-    )
+    resolve_packages(&cache, &natives, &storage, linkage, all_packages)
 }
 
 #[test]

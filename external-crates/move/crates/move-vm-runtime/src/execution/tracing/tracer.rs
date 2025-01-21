@@ -356,7 +356,7 @@ impl<'a> VMTracer<'a> {
     /// for TraceValue references.
     fn root_location_snapshot(
         &self,
-        vtables: &VMDispatchTables,
+        _vtables: &VMDispatchTables,
         machine: &MachineState,
         loc: &RuntimeLocation,
     ) -> Option<AnnotatedValue> {
@@ -384,7 +384,7 @@ impl<'a> VMTracer<'a> {
                         panic!("We tried to access a local that was not initialized")
                     }
                     ReferenceKind::Filled { location, .. } => {
-                        self.root_location_snapshot(vtables, machine, &location)?
+                        self.root_location_snapshot(_vtables, machine, &location)?
                     }
                 }
             }
@@ -392,7 +392,7 @@ impl<'a> VMTracer<'a> {
                 let ty = self.type_stack.get(*stack_idx)?;
                 match &ty.ref_type {
                     Some((_, location)) => {
-                        self.root_location_snapshot(vtables, machine, location)?
+                        self.root_location_snapshot(_vtables, machine, location)?
                     }
                     None => {
                         let value = machine.operand_stack.value_at(*stack_idx)?;
@@ -401,7 +401,7 @@ impl<'a> VMTracer<'a> {
                 }
             }
             RuntimeLocation::Indexed(loc, _) => {
-                self.root_location_snapshot(vtables, machine, loc)?
+                self.root_location_snapshot(_vtables, machine, loc)?
             }
             RuntimeLocation::Global(id) => self.loaded_data.get(id)?.snapshot().clone(),
         };

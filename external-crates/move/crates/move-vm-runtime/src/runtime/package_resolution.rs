@@ -32,7 +32,6 @@ use std::{
 pub fn resolve_packages(
     cache: &MoveCache,
     natives: &NativeFunctions,
-    vm_config: &VMConfig,
     data_store: &impl DataStore,
     link_context: &LinkageContext,
     packages_to_read: BTreeSet<PackageStorageId>,
@@ -57,8 +56,8 @@ pub fn resolve_packages(
     // Load and cache anything that wasn't already there.
     // NB: packages can be loaded out of order here (e.g., in parallel) if so desired.
     for pkg in load_and_verify_packages(
+        &cache.vm_config,
         natives,
-        vm_config,
         data_store,
         allow_loading_failure,
         &pkgs_to_cache,
@@ -79,8 +78,8 @@ pub fn resolve_packages(
 // Read the package from the data store, deserialize it, and verify it (internally).
 // NB: Does not perform cyclic dependency verification or linkage checking.
 pub fn load_and_verify_packages(
-    natives: &NativeFunctions,
     vm_config: &VMConfig,
+    natives: &NativeFunctions,
     data_store: &impl DataStore,
     allow_loading_failure: bool,
     packages_to_read: &BTreeSet<PackageStorageId>,
@@ -114,8 +113,13 @@ pub fn jit_package_for_publish(
         panic!("Attempting to re-jit a package, which should be impossible -- we already checked.");
     }
 
-    let runtime_pkg = jit::translate_package(natives, link_context, verified_pkg.clone())
-        .map_err(|err| err.finish(Location::Undefined))?;
+    let runtime_pkg = jit::translate_package(
+        &cache.vm_config,
+        natives,
+        link_context,
+        verified_pkg.clone(),
+    )
+    .map_err(|err| err.finish(Location::Undefined))?;
 
     Ok(Arc::new(Package::new(
         verified_pkg.into(),
@@ -135,8 +139,13 @@ pub fn jit_and_cache_package(
         panic!("Attempting to re-jit a package, which should be impossible -- we already checked.");
     }
 
-    let runtime_pkg = jit::translate_package(natives, link_context, verified_pkg.clone())
-        .map_err(|err| err.finish(Location::Undefined))?;
+    let runtime_pkg = jit::translate_package(
+        &cache.vm_config,
+        natives,
+        link_context,
+        verified_pkg.clone(),
+    )
+    .map_err(|err| err.finish(Location::Undefined))?;
 
     cache.add_to_cache(storage_id, verified_pkg, runtime_pkg);
 
