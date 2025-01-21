@@ -3,3 +3,4 @@
 
 pub(crate) mod governance;
 pub(crate) mod rpc_module;
+pub(crate) mod transactions;
