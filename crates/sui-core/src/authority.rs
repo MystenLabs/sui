@@ -4116,9 +4116,18 @@ impl AuthorityState {
             .into_iter()
             .collect::<Vec<_>>();
 
+        eprintln!("flask len {}", transaction_digests.len());
+        for tx_digest in &transaction_digests {
+            eprintln!("flask tx digest {:?}", tx_digest);
+        }
+
         let events = kv_store
             .multi_get_events_by_tx_digests(&transaction_digests)
             .await?;
+
+        for event in &events {
+            eprintln!("flask event is {:?}", event);
+        }
 
         let events_map: HashMap<_, _> =
             transaction_digests.iter().zip(events.into_iter()).collect();
