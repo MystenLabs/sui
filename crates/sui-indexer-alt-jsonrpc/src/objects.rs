@@ -16,7 +16,7 @@ use sui_indexer_alt_schema::objects::StoredOwnerKind;
 use sui_indexer_alt_schema::schema::{obj_info, obj_versions};
 use sui_pg_db::{Connection, Db};
 use sui_types::base_types::SuiAddress;
-use sui_types::TypeTag;
+use sui_types::{Identifier, TypeTag};
 
 #[allow(dead_code)]
 pub(crate) struct Cursor {
@@ -33,7 +33,7 @@ pub(crate) enum TypeFilter {
     Package(SuiAddress),
 
     /// Filter the object type by the package and module it's from.
-    Module(SuiAddress, String),
+    Module(SuiAddress, Identifier),
 
     /// Filter the object type by the package, module, name, and type parameters.
     /// If the struct tag has type parameters, treat it as an exact filter on that instantiation,
@@ -85,8 +85,8 @@ enum CursorMode {
 #[derive(Clone, Default)]
 struct ObjectFilterQueryBuilder {
     package: Option<SuiAddress>,
-    module: Option<String>,
-    name: Option<String>,
+    module: Option<Identifier>,
+    name: Option<Identifier>,
     type_params: Option<Vec<TypeTag>>,
     owner: Option<SuiAddress>,
     view_checkpoint: Option<i64>,
@@ -118,8 +118,8 @@ impl ObjectFilterQueryBuilder {
             }
             TypeFilter::FullType(struct_tag) => {
                 self.package = Some(struct_tag.address.into());
-                self.module = Some(struct_tag.module.as_str().to_owned());
-                self.name = Some(struct_tag.name.as_str().to_owned());
+                self.module = Some(struct_tag.module);
+                self.name = Some(struct_tag.name);
                 if !struct_tag.type_params.is_empty() {
                     // Not setting type_paramms when the struct tag has no type parameters, allowing us
                     // to query for all generic instantiations of the type.
@@ -159,14 +159,14 @@ impl ObjectFilterQueryBuilder {
             ));
         }
 
-        // FIXME: Adding module and name as strings is prone to SQL injection.
-        // We will fix them when we move to a better way of building raw SQL queries.
+        // Since both `module` and `name` are identifiers, and valid identifiers cannot contain single quotes,
+        // we can safely use the identifier as a string without any risk of SQL injection.
         if let Some(module) = module {
-            filter_conditions.push(format!("module = '{}'", module));
+            filter_conditions.push(format!("module = '{}'", module.as_str()));
         }
 
         if let Some(name) = name {
-            filter_conditions.push(format!("name = '{}'", name));
+            filter_conditions.push(format!("name = '{}'", name.as_str()));
         }
 
         if let Some(type_params) = type_params {
