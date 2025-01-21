@@ -6,7 +6,12 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import toml from 'toml';
-import { IFileInfo, ISourceMap, readAllSourceMaps } from './source_map_utils';
+import {
+    IFileInfo,
+    ILocalInfo,
+    ISourceMap,
+    readAllSourceMaps
+} from './source_map_utils';
 import {
     TraceEffectKind,
     TraceEvent,
@@ -15,6 +20,7 @@ import {
     readTrace,
 } from './trace_utils';
 import { JSON_FILE_EXT } from './utils';
+import { info } from 'console';
 
 const MOVE_FILE_EXT = ".move";
 const BCODE_FILE_EXT = ".mvb";
@@ -87,9 +93,10 @@ export interface IRuntimeCompoundValue {
  * Describes a runtime local variable.
  */
 interface IRuntimeVariable {
-    name: string;
+    info: ILocalInfo;
     value: RuntimeValueType;
     type: string;
+    frameIdx: number;
 }
 
 /**
@@ -134,9 +141,10 @@ interface IRuntimeStackFrame {
      */
     localsTypes: string[];
     /**
-     *  Local variable names by variable frame index.
+     * Local variables info by their index in the frame
+     * (parameters first, then actual locals).
      */
-    localsNames: string[];
+    localsInfo: ILocalInfo[];
     /**
      * Local variables per scope (local scope at 0 and then following block scopes),
      * indexed by variable frame index.
@@ -515,11 +523,19 @@ export class Runtime extends EventEmitter {
             // set values of parameters in the new frame
             this.frameStack.frames.push(newFrame);
             for (let i = 0; i < currentEvent.paramValues.length; i++) {
-                localWrite(newFrame, i, currentEvent.paramValues[i]);
+                localWrite(
+                    newFrame,
+                    this.frameStack.frames.length - 1,
+                    i,
+                    currentEvent.paramValues[i]
+                );
             }
 
-            if (next) {
-                // step out of the frame right away
+            if (next && (!newFrame.showDisassembly || newFrame.id >= 0)) {
+                // step out of the frame right away if this frame is not inlined
+                // (id >= 0) or if we are NOT showing disassembly for it
+                // (otherwise we will see instructions skipped in the disassembly
+                // view for apparently no reason)
                 return this.stepOut(next);
             } else {
                 return this.step(next, stopAtCloseFrame);
@@ -560,16 +576,22 @@ export class Runtime extends EventEmitter {
                     this.frameStack.globals.set(traceLocation.globalIndex, globalValue);
                 } else if ('frameID' in traceLocation && 'localIndex' in traceLocation) {
                     const traceValue = effect.value;
-                    const frame = this.frameStack.frames.find(
-                        frame => frame.id === traceLocation.frameID
-                    );
+                    let frame = undefined;
+                    let frameIdx = 0;
+                    for (const f of this.frameStack.frames) {
+                        if (f.id === traceLocation.frameID) {
+                            frame = f;
+                            break;
+                        }
+                        frameIdx++;
+                    }
                     if (!frame) {
                         throw new Error('Cannot find frame with ID: '
                             + traceLocation.frameID
                             + ' when processing Write effect for local variable at index: '
                             + traceLocation.localIndex);
                     }
-                    localWrite(frame, traceLocation.localIndex, traceValue);
+                    localWrite(frame, frameIdx, traceLocation.localIndex, traceValue);
                 }
             }
             return this.step(next, stopAtCloseFrame);
@@ -742,11 +764,11 @@ export class Runtime extends EventEmitter {
         const instLine = currentFrame.showDisassembly
             ? instructionEvent.bcodeLoc!.line
             : instructionEvent.srcLoc.line;
-        const frameSrcLine = currentFrame.showDisassembly
+        const frameLine = currentFrame.showDisassembly
             ? currentFrame.bcodeLine!
             : currentFrame.srcLine;
 
-        if (instLine === frameSrcLine) {
+        if (instLine === frameLine) {
             // so that instructions on the same line can be bypassed
             return [true, instLine];
         } else {
@@ -834,7 +856,7 @@ export class Runtime extends EventEmitter {
      * @param srcFileHash hash of the source file containing the function.
      * @param bcodeFileHash hash of the disassembled bytecode file containing the function.
      * @param localsTypes types of local variables in the frame.
-     * @param localsNames names of local variables in the frame.
+     * @param localsInfo information about local variables in the frame.
      * @param optimizedSrcLines lines that are not present in the source map.
      * @param optimizedBcodeLines lines that are not present in the bytecode map.
      * @returns new frame.
@@ -846,7 +868,7 @@ export class Runtime extends EventEmitter {
         srcFileHash: string,
         bcodeFileHash: undefined | string,
         localsTypes: string[],
-        localsNames: string[],
+        localsInfo: ILocalInfo[],
         optimizedSrcLines: number[],
         optimizedBcodeLines: undefined | number[]
     ): IRuntimeStackFrame {
@@ -886,7 +908,7 @@ export class Runtime extends EventEmitter {
             srcLine: 0,
             bcodeLine: 0,
             localsTypes,
-            localsNames,
+            localsInfo,
             locals,
             lastCallInstructionSrcLine: undefined,
             lastCallInstructionBcodeLine: undefined,
@@ -946,10 +968,14 @@ export class Runtime extends EventEmitter {
                 res += this.singleTab + this.singleTab + 'scope ' + i + ' :\n';
                 for (let j = 0; j < frame.locals[i].length; j++) {
                     const local = frame.locals[i][j];
-                    if (local) {
-                        res += this.varToString(this.singleTab
-                            + this.singleTab
-                            + this.singleTab, local) + '\n';
+                    if (local && (frame.showDisassembly ||
+                        (!local.info.name.includes('%') && !local.info.internalName.includes('%')))) {
+                        // don't show "artificial" locals outside of the disassembly view
+                        res += this.varToString(
+                            this.singleTab + this.singleTab + this.singleTab,
+                            local,
+                            frame.showDisassembly
+                        ) + '\n';
                     }
                 }
             }
@@ -969,10 +995,18 @@ export class Runtime extends EventEmitter {
      * Returns a string representation of a runtime variable.
      *
      * @param variable runtime variable.
+     *
      * @returns string representation of the variable.
      */
-    private varToString(tabs: string, variable: IRuntimeVariable): string {
-        return this.valueToString(tabs, variable.value, variable.name, [], variable.type);
+    private varToString(
+        tabs: string,
+        variable: IRuntimeVariable,
+        showDisassembly: boolean
+    ): string {
+        let varName = showDisassembly
+            ? variable.info.internalName
+            : variable.info.name;
+        return this.valueToString(tabs, variable.value, varName, [], variable.type);
     }
 
     /**
@@ -1133,11 +1167,13 @@ function hashToFileMap(
  * Handles a write to a local variable in a stack frame.
  *
  * @param frame stack frame frame.
+ * @param frameIdx index of the frame in the stack.
  * @param localIndex variable index in the frame.
  * @param runtimeValue variable value.
  */
 function localWrite(
     frame: IRuntimeStackFrame,
+    frameIdx: number,
     localIndex: number,
     value: RuntimeValueType
 ): void {
@@ -1148,39 +1184,35 @@ function localWrite(
             + ' in function: '
             + frame.name);
     }
-    const name = frame.localsNames[localIndex];
-    if (!name) {
+    const localInfo = frame.localsInfo[localIndex];
+    if (!localInfo) {
         throw new Error('Cannot find local variable at index: '
             + localIndex
             + ' in function: '
             + frame.name);
     }
 
-    if (name.includes('%')) {
-        // don't show "artificial" variables generated by the compiler
-        // for enum and macro execution as they would be quite confusing
-        // for the user without knowing compilation internals
-        return;
-    }
-
-
     const scopesCount = frame.locals.length;
     if (scopesCount <= 0) {
         throw new Error("There should be at least one variable scope in function"
             + frame.name);
     }
-    // If a variable has the same name but a different index (it is shadowed)
+    // If a variable has the same name in the source but a different index (it is shadowed)
     // it has to be put in a different scope (e.g., locals[1], locals[2], etc.).
     // Find scope already containing variable name, if any, starting from
     // the outermost one
     let existingVarScope = -1;
-    for (let i = scopesCount - 1; i >= 0; i--) {
-        const existingVarIndex = frame.locals[i].findIndex(runtimeVar => {
-            return runtimeVar && runtimeVar.name === name;
-        });
-        if (existingVarIndex !== -1 && existingVarIndex !== localIndex) {
-            existingVarScope = i;
-            break;
+    if (!localInfo.name.includes('%') && !localInfo.internalName.includes('%')) {
+        // variables containing '%' are artificial (generated by the compiler) and
+        // as such are not subject to source-level shadowing rules
+        for (let i = scopesCount - 1; i >= 0; i--) {
+            const existingVarIndex = frame.locals[i].findIndex(runtimeVar => {
+                return runtimeVar && runtimeVar.info.name === localInfo.name;
+            });
+            if (existingVarIndex !== -1 && existingVarIndex !== localIndex) {
+                existingVarScope = i;
+                break;
+            }
         }
     }
     if (existingVarScope >= 0) {
@@ -1188,10 +1220,10 @@ function localWrite(
         if (!shadowedScope) {
             frame.locals.push([]);
         }
-        frame.locals[existingVarScope + 1][localIndex] = { name, value, type };
+        frame.locals[existingVarScope + 1][localIndex] = { info: localInfo, value, type, frameIdx };
     } else {
         // put variable in the "main" locals scope
-        frame.locals[0][localIndex] = { name, value, type };
+        frame.locals[0][localIndex] = { info: localInfo, value, type, frameIdx };
     }
 }
 

@@ -11,7 +11,14 @@ import {
     IRuntimeLoc,
     IRuntimeRefValue
 } from './runtime';
-import { ISourceMap, IFileLoc, IFileInfo, ILoc, ISourceMapFunction } from './source_map_utils';
+import {
+    ISourceMap,
+    ILocalInfo,
+    IFileLoc,
+    IFileInfo,
+    ILoc,
+    ISourceMapFunction
+} from './source_map_utils';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -240,7 +247,7 @@ export type TraceEvent =
         bcodeFileHash: undefined | string,
         isNative: boolean,
         localsTypes: string[],
-        localsNames: string[],
+        localsNames: ILocalInfo[],
         paramValues: RuntimeValueType[]
         optimizedSrcLines: number[]
         optimizedBcodeLines: undefined | number[]
@@ -472,7 +479,7 @@ export function readTrace(
                 bcodeFileHash,
                 isNative: frame.is_native,
                 localsTypes,
-                localsNames: srcFunEntry.localsNames,
+                localsNames: srcFunEntry.localsInfo,
                 paramValues,
                 optimizedSrcLines,
                 optimizedBcodeLines
