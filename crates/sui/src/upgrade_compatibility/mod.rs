@@ -53,9 +53,6 @@ use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
 /// one-to-one related to the underlying trait functions see: [`CompatibilityMode`].
 #[derive(Debug, Clone)]
 pub(crate) enum UpgradeCompatibilityModeError {
-    ModuleMissing {
-        name: Identifier,
-    },
     StructMissing {
         name: Identifier,
     },
@@ -128,7 +125,6 @@ pub(crate) enum UpgradeCompatibilityModeError {
     },
     StructNew {
         name: Identifier,
-        new_struct: Struct,
     },
     StructChange {
         name: Identifier,
@@ -137,7 +133,6 @@ pub(crate) enum UpgradeCompatibilityModeError {
     },
     EnumNew {
         name: Identifier,
-        new_enum: Enum,
     },
     EnumChange {
         name: Identifier,
@@ -145,7 +140,6 @@ pub(crate) enum UpgradeCompatibilityModeError {
     },
     FunctionNew {
         name: Identifier,
-        new_func: Function,
     },
     FunctionChange {
         name: Identifier,
@@ -165,8 +159,6 @@ fn breaks_compatibility(
     compatability: &Compatibility,
 ) -> bool {
     match error {
-        UpgradeCompatibilityModeError::ModuleMissing { .. } => true,
-
         UpgradeCompatibilityModeError::StructAbilityMismatch { .. }
         | UpgradeCompatibilityModeError::StructTypeParamMismatch { .. }
         | UpgradeCompatibilityModeError::EnumAbilityMismatch { .. }
@@ -230,8 +222,7 @@ fn breaks_inclusion_check(
             matches!(inclusion_check, InclusionCheck::Equal)
         }
 
-        UpgradeCompatibilityModeError::ModuleMissing { .. }
-        | UpgradeCompatibilityModeError::StructMissing { .. }
+        UpgradeCompatibilityModeError::StructMissing { .. }
         | UpgradeCompatibilityModeError::StructAbilityMismatch { .. }
         | UpgradeCompatibilityModeError::StructTypeParamMismatch { .. }
         | UpgradeCompatibilityModeError::StructFieldMismatch { .. }
@@ -462,11 +453,9 @@ impl InclusionCheckMode for CliInclusionCheckMode {
             });
     }
 
-    fn struct_new(&mut self, name: &Identifier, new_struct: &Struct) {
-        self.errors.push(UpgradeCompatibilityModeError::StructNew {
-            name: name.clone(),
-            new_struct: new_struct.clone(),
-        });
+    fn struct_new(&mut self, name: &Identifier, _new_struct: &Struct) {
+        self.errors
+            .push(UpgradeCompatibilityModeError::StructNew { name: name.clone() });
     }
 
     fn struct_change(&mut self, name: &Identifier, old_struct: &Struct, new_struct: &Struct) {
@@ -483,11 +472,9 @@ impl InclusionCheckMode for CliInclusionCheckMode {
             .push(UpgradeCompatibilityModeError::StructMissing { name: name.clone() });
     }
 
-    fn enum_new(&mut self, name: &Identifier, new_enum: &Enum) {
-        self.errors.push(UpgradeCompatibilityModeError::EnumNew {
-            name: name.clone(),
-            new_enum: new_enum.clone(),
-        });
+    fn enum_new(&mut self, name: &Identifier, _new_enum: &Enum) {
+        self.errors
+            .push(UpgradeCompatibilityModeError::EnumNew { name: name.clone() });
     }
 
     fn enum_change(&mut self, name: &Identifier, new_enum: &Enum) {
@@ -502,12 +489,9 @@ impl InclusionCheckMode for CliInclusionCheckMode {
             .push(UpgradeCompatibilityModeError::EnumMissing { name: name.clone() });
     }
 
-    fn function_new(&mut self, name: &Identifier, new_func: &Function) {
+    fn function_new(&mut self, name: &Identifier, _new_func: &Function) {
         self.errors
-            .push(UpgradeCompatibilityModeError::FunctionNew {
-                name: name.clone(),
-                new_func: new_func.clone(),
-            });
+            .push(UpgradeCompatibilityModeError::FunctionNew { name: name.clone() });
     }
 
     fn function_change(&mut self, name: &Identifier, old_func: &Function, new_func: &Function) {
@@ -976,12 +960,9 @@ fn compatibility_diag_from_error(
         UpgradeCompatibilityModeError::FunctionEntryCompatibility {
             name, old_function, ..
         } => function_entry_mismatch(name, old_function, compiled_unit_with_source, lookup),
-        UpgradeCompatibilityModeError::ModuleMissing { .. } => {
-            unreachable!("Module Missing should be handled by outer function")
-        }
 
-        UpgradeCompatibilityModeError::StructNew { name, .. } => {
-            struct_new_diag(name, compiled_unit_with_source)
+        UpgradeCompatibilityModeError::StructNew { name } => {
+            struct_new_diag(name, compiled_unit_with_source, lookup)
         }
         UpgradeCompatibilityModeError::StructChange {
             name,
@@ -995,14 +976,14 @@ fn compatibility_diag_from_error(
             lookup,
         ),
 
-        UpgradeCompatibilityModeError::EnumNew { name, new_enum } => {
-            enum_new_diag(name, new_enum, compiled_unit_with_source)
+        UpgradeCompatibilityModeError::EnumNew { name } => {
+            enum_new_diag(name, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::EnumChange { name, new_enum } => {
             enum_changed_diag(name, new_enum, new_enum, compiled_unit_with_source, lookup)
         }
 
-        UpgradeCompatibilityModeError::FunctionNew { name, .. } => {
+        UpgradeCompatibilityModeError::FunctionNew { name } => {
             function_new_diag(name, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::FunctionChange {
@@ -2079,17 +2060,27 @@ fn enum_variant_missing_diag(
 fn struct_new_diag(
     struct_name: &Identifier,
     compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
 
-    let def_loc = compiled_unit_with_source
+    let struct_index = lookup
+        .struct_identifier_to_index
+        .get(struct_name)
+        .context("Unable to get struct index")?;
+
+    let struct_sourcemap = compiled_unit_with_source
         .unit
         .source_map
-        .definition_location;
+        .get_struct_source_map(StructDefinitionIndex::new(*struct_index))
+        .context("Unable to get struct source map")?;
 
     diags.add(Diagnostic::new(
         Declarations::TypeMismatch,
-        (def_loc, format!("New unexpected struct '{}'.", struct_name)),
+        (
+            struct_sourcemap.definition_location,
+            format!("New unexpected struct '{}'.", struct_name),
+        ),
         Vec::<(Loc, String)>::new(),
         vec![
             "Structs are part of a module's public interface \
@@ -2154,7 +2145,6 @@ fn struct_changed_diag(
 /// Returns a diagnostic for an unexpected new enum.
 fn enum_new_diag(
     enum_name: &Identifier,
-    _new_enum: &Enum,
     compiled_unit_with_source: &CompiledUnitWithSource,
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
