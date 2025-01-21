@@ -723,7 +723,7 @@ impl AuthorityEpochTables {
         impl Iterator<Item = ((CheckpointSequenceNumber, u64), CheckpointSignatureMessage)> + '_,
     > {
         let key = (checkpoint_seq, starting_index);
-        debug!("Scanning pending checkpoint signatures from {:?}", key);
+        trace!("Scanning pending checkpoint signatures from {:?}", key);
         let iter = self
             .pending_checkpoint_signatures
             .unbounded_iter()
@@ -2658,7 +2658,7 @@ impl AuthorityPerEpochStore {
             .is_consensus_message_processed(&transaction.transaction.key())
             .expect("Storage error")
         {
-            debug!(
+            trace!(
                 consensus_index=?transaction.consensus_index.transaction_index,
                 tracking_id=?transaction.transaction.get_tracking_id(),
                 "handle_consensus_transaction UserTransaction [skip]",

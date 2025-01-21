@@ -11,7 +11,7 @@ services:
     environment:
       - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,consensus=debug,jsonrpsee=error
+      - RUST_LOG=${SUI_RUST_LOG:-info}
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -39,7 +39,7 @@ services:
     environment:
       - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,consensus=debug,jsonrpsee=error
+      - RUST_LOG=${SUI_RUST_LOG:-info}
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -67,7 +67,7 @@ services:
     environment:
       - DISABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,consensus=debug,jsonrpsee=error
+      - RUST_LOG=${SUI_RUST_LOG:-info}
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -95,7 +95,7 @@ services:
     environment:
       - DISABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,consensus=debug,jsonrpsee=error
+      - RUST_LOG=${SUI_RUST_LOG:-info}
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -123,7 +123,7 @@ services:
     environment:
       - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,jsonrpsee=error
+      - RUST_LOG=${SUI_RUST_LOG:-info}
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
