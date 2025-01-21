@@ -14059,7 +14059,7 @@ dependencies = [
  "diesel-async",
  "msim",
  "prometheus",
- "reqwest 0.12.5",
+ "reqwest 0.12.9",
  "serde_json",
  "sui-indexer-alt",
  "sui-indexer-alt-framework",
@@ -14068,7 +14068,7 @@ dependencies = [
  "sui-transactional-test-runner",
  "telemetry-subscribers",
  "tokio",
- "tokio-util 0.7.10",
+ "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "url",
 ]
 
@@ -14120,7 +14120,7 @@ dependencies = [
  "jsonrpsee",
  "pin-project-lite",
  "prometheus",
- "reqwest 0.12.5",
+ "reqwest 0.12.9",
  "serde_json",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
@@ -14131,7 +14131,7 @@ dependencies = [
  "telemetry-subscribers",
  "thiserror 1.0.69",
  "tokio",
- "tokio-util 0.7.10",
+ "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower-layer",
  "tracing",
  "url",
@@ -14147,7 +14147,7 @@ dependencies = [
  "prometheus",
  "sui-pg-db",
  "tokio",
- "tokio-util 0.7.10",
+ "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
 ]
 
