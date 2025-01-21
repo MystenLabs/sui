@@ -1041,6 +1041,27 @@ impl AuthorityStore {
         Ok(())
     }
 
+    pub(crate) fn persist_transactions_and_effects(
+        &self,
+        transactions_and_effects: &[(VerifiedTransaction, TransactionEffects)],
+    ) -> SuiResult {
+        let mut batch = self.perpetual_tables.transactions.batch();
+        batch.insert_batch(
+            &self.perpetual_tables.transactions,
+            transactions_and_effects
+                .iter()
+                .map(|(tx, _)| (*tx.digest(), tx.serializable_ref())),
+        )?;
+        batch.insert_batch(
+            &self.perpetual_tables.effects,
+            transactions_and_effects
+                .iter()
+                .map(|(_, fx)| (fx.digest(), fx.clone())),
+        )?;
+        batch.write()?;
+        Ok(())
+    }
+
     pub async fn acquire_transaction_locks(
         &self,
         epoch_store: &AuthorityPerEpochStore,
