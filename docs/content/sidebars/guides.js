@@ -144,7 +144,7 @@ const guides = [
 					'guides/developer/advanced/custom-indexer',
 					'guides/developer/advanced/randomness-onchain',
 					'guides/developer/advanced/graphql-migration',
-					'guides/developer/advanced/congestion-control',
+					'guides/developer/advanced/local-fee-markets',
 				],
 			},
 			{

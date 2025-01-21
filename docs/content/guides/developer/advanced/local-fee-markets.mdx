@@ -1,5 +1,5 @@
 ---
-title: Congestion Control
+title: Object-based Local Fee Markets
 description: Congestion control is the system that limits the rate of transactions writing to a single shared object, preventing the network from becoming overloaded with checkpoints that take too long to execute.
 ---
 
@@ -24,7 +24,7 @@ Sui's congestion control algorithm runs every time a new batch of sequenced tran
 
 ### Priority ordering of transactions
 
-Transaction priority is determined solely by **gas price**. If you want your transaction to be assigned access to shared objects ahead of others, you must pay a higher gas price than the others. This is the only way to get priority access.
+Transaction priority is determined solely by **gas price**. If you want your transaction to be assigned access to shared objects ahead of others in the same consensus commit, you must pay a higher gas price than the others. This is the only way to get priority access.
 
 ### Cost estimation of transactions
 
@@ -60,6 +60,6 @@ There is no way to increase the total execution capacity of a particular shared 
 
 - Set a gas budget that is close to your actual execution cost. You can use dry runs to estimate this. Be aware that some transactions have variable cost.
 
-- If your object `O` is congested, optimize the gas usage of the functions that are commonly used to access the object. For example, if all the accesses to your object happen via Move function `f`, halving the gas usage of `f` will effectively double the number of transactions that can touch `O` in a single commit (assuming the gas budget is correspondingly decreased).
-
 - When designing Move packages, avoid using a single shared object if possible. For example, a DEX application with a single, main shared object and dynamic fields for each currency pair would suffer much more congestion than one with a separate object per currency pair.
+
+- If your object `O` is congested, optimize the gas usage of the functions that are commonly used to access the object. For example, if all the accesses to your object happen via Move function `f`, halving the gas usage of `f` will effectively double the number of transactions that can touch `O` in a single commit (assuming the gas budget is correspondingly decreased).
