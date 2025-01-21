@@ -12,3 +12,10 @@ CREATE TABLE IF NOT EXISTS obj_versions
 
 CREATE INDEX IF NOT EXISTS obj_versions_cp_sequence_number
 ON obj_versions (cp_sequence_number);
+
+-- This index is primarily used for querying the latest version of an object bounded by
+-- a view checkpoint number. Since a checkpoint can contain multiple versions of the
+-- same object, we need to sort by cp_sequence_number DESC and object_version DESC to
+-- get the latest version.
+CREATE INDEX IF NOT EXISTS obj_versions_id_cp_version
+ON obj_versions (object_id, cp_sequence_number DESC, object_version DESC)
