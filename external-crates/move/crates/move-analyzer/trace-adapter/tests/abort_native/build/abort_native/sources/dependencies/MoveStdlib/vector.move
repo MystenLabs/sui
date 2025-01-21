@@ -84,8 +84,10 @@ public fun reverse<Element>(v: &mut vector<Element>) {
 }
 
 /// Pushes all of the elements of the `other` vector into the `lhs` vector.
-public fun append<Element>(lhs: &mut vector<Element>, other: vector<Element>) {
-    other.do!(|e| lhs.push_back(e));
+public fun append<Element>(lhs: &mut vector<Element>, mut other: vector<Element>) {
+    other.reverse();
+    while (!other.is_empty()) lhs.push_back(other.pop_back());
+    other.destroy_empty();
 }
 
 /// Return `true` if the vector `v` has no elements and `false` otherwise.
@@ -154,7 +156,7 @@ public fun insert<Element>(v: &mut vector<Element>, e: Element, mut i: u64) {
 /// This is O(1), but does not preserve ordering of elements in the vector.
 /// Aborts if `i` is out of bounds.
 public fun swap_remove<Element>(v: &mut vector<Element>, i: u64): Element {
-    assert!(v.length() != 0, EINDEX_OUT_OF_BOUNDS);
+    assert!(!v.is_empty(), EINDEX_OUT_OF_BOUNDS);
     let last_idx = v.length() - 1;
     v.swap(i, last_idx);
     v.pop_back()
@@ -174,7 +176,7 @@ public macro fun tabulate<$T>($n: u64, $f: |u64| -> $T): vector<$T> {
 /// Does not preserve the order of elements in the vector (starts from the end of the vector).
 public macro fun destroy<$T>($v: vector<$T>, $f: |$T|) {
     let mut v = $v;
-    while (v.length() != 0) $f(v.pop_back());
+    while (!v.is_empty()) $f(v.pop_back());
     v.destroy_empty();
 }
 
@@ -183,7 +185,7 @@ public macro fun destroy<$T>($v: vector<$T>, $f: |$T|) {
 public macro fun do<$T>($v: vector<$T>, $f: |$T|) {
     let mut v = $v;
     v.reverse();
-    v.length().do!(|_| $f(v.pop_back()));
+    while (!v.is_empty()) $f(v.pop_back());
     v.destroy_empty();
 }
 
