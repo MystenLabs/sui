@@ -4359,7 +4359,7 @@ impl AuthorityState {
     /// Returns UserInputError::ObjectNotFound if no lock records for the given object can be found.
     /// Returns UserInputError::ObjectVersionUnavailableForConsumption if the object record is at a different version.
     /// Returns Some(VerifiedEnvelope) if the given ObjectRef is locked by a certain transaction.
-    /// Returns None if the a lock record is initialized for the given ObjectRef but not yet locked by any transaction,
+    /// Returns None if a lock record is initialized for the given ObjectRef but not yet locked by any transaction,
     ///     or cannot find the transaction in transaction table, because of data race etc.
     #[instrument(level = "trace", skip_all)]
     pub async fn get_transaction_lock(

@@ -49,7 +49,7 @@ pub enum AdversarialPayloadType {
     LargePureFunctionArgs,
     // Creates a bunch of shared objects in the module init for adversarial, then taking them all as input)
     MaxReads,
-    // Creates a the largest package publish possible
+    // Creates the largest package publish possible
     MaxPackagePublish,
     // TODO:
     // - MaxReads (by creating a bunch of shared objects in the module init for adversarial, then taking them all as input)
