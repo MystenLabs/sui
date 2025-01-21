@@ -16,5 +16,7 @@ pub fn optimize(input: crate::validation::verification::ast::Package) -> ast::Pa
     dbg_println!(flag: optimizer, "Blocks: {:#?}", opt);
     optimizations::dead_code_elim::package(&mut opt);
     dbg_println!(flag: optimizer, "Dead Code elim: {:#?}", opt);
+    optimizations::inline_immediate_constants::package(&mut opt);
+    dbg_println!(flag: optimizer, "Immediate Constants Inlined: {:#?}", opt);
     opt
 }

@@ -8,7 +8,7 @@ use move_binary_format::{
         ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
         FunctionHandleIndex, FunctionInstantiationIndex, LocalIndex, SignatureIndex,
         StructDefInstantiationIndex, StructDefinitionIndex, VariantHandleIndex,
-        VariantInstantiationHandleIndex, VariantJumpTableIndex,
+        VariantInstantiationHandleIndex, VariantJumpTableIndex, VariantJumpTable, JumpTableInner,
     },
     CompiledModule,
 };
@@ -35,7 +35,16 @@ pub struct Package {
 pub struct Module {
     pub(crate) compiled_module: CompiledModule,
     /// Optimized versions of the functions defined in the module.
-    pub(crate) functions: BTreeMap<FunctionDefinitionIndex, Option<Code>>,
+    pub(crate) functions: BTreeMap<FunctionDefinitionIndex, Function>,
+}
+
+/// Representation of functions being optimized
+#[derive(Debug, Clone)]
+pub struct Function {
+    /// Original index in the compiled module
+    pub(crate) ndx: FunctionDefinitionIndex,
+    /// Optimized code
+    pub(crate) code: Option<Code>,
 }
 
 pub(crate) type Label = u16;
@@ -43,6 +52,7 @@ pub(crate) type Label = u16;
 /// Optimized Function Code
 #[derive(Debug, Clone)]
 pub struct Code {
+    pub(crate) jump_tables: Vec<VariantJumpTable>,
     pub(crate) code: BTreeMap<Label, Vec<Bytecode>>,
 }
 
@@ -222,3 +232,177 @@ impl ::std::fmt::Debug for Bytecode {
     }
 }
 
+// -------------------------------------------------------------------------------------------------
+// Impls
+// -------------------------------------------------------------------------------------------------
+
+impl Bytecode {
+    pub fn branch_target(&self, tables: &[VariantJumpTable]) -> Option<Vec<Label>> {
+        match self {
+            Bytecode::BrTrue(target) |
+            Bytecode::BrFalse(target) |
+            Bytecode::Branch(target) => Some(vec![*target as Label]),
+            Bytecode::VariantSwitch(table) => {
+                let jump_table: &JumpTableInner = &tables.get(table.0 as usize)?.jump_table;
+                match jump_table {
+                    JumpTableInner::Full(vec) => {
+                        Some(vec.iter().map(|ndx| *ndx as Label).collect())
+                    },
+                }
+            },
+            Bytecode::Pop |
+            Bytecode::Ret |
+            Bytecode::LdU8(_) |
+            Bytecode::LdU64(_) |
+            Bytecode::LdU128(_) |
+            Bytecode::CastU8 |
+            Bytecode::CastU64 |
+            Bytecode::CastU128 |
+            Bytecode::LdConst(_) |
+            Bytecode::LdTrue |
+            Bytecode::LdFalse |
+            Bytecode::CopyLoc(_) |
+            Bytecode::MoveLoc(_) |
+            Bytecode::StLoc(_) |
+            Bytecode::Call(_) |
+            Bytecode::CallGeneric(_) |
+            Bytecode::Pack(_) |
+            Bytecode::PackGeneric(_) |
+            Bytecode::Unpack(_) |
+            Bytecode::UnpackGeneric(_) |
+            Bytecode::ReadRef |
+            Bytecode::WriteRef |
+            Bytecode::FreezeRef |
+            Bytecode::MutBorrowLoc(_) |
+            Bytecode::ImmBorrowLoc(_) |
+            Bytecode::MutBorrowField(_) |
+            Bytecode::MutBorrowFieldGeneric(_) |
+            Bytecode::ImmBorrowField(_) |
+            Bytecode::ImmBorrowFieldGeneric(_) |
+            Bytecode::Add |
+            Bytecode::Sub |
+            Bytecode::Mul |
+            Bytecode::Mod |
+            Bytecode::Div |
+            Bytecode::BitOr |
+            Bytecode::BitAnd |
+            Bytecode::Xor |
+            Bytecode::Or |
+            Bytecode::And |
+            Bytecode::Not |
+            Bytecode::Eq |
+            Bytecode::Neq |
+            Bytecode::Lt |
+            Bytecode::Gt |
+            Bytecode::Le |
+            Bytecode::Ge |
+            Bytecode::Abort |
+            Bytecode::Nop |
+            Bytecode::Shl |
+            Bytecode::Shr |
+            Bytecode::VecPack(_, _) |
+            Bytecode::VecLen(_) |
+            Bytecode::VecImmBorrow(_) |
+            Bytecode::VecMutBorrow(_) |
+            Bytecode::VecPushBack(_) |
+            Bytecode::VecPopBack(_) |
+            Bytecode::VecUnpack(_, _) |
+            Bytecode::VecSwap(_) |
+            Bytecode::LdU16(_) |
+            Bytecode::LdU32(_) |
+            Bytecode::LdU256(_) |
+            Bytecode::CastU16 |
+            Bytecode::CastU32 |
+            Bytecode::CastU256 |
+            Bytecode::PackVariant(_) |
+            Bytecode::PackVariantGeneric(_) |
+            Bytecode::UnpackVariant(_) |
+            Bytecode::UnpackVariantImmRef(_) |
+            Bytecode::UnpackVariantMutRef(_) |
+            Bytecode::UnpackVariantGeneric(_) |
+            Bytecode::UnpackVariantGenericImmRef(_) |
+            Bytecode::UnpackVariantGenericMutRef(_) => None,
+        }
+    }
+
+    pub fn is_unconditional_branch(&self) -> bool {
+        match self {
+            Bytecode::Branch(_) | Bytecode::Abort | Bytecode::Ret => true,
+            // True because verifier insists these are exhaustive
+            Bytecode::VariantSwitch(_) => true,
+            Bytecode::Pop |
+            Bytecode::BrTrue(_) |
+            Bytecode::BrFalse(_) |
+            Bytecode::LdU8(_) |
+            Bytecode::LdU64(_) |
+            Bytecode::LdU128(_) |
+            Bytecode::CastU8 |
+            Bytecode::CastU64 |
+            Bytecode::CastU128 |
+            Bytecode::LdConst(_) |
+            Bytecode::LdTrue |
+            Bytecode::LdFalse |
+            Bytecode::CopyLoc(_) |
+            Bytecode::MoveLoc(_) |
+            Bytecode::StLoc(_) |
+            Bytecode::Call(_) |
+            Bytecode::CallGeneric(_) |
+            Bytecode::Pack(_) |
+            Bytecode::PackGeneric(_) |
+            Bytecode::Unpack(_) |
+            Bytecode::UnpackGeneric(_) |
+            Bytecode::ReadRef |
+            Bytecode::WriteRef |
+            Bytecode::FreezeRef |
+            Bytecode::MutBorrowLoc(_) |
+            Bytecode::ImmBorrowLoc(_) |
+            Bytecode::MutBorrowField(_) |
+            Bytecode::MutBorrowFieldGeneric(_) |
+            Bytecode::ImmBorrowField(_) |
+            Bytecode::ImmBorrowFieldGeneric(_) |
+            Bytecode::Add |
+            Bytecode::Sub |
+            Bytecode::Mul |
+            Bytecode::Mod |
+            Bytecode::Div |
+            Bytecode::BitOr |
+            Bytecode::BitAnd |
+            Bytecode::Xor |
+            Bytecode::Or |
+            Bytecode::And |
+            Bytecode::Not |
+            Bytecode::Eq |
+            Bytecode::Neq |
+            Bytecode::Lt |
+            Bytecode::Gt |
+            Bytecode::Le |
+            Bytecode::Ge |
+            Bytecode::Nop |
+            Bytecode::Shl |
+            Bytecode::Shr |
+            Bytecode::VecPack(_, _) |
+            Bytecode::VecLen(_) |
+            Bytecode::VecImmBorrow(_) |
+            Bytecode::VecMutBorrow(_) |
+            Bytecode::VecPushBack(_) |
+            Bytecode::VecPopBack(_) |
+            Bytecode::VecUnpack(_, _) |
+            Bytecode::VecSwap(_) |
+            Bytecode::LdU16(_) |
+            Bytecode::LdU32(_) |
+            Bytecode::LdU256(_) |
+            Bytecode::CastU16 |
+            Bytecode::CastU32 |
+            Bytecode::CastU256 |
+            Bytecode::PackVariant(_) |
+            Bytecode::PackVariantGeneric(_) |
+            Bytecode::UnpackVariant(_) |
+            Bytecode::UnpackVariantImmRef(_) |
+            Bytecode::UnpackVariantMutRef(_) |
+            Bytecode::UnpackVariantGeneric(_) |
+            Bytecode::UnpackVariantGenericImmRef(_) |
+            Bytecode::UnpackVariantGenericMutRef(_) => false,
+        }
+    }
+
+}

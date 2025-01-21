@@ -3,7 +3,10 @@
 
 use crate::{jit::optimization::ast, validation::verification::ast as Input};
 
-use move_binary_format::file_format::{self as FF, FunctionDefinition};
+use move_abstract_interpreter::control_flow_graph::{
+    BlockId, ControlFlowGraph, VMControlFlowGraph,
+};
+use move_binary_format::file_format::{self as FF, FunctionDefinition, FunctionDefinitionIndex};
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -37,8 +40,8 @@ fn module(m: Input::Module) -> ast::Module {
         .iter()
         .enumerate()
         .map(|(ndx, fun)| {
-            let index = ndx as u16;
-            (FF::FunctionDefinitionIndex::new(index), function(fun))
+            let index = FF::FunctionDefinitionIndex::new(ndx as u16);
+            (index.clone(), function(index, fun))
         })
         .collect();
     ast::Module {
@@ -47,8 +50,8 @@ fn module(m: Input::Module) -> ast::Module {
     }
 }
 
-fn function(fun: &FunctionDefinition) -> Option<ast::Code> {
-    let Some(code) = &fun.code else { return None };
+fn function(ndx: FunctionDefinitionIndex, fun: &FunctionDefinition) -> ast::Function {
+    let Some(code) = &fun.code else { return ast::Function { ndx, code: None }};
     let FF::CodeUnit {
         locals: _,
         code,
@@ -56,9 +59,9 @@ fn function(fun: &FunctionDefinition) -> Option<ast::Code> {
     } = code;
 
     let code = generate_basic_blocks(code, jump_tables);
-
-    let code = ast::Code { code };
-    Some(code)
+    let jump_tables = jump_tables.clone();
+    let code = Some(ast::Code { code, jump_tables });
+    ast::Function { ndx, code }
 }
 
 // NB: We use this instead of the VMControlFlowGraph because it reduces the number of labels
@@ -68,52 +71,16 @@ fn generate_basic_blocks(
     input: &[FF::Bytecode],
     jump_tables: &[FF::VariantJumpTable],
 ) -> BTreeMap<ast::Label, Vec<ast::Bytecode>> {
-    use ast::Bytecode;
 
-    // Write down the heads of the basic blocks.
-    let mut labels = BTreeSet::from([0]);
-    for FF::VariantJumpTable {
-        head_enum: _,
-        jump_table,
-    } in jump_tables
-    {
-        match jump_table {
-            FF::JumpTableInner::Full(entries) => entries.iter().for_each(|entry| {
-                labels.insert(*entry);
-            }),
-        }
-    }
-    for instr in input {
-        match instr {
-            FF::Bytecode::BrTrue(entry)
-            | FF::Bytecode::BrFalse(entry)
-            | FF::Bytecode::Branch(entry) => {
-                labels.insert(*entry);
-            }
-            _ => (),
-        }
-    }
-
-    // Split the code into blocks based on all possible target heads.
-    let mut blocks = BTreeMap::new();
-
-    // TODO: this is probably an invariant violation
-    if input.is_empty() {
-        return blocks;
-    };
-
-    let mut current_block: Vec<Bytecode> = vec![];
-
-    for (i, instr) in input.iter().enumerate().rev() {
-        current_block.push(bytecode(instr));
-        if labels.contains(&(i as u16)) {
-            let mut block = std::mem::replace(&mut current_block, vec![]);
-            block.reverse();
-            assert!(blocks.insert(i as ast::Label, block).is_none());
-        }
-    }
-
-    blocks
+    let cfg = VMControlFlowGraph::new(input, jump_tables);
+    cfg.blocks().iter().map(|label| {
+        let start = cfg.block_start(*label) as usize;
+        let end = cfg.block_end(*label) as usize;
+        let label = *label as ast::Label;
+        let code = input[start..(end+1)].iter().map(|instr| bytecode(instr)).collect();
+        (label, code)
+    })
+    .collect::<BTreeMap<ast::Label, Vec<ast::Bytecode>>>()
 }
 
 fn bytecode(code: &FF::Bytecode) -> ast::Bytecode {

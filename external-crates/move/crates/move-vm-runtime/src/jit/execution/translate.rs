@@ -514,15 +514,16 @@ fn functions(
         .iter_mut()
         .zip(module.function_defs())
     {
-        let Some(code_unit) = optimized_fns.remove(&alloc.index) else {
+        let Some(opt_fun) = optimized_fns.remove(&alloc.index) else {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                     "failed to find module function in optimized function list".to_string(),
                 ),
             );
         };
-        if let Some(code_unit) = code_unit {
-            alloc.code = code(&mut module_context, code_unit.code)?;
+        let input::Function { ndx: _, code: opt_code } = opt_fun;
+        if let Some(opt_code) = opt_code {
+            alloc.code = code(&mut module_context, opt_code.code)?;
         }
     }
 
