@@ -13,10 +13,18 @@ from collections import Counter, defaultdict
 from typing import List, Dict, Set
 
 class ThreadDumpAnalyzer:
+    def __init__(self):
+        # Add interesting path prefixes as a class attribute
+        self.interesting_prefixes = [
+            'crates/',
+            'consensus/',
+            'sui-execution/',
+            'external-crates/',
+        ]
+
     def is_interesting(self, line: str) -> bool:
-        # Only lines that starts with "crates/" are interesting/
-        # This assumes a release build with debug symbols.
-        return line.startswith('crates/') or line.startswith('consensus/')
+        # Check if line starts with any of the interesting prefixes
+        return any(line.startswith(prefix) for prefix in self.interesting_prefixes)
 
     def parse_dump_file(self, file_path: str) -> List[List[str]]:
         stacks = []
