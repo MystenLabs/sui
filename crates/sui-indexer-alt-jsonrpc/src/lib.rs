@@ -29,7 +29,7 @@ mod context;
 pub mod data;
 mod error;
 mod metrics;
-mod object_queries;
+mod objects;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct RpcArgs {
