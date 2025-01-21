@@ -22,7 +22,6 @@ diesel_migrations.workspace = true
 futures.workspace = true
 hex.workspace = true
 itertools.workspace = true
-move-core-types.workspace = true
 prometheus.workspace = true
 serde.workspace = true
 telemetry-subscribers.workspace = true

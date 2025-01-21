@@ -35,7 +35,6 @@ pub(crate) mod bootstrap;
 pub mod config;
 pub(crate) mod consistent_pruning;
 pub(crate) mod handlers;
-pub mod queries;
 
 pub async fn start_indexer(
     db_args: DbArgs,
