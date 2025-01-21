@@ -1,30 +1,30 @@
 ---
 title: Object-based Local Fee Markets
-description: Congestion control is the system that limits the rate of transactions writing to a single shared object, preventing the network from becoming overloaded with checkpoints that take too long to execute.
+description: Object-based local fee markets limit the rate of transactions writing to a single shared object, preventing the network from becoming overloaded with checkpoints that take too long to execute.
 ---
 
-Congestion control is the system that limits the rate of transactions writing to a single shared object, preventing the network from becoming overloaded with checkpoints that take too long to execute.
+Object-based local fee markets limit the rate of transactions writing to a single shared object, preventing the network from becoming overloaded with checkpoints that take too long to execute.
 
 The Sui network’s object-based architecture allows processing many different user transactions massively in parallel, in a way that’s not possible on most other networks. However, if multiple transactions are all writing to the same shared object, they must execute in sequential order. There is a limit to how many transactions the network can process that touch one specific object.
 
-If you see transactions fail with the error `ExecutionCancelledDueToSharedObjectCongestion`, you are observing congestion control at work! Continue reading to learn:
+If you see transactions fail with the error `ExecutionCancelledDueToSharedObjectCongestion`, you are observing object-based local fee markets at work! Continue reading to learn:
 - How transaction space is allocated on a congested shared object.
 - How to bid for priority access to limited space.
 - How to structure your applications and transactions for maximum throughput.
 
-## How congestion control works
+## How object-based local fee markets work
 
-Sui's congestion control algorithm runs every time a new batch of sequenced transactions is received from consensus.
+Sui's local fee market algorithm runs every time a new batch of sequenced transactions is received from consensus.
 
 1. All transactions are **sorted in order of gas price**.
 
 1. Each transaction's **execution cost is estimated** using the [`TotalGasBudgetWithCap`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs#L143) heuristic.
 
-1. The [`SharedObjectCongestionTracker`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs) keeps a running tally of how much **per-object congestion budget** is used. If *all* shared objects used by the transaction have enough budget left, the transaction is scheduled. In that case, it consumes budget for the *mutable* shared objects that it uses. (*Immutable* shared objects don't consume any budget, because multiple immutable uses of a shared object can be executed in parallel.) Otherwise it is **deferred** until the next commit.
+1. The [`SharedObjectCongestionTracker`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs) keeps a running tally of how much per-object congestion budget is used. If *all* shared objects used by the transaction have enough budget left, the transaction is **scheduled**. In that case, it consumes budget for the *mutable* shared objects that it uses. (*Immutable* shared objects don't consume any budget, because multiple immutable uses of a shared object can be executed in parallel.) Otherwise it is **deferred** until the next commit.
 
 ### Priority ordering of transactions
 
-Transaction priority is determined solely by **gas price**. If you want your transaction to be assigned access to shared objects ahead of others in the same consensus commit, you must pay a higher gas price than the others. This is the only way to get priority access.
+Transaction priority is determined solely by gas price. If you want your transaction to be assigned access to shared objects ahead of others in the same consensus commit, you must pay a higher gas price than the others. This is the only way to get priority access.
 
 ### Cost estimation of transactions
 
@@ -36,7 +36,7 @@ We are actively developing an improved algorithm for estimating transaction exec
 
 Sui limits the per-commit execution capacity of each shared object. If transactions touching a shared object have a low estimated cost, more of them can fit. If they have a high estimated cost, not as many will fit.  
 
-How is the estimated cost of a transaction determined for congestion control purposes? We use a heuristic called [`TotalGasBudgetWithCap`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs#L143).
+How is the estimated cost of a transaction determined for local fee market purposes? We use a heuristic called [`TotalGasBudgetWithCap`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs#L143).
 
 - A transaction's initial estimated cost is simply its **gas budget**. (Unfortunately, the final gas cost of a transaction is not known until after execution, which is too late for us to use in scheduling.)
 
