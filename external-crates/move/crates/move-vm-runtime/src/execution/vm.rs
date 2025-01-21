@@ -325,7 +325,6 @@ impl<'extensions> MoveVM<'extensions> {
         // deserialization should be done outside of the VM calls.
         let (ref_ids, deserialized_args) = deserialize_args(
             &self.virtual_tables,
-            &self.vm_config,
             &mut self.base_heap,
             arg_types,
             serialized_args,
@@ -348,13 +347,9 @@ impl<'extensions> MoveVM<'extensions> {
             deserialized_args,
         )?;
 
-        let serialized_return_values = serialize_return_values(
-            &self.virtual_tables,
-            &self.vm_config,
-            &return_types,
-            return_values,
-        )
-        .map_err(|e| e.finish(Location::Undefined))?;
+        let serialized_return_values =
+            serialize_return_values(&self.virtual_tables, &return_types, return_values)
+                .map_err(|e| e.finish(Location::Undefined))?;
         let serialized_mut_ref_outputs = mut_ref_args
             .into_iter()
             .map(|(ndx, ty)| {
@@ -362,8 +357,7 @@ impl<'extensions> MoveVM<'extensions> {
                 // take the value of each reference; return values first in the case that a value
                 // points into this local
                 let local_val = self.base_heap.take_loc(*heap_ref_id)?;
-                let (bytes, layout) =
-                    serialize_return_value(&self.virtual_tables, &self.vm_config, &ty, local_val)?;
+                let (bytes, layout) = serialize_return_value(&self.virtual_tables, &ty, local_val)?;
                 Ok((ndx as LocalIndex, bytes, layout))
             })
             .collect::<PartialVMResult<_>>()

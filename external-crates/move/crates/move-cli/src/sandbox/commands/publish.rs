@@ -14,7 +14,7 @@ use move_vm_runtime::{
     runtime::MoveRuntime,
     shared::{linkage_context::LinkageContext, types::PackageStorageId},
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub fn publish(
     natives: impl IntoIterator<Item = NativeFunctionRecord>,
@@ -55,7 +55,7 @@ pub fn publish(
         .collect::<Vec<_>>();
 
     // Build the dependency map from the package
-    let mut dependency_map = HashMap::new();
+    let mut dependency_map = BTreeMap::new();
     for (name, unit) in package.deps_compiled_units.iter() {
         let unit_address = *unit.unit.module.self_id().address();
         if let Some(other) = dependency_map.insert(unit_address, unit_address) {
@@ -77,7 +77,7 @@ pub fn publish(
     let mut gas_status = get_gas_status(cost_table, None)?;
 
     // Create a `LinkageContext`
-    let linkage_context = LinkageContext::new(package_storage_id, dependency_map);
+    let linkage_context = LinkageContext::new(dependency_map);
 
     // Serialize the modules into a package to prepare them for publishing
     let pkg = StoredPackage::from_module_for_testing_with_linkage(

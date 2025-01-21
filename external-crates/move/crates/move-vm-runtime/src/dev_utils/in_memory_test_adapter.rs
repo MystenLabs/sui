@@ -123,7 +123,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
             // TODO: VM error instead?
             panic!("Did not find runtime ID {runtime_id} in linkage context.");
         };
-        assert!(storage_id == package.storage_id);
+        assert_eq!(storage_id, package.storage_id);
         let mut gas_meter = GasStatus::new_unmetered();
         self.runtime.validate_package(
             &self.storage,
@@ -204,7 +204,6 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
             "Found circular dependencies during linkage generation."
         );
         let linkage_context = LinkageContext::new(
-            storage_id,
             all_dependencies
                 .into_iter()
                 .map(|id| (id, id))

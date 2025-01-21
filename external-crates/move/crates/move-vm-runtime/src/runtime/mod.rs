@@ -15,10 +15,7 @@ use move_binary_format::errors::VMResult;
 use move_core_types::resolver::{MoveResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 // FIXME(cswords): This is only public for testing...
 pub mod package_resolution;
@@ -123,7 +120,7 @@ impl MoveRuntime {
             .map(|pkg| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
             .collect::<BTreeMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
 
-        let virtual_tables = VMDispatchTables::new(runtime_packages)?;
+        let virtual_tables = VMDispatchTables::new(self.vm_config.clone(), runtime_packages)?;
 
         let base_heap = BaseHeap::new();
 
@@ -165,10 +162,7 @@ impl MoveRuntime {
         dbg_println!("\n\nPublishing module at {storage_id} (=> {pkg_runtime_id})\n\n");
 
         let data_cache = TransactionDataCache::new(data_cache);
-        let link_context = LinkageContext::new(
-            pkg.storage_id,
-            HashMap::from_iter(pkg.linkage_table.clone()),
-        );
+        let link_context = LinkageContext::new(BTreeMap::from_iter(pkg.linkage_table.clone()));
 
         // Verify a provided serialized package. This will validate the provided serialized
         // package, including attempting to jit-compile the package and verify linkage with its
@@ -181,7 +175,7 @@ impl MoveRuntime {
             &self.vm_config,
             &data_cache,
             &link_context,
-            link_context.all_package_dependencies()?,
+            link_context.all_package_dependencies_except(pkg.storage_id)?,
         )?;
         let verified_pkg = {
             let deps = pkg_dependencies
@@ -206,7 +200,7 @@ impl MoveRuntime {
             .map(|pkg| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
             .collect::<BTreeMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
 
-        let virtual_tables = VMDispatchTables::new(runtime_packages)?;
+        let virtual_tables = VMDispatchTables::new(self.vm_config.clone(), runtime_packages)?;
 
         let base_heap = BaseHeap::new();
 

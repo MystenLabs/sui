@@ -13,12 +13,7 @@ pub(crate) fn package(vm_config: &VMConfig, pkg: SerializedPackage) -> VMResult<
     let mut modules = BTreeMap::new();
     for module in pkg.modules.iter() {
         let module = CompiledModule::deserialize_with_config(module, &vm_config.binary_config)
-            .map_err(|err| -> move_binary_format::errors::VMError {
-                let msg = format!("Deserialization error: {:?}", err);
-                PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
-                    .with_message(msg)
-                    .finish(Location::Undefined) // TODO(tzakian): add Location::Package
-            })?;
+            .map_err(|err| err.finish(Location::Undefined))?; // TODO: add Location::Package
         modules.insert(module.self_id(), module);
     }
 
