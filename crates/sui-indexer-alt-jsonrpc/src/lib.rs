@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use api::rpc_module::RpcModule;
+use api::transactions::Transactions;
 use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use jsonrpsee::server::{RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
@@ -209,6 +210,7 @@ pub async fn start_rpc(
     );
 
     rpc.add_module(Governance(context.clone()))?;
+    rpc.add_module(Transactions(context.clone()))?;
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
     let h_system_package_task = system_package_task.run();

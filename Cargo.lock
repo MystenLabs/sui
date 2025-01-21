@@ -14054,6 +14054,7 @@ dependencies = [
  "serde_json",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
+ "sui-json-rpc-types",
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-package-resolver",
