@@ -163,6 +163,7 @@ pub use crate::checkpoints::checkpoint_executor::{
     init_checkpoint_timeout_config, CheckpointTimeoutConfig,
 };
 
+use crate::authority::authority_store_tables::AuthorityPrunerTables;
 use crate::authority_client::NetworkAuthorityClient;
 use crate::validator_tx_finalizer::ValidatorTxFinalizer;
 #[cfg(msim)]
@@ -2855,6 +2856,7 @@ impl AuthorityState {
         archive_readers: ArchiveReaderBalancer,
         validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
         chain_identifier: ChainIdentifier,
+        pruner_db: Option<Arc<AuthorityPrunerTables>>,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -2886,6 +2888,7 @@ impl AuthorityState {
             prometheus_registry,
             indirect_objects_threshold,
             archive_readers,
+            pruner_db,
         );
         let input_loader =
             TransactionInputLoader::new(execution_cache_trait_pointers.object_cache_reader.clone());
@@ -2993,6 +2996,7 @@ impl AuthorityState {
             &self.checkpoint_store,
             self.rpc_index.as_deref(),
             &self.database_for_testing().objects_lock_table,
+            None,
             config.authority_store_pruning_config,
             metrics,
             config.indirect_objects_threshold,
@@ -4112,9 +4116,18 @@ impl AuthorityState {
             .into_iter()
             .collect::<Vec<_>>();
 
+        eprintln!("flask len {}", transaction_digests.len());
+        for tx_digest in &transaction_digests {
+            eprintln!("flask tx digest {:?}", tx_digest);
+        }
+
         let events = kv_store
             .multi_get_events_by_tx_digests(&transaction_digests)
             .await?;
+
+        for event in &events {
+            eprintln!("flask event is {:?}", event);
+        }
 
         let events_map: HashMap<_, _> =
             transaction_digests.iter().zip(events.into_iter()).collect();
