@@ -1131,6 +1131,30 @@ impl Type {
 }
 
 // -------------------------------------------------------------------------------------------------
+// Equality
+// -------------------------------------------------------------------------------------------------
+
+impl PartialEq for Function {
+    fn eq(&self, other: &Self) -> bool {
+        self.file_format_version == other.file_format_version
+            && self.is_entry == other.is_entry
+            && self.index == other.index
+            && std::ptr::eq(self.code, other.code) // Compare raw pointers for equality
+            && self.parameters == other.parameters
+            && self.locals == other.locals
+            && self.return_ == other.return_
+            && self.type_parameters == other.type_parameters
+            && self.def_is_native == other.def_is_native
+            && self.module == other.module
+            && self.name == other.name
+            && self.locals_len == other.locals_len
+            && self.jump_tables == other.jump_tables
+    }
+}
+
+impl Eq for Function { }
+
+// -------------------------------------------------------------------------------------------------
 // Into
 // -------------------------------------------------------------------------------------------------
 
