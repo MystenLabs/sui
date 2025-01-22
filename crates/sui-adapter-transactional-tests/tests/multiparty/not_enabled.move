@@ -35,3 +35,17 @@ public fun priv_multiparty(obj: Priv, p: vector<address>) {
 }
 
 //# run ex::m::mint
+
+// Aborts since multiparty transfer is not enabled
+//# run ex::m::create_multiparty
+
+// Aborts since multiparty transfer is not enabled
+//# run ex::m::priv_multiparty --args object(2,0) vector[@0]
+
+// Aborts since multiparty transfer is not enabled
+//# run ex::m::pub_multiparty --args object(2,1) vector[@0]
+
+// Aborts since multiparty transfer is not enabled
+//# run sui::transfer::public_multiparty_transfer
+//#     --type-args ex::m::Pub
+//#     --args object(2,1) vector[@0]
