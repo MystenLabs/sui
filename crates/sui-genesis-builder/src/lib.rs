@@ -931,6 +931,7 @@ fn create_genesis_transaction(
                 kind,
                 signer,
                 genesis_digest,
+                None,
             );
         assert!(inner_temp_store.input_objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());

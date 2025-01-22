@@ -205,6 +205,14 @@ impl SingleValidator {
         )
         .unwrap();
         let (kind, signer, gas) = executable.transaction_data().execution_parts();
+        let sponsor = {
+            let gas_owner = executable.transaction_data().gas_owner();
+            if gas_owner == signer {
+                None
+            } else {
+                Some(gas_owner)
+            }
+        };
         let (inner_temp_store, _, effects, _timings, _) =
             self.epoch_store.executor().execute_transaction_to_effects(
                 &store,
@@ -220,6 +228,7 @@ impl SingleValidator {
                 kind,
                 signer,
                 *executable.digest(),
+                sponsor,
             );
         assert!(effects.status().is_ok());
         store.commit_objects(inner_temp_store);

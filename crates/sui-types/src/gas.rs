@@ -32,6 +32,7 @@ pub mod checked {
         fn bucketize_computation(&mut self) -> Result<(), ExecutionError>;
         fn summary(&self) -> GasCostSummary;
         fn gas_budget(&self) -> u64;
+        fn gas_price(&self) -> u64;
         fn storage_gas_units(&self) -> u64;
         fn storage_rebate(&self) -> u64;
         fn unmetered_storage_rebate(&self) -> u64;
@@ -105,6 +106,12 @@ pub mod checked {
         ) -> UserInputResult {
             match self {
                 Self::V2(status) => status.check_gas_balance(gas_objs, gas_budget),
+            }
+        }
+
+        pub fn gas_price(&self) -> u64 {
+            match self {
+                Self::V2(status) => status.gas_price(),
             }
         }
     }

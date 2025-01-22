@@ -1690,8 +1690,14 @@ async fn test_publish_dependent_module_ok() {
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
 
-    let dependent_module_id =
-        TxContext::new(&sender, transaction.digest(), &EpochData::new_test()).fresh_id();
+    let dependent_module_id = TxContext::new(
+        &sender,
+        transaction.digest(),
+        &EpochData::new_test(),
+        rgp,
+        None,
+    )
+    .fresh_id();
 
     // Object does not exist
     assert!(authority.get_object(&dependent_module_id).await.is_none());
@@ -1739,8 +1745,14 @@ async fn test_publish_module_no_dependencies_ok() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let _module_object_id =
-        TxContext::new(&sender, transaction.digest(), &EpochData::new_test()).fresh_id();
+    let _module_object_id = TxContext::new(
+        &sender,
+        transaction.digest(),
+        &EpochData::new_test(),
+        rgp,
+        None,
+    )
+    .fresh_id();
     let signed_effects = send_and_confirm_transaction(&authority, transaction)
         .await
         .unwrap()
