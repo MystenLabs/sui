@@ -653,6 +653,10 @@ struct FeatureFlags {
     // weighted by stake median timestamp of the leader's ancestors.
     #[serde(skip_serializing_if = "is_false")]
     consensus_median_based_commit_timestamp: bool,
+
+    // Enable native function for multiparty transfer
+    #[serde(skip_serializing_if = "is_false")]
+    enable_multiparty_transfer: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1905,6 +1909,10 @@ impl ProtocolConfig {
 
     pub fn move_native_context(&self) -> bool {
         self.feature_flags.move_native_context
+    }
+
+    pub fn enable_multiparty_transfer(&self) -> bool {
+        self.feature_flags.enable_multiparty_transfer
     }
 }
 

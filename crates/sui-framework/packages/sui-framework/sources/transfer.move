@@ -37,6 +37,10 @@ const EUnableToReceiveObject: u64 = 3;
 /// Shared object operations such as wrapping, freezing, and converting to owned are not allowed.
 const ESharedObjectOperationNotSupported: u64 = 4;
 
+#[allow(unused_const)]
+/// Operation is not yet supported by the network. The functionality might still be in development.
+const ENotSupported: u64 = 5;
+
 #[error]
 const EInvalidMultipartySize: vector<u8> =
     b"Multiparty transfer is currently limited to one party.";
@@ -61,6 +65,8 @@ public fun public_transfer<T: key + store>(obj: T, recipient: address) {
     transfer_impl(obj, recipient)
 }
 
+/// NOT YET SUPPORTED. The function will abort with `ENotSupported` if used on a network,
+/// e.g. mainnet, where multiparty objects are not yet supported.
 /// Transfer ownership of `obj` to the `party_members`. This transfer behaves similar to both
 /// `transfer` and `share_object`. It is similar to `transfer` in that the object be authenticated
 /// only by the recipient(s), in this case the `party_members`. This means that only the members
@@ -74,6 +80,8 @@ public fun multiparty_transfer<T: key>(obj: T, party_members: vector<address>) {
     multiparty_transfer_impl(obj, party_members)
 }
 
+/// NOT YET SUPPORTED. The function will abort with `ENotSupported` if used on a network,
+/// e.g. mainnet, where multiparty objects are not yet supported.
 /// Transfer ownership of `obj` to the `party_members`. This transfer behaves similar to both
 /// `transfer` and `share_object`. It is similar to `transfer` in that the object be authenticated
 /// only by the recipient(s), in this case the `party_members`. This means that only the members
