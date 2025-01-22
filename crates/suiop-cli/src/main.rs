@@ -5,9 +5,11 @@ use anyhow::Result;
 use clap::Parser;
 use suioplib::{
     cli::{
+        ci::{image_cmd, ImageArgs},
         ci_cmd, docker_cmd, iam_cmd, incidents_cmd, load_environment_cmd, pulumi_cmd,
-        service::ServiceAction, service_cmd, CIArgs, DockerArgs, IAMArgs, IncidentsArgs,
-        LoadEnvironmentArgs, PulumiArgs, ServiceArgs,
+        service::ServiceAction,
+        service_cmd, CIArgs, DockerArgs, IAMArgs, IncidentsArgs, LoadEnvironmentArgs, PulumiArgs,
+        ServiceArgs,
     },
     DEBUG_MODE,
 };
@@ -33,6 +35,8 @@ pub(crate) enum Resource {
     Iam(IAMArgs),
     #[clap(aliases = ["inc", "i"])]
     Incidents(IncidentsArgs),
+    #[clap(aliases = ["im"])]
+    Image(ImageArgs),
     #[clap(aliases = ["p"])]
     Pulumi(PulumiArgs),
     #[clap(aliases = ["s", "svc"])]
@@ -89,6 +93,9 @@ async fn main() -> Result<()> {
         }
         Resource::Incidents(args) => {
             incidents_cmd(&args).await?;
+        }
+        Resource::Image(args) => {
+            image_cmd(&args).await?;
         }
         Resource::Pulumi(args) => {
             pulumi_cmd(&args)?;

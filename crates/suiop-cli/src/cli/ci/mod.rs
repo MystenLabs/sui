@@ -5,7 +5,7 @@ mod image;
 mod key;
 
 use anyhow::Result;
-use image::{image_cmd, ImageArgs};
+pub use image::{image_cmd, ImageArgs};
 use key::{key_cmd, KeyArgs};
 
 use clap::Parser;
