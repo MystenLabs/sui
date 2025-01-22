@@ -6,6 +6,7 @@ pub struct SubscribeCheckpointsRequest {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SubscribeCheckpointsResponse {
+    /// The checkpoint sequence number and value of the current cursor into the checkpoint stream
     #[prost(uint64, optional, tag = "1")]
     pub cursor: ::core::option::Option<u64>,
     #[prost(message, optional, tag = "2")]

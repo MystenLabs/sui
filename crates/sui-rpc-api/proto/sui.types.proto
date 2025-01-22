@@ -5,7 +5,6 @@
 // protobuf message defined in this file and be able to roundtrip to/from their
 // rust and protobuf definitions assuming a sufficiently up-to-date version of
 // both these definitions.
-
 syntax = "proto3";
 
 package sui.types;
