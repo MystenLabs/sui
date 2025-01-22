@@ -71,7 +71,7 @@ pub enum EpochFlag {
     StateAccumulatorV2EnabledTestnet = 5,
     StateAccumulatorV2EnabledMainnet = 6,
 
-    ExecutedInEpochTable = 7,
+    _ExecutedInEpochTableDeprecated = 7,
 
     UseVersionAssignmentTablesV3 = 8,
 }
@@ -88,7 +88,6 @@ impl EpochFlag {
 
     fn default_flags_impl(cache_config: &ExecutionCacheConfig) -> Vec<Self> {
         let mut new_flags = vec![
-            EpochFlag::ExecutedInEpochTable,
             EpochFlag::StateAccumulatorV2EnabledTestnet,
             EpochFlag::StateAccumulatorV2EnabledMainnet,
             EpochFlag::UseVersionAssignmentTablesV3,
@@ -122,7 +121,9 @@ impl fmt::Display for EpochFlag {
             EpochFlag::_StateAccumulatorV2EnabledDeprecated => {
                 write!(f, "StateAccumulatorV2EnabledDeprecated (DEPRECATED)")
             }
-            EpochFlag::ExecutedInEpochTable => write!(f, "ExecutedInEpochTable"),
+            EpochFlag::_ExecutedInEpochTableDeprecated => {
+                write!(f, "ExecutedInEpochTable (DEPRECATED)")
+            }
             EpochFlag::StateAccumulatorV2EnabledTestnet => {
                 write!(f, "StateAccumulatorV2EnabledTestnet")
             }
