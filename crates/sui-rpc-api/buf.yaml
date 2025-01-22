@@ -7,6 +7,9 @@ modules:
     lint:
       use:
         - STANDARD
+        # Disallow client streaming apis since many clients (eg grpc-web)
+        # cannot properly handle client side streaming requests.
+        - RPC_NO_CLIENT_STREAMING
       ignore_only:
         PACKAGE_VERSION_SUFFIX:
           - proto/sui.types.proto
