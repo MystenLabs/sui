@@ -14143,6 +14143,7 @@ dependencies = [
  "clap",
  "diesel",
  "diesel-async",
+ "futures",
  "jsonrpsee",
  "move-core-types",
  "pin-project-lite",
