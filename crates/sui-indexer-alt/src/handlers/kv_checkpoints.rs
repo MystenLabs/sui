@@ -11,7 +11,6 @@ use sui_indexer_alt_schema::{checkpoints::StoredCheckpoint, schema::kv_checkpoin
 use sui_pg_db as db;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-#[derive(Default)]
 pub(crate) struct KvCheckpoints;
 
 impl Processor for KvCheckpoints {
@@ -75,27 +74,26 @@ mod tests {
     async fn test_kv_checkpoints_pruning() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
-        let kv_checkpoints = KvCheckpoints::default();
 
         // Create 3 checkpoints
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = kv_checkpoints.process(&checkpoint).unwrap();
+        let values = KvCheckpoints.process(&checkpoint).unwrap();
         KvCheckpoints::commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = kv_checkpoints.process(&checkpoint).unwrap();
+        let values = KvCheckpoints.process(&checkpoint).unwrap();
         KvCheckpoints::commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = kv_checkpoints.process(&checkpoint).unwrap();
+        let values = KvCheckpoints.process(&checkpoint).unwrap();
         KvCheckpoints::commit(&values, &mut conn).await.unwrap();
 
         // Prune checkpoints from `[0, 2)`
-        let rows_pruned = kv_checkpoints.prune(0, 2, &mut conn).await.unwrap();
+        let rows_pruned = KvCheckpoints.prune(0, 2, &mut conn).await.unwrap();
         assert_eq!(rows_pruned, 2);
 
         // Checkpoint 2 remains

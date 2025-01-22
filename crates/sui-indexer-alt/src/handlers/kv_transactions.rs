@@ -11,7 +11,6 @@ use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransa
 use sui_pg_db as db;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-#[derive(Default)]
 pub(crate) struct KvTransactions;
 
 impl Processor for KvTransactions {
@@ -103,18 +102,17 @@ mod tests {
     async fn test_kv_transactions_pruning() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
-        let kv_transactions = KvTransactions::default();
 
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = kv_transactions.process(&checkpoint).unwrap();
+        let values = KvTransactions.process(&checkpoint).unwrap();
         KvTransactions::commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = kv_transactions.process(&checkpoint).unwrap();
+        let values = KvTransactions.process(&checkpoint).unwrap();
         KvTransactions::commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
@@ -122,14 +120,14 @@ mod tests {
         builder = builder.start_transaction(2).finish_transaction();
         builder = builder.start_transaction(3).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = kv_transactions.process(&checkpoint).unwrap();
+        let values = KvTransactions.process(&checkpoint).unwrap();
         KvTransactions::commit(&values, &mut conn).await.unwrap();
 
         let transactions = get_all_kv_transactions(&mut conn).await.unwrap();
         assert_eq!(transactions.len(), 7);
 
         // Prune checkpoints from `[0, 2)`
-        let rows_pruned = kv_transactions.prune(0, 2, &mut conn).await.unwrap();
+        let rows_pruned = KvTransactions.prune(0, 2, &mut conn).await.unwrap();
         assert_eq!(rows_pruned, 3);
 
         let remaining_transactions = get_all_kv_transactions(&mut conn).await.unwrap();

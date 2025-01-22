@@ -19,7 +19,6 @@ use sui_types::{
     transaction::{TransactionDataAPI, TransactionKind},
 };
 
-#[derive(Default)]
 pub(crate) struct KvEpochEnds;
 
 impl Processor for KvEpochEnds {
