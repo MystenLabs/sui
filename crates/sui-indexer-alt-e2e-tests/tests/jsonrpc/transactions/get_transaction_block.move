@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --addresses test=0x0 --simulator
+//# init --protocol-version 70 --accounts A B --addresses test=0x0 --simulator
 
 // 1. Default behavior of getTransactionBlock (no options)
 // 2. "Not found" case
 // 3. Raw transaction and effects
 // 4. Structured transaction and effects
 // 5. Events
+// 6a. Balance Changes (gas only)
+// 6b. Balance Changes (transfer SUI)
 
 //# publish
 module test::counter {
@@ -53,6 +55,10 @@ module test::counter {
 //> 4: test::counter::take(Input(0), Input(1));
 //> 5: TransferObjects([Result(4)], Input(2))
 
+//# programmable --sender A --inputs 42 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+
 //# create-checkpoint
 
 //# run-jsonrpc
@@ -91,7 +97,6 @@ module test::counter {
   ]
 }
 
-
 //# run-jsonrpc
 {
   "method": "sui_getTransactionBlock",
@@ -99,6 +104,28 @@ module test::counter {
     "@{digest_2}",
     {
       "showEvents": true
+    }
+  ]
+}
+
+//# run-jsonrpc
+{
+  "method": "sui_getTransactionBlock",
+  "params": [
+    "@{digest_2}",
+    {
+      "showBalanceChanges": true
+    }
+  ]
+}
+
+//# run-jsonrpc
+{
+  "method": "sui_getTransactionBlock",
+  "params": [
+    "@{digest_3}",
+    {
+      "showBalanceChanges": true
     }
   ]
 }
