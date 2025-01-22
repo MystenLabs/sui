@@ -28,6 +28,7 @@ use std::{
 use either::Either;
 use futures::stream::FuturesOrdered;
 use itertools::izip;
+use mysten_common::fatal;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::{fail_point, fail_point_async};
@@ -460,7 +461,7 @@ impl CheckpointExecutor {
             .await;
 
         epoch_store
-            .handle_committed_transactions(all_tx_digests)
+            .handle_finalized_checkpoint(checkpoint.data(), all_tx_digests)
             .expect("cannot fail");
 
         if let Some(checkpoint_data) = checkpoint_data {
@@ -1207,7 +1208,7 @@ fn get_unexecuted_transactions(
             .enumerate()
             .map(|(i, (tx, expected_effects_digest))| {
                 let tx = tx.unwrap_or_else(||
-                    panic!(
+                    fatal!(
                         "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
                         unexecuted_txns[i]
                     )

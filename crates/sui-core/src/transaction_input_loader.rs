@@ -181,7 +181,6 @@ impl TransactionInputLoader {
                         .get_or_init(|| {
                             epoch_store
                                 .get_assigned_shared_object_versions(tx_key)
-                                .expect("loading assigned shared versions should not fail")
                                 .map(|versions| versions.into_iter().collect())
                         })
                         .as_ref()
