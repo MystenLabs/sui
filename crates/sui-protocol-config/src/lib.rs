@@ -605,6 +605,10 @@ struct FeatureFlags {
     // Variants count as nodes
     #[serde(skip_serializing_if = "is_false")]
     variant_nodes: bool,
+
+    // Enable native function for multiparty transfer
+    #[serde(skip_serializing_if = "is_false")]
+    enable_multiparty_transfer: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1767,6 +1771,10 @@ impl ProtocolConfig {
 
     pub fn variant_nodes(&self) -> bool {
         self.feature_flags.variant_nodes
+    }
+
+    pub fn enable_multiparty_transfer(&self) -> bool {
+        self.feature_flags.enable_multiparty_transfer
     }
 }
 

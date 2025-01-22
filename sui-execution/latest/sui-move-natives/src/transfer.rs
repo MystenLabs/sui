@@ -28,6 +28,8 @@ const E_RECEIVING_OBJECT_TYPE_MISMATCH: u64 = 2;
 // Represents both the case where the object does not exist and the case where the object is not
 // able to be accessed through the parent that is passed-in.
 const E_UNABLE_TO_RECEIVE_OBJECT: u64 = 3;
+// Operation not yet supported
+const E_NOT_SUPPORTED: u64 = 5;
 
 #[derive(Clone, Debug)]
 pub struct TransferReceiveObjectInternalCostParams {
@@ -159,6 +161,16 @@ pub fn multiparty_transfer_internal(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 2);
+
+    let is_supported = context
+        .extensions()
+        .get::<ObjectRuntime>()
+        .protocol_config
+        .enable_multiparty_transfer();
+    if !is_supported {
+        let cost = context.gas_used();
+        return Ok(NativeResult::err(cost, E_NOT_SUPPORTED));
+    }
 
     let transfer_multiparty_transfer_internal_cost_params = context
         .extensions_mut()
