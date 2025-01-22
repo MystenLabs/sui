@@ -7,7 +7,6 @@ use move_core_types::{
     ident_str,
     language_storage::{StructTag, TypeTag},
 };
-use serde::Serialize;
 use sui_protocol_config::ProtocolConfig;
 use tap::Pipe;
 
@@ -20,7 +19,7 @@ use crate::{
     committee::Committee,
     digests::TransactionDigest,
     effects::{TestEffectsBuilder, TransactionEffectsAPI, TransactionEvents},
-    event::Event,
+    event::{Event, SystemEpochInfoEvent},
     full_checkpoint_content::{CheckpointData, CheckpointTransaction},
     gas_coin::GAS,
     message_envelope::Message,
@@ -84,23 +83,6 @@ struct TransactionBuilder {
     wrapped_objects: BTreeSet<ObjectID>,
     deleted_objects: BTreeSet<ObjectID>,
     events: Option<Vec<Event>>,
-}
-
-// Matches the SystemEpochInfoEvent
-#[derive(Serialize, Default)]
-struct TestSystemEpochInfoEvent {
-    pub epoch: u64,
-    pub protocol_version: u64,
-    pub reference_gas_price: u64,
-    pub total_stake: u64,
-    pub storage_fund_reinvestment: u64,
-    pub storage_charge: u64,
-    pub storage_rebate: u64,
-    pub storage_fund_balance: u64,
-    pub stake_subsidy_amount: u64,
-    pub total_gas_fees: u64,
-    pub total_stake_rewards_distributed: u64,
-    pub leftover_storage_fund_inflow: u64,
 }
 
 impl TransactionBuilder {
@@ -552,7 +534,7 @@ impl TestCheckpointDataBuilder {
         .pipe(Transaction::new);
 
         let events = if !safe_mode {
-            let system_epoch_info_event = TestSystemEpochInfoEvent {
+            let system_epoch_info_event = SystemEpochInfoEvent {
                 epoch: self.checkpoint_builder.epoch,
                 protocol_version: protocol_config.version.as_u64(),
                 ..Default::default()
