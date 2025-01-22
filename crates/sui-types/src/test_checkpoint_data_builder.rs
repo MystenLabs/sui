@@ -522,11 +522,9 @@ impl TestCheckpointDataBuilder {
         }
     }
 
-    /// Creates a transaction that advances the epoch,
-    /// Build the checkpoint data with a transaction that advances the epoch in addition to all the
-    /// transactions added to the builder so far. This increments the stored checkpoint sequence
-    /// number and epoch. If `safe_mode` is true, the epoch end transaction will not include the
-    /// `SystemEpochInfoEvent`.
+    /// Creates a transaction that advances the epoch, adds it to the checkpoint, and then builds
+    /// the checkpoint. This increments the stored checkpoint sequence number and epoch. If
+    /// `safe_mode` is true, the epoch end transaction will not include the `SystemEpochInfoEvent`.
     pub fn advance_epoch(&mut self, safe_mode: bool) -> CheckpointData {
         let (committee, _) = Committee::new_simple_test_committee();
         let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
