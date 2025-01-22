@@ -174,7 +174,7 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn test_kv_epoch_ends_safe_mode() -> () {
+    pub async fn test_kv_epoch_ends_safe_mode() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
 
@@ -185,7 +185,7 @@ mod tests {
 
         let epochs = get_all_kv_epoch_ends(&mut conn).await.unwrap();
         assert_eq!(epochs.len(), 1);
-        assert_eq!(epochs[0].safe_mode, true);
+        assert!(epochs[0].safe_mode);
         assert_eq!(epochs[0].total_gas_fees, None);
 
         let checkpoint = Arc::new(builder.advance_epoch(false));
@@ -194,12 +194,12 @@ mod tests {
 
         let epochs = get_all_kv_epoch_ends(&mut conn).await.unwrap();
         assert_eq!(epochs.len(), 2);
-        assert_eq!(epochs[1].safe_mode, false);
+        assert!(!epochs[1].safe_mode);
         assert_eq!(epochs[1].total_gas_fees, Some(0));
     }
 
     #[tokio::test]
-    pub async fn test_kv_epoch_ends_same_epoch() -> () {
+    pub async fn test_kv_epoch_ends_same_epoch() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
 
@@ -253,7 +253,7 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn test_kv_epoch_ends_advance_multiple_epochs() -> () {
+    pub async fn test_kv_epoch_ends_advance_multiple_epochs() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
 
