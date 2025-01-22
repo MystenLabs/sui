@@ -84,20 +84,9 @@ fragment Structs on Object {
         }
     }
 }
-
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...Structs
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_2_0}") {
+        ...Structs
     }
 }
 
@@ -155,18 +144,8 @@ fragment Structs on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...Structs
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_5_0}") {
+        ...Structs
     }
 }
 
@@ -192,18 +171,8 @@ fragment Structs on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...Structs
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_5_0}") {
+        ...Structs
     }
 }
 

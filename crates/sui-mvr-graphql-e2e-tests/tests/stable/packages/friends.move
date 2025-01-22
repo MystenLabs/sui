@@ -60,21 +60,10 @@ fragment ModuleFriends on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...ModuleFriends
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_1_0}") {
+        ...ModuleFriends
     }
 }
-
 
 //# run-graphql
 
@@ -92,18 +81,8 @@ fragment ModuleFriends on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...ModuleFriends
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_1_0}") {
+        ...ModuleFriends
     }
 }
 
@@ -156,18 +135,8 @@ fragment ModuleFriends on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...ModuleFriends
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_1_0}") {
+        ...ModuleFriends
     }
 }
 
@@ -204,17 +173,7 @@ fragment ModuleFriends on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...ModuleFriends
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_6_0}") {
+        ...ModuleFriends
     }
 }

@@ -49,18 +49,8 @@ fragment Modules on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...Modules
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_1_0}") {
+        ...Modules
     }
 }
 
@@ -88,20 +78,11 @@ fragment Modules on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...Modules
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_1_0}") {
+        ...Modules
     }
 }
+
 
 //# run-graphql --cursors {"n":"m","c":1} {"n":"o","c":1}
 fragment NodeNames on MoveModuleConnection {
@@ -130,17 +111,7 @@ fragment Modules on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...Modules
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_1_0}") {
+        ...Modules
     }
 }

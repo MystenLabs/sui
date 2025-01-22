@@ -50,18 +50,8 @@ fragment Enums on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...Enums
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_1_0}") {
+        ...Enums
     }
 }
 
@@ -132,18 +122,8 @@ fragment Enums on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...Enums
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_4_0}") {
+        ...Enums
     }
 }
 
@@ -169,17 +149,7 @@ fragment Enums on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...Enums
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_4_0}") {
+        ...Enums
     }
 }

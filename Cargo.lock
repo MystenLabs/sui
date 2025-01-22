@@ -14574,6 +14574,7 @@ dependencies = [
  "async-trait",
  "datatest-stable",
  "msim",
+ "serde_json",
  "sui-mvr-graphql-rpc",
  "sui-transactional-test-runner",
  "telemetry-subscribers",

@@ -70,20 +70,11 @@ fragment Functions on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...Functions
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_2_0}") {
+        ...Functions
     }
 }
+
 
 //# upgrade --package P0 --upgrade-capability 2,1 --sender A
 
@@ -120,18 +111,8 @@ fragment Functions on Object {
 }
 
 {
-    transactionBlocks(last: 1) {
-        nodes {
-            effects {
-                objectChanges {
-                    nodes {
-                        outputState {
-                            ...Functions
-                        }
-                    }
-                }
-            }
-        }
+    object(address: "@{obj_5_0}") {
+        ...Functions
     }
 }
 
