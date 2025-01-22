@@ -7,6 +7,8 @@ use crate::jit::optimization::ast;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+const MAX_ITERATIONS: usize = 32;
+
 pub(crate) fn package(pkg: &mut ast::Package) -> bool {
     let mut changed = false;
     pkg.modules.iter_mut().for_each(|(_, m)| {
@@ -22,7 +24,7 @@ fn module(changed: &mut bool, m: &mut ast::Module) {
     } = m;
     functions
         .iter_mut()
-        .for_each(|(ndx, code)| function(changed, *ndx, code));
+        .for_each(|(ndx, code)| function(changed, 0, *ndx, code));
 }
 
 struct BlockContext<'changed, 'labels, 'tables> {
@@ -31,17 +33,42 @@ struct BlockContext<'changed, 'labels, 'tables> {
     jump_tables: &'tables [VariantJumpTable],
 }
 
-fn function(changed: &mut bool, _ndx: FunctionDefinitionIndex, fun: &mut ast::Function) {
+// NB: This is a sort of peephole optimizer to eliminate dead code. We could make this
+// more-sophisticated by building up a proper graph of connected edges, and then computing
+// reachability from the root (`0`) through it. The current is sufficient, though, when run in
+// iteration, and requires less-complex machinery. It does, however, require an interation bound to
+// avoid running too long on sub-optimal edge cases.
+fn function(
+    changed: &mut bool,
+    iter_count: usize,
+    _ndx: FunctionDefinitionIndex,
+    fun: &mut ast::Function,
+) {
+    if iter_count > MAX_ITERATIONS {
+        return;
+    }
     let Some(code) = &mut fun.code else { return };
 
+    // Process all of the blocks
     let ast::Code { jump_tables, code } = code;
-    let mut live_labels = BTreeSet::new();
+    let mut live_labels: BTreeSet<ast::Label> = BTreeSet::from([0]);
     let mut context = BlockContext {
         changed,
         live_labels: &mut live_labels,
         jump_tables,
     };
     blocks(&mut context, code);
+
+    // Now remove all the unreachable labels
+    let labels: BTreeSet<ast::Label> = code.keys().cloned().collect::<BTreeSet<_>>();
+    let dead_labels = labels.difference(&live_labels).collect::<BTreeSet<_>>();
+    if !dead_labels.is_empty() {
+        for label in dead_labels {
+            code.remove(label).unwrap();
+        }
+        // In this case, recur -- we may have exposed new dead code.
+        function(changed, iter_count + 1, _ndx, fun);
+    }
 }
 
 fn blocks(
