@@ -18,6 +18,7 @@ use sui_types::{
 
 use crate::{
     context::Context,
+    data::transactions::TransactionKey,
     error::{internal_error, invalid_params},
 };
 
@@ -64,7 +65,7 @@ impl TransactionsApiServer for Transactions {
         let Self(ctx) = self;
         let Some(stored) = ctx
             .loader()
-            .load_one(digest)
+            .load_one(TransactionKey(digest))
             .await
             .map_err(internal_error)?
         else {
