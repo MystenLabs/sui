@@ -54,7 +54,7 @@ pub trait EpochStartConfigTrait {
 // in the value of some variant, the branch which has been released should take precedence.
 // In this case, the picked-from branch is inconsistent with the released branch, and must
 // be fixed.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
 pub enum EpochFlag {
     // The deprecated flags have all been in production for long enough that
     // we can have deleted the old code paths they were guarding.

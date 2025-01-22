@@ -41,12 +41,8 @@ use tracing::{error, instrument};
 pub(crate) mod cache_types;
 pub mod metrics;
 mod object_locks;
-pub mod passthrough_cache;
-pub mod proxy_cache;
 pub mod writeback_cache;
 
-pub use passthrough_cache::PassthroughCache;
-pub use proxy_cache::ProxyCache;
 pub use writeback_cache::WritebackCache;
 
 use metrics::ExecutionCacheMetrics;
@@ -140,15 +136,9 @@ pub fn build_execution_cache(
             )
             .into(),
         ),
-        ExecutionCacheConfigType::PassthroughCache => ExecutionCacheTraitPointers::new(
-            ProxyCache::new(
-                epoch_start_config,
-                store.clone(),
-                execution_cache_metrics,
-                backpressure_manager,
-            )
-            .into(),
-        ),
+        ExecutionCacheConfigType::PassthroughCache => {
+            fatal!("PassthroughCache is no longer supported")
+        }
     }
 }
 
@@ -161,9 +151,7 @@ pub fn build_execution_cache_from_env(
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
 
     if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
-        ExecutionCacheTraitPointers::new(
-            PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
-        )
+        fatal!("PassthroughCache is no longer supported");
     } else {
         ExecutionCacheTraitPointers::new(
             WritebackCache::new(
@@ -890,9 +878,7 @@ macro_rules! implement_passthrough_traits {
 
 use implement_passthrough_traits;
 
-implement_storage_traits!(PassthroughCache);
 implement_storage_traits!(WritebackCache);
-implement_storage_traits!(ProxyCache);
 
 pub trait ExecutionCacheAPI:
     ObjectCacheRead
