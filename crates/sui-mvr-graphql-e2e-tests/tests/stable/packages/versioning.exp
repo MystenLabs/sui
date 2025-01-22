@@ -1,4 +1,4 @@
-processed 17 tasks
+processed 15 tasks
 
 init:
 A: object(0,0)
@@ -13,7 +13,7 @@ task 2, line 11:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 13-50:
+task 3, lines 13-29:
 //# run-graphql
 Response: {
   "data": {
@@ -27,9 +27,6 @@ Response: {
             }
           ]
         }
-      },
-      "packageVersions": {
-        "nodes": []
       }
     },
     "firstPackage": {
@@ -43,28 +40,22 @@ Response: {
             }
           ]
         }
-      },
-      "packageVersions": {
-        "nodes": []
       }
-    },
-    "packages": {
-      "nodes": []
     }
   }
 }
 
-task 4, lines 52-56:
+task 4, lines 31-35:
 //# upgrade --package P0 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5251600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 5, line 58:
+task 5, line 37:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 6, lines 60-97:
+task 6, lines 39-55:
 //# run-graphql
 Response: {
   "data": {
@@ -81,9 +72,6 @@ Response: {
             }
           ]
         }
-      },
-      "packageVersions": {
-        "nodes": []
       }
     },
     "firstPackage": {
@@ -97,28 +85,22 @@ Response: {
             }
           ]
         }
-      },
-      "packageVersions": {
-        "nodes": []
       }
-    },
-    "packages": {
-      "nodes": []
     }
   }
 }
 
-task 7, lines 99-104:
+task 7, lines 57-62:
 //# upgrade --package P1 --upgrade-capability 1,1 --sender A
 created: object(7,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5426400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 8, line 106:
+task 8, line 64:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 9, lines 108-145:
+task 9, lines 66-82:
 //# run-graphql
 Response: {
   "data": {
@@ -138,9 +120,6 @@ Response: {
             }
           ]
         }
-      },
-      "packageVersions": {
-        "nodes": []
       }
     },
     "firstPackage": {
@@ -154,18 +133,12 @@ Response: {
             }
           ]
         }
-      },
-      "packageVersions": {
-        "nodes": []
       }
-    },
-    "packages": {
-      "nodes": []
     }
   }
 }
 
-task 10, lines 147-184:
+task 10, lines 84-121:
 //# run-graphql
 Response: {
   "data": {
@@ -265,7 +238,7 @@ Response: {
   }
 }
 
-task 11, lines 186-223:
+task 11, lines 123-160:
 //# run-graphql
 Response: {
   "data": {
@@ -356,7 +329,7 @@ Response: {
   }
 }
 
-task 12, lines 225-280:
+task 12, lines 162-217:
 //# run-graphql
 Response: {
   "data": {
@@ -495,7 +468,7 @@ Response: {
   }
 }
 
-task 13, lines 282-310:
+task 13, lines 219-247:
 //# run-graphql
 Response: {
   "data": {
@@ -508,7 +481,7 @@ Response: {
   }
 }
 
-task 14, lines 312-343:
+task 14, lines 249-280:
 //# run-graphql
 Response: {
   "data": {
@@ -520,40 +493,6 @@ Response: {
     },
     "between": {
       "nodes": []
-    }
-  }
-}
-
-task 15, lines 345-380:
-//# run-graphql
-Response: {
-  "data": {
-    "packageVersions": {
-      "nodes": []
-    },
-    "after": {
-      "nodes": []
-    },
-    "before": {
-      "nodes": []
-    },
-    "between": {
-      "nodes": []
-    }
-  }
-}
-
-task 16, lines 382-400:
-//# run-graphql
-Response: {
-  "data": {
-    "packageVersions": {
-      "nodes": []
-    },
-    "package": {
-      "packageVersions": {
-        "nodes": []
-      }
     }
   }
 }

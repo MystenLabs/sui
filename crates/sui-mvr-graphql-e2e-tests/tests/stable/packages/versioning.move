@@ -17,13 +17,6 @@ module P0::m {
         module(name: "m") {
             functions { nodes { name } }
         }
-
-        packageVersions {
-            nodes {
-                address
-                version
-            }
-        }
     }
 
     firstPackage: package(address: "@{P0}", version: 1) {
@@ -31,20 +24,6 @@ module P0::m {
         version
         module(name: "m") {
             functions { nodes { name } }
-        }
-
-        packageVersions {
-            nodes {
-                address
-                version
-            }
-        }
-    }
-
-    packages(first: 10) {
-        nodes {
-            address
-            version
         }
     }
 }
@@ -64,13 +43,6 @@ module P1::m {
         module(name: "m") {
             functions { nodes { name } }
         }
-
-        packageVersions {
-            nodes {
-                address
-                version
-            }
-        }
     }
 
     firstPackage: package(address: "@{P1}", version: 1) {
@@ -78,20 +50,6 @@ module P1::m {
         version
         module(name: "m") {
             functions { nodes { name } }
-        }
-
-        packageVersions {
-            nodes {
-                address
-                version
-            }
-        }
-    }
-
-    packages(first: 10) {
-        nodes {
-            address
-            version
         }
     }
 }
@@ -112,13 +70,6 @@ module P2::m {
         module(name: "m") {
             functions { nodes { name } }
         }
-
-        packageVersions {
-            nodes {
-                address
-                version
-            }
-        }
     }
 
     firstPackage: package(address: "@{P2}", version: 1) {
@@ -126,20 +77,6 @@ module P2::m {
         version
         module(name: "m") {
             functions { nodes { name } }
-        }
-
-        packageVersions {
-            nodes {
-                address
-                version
-            }
-        }
-    }
-
-    packages(first: 10) {
-        nodes {
-            address
-            version
         }
     }
 }
@@ -337,63 +274,6 @@ module P2::m {
             version
             previousTransactionBlock {
                 effects { checkpoint { sequenceNumber } }
-            }
-        }
-    }
-}
-
-//# run-graphql
-{   # Query for versions of a user package
-    packageVersions(address: "@{P0}") {
-        nodes {
-            address
-            version
-        }
-    }
-
-    after: packageVersions(address: "@{P0}", filter: { afterVersion: 1 }) {
-        nodes {
-            address
-            version
-        }
-    }
-
-    before: packageVersions(address: "@{P0}", filter: { beforeVersion: 3 }) {
-        nodes {
-            address
-            version
-        }
-    }
-
-    between: packageVersions(
-        address: "@{P0}",
-        filter: {
-          afterVersion: 1,
-          beforeVersion: 3,
-        },
-    ) {
-        nodes {
-            address
-            version
-        }
-    }
-}
-
-//# run-graphql
-{   # Query for versions of a system package (there will be only one because we
-    # don't have a way to upgrade system packages in these tests.)
-    packageVersions(address: "0x1") {
-        nodes {
-            address
-            version
-        }
-    }
-
-    package(address: "0x1") {
-        packageVersions {
-            nodes {
-                address
-                version
             }
         }
     }
