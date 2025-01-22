@@ -100,7 +100,6 @@ pub(crate) struct CommitSyncer<C: NetworkClient> {
     // The commit index that is the max of highest local commit index and commit index inflight to Core.
     // Used to determine if fetched blocks can be sent to Core without gaps.
     synced_commit_index: CommitIndex,
-    last_processed_commit: Option<TrustedCommit>,
 }
 
 impl<C: NetworkClient> CommitSyncer<C> {
@@ -131,7 +130,6 @@ impl<C: NetworkClient> CommitSyncer<C> {
             highest_scheduled_index: None,
             highest_fetched_commit_index: 0,
             synced_commit_index,
-            last_processed_commit: None,
         }
     }
 
@@ -301,65 +299,20 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 blocks.iter().map(|b| b.reference().to_string()).join(","),
             );
 
-            // Identify the blocks to include according to the commits
-            let mut blocks_map = BTreeMap::new();
-            for block in blocks {
-                blocks_map.insert(block.reference(), block);
-            }
+            // If core thread cannot handle the incoming blocks, it is ok to block here.
+            // Also it is possible to have missing ancestors because an equivocating validator
+            // may produce blocks that are not included in commits but are ancestors to other blocks.
+            // Synchronizer is needed to fill in the missing ancestors in this case.
+            if let Err(err) = self
+                .inner
+                .core_thread_dispatcher
+                .add_commits(commits, blocks)
+                .await
+            {
+                info!("Failed to add blocks, shutting down: {}", err);
+                return;
+            };
 
-            let mut commits_with_blocks = Vec::new();
-            for commit in commits {
-                let mut blocks = Vec::new();
-                for block_ref in commit.blocks() {
-                    let block = blocks_map.remove(block_ref).expect("Block should exist");
-                    blocks.push(block);
-                }
-                commits_with_blocks.push((commit, blocks));
-            }
-
-            for (commit, blocks) in commits_with_blocks {
-                // Find the last commit if exists. If not it's ok.
-                let last_committed_leader = self.last_processed_commit.as_ref().map(|c| c.leader());
-
-                debug!(
-                    "Will process certified blocks with leader{:?}: {:?}",
-                    last_committed_leader,
-                    blocks.iter().map(|b| b.reference().to_string()).join(","),
-                );
-
-                // If core thread cannot handle the incoming blocks, it is ok to block here.
-                // Also it is possible to have missing ancestors because an equivocating validator
-                // may produce blocks that are not included in commits but are ancestors to other blocks.
-                // Synchronizer is needed to fill in the missing ancestors in this case.
-                match self
-                    .inner
-                    .core_thread_dispatcher
-                    .add_commit(commit.clone(), blocks)
-                    .await
-                {
-                    Ok(missing) => {
-                        if !missing.is_empty() {
-                            warn!(
-                                "Fetched blocks have missing ancestors: {:?} for commit range {:?}",
-                                missing, fetched_commit_range
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        info!("Failed to add blocks, shutting down: {}", e);
-                        return;
-                    }
-                };
-
-                info!(
-                    "Processed synced commit {} with previous leader {:?}.",
-                    commit.index(),
-                    last_committed_leader
-                );
-
-                // Every time we finish processing we update the last processed committed leader
-                self.last_processed_commit = Some(commit);
-            }
             // Once commits and blocks are sent to Core, ratchet up synced_commit_index
             self.synced_commit_index = self.synced_commit_index.max(fetched_commit_range.end());
         }

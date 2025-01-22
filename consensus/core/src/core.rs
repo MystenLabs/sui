@@ -330,14 +330,13 @@ impl Core {
         Ok(missing_block_refs)
     }
 
-    // Adds blocks that have been synced via the commit syncer. We do a special handling here as it's possible due to GC to have pruned causal history
-    // that might not be present in earlier committed sub dags, but still needed in order to be able to advance the commits. However, this history in practice is not essential
-    // for safety (never committed as part of any sub dag) but only for liveness and even in this case only temporarily needed until commits advance.
-    pub(crate) fn add_commit(
+    // Adds the commits and blocks that have been synced via the commit syncer. We are using the commit info in order to skip running the decision rule and immediately commit
+    // the corresponding leaders and sub dags.
+    pub(crate) fn add_commits(
         &mut self,
-        commit: TrustedCommit,
+        commits: Vec<TrustedCommit>,
         blocks: Vec<VerifiedBlock>,
-    ) -> ConsensusResult<BTreeSet<BlockRef>> {
+    ) -> ConsensusResult<()> {
         let _scope = monitored_scope("Core::add_commit");
 
         // Just accept all the blocks - maybe do some basic timestamp validation?
@@ -353,7 +352,7 @@ impl Core {
             );
 
             // Try to commit the new blocks. Take into account the trusted commit that has been provided.
-            self.try_commit(vec![commit])?;
+            self.try_commit(commits)?;
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
@@ -364,7 +363,7 @@ impl Core {
             self.try_signal_new_round();
         };
 
-        Ok(BTreeSet::new())
+        Ok(())
     }
 
     /// If needed, signals a new clock round and sets up leader timeout.
@@ -669,6 +668,9 @@ impl Core {
             info!(
                 "Will try to commit synced commits first : {:?}",
                 synced_commits
+                    .iter()
+                    .map(|c| (c.index(), c.leader()))
+                    .collect::<Vec<_>>()
             );
         }
 

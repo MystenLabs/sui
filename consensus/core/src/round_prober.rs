@@ -418,11 +418,11 @@ mod test {
             unimplemented!()
         }
 
-        async fn add_commit(
+        async fn add_commits(
             &self,
-            _commit: TrustedCommit,
+            _commit: Vec<TrustedCommit>,
             _blocks: Vec<VerifiedBlock>,
-        ) -> Result<BTreeSet<BlockRef>, CoreError> {
+        ) -> Result<(), CoreError> {
             unimplemented!()
         }
 

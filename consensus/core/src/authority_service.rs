@@ -745,11 +745,11 @@ mod tests {
             Ok(BTreeSet::new())
         }
 
-        async fn add_commit(
+        async fn add_commits(
             &self,
-            _commit: TrustedCommit,
+            _commits: Vec<TrustedCommit>,
             _blocks: Vec<VerifiedBlock>,
-        ) -> Result<BTreeSet<BlockRef>, CoreError> {
+        ) -> Result<(), CoreError> {
             todo!()
         }
 
