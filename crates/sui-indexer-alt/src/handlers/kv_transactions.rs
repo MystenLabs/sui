@@ -74,12 +74,63 @@ impl Handler for KvTransactions {
         to_exclusive: u64,
         conn: &mut db::Connection<'_>,
     ) -> Result<usize> {
-        // TODO: use tx_interval. `tx_sequence_number` needs to be added to this table, and an index
-        // created as its primary key is on `tx_digest`.
         let filter = kv_transactions::table.filter(
             kv_transactions::cp_sequence_number.between(from as i64, to_exclusive as i64 - 1),
         );
 
         Ok(diesel::delete(filter).execute(conn).await?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diesel_async::RunQueryDsl;
+    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_schema::MIGRATIONS;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
+
+    async fn get_all_kv_transactions(
+        conn: &mut db::Connection<'_>,
+    ) -> Result<Vec<StoredTransaction>> {
+        Ok(kv_transactions::table.load(conn).await?)
+    }
+
+    /// The kv_checkpoints pruner does not require cp_sequence_numbers, it can prune directly with the
+    /// checkpoint sequence number range.
+    #[tokio::test]
+    async fn test_kv_transactions_pruning() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.db().connect().await.unwrap();
+
+        let mut builder = TestCheckpointDataBuilder::new(0);
+        builder = builder.start_transaction(0).finish_transaction();
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = KvTransactions.process(&checkpoint).unwrap();
+        KvTransactions::commit(&values, &mut conn).await.unwrap();
+
+        builder = builder.start_transaction(0).finish_transaction();
+        builder = builder.start_transaction(1).finish_transaction();
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = KvTransactions.process(&checkpoint).unwrap();
+        KvTransactions::commit(&values, &mut conn).await.unwrap();
+
+        builder = builder.start_transaction(0).finish_transaction();
+        builder = builder.start_transaction(1).finish_transaction();
+        builder = builder.start_transaction(2).finish_transaction();
+        builder = builder.start_transaction(3).finish_transaction();
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = KvTransactions.process(&checkpoint).unwrap();
+        KvTransactions::commit(&values, &mut conn).await.unwrap();
+
+        let transactions = get_all_kv_transactions(&mut conn).await.unwrap();
+        assert_eq!(transactions.len(), 7);
+
+        // Prune checkpoints from `[0, 2)`
+        let rows_pruned = KvTransactions.prune(0, 2, &mut conn).await.unwrap();
+        assert_eq!(rows_pruned, 3);
+
+        let remaining_transactions = get_all_kv_transactions(&mut conn).await.unwrap();
+        assert_eq!(remaining_transactions.len(), 4);
     }
 }

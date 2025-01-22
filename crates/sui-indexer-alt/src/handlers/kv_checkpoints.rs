@@ -52,3 +52,52 @@ impl Handler for KvCheckpoints {
         Ok(diesel::delete(filter).execute(conn).await?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diesel_async::RunQueryDsl;
+    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_schema::MIGRATIONS;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
+
+    async fn get_all_kv_checkpoints(
+        conn: &mut db::Connection<'_>,
+    ) -> Result<Vec<StoredCheckpoint>> {
+        let query = kv_checkpoints::table.load(conn).await?;
+        Ok(query)
+    }
+
+    /// The kv_checkpoints pruner does not require cp_sequence_numbers, it can prune directly with the
+    /// checkpoint sequence number range.
+    #[tokio::test]
+    async fn test_kv_checkpoints_pruning() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.db().connect().await.unwrap();
+
+        // Create 3 checkpoints
+        let mut builder = TestCheckpointDataBuilder::new(0);
+        builder = builder.start_transaction(0).finish_transaction();
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = KvCheckpoints.process(&checkpoint).unwrap();
+        KvCheckpoints::commit(&values, &mut conn).await.unwrap();
+
+        builder = builder.start_transaction(0).finish_transaction();
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = KvCheckpoints.process(&checkpoint).unwrap();
+        KvCheckpoints::commit(&values, &mut conn).await.unwrap();
+
+        builder = builder.start_transaction(0).finish_transaction();
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = KvCheckpoints.process(&checkpoint).unwrap();
+        KvCheckpoints::commit(&values, &mut conn).await.unwrap();
+
+        // Prune checkpoints from `[0, 2)`
+        let rows_pruned = KvCheckpoints.prune(0, 2, &mut conn).await.unwrap();
+        assert_eq!(rows_pruned, 2);
+
+        // Checkpoint 2 remains
+        let remaining_checkpoints = get_all_kv_checkpoints(&mut conn).await.unwrap();
+        assert_eq!(remaining_checkpoints.len(), 1);
+    }
+}
