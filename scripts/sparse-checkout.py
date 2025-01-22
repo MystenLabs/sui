@@ -20,6 +20,15 @@ Usage:
 When in a sparse checkout, changes to Cargo.toml and Cargo.lock are ignored by git. If you need
 to edit these files from within a sparse checkout, use the `reset` subcommand to un-ignore them.
 Then edit them, check in the changes, and run this script again.
+
+If you need to rebase or checkout a different branch, you can use the `git` subcommand to run
+git commands after resetting the index. For example:
+
+  $ ./sparse-checkout.py git rebase origin/main
+
+After git completes successfully, it will re-run the script to update the sparse checkout.
+If git does not complete successfully (e.g. rebase conflicts), you will need to manually
+resolve the conflicts and re-run the script (with no arguments) to update the sparse checkout.
 """
 
 import os
@@ -308,6 +317,15 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "auto":
         auto_update_config()
         sys.exit(0)
+
+    if len(sys.argv) > 1 and sys.argv[1] == "git":
+        # check if there are any ignored files
+        if get_ignored_files():
+          reset_index()
+
+        # run the git command
+        subprocess.check_call(sys.argv[1:])
+        # fall through to re-generate the Cargo.toml changes
 
     # 1. Read the crates to include from .sparse
     crates_to_checkout = read_sparse_config(".sparse")
