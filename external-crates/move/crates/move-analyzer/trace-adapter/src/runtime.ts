@@ -955,14 +955,17 @@ export class Runtime extends EventEmitter {
     public toString(): string {
         let res = 'current frame stack:\n';
         for (const frame of this.frameStack.frames) {
-            const fileName = path.basename(frame.srcFilePath);
+            const fileName = frame.showDisassembly ?
+                path.basename(frame.bcodeFilePath!) :
+                path.basename(frame.srcFilePath);
+            const line = frame.showDisassembly ? frame.bcodeLine : frame.srcLine;
             res += this.singleTab
                 + 'function: '
                 + frame.name
                 + ' ('
                 + fileName
                 + ':'
-                + frame.srcLine
+                + line
                 + ')\n';
             for (let i = 0; i < frame.locals.length; i++) {
                 res += this.singleTab + this.singleTab + 'scope ' + i + ' :\n';
