@@ -29,7 +29,6 @@ mod context;
 pub mod data;
 mod error;
 mod metrics;
-mod objects;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct RpcArgs {
@@ -190,7 +189,7 @@ impl Default for RpcArgs {
 /// command-line). The service will continue to run until the cancellation token is triggered, and
 /// will signal cancellation on the token when it is shutting down.
 ///
-/// The service may spin up auxilliary services (such as the system package task) to support
+/// The service may spin up auxiliary services (such as the system package task) to support
 /// itself, and will clean these up on shutdown as well.
 pub async fn start_rpc(
     db_args: DbArgs,
