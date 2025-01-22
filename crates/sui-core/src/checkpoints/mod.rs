@@ -1043,11 +1043,11 @@ impl CheckpointBuilder {
                 .await?;
             sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
         }
-        let new_checkpoint = self
+        let new_checkpoints = self
             .create_checkpoints(sorted_tx_effects_included_in_checkpoint, &last_details)
             .await?;
-        let highest_sequence = *new_checkpoint.last().0.sequence_number();
-        self.write_checkpoints(last_details.checkpoint_height, new_checkpoint)
+        let highest_sequence = *new_checkpoints.last().0.sequence_number();
+        self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
             .await?;
         Ok(highest_sequence)
     }
@@ -2218,7 +2218,7 @@ enum CheckpointServiceState {
 }
 
 impl CheckpointServiceState {
-    fn take(&mut self) -> (CheckpointBuilder, CheckpointAggregator) {
+    fn take_unstarted(&mut self) -> (CheckpointBuilder, CheckpointAggregator) {
         let mut state = CheckpointServiceState::Started;
         std::mem::swap(self, &mut state);
 
@@ -2234,7 +2234,7 @@ pub struct CheckpointService {
     notify_builder: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
     last_signature_index: Mutex<u64>,
-    // A notification for each time a new checkpoint is built.
+    // A notification for the current highest built sequence number.
     highest_currently_built_seq_tx: watch::Sender<CheckpointSequenceNumber>,
     // The highest sequence number that had already been built at the time CheckpointService
     // was constructed
@@ -2322,7 +2322,7 @@ impl CheckpointService {
     pub async fn spawn(&self) -> JoinSet<()> {
         let mut tasks = JoinSet::new();
 
-        let (builder, aggregator) = self.state.lock().take();
+        let (builder, aggregator) = self.state.lock().take_unstarted();
         tasks.spawn(monitored_future!(builder.run()));
         tasks.spawn(monitored_future!(aggregator.run()));
 
@@ -2342,7 +2342,8 @@ impl CheckpointService {
 }
 
 impl CheckpointService {
-    /// Waits until the last_built_seq available in last_built_rx is >= last_built_seq
+    /// Waits until all checkpoints had been built before the node restarted
+    /// are rebuilt.
     pub async fn wait_for_rebuilt_checkpoints(&self) {
         let highest_previously_built_seq = self.highest_previously_built_seq;
         let mut rx = self.highest_currently_built_seq_tx.subscribe();
