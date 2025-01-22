@@ -1896,7 +1896,7 @@
     },
     {
       "name": "sui.types.proto",
-      "description": "",
+      "description": "Protobuf definitions of public Sui core types\n\nThis file contains a complete set of protobuf definitions for all of the\npublic sui core types. All sui types are intended to have a 1:1 mapping to a\nprotobuf message defined in this file and be able to roundtrip to/from their\nrust and protobuf definitions assuming a sufficiently up-to-date version of\nboth these definitions.",
       "package": "sui.types",
       "hasEnums": true,
       "hasExtensions": false,
