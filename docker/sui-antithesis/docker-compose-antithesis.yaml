@@ -117,7 +117,7 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.15
-    image: sui-node-alt:${SUI_NODE_B_TAG}
+    image: sui-node:${SUI_NODE_A_TAG}
     hostname: fullnode1
     container_name: fullnode1
     environment:
