@@ -9,7 +9,7 @@ use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 
 use crate::schema::{kv_checkpoints, kv_genesis};
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = kv_checkpoints)]
 pub struct StoredCheckpoint {
     pub sequence_number: i64,
