@@ -7,7 +7,6 @@
 !/*.js
 
 # ignore generated files
-/apps/icons/src
 npm-debug.log*
 package-lock.json
 yarn-debug.log*
