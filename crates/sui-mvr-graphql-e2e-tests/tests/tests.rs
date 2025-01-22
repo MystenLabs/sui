@@ -20,12 +20,6 @@ pub struct OffchainReaderForAdapter {
 
 #[async_trait]
 impl OffchainStateReader for OffchainReaderForAdapter {
-    async fn wait_for_objects_snapshot_catchup(&self, base_timeout: Duration) {
-        self.cluster
-            .wait_for_objects_snapshot_catchup(base_timeout)
-            .await
-    }
-
     async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         self.cluster
             .wait_for_checkpoint_catchup(checkpoint, base_timeout)
@@ -55,6 +49,10 @@ impl OffchainStateReader for OffchainReaderForAdapter {
             service_version: result.graphql_version().ok(),
         })
     }
+
+    async fn execute_jsonrpc(&self, _: String, _: Value) -> anyhow::Result<TestResponse> {
+        bail!("JSON-RPC queries are not supported in these tests")
+    }
 }
 
 datatest_stable::harness!(run_test, "tests", r"stable/.*\.move$");
@@ -68,9 +66,6 @@ async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         let (output, mut adapter) =
             create_adapter::<SuiTestAdapter>(path, Some(Arc::new(PRE_COMPILED.clone()))).await?;
 
-        // In another crate like `sui-mvr-graphql-e2e-tests`, this would be the place to translate
-        // from `offchain_config` to something compatible with the indexer and graphql flavor of
-        // choice.
         let offchain_config = adapter.offchain_config.as_ref().unwrap();
 
         let cluster = serve_executor(
