@@ -495,7 +495,6 @@ impl SuiNode {
 
         let cache_traits = build_execution_cache(
             &config.execution_cache,
-            &epoch_start_configuration,
             &prometheus_registry,
             &store,
             backpressure_manager.clone(),
