@@ -205,7 +205,8 @@ impl AuthorityPerpetualTables {
         let objects = builder.add_key_space_config("objects", 32 + 8, MUTEXES, default_cells_per_mutex(), objects_config);
         let live_owned_object_markers = builder.add_key_space_config("live_owned_object_markers", 32 + 8 + 32 + 8, MUTEXES, default_cells_per_mutex(), bloom_config.clone());
         let transactions = builder.add_key_space("transactions", 32, MUTEXES, default_cells_per_mutex());
-        let effects = builder.add_key_space_config("effects", 32, MUTEXES, default_cells_per_mutex(), bloom_config.clone());
+        let effects_config = bloom_config.clone().value_cache_size(4096);
+        let effects = builder.add_key_space_config("effects", 32, MUTEXES, default_cells_per_mutex(), effects_config);
         let executed_effects = builder.add_key_space_config("executed_effects",32, MUTEXES, default_cells_per_mutex(), bloom_config);
         let events = builder.add_key_space("events", 32 + 8, MUTEXES, default_cells_per_mutex());
         let executed_transactions_to_checkpoint =
