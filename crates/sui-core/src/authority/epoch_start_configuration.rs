@@ -68,8 +68,8 @@ pub enum EpochFlag {
     // This flag was "burned" because it was deployed with a broken version of the code. The
     // new flags below are required to enable state accumulator v2
     _StateAccumulatorV2EnabledDeprecated = 4,
-    StateAccumulatorV2EnabledTestnet = 5,
-    StateAccumulatorV2EnabledMainnet = 6,
+    _StateAccumulatorV2EnabledTestnetDeprecated = 5,
+    _StateAccumulatorV2EnabledMainnetDeprecated = 6,
 
     _ExecutedInEpochTableDeprecated = 7,
 
@@ -87,11 +87,7 @@ impl EpochFlag {
     }
 
     fn default_flags_impl(cache_config: &ExecutionCacheConfig) -> Vec<Self> {
-        let mut new_flags = vec![
-            EpochFlag::StateAccumulatorV2EnabledTestnet,
-            EpochFlag::StateAccumulatorV2EnabledMainnet,
-            EpochFlag::UseVersionAssignmentTablesV3,
-        ];
+        let mut new_flags = vec![EpochFlag::UseVersionAssignmentTablesV3];
 
         if matches!(
             choose_execution_cache(cache_config),
@@ -124,11 +120,11 @@ impl fmt::Display for EpochFlag {
             EpochFlag::_ExecutedInEpochTableDeprecated => {
                 write!(f, "ExecutedInEpochTable (DEPRECATED)")
             }
-            EpochFlag::StateAccumulatorV2EnabledTestnet => {
-                write!(f, "StateAccumulatorV2EnabledTestnet")
+            EpochFlag::_StateAccumulatorV2EnabledTestnetDeprecated => {
+                write!(f, "StateAccumulatorV2EnabledTestnet (DEPRECATED)")
             }
-            EpochFlag::StateAccumulatorV2EnabledMainnet => {
-                write!(f, "StateAccumulatorV2EnabledMainnet")
+            EpochFlag::_StateAccumulatorV2EnabledMainnetDeprecated => {
+                write!(f, "StateAccumulatorV2EnabledMainnet (DEPRECATED)")
             }
             EpochFlag::UseVersionAssignmentTablesV3 => {
                 write!(f, "UseVersionAssignmentTablesV3")
