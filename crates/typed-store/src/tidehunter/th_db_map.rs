@@ -63,6 +63,26 @@ where
         }
     }
 
+    fn do_get(&self, key: &K, multi: bool) -> Result<Option<V>, <Self as Map<K, V>>::Error> {
+        if self.log_get {
+            let now = START.elapsed().as_secs();
+            let prev = self.last_get_log.swap(now, Ordering::Relaxed);
+            if prev != now {
+                tracing::info!("reported_get_backtrace {multi} {:?} ", Backtrace::force_capture());
+            }
+        }
+        let key = self.serialize_key(key);
+        let v = self
+            .db
+            .get(self.ks, &key)
+            .map_err(typed_store_error_from_db_error)?;
+        if let Some(v) = v {
+            Ok(Some(self.deserialize_value(&v)))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn batch(&self) -> ThDbBatch {
         ThDbBatch {
             db: self.db.clone(),
@@ -198,23 +218,7 @@ where
             .rocksdb_get_latency_seconds // todo different metric name?
             .with_label_values(&[&self.ks_name()])
             .start_timer();
-        if self.log_get {
-            let now = START.elapsed().as_secs();
-            let prev = self.last_get_log.swap(now, Ordering::Relaxed);
-            if prev != now {
-                tracing::info!("reported_get_backtrace {:?} ", Backtrace::force_capture());
-            }
-        }
-        let key = self.serialize_key(key);
-        let v = self
-            .db
-            .get(self.ks, &key)
-            .map_err(typed_store_error_from_db_error)?;
-        if let Some(v) = v {
-            Ok(Some(self.deserialize_value(&v)))
-        } else {
-            Ok(None)
-        }
+        self.do_get(key, false)
     }
 
     fn multi_get<J>(&self, keys: impl IntoIterator<Item=J>) -> Result<Vec<Option<V>>, Self::Error>
@@ -228,7 +232,7 @@ where
             .with_label_values(&[&self.ks_name()])
             .start_timer();
         // copy from Map::multi_get
-        keys.into_iter().map(|key| self.get(key.borrow())).collect()
+        keys.into_iter().map(|key| self.do_get(key.borrow(), true)).collect()
     }
 
     fn multi_contains_keys<J>(&self, keys: impl IntoIterator<Item=J>) -> Result<Vec<bool>, Self::Error>
