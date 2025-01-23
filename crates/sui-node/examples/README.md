@@ -1,6 +1,6 @@
 # Sui Node Builder Example
 
-This example demonstrates how to use the `NodeBuilder` to create and run a Sui node with custom extensions.
+This example demonstrates how to use the `NodeBuilder` to create and run a Sui node.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ This example demonstrates how to use the `NodeBuilder` to create and run a Sui n
 
 2. Create a genesis blob file (if you don't have one):
 ```bash
-cargo run --bin sui genesis
+cargo run --bin sui genesis --force --write-config crates/sui-node/examples/node_config.yaml
 ```
 
 3. Run the example:
@@ -23,8 +23,8 @@ cargo run --example node_builder_test -p sui-node
 
 The example will:
 1. Initialize a node with the configuration from `crates/sui-node/examples/node_config.yaml`
-2. Run a simple extension that logs when it's executed
-3. Start the node
+2. Start the node and keep it running
+3. Wait for Ctrl+C to initiate shutdown
 
 ## Configuration
 
