@@ -387,8 +387,8 @@ moka = { version = "0.12", default-features = false, features = [
     "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "2a170f4cd81c5cd10f5e4a5e810068f3045f41b6", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "2a170f4cd81c5cd10f5e4a5e810068f3045f41b6", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e06fc6fa9aeb978ffc621f8b27c06a404042279f", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e06fc6fa9aeb978ffc621f8b27c06a404042279f", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
@@ -457,7 +457,7 @@ scopeguard = "1.1"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde-env = "0.2.0"
 serde-name = "0.2.1"
-serde-reflection = "0.3.6"
+serde-reflection = "0.5"
 serde_json = { version = "1.0.95", features = ["preserve_order"] }
 serde_repr = "0.1"
 serde_test = "1.0.147"
@@ -487,7 +487,7 @@ tempfile = "3.3.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
-tokio = "1.36.0"
+tokio = "1.43.0"
 tokio-retry = "0.3"
 tokio-rustls = { version = "0.26", default-features = false, features = [
     "tls12",
