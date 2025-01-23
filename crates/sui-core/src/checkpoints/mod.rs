@@ -998,9 +998,12 @@ impl CheckpointBuilder {
             {
                 Ok(seq) => {
                     self.last_built.send_if_modified(|cur| {
-                        assert!(seq > *cur);
-                        *cur = seq;
-                        true
+                        if seq > *cur {
+                            *cur = seq;
+                            true
+                        } else {
+                            false
+                        }
                     });
                 }
                 Err(e) => {
