@@ -10,16 +10,18 @@ use diesel::{
     sql_types::{BigInt, Bytea},
     QueryableByName, Selectable,
 };
-use diesel_async::RunQueryDsl;
 use move_core_types::language_storage::StructTag;
+use serde::{Deserialize, Serialize};
 use sui_indexer_alt_schema::objects::StoredOwnerKind;
 use sui_indexer_alt_schema::schema::{obj_info, obj_versions};
-use sui_pg_db::{Connection, Db};
 use sui_types::base_types::SuiAddress;
 use sui_types::{Identifier, TypeTag};
 
+use super::reader::Connection;
+
 #[allow(dead_code)]
-pub(crate) struct Cursor {
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub(crate) struct ObjectCursor {
     // The cursor checkpoint number
     checkpoint: i64,
     // The cursor object ID
@@ -249,22 +251,21 @@ impl ObjectFilterQueryBuilder {
 /// Return the objects and the new cursor.
 #[allow(dead_code)]
 pub async fn query_objects_with_filters(
-    db: &Db,
+    connection: &mut Connection<'_>,
     filters: ObjectFilter,
     view_checkpoint: Option<i64>,
-    cursor: Option<Cursor>,
+    cursor: Option<ObjectCursor>,
     limit: usize,
-) -> anyhow::Result<(Vec<IdVersion>, Option<Cursor>)> {
+) -> anyhow::Result<(Vec<IdVersion>, Option<ObjectCursor>)> {
     if limit == 0 {
         return Ok((vec![], None));
     }
-    let mut conn = db.connect().await?;
     let object_ids =
-        query_object_ids_with_filters(&mut conn, filters, view_checkpoint, cursor, limit).await?;
+        query_object_ids_with_filters(connection, filters, view_checkpoint, cursor, limit).await?;
     let next_cursor = if object_ids.len() == limit {
         // unwrap safe since limit is not 0, and hence object_ids.len() is not 0.
         let last = object_ids.last().unwrap();
-        Some(Cursor {
+        Some(ObjectCursor {
             checkpoint: last.cp_sequence_number,
             object_id: last.object_id.clone(),
         })
@@ -274,14 +275,14 @@ pub async fn query_objects_with_filters(
     // The obj_info table only tracks ownership or presence changes for objects.
     // To get the latest object versions that cover all mutations, we need to query the obj_versions table.
     let object_versions =
-        query_latest_object_versions(&mut conn, &object_ids, view_checkpoint).await?;
+        query_latest_object_versions(connection, &object_ids, view_checkpoint).await?;
     Ok((object_versions, next_cursor))
 }
 
 fn build_object_ids_query(
     filters: ObjectFilter,
     view_checkpoint: Option<i64>,
-    cursor: Option<Cursor>,
+    cursor: Option<ObjectCursor>,
     limit: usize,
 ) -> String {
     let mut builder = ObjectFilterQueryBuilder::default();
@@ -335,11 +336,11 @@ async fn query_object_ids_with_filters(
     conn: &mut Connection<'_>,
     filters: ObjectFilter,
     view_checkpoint: Option<i64>,
-    cursor: Option<Cursor>,
+    cursor: Option<ObjectCursor>,
     limit: usize,
 ) -> anyhow::Result<Vec<IdCheckpoint>> {
     let query = build_object_ids_query(filters, view_checkpoint, cursor, limit);
-    Ok(sql_query(query).load::<IdCheckpoint>(conn).await?)
+    Ok(conn.results(sql_query(query)).await?)
 }
 
 fn build_latest_object_versions_query<'a>(
@@ -382,7 +383,7 @@ async fn query_latest_object_versions(
         objects.iter().map(|o| &o.object_id),
         view_checkpoint_number,
     );
-    Ok(sql_query(query).load::<IdVersion>(conn).await?)
+    Ok(conn.results(sql_query(query)).await?)
 }
 
 #[cfg(test)]
@@ -466,7 +467,7 @@ mod tests {
         let query_with_cursor = build_object_ids_query(
             filters,
             Some(1000),
-            Some(Cursor {
+            Some(ObjectCursor {
                 checkpoint: 1000,
                 object_id: vec![0; 32],
             }),
