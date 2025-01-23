@@ -3,7 +3,7 @@
 
 /// This module implements the JSON RPC benchmark runner.
 /// The main function is `run_queries`, which runs the queries concurrently
-/// and records the metrics.
+/// and records the overall and per-method stats.
 use anyhow::Result;
 use std::{
     collections::HashMap,
@@ -17,7 +17,7 @@ use super::request_loader::JsonRpcRequestLine;
 use crate::config::BenchmarkConfig;
 
 #[derive(Clone, Default)]
-pub struct MethodMetrics {
+pub struct PerMethodStats {
     pub total_sent: usize,
     pub total_errors: usize,
     // record total latency and calculate average latency later to avoid duplicate calculations
@@ -25,15 +25,15 @@ pub struct MethodMetrics {
 }
 
 #[derive(Clone, Default)]
-pub struct JsonRpcMetrics {
+pub struct JsonRpcStats {
     pub total_sent: usize,
     pub total_errors: usize,
     // record total latency and calculate average latency to avoid duplicate calculations
     pub total_latency_ms: f64,
-    pub per_method: HashMap<String, MethodMetrics>,
+    pub per_method: HashMap<String, PerMethodStats>,
 }
 
-impl JsonRpcMetrics {
+impl JsonRpcStats {
     pub fn new() -> Self {
         Self::default()
     }
@@ -45,11 +45,11 @@ impl JsonRpcMetrics {
             self.total_errors += 1;
         }
 
-        let method_metrics = self.per_method.entry(method.to_string()).or_default();
-        method_metrics.total_sent += 1;
-        method_metrics.total_latency_ms += latency_ms;
+        let method_stats = self.per_method.entry(method.to_string()).or_default();
+        method_stats.total_sent += 1;
+        method_stats.total_latency_ms += latency_ms;
         if is_error {
-            method_metrics.total_errors += 1;
+            method_stats.total_errors += 1;
         }
     }
 }
@@ -58,15 +58,16 @@ pub async fn run_queries(
     endpoint: &str,
     requests: &[JsonRpcRequestLine],
     config: &BenchmarkConfig,
-) -> Result<JsonRpcMetrics> {
+) -> Result<JsonRpcStats> {
     let concurrency = config.concurrency;
-    let shared_metrics = Arc::new(Mutex::new(JsonRpcMetrics::new()));
+    let shared_stats = Arc::new(Mutex::new(JsonRpcStats::new()));
     let client = reqwest::Client::new();
     let endpoint = endpoint.to_owned();
     let requests = requests.to_vec();
-    let metrics = shared_metrics.clone();
-    futures::stream::iter(requests.into_iter().map(move |request_line| {
-        let task_metrics = metrics.clone();
+    let stats = shared_stats.clone();
+
+    let stream = futures::stream::iter(requests.into_iter().map(move |request_line| {
+        let task_stats = stats.clone();
         let client = client.clone();
         let endpoint = endpoint.clone();
         async move {
@@ -80,19 +81,24 @@ pub async fn run_queries(
             let elapsed_ms = now.elapsed().as_millis() as f64;
             let is_error = !matches!(res, Ok(Ok(ref resp)) if resp.status().is_success());
 
-            let mut metrics = task_metrics
+            let mut stats = task_stats
                 .lock()
-                .map_err(|e| anyhow::anyhow!("Failed to acquire metrics lock: {}", e))?;
-            metrics.record_request(&request_line.method, elapsed_ms, is_error);
+                .map_err(|e| anyhow::anyhow!("Failed to acquire stats lock: {}", e))?;
+            stats.record_request(&request_line.method, elapsed_ms, is_error);
             Ok::<(), anyhow::Error>(())
         }
-    }))
-    .try_for_each_spawned(concurrency, |fut| fut)
-    .await?;
+    }));
 
-    let final_metrics = shared_metrics
+    timeout(
+        config.duration,
+        stream.try_for_each_spawned(concurrency, |fut| fut),
+    )
+    .await
+    .unwrap_or(Ok(()))?;
+
+    let final_stats = shared_stats
         .lock()
-        .map_err(|e| anyhow::anyhow!("Failed to acquire metrics lock for final results: {}", e))?
+        .map_err(|e| anyhow::anyhow!("Failed to acquire stats lock for final results: {}", e))?
         .clone();
-    Ok(final_metrics)
+    Ok(final_stats)
 }
