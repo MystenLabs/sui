@@ -411,6 +411,7 @@ pub fn load_committed_subdag_from_store(
 pub(crate) enum Decision {
     Direct,
     Indirect,
+    Synced, // This is a commit synced leader so no actual decision rule did run for it.
 }
 
 /// The status of a leader slot from the direct and indirect commit rules.

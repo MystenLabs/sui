@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, iter, mem, sync::Arc, time::Duration, vec};
+use std::{collections::BTreeSet, iter, sync::Arc, time::Duration, vec};
 
 #[cfg(test)]
 use consensus_config::{local_committee_and_keys, Stake};
@@ -684,9 +684,10 @@ impl Core {
             let mut commits_until_update = self
                 .leader_schedule
                 .commits_until_leader_schedule_update(self.dag_state.clone());
-            let last_commit_index = self.dag_state.read().last_commit_index();
 
             if commits_until_update == 0 {
+                let last_commit_index = self.dag_state.read().last_commit_index();
+
                 tracing::info!(
                     "Leader schedule change triggered at commit index {last_commit_index}"
                 );
@@ -718,81 +719,35 @@ impl Core {
             }
             assert!(commits_until_update > 0);
 
-            // If there are synced committed leaders, check that the first synced committed leader which is higher than the last decided one has not gaps.
-            while !synced_commits.is_empty() {
-                let synced_commit = synced_commits
-                    .first()
-                    .expect("Synced commits should not be empty");
-                if synced_commit.index() <= last_commit_index {
-                    info!("Skip commit for index {} as it is already committed with last commit index {}", synced_commit.index(), last_commit_index);
-                    synced_commits.remove(0);
-                } else {
-                    // Make sure that the first we do find is the next one in line and there is no gap.
-                    if synced_commit.index() != last_commit_index + 1 {
-                        panic!("Gap found between the synced commits and the last committed index. Expected next commit index to be {}, but found {}", last_commit_index + 1, synced_commit.index());
-                    }
+            // Always try to process the synced commits first
+            let mut decided_leaders = self
+                .committer
+                .try_decide_synced(&mut synced_commits, commits_until_update);
 
-                    // now break as we want to process the rest of the committed leaders
-                    break;
-                }
-            }
+            // If the synced `decided_leaders` is empty then try to run the decision rule.
+            if decided_leaders.is_empty() {
+                // TODO: limit commits by commits_until_update, which may be needed when leader schedule length is reduced.
+                decided_leaders = self.committer.try_decide(self.last_decided_leader);
 
-            // If the synced_commits is not empty, then we should process them first and then try to decide any further leaders.
-            let sequenced_leaders = if !synced_commits.is_empty() {
-                // We keep only the number of leaders that can be committed before the next leader schedule change.
-                let to_commit = if synced_commits.len() >= commits_until_update {
-                    // Now keep only the leaders that can be committed before the next leader schedule change, and just leave the rest so we can process them in the next iteration.
-                    synced_commits
-                        .drain(..commits_until_update)
-                        .collect::<Vec<_>>()
-                } else {
-                    // Otherwise just take all of them and leave the `synced_commits` empty.
-                    mem::take(&mut synced_commits)
-                };
-
-                let dag_state = self.dag_state.read();
-                let sequenced_leaders = to_commit
-                    .into_iter()
-                    .map(|commit| dag_state.get_block(&commit.leader()).unwrap())
-                    .collect::<Vec<_>>();
-
-                tracing::info!(
-                    "Decided {} synced leaders: {}",
-                    sequenced_leaders.len(),
-                    sequenced_leaders
-                        .iter()
-                        .map(|b| b.reference().to_string())
-                        .join(",")
-                );
-
-                self.last_decided_leader = sequenced_leaders.last().unwrap().slot();
-                sequenced_leaders
-            } else {
-                // TODO: limit commits by commits_until_update, which may be needed when leader schedule length
-                // is reduced.
-                let decided_leaders = self.committer.try_decide(self.last_decided_leader);
-
-                let Some(last_decided) = decided_leaders.last().cloned() else {
-                    break;
-                };
-                tracing::debug!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", decided_leaders.len());
-
-                let mut sequenced_leaders = decided_leaders
-                    .into_iter()
-                    .filter_map(|leader| leader.into_committed_block())
-                    .collect::<Vec<_>>();
-
-                // If the sequenced leaders are truncated to fit the leader schedule, use the last sequenced leader
-                // as the last decided leader. Otherwise, use the last decided leader from try_commit().
-                if sequenced_leaders.len() >= commits_until_update {
-                    let _ = sequenced_leaders.split_off(commits_until_update);
-                    self.last_decided_leader = sequenced_leaders.last().unwrap().slot();
-                    sequenced_leaders
-                } else {
-                    self.last_decided_leader = last_decided.slot();
-                    sequenced_leaders
+                // Truncate the decided leaders to fit the commit schedule limit.
+                if decided_leaders.len() >= commits_until_update {
+                    let _ = decided_leaders.split_off(commits_until_update);
                 }
             };
+
+            // If the decided leaders list is empty then just break the loop.
+            let Some(last_decided) = decided_leaders.last().cloned() else {
+                break;
+            };
+
+            self.last_decided_leader = last_decided.slot();
+
+            let sequenced_leaders = decided_leaders
+                .into_iter()
+                .filter_map(|leader| leader.into_committed_block())
+                .collect::<Vec<_>>();
+
+            tracing::debug!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", sequenced_leaders.len());
 
             self.context
                 .metrics
@@ -800,9 +755,12 @@ impl Core {
                 .last_decided_leader_round
                 .set(self.last_decided_leader.round as i64);
 
+            // It's possible to reach this point as the decided leaders might all of them be "Skip" decisions. In this case there is no
+            // leader to commit and we should break the loop.
             if sequenced_leaders.is_empty() {
                 break;
             }
+
             tracing::info!(
                 "Committing {} leaders: {}",
                 sequenced_leaders.len(),
