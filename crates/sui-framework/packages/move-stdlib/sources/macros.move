@@ -84,7 +84,7 @@ public macro fun num_to_string($x: _): String {
     buffer.to_string()
 }
 
-public macro fun range_do($start: _, $stop: _, $f: |_| -> _) {
+public macro fun range_do<$R: drop>($start: _, $stop: _, $f: |_| -> $R) {
     let mut i = $start;
     let stop = $stop;
     while (i < stop) {
@@ -93,7 +93,7 @@ public macro fun range_do($start: _, $stop: _, $f: |_| -> _) {
     }
 }
 
-public macro fun range_do_eq($start: _, $stop: _, $f: |_| -> _) {
+public macro fun range_do_eq<$R: drop>($start: _, $stop: _, $f: |_| -> $R) {
     let mut i = $start;
     let stop = $stop;
     // we check `i >= stop` inside the loop instead of `i <= stop` as `while` condition to avoid
@@ -108,11 +108,11 @@ public macro fun range_do_eq($start: _, $stop: _, $f: |_| -> _) {
     }
 }
 
-public macro fun do($stop: _, $f: |_| -> _) {
+public macro fun do<$R: drop>($stop: _, $f: |_| -> $R) {
     range_do!(0, $stop, $f)
 }
 
-public macro fun do_eq($stop: _, $f: |_| -> _) {
+public macro fun do_eq<$R: drop>($stop: _, $f: |_| -> $R) {
     range_do_eq!(0, $stop, $f)
 }
 
