@@ -737,8 +737,8 @@ async fn test_epoch_flag_upgrade() {
             return None;
         }
 
-        // start with only writeback cache enabled
-        let flags: Vec<EpochFlag> = vec![EpochFlag::WritebackCacheEnabled];
+        // start with no flags
+        let flags: Vec<EpochFlag> = vec![];
         Some(flags)
     });
 
