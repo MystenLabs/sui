@@ -14,6 +14,7 @@ use handlers::{
     tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
     tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
 };
+use prometheus::Registry;
 use sui_indexer_alt_framework::handlers::cp_sequence_numbers::CpSequenceNumbers;
 use sui_indexer_alt_framework::ingestion::{ClientArgs, IngestionConfig};
 use sui_indexer_alt_framework::pipeline::{
@@ -24,6 +25,7 @@ use sui_indexer_alt_framework::pipeline::{
 use sui_indexer_alt_framework::{Indexer, IndexerArgs};
 use sui_indexer_alt_schema::MIGRATIONS;
 use sui_pg_db::DbArgs;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 pub mod args;
@@ -44,9 +46,12 @@ pub async fn start_indexer(
     // TODO: There is probably a better way to handle this.
     // For instance, we could also pass in dummy genesis data in the benchmark mode.
     with_genesis: bool,
-) -> anyhow::Result<()> {
+    registry: &Registry,
+    cancel: CancellationToken,
+) -> anyhow::Result<JoinHandle<()>> {
     let IndexerConfig {
         ingestion,
+        consistency,
         committer,
         pruner,
         pipeline,
@@ -79,10 +84,10 @@ pub async fn start_indexer(
     } = pipeline.finish();
 
     let ingestion = ingestion.finish(IngestionConfig::default());
+    let consistency = consistency.finish(PrunerConfig::default());
     let committer = committer.finish(CommitterConfig::default());
     let pruner = pruner.finish(PrunerConfig::default());
 
-    let cancel = CancellationToken::new();
     let retry_interval = ingestion.retry_interval();
 
     let mut indexer = Indexer::new(
@@ -91,6 +96,7 @@ pub async fn start_indexer(
         client_args,
         ingestion,
         &MIGRATIONS,
+        registry,
         cancel.clone(),
     )
     .await?;
@@ -109,6 +115,22 @@ pub async fn start_indexer(
     // `add_consistent` is a special case that generates both a sequential "summary" pipeline and a
     // `concurrent` "write-ahead log" pipeline, with their configuration based on the supplied
     // ConsistencyConfig.
+
+    macro_rules! add_consistent {
+        ($handler:expr, $config:expr) => {
+            if let Some(layer) = $config {
+                indexer
+                    .concurrent_pipeline(
+                        $handler,
+                        ConcurrentConfig {
+                            committer: layer.finish(committer.clone()),
+                            pruner: Some(consistency.clone()),
+                        },
+                    )
+                    .await?
+            }
+        };
+    }
 
     macro_rules! add_concurrent {
         ($handler:expr, $config:expr) => {
@@ -150,12 +172,15 @@ pub async fn start_indexer(
         add_concurrent!(KvProtocolConfigs(genesis.clone()), kv_protocol_configs);
     }
 
-    // Other summary tables (without write-ahead log)
+    // Consistent pipelines
+    add_consistent!(CoinBalanceBuckets::default(), coin_balance_buckets);
+    add_consistent!(ObjInfo::default(), obj_info);
+
+    // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);
     add_sequential!(SumPackages, sum_packages);
 
     // Unpruned concurrent pipelines
-    add_concurrent!(CoinBalanceBuckets::default(), coin_balance_buckets);
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);
@@ -164,7 +189,6 @@ pub async fn start_indexer(
     add_concurrent!(KvEpochStarts, kv_epoch_starts);
     add_concurrent!(KvObjects, kv_objects);
     add_concurrent!(KvTransactions, kv_transactions);
-    add_concurrent!(ObjInfo::default(), obj_info);
     add_concurrent!(ObjVersions, obj_versions);
     add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);
@@ -173,9 +197,5 @@ pub async fn start_indexer(
     add_concurrent!(TxDigests, tx_digests);
     add_concurrent!(TxKinds, tx_kinds);
 
-    let h_indexer = indexer.run().await.context("Failed to start indexer")?;
-
-    cancel.cancelled().await;
-    let _ = h_indexer.await;
-    Ok(())
+    indexer.run().await.context("Failed to start indexer")
 }

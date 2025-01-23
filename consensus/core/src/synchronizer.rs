@@ -606,7 +606,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         blocks
             .into_iter()
-            .map(|block| block.round())
+            .map(|(block, _)| block.round())
             .collect::<Vec<_>>()
     }
 

@@ -21,14 +21,14 @@ pub async fn serve_connection<IO, S, B, C>(
     B: http_body::Body + Send + 'static,
     B::Data: Send,
     B::Error: Into<BoxError>,
-    IO: hyper::rt::Read + hyper::rt::Write + Unpin + 'static,
+    IO: hyper::rt::Read + hyper::rt::Write + Send + Unpin + 'static,
     S: hyper::service::Service<Request<hyper::body::Incoming>, Response = Response<B>> + 'static,
     S::Future: Send + 'static,
     S::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
 {
     let mut sig = pin!(Fuse::new(graceful_shutdown_token.cancelled_owned()));
 
-    let mut conn = pin!(builder.serve_connection(hyper_io, hyper_svc));
+    let mut conn = pin!(builder.serve_connection_with_upgrades(hyper_io, hyper_svc));
 
     let sleep = sleep_or_pending(max_connection_age);
     tokio::pin!(sleep);

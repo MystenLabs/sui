@@ -13,7 +13,6 @@ publish = false
 [dependencies]
 move-docgen.workspace = true
 move-command-line-common.workspace = true
-move-prover.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 # referred to via path for execution versioning
@@ -24,6 +23,7 @@ sha2.workspace = true
 anyhow.workspace = true
 hex.workspace = true
 move-stdlib-natives.workspace = true
+move-package.workspace = true
 
 [dev-dependencies]
 move-unit-test.workspace = true
@@ -31,7 +31,6 @@ tempfile.workspace = true
 dir-diff.workspace = true
 file_diff.workspace = true
 move-cli.workspace = true
-move-package.workspace = true
 
 [features]
 default = []

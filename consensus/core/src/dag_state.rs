@@ -12,6 +12,7 @@ use std::{
 
 use consensus_config::AuthorityIndex;
 use itertools::Itertools as _;
+use tokio::time::Instant;
 use tracing::{debug, error, info};
 
 use crate::{
@@ -25,8 +26,8 @@ use crate::{
     },
     context::Context,
     leader_scoring::{ReputationScores, ScoringSubdag},
-    stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::{Store, WriteBatch},
+    threshold_clock::ThresholdClock,
     CommittedSubDag,
 };
 
@@ -55,6 +56,9 @@ pub(crate) struct DagState {
     // Indexes recent block refs by their authorities.
     // Vec position corresponds to the authority index.
     recent_refs_by_authority: Vec<BTreeSet<BlockRef>>,
+
+    // Keeps track of the threshold clock for proposing blocks.
+    threshold_clock: ThresholdClock,
 
     // Keeps track of the highest round that has been evicted for each authority. Any blocks that are of round <= evict_round
     // should be considered evicted, and if any exist we should not consider the causauly complete in the order they appear.
@@ -114,6 +118,8 @@ impl DagState {
             .map(|block| (block.reference(), block))
             .collect();
 
+        let threshold_clock = ThresholdClock::new(1, context.clone());
+
         let last_commit = store
             .read_last_commit()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
@@ -168,6 +174,7 @@ impl DagState {
             genesis,
             recent_blocks: BTreeMap::new(),
             recent_refs_by_authority: vec![BTreeSet::new(); num_authorities],
+            threshold_clock,
             highest_accepted_round: 0,
             last_commit: last_commit.clone(),
             last_commit_round_advancement_time: None,
@@ -334,6 +341,7 @@ impl DagState {
         self.recent_blocks
             .insert(block_ref, BlockInfo::new(block.clone()));
         self.recent_refs_by_authority[block_ref.author].insert(block_ref);
+        self.threshold_clock.add_block(block_ref);
         self.highest_accepted_round = max(self.highest_accepted_round, block.round());
         self.context
             .metrics
@@ -518,11 +526,6 @@ impl DagState {
             .collect()
     }
 
-    pub(crate) fn contains_block(&self, block_ref: &BlockRef) -> bool {
-        let blocks = self.contains_blocks(vec![*block_ref]);
-        blocks.first().cloned().unwrap()
-    }
-
     /// Gets the last proposed block from this authority.
     /// If no block is proposed yet, returns the genesis block.
     pub(crate) fn get_last_proposed_block(&self) -> VerifiedBlock {
@@ -576,6 +579,7 @@ impl DagState {
 
     // Retrieves the cached block within the range [start_round, end_round) from a given authority.
     // NOTE: end_round must be greater than GENESIS_ROUND.
+    #[cfg(test)]
     pub(crate) fn get_last_cached_block_in_range(
         &self,
         authority: AuthorityIndex,
@@ -608,13 +612,15 @@ impl DagState {
     /// The method is guaranteed to return results only when the `end_round` is not earlier of the
     /// available cached data for each authority (evicted round + 1), otherwise the method will panic.
     /// It's the caller's responsibility to ensure that is not requesting for earlier rounds.
-    /// In case of equivocation for an authority's last slot only one block will be returned (the last in order).
+    /// In case of equivocation for an authority's last slot, one block will be returned (the last in order)
+    /// and the other equivocating blocks will be returned.
     pub(crate) fn get_last_cached_block_per_authority(
         &self,
         end_round: Round,
-    ) -> Vec<VerifiedBlock> {
-        // init with the genesis blocks as fallback
+    ) -> Vec<(VerifiedBlock, Vec<BlockRef>)> {
+        // Initialize with the genesis blocks as fallback
         let mut blocks = self.genesis.values().cloned().collect::<Vec<_>>();
+        let mut equivocating_blocks = vec![vec![]; self.context.committee.size()];
 
         if end_round == GENESIS_ROUND {
             panic!(
@@ -623,7 +629,7 @@ impl DagState {
         }
 
         if end_round == GENESIS_ROUND + 1 {
-            return blocks;
+            return blocks.into_iter().map(|b| (b, vec![])).collect();
         }
 
         for (authority_index, block_refs) in self.recent_refs_by_authority.iter().enumerate() {
@@ -638,7 +644,7 @@ impl DagState {
                 panic!("Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}", );
             }
 
-            if let Some(block_ref) = block_refs
+            let block_ref_iter = block_refs
                 .range((
                     Included(BlockRef::new(
                         last_evicted_round + 1,
@@ -647,18 +653,27 @@ impl DagState {
                     )),
                     Excluded(BlockRef::new(end_round, authority_index, BlockDigest::MIN)),
                 ))
-                .next_back()
-            {
-                let block_info = self
-                    .recent_blocks
-                    .get(block_ref)
-                    .expect("Block should exist in recent blocks");
+                .rev();
 
-                blocks[authority_index] = block_info.block.clone();
+            let mut last_round = 0;
+            for block_ref in block_ref_iter {
+                if last_round == 0 {
+                    last_round = block_ref.round;
+                    let block_info = self
+                        .recent_blocks
+                        .get(block_ref)
+                        .expect("Block should exist in recent blocks");
+                    blocks[authority_index] = block_info.block.clone();
+                    continue;
+                }
+                if block_ref.round < last_round {
+                    break;
+                }
+                equivocating_blocks[authority_index].push(*block_ref);
             }
         }
 
-        blocks.into_iter().collect()
+        blocks.into_iter().zip(equivocating_blocks).collect()
     }
 
     /// Checks whether a block exists in the slot. The method checks only against the cached data.
@@ -726,6 +741,19 @@ impl DagState {
         }
 
         exist
+    }
+
+    pub(crate) fn contains_block(&self, block_ref: &BlockRef) -> bool {
+        let blocks = self.contains_blocks(vec![*block_ref]);
+        blocks.first().cloned().unwrap()
+    }
+
+    pub(crate) fn threshold_clock_round(&self) -> Round {
+        self.threshold_clock.get_round()
+    }
+
+    pub(crate) fn threshold_clock_quorum_ts(&self) -> Instant {
+        self.threshold_clock.get_quorum_ts()
     }
 
     pub(crate) fn highest_accepted_round(&self) -> Round {
@@ -959,31 +987,6 @@ impl DagState {
         );
     }
 
-    /// Detects and returns the blocks of the round that forms the last quorum. The method will return
-    /// the quorum even if that's genesis.
-    pub(crate) fn last_quorum(&self) -> Vec<VerifiedBlock> {
-        // the quorum should exist either on the highest accepted round or the one before. If we fail to detect
-        // a quorum then it means that our DAG has advanced with missing causal history.
-        for round in
-            (self.highest_accepted_round.saturating_sub(1)..=self.highest_accepted_round).rev()
-        {
-            if round == GENESIS_ROUND {
-                return self.genesis_blocks();
-            }
-            let mut quorum = StakeAggregator::<QuorumThreshold>::new();
-
-            // Since the minimum wave length is 3 we expect to find a quorum in the uncommitted rounds.
-            let blocks = self.get_uncommitted_blocks_at_round(round);
-            for block in &blocks {
-                if quorum.add(block.author(), &self.context.committee) {
-                    return blocks;
-                }
-            }
-        }
-
-        panic!("Fatal error, no quorum has been detected in our DAG on the last two rounds.");
-    }
-
     pub(crate) fn recover_last_commit_info(&self) -> Option<(CommitRef, CommitInfo)> {
         self.store
             .read_last_commit_info()
@@ -1039,10 +1042,6 @@ impl DagState {
             .end()
     }
 
-    pub(crate) fn genesis_blocks(&self) -> Vec<VerifiedBlock> {
-        self.genesis.values().cloned().collect()
-    }
-
     /// The last round that should get evicted after a cache clean up operation. After this round we are
     /// guaranteed to have all the produced blocks from that authority. For any round that is
     /// <= `last_evicted_round` we don't have such guarantees as out of order blocks might exist.
@@ -1070,6 +1069,38 @@ impl DagState {
     /// of the latest blocks in the cache (if enough data is available), while evicting blocks with rounds <= `gc_round` when possible.
     fn gc_eviction_round(last_round: Round, gc_round: Round, cached_rounds: u32) -> Round {
         gc_round.min(last_round.saturating_sub(cached_rounds))
+    }
+
+    /// Detects and returns the blocks of the round that forms the last quorum. The method will return
+    /// the quorum even if that's genesis.
+    #[cfg(test)]
+    pub(crate) fn last_quorum(&self) -> Vec<VerifiedBlock> {
+        // the quorum should exist either on the highest accepted round or the one before. If we fail to detect
+        // a quorum then it means that our DAG has advanced with missing causal history.
+        for round in
+            (self.highest_accepted_round.saturating_sub(1)..=self.highest_accepted_round).rev()
+        {
+            if round == GENESIS_ROUND {
+                return self.genesis_blocks();
+            }
+            use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
+            let mut quorum = StakeAggregator::<QuorumThreshold>::new();
+
+            // Since the minimum wave length is 3 we expect to find a quorum in the uncommitted rounds.
+            let blocks = self.get_uncommitted_blocks_at_round(round);
+            for block in &blocks {
+                if quorum.add(block.author(), &self.context.committee) {
+                    return blocks;
+                }
+            }
+        }
+
+        panic!("Fatal error, no quorum has been detected in our DAG on the last two rounds.");
+    }
+
+    #[cfg(test)]
+    pub(crate) fn genesis_blocks(&self) -> Vec<VerifiedBlock> {
+        self.genesis.values().cloned().collect()
     }
 
     #[cfg(test)]
@@ -2176,8 +2207,15 @@ mod test {
 
         let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag");
 
+        // Add equivocating block for round 2 authority 3
+        let block = VerifiedBlock::new_for_test(TestBlock::new(2, 2).build());
+
         // Accept all blocks
-        for block in dag_builder.all_blocks() {
+        for block in dag_builder
+            .all_blocks()
+            .into_iter()
+            .chain(std::iter::once(block))
+        {
             dag_state.accept_block(block);
         }
 
@@ -2192,12 +2230,16 @@ mod test {
         // WHEN search for the latest blocks
         let end_round = 4;
         let expected_rounds = vec![0, 1, 2, 3];
-
+        let expected_excluded_and_equivocating_blocks = vec![0, 0, 1, 0];
         // THEN
         let last_blocks = dag_state.get_last_cached_block_per_authority(end_round);
         assert_eq!(
-            last_blocks.iter().map(|b| b.round()).collect::<Vec<_>>(),
+            last_blocks.iter().map(|b| b.0.round()).collect::<Vec<_>>(),
             expected_rounds
+        );
+        assert_eq!(
+            last_blocks.iter().map(|b| b.1.len()).collect::<Vec<_>>(),
+            expected_excluded_and_equivocating_blocks
         );
 
         // THEN
@@ -2245,7 +2287,7 @@ mod test {
         // THEN
         let last_blocks = dag_state.get_last_cached_block_per_authority(end_round);
         assert_eq!(
-            last_blocks.iter().map(|b| b.round()).collect::<Vec<_>>(),
+            last_blocks.iter().map(|b| b.0.round()).collect::<Vec<_>>(),
             expected_rounds
         );
 

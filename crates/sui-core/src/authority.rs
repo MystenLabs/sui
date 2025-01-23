@@ -61,6 +61,7 @@ use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::task::JoinHandle;
+use tracing::trace;
 use tracing::{debug, error, info, instrument, warn};
 
 use self::authority_store::ExecutionLockWriteGuard;
@@ -348,7 +349,7 @@ const GAS_LATENCY_RATIO_BUCKETS: &[f64] = &[
     3000.0, 4000.0, 5000.0, 6000.0, 7000.0, 8000.0, 9000.0, 10000.0, 50000.0, 100000.0, 1000000.0,
 ];
 
-pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000;
+pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000_000;
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
@@ -1154,7 +1155,7 @@ impl AuthorityState {
                 .execute_certificate_latency_single_writer
                 .start_timer()
         };
-        debug!("execute_certificate");
+        trace!("execute_certificate");
 
         self.metrics.total_cert_attempts.inc();
 
@@ -1217,7 +1218,6 @@ impl AuthorityState {
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
-        debug!("execute_certificate_internal");
 
         let tx_digest = certificate.digest();
 
@@ -1253,7 +1253,8 @@ impl AuthorityState {
             epoch_store,
         )
         .await
-        .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
+        .tap_err(|e| info!("process_certificate failed: {e}"))
+        .tap_ok(|_| debug!("process_certificate succeeded"))
     }
 
     pub fn read_objects_for_execution(
@@ -4382,7 +4383,7 @@ impl AuthorityState {
     /// Returns UserInputError::ObjectNotFound if no lock records for the given object can be found.
     /// Returns UserInputError::ObjectVersionUnavailableForConsumption if the object record is at a different version.
     /// Returns Some(VerifiedEnvelope) if the given ObjectRef is locked by a certain transaction.
-    /// Returns None if the a lock record is initialized for the given ObjectRef but not yet locked by any transaction,
+    /// Returns None if a lock record is initialized for the given ObjectRef but not yet locked by any transaction,
     ///     or cannot find the transaction in transaction table, because of data race etc.
     #[instrument(level = "trace", skip_all)]
     pub async fn get_transaction_lock(

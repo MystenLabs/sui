@@ -1161,7 +1161,6 @@ dependencies = [
  "aws-http",
  "aws-sigv4",
  "aws-smithy-async",
- "aws-smithy-eventstream",
  "aws-smithy-http",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -1225,38 +1224,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-sdk-s3"
-version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e30370b61599168d38190ad272bb91842cd81870a6ca035c05dd5726d22832c"
-dependencies = [
- "aws-credential-types",
- "aws-http",
- "aws-runtime",
- "aws-sigv4",
- "aws-smithy-async",
- "aws-smithy-checksums",
- "aws-smithy-client",
- "aws-smithy-eventstream",
- "aws-smithy-http",
- "aws-smithy-json",
- "aws-smithy-runtime",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "aws-smithy-xml",
- "aws-types",
- "bytes",
- "http 0.2.9",
- "http-body 0.4.5",
- "once_cell",
- "percent-encoding",
- "regex",
- "tokio-stream",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "aws-sdk-sso"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1310,9 +1277,7 @@ version = "0.56.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7b28f4910bb956b7ab320b62e98096402354eca976c587d1eeccd523d9bac03"
 dependencies = [
- "aws-smithy-eventstream",
  "aws-smithy-http",
- "bytes",
  "form_urlencoded",
  "hex",
  "hmac 0.12.1",
@@ -1335,27 +1300,6 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-stream",
-]
-
-[[package]]
-name = "aws-smithy-checksums"
-version = "0.56.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afb15946af1b8d3beeff53ad991d9bff68ac22426b6d40372b958a75fa61eaed"
-dependencies = [
- "aws-smithy-http",
- "aws-smithy-types",
- "bytes",
- "crc32c",
- "crc32fast",
- "hex",
- "http 0.2.9",
- "http-body 0.4.5",
- "md-5 0.10.6",
- "pin-project-lite",
- "sha1",
- "sha2 0.10.8",
- "tracing",
 ]
 
 [[package]]
@@ -1383,23 +1327,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-smithy-eventstream"
-version = "0.56.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "850233feab37b591b7377fd52063aa37af615687f5896807abe7f49bd4e1d25b"
-dependencies = [
- "aws-smithy-types",
- "bytes",
- "crc32fast",
-]
-
-[[package]]
 name = "aws-smithy-http"
 version = "0.56.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54cdcf365d8eee60686885f750a34c190e513677db58bbc466c44c588abf4199"
 dependencies = [
- "aws-smithy-eventstream",
  "aws-smithy-types",
  "bytes",
  "bytes-utils",
@@ -1908,7 +1840,7 @@ checksum = "230c5f1ca6a325a32553f8640d31ac9b49f2411e901e427570154868b46da4f7"
 
 [[package]]
 name = "bin-version"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "const-str",
  "git-version",
@@ -3034,15 +2966,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a17b76ff3a4162b0b27f354a0c87015ddad39d35f9c0c36607a3bdd175dde1f1"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "crc32c"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8f48d60e5b4d2c53d5c2b1d8a58c849a70ae5e5509b08a48d047e3b65714a74"
-dependencies = [
- "rustc_version",
 ]
 
 [[package]]
@@ -7721,8 +7644,8 @@ dependencies = [
  "move-disassembler",
  "move-docgen",
  "move-ir-types",
+ "move-model-2",
  "move-package",
- "move-prover",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
@@ -7859,12 +7782,17 @@ name = "move-docgen"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "codespan",
  "codespan-reporting",
  "itertools 0.10.5",
  "log",
+ "move-binary-format",
  "move-compiler",
- "move-model",
+ "move-core-types",
+ "move-ir-types",
+ "move-model-2",
+ "move-symbol-pool",
  "num",
  "once_cell",
  "regex",
@@ -7953,6 +7881,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-model-2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "codespan",
+ "codespan-reporting",
+ "move-binary-format",
+ "move-bytecode-source-map",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
+ "move-symbol-pool",
+ "num",
+ "serde",
+ "vfs",
+]
+
+[[package]]
 name = "move-package"
 version = "0.1.0"
 dependencies = [
@@ -7968,7 +7917,7 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-docgen",
- "move-model",
+ "move-model-2",
  "move-symbol-pool",
  "named-lock",
  "once_cell",
@@ -7996,46 +7945,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-prover"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "codespan-reporting",
- "itertools 0.10.5",
- "log",
- "move-command-line-common",
- "move-compiler",
- "move-docgen",
- "move-model",
- "move-stackless-bytecode",
- "once_cell",
- "serde",
- "simplelog",
- "toml 0.5.11",
-]
-
-[[package]]
-name = "move-stackless-bytecode"
-version = "0.1.0"
-dependencies = [
- "codespan",
- "codespan-reporting",
- "ethnum",
- "im",
- "itertools 0.10.5",
- "log",
- "move-binary-format",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-model",
- "num",
- "petgraph 0.5.1",
- "serde",
-]
-
-[[package]]
 name = "move-stdlib"
 version = "0.1.1"
 dependencies = [
@@ -8046,7 +7955,7 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
- "move-prover",
+ "move-package",
  "move-stdlib-natives",
  "move-vm-runtime",
  "sha2 0.9.9",
@@ -9299,6 +9208,18 @@ name = "p256"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9863ad85fa8f4460f9c48cb909d38a0d689dba1f6f6988a5e3e0d31071bcd4b"
+dependencies = [
+ "ecdsa 0.16.9",
+ "elliptic-curve 0.13.8",
+ "primeorder",
+ "sha2 0.10.8",
+]
+
+[[package]]
+name = "p384"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70786f51bcc69f6a4c0360e063a4cac5419ef7c5cd5b3c99ad70f3be5ba79209"
 dependencies = [
  "ecdsa 0.16.9",
  "elliptic-curve 0.13.8",
@@ -12253,17 +12174,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "simplelog"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bc0ffd69814a9b251d43afcabf96dad1b29f5028378056257be9e3fecc9f720"
-dependencies = [
- "chrono",
- "log",
- "termcolor",
-]
-
-[[package]]
 name = "simulacrum"
 version = "0.1.0"
 dependencies = [
@@ -12712,7 +12622,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -12930,7 +12840,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -12982,7 +12892,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "proc-macro2 1.0.87",
  "quote 1.0.37",
@@ -12991,7 +12901,7 @@ dependencies = [
 
 [[package]]
 name = "sui-archival"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -13115,7 +13025,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -13166,7 +13076,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge-cli"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -13233,7 +13143,7 @@ dependencies = [
 
 [[package]]
 name = "sui-cluster-test"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13421,13 +13331,12 @@ dependencies = [
 
 [[package]]
 name = "sui-data-ingestion"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "aws-config",
  "aws-sdk-dynamodb",
- "aws-sdk-s3",
  "backoff",
  "base64-url",
  "bcs",
@@ -13519,7 +13428,7 @@ dependencies = [
 
 [[package]]
 name = "sui-default-config"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "quote 1.0.37",
  "syn 1.0.107",
@@ -13527,7 +13436,7 @@ dependencies = [
 
 [[package]]
 name = "sui-e2e-tests"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -13604,6 +13513,7 @@ dependencies = [
  "futures",
  "mysten-metrics",
  "prometheus",
+ "rand 0.8.5",
  "reqwest 0.12.5",
  "serde",
  "serde_json",
@@ -13672,7 +13582,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13680,15 +13590,19 @@ dependencies = [
  "axum 0.7.5",
  "bin-version",
  "clap",
+ "dashmap",
  "eyre",
  "futures",
  "http 1.1.0",
  "mysten-metrics",
  "mysten-network",
+ "once_cell",
  "parking_lot 0.12.1",
  "prometheus",
+ "reqwest 0.12.5",
  "scopeguard",
  "serde",
+ "serde_json",
  "shared-crypto",
  "sui-config",
  "sui-json-rpc-types",
@@ -13709,18 +13623,19 @@ dependencies = [
  "ttl_cache",
  "typed-store",
  "uuid 1.2.2",
+ "wiremock",
 ]
 
 [[package]]
 name = "sui-field-count"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "sui-field-count-derive",
 ]
 
 [[package]]
 name = "sui-field-count-derive"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "quote 1.0.37",
  "syn 1.0.107",
@@ -13748,7 +13663,7 @@ dependencies = [
 
 [[package]]
 name = "sui-framework-snapshot"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13818,6 +13733,7 @@ dependencies = [
  "async-trait",
  "datatest-stable",
  "msim",
+ "serde_json",
  "sui-graphql-rpc",
  "sui-transactional-test-runner",
  "telemetry-subscribers",
@@ -13826,7 +13742,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-rpc"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -13947,7 +13863,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14025,7 +13941,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14038,11 +13954,13 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.13.0",
+ "prometheus",
  "rand 0.8.5",
  "serde",
  "sui-default-config",
  "sui-field-count",
  "sui-indexer-alt-framework",
+ "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
  "sui-pg-db",
  "sui-protocol-config",
@@ -14058,8 +13976,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer-alt-e2e-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "datatest-stable",
+ "diesel",
+ "diesel-async",
+ "msim",
+ "prometheus",
+ "reqwest 0.12.5",
+ "serde_json",
+ "sui-indexer-alt",
+ "sui-indexer-alt-framework",
+ "sui-indexer-alt-jsonrpc",
+ "sui-pg-db",
+ "sui-transactional-test-runner",
+ "telemetry-subscribers",
+ "tokio",
+ "tokio-util 0.7.10",
+ "url",
+]
+
+[[package]]
 name = "sui-indexer-alt-framework"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14077,6 +14019,7 @@ dependencies = [
  "reqwest 0.12.5",
  "serde",
  "sui-field-count",
+ "sui-indexer-alt-metrics",
  "sui-pg-db",
  "sui-storage",
  "sui-types",
@@ -14093,23 +14036,51 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-jsonrpc"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
+ "async-graphql",
  "async-trait",
  "axum 0.7.5",
+ "bcs",
  "clap",
  "diesel",
  "diesel-async",
  "jsonrpsee",
+ "move-core-types",
+ "pin-project-lite",
+ "prometheus",
+ "reqwest 0.12.5",
+ "serde_json",
+ "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
+ "sui-json-rpc-types",
+ "sui-open-rpc",
+ "sui-open-rpc-macros",
+ "sui-package-resolver",
  "sui-pg-db",
  "sui-types",
  "telemetry-subscribers",
  "thiserror 1.0.64",
  "tokio",
+ "tokio-util 0.7.10",
+ "tower-layer",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "sui-indexer-alt-metrics"
+version = "1.42.0"
+dependencies = [
+ "anyhow",
+ "axum 0.7.5",
+ "clap",
+ "prometheus",
+ "sui-pg-db",
+ "tokio",
+ "tokio-util 0.7.10",
+ "tracing",
 ]
 
 [[package]]
@@ -14142,7 +14113,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-schema"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14357,7 +14328,7 @@ dependencies = [
 
 [[package]]
 name = "sui-kvstore"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14380,7 +14351,7 @@ dependencies = [
 
 [[package]]
 name = "sui-light-client"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14418,7 +14389,7 @@ dependencies = [
 
 [[package]]
 name = "sui-metric-checker"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "backoff",
@@ -14439,7 +14410,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -14457,7 +14428,6 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "move-package",
- "move-prover",
  "move-unit-test",
  "move-vm-runtime",
  "mysten-metrics",
@@ -14482,7 +14452,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -14506,7 +14476,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-lsp"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "bin-version",
  "clap",
@@ -14597,8 +14567,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-mvr-graphql-e2e-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "datatest-stable",
+ "msim",
+ "serde_json",
+ "sui-mvr-graphql-rpc",
+ "sui-transactional-test-runner",
+ "telemetry-subscribers",
+ "tokio",
+]
+
+[[package]]
 name = "sui-mvr-graphql-rpc"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -14718,7 +14703,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -14770,7 +14755,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14806,7 +14791,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14836,7 +14821,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-dump"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14853,7 +14838,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-management"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "move-core-types",
@@ -14892,7 +14877,7 @@ dependencies = [
 
 [[package]]
 name = "sui-pg-db"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "bb8",
@@ -15037,7 +15022,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rosetta"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15127,7 +15112,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15156,7 +15141,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -15213,7 +15198,7 @@ dependencies = [
 
 [[package]]
 name = "sui-security-watchdog"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -15260,7 +15245,7 @@ dependencies = [
 
 [[package]]
 name = "sui-single-node-benchmark"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -15324,7 +15309,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -15450,7 +15435,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -15572,7 +15557,7 @@ dependencies = [
 
 [[package]]
 name = "sui-test-validator"
-version = "1.41.0"
+version = "1.42.0"
 
 [[package]]
 name = "sui-tls"
@@ -15598,7 +15583,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anemo",
  "anemo-cli",
@@ -15713,6 +15698,7 @@ dependencies = [
  "once_cell",
  "rand 0.8.5",
  "regex",
+ "serde",
  "serde_json",
  "simulacrum",
  "sui-config",
@@ -15747,6 +15733,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "chrono",
+ "ciborium",
  "consensus-config",
  "coset",
  "criterion",
@@ -15776,6 +15763,7 @@ dependencies = [
  "num_enum 0.6.1",
  "once_cell",
  "p256",
+ "p384",
  "parking_lot 0.12.1",
  "passkey-authenticator",
  "passkey-client",
@@ -15785,6 +15773,7 @@ dependencies = [
  "proptest-derive 0.5.1",
  "rand 0.8.5",
  "roaring",
+ "rustls-pemfile 2.1.2",
  "schemars",
  "serde",
  "serde-name",
@@ -15807,6 +15796,7 @@ dependencies = [
  "tracing",
  "typed-store-error",
  "url",
+ "x509-parser",
 ]
 
 [[package]]
@@ -15893,7 +15883,7 @@ dependencies = [
 
 [[package]]
 name = "suins-indexer"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15933,7 +15923,7 @@ dependencies = [
 
 [[package]]
 name = "suiop-cli"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "axum 0.7.5",
@@ -18336,7 +18326,7 @@ dependencies = [
 
 [[package]]
 name = "x"
-version = "1.41.0"
+version = "1.42.0"
 dependencies = [
  "anyhow",
  "camino",
@@ -18377,6 +18367,7 @@ dependencies = [
  "lazy_static",
  "nom",
  "oid-registry",
+ "ring 0.16.20",
  "rusticata-macros",
  "thiserror 1.0.64",
  "time",

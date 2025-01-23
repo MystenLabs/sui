@@ -38,7 +38,6 @@ exclude = [
     "external-crates/move/crates/move-model",
     "external-crates/move/crates/move-package",
     "external-crates/move/crates/move-proc-macros",
-    "external-crates/move/crates/move-prover",
     "external-crates/move/crates/move-prover-test-utils",
     "external-crates/move/crates/move-stackless-bytecode",
     "external-crates/move/crates/move-stdlib",
@@ -117,8 +116,10 @@ members = [
     "crates/sui-http",
     "crates/sui-indexer",
     "crates/sui-indexer-alt",
+    "crates/sui-indexer-alt-e2e-tests",
     "crates/sui-indexer-alt-framework",
     "crates/sui-indexer-alt-jsonrpc",
+    "crates/sui-indexer-alt-metrics",
     "crates/sui-indexer-alt-restorer",
     "crates/sui-indexer-alt-schema",
     "crates/sui-indexer-builder",
@@ -135,6 +136,7 @@ members = [
     "crates/sui-move",
     "crates/sui-move-build",
     "crates/sui-move-lsp",
+    "crates/sui-mvr-graphql-e2e-tests",
     "crates/sui-mvr-graphql-rpc",
     "crates/sui-network",
     "crates/sui-node",
@@ -204,7 +206,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.41.0"
+version = "1.42.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -263,7 +265,6 @@ atomic_float = "0.1"
 aws-config = "0.56"
 aws-sdk-ec2 = "0.29.0"
 aws-sdk-dynamodb = "0.29.0"
-aws-sdk-s3 = "0.29.0"
 aws-smithy-http = "0.56"
 aws-smithy-runtime-api = "0.56"
 axum = { version = "0.7", default-features = false, features = [
@@ -402,6 +403,7 @@ once_cell = "1.18.0"
 ouroboros = "0.17"
 parking_lot = "0.12.1"
 parquet = "52"
+pin-project-lite = "0.2.13"
 pkcs8 = { version = "0.9.0", features = ["std"] }
 pprof = { version = "0.14.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
@@ -539,7 +541,7 @@ webpki = { version = "0.102", package = "rustls-webpki", features = [
     "std",
 ] }
 wiremock = "0.5"
-x509-parser = "0.14.0"
+x509-parser = { version = "0.14.0", features = ["verify"] }
 zstd = "0.12.3"
 zeroize = "1.6.0"
 versions = "4.1.0"
@@ -566,7 +568,6 @@ move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
 move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
 move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
-move-prover = { path = "external-crates/move/crates/move-prover" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-interpreter" }
@@ -584,6 +585,9 @@ passkey-client = { version = "0.2.0" }
 passkey-authenticator = { version = "0.2.0" }
 coset = "0.3"
 p256 = { version = "0.13.2", features = ["ecdsa"] }
+
+p384 = { version = "0.13.0", default-features = false, features = ["ecdsa","sha384"] }
+ciborium = "0.2"
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
@@ -637,8 +641,10 @@ sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-http = { path = "crates/sui-http" }
 sui-indexer = { path = "crates/sui-indexer" }
+sui-indexer-alt = { path = "crates/sui-indexer-alt" }
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework" }
 sui-indexer-alt-jsonrpc = { path = "crates/sui-indexer-alt-jsonrpc" }
+sui-indexer-alt-metrics = { path = "crates/sui-indexer-alt-metrics" }
 sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }

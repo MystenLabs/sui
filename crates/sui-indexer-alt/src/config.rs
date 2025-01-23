@@ -25,6 +25,9 @@ pub struct IndexerConfig {
     /// How checkpoints are read by the indexer.
     pub ingestion: IngestionLayer,
 
+    /// Configuration for the retention on consistent pipelines.
+    pub consistency: PrunerLayer,
+
     /// Default configuration for committers that is shared by all pipelines. Pipelines can
     /// override individual settings in their own configuration sections.
     pub committer: CommitterLayer,
@@ -100,6 +103,7 @@ pub struct PrunerLayer {
     pub delay_ms: Option<u64>,
     pub retention: Option<u64>,
     pub max_chunk_size: Option<u64>,
+    pub prune_concurrency: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -109,12 +113,15 @@ pub struct PrunerLayer {
 #[derive(Clone, Default, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct PipelineLayer {
+    // Consistent pipelines
+    pub coin_balance_buckets: Option<CommitterLayer>,
+    pub obj_info: Option<CommitterLayer>,
+
     // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
     pub sum_packages: Option<SequentialLayer>,
 
     // All concurrent pipelines
-    pub coin_balance_buckets: Option<ConcurrentLayer>,
     pub cp_sequence_numbers: Option<ConcurrentLayer>,
     pub ev_emit_mod: Option<ConcurrentLayer>,
     pub ev_struct_inst: Option<ConcurrentLayer>,
@@ -125,7 +132,6 @@ pub struct PipelineLayer {
     pub kv_objects: Option<ConcurrentLayer>,
     pub kv_protocol_configs: Option<ConcurrentLayer>,
     pub kv_transactions: Option<ConcurrentLayer>,
-    pub obj_info: Option<ConcurrentLayer>,
     pub obj_versions: Option<ConcurrentLayer>,
     pub tx_affected_addresses: Option<ConcurrentLayer>,
     pub tx_affected_objects: Option<ConcurrentLayer>,
@@ -145,6 +151,11 @@ impl IndexerConfig {
         let mut example: Self = Default::default();
 
         example.ingestion = IngestionConfig::default().into();
+        example.consistency = PrunerLayer {
+            interval_ms: Some(60_000),
+            retention: Some(4 * 60 * 60),
+            ..Default::default()
+        };
         example.committer = CommitterConfig::default().into();
         example.pruner = PrunerConfig::default().into();
         example.pipeline = PipelineLayer::example();
@@ -224,6 +235,7 @@ impl PrunerLayer {
             delay_ms: self.delay_ms.unwrap_or(base.delay_ms),
             retention: self.retention.unwrap_or(base.retention),
             max_chunk_size: self.max_chunk_size.unwrap_or(base.max_chunk_size),
+            prune_concurrency: self.prune_concurrency.unwrap_or(base.prune_concurrency),
         }
     }
 }
@@ -233,9 +245,10 @@ impl PipelineLayer {
     /// configure.
     pub fn example() -> Self {
         PipelineLayer {
+            coin_balance_buckets: Some(Default::default()),
+            obj_info: Some(Default::default()),
             sum_displays: Some(Default::default()),
             sum_packages: Some(Default::default()),
-            coin_balance_buckets: Some(Default::default()),
             cp_sequence_numbers: Some(Default::default()),
             ev_emit_mod: Some(Default::default()),
             ev_struct_inst: Some(Default::default()),
@@ -246,7 +259,6 @@ impl PipelineLayer {
             kv_objects: Some(Default::default()),
             kv_protocol_configs: Some(Default::default()),
             kv_transactions: Some(Default::default()),
-            obj_info: Some(Default::default()),
             obj_versions: Some(Default::default()),
             tx_affected_addresses: Some(Default::default()),
             tx_affected_objects: Some(Default::default()),
@@ -270,6 +282,7 @@ impl Merge for IndexerConfig {
         check_extra("top-level", other.extra);
         IndexerConfig {
             ingestion: self.ingestion.merge(other.ingestion),
+            consistency: self.consistency.merge(other.consistency),
             committer: self.committer.merge(other.committer),
             pruner: self.pruner.merge(other.pruner),
             pipeline: self.pipeline.merge(other.pipeline),
@@ -343,6 +356,7 @@ impl Merge for PrunerLayer {
                 (None, None) => None,
             },
             max_chunk_size: other.max_chunk_size.or(self.max_chunk_size),
+            prune_concurrency: other.prune_concurrency.or(self.prune_concurrency),
             extra: Default::default(),
         }
     }
@@ -353,9 +367,10 @@ impl Merge for PipelineLayer {
         check_extra("pipeline", self.extra);
         check_extra("pipeline", other.extra);
         PipelineLayer {
+            coin_balance_buckets: self.coin_balance_buckets.merge(other.coin_balance_buckets),
+            obj_info: self.obj_info.merge(other.obj_info),
             sum_displays: self.sum_displays.merge(other.sum_displays),
             sum_packages: self.sum_packages.merge(other.sum_packages),
-            coin_balance_buckets: self.coin_balance_buckets.merge(other.coin_balance_buckets),
             cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers),
             ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod),
             ev_struct_inst: self.ev_struct_inst.merge(other.ev_struct_inst),
@@ -366,7 +381,6 @@ impl Merge for PipelineLayer {
             kv_objects: self.kv_objects.merge(other.kv_objects),
             kv_protocol_configs: self.kv_protocol_configs.merge(other.kv_protocol_configs),
             kv_transactions: self.kv_transactions.merge(other.kv_transactions),
-            obj_info: self.obj_info.merge(other.obj_info),
             obj_versions: self.obj_versions.merge(other.obj_versions),
             tx_affected_addresses: self
                 .tx_affected_addresses
@@ -440,6 +454,7 @@ impl From<PrunerConfig> for PrunerLayer {
             delay_ms: Some(config.delay_ms),
             retention: Some(config.retention),
             max_chunk_size: Some(config.max_chunk_size),
+            prune_concurrency: Some(config.prune_concurrency),
             extra: Default::default(),
         }
     }
@@ -607,6 +622,7 @@ mod tests {
             delay_ms: Some(100),
             retention: Some(200),
             max_chunk_size: Some(300),
+            prune_concurrency: Some(1),
             extra: Default::default(),
         };
 
@@ -615,6 +631,7 @@ mod tests {
             delay_ms: None,
             retention: Some(500),
             max_chunk_size: Some(600),
+            prune_concurrency: Some(2),
             extra: Default::default(),
         };
 
@@ -628,6 +645,7 @@ mod tests {
                 delay_ms: Some(100),
                 retention: Some(500),
                 max_chunk_size: Some(600),
+                prune_concurrency: Some(2),
                 extra: _,
             },
         );
@@ -639,6 +657,7 @@ mod tests {
                 delay_ms: Some(100),
                 retention: Some(500),
                 max_chunk_size: Some(300),
+                prune_concurrency: Some(1),
                 extra: _,
             },
         );
@@ -726,6 +745,7 @@ mod tests {
                 delay_ms: 200,
                 retention: 300,
                 max_chunk_size: 400,
+                prune_concurrency: 1,
             }),
         };
 
@@ -742,6 +762,7 @@ mod tests {
                     delay_ms: 200,
                     retention: 300,
                     max_chunk_size: 400,
+                    prune_concurrency: 1,
                 }),
             },
         );

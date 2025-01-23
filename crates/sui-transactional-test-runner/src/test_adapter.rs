@@ -7,7 +7,7 @@ use crate::offchain_state::OffchainStateReader;
 use crate::simulator_persisted_store::PersistedStore;
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
 use crate::{TransactionalAdapter, ValidatorWithFullnode};
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
 use criterion::Criterion;
@@ -39,6 +39,8 @@ use move_transactional_test_runner::{
 use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use serde::Deserialize;
+use serde_json::Value;
 use std::fmt::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -147,6 +149,8 @@ pub struct SuiTestAdapter {
     default_account: TestAccount,
     default_syntax: SyntaxChoice,
     object_enumeration: BiBTreeMap<ObjectID, FakeID>,
+    /// Mapping from task ID to a transaction digest, for use in named variable substitution.
+    digest_enumeration: BTreeMap<u64, TransactionDigest>,
     next_fake: (u64, u64),
     gas_price: u64,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
@@ -408,6 +412,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             default_account,
             default_syntax,
             object_enumeration: BiBTreeMap::new(),
+            digest_enumeration: BTreeMap::new(),
             next_fake: (0, 0),
             // TODO: make this configurable
             gas_price: default_gas_price.unwrap_or(DEFAULT_GAS_PRICE),
@@ -622,8 +627,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
                     .await;
 
-                // wait_for_objects_snapshot_catchup(graphql_client, Duration::from_secs(180)).await;
-
                 if let Some(checkpoint_to_prune) = wait_for_checkpoint_pruned {
                     offchain_reader
                         .wait_for_pruned_checkpoint(checkpoint_to_prune, Duration::from_secs(60))
@@ -649,6 +652,49 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 output.push(format!("Response: {}", resp.response_body));
 
                 Ok(Some(output.join("\n")))
+            }
+            SuiSubcommand::RunJsonRpc(RunJsonRpcCommand { show_headers }) => {
+                let file = data.ok_or_else(|| anyhow::anyhow!("Missing JSON-RPC query"))?;
+                let contents = std::fs::read_to_string(file.path())?;
+
+                let offchain_reader = self
+                    .offchain_reader
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Offchain reader not set"))?;
+
+                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
+                offchain_reader
+                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
+                    .await;
+
+                let interpolated = self.interpolate_query(&contents, &[], highest_checkpoint)?;
+
+                #[derive(Deserialize)]
+                struct Query {
+                    method: String,
+                    params: Value,
+                }
+
+                let query: Query = serde_json::from_str(&interpolated)
+                    .context("Failed to parse JSON-RPC query")?;
+
+                let resp = offchain_reader
+                    .execute_jsonrpc(query.method, query.params)
+                    .await?;
+
+                let mut output = String::new();
+
+                if show_headers {
+                    write!(
+                        &mut output,
+                        "Headers: {:#?}\n\n",
+                        resp.http_headers.unwrap()
+                    )
+                    .unwrap();
+                }
+
+                write!(&mut output, "Response: {}", resp.response_body).unwrap();
+                Ok(Some(output))
             }
             SuiSubcommand::ViewCheckpoint => {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
@@ -1248,6 +1294,10 @@ impl<'a> SuiTestAdapter {
             }
         }
 
+        for (tid, digest) in &self.digest_enumeration {
+            variables.insert(format!("digest_{tid}"), digest.to_string());
+        }
+
         for (idx, s) in cursors.iter().enumerate() {
             // an object cursor may be either @{obj_x_y} or @{obj_x_y,n}
             // if the former, then use highest_checkpoint
@@ -1511,6 +1561,18 @@ impl<'a> SuiTestAdapter {
             .contains_shared_object();
         let (effects, error_opt) = self.executor.execute_txn(transaction).await?;
         let digest = effects.transaction_digest();
+
+        // Try to assign `digest_$task` to this transaction's digest -- panic if a transaction has
+        // already been set. Currently each task executes at most one transaction, and everything
+        // is fine. This panic triggering will be an early warning that we need to do something
+        // more sophisticated.
+        let task = self.next_fake.0;
+        if let Some(prev) = self.digest_enumeration.insert(task, *digest) {
+            panic!(
+                "Task {task} executed two transactions (expected at most one): {prev}, {digest}"
+            );
+        }
+
         let mut created_ids: Vec<_> = effects
             .created()
             .iter()

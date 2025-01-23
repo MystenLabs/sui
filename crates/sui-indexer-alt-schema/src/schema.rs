@@ -36,8 +36,9 @@ diesel::table! {
 diesel::table! {
     kv_checkpoints (sequence_number) {
         sequence_number -> Int8,
-        certified_checkpoint -> Bytea,
         checkpoint_contents -> Bytea,
+        checkpoint_summary -> Bytea,
+        validator_signatures -> Bytea,
     }
 }
 
@@ -111,6 +112,7 @@ diesel::table! {
         raw_transaction -> Bytea,
         raw_effects -> Bytea,
         events -> Bytea,
+        user_signatures -> Bytea,
     }
 }
 

@@ -10,7 +10,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     metrics::IndexerMetrics,
-    watermarks::{ReaderWatermark, StoredWatermark},
+    models::watermarks::{ReaderWatermark, StoredWatermark},
 };
 
 use super::{Handler, PrunerConfig};

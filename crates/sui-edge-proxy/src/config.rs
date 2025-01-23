@@ -29,6 +29,9 @@ pub struct ProxyConfig {
     #[serde_as(as = "DurationSeconds")]
     #[serde(default = "default_idle_timeout")]
     pub idle_timeout_seconds: Duration,
+    /// Logging configuration for read requests including sample rate and log file path.
+    #[serde(default)]
+    pub logging: LoggingConfig,
 }
 
 fn default_max_idle_connections() -> usize {
@@ -43,6 +46,19 @@ fn default_idle_timeout() -> Duration {
 #[serde(rename_all = "kebab-case")]
 pub struct PeerConfig {
     pub address: Url,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct LoggingConfig {
+    /// The sample rate for read-request logging. 0.0 = no logs;
+    /// 1.0 = log all read requests.
+    #[serde(default = "default_sample_rate")]
+    pub read_request_sample_rate: f64,
+}
+
+fn default_sample_rate() -> f64 {
+    0.0
 }
 
 /// Load and validate configuration

@@ -13,12 +13,14 @@ WORKDIR /
 
 ARG SUI_NODE_A_TAG
 ARG SUI_NODE_B_TAG
+ARG SUI_RUST_LOG
 ENV SUI_NODE_A_TAG=$SUI_NODE_A_TAG
 ENV SUI_NODE_B_TAG=$SUI_NODE_B_TAG
 
 RUN ./new-genesis.sh
 RUN echo "SUI_NODE_A_TAG=$SUI_NODE_A_TAG" >> /.env
 RUN echo "SUI_NODE_B_TAG=$SUI_NODE_B_TAG" >> /.env
+RUN echo "SUI_RUST_LOG=$SUI_RUST_LOG" >> /.env
 
 COPY ./docker-compose-antithesis.yaml /docker-compose.yaml
 

@@ -3,10 +3,10 @@
 
 use std::time::Duration;
 
-use crate::watermarks::CommitterWatermark;
-
 pub use processor::Processor;
 use serde::{Deserialize, Serialize};
+
+use crate::models::watermarks::CommitterWatermark;
 
 pub mod concurrent;
 mod logging;
