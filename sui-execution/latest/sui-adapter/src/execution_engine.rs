@@ -51,7 +51,7 @@ mod checked {
     };
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
-    use sui_types::execution::{is_certificate_denied, ExecutionTiming, TimingResult};
+    use sui_types::execution::{is_certificate_denied, ExecutionTiming, ResultWithTimings};
     use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::{CongestedObjects, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
@@ -301,22 +301,24 @@ mod checked {
         // we must still ensure an effect is committed and all objects versions incremented
         let result = gas_charger.charge_input_objects(temporary_store);
 
-        let result: TimingResult<Mode::ExecutionResults, ExecutionError> =
+        let result: ResultWithTimings<Mode::ExecutionResults, ExecutionError> =
             result.map_err(|e| (e, vec![])).and_then(
-                |()| -> TimingResult<Mode::ExecutionResults, ExecutionError> {
-                    let mut execution_result: TimingResult<Mode::ExecutionResults, ExecutionError> =
-                        if deny_cert {
-                            Err((
-                                ExecutionError::new(ExecutionErrorKind::CertificateDenied, None),
-                                vec![],
-                            ))
-                        } else if contains_deleted_input {
-                            Err((
-                                ExecutionError::new(ExecutionErrorKind::InputObjectDeleted, None),
-                                vec![],
-                            ))
-                        } else if let Some((cancelled_objects, reason)) = cancelled_objects {
-                            match reason {
+                |()| -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
+                    let mut execution_result: ResultWithTimings<
+                        Mode::ExecutionResults,
+                        ExecutionError,
+                    > = if deny_cert {
+                        Err((
+                            ExecutionError::new(ExecutionErrorKind::CertificateDenied, None),
+                            vec![],
+                        ))
+                    } else if contains_deleted_input {
+                        Err((
+                            ExecutionError::new(ExecutionErrorKind::InputObjectDeleted, None),
+                            vec![],
+                        ))
+                    } else if let Some((cancelled_objects, reason)) = cancelled_objects {
+                        match reason {
                             SequenceNumber::CONGESTED => Err((ExecutionError::new(
                                 ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
                                     congested_objects: CongestedObjects(cancelled_objects),
@@ -329,17 +331,17 @@ mod checked {
                             ), vec![])),
                             _ => panic!("invalid cancellation reason SequenceNumber: {reason}"),
                         }
-                        } else {
-                            execution_loop::<Mode>(
-                                temporary_store,
-                                transaction_kind,
-                                tx_ctx,
-                                move_vm,
-                                gas_charger,
-                                protocol_config,
-                                metrics.clone(),
-                            )
-                        };
+                    } else {
+                        execution_loop::<Mode>(
+                            temporary_store,
+                            transaction_kind,
+                            tx_ctx,
+                            move_vm,
+                            gas_charger,
+                            protocol_config,
+                            metrics.clone(),
+                        )
+                    };
 
                     let meter_check = check_meter_limit(
                         temporary_store,
@@ -564,7 +566,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-    ) -> TimingResult<Mode::ExecutionResults, ExecutionError> {
+    ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
         let result = match transaction_kind {
             TransactionKind::ChangeEpoch(change_epoch) => {
                 let builder = ProgrammableTransactionBuilder::new();

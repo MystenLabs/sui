@@ -175,7 +175,7 @@ pub enum ExecutionTiming {
     Success(Duration),
     Abort(Duration),
 }
-pub type TimingResult<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
+pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
 
 /// If a transaction digest shows up in this list, when executing such transaction,
 /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do

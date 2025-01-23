@@ -37,7 +37,7 @@ mod checked {
     };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::execution::{ExecutionTiming, TimingResult};
+    use sui_types::execution::{ExecutionTiming, ResultWithTimings};
     use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
     use sui_types::storage::{get_package_objects, PackageObject};
@@ -76,7 +76,7 @@ mod checked {
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
-    ) -> TimingResult<Mode::ExecutionResults, ExecutionError> {
+    ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
         let mut timings = vec![];
         let result = execute_inner::<Mode>(
             &mut timings,

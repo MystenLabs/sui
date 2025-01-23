@@ -104,6 +104,7 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 certificate_deny_set,
             );
+        // note: old versions do not report timings.
         (inner_temp_store, gas_status, effects, vec![], result)
     }
 
