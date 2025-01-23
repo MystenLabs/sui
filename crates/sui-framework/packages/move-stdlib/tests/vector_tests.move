@@ -601,6 +601,9 @@ fun test_destroy_macro() {
     let mut acc = 0;
     vector[10, 20, 30, 40].destroy!(|e| acc = acc + e);
     assert!(acc == 100);
+
+    vector[10, 20, 30, 40].destroy!(|e| e); // return value
+    vector[10, 20, 30, 40].destroy!(|_| {}); // no return
 }
 
 #[test]
@@ -643,11 +646,15 @@ fun test_do_macro() {
     let mut vec = vector[10, 20, 30, 40];
     vec.do_mut!(|e| *e = *e + 1);
     assert!(vec == vector[11, 21, 31, 41]);
-}
 
-#[test]
-fun test_do_macro_with_return_value() {
-    vector[10, 20, 30].do!(|e| e);
+    vector[10].do!(|e| e); // return value
+    vector[10].do!(|_| {}); // no return
+
+    vector[10].do_ref!(|e| *e); // return value
+    vector[10].do_ref!(|_| {}); // no return
+
+    vector[10].do_mut!(|e| *e); // return value
+    vector[10].do_mut!(|_| {}); // no return
 }
 
 #[test]
@@ -744,6 +751,9 @@ fun zip_do_macro() {
     let mut res = vector[];
     v1.zip_do!(v2, |a, b| res.push_back(a + b));
     assert!(res == vector[5, 7, 9]);
+
+    vector[1].zip_do!(vector[2], |a, b| a + b); // return value
+    vector[1].zip_do!(vector[2], |_, _| {}); // no return
 }
 
 #[test]
@@ -772,6 +782,9 @@ fun zip_do_reverse_macro() {
     let mut res = vector[];
     v2.zip_do_reverse!(v1, |a, b| res.push_back(a + b));
     assert!(res == vector[9, 7, 5]);
+
+    vector[1].zip_do_reverse!(vector[2], |a, b| a + b); // return value
+    vector[1].zip_do_reverse!(vector[2], |_, _| {}); // no return
 }
 
 #[test, expected_failure]
@@ -789,6 +802,9 @@ fun zip_do_ref_macro() {
     let mut res = vector[];
     v1.zip_do_ref!(&v2, |a, b| res.push_back(*a + *b));
     assert!(res == vector[5, 7, 9]);
+
+    v1.zip_do_ref!(&v2, |a, b| *a + *b); // return value
+    v1.zip_do_ref!(&v2, |_, _| {}); // no return
 }
 
 #[test, expected_failure]
@@ -813,6 +829,9 @@ fun zip_do_mut_macro() {
     });
     assert!(v1 == vector[4, 5, 6]);
     assert!(v2 == vector[1, 2, 3]);
+
+    v1.zip_do_mut!(&mut v2, |a, b| *a + *b); // return value
+    v1.zip_do_mut!(&mut v2, |_, _| {}); // no return
 }
 
 #[test]
