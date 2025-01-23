@@ -208,6 +208,7 @@ const MAX_PROTOCOL_VERSION: u64 = 72;
 //             Max gas budget moved to 50_000 SUI
 //             Max gas price moved to 50 SUI
 //             Variants as type nodes.
+//             Enable new marker table version.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1358,6 +1359,9 @@ pub struct ProtocolConfig {
     /// SIP-45: K in the formula `amplification_factor = max(0, gas_price / reference_gas_price - K)`.
     /// This is the threshold for activating consensus amplification.
     sip_45_consensus_amplification_threshold: Option<u64>,
+
+    /// Enables use of v2 of the object per-epoch marker table with FullObjectID keys.
+    use_object_per_epoch_marker_table_v2: Option<bool>,
 }
 
 // feature flags
@@ -2300,6 +2304,8 @@ impl ProtocolConfig {
             gas_budget_based_txn_cost_absolute_cap_commit_count: None,
 
             sip_45_consensus_amplification_threshold: None,
+
+            use_object_per_epoch_marker_table_v2: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3149,6 +3155,9 @@ impl ProtocolConfig {
                     cfg.max_gas_price = Some(50_000_000_000);
 
                     cfg.feature_flags.variant_nodes = true;
+
+                    // Enable new marker table version.
+                    cfg.use_object_per_epoch_marker_table_v2 = Some(true);
                 }
                 // Use this template when making changes:
                 //

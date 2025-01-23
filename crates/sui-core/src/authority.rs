@@ -890,6 +890,10 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_objects_refs,
             epoch_store.epoch(),
+            epoch_store
+                .protocol_config()
+                .use_object_per_epoch_marker_table_v2_as_option()
+                .unwrap_or(false),
         )?;
 
         let (_gas_status, checked_input_objects) = sui_transaction_checks::check_transaction_input(
@@ -1557,7 +1561,14 @@ impl AuthorityState {
             inner_temporary_store,
         );
         self.get_cache_writer()
-            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs.into())
+            .write_transaction_outputs(
+                epoch_store.epoch(),
+                transaction_outputs.into(),
+                epoch_store
+                    .protocol_config()
+                    .use_object_per_epoch_marker_table_v2_as_option()
+                    .unwrap_or(false),
+            )
             .await;
 
         if certificate.transaction_data().is_end_of_epoch_tx() {
@@ -1797,6 +1808,10 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_object_refs,
             epoch_store.epoch(),
+            epoch_store
+                .protocol_config()
+                .use_object_per_epoch_marker_table_v2_as_option()
+                .unwrap_or(false),
         )?;
 
         // make a gas object if one was not provided
@@ -1983,6 +1998,10 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_object_refs,
             epoch_store.epoch(),
+            epoch_store
+                .protocol_config()
+                .use_object_per_epoch_marker_table_v2_as_option()
+                .unwrap_or(false),
         )?;
 
         // make a gas object if one was not provided
@@ -2145,6 +2164,10 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_object_refs,
             epoch_store.epoch(),
+            epoch_store
+                .protocol_config()
+                .use_object_per_epoch_marker_table_v2_as_option()
+                .unwrap_or(false),
         )?;
 
         // Create and use a dummy gas object if there is no gas object provided.

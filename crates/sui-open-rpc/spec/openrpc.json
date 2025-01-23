@@ -1949,6 +1949,7 @@
                 "types_is_one_time_witness_type_tag_cost_per_byte": {
                   "u64": "2"
                 },
+                "use_object_per_epoch_marker_table_v2": null,
                 "validator_validate_metadata_cost_base": {
                   "u64": "52"
                 },

@@ -63,7 +63,9 @@ use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point_async;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
-use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData};
+use sui_types::base_types::{
+    EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
+};
 use sui_types::bridge::{get_bridge, Bridge};
 use sui_types::digests::{
     ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
@@ -73,7 +75,9 @@ use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
-use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
+use sui_types::storage::{
+    FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
+};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapOptional;
@@ -180,7 +184,7 @@ impl IsNewer for LatestObjectCacheEntry {
     }
 }
 
-type MarkerKey = (EpochId, ObjectID);
+type MarkerKey = (EpochId, FullObjectID);
 
 enum CacheResult<T> {
     /// Entry is in the cache
@@ -547,22 +551,18 @@ impl WritebackCache {
     async fn write_marker_value(
         &self,
         epoch_id: EpochId,
-        object_key: &ObjectKey,
+        object_key: FullObjectKey,
         marker_value: MarkerValue,
     ) {
-        tracing::trace!(
-            "inserting marker value {:?}: {:?}",
-            object_key,
-            marker_value
-        );
+        tracing::trace!("inserting marker value {object_key:?}: {marker_value:?}",);
         fail_point_async!("write_marker_entry");
         self.metrics.record_cache_write("marker");
         self.dirty
             .markers
-            .entry((epoch_id, object_key.0))
+            .entry((epoch_id, object_key.id()))
             .or_default()
             .value_mut()
-            .insert(object_key.1, marker_value);
+            .insert(object_key.version(), marker_value);
     }
 
     // lock both the dirty and committed sides of the cache, and then pass the entries to
@@ -734,28 +734,27 @@ impl WritebackCache {
 
     fn get_marker_value_cache_only(
         &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
+        object_key: FullObjectKey,
         epoch_id: EpochId,
     ) -> CacheResult<MarkerValue> {
         Self::with_locked_cache_entries(
             &self.dirty.markers,
             &self.cached.marker_cache,
-            &(epoch_id, *object_id),
+            &(epoch_id, object_key.id()),
             |dirty_entry, cached_entry| {
                 check_cache_entry_by_version!(
                     self,
                     "marker_by_version",
                     "uncommitted",
                     dirty_entry,
-                    version
+                    object_key.version()
                 );
                 check_cache_entry_by_version!(
                     self,
                     "marker_by_version",
                     "committed",
                     cached_entry,
-                    version
+                    object_key.version()
                 );
                 CacheResult::Miss
             },
@@ -764,13 +763,13 @@ impl WritebackCache {
 
     fn get_latest_marker_value_cache_only(
         &self,
-        object_id: &ObjectID,
+        object_id: FullObjectID,
         epoch_id: EpochId,
     ) -> CacheResult<(SequenceNumber, MarkerValue)> {
         Self::with_locked_cache_entries(
             &self.dirty.markers,
             &self.cached.marker_cache,
-            &(epoch_id, *object_id),
+            &(epoch_id, object_id),
             |dirty_entry, cached_entry| {
                 check_cache_entry_by_latest!(self, "marker_latest", "uncommitted", dirty_entry);
                 check_cache_entry_by_latest!(self, "marker_latest", "committed", cached_entry);
@@ -846,7 +845,7 @@ impl WritebackCache {
 
         // Update all markers
         for (object_key, marker_value) in markers.iter() {
-            self.write_marker_value(epoch_id, object_key, *marker_value)
+            self.write_marker_value(epoch_id, *object_key, *marker_value)
                 .await;
         }
 
@@ -928,7 +927,13 @@ impl WritebackCache {
 
     // Commits dirty data for the given TransactionDigest to the db.
     #[instrument(level = "debug", skip_all)]
-    async fn commit_transaction_outputs(&self, epoch: EpochId, digests: &[TransactionDigest]) {
+    async fn commit_transaction_outputs(
+        &self,
+        epoch: EpochId,
+        digests: &[TransactionDigest],
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
+    ) {
         fail_point_async!("writeback-cache-commit");
         trace!(?digests);
 
@@ -955,7 +960,7 @@ impl WritebackCache {
         // a cache eviction could cause a value to disappear briefly, even if we insert to the
         // cache before removing from the dirty set.
         self.store
-            .write_transaction_outputs(epoch, &all_outputs)
+            .write_transaction_outputs(epoch, &all_outputs, use_object_per_epoch_marker_table_v2)
             .await
             .expect("db error");
 
@@ -1093,8 +1098,8 @@ impl WritebackCache {
             Self::move_version_from_dirty_to_cache(
                 &self.dirty.markers,
                 &self.cached.marker_cache,
-                (epoch, object_key.0),
-                object_key.1,
+                (epoch, object_key.id()),
+                object_key.version(),
                 marker_value,
             );
         }
@@ -1297,8 +1302,16 @@ impl ExecutionCacheCommit for WritebackCache {
         &'a self,
         epoch: EpochId,
         digests: &'a [TransactionDigest],
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> BoxFuture<'a, ()> {
-        WritebackCache::commit_transaction_outputs(self, epoch, digests).boxed()
+        WritebackCache::commit_transaction_outputs(
+            self,
+            epoch,
+            digests,
+            use_object_per_epoch_marker_table_v2,
+        )
+        .boxed()
     }
 
     fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()> {
@@ -1643,24 +1656,27 @@ impl ObjectCacheRead for WritebackCache {
 
     fn get_marker_value(
         &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
+        object_key: FullObjectKey,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<MarkerValue> {
-        match self.get_marker_value_cache_only(object_id, version, epoch_id) {
+        match self.get_marker_value_cache_only(object_key, epoch_id) {
             CacheResult::Hit(marker) => Some(marker),
             CacheResult::NegativeHit => None,
             CacheResult::Miss => self
                 .record_db_get("marker_by_version")
-                .get_marker_value(object_id, &version, epoch_id)
+                .get_marker_value(object_key, epoch_id, use_object_per_epoch_marker_table_v2)
                 .expect("db error"),
         }
     }
 
     fn get_latest_marker(
         &self,
-        object_id: &ObjectID,
+        object_id: FullObjectID,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<(SequenceNumber, MarkerValue)> {
         match self.get_latest_marker_value_cache_only(object_id, epoch_id) {
             CacheResult::Hit((v, marker)) => Some((v, marker)),
@@ -1669,7 +1685,7 @@ impl ObjectCacheRead for WritebackCache {
             }
             CacheResult::Miss => self
                 .record_db_get("marker_latest")
-                .get_latest_marker(object_id, epoch_id)
+                .get_latest_marker(object_id, epoch_id, use_object_per_epoch_marker_table_v2)
                 .expect("db error"),
         }
     }
@@ -2064,6 +2080,8 @@ impl ExecutionCacheWrite for WritebackCache {
         &self,
         epoch_id: EpochId,
         tx_outputs: Arc<TransactionOutputs>,
+        // TODO: Delete this parameter once table migration is complete.
+        _use_object_per_epoch_marker_table_v2: bool,
     ) -> BoxFuture<'_, ()> {
         WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs).boxed()
     }
