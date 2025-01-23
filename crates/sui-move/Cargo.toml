@@ -16,6 +16,7 @@ serde_yaml.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 bin-version.workspace = true
+datatest-stable.workspace = true
 
 move-binary-format.workspace = true
 move-cli.workspace = true
@@ -45,6 +46,9 @@ futures.workspace = true
 jsonrpsee.workspace = true
 rand.workspace = true
 tempfile.workspace = true
+walkdir.workspace = true
+insta-cmd.workspace = true
+insta.workspace = true
 
 move-package.workspace = true
 
@@ -56,3 +60,10 @@ sui-simulator.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]
+
+[[test]]
+name = "cli_tests"
+harness = false
+
+[lints]
+workspace = true

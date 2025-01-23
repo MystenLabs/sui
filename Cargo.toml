@@ -370,6 +370,7 @@ indexmap = { version = "2.1.0", features = ["serde"] }
 indicatif = "0.17.2"
 inquire = "0.6.0"
 insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
+insta-cmd = "0.6.0"
 integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
 itertools = "0.13.0"
@@ -536,6 +537,7 @@ unescape = "0.1.0"
 ureq = "2.9.1"
 url = "2.3.1"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
+walkdir = "2.5.0"
 webpki = { version = "0.102", package = "rustls-webpki", features = [
     "alloc",
     "std",
