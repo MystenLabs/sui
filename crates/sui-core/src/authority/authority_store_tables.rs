@@ -228,12 +228,14 @@ impl AuthorityPerpetualTables {
         // the size of the prefix is 25% of the useful key length, so not negligible.
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
+        let mut effects = ThDbMap::new_with_rm_prefix(&thdb, effects, digest_prefix.clone());
+        effects.log_get = true;
         Self {
             objects: ThDbMap::new(&thdb, objects),
             indirect_move_objects: ThDbMap::new(&thdb, indirect_move_objects),
             live_owned_object_markers: ThDbMap::new(&thdb, live_owned_object_markers),
             transactions: ThDbMap::new_with_rm_prefix(&thdb, transactions, digest_prefix.clone()),
-            effects: ThDbMap::new_with_rm_prefix(&thdb, effects, digest_prefix.clone()),
+            effects,
             executed_effects: ThDbMap::new_with_rm_prefix(
                 &thdb,
                 executed_effects,

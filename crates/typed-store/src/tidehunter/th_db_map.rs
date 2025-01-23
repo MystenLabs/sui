@@ -1,3 +1,4 @@
+use std::backtrace::Backtrace;
 use crate::rocks::be_fix_int_ser;
 use crate::{DBMetrics, Map};
 use bincode::Options;
@@ -11,6 +12,9 @@ use std::marker::PhantomData;
 use std::ops::{Bound, RangeBounds};
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
+use once_cell::sync::Lazy;
 use tidehunter::batch::WriteBatch;
 use tidehunter::config::Config;
 use tidehunter::db::{Db, DbError};
@@ -24,12 +28,16 @@ pub struct ThDbMap<K, V> {
     rm_prefix: Vec<u8>,
     _phantom: PhantomData<(K, V)>,
     metrics: Arc<DBMetrics>,
+    pub log_get: bool,
+    last_get_log: AtomicU64,
 }
 
 pub struct ThDbBatch {
     db: Arc<Db>,
     batch: WriteBatch,
 }
+
+static START: Lazy<Instant> = Lazy::new(||Instant::now());
 
 impl<'a, K, V> ThDbMap<K, V>
 where
@@ -49,6 +57,8 @@ where
             ks,
             rm_prefix,
             metrics,
+            last_get_log: AtomicU64::new(0),
+            log_get: false,
             _phantom: PhantomData,
         }
     }
@@ -188,6 +198,13 @@ where
             .rocksdb_get_latency_seconds // todo different metric name?
             .with_label_values(&[&self.ks_name()])
             .start_timer();
+        if self.log_get {
+            let now = START.elapsed().as_secs();
+            let prev = self.last_get_log.swap(now, Ordering::Relaxed);
+            if prev != now {
+                tracing::info!("reported_get_backtrace {:?} ", Backtrace::force_capture());
+            }
+        }
         let key = self.serialize_key(key);
         let v = self
             .db
