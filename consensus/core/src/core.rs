@@ -1883,6 +1883,149 @@ mod test {
         }
     }
 
+    // Tests that the threshold clock advances when blocks get unsuspended due to GC'ed blocks and newly created blocks are always higher
+    // than the last advanced gc round.
+    #[tokio::test]
+    async fn test_multiple_commits_advance_threshold_clock() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, mut key_pairs) = Context::new_for_test(4);
+        const GC_DEPTH: u32 = 2;
+
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+
+        // On round 1 we do produce the block for authority D but we do not link it until round 6. This is making round 6 unable to get processed
+        // until leader of round 3 is committed where round 1 gets garbage collected.
+        // Then we add more rounds so we can trigger a commit for leader of round 9 which will move the gc round to 7.
+        let dag_str = "DAG {
+            Round 0 : { 4 },
+            Round 1 : { * },
+            Round 2 : { 
+                B -> [-D1],
+                C -> [-D1],
+                D -> [-D1],
+            },
+            Round 3 : {
+                B -> [*],
+                C -> [*]
+                D -> [*],
+            },
+            Round 4 : { 
+                A -> [*],
+                B -> [*],
+                C -> [*]
+                D -> [*],
+            },
+            Round 5 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 6 : { 
+                B -> [A6, B6, C6, D1],
+                C -> [A6, B6, C6, D1],
+                D -> [A6, B6, C6, D1],
+            },
+            Round 7 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 8 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 9 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 10 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 11 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+        }";
+
+        let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag");
+        dag_builder.print();
+
+        // create dag state after all blocks have been written to store
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
+            context.clone(),
+            dag_state.clone(),
+        ));
+
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            commit_consumer,
+            dag_state.clone(),
+            store.clone(),
+            leader_schedule.clone(),
+        );
+
+        // Check no commits have been persisted to dag_state or store.
+        let last_commit = store.read_last_commit().unwrap();
+        assert!(last_commit.is_none());
+        assert_eq!(dag_state.read().last_commit_index(), 0);
+
+        // Now spin up core
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        // Need at least one subscriber to the block broadcast channel.
+        let _block_receiver = signal_receivers.block_broadcast_receiver();
+        let mut core = Core::new(
+            context.clone(),
+            leader_schedule,
+            transaction_consumer,
+            block_manager,
+            true,
+            commit_observer,
+            signals,
+            key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
+            true,
+        );
+        // We set the last known round to 4 so we avoid creating new blocks until then - otherwise it will crash as the already created DAG contains blocks for this
+        // authority.
+        core.set_last_known_proposed_round(4);
+
+        // We add all the blocks except D1. The only ones we can immediately accept are the ones up to round 5 as they don't have a dependency on D1. Rest of blocks do have causal dependency
+        // to D1 so they can't be processed until the leader of round 3 can get committed and gc round moves to 1. That will make all the blocks that depend to D1 get accepted.
+        // However, our threshold clock is now at round 6 as the last quorum that we managed to process was the round 5.
+        // As commits happen blocks of later rounds get accepted and more leaders get committed. Eventually the leader of round 9 gets committed and gc is moved to 9 - 2 = 7.
+        // If our node attempts to produce a block for the threshold clock 6, that will make the acceptance checks fail as now gc has moved far past this round.
+        core.add_blocks(
+            dag_builder
+                .blocks(1..=11)
+                .into_iter()
+                .filter(|b| !(b.round() == 1 && b.author() == AuthorityIndex::new_for_test(3)))
+                .collect(),
+        )
+        .expect("Should not fail");
+
+        assert_eq!(core.last_proposed_round(), 12);
+    }
+
     #[tokio::test]
     async fn test_core_set_min_propose_round() {
         telemetry_subscribers::init_for_testing();
