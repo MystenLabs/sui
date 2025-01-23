@@ -171,7 +171,8 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
         // if launch.json is missing or empty
         if (!config.type && !config.request && !config.name) {
             const editor = vscode.window.activeTextEditor;
-            if (editor && editor.document.languageId === 'move') {
+            if (editor && (editor.document.languageId === 'move'
+                || editor.document.languageId === 'mvb')) {
 
                 try {
                     let traceInfo = await findTraceInfo(editor);
@@ -206,7 +207,7 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
  * Finds the trace information for the current active editor.
  *
  * @param editor active text editor.
- * @returns trace information of the form `<package>::<module>::<function>`.
+ * @returns trace information of the form `<package>::<module>::<function_name>`.
  * @throws Error with a descriptive error message if the trace information cannot be found.
  */
 async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
@@ -215,14 +216,30 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
         throw new Error(`Cannot find package root for file  '${editor.document.uri.fsPath}'`);
     }
 
-    const pkgModules = findModules(editor.document.getText());
-    if (pkgModules.length === 0) {
-        throw new Error(`Cannot find any modules in file '${editor.document.uri.fsPath}'`);
+    let tracedFunctions: string[] = [];
+    if (path.extname(editor.document.uri.fsPath) === '.move') {
+        const pkgModules = findSrcModules(editor.document.getText());
+        if (pkgModules.length === 0) {
+            throw new Error(`Cannot find any modules in file '${editor.document.uri.fsPath}'`);
+        }
+        tracedFunctions = findTracedFunctionsFromPath(pkgRoot, pkgModules);
+    } else {
+        // this is a disassembly file (.mvb) as this function is only called if
+        // the active file is either a .move or .mvb file
+        const modulePattern = /\bmodule\s+\d+\.\w+\b/g;
+        const moduleSequences = editor.document.getText().match(modulePattern);
+        if (!moduleSequences || moduleSequences.length === 0) {
+            throw new Error(`Cannot find module declaration in disassembly file '${editor.document.uri.fsPath}'`);
+        }
+        // there should be only one module declaration in a disassembly file
+        const [pkgAddrStr, module] = moduleSequences[0].substring('module'.length).trim().split('.');
+        const pkgAddr = parseInt(pkgAddrStr);
+        if (isNaN(pkgAddr)) {
+            throw new Error(`Cannot parse package address from '${pkgAddrStr}' in disassembly file '${editor.document.uri.fsPath}'`);
+        }
+        tracedFunctions = findTracedFunctionsFromTrace(pkgRoot, pkgAddr, module);
     }
-
-    const tracedFunctions = findTracedFunctions(pkgRoot, pkgModules);
-
-    if (tracedFunctions.length === 0) {
+    if (!tracedFunctions || tracedFunctions.length === 0) {
         throw new Error(`No traced functions found for package at '${pkgRoot}'`);
     }
 
@@ -233,7 +250,6 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
     if (!fun) {
         throw new Error(`No function to be trace-debugged selected from\n` + tracedFunctions.join('\n'));
     }
-
     return fun;
 }
 
@@ -268,7 +284,7 @@ async function findPkgRoot(active_file_path: string): Promise<string | undefined
 }
 
 /**
- * Finds modules by searching the content of the file to look for
+ * Finds modules by searching the content of a source file to look for
  * module declarations of the form `module <package>::<module>`.
  * We cannot rely on the directory structure to find modules because
  * trace info is generated based on module names in the source files.
@@ -276,7 +292,7 @@ async function findPkgRoot(active_file_path: string): Promise<string | undefined
  * @param file_content content of the file.
  * @returns modules in the file content of the form `<package>::<module>`.
  */
-function findModules(file_content: string): string[] {
+function findSrcModules(file_content: string): string[] {
     const modulePattern = /\bmodule\s+\w+::\w+\b/g;
     const moduleSequences = file_content.match(modulePattern);
     return moduleSequences
@@ -285,28 +301,19 @@ function findModules(file_content: string): string[] {
 }
 
 /**
- * Find all functions that have a corresponding trace file.
+ * Find all functions that have a corresponding trace file by looking at
+ * the trace file names that have the following format and extracting all
+ * function names that match:
+ * `<package>__<module>__<function_name>.json`.
  *
  * @param pkgRoot root directory of the package.
  * @param pkgModules modules in the package of the form `<package>::<module>`.
- * @returns list of functions of the form `<package>::<module>::<function>`.
- * @throws Error (containing a descriptive message) if no trace files are found for the package.
+ * @returns list of functions of the form `<package>::<module>::<function_name>`.
+ * @throws Error (containing a descriptive message) if no traced functions are found for the package.
  */
-function findTracedFunctions(pkgRoot: string, pkgModules: string[]): string[] {
+function findTracedFunctionsFromPath(pkgRoot: string, pkgModules: string[]): string[] {
 
-    function getFiles(tracesDir: string): string[] {
-        try {
-            return fs.readdirSync(tracesDir);
-        } catch (err) {
-            throw new Error(`Error accessing 'traces' directory for package at '${pkgRoot}'`);
-        }
-    }
-    const tracesDir = path.join(pkgRoot, 'traces');
-
-    const filePaths = getFiles(tracesDir);
-    if (filePaths.length === 0) {
-        throw new Error(`No trace files for package at ${pkgRoot}`);
-    }
+    const filePaths = getTraceFiles(pkgRoot);
     const result: [string, string[]][] = [];
 
     pkgModules.forEach((module) => {
@@ -328,10 +335,93 @@ function findTracedFunctions(pkgRoot: string, pkgModules: string[]): string[] {
 }
 
 /**
+ * Find all functions that have a corresponding trace file by looking at
+ * the content of the trace file and its name (`<package>__<module>__<function_name>.json`).
+ * We need to match the package address, module name, and function name in the trace
+ * file itself as this is the only place where we can find the (potentially matching)
+ * package address (module name and function name could be extracted from the trace
+ * file name).
+ *
+ * @param pkgRoot root directory of the package.
+ * @param pkgAddr package address.
+ * @param module module name.
+ * @returns list of functions of the form `<package>::<module>::<function_name>`.
+ * @throws Error (containing a descriptive message) if no traced functions are found for the package.
+ */
+function findTracedFunctionsFromTrace(pkgRoot: string, pkgAddr: number, module: string): string[] {
+    const filePaths = getTraceFiles(pkgRoot);
+
+    const result: string[] = [];
+    for (const p of filePaths) {
+        const fpath = path.join(pkgRoot, 'traces', p);
+
+        let traceContent = undefined;
+        try {
+            traceContent = fs.readFileSync(fpath, 'utf-8');
+        } catch {
+            throw new Error(`Error reading trace file '${fpath}'`);
+        }
+
+        const trace = JSON.parse(traceContent);
+        if (!trace) {
+            throw new Error(`Error parsing trace file '${fpath}'`);
+        }
+        if (trace.events.length === 0) {
+            throw new Error(`Empty trace file '${fpath}'`);
+        }
+        const frame = trace.events[0]?.OpenFrame?.frame;
+        const pkgAddrStrInTrace = frame?.module?.address;
+        if (!pkgAddrStrInTrace) {
+            throw new Error(`No package address for the initial frame in trace file '${fpath}'`);
+        }
+        const pkgAddrInTrace = parseInt(pkgAddrStrInTrace);
+        if (isNaN(pkgAddrInTrace)) {
+            throw new Error('Cannot parse package address '
+                + pkgAddrStrInTrace
+                + ' for the initial frame in trace file '
+                + fpath);
+        }
+        const moduleInTrace = frame?.module?.name;
+        if (!moduleInTrace) {
+            throw new Error(`No module name for the initial frame in trace file '${fpath}'`);
+        }
+        const functionInTrace = frame?.function_name;
+        if (!functionInTrace) {
+            throw new Error(`No function name for the initial frame in trace file '${fpath}'`);
+        }
+        if (pkgAddrInTrace === pkgAddr && moduleInTrace === module) {
+            result.push(path.basename(fpath, path.extname(fpath)));
+        }
+    }
+    return result;
+}
+
+/**
+ * Return list of trace files for a given package.
+ *
+ * @param pkgRoot root directory of the package.
+ * @returns list of trace files for the package.
+ * @throws Error (containing a descriptive message) if no trace files are found for the package.
+ */
+function getTraceFiles(pkgRoot: string): string[] {
+    const tracesDir = path.join(pkgRoot, 'traces');
+    let filePaths = [];
+    try {
+        filePaths = fs.readdirSync(tracesDir);
+    } catch (err) {
+        throw new Error(`Error accessing 'traces' directory for package at '${pkgRoot}'`);
+    }
+    if (filePaths.length === 0) {
+        throw new Error(`No trace files for package at ${pkgRoot}`);
+    }
+    return filePaths;
+}
+
+/**
  * Prompts the user to select a function to debug from a list of traced functions.
  *
- * @param tracedFunctions list of traced functions of the form `<package>::<module>::<function>`.
- * @returns single function to debug of the form `<package>::<module>::<function>`.
+ * @param tracedFunctions list of traced functions of the form `<package>::<module>::<function_name>`.
+ * @returns single function to debug of the form `<package>::<module>::<function_name>`.
  */
 async function pickFunctionToDebug(tracedFunctions: string[]): Promise<string | undefined> {
     const selectedFunction = await vscode.window.showQuickPick(tracedFunctions.map(pkgFun => {
