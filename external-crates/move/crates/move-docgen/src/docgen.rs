@@ -997,11 +997,7 @@ impl<'env> Docgen<'env> {
     fn struct_header_display(&self, struct_env: model::Struct<'_>) -> String {
         let name = struct_env.name();
         let info = struct_env.info();
-        let type_params = info
-            .type_parameters
-            .iter()
-            .map(|tp| tp.param.user_specified_name.value)
-            .join(", ");
+        let type_params = self.datatype_type_parameter_list_display(&info.type_parameters);
         let ability_tokens = self.compiler_ability_tokens(&info.abilities);
         if ability_tokens.is_empty() {
             format!("public struct {name}{type_params}")
@@ -1104,9 +1100,7 @@ impl<'env> Docgen<'env> {
             self.code_block(env, &self.get_source_with_indent(env, func_info.full_loc));
             self.end_collapsed();
         }
-        if self.options.flags.include_call_diagrams
-            && !(func_info.is_native || func_info.macro_.is_some())
-        {
+        if self.options.flags.include_call_diagrams && func_env.compiled().is_some() {
             let file_prefix = full_name.replace("::", "_");
             self.gen_call_diagram(env, module_env.id(), name, true);
             self.begin_collapsed(&format!("Show all the functions that \"{}\" calls", name,));
@@ -1124,11 +1118,7 @@ impl<'env> Docgen<'env> {
     /// Generates documentation for a function signature.
     fn function_header_display(&self, name: Symbol, func_env: model::Function<'_>) -> String {
         let signature = &func_env.info().signature;
-        let type_params = signature
-            .type_parameters
-            .iter()
-            .map(|tp| tp.user_specified_name.value)
-            .join(", ");
+        let type_params = self.function_type_parameter_list_display(&signature.type_parameters);
         let params = func_env
             .info()
             .signature
@@ -1625,7 +1615,6 @@ impl<'env> Docgen<'env> {
         }
     }
 
-    #[allow(unused)]
     fn function_type_parameter_list_display(&self, tps: &[N::TParam]) -> String {
         if tps.is_empty() {
             "".to_owned()
