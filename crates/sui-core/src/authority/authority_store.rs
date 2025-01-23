@@ -326,13 +326,6 @@ impl AuthorityStore {
         self.perpetual_tables.get_recovery_epoch_at_restart()
     }
 
-    pub fn get_effects(
-        &self,
-        effects_digest: &TransactionEffectsDigest,
-    ) -> SuiResult<Option<TransactionEffects>> {
-        Ok(self.perpetual_tables.effects.get(effects_digest)?)
-    }
-
     /// Returns true if we have an effects structure for this transaction digest
     pub fn effects_exists(&self, effects_digest: &TransactionEffectsDigest) -> SuiResult<bool> {
         self.perpetual_tables
