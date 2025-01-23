@@ -76,6 +76,7 @@ feature_flags:
   consensus_round_prober_probe_accepted_rounds: true
   native_charging_v2: true
   convert_type_argument_error: true
+  variant_nodes: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -109,8 +110,8 @@ binary_friend_decls: 100
 max_move_object_size: 256000
 max_move_package_size: 102400
 max_publish_or_upgrade_per_ptb: 5
-max_tx_gas: 50000000000
-max_gas_price: 100000
+max_tx_gas: 50000000000000
+max_gas_price: 50000000000
 max_gas_computation_bucket: 5000000
 gas_rounding_step: 1000
 max_loop_depth: 5
@@ -354,4 +355,5 @@ max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: 3700000
 gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
+use_object_per_epoch_marker_table_v2: true
 

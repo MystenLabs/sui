@@ -40,10 +40,10 @@ move-vm-profiler.workspace = true
 move-vm-test-utils.workspace = true
 move-binary-format.workspace = true
 move-package.workspace = true
-move-prover.workspace = true
 move-symbol-pool.workspace = true
 move-unit-test.workspace = true
 move-bytecode-viewer.workspace = true
+move-model-2.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

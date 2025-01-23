@@ -83,9 +83,9 @@ module upgrades::upgrades {
 
     public enum EnumChangePositionalType {
         A(u8), // add u8
-        B(u16), // to be changed to u16
+        B(u16), // changed to u16
         C(u8), // removed u8
-        D, // removed last u8
+        D, // removed u8 from variant
     }
 
     public struct ChangeFieldA {

@@ -1,18 +1,18 @@
 ---
-title: Module `0xdee9::math`
+title: Module `deepbook::math`
 ---
 
 
 
 -  [Constants](#@Constants_0)
--  [Function `unsafe_mul`](#0xdee9_math_unsafe_mul)
--  [Function `unsafe_mul_round`](#0xdee9_math_unsafe_mul_round)
--  [Function `mul`](#0xdee9_math_mul)
--  [Function `mul_round`](#0xdee9_math_mul_round)
--  [Function `unsafe_div`](#0xdee9_math_unsafe_div)
--  [Function `unsafe_div_round`](#0xdee9_math_unsafe_div_round)
--  [Function `div_round`](#0xdee9_math_div_round)
--  [Function `count_leading_zeros`](#0xdee9_math_count_leading_zeros)
+-  [Function `unsafe_mul`](#deepbook_math_unsafe_mul)
+-  [Function `unsafe_mul_round`](#deepbook_math_unsafe_mul_round)
+-  [Function `mul`](#deepbook_math_mul)
+-  [Function `mul_round`](#deepbook_math_mul_round)
+-  [Function `unsafe_div`](#deepbook_math_unsafe_div)
+-  [Function `unsafe_div_round`](#deepbook_math_unsafe_div_round)
+-  [Function `div_round`](#deepbook_math_div_round)
+-  [Function `count_leading_zeros`](#deepbook_math_count_leading_zeros)
 
 
 <pre><code></code></pre>
@@ -24,41 +24,41 @@ title: Module `0xdee9::math`
 ## Constants
 
 
-<a name="0xdee9_math_EUnderflow"></a>
+<a name="deepbook_math_EUnderflow"></a>
 
 
 
-<pre><code><b>const</b> <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../deepbook/math.md#deepbook_math_EUnderflow">EUnderflow</a>: u64 = 1;
 </code></pre>
 
 
 
-<a name="0xdee9_math_FLOAT_SCALING"></a>
+<a name="deepbook_math_FLOAT_SCALING"></a>
 
 scaling setting for float
 
 
-<pre><code><b>const</b> <a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a>: u64 = 1000000000;
+<pre><code><b>const</b> <a href="../deepbook/math.md#deepbook_math_FLOAT_SCALING">FLOAT_SCALING</a>: u64 = 1000000000;
 </code></pre>
 
 
 
-<a name="0xdee9_math_FLOAT_SCALING_U128"></a>
+<a name="deepbook_math_FLOAT_SCALING_U128"></a>
 
 
 
-<pre><code><b>const</b> <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>: u128 = 1000000000;
+<pre><code><b>const</b> <a href="../deepbook/math.md#deepbook_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>: u128 = 1000000000;
 </code></pre>
 
 
 
-<a name="0xdee9_math_unsafe_mul"></a>
+<a name="deepbook_math_unsafe_mul"></a>
 
 ## Function `unsafe_mul`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul">unsafe_mul</a>(x: u64, y: u64): u64
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/math.md#deepbook_math_unsafe_mul">unsafe_mul</a>(x: u64, y: u64): u64
 </code></pre>
 
 
@@ -67,8 +67,8 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul">unsafe_mul</a>(x: u64, y: u64): u64 {
-    <b>let</b> (_, result) = <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/math.md#deepbook_math_unsafe_mul">unsafe_mul</a>(x: u64, y: u64): u64 {
+    <b>let</b> (_, result) = <a href="../deepbook/math.md#deepbook_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
     result
 }
 </code></pre>
@@ -77,13 +77,13 @@ scaling setting for float
 
 </details>
 
-<a name="0xdee9_math_unsafe_mul_round"></a>
+<a name="deepbook_math_unsafe_mul_round"></a>
 
 ## Function `unsafe_mul_round`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: u64, y: u64): (bool, u64)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/math.md#deepbook_math_unsafe_mul_round">unsafe_mul_round</a>(x: u64, y: u64): (bool, u64)
 </code></pre>
 
 
@@ -92,12 +92,12 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: u64, y: u64): (bool, u64) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/math.md#deepbook_math_unsafe_mul_round">unsafe_mul_round</a>(x: u64, y: u64): (bool, u64) {
     <b>let</b> x = x <b>as</b> u128;
     <b>let</b> y = y <b>as</b> u128;
     <b>let</b> <b>mut</b> is_round_down = <b>true</b>;
-    <b>if</b> ((x * y) % <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a> == 0) is_round_down = <b>false</b>;
-    (is_round_down, (x * y / <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>) <b>as</b> u64)
+    <b>if</b> ((x * y) % <a href="../deepbook/math.md#deepbook_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a> == 0) is_round_down = <b>false</b>;
+    (is_round_down, (x * y / <a href="../deepbook/math.md#deepbook_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>) <b>as</b> u64)
 }
 </code></pre>
 
@@ -105,13 +105,13 @@ scaling setting for float
 
 </details>
 
-<a name="0xdee9_math_mul"></a>
+<a name="deepbook_math_mul"></a>
 
 ## Function `mul`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul">mul</a>(x: u64, y: u64): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/math.md#deepbook_math_mul">mul</a>(x: u64, y: u64): u64
 </code></pre>
 
 
@@ -120,9 +120,9 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul">mul</a>(x: u64, y: u64): u64 {
-    <b>let</b> (_, result) = <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
-    <b>assert</b>!(result &gt; 0, <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/math.md#deepbook_math_mul">mul</a>(x: u64, y: u64): u64 {
+    <b>let</b> (_, result) = <a href="../deepbook/math.md#deepbook_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
+    <b>assert</b>!(result &gt; 0, <a href="../deepbook/math.md#deepbook_math_EUnderflow">EUnderflow</a>);
     result
 }
 </code></pre>
@@ -131,13 +131,13 @@ scaling setting for float
 
 </details>
 
-<a name="0xdee9_math_mul_round"></a>
+<a name="deepbook_math_mul_round"></a>
 
 ## Function `mul_round`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul_round">mul_round</a>(x: u64, y: u64): (bool, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/math.md#deepbook_math_mul_round">mul_round</a>(x: u64, y: u64): (bool, u64)
 </code></pre>
 
 
@@ -146,9 +146,9 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul_round">mul_round</a>(x: u64, y: u64): (bool, u64) {
-    <b>let</b> (is_round_down, result) = <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
-    <b>assert</b>!(result &gt; 0, <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/math.md#deepbook_math_mul_round">mul_round</a>(x: u64, y: u64): (bool, u64) {
+    <b>let</b> (is_round_down, result) = <a href="../deepbook/math.md#deepbook_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
+    <b>assert</b>!(result &gt; 0, <a href="../deepbook/math.md#deepbook_math_EUnderflow">EUnderflow</a>);
     (is_round_down, result)
 }
 </code></pre>
@@ -157,13 +157,13 @@ scaling setting for float
 
 </details>
 
-<a name="0xdee9_math_unsafe_div"></a>
+<a name="deepbook_math_unsafe_div"></a>
 
 ## Function `unsafe_div`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div">unsafe_div</a>(x: u64, y: u64): u64
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/math.md#deepbook_math_unsafe_div">unsafe_div</a>(x: u64, y: u64): u64
 </code></pre>
 
 
@@ -172,8 +172,8 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div">unsafe_div</a>(x: u64, y: u64): u64 {
-    <b>let</b> (_, result) = <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x, y);
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/math.md#deepbook_math_unsafe_div">unsafe_div</a>(x: u64, y: u64): u64 {
+    <b>let</b> (_, result) = <a href="../deepbook/math.md#deepbook_math_unsafe_div_round">unsafe_div_round</a>(x, y);
     result
 }
 </code></pre>
@@ -182,13 +182,13 @@ scaling setting for float
 
 </details>
 
-<a name="0xdee9_math_unsafe_div_round"></a>
+<a name="deepbook_math_unsafe_div_round"></a>
 
 ## Function `unsafe_div_round`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: u64, y: u64): (bool, u64)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/math.md#deepbook_math_unsafe_div_round">unsafe_div_round</a>(x: u64, y: u64): (bool, u64)
 </code></pre>
 
 
@@ -197,12 +197,12 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: u64, y: u64): (bool, u64) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/math.md#deepbook_math_unsafe_div_round">unsafe_div_round</a>(x: u64, y: u64): (bool, u64) {
     <b>let</b> x = x <b>as</b> u128;
     <b>let</b> y = y <b>as</b> u128;
     <b>let</b> <b>mut</b> is_round_down = <b>true</b>;
-    <b>if</b> ((x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) % y) == 0) is_round_down = <b>false</b>;
-    (is_round_down, (x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) / y) <b>as</b> u64)
+    <b>if</b> ((x * (<a href="../deepbook/math.md#deepbook_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) % y) == 0) is_round_down = <b>false</b>;
+    (is_round_down, (x * (<a href="../deepbook/math.md#deepbook_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) / y) <b>as</b> u64)
 }
 </code></pre>
 
@@ -210,13 +210,13 @@ scaling setting for float
 
 </details>
 
-<a name="0xdee9_math_div_round"></a>
+<a name="deepbook_math_div_round"></a>
 
 ## Function `div_round`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_div_round">div_round</a>(x: u64, y: u64): (bool, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/math.md#deepbook_math_div_round">div_round</a>(x: u64, y: u64): (bool, u64)
 </code></pre>
 
 
@@ -225,9 +225,9 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_div_round">div_round</a>(x: u64, y: u64): (bool, u64) {
-    <b>let</b> (is_round_down, result) = <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x, y);
-    <b>assert</b>!(result &gt; 0, <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/math.md#deepbook_math_div_round">div_round</a>(x: u64, y: u64): (bool, u64) {
+    <b>let</b> (is_round_down, result) = <a href="../deepbook/math.md#deepbook_math_unsafe_div_round">unsafe_div_round</a>(x, y);
+    <b>assert</b>!(result &gt; 0, <a href="../deepbook/math.md#deepbook_math_EUnderflow">EUnderflow</a>);
     (is_round_down, result)
 }
 </code></pre>
@@ -236,13 +236,13 @@ scaling setting for float
 
 </details>
 
-<a name="0xdee9_math_count_leading_zeros"></a>
+<a name="deepbook_math_count_leading_zeros"></a>
 
 ## Function `count_leading_zeros`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_count_leading_zeros">count_leading_zeros</a>(x: u128): u8
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/math.md#deepbook_math_count_leading_zeros">count_leading_zeros</a>(x: u128): u8
 </code></pre>
 
 
@@ -251,7 +251,7 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_count_leading_zeros">count_leading_zeros</a>(<b>mut</b> x: u128): u8 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/math.md#deepbook_math_count_leading_zeros">count_leading_zeros</a>(<b>mut</b> x: u128): u8 {
     <b>if</b> (x == 0) {
         128
     } <b>else</b> {
@@ -289,7 +289,6 @@ scaling setting for float
         <b>if</b> (x & 0x80000000000000000000000000000000 == 0) {
             n = n + 1;
         };
-
         n
     }
 }

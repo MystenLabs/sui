@@ -61,7 +61,7 @@ use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::transaction::{TransactionDataAPI, TransactionKey, TransactionKind};
 use tokio::{sync::Notify, task::JoinSet, time::timeout};
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::DBMapUtils;
 use typed_store::Map;
@@ -1837,14 +1837,14 @@ impl CheckpointAggregator {
             )?;
             for ((seq, index), data) in iter {
                 if seq != current.summary.sequence_number {
-                    debug!(
+                    trace!(
                         checkpoint_seq =? current.summary.sequence_number,
                         "Not enough checkpoint signatures",
                     );
                     // No more signatures (yet) for this checkpoint
                     return Ok(result);
                 }
-                debug!(
+                trace!(
                     checkpoint_seq = current.summary.sequence_number,
                     "Processing signature for checkpoint (digest: {:?}) from {:?}",
                     current.summary.digest(),
@@ -1858,6 +1858,11 @@ impl CheckpointAggregator {
                     )])
                     .inc();
                 if let Ok(auth_signature) = current.try_aggregate(data) {
+                    debug!(
+                        checkpoint_seq = current.summary.sequence_number,
+                        "Successfully aggregated signatures for checkpoint (digest: {:?})",
+                        current.summary.digest(),
+                    );
                     let summary = VerifiedCheckpoint::new_unchecked(
                         CertifiedCheckpointSummary::new_from_data_and_sig(
                             current.summary.clone(),
@@ -2291,9 +2296,10 @@ impl CheckpointServiceNotify for CheckpointService {
             .map(|x| *x.sequence_number())
         {
             if sequence <= highest_verified_checkpoint {
-                debug!(
+                trace!(
                     checkpoint_seq = sequence,
-                    "Ignore checkpoint signature from {} - already certified", signer,
+                    "Ignore checkpoint signature from {} - already certified",
+                    signer,
                 );
                 self.metrics
                     .last_ignored_checkpoint_signature_received
@@ -2301,7 +2307,7 @@ impl CheckpointServiceNotify for CheckpointService {
                 return Ok(());
             }
         }
-        debug!(
+        trace!(
             checkpoint_seq = sequence,
             "Received checkpoint signature, digest {} from {}",
             info.summary.digest(),

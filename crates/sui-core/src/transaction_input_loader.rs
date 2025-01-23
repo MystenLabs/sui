@@ -14,9 +14,9 @@ use once_cell::unsync::OnceCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::{
-    base_types::{EpochId, ObjectRef, SequenceNumber, TransactionDigest},
+    base_types::{EpochId, FullObjectID, ObjectRef, SequenceNumber, TransactionDigest},
     error::{SuiError, SuiResult, UserInputError},
-    storage::ObjectKey,
+    storage::{FullObjectKey, ObjectKey},
     transaction::{
         InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjectReadResultKind, ReceivingObjects, TransactionKey,
@@ -47,6 +47,8 @@ impl TransactionInputLoader {
         input_object_kinds: &[InputObjectKind],
         receiving_objects: &[ObjectRef],
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<(InputObjects, ReceivingObjects)> {
         // Length of input_object_kinds have been checked via validity_check() for ProgrammableTransaction.
         let mut input_results = vec![None; input_object_kinds.len()];
@@ -65,14 +67,21 @@ impl TransactionInputLoader {
                         object: ObjectReadResultKind::Object(package),
                     });
                 }
-                InputObjectKind::SharedMoveObject { id, .. } => match self.cache.get_object(id) {
+                InputObjectKind::SharedMoveObject {
+                    id,
+                    initial_shared_version,
+                    ..
+                } => match self.cache.get_object(id) {
                     Some(object) => {
                         input_results[i] = Some(ObjectReadResult::new(*kind, object.into()))
                     }
                     None => {
-                        if let Some((version, digest)) = self
-                            .cache
-                            .get_last_shared_object_deletion_info(id, epoch_id)
+                        if let Some((version, digest)) =
+                            self.cache.get_last_shared_object_deletion_info(
+                                FullObjectID::new(*id, Some(*initial_shared_version)),
+                                epoch_id,
+                                use_object_per_epoch_marker_table_v2,
+                            )
                         {
                             input_results[i] = Some(ObjectReadResult {
                                 input_object_kind: *kind,
@@ -101,8 +110,11 @@ impl TransactionInputLoader {
             });
         }
 
-        let receiving_results =
-            self.read_receiving_objects_for_signing(receiving_objects, epoch_id)?;
+        let receiving_results = self.read_receiving_objects_for_signing(
+            receiving_objects,
+            epoch_id,
+            use_object_per_epoch_marker_table_v2,
+        )?;
 
         Ok((
             input_results
@@ -228,11 +240,18 @@ impl TransactionInputLoader {
                     input_object_kind: *input_object_kind,
                     object: obj.into(),
                 },
-                (None, InputObjectKind::SharedMoveObject { id, .. }) => {
+                (None, InputObjectKind::SharedMoveObject { id, initial_shared_version, .. }) => {
                     assert!(key.1.is_valid());
                     // Check if the object was deleted by a concurrently certified tx
                     let version = key.1;
-                    if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(id, version, epoch_id) {
+                    if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(
+                        FullObjectKey::new(
+                            FullObjectID::new(*id, Some(*initial_shared_version)),
+                            version,
+                        ),
+                        epoch_id,
+                        epoch_store.protocol_config().use_object_per_epoch_marker_table_v2_as_option().unwrap_or(false),
+                    ) {
                         ObjectReadResult {
                             input_object_kind: *input,
                             object: ObjectReadResultKind::DeletedSharedObject(version, dependency),
@@ -259,16 +278,20 @@ impl TransactionInputLoader {
         &self,
         receiving_objects: &[ObjectRef],
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<ReceivingObjects> {
         let mut receiving_results = Vec::with_capacity(receiving_objects.len());
         for objref in receiving_objects {
             // Note: the digest is checked later in check_transaction_input
             let (object_id, version, _) = objref;
 
-            if self
-                .cache
-                .have_received_object_at_version(object_id, *version, epoch_id)
-            {
+            // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+            if self.cache.have_received_object_at_version(
+                FullObjectKey::new(FullObjectID::new(*object_id, None), *version),
+                epoch_id,
+                use_object_per_epoch_marker_table_v2,
+            ) {
                 receiving_results.push(ReceivingObjectReadResult::new(
                     *objref,
                     ReceivingObjectReadResultKind::PreviouslyReceivedObject,

@@ -31,7 +31,8 @@ use sui_types::error::UserInputError;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::message_envelope::Message;
 use sui_types::storage::{
-    get_module, BackingPackageStore, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore,
+    get_module, BackingPackageStore, FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone,
+    ObjectStore,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure};
@@ -212,9 +213,12 @@ impl AuthorityStore {
         // We can safely delete all entries in the per epoch marker table since this is only called
         // at epoch boundaries (during reconfiguration). Therefore any entries that currently
         // exist can be removed. Because of this we can use the `schedule_delete_all` method.
+        self.perpetual_tables
+            .object_per_epoch_marker_table
+            .schedule_delete_all()?;
         Ok(self
             .perpetual_tables
-            .object_per_epoch_marker_table
+            .object_per_epoch_marker_table_v2
             .schedule_delete_all()?)
     }
 
@@ -412,40 +416,70 @@ impl AuthorityStore {
 
     pub fn get_marker_value(
         &self,
-        object_id: &ObjectID,
-        version: &SequenceNumber,
+        object_key: FullObjectKey,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<MarkerValue>> {
-        let object_key = (epoch_id, ObjectKey(*object_id, *version));
-        Ok(self
-            .perpetual_tables
-            .object_per_epoch_marker_table
-            .get(&object_key)?)
+        if use_object_per_epoch_marker_table_v2 {
+            Ok(self
+                .perpetual_tables
+                .object_per_epoch_marker_table_v2
+                .get(&(epoch_id, object_key))?)
+        } else {
+            Ok(self
+                .perpetual_tables
+                .object_per_epoch_marker_table
+                .get(&(epoch_id, object_key.into_object_key()))?)
+        }
     }
 
     pub fn get_latest_marker(
         &self,
-        object_id: &ObjectID,
+        object_id: FullObjectID,
         epoch_id: EpochId,
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-        let min_key = (epoch_id, ObjectKey::min_for_id(object_id));
-        let max_key = (epoch_id, ObjectKey::max_for_id(object_id));
+        if use_object_per_epoch_marker_table_v2 {
+            let min_key = (epoch_id, FullObjectKey::min_for_id(&object_id));
+            let max_key = (epoch_id, FullObjectKey::max_for_id(&object_id));
 
-        let marker_entry = self
-            .perpetual_tables
-            .object_per_epoch_marker_table
-            .safe_iter_with_bounds(Some(min_key), Some(max_key))
-            .skip_prior_to(&max_key)?
-            .next();
-        match marker_entry {
-            Some(Ok(((epoch, key), marker))) => {
-                // because of the iterator bounds these cannot fail
-                assert_eq!(epoch, epoch_id);
-                assert_eq!(key.0, *object_id);
-                Ok(Some((key.1, marker)))
+            let marker_entry = self
+                .perpetual_tables
+                .object_per_epoch_marker_table_v2
+                .safe_iter_with_bounds(Some(min_key), Some(max_key))
+                .skip_prior_to(&max_key)?
+                .next();
+            match marker_entry {
+                Some(Ok(((epoch, key), marker))) => {
+                    // because of the iterator bounds these cannot fail
+                    assert_eq!(epoch, epoch_id);
+                    assert_eq!(key.id(), object_id);
+                    Ok(Some((key.version(), marker)))
+                }
+                Some(Err(e)) => Err(e.into()),
+                None => Ok(None),
             }
-            Some(Err(e)) => Err(e.into()),
-            None => Ok(None),
+        } else {
+            let min_key = (epoch_id, ObjectKey::min_for_id(&object_id.id()));
+            let max_key = (epoch_id, ObjectKey::max_for_id(&object_id.id()));
+
+            let marker_entry = self
+                .perpetual_tables
+                .object_per_epoch_marker_table
+                .safe_iter_with_bounds(Some(min_key), Some(max_key))
+                .skip_prior_to(&max_key)?
+                .next();
+            match marker_entry {
+                Some(Ok(((epoch, key), marker))) => {
+                    // because of the iterator bounds these cannot fail
+                    assert_eq!(epoch, epoch_id);
+                    assert_eq!(key.0, object_id.id());
+                    Ok(Some((key.1, marker)))
+                }
+                Some(Err(e)) => Err(e.into()),
+                None => Ok(None),
+            }
         }
     }
 
@@ -824,6 +858,8 @@ impl AuthorityStore {
         &self,
         epoch_id: EpochId,
         tx_outputs: &[Arc<TransactionOutputs>],
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult {
         let mut written = Vec::with_capacity(tx_outputs.len());
         for outputs in tx_outputs {
@@ -834,7 +870,12 @@ impl AuthorityStore {
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
         for outputs in tx_outputs {
-            self.write_one_transaction_outputs(&mut write_batch, epoch_id, outputs)?;
+            self.write_one_transaction_outputs(
+                &mut write_batch,
+                epoch_id,
+                outputs,
+                use_object_per_epoch_marker_table_v2,
+            )?;
         }
         // test crashing before writing the batch
         fail_point_async!("crash");
@@ -859,6 +900,8 @@ impl AuthorityStore {
         write_batch: &mut DBBatch,
         epoch_id: EpochId,
         tx_outputs: &TransactionOutputs,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult {
         let TransactionOutputs {
             transaction,
@@ -883,12 +926,21 @@ impl AuthorityStore {
         // Add batched writes for objects and locks.
         let effects_digest = effects.digest();
 
-        write_batch.insert_batch(
-            &self.perpetual_tables.object_per_epoch_marker_table,
-            markers
-                .iter()
-                .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
-        )?;
+        if use_object_per_epoch_marker_table_v2 {
+            write_batch.insert_batch(
+                &self.perpetual_tables.object_per_epoch_marker_table_v2,
+                markers
+                    .iter()
+                    .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
+            )?;
+        } else {
+            write_batch.insert_batch(
+                &self.perpetual_tables.object_per_epoch_marker_table,
+                markers
+                    .iter()
+                    .map(|(key, marker_value)| ((epoch_id, key.into_object_key()), *marker_value)),
+            )?;
+        }
 
         write_batch.insert_batch(
             &self.perpetual_tables.objects,

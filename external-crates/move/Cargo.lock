@@ -471,10 +471,8 @@ checksum = "a21f936df1771bf62b77f047b726c4625ff2e8aa607c01ec06e5a05bd8463401"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
- "js-sys",
  "num-traits",
  "serde",
- "wasm-bindgen",
  "windows-targets 0.52.6",
 ]
 
@@ -617,6 +615,18 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "console"
+version = "0.15.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea3c6ecd8059b57859df5c69830340ed3c41d30e3da0c1cbed90a96ac853041b"
+dependencies = [
+ "encode_unicode 1.0.0",
+ "libc",
+ "once_cell",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -991,6 +1001,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
 
 [[package]]
+name = "encode_unicode"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
+
+[[package]]
 name = "enum-compat-util"
 version = "0.1.0"
 dependencies = [
@@ -1306,6 +1322,18 @@ name = "inline_colorization"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc1804bdb6a9784758b200007273a8b84e2b0b0b97a8f1e18e763eceb3e9f98a"
+
+[[package]]
+name = "insta"
+version = "1.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6513e4067e16e69ed1db5ab56048ed65db32d10ba5fc1217f5393f8f17d8b5a5"
+dependencies = [
+ "console",
+ "linked-hash-map",
+ "once_cell",
+ "similar",
+]
 
 [[package]]
 name = "instant"
@@ -1785,8 +1813,8 @@ dependencies = [
  "move-disassembler",
  "move-docgen",
  "move-ir-types",
+ "move-model-2",
  "move-package",
- "move-prover",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
@@ -1936,15 +1964,44 @@ name = "move-docgen"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap 4.5.17",
+ "codespan",
+ "codespan-reporting",
+ "itertools",
+ "log",
+ "move-binary-format",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-types",
+ "move-model-2",
+ "move-symbol-pool",
+ "num",
+ "once_cell",
+ "regex",
+ "serde",
+]
+
+[[package]]
+name = "move-docgen-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "codespan",
  "codespan-reporting",
  "datatest-stable",
+ "insta",
  "itertools",
  "log",
+ "move-binary-format",
+ "move-command-line-common",
  "move-compiler",
- "move-model",
- "move-prover",
+ "move-core-types",
+ "move-docgen",
+ "move-ir-types",
+ "move-model-2",
+ "move-package",
  "move-prover-test-utils",
+ "move-symbol-pool",
  "num",
  "once_cell",
  "regex",
@@ -2083,7 +2140,7 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-docgen",
- "move-model",
+ "move-model-2",
  "move-symbol-pool",
  "named-lock",
  "once_cell",
@@ -2108,31 +2165,6 @@ dependencies = [
  "enum-compat-util",
  "quote 1.0.37",
  "syn 2.0.77",
-]
-
-[[package]]
-name = "move-prover"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap 4.5.17",
- "codespan-reporting",
- "datatest-stable",
- "itertools",
- "log",
- "move-command-line-common",
- "move-compiler",
- "move-docgen",
- "move-model",
- "move-prover-test-utils",
- "move-stackless-bytecode",
- "once_cell",
- "serde",
- "shell-words",
- "simplelog",
- "tempfile",
- "toml",
- "walkdir",
 ]
 
 [[package]]
@@ -2184,7 +2216,6 @@ dependencies = [
  "move-core-types",
  "move-docgen",
  "move-package",
- "move-prover",
  "move-stdlib-natives",
  "move-unit-test",
  "move-vm-runtime",
@@ -2889,7 +2920,7 @@ checksum = "0fd04b170004fa2daccf418a7f8253aaf033c27760b5f225889024cf66d7ac2e"
 dependencies = [
  "atty",
  "csv",
- "encode_unicode",
+ "encode_unicode 0.3.6",
  "lazy_static",
  "term",
  "unicode-width",
@@ -3477,12 +3508,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shell-words"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24188a676b6ae68c3b2cb3a01be17fbf7240ce009799bb56d5b1409051e78fde"
-
-[[package]]
 name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3529,17 +3554,6 @@ name = "similar"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1de1d4f81173b03af4c0cbed3c898f6bff5b870e4a7f5d6f4057d62a7a4b686e"
-
-[[package]]
-name = "simplelog"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bc0ffd69814a9b251d43afcabf96dad1b29f5028378056257be9e3fecc9f720"
-dependencies = [
- "chrono",
- "log",
- "termcolor",
-]
 
 [[package]]
 name = "siphasher"

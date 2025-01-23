@@ -110,7 +110,7 @@ Next, add some more code to this module:
 - The first struct, `HouseData`, stores the most essential information pertaining to the game.
 - The second struct, `HouseCap`, is a capability that initializes the house data.
 - The third struct, `HOUSE_DATA`, is a one-time witness that ensures only a single instance of this `HouseData` ever exists.
-- The [`init` function](concepts/sui-move-concepts/init.mdx) creates and sends the `Publisher` and `HouseCap` objects to the sender.
+- The `init` function creates and sends the `Publisher` and `HouseCap` objects to the sender. See [Module Initializer](https://move-book.com/programmability/module-initializer.html) in The Move Book for more information.
 
 So far, you've set up the data structures within the module. Now, create a function that initializes the house data and shares the `HouseData` object:
 

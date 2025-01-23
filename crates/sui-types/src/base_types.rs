@@ -135,6 +135,32 @@ pub struct ObjectID(
     AccountAddress,
 );
 
+#[serde_as]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum FullObjectID {
+    Fastpath(ObjectID),
+    Consensus(ConsensusObjectSequenceKey),
+}
+
+impl FullObjectID {
+    pub fn new(object_id: ObjectID, start_version: Option<SequenceNumber>) -> Self {
+        if let Some(start_version) = start_version {
+            Self::Consensus((object_id, start_version))
+        } else {
+            Self::Fastpath(object_id)
+        }
+    }
+
+    pub fn id(&self) -> ObjectID {
+        match &self {
+            FullObjectID::Fastpath(object_id) => *object_id,
+            FullObjectID::Consensus(consensus_object_sequence_key) => {
+                consensus_object_sequence_key.0
+            }
+        }
+    }
+}
+
 pub type VersionDigest = (SequenceNumber, ObjectDigest);
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
@@ -155,8 +181,10 @@ pub fn update_object_ref_for_testing(object_ref: ObjectRef) -> ObjectRef {
     )
 }
 
+pub type FullObjectRef = (FullObjectID, SequenceNumber, ObjectDigest);
+
 /// Represents an distinct stream of object versions for a Shared or ConsensusV2 object,
-/// based on the object ID and initial shared version.
+/// based on the object ID and start version.
 pub type ConsensusObjectSequenceKey = (ObjectID, SequenceNumber);
 
 /// Wrapper around StructTag with a space-efficient representation for common types like coins

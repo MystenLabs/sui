@@ -7,7 +7,9 @@ mod read_store;
 mod shared_in_memory_store;
 mod write_store;
 
-use crate::base_types::{TransactionDigest, VersionNumber};
+use crate::base_types::{
+    ConsensusObjectSequenceKey, FullObjectID, FullObjectRef, TransactionDigest, VersionNumber,
+};
 use crate::committee::EpochId;
 use crate::error::{ExecutionError, SuiError};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
@@ -42,7 +44,7 @@ pub use write_store::WriteStore;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum InputKey {
     VersionedObject {
-        id: ObjectID,
+        id: FullObjectID,
         version: SequenceNumber,
     },
     Package {
@@ -51,10 +53,10 @@ pub enum InputKey {
 }
 
 impl InputKey {
-    pub fn id(&self) -> ObjectID {
+    pub fn id(&self) -> FullObjectID {
         match self {
             InputKey::VersionedObject { id, .. } => *id,
-            InputKey::Package { id } => *id,
+            InputKey::Package { id } => FullObjectID::Fastpath(*id),
         }
     }
 
@@ -79,7 +81,7 @@ impl From<&Object> for InputKey {
             InputKey::Package { id: obj.id() }
         } else {
             InputKey::VersionedObject {
-                id: obj.id(),
+                id: obj.full_id(),
                 version: obj.version(),
             }
         }
@@ -187,6 +189,8 @@ pub trait ChildObjectResolver {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>>;
 }
 
@@ -426,6 +430,8 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::get_object_received_at_version(
             self.as_ref(),
@@ -433,6 +439,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
+            use_object_per_epoch_marker_table_v2,
         )
     }
 }
@@ -452,6 +459,8 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::get_object_received_at_version(
             *self,
@@ -459,6 +468,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
+            use_object_per_epoch_marker_table_v2,
         )
     }
 }
@@ -478,6 +488,8 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::get_object_received_at_version(
             *self,
@@ -485,11 +497,11 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
+            use_object_per_epoch_marker_table_v2,
         )
     }
 }
 
-// The primary key type for object storage.
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct ObjectKey(pub ObjectID, pub VersionNumber);
@@ -515,6 +527,89 @@ impl From<ObjectRef> for ObjectKey {
 impl From<&ObjectRef> for ObjectKey {
     fn from(object_ref: &ObjectRef) -> Self {
         Self(object_ref.0, object_ref.1)
+    }
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
+pub struct ConsensusObjectKey(pub ConsensusObjectSequenceKey, pub VersionNumber);
+
+/// FullObjectKey represents a unique object a specific version. For fastpath objects, this
+/// is the same as ObjectKey. For consensus objects, this includes the start version, which
+/// may change if an object is transferred out of and back into consensus.
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
+pub enum FullObjectKey {
+    Fastpath(ObjectKey),
+    Consensus(ConsensusObjectKey),
+}
+
+impl FullObjectKey {
+    pub fn max_for_id(id: &FullObjectID) -> Self {
+        match id {
+            FullObjectID::Fastpath(object_id) => Self::Fastpath(ObjectKey::max_for_id(object_id)),
+            FullObjectID::Consensus(consensus_object_sequence_key) => Self::Consensus(
+                ConsensusObjectKey(*consensus_object_sequence_key, VersionNumber::MAX),
+            ),
+        }
+    }
+
+    pub fn min_for_id(id: &FullObjectID) -> Self {
+        match id {
+            FullObjectID::Fastpath(object_id) => Self::Fastpath(ObjectKey::min_for_id(object_id)),
+            FullObjectID::Consensus(consensus_object_sequence_key) => Self::Consensus(
+                ConsensusObjectKey(*consensus_object_sequence_key, VersionNumber::MIN),
+            ),
+        }
+    }
+
+    pub fn new(object_id: FullObjectID, version: VersionNumber) -> Self {
+        match object_id {
+            FullObjectID::Fastpath(object_id) => Self::Fastpath(ObjectKey(object_id, version)),
+            FullObjectID::Consensus(consensus_object_sequence_key) => {
+                Self::Consensus(ConsensusObjectKey(consensus_object_sequence_key, version))
+            }
+        }
+    }
+
+    pub fn id(&self) -> FullObjectID {
+        match self {
+            FullObjectKey::Fastpath(object_key) => FullObjectID::Fastpath(object_key.0),
+            FullObjectKey::Consensus(consensus_object_key) => {
+                FullObjectID::Consensus(consensus_object_key.0)
+            }
+        }
+    }
+
+    pub fn version(&self) -> VersionNumber {
+        match self {
+            FullObjectKey::Fastpath(object_key) => object_key.1,
+            FullObjectKey::Consensus(consensus_object_key) => consensus_object_key.1,
+        }
+    }
+
+    // Returns the equivalent ObjectKey for this FullObjectKey, discarding any initial
+    // shared version information, if present.
+    // TODO: Delete this function once marker table migration is complete.
+    pub fn into_object_key(self) -> ObjectKey {
+        match self {
+            FullObjectKey::Fastpath(object_key) => object_key,
+            FullObjectKey::Consensus(consensus_object_key) => {
+                ObjectKey(consensus_object_key.0 .0, consensus_object_key.1)
+            }
+        }
+    }
+}
+
+impl From<FullObjectRef> for FullObjectKey {
+    fn from(object_ref: FullObjectRef) -> Self {
+        FullObjectKey::from(&object_ref)
+    }
+}
+
+impl From<&FullObjectRef> for FullObjectKey {
+    fn from(object_ref: &FullObjectRef) -> Self {
+        FullObjectKey::new(object_ref.0, object_ref.1)
     }
 }
 

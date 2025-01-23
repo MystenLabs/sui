@@ -205,6 +205,10 @@ const MAX_PROTOCOL_VERSION: u64 = 72;
 //             Improve gas/wall time efficiency of some Move stdlib vector functions
 // Version 71: [SIP-45] Enable consensus amplification.
 // Version 72: Fix issue where `convert_type_argument_error` wasn't being used in all cases.
+//             Max gas budget moved to 50_000 SUI
+//             Max gas price moved to 50 SUI
+//             Variants as type nodes.
+//             Enable new marker table version.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -598,6 +602,10 @@ struct FeatureFlags {
     // Properly convert certain type argument errors in the execution layer.
     #[serde(skip_serializing_if = "is_false")]
     convert_type_argument_error: bool,
+
+    // Variants count as nodes
+    #[serde(skip_serializing_if = "is_false")]
+    variant_nodes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1351,6 +1359,9 @@ pub struct ProtocolConfig {
     /// SIP-45: K in the formula `amplification_factor = max(0, gas_price / reference_gas_price - K)`.
     /// This is the threshold for activating consensus amplification.
     sip_45_consensus_amplification_threshold: Option<u64>,
+
+    /// Enables use of v2 of the object per-epoch marker table with FullObjectID keys.
+    use_object_per_epoch_marker_table_v2: Option<bool>,
 }
 
 // feature flags
@@ -1754,6 +1765,10 @@ impl ProtocolConfig {
 
     pub fn convert_type_argument_error(&self) -> bool {
         self.feature_flags.convert_type_argument_error
+    }
+
+    pub fn variant_nodes(&self) -> bool {
+        self.feature_flags.variant_nodes
     }
 }
 
@@ -2289,6 +2304,8 @@ impl ProtocolConfig {
             gas_budget_based_txn_cost_absolute_cap_commit_count: None,
 
             sip_45_consensus_amplification_threshold: None,
+
+            use_object_per_epoch_marker_table_v2: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3130,6 +3147,17 @@ impl ProtocolConfig {
                 }
                 72 => {
                     cfg.feature_flags.convert_type_argument_error = true;
+
+                    // Invariant: max_gas_price * base_tx_cost_fixed <= max_tx_gas
+                    // max gas budget is in MIST and an absolute value 50_000 SUI
+                    cfg.max_tx_gas = Some(50_000_000_000_000);
+                    // max gas price is in MIST and an absolute value 50 SUI
+                    cfg.max_gas_price = Some(50_000_000_000);
+
+                    cfg.feature_flags.variant_nodes = true;
+
+                    // Enable new marker table version.
+                    cfg.use_object_per_epoch_marker_table_v2 = Some(true);
                 }
                 // Use this template when making changes:
                 //

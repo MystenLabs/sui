@@ -9,7 +9,7 @@ use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
-use sui_types::storage::MarkerValue;
+use sui_types::storage::{FullObjectKey, MarkerValue};
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
@@ -136,6 +136,7 @@ pub struct AuthorityPerpetualTables {
     /// objects that have been deleted. This table is meant to be pruned per-epoch, and all
     /// previous epochs other than the current epoch may be pruned safely.
     pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey), MarkerValue>,
+    pub(crate) object_per_epoch_marker_table_v2: DBMap<(EpochId, FullObjectKey), MarkerValue>,
 }
 
 impl AuthorityPerpetualTables {
@@ -459,6 +460,7 @@ impl AuthorityPerpetualTables {
         self.expected_network_sui_amount.unsafe_clear()?;
         self.expected_storage_fund_imbalance.unsafe_clear()?;
         self.object_per_epoch_marker_table.unsafe_clear()?;
+        self.object_per_epoch_marker_table_v2.unsafe_clear()?;
         self.objects.rocksdb.flush()?;
         Ok(())
     }
