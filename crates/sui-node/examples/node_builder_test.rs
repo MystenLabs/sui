@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Starting node...");
     // Run the node
-    let (_node, _runtimes) = builder.run().await?;
+    let (_handle, _runtimes) = builder.launch().await?;
     info!("Node started successfully!");
     info!("Press Ctrl+C to shut down");
 
