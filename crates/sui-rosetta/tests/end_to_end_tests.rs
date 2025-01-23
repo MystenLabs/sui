@@ -890,8 +890,9 @@ async fn test_balance_from_obj_merge_to_gas() {
 /// Similar to `test_balance_from_obj_merge_to_gas` test, but `Vault` splits balance to extract
 /// amount double the gas-cost. Then gas-object is merged with the coin equal to gas-cost and is
 /// returned to sender.
-/// This should result to the sender paying the recipient equal to gas-cost, but having no
-/// balance-change on their account.
+/// This checks to see when GAS_COST is transferred back to the sender, which is an edge case.
+/// In this case `process_gascoin_transfer` should be not processed.
+/// 
 /// ```move
 /// public fun amount_to_coin(self: &mut Vault, amount: u64, ctx: &mut TxContext): Coin<SUI> {
 ///     self.balance.split(amount).into_coin(ctx)
@@ -921,8 +922,6 @@ async fn test_balance_from_obj_paid_eq_gas() {
     const SENDER: &str = "0x6293e2b4434265fa60ac8ed96342b7a288c0e43ffe737ba40feb24f06fed305d";
     const RECIPIENT: &str = "0x0e3225553e3b945b4cde5621a980297c45b96002f33c95d3306e58013129ee7c";
     const AMOUNT: i128 = 2999180;
-    // let sender = test_cluster.get_address_0();
-    // let recipient = test_cluster.get_address_1();
     let client = test_cluster.wallet.get_client().await.unwrap();
     let response: SuiTransactionBlockResponse = serde_json::from_value(json!({
       "digest": "HavKhwo1K4QNXvvRPE8AhSYKEJSS7tmVq66Eb5Woj4ut",

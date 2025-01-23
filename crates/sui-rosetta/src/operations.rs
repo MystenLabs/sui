@@ -626,7 +626,7 @@ impl Operations {
         gas_used: i128,
     ) -> Result<Vec<Operation>, anyhow::Error> {
         let mut operations = vec![];
-        if Self::is_gascoin_transfer(tx) {
+        if Self::is_gascoin_transfer(tx) && prev_gas_owner != new_gas_owner {
             operations = coin_change_operations.collect();
             Self::add_missing_gas_owner(&mut operations, prev_gas_owner);
             Self::add_missing_gas_owner(&mut operations, new_gas_owner);
