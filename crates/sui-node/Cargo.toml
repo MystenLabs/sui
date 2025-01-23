@@ -9,6 +9,10 @@ edition = "2021"
 [lints]
 workspace = true
 
+[[example]]
+name = "node_builder_test"
+path = "examples/node_builder_test.rs"
+
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
@@ -50,6 +54,7 @@ sui-exex.workspace = true
 mysten-metrics.workspace = true
 mysten-service.workspace = true
 mysten-common.workspace = true
+tracing-subscriber.workspace = true
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true

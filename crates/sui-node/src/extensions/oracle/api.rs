@@ -34,7 +34,10 @@ pub struct Api {
 }
 
 impl Api {
-    pub fn new(host: [u8; 4], quorum_rx: Receiver<(MedianPrice, Vec<SignedData<MedianPrice>>)>) -> Self {
+    pub fn new(
+        host: [u8; 4],
+        quorum_rx: Receiver<(MedianPrice, Vec<SignedData<MedianPrice>>)>,
+    ) -> Self {
         let api_port = std::env::var("API_PORT")
             .ok()
             .and_then(|p| p.parse().ok())
@@ -73,13 +76,18 @@ impl Api {
         axum::serve(listener, app).await.unwrap();
     }
 
-    async fn get_price(State(state): State<Arc<AppState>>) -> Json<(MedianPrice, Vec<SignedData<MedianPrice>>)> {
+    async fn get_price(
+        State(state): State<Arc<AppState>>,
+    ) -> Json<(MedianPrice, Vec<SignedData<MedianPrice>>)> {
         let price_data = state.price_data.lock().unwrap();
         Json(price_data.clone())
     }
 
     /// Updates the exposed price in the API.
-    async fn update_exposed_price(state: Arc<AppState>, consensus_price: (MedianPrice, Vec<SignedData<MedianPrice>>)) {
+    async fn update_exposed_price(
+        state: Arc<AppState>,
+        consensus_price: (MedianPrice, Vec<SignedData<MedianPrice>>),
+    ) {
         let mut price_data = state.price_data.lock().expect("Poisoned lock");
         *price_data = consensus_price;
     }

@@ -141,8 +141,8 @@ use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
 
 pub mod admin;
-pub mod extensions;
 pub mod builder;
+pub mod extensions;
 mod handle;
 pub mod metrics;
 

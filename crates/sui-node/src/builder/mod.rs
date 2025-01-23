@@ -15,14 +15,21 @@ use tracing::{error, info};
 
 pub struct NodeBuilder {
     config: Option<NodeConfig>,
-    exex: Option<Vec<Box<dyn FnOnce(ExExContext) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>> + Send + Sync>>>,
+    exex: Option<
+        Vec<
+            Box<
+                dyn FnOnce(ExExContext) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>>
+                    + Send
+                    + Sync,
+            >,
+        >,
+    >,
 }
 
 impl NodeBuilder {
-    pub fn new() -> Self
-    {
+    pub fn new() -> Self {
         NodeBuilder {
-            config : None,
+            config: None,
             exex: None,
         }
     }
@@ -40,7 +47,7 @@ impl NodeBuilder {
         self
     }
 
-    pub fn with_exex<F, Fut>(mut self, exex: F) -> Self 
+    pub fn with_exex<F, Fut>(mut self, exex: F) -> Self
     where
         F: FnOnce(ExExContext) -> Fut + Send + Sync + 'static,
         Fut: futures::Future<Output = anyhow::Result<()>> + Send + 'static,
@@ -49,14 +56,16 @@ impl NodeBuilder {
         self
     }
 
-    pub async fn run(&self) {
+    pub async fn run(&self) -> anyhow::Result<()> {
         info!("Starting Node...");
-        bin_version::bin_version!();
-        let cfg =  self.config.expect("NodeBuilder : Config was not provided");
+
+        let cfg = self
+            .config
+            .clone()
+            .expect("NodeBuilder : Config was not provided");
         let runtimes = SuiRuntimes::new(&cfg);
         let rpc_runtime = runtimes.json_rpc.handle().clone();
         let registry_service = mysten_metrics::start_prometheus_server(cfg.metrics_address);
-
 
         // Run node in a separate runtime so that admin/monitoring functions continue to work
         // if it deadlocks.
@@ -66,7 +75,7 @@ impl NodeBuilder {
         let (runtime_shutdown_tx, runtime_shutdown_rx) = broadcast::channel::<()>(1);
 
         runtimes.sui_node.spawn(async move {
-            match SuiNode::start_async(cfg, registry_service, Some(rpc_runtime), VERSION).await {
+            match SuiNode::start_async(cfg, registry_service, Some(rpc_runtime), "0.0.1").await {
                 Ok(sui_node) => node_once_cell_clone
                     .set(sui_node)
                     .expect("Failed to set node in AsyncOnceCell"),
@@ -94,6 +103,31 @@ impl NodeBuilder {
             }
         });
 
-        todo!();
+        Ok(())
+    }
+}
+
+#[cfg(not(unix))]
+async fn wait_termination(mut shutdown_rx: tokio::sync::broadcast::Receiver<()>) {
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {},
+        _ = shutdown_rx.recv() => {},
+    }
+}
+
+#[cfg(unix)]
+async fn wait_termination(mut shutdown_rx: tokio::sync::broadcast::Receiver<()>) {
+    use futures::FutureExt;
+    use tokio::signal::unix::*;
+
+    let sigint = tokio::signal::ctrl_c().boxed();
+    let mut sigterm = signal(SignalKind::terminate()).unwrap();
+    let sigterm_recv = sigterm.recv().boxed();
+    let shutdown_recv = shutdown_rx.recv().boxed();
+
+    tokio::select! {
+        _ = sigint => {},
+        _ = sigterm_recv => {},
+        _ = shutdown_recv => {},
     }
 }

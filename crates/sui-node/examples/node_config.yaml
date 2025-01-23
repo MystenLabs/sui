@@ -1,0 +1,16 @@
+db-path: "./full_node_db"
+network-address: "/dns/localhost/tcp/8080/http"
+metrics-address: "0.0.0.0:9184"
+json-rpc-address: "0.0.0.0:9000"
+enable-event-processing: true
+
+genesis:
+  genesis-file-location: "./genesis.blob"
+
+authority-store-pruning-config:
+  num-latest-epoch-dbs-to-retain: 3
+  epoch-db-pruning-period-secs: 3600
+  num-epochs-to-retain: 1
+  max-checkpoints-in-batch: 10
+  max-transactions-in-batch: 1000
+  pruning-run-delay-seconds: 60 

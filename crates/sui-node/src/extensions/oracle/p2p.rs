@@ -24,7 +24,10 @@ const ORACLE_TOPIC: &str = "pragma/defi_protocol_name";
 /// Runs the P2P node and returns the handle (used to broadcast price to the network
 /// or stop the P2P node) along with the receiver of the consensus prices, mainly used
 /// in the API so we can update the price of the asset.
-pub async fn start_p2p() -> Result<(P2PBroadcaster, mpsc::Receiver<(MedianPrice, Vec<SignedData<MedianPrice>>)>)> {
+pub async fn start_p2p() -> Result<(
+    P2PBroadcaster,
+    mpsc::Receiver<(MedianPrice, Vec<SignedData<MedianPrice>>)>,
+)> {
     let (consensus_tx, consensus_rx) = mpsc::channel(1024);
     let (mut node, command_tx) = P2PNode::new(consensus_tx).await?;
     tracing::info!("[Oracle ExEx] 👤 Joined the Oracle P2P network");
@@ -294,7 +297,14 @@ impl NetworkPricesPerCheckpoint {
                 timestamp: checkpoint_data.get_latest_timestamp(),
                 checkpoint: Some(signed_price.checkpoint),
             };
-            let peers_data: Vec<SignedData<MedianPrice>> = self.0.get_mut(&signed_price.checkpoint).unwrap().peer_prices.iter().map(|(_, v)| v.clone()).collect();
+            let peers_data: Vec<SignedData<MedianPrice>> = self
+                .0
+                .get_mut(&signed_price.checkpoint)
+                .unwrap()
+                .peer_prices
+                .iter()
+                .map(|(_, v)| v.clone())
+                .collect();
             self.cleanup_old_checkpoints(signed_price.checkpoint);
             Some((consensus_price, peers_data))
         } else {
