@@ -303,14 +303,24 @@ impl<C: NetworkClient> CommitSyncer<C> {
             // Also it is possible to have missing ancestors because an equivocating validator
             // may produce blocks that are not included in commits but are ancestors to other blocks.
             // Synchronizer is needed to fill in the missing ancestors in this case.
-            if let Err(err) = self
+            match self
                 .inner
                 .core_thread_dispatcher
                 .add_commits(commits, blocks)
                 .await
             {
-                info!("Failed to add blocks, shutting down: {}", err);
-                return;
+                Ok(missing) => {
+                    if !missing.is_empty() {
+                        warn!(
+                            "Fetched blocks have missing ancestors: {:?} for commit range {:?}",
+                            missing, fetched_commit_range
+                        );
+                    }
+                }
+                Err(e) => {
+                    info!("Failed to add blocks, shutting down: {}", e);
+                    return;
+                }
             };
 
             // Once commits and blocks are sent to Core, ratchet up synced_commit_index

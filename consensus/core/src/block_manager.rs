@@ -538,9 +538,19 @@ impl BlockManager {
     ) -> Vec<VerifiedBlock> {
         // Just accept the blocks
         let _s = monitored_scope("BlockManager::try_accept_committed_blocks");
-        blocks.sort_by_key(|b| b.round());
-
         let mut accepted_blocks = vec![];
+
+        // Keep only the blocks that have not been already accepted into the DAG.
+        blocks = self
+            .dag_state
+            .read()
+            .contains_blocks(blocks.iter().map(|b| b.reference()).collect::<Vec<_>>())
+            .into_iter()
+            .zip(blocks)
+            .filter_map(|(found, block)| (!found).then_some(block))
+            .collect::<Vec<_>>();
+
+        blocks.sort_by_key(|b| b.round());
 
         for block in blocks {
             self.update_block_received_metrics(&block);

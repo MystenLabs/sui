@@ -336,34 +336,39 @@ impl Core {
         &mut self,
         commits: Vec<TrustedCommit>,
         blocks: Vec<VerifiedBlock>,
-    ) -> ConsensusResult<()> {
+    ) -> ConsensusResult<BTreeSet<BlockRef>> {
         let _scope = monitored_scope("Core::add_commit");
 
-        // Just accept all the blocks - maybe do some basic timestamp validation?
-        let accepted_blocks = self.block_manager.try_accept_committed_blocks(blocks);
+        // We want to enable the commit process logic when GC is enabled.
+        if self.dag_state.read().gc_enabled() {
+            // Just accept all the blocks - maybe do some basic timestamp validation?
+            let accepted_blocks = self.block_manager.try_accept_committed_blocks(blocks);
 
-        if !accepted_blocks.is_empty() {
-            debug!(
-                "Accepted blocks via add_commit: {}",
-                accepted_blocks
-                    .iter()
-                    .map(|b| b.reference().to_string())
-                    .join(",")
-            );
+            if !accepted_blocks.is_empty() {
+                debug!(
+                    "Accepted blocks via add_commit: {}",
+                    accepted_blocks
+                        .iter()
+                        .map(|b| b.reference().to_string())
+                        .join(",")
+                );
 
-            // Try to commit the new blocks. Take into account the trusted commit that has been provided.
-            self.try_commit(commits)?;
+                // Try to commit the new blocks. Take into account the trusted commit that has been provided.
+                self.try_commit(commits)?;
 
-            // Try to propose now since there are new blocks accepted.
-            self.try_propose(false)?;
+                // Try to propose now since there are new blocks accepted.
+                self.try_propose(false)?;
 
-            // Now set up leader timeout if needed.
-            // This needs to be called after try_commit() and try_propose(), which may
-            // have advanced the threshold clock round.
-            self.try_signal_new_round();
-        };
+                // Now set up leader timeout if needed.
+                // This needs to be called after try_commit() and try_propose(), which may
+                // have advanced the threshold clock round.
+                self.try_signal_new_round();
+            };
 
-        Ok(())
+            return Ok(BTreeSet::new());
+        }
+
+        self.add_blocks(blocks)
     }
 
     /// If needed, signals a new clock round and sets up leader timeout.

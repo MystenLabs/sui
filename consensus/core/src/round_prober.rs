@@ -422,7 +422,7 @@ mod test {
             &self,
             _commit: Vec<TrustedCommit>,
             _blocks: Vec<VerifiedBlock>,
-        ) -> Result<(), CoreError> {
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
             unimplemented!()
         }
 

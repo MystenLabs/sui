@@ -749,7 +749,7 @@ mod tests {
             &self,
             _commits: Vec<TrustedCommit>,
             _blocks: Vec<VerifiedBlock>,
-        ) -> Result<(), CoreError> {
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
             todo!()
         }
 
