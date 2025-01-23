@@ -1714,7 +1714,12 @@ impl ProtocolConfig {
     }
 
     pub fn gc_depth(&self) -> u32 {
-        self.consensus_gc_depth.unwrap_or(0)
+        if cfg!(msim) {
+            // exercise a very low gc_depth
+            5
+        } else {
+            self.consensus_gc_depth.unwrap_or(0)
+        }
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {
@@ -1751,7 +1756,11 @@ impl ProtocolConfig {
     }
 
     pub fn consensus_linearize_subdag_v2(&self) -> bool {
-        let res = self.feature_flags.consensus_linearize_subdag_v2;
+        let res = if cfg!(msim) {
+            true
+        } else {
+            self.feature_flags.consensus_linearize_subdag_v2
+        };
         assert!(
             !res || self.gc_depth() > 0,
             "The consensus linearize sub dag V2 requires GC to be enabled"
