@@ -209,6 +209,7 @@ const MAX_PROTOCOL_VERSION: u64 = 73;
 //             Max gas price moved to 50 SUI
 //             Variants as type nodes.
 // Version 73: Enable new marker table version.
+//             Enable consensus garbage collection and new commit rule for devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3159,6 +3160,11 @@ impl ProtocolConfig {
                 73 => {
                     // Enable new marker table version.
                     cfg.use_object_per_epoch_marker_table_v2 = Some(true);
+                
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.consensus_gc_depth = Some(60);
+                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
