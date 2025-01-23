@@ -1120,29 +1120,29 @@ TypeInput:
     0:
       bool: UNIT
     1:
-      u8: UNIT
+      U8: UNIT
     2:
-      u64: UNIT
+      U64: UNIT
     3:
-      u128: UNIT
+      U128: UNIT
     4:
-      address: UNIT
+      Address: UNIT
     5:
-      signer: UNIT
+      Signer: UNIT
     6:
-      vector:
+      Vector:
         NEWTYPE:
           TYPENAME: TypeInput
     7:
-      struct:
+      Struct:
         NEWTYPE:
           TYPENAME: StructInput
     8:
-      u16: UNIT
+      U16: UNIT
     9:
-      u32: UNIT
+      U32: UNIT
     10:
-      u256: UNIT
+      U256: UNIT
 TypeOrigin:
   STRUCT:
     - module_name: STR
@@ -1152,19 +1152,19 @@ TypeOrigin:
 TypeTag:
   ENUM:
     0:
-      bool: UNIT
+      Bool: UNIT
     1:
-      u8: UNIT
+      U8: UNIT
     2:
-      u64: UNIT
+      U64: UNIT
     3:
-      u128: UNIT
+      U128: UNIT
     4:
-      address: UNIT
+      Address: UNIT
     5:
-      signer: UNIT
+      Signer: UNIT
     6:
-      vector:
+      Vector:
         NEWTYPE:
           TYPENAME: TypeTag
     7:
@@ -1172,11 +1172,11 @@ TypeTag:
         NEWTYPE:
           TYPENAME: StructTag
     8:
-      u16: UNIT
+      U16: UNIT
     9:
-      u32: UNIT
+      U32: UNIT
     10:
-      u256: UNIT
+      U256: UNIT
 TypedStoreError:
   ENUM:
     0:
