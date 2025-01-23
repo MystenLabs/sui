@@ -153,7 +153,7 @@ this function are defining IDs (the ID of the package in
 storage that first introduced the type).
 
 
-<pre><code><b>public</b> <b>fun</b> getT(): <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get">get</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
 </code></pre>
 
 
@@ -180,7 +180,7 @@ the package, even if the type in question was introduced in a
 later upgrade).
 
 
-<pre><code><b>public</b> <b>fun</b> get_with_original_idsT(): <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_with_original_ids">get_with_original_ids</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
 </code></pre>
 
 
