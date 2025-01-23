@@ -124,7 +124,7 @@ This is a doc comment above an annotation.
 
 
 
-<pre><code><b>public</b> <b>struct</b> XGGT
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_XGG">XGG</a>&lt;T&gt;
 </code></pre>
 
 
@@ -147,7 +147,7 @@ This is a doc comment above an annotation.
 
 
 
-<pre><code><b>public</b> <b>struct</b> YGGT
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_YGG">YGG</a>&lt;T&gt;
 </code></pre>
 
 
@@ -170,7 +170,7 @@ This is a doc comment above an annotation.
 
 
 
-<pre><code><b>public</b> <b>struct</b> VecMapK, V <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_VecMap">VecMap</a>&lt;K: <b>copy</b>, V&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -194,7 +194,7 @@ This is a doc comment above an annotation.
 An entry in the map
 
 
-<pre><code><b>public</b> <b>struct</b> EntryK, V <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_Entry">Entry</a>&lt;K: <b>copy</b>, V&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
