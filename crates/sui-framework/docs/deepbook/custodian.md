@@ -56,7 +56,7 @@ title: Module `deepbook::custodian`
 
 
 
-<pre><code><b>public</b> <b>struct</b> AccountT <b>has</b> store
+<pre><code><b>public</b> <b>struct</b> <a href="../deepbook/custodian.md#deepbook_custodian_Account">Account</a>&lt;<b>phantom</b> T&gt; <b>has</b> store
 </code></pre>
 
 
@@ -113,7 +113,7 @@ title: Module `deepbook::custodian`
 
 
 
-<pre><code><b>public</b> <b>struct</b> CustodianT <b>has</b> key, store
+<pre><code><b>public</b> <b>struct</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">Custodian</a>&lt;<b>phantom</b> T&gt; <b>has</b> key, store
 </code></pre>
 
 
@@ -170,7 +170,7 @@ Create an <code><a href="../deepbook/custodian.md#deepbook_custodian_AccountCap"
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> account_balanceAsset(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;Asset&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): (u64, u64)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_account_balance">account_balance</a>&lt;Asset&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;Asset&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): (u64, u64)
 </code></pre>
 
 
@@ -204,7 +204,7 @@ Create an <code><a href="../deepbook/custodian.md#deepbook_custodian_AccountCap"
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> newT(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_new">new</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;
 </code></pre>
 
 
@@ -231,7 +231,7 @@ Create an <code><a href="../deepbook/custodian.md#deepbook_custodian_AccountCap"
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> withdraw_assetAsset(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;Asset&gt;, quantity: u64, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;Asset&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;Asset&gt;, quantity: u64, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;Asset&gt;
 </code></pre>
 
 
@@ -260,7 +260,7 @@ Create an <code><a href="../deepbook/custodian.md#deepbook_custodian_AccountCap"
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> increase_user_available_balanceT(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, quantity: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_increase_user_available_balance">increase_user_available_balance</a>&lt;T&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, quantity: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -289,7 +289,7 @@ Create an <code><a href="../deepbook/custodian.md#deepbook_custodian_AccountCap"
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> decrease_user_available_balanceT(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, quantity: u64): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, quantity: u64): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -318,7 +318,7 @@ Create an <code><a href="../deepbook/custodian.md#deepbook_custodian_AccountCap"
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> increase_user_locked_balanceT(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, quantity: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_increase_user_locked_balance">increase_user_locked_balance</a>&lt;T&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, quantity: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -347,7 +347,7 @@ Create an <code><a href="../deepbook/custodian.md#deepbook_custodian_AccountCap"
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> decrease_user_locked_balanceT(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, quantity: u64): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, quantity: u64): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -377,7 +377,7 @@ Create an <code><a href="../deepbook/custodian.md#deepbook_custodian_AccountCap"
 Move <code>quantity</code> from the unlocked balance of <code>user</code> to the locked balance of <code>user</code>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> lock_balanceT(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, quantity: u64)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_lock_balance">lock_balance</a>&lt;T&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, quantity: u64)
 </code></pre>
 
 
@@ -407,7 +407,7 @@ Move <code>quantity</code> from the unlocked balance of <code>user</code> to the
 Move <code>quantity</code> from the locked balance of <code>user</code> to the unlocked balacne of <code>user</code>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> unlock_balanceT(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, quantity: u64)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_unlock_balance">unlock_balance</a>&lt;T&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, quantity: u64)
 </code></pre>
 
 
@@ -436,7 +436,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> account_available_balanceT(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): u64
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_account_available_balance">account_available_balance</a>&lt;T&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): u64
 </code></pre>
 
 
@@ -463,7 +463,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> account_locked_balanceT(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): u64
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_account_locked_balance">account_locked_balance</a>&lt;T&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): u64
 </code></pre>
 
 
@@ -490,7 +490,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 
 
 
-<pre><code><b>fun</b> borrow_mut_account_balanceT(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Account">deepbook::custodian::Account</a>&lt;T&gt;
+<pre><code><b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Account">deepbook::custodian::Account</a>&lt;T&gt;
 </code></pre>
 
 

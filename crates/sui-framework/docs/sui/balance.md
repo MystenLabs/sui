@@ -43,7 +43,7 @@ A Supply of T. Used for minting and burning.
 Wrapped into a <code>TreasuryCap</code> in the <code>Coin</code> module.
 
 
-<pre><code><b>public</b> <b>struct</b> SupplyT <b>has</b> store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/balance.md#sui_balance_Supply">Supply</a>&lt;<b>phantom</b> T&gt; <b>has</b> store
 </code></pre>
 
 
@@ -71,7 +71,7 @@ Storable balance - an inner struct of a Coin type.
 Can be used to store coins which don't need the key ability.
 
 
-<pre><code><b>public</b> <b>struct</b> BalanceT <b>has</b> store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;<b>phantom</b> T&gt; <b>has</b> store
 </code></pre>
 
 
@@ -162,7 +162,7 @@ For when an overflow is happening on Supply operations.
 Get the amount stored in a <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> valueT(self: &<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_value">value</a>&lt;T&gt;(self: &<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): u64
 </code></pre>
 
 
@@ -187,7 +187,7 @@ Get the amount stored in a <code><a href="../sui/balance.md#sui_balance_Balance"
 Get the <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a></code> value.
 
 
-<pre><code><b>public</b> <b>fun</b> supply_valueT(supply: &<a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_supply_value">supply_value</a>&lt;T&gt;(supply: &<a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;): u64
 </code></pre>
 
 
@@ -212,7 +212,7 @@ Get the <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a></code> v
 Create a new supply for type T.
 
 
-<pre><code><b>public</b> <b>fun</b> create_supplyT(_: T): <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_create_supply">create_supply</a>&lt;T: drop&gt;(_: T): <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
 </code></pre>
 
 
@@ -237,7 +237,7 @@ Create a new supply for type T.
 Increase supply by <code><a href="../sui/balance.md#sui_balance_value">value</a></code> and create a new <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;</code> with this value.
 
 
-<pre><code><b>public</b> <b>fun</b> increase_supplyT(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance_value">value</a>: u64): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_increase_supply">increase_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance_value">value</a>: u64): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -264,7 +264,7 @@ Increase supply by <code><a href="../sui/balance.md#sui_balance_value">value</a>
 Burn a Balance<T> and decrease Supply<T>.
 
 
-<pre><code><b>public</b> <b>fun</b> decrease_supplyT(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_decrease_supply">decrease_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): u64
 </code></pre>
 
 
@@ -292,7 +292,7 @@ Burn a Balance<T> and decrease Supply<T>.
 Create a zero <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code> for type <code>T</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> zeroT(): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_zero">zero</a>&lt;T&gt;(): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -317,7 +317,7 @@ Create a zero <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a><
 Join two balances together.
 
 
-<pre><code><b>public</b> <b>fun</b> joinT(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): u64
 </code></pre>
 
 
@@ -344,7 +344,7 @@ Join two balances together.
 Split a <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code> and take a sub balance from it.
 
 
-<pre><code><b>public</b> <b>fun</b> splitT(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance_value">value</a>: u64): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance_value">value</a>: u64): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -371,7 +371,7 @@ Split a <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code>
 Withdraw all balance. After this the remaining balance must be 0.
 
 
-<pre><code><b>public</b> <b>fun</b> withdraw_allT(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_withdraw_all">withdraw_all</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -397,7 +397,7 @@ Withdraw all balance. After this the remaining balance must be 0.
 Destroy a zero <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> destroy_zeroT(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_zero">destroy_zero</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -425,7 +425,7 @@ It should only be called by the epoch change system txn to create staking reward
 and nowhere else.
 
 
-<pre><code><b>fun</b> create_staking_rewardsT(<a href="../sui/balance.md#sui_balance_value">value</a>: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>fun</b> <a href="../sui/balance.md#sui_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance_value">value</a>: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -454,7 +454,7 @@ It should only be called by the epoch change system txn to destroy storage rebat
 and nowhere else.
 
 
-<pre><code><b>fun</b> destroy_storage_rebatesT(self: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -481,7 +481,7 @@ and nowhere else.
 Destroy a <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a></code> preventing any further minting and burning.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> destroy_supplyT(self: <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;): u64
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;): u64
 </code></pre>
 
 

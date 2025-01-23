@@ -96,7 +96,7 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 A coin of type <code>T</code> worth <code><a href="../sui/coin.md#sui_coin_value">value</a></code>. Transferable and storable
 
 
-<pre><code><b>public</b> <b>struct</b> CoinT <b>has</b> key, store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;<b>phantom</b> T&gt; <b>has</b> key, store
 </code></pre>
 
 
@@ -129,7 +129,7 @@ Each Coin type T created through <code><a href="../sui/coin.md#sui_coin_create_c
 unique instance of CoinMetadata<T> that stores the metadata for this coin type.
 
 
-<pre><code><b>public</b> <b>struct</b> CoinMetadataT <b>has</b> key, store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;<b>phantom</b> T&gt; <b>has</b> key, store
 </code></pre>
 
 
@@ -190,7 +190,7 @@ Similar to CoinMetadata, but created only for regulated coins that use the DenyL
 This object is always immutable.
 
 
-<pre><code><b>public</b> <b>struct</b> RegulatedCoinMetadataT <b>has</b> key
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin.md#sui_coin_RegulatedCoinMetadata">RegulatedCoinMetadata</a>&lt;<b>phantom</b> T&gt; <b>has</b> key
 </code></pre>
 
 
@@ -230,7 +230,7 @@ Capability allowing the bearer to mint and burn
 coins of type <code>T</code>. Transferable
 
 
-<pre><code><b>public</b> <b>struct</b> TreasuryCapT <b>has</b> key, store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a>&lt;<b>phantom</b> T&gt; <b>has</b> key, store
 </code></pre>
 
 
@@ -266,7 +266,7 @@ If <code>allow_global_pause</code> is true, the bearer can enable a global pause
 all addresses were added to the deny list.
 
 
-<pre><code><b>public</b> <b>struct</b> DenyCapV2T <b>has</b> key, store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a>&lt;<b>phantom</b> T&gt; <b>has</b> key, store
 </code></pre>
 
 
@@ -297,7 +297,7 @@ all addresses were added to the deny list.
 
 
 
-<pre><code><b>public</b> <b>struct</b> CurrencyCreatedT <b>has</b> <b>copy</b>, drop
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin.md#sui_coin_CurrencyCreated">CurrencyCreated</a>&lt;<b>phantom</b> T&gt; <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -325,7 +325,7 @@ Capability allowing the bearer to freeze addresses, preventing those addresses f
 interacting with the coin as an input to a transaction.
 
 
-<pre><code><b>public</b> <b>struct</b> DenyCapT <b>has</b> key, store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin.md#sui_coin_DenyCap">DenyCap</a>&lt;<b>phantom</b> T&gt; <b>has</b> key, store
 </code></pre>
 
 
@@ -406,7 +406,7 @@ Trying to split a coin more times than its balance allows.
 Return the total number of <code>T</code>'s in circulation.
 
 
-<pre><code><b>public</b> <b>fun</b> total_supplyT(cap: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_total_supply">total_supply</a>&lt;T&gt;(cap: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;): u64
 </code></pre>
 
 
@@ -434,7 +434,7 @@ Operation is irreversible. Supply cannot be converted into a <code><a href="../s
 to different security guarantees (TreasuryCap can be created only once for a type)
 
 
-<pre><code><b>public</b> <b>fun</b> treasury_into_supplyT(treasury: <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;): <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_treasury_into_supply">treasury_into_supply</a>&lt;T&gt;(treasury: <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;): <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
 </code></pre>
 
 
@@ -461,7 +461,7 @@ to different security guarantees (TreasuryCap can be created only once for a typ
 Get immutable reference to the treasury's <code>Supply</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> supply_immutT(treasury: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;): &<a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_supply_immut">supply_immut</a>&lt;T&gt;(treasury: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;): &<a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
 </code></pre>
 
 
@@ -486,7 +486,7 @@ Get immutable reference to the treasury's <code>Supply</code>.
 Get mutable reference to the treasury's <code>Supply</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> supply_mutT(treasury: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;): &<b>mut</b> <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_supply_mut">supply_mut</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;): &<b>mut</b> <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
 </code></pre>
 
 
@@ -511,7 +511,7 @@ Get mutable reference to the treasury's <code>Supply</code>.
 Public getter for the coin's value
 
 
-<pre><code><b>public</b> <b>fun</b> valueT(self: &<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_value">value</a>&lt;T&gt;(self: &<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;): u64
 </code></pre>
 
 
@@ -536,7 +536,7 @@ Public getter for the coin's value
 Get immutable reference to the balance of a coin.
 
 
-<pre><code><b>public</b> <b>fun</b> balanceT(<a href="../sui/coin.md#sui_coin">coin</a>: &<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;): &<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance">balance</a>&lt;T&gt;(<a href="../sui/coin.md#sui_coin">coin</a>: &<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;): &<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -561,7 +561,7 @@ Get immutable reference to the balance of a coin.
 Get a mutable reference to the balance of a coin.
 
 
-<pre><code><b>public</b> <b>fun</b> balance_mutT(<a href="../sui/coin.md#sui_coin">coin</a>: &<b>mut</b> <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;): &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_balance_mut">balance_mut</a>&lt;T&gt;(<a href="../sui/coin.md#sui_coin">coin</a>: &<b>mut</b> <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;): &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -586,7 +586,7 @@ Get a mutable reference to the balance of a coin.
 Wrap a balance into a Coin to make it transferable.
 
 
-<pre><code><b>public</b> <b>fun</b> from_balanceT(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_from_balance">from_balance</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
 </code></pre>
 
 
@@ -611,7 +611,7 @@ Wrap a balance into a Coin to make it transferable.
 Destruct a Coin wrapper and keep the balance.
 
 
-<pre><code><b>public</b> <b>fun</b> into_balanceT(<a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_into_balance">into_balance</a>&lt;T&gt;(<a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -639,7 +639,7 @@ Take a <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> worth of <co
 Aborts if <code><a href="../sui/coin.md#sui_coin_value">value</a> &gt; <a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/coin.md#sui_coin_value">value</a></code>
 
 
-<pre><code><b>public</b> <b>fun</b> takeT(<a href="../sui/balance.md#sui_balance">balance</a>: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_value">value</a>: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_take">take</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_value">value</a>: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
 </code></pre>
 
 
@@ -667,7 +667,7 @@ Aborts if <code><a href="../sui/coin.md#sui_coin_value">value</a> &gt; <a href="
 Put a <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;</code> to the <code>Balance&lt;T&gt;</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> putT(<a href="../sui/balance.md#sui_balance">balance</a>: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_put">put</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -693,7 +693,7 @@ Consume the coin <code>c</code> and add its value to <code>self</code>.
 Aborts if <code>c.<a href="../sui/coin.md#sui_coin_value">value</a> + self.<a href="../sui/coin.md#sui_coin_value">value</a> &gt; U64_MAX</code>
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> joinT(self: &<b>mut</b> <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, c: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, c: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -721,7 +721,7 @@ Split coin <code>self</code> to two coins, one with balance <code>split_amount</
 and the remaining balance is left is <code>self</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> splitT(self: &<b>mut</b> <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
 </code></pre>
 
 
@@ -747,7 +747,7 @@ Split coin <code>self</code> into <code>n - 1</code> coins with equal balances. 
 <code>self</code>. Return newly created coins.
 
 
-<pre><code><b>public</b> <b>fun</b> divide_into_nT(self: &<b>mut</b> <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): vector&lt;<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_divide_into_n">divide_into_n</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): vector&lt;<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;&gt;
 </code></pre>
 
 
@@ -782,7 +782,7 @@ Make any Coin with a zero value. Useful for placeholding
 bids/payments or preemptively making empty balances.
 
 
-<pre><code><b>public</b> <b>fun</b> zeroT(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_zero">zero</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
 </code></pre>
 
 
@@ -807,7 +807,7 @@ bids/payments or preemptively making empty balances.
 Destroy a coin with value zero
 
 
-<pre><code><b>public</b> <b>fun</b> destroy_zeroT(c: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_destroy_zero">destroy_zero</a>&lt;T&gt;(c: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -836,7 +836,7 @@ Create a new currency type <code>T</code> as and return the <code><a href="../su
 type, ensuring that there's only one <code><a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a></code> per <code>T</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> create_currencyT(witness: T, decimals: u8, symbol: vector&lt;u8&gt;, name: vector&lt;u8&gt;, description: vector&lt;u8&gt;, icon_url: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/url.md#sui_url_Url">sui::url::Url</a>&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_create_currency">create_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: vector&lt;u8&gt;, name: vector&lt;u8&gt;, description: vector&lt;u8&gt;, icon_url: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/url.md#sui_url_Url">sui::url::Url</a>&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -891,7 +891,7 @@ be denied. Note however, that this doesn't affect per-address entries of the den
 will not change the result of the "contains" APIs.
 
 
-<pre><code><b>public</b> <b>fun</b> create_regulated_currency_v2T(witness: T, decimals: u8, symbol: vector&lt;u8&gt;, name: vector&lt;u8&gt;, description: vector&lt;u8&gt;, icon_url: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/url.md#sui_url_Url">sui::url::Url</a>&gt;, allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_create_regulated_currency_v2">create_regulated_currency_v2</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: vector&lt;u8&gt;, name: vector&lt;u8&gt;, description: vector&lt;u8&gt;, icon_url: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/url.md#sui_url_Url">sui::url::Url</a>&gt;, allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -945,7 +945,7 @@ All entries in the deny list will be migrated to the new format.
 See <code><a href="../sui/coin.md#sui_coin_create_regulated_currency_v2">create_regulated_currency_v2</a></code> for details on the new v2 of the deny list.
 
 
-<pre><code><b>public</b> <b>fun</b> migrate_regulated_currency_to_v2T(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, cap: <a href="../sui/coin.md#sui_coin_DenyCap">sui::coin::DenyCap</a>&lt;T&gt;, allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_migrate_regulated_currency_to_v2">migrate_regulated_currency_to_v2</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, cap: <a href="../sui/coin.md#sui_coin_DenyCap">sui::coin::DenyCap</a>&lt;T&gt;, allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;
 </code></pre>
 
 
@@ -983,7 +983,7 @@ Create a coin worth <code><a href="../sui/coin.md#sui_coin_value">value</a></cod
 in <code>cap</code> accordingly.
 
 
-<pre><code><b>public</b> <b>fun</b> mintT(cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_value">value</a>: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_mint">mint</a>&lt;T&gt;(cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_value">value</a>: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
 </code></pre>
 
 
@@ -1013,7 +1013,7 @@ supply in <code>cap</code> accordingly.
 Aborts if <code><a href="../sui/coin.md#sui_coin_value">value</a></code> + <code>cap.<a href="../sui/coin.md#sui_coin_total_supply">total_supply</a></code> >= U64_MAX
 
 
-<pre><code><b>public</b> <b>fun</b> mint_balanceT(cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_value">value</a>: u64): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_mint_balance">mint_balance</a>&lt;T&gt;(cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_value">value</a>: u64): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -1039,7 +1039,7 @@ Destroy the coin <code>c</code> and decrease the total supply in <code>cap</code
 accordingly.
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> burnT(cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, c: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, c: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;): u64
 </code></pre>
 
 
@@ -1068,7 +1068,7 @@ coin type as an input to a transaction. Additionally at the start of the next ep
 address will be unable to receive objects of this coin type.
 
 
-<pre><code><b>public</b> <b>fun</b> deny_list_v2_addT(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_add">deny_list_v2_add</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1101,7 +1101,7 @@ objects will be immediate, but the effect for receiving objects will be delayed 
 next epoch.
 
 
-<pre><code><b>public</b> <b>fun</b> deny_list_v2_removeT(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_remove">deny_list_v2_remove</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1133,7 +1133,7 @@ Check if the deny list contains the given address for the current epoch. Denied 
 in the current epoch will be unable to receive objects of this coin type.
 
 
-<pre><code><b>public</b> <b>fun</b> deny_list_v2_contains_current_epochT(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, addr: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_contains_current_epoch">deny_list_v2_contains_current_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, addr: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -1165,7 +1165,7 @@ the next epoch will immediately be unable to use objects of this coin type as in
 start of the next epoch, the address will be unable to receive objects of this coin type.
 
 
-<pre><code><b>public</b> <b>fun</b> deny_list_v2_contains_next_epochT(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, addr: <b>address</b>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_contains_next_epoch">deny_list_v2_contains_next_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, addr: <b>address</b>): bool
 </code></pre>
 
 
@@ -1193,7 +1193,7 @@ from using objects of this coin type as inputs. At the start of the next epoch, 
 addresses will be unable to receive objects of this coin type.
 
 
-<pre><code><b>public</b> <b>fun</b> deny_list_v2_enable_global_pauseT(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_enable_global_pause">deny_list_v2_enable_global_pause</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1226,7 +1226,7 @@ to resume using objects of this coin type as inputs. However, receiving objects 
 type will still be paused until the start of the next epoch.
 
 
-<pre><code><b>public</b> <b>fun</b> deny_list_v2_disable_global_pauseT(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_disable_global_pause">deny_list_v2_disable_global_pause</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1257,7 +1257,7 @@ type will still be paused until the start of the next epoch.
 Check if the global pause is enabled for the given coin type in the current epoch.
 
 
-<pre><code><b>public</b> <b>fun</b> deny_list_v2_is_global_pause_enabled_current_epochT(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_is_global_pause_enabled_current_epoch">deny_list_v2_is_global_pause_enabled_current_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -1286,7 +1286,7 @@ Check if the global pause is enabled for the given coin type in the current epoc
 Check if the global pause is enabled for the given coin type in the next epoch.
 
 
-<pre><code><b>public</b> <b>fun</b> deny_list_v2_is_global_pause_enabled_next_epochT(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>): bool
 </code></pre>
 
 
@@ -1312,7 +1312,7 @@ Check if the global pause is enabled for the given coin type in the next epoch.
 Mint <code>amount</code> of <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> and send it to <code>recipient</code>. Invokes <code><a href="../sui/coin.md#sui_coin_mint">mint</a>()</code>.
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> mint_and_transferT(c: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_mint_and_transfer">mint_and_transfer</a>&lt;T&gt;(c: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1342,7 +1342,7 @@ Mint <code>amount</code> of <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a
 Update name of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code>
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> update_nameT(_treasury: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_update_name">update_name</a>&lt;T&gt;(_treasury: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>)
 </code></pre>
 
 
@@ -1371,7 +1371,7 @@ Update name of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadata">
 Update the symbol of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code>
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> update_symbolT(_treasury: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, symbol: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_update_symbol">update_symbol</a>&lt;T&gt;(_treasury: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, symbol: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>)
 </code></pre>
 
 
@@ -1400,7 +1400,7 @@ Update the symbol of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMeta
 Update the description of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code>
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> update_descriptionT(_treasury: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, description: <a href="../std/string.md#std_string_String">std::string::String</a>)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_update_description">update_description</a>&lt;T&gt;(_treasury: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, description: <a href="../std/string.md#std_string_String">std::string::String</a>)
 </code></pre>
 
 
@@ -1429,7 +1429,7 @@ Update the description of the coin in <code><a href="../sui/coin.md#sui_coin_Coi
 Update the url of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code>
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> update_icon_urlT(_treasury: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, <a href="../sui/url.md#sui_url">url</a>: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_update_icon_url">update_icon_url</a>&lt;T&gt;(_treasury: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, <a href="../sui/url.md#sui_url">url</a>: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>)
 </code></pre>
 
 
@@ -1457,7 +1457,7 @@ Update the url of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadat
 
 
 
-<pre><code><b>public</b> <b>fun</b> get_decimalsT(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;): u8
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_get_decimals">get_decimals</a>&lt;T&gt;(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;): u8
 </code></pre>
 
 
@@ -1481,7 +1481,7 @@ Update the url of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadat
 
 
 
-<pre><code><b>public</b> <b>fun</b> get_nameT(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;): <a href="../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_get_name">get_name</a>&lt;T&gt;(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;): <a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1505,7 +1505,7 @@ Update the url of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadat
 
 
 
-<pre><code><b>public</b> <b>fun</b> get_symbolT(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;): <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_get_symbol">get_symbol</a>&lt;T&gt;(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;): <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 
@@ -1529,7 +1529,7 @@ Update the url of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadat
 
 
 
-<pre><code><b>public</b> <b>fun</b> get_descriptionT(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;): <a href="../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_get_description">get_description</a>&lt;T&gt;(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;): <a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -1553,7 +1553,7 @@ Update the url of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadat
 
 
 
-<pre><code><b>public</b> <b>fun</b> get_icon_urlT(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/url.md#sui_url_Url">sui::url::Url</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_get_icon_url">get_icon_url</a>&lt;T&gt;(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/url.md#sui_url_Url">sui::url::Url</a>&gt;
 </code></pre>
 
 
@@ -1577,7 +1577,7 @@ Update the url of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadat
 
 
 
-<pre><code><b>public</b> <b>fun</b> supplyT(treasury: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;): &<a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_supply">supply</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;): &<a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
 </code></pre>
 
 
@@ -1604,7 +1604,7 @@ allows for specific addresses to have their coins frozen. Those addresses cannot
 with the coin as input objects.
 
 
-<pre><code><b>public</b> <b>fun</b> create_regulated_currencyT(witness: T, decimals: u8, symbol: vector&lt;u8&gt;, name: vector&lt;u8&gt;, description: vector&lt;u8&gt;, icon_url: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/url.md#sui_url_Url">sui::url::Url</a>&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_DenyCap">sui::coin::DenyCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_create_regulated_currency">create_regulated_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: vector&lt;u8&gt;, name: vector&lt;u8&gt;, description: vector&lt;u8&gt;, icon_url: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/url.md#sui_url_Url">sui::url::Url</a>&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_DenyCap">sui::coin::DenyCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -1655,7 +1655,7 @@ Adds the given address to the deny list, preventing it
 from interacting with the specified coin type as an input to a transaction.
 
 
-<pre><code><b>public</b> <b>fun</b> deny_list_addT(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCap">sui::coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_add">deny_list_add</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCap">sui::coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1687,7 +1687,7 @@ Removes an address from the deny list.
 Aborts with <code>ENotFrozen</code> if the address is not already in the list.
 
 
-<pre><code><b>public</b> <b>fun</b> deny_list_removeT(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCap">sui::coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_remove">deny_list_remove</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_DenyCap">sui::coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1719,7 +1719,7 @@ Returns true iff the given address is denied for the given coin type. It will
 return false if given a non-coin type.
 
 
-<pre><code><b>public</b> <b>fun</b> deny_list_containsT(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, addr: <b>address</b>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_contains">deny_list_contains</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, addr: <b>address</b>): bool
 </code></pre>
 
 
