@@ -719,7 +719,6 @@ impl CheckpointExecutor {
                         .expect("Failed to accumulate running root");
                     self.accumulator
                         .accumulate_epoch(epoch_store.clone(), *checkpoint.sequence_number())
-                        .await
                         .expect("Accumulating epoch cannot fail");
 
                     self.bump_highest_executed_checkpoint(checkpoint);

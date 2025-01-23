@@ -4,8 +4,8 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
 use crate::authority::backpressure::BackpressureManager;
+use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfigTrait};
 use crate::authority::AuthorityStore;
 use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
@@ -36,7 +36,7 @@ use sui_types::{
     object::Owner,
     storage::InputKey,
 };
-use tracing::{error, instrument};
+use tracing::instrument;
 
 pub(crate) mod cache_types;
 pub mod metrics;
@@ -101,45 +101,23 @@ impl ExecutionCacheTraitPointers {
     }
 }
 
-static DISABLE_WRITEBACK_CACHE_ENV_VAR: &str = "DISABLE_WRITEBACK_CACHE";
-
-#[derive(Debug)]
-pub enum ExecutionCacheConfigType {
-    WritebackCache,
-    PassthroughCache,
-}
-
-pub fn choose_execution_cache(_: &ExecutionCacheConfig) -> ExecutionCacheConfigType {
-    if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
-        error!("DISABLE_WRITEBACK_CACHE is no longer respected. WritebackCache is the default.");
-    }
-
-    ExecutionCacheConfigType::WritebackCache
-}
-
 pub fn build_execution_cache(
     cache_config: &ExecutionCacheConfig,
-    epoch_start_config: &EpochStartConfiguration,
     prometheus_registry: &Registry,
     store: &Arc<AuthorityStore>,
     backpressure_manager: Arc<BackpressureManager>,
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
 
-    match epoch_start_config.execution_cache_type() {
-        ExecutionCacheConfigType::WritebackCache => ExecutionCacheTraitPointers::new(
-            WritebackCache::new(
-                cache_config,
-                store.clone(),
-                execution_cache_metrics,
-                backpressure_manager,
-            )
-            .into(),
-        ),
-        ExecutionCacheConfigType::PassthroughCache => {
-            fatal!("PassthroughCache is no longer supported")
-        }
-    }
+    ExecutionCacheTraitPointers::new(
+        WritebackCache::new(
+            cache_config,
+            store.clone(),
+            execution_cache_metrics,
+            backpressure_manager,
+        )
+        .into(),
+    )
 }
 
 /// Should only be used for sui-tool or tests. Nodes must use build_execution_cache which
@@ -150,19 +128,15 @@ pub fn build_execution_cache_from_env(
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
 
-    if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
-        fatal!("PassthroughCache is no longer supported");
-    } else {
-        ExecutionCacheTraitPointers::new(
-            WritebackCache::new(
-                &Default::default(),
-                store.clone(),
-                execution_cache_metrics,
-                BackpressureManager::new_for_tests(),
-            )
-            .into(),
+    ExecutionCacheTraitPointers::new(
+        WritebackCache::new(
+            &Default::default(),
+            store.clone(),
+            execution_cache_metrics,
+            BackpressureManager::new_for_tests(),
         )
-    }
+        .into(),
+    )
 }
 
 pub trait ExecutionCacheCommit: Send + Sync {

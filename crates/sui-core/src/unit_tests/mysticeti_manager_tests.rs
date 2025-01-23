@@ -31,7 +31,6 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
     let epoch_store = state.epoch_store_for_testing();
     let accumulator = Arc::new(StateAccumulator::new_for_tests(
         state.get_accumulator_store().clone(),
-        &epoch_store,
     ));
     let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
 

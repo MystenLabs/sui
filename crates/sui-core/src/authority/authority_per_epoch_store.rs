@@ -89,7 +89,7 @@ use super::shared_object_congestion_tracker::{
     CongestionPerObjectDebt, SharedObjectCongestionTracker,
 };
 use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
-use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::shared_object_version_manager::{
     AssignedTxAndVersions, ConsensusSharedObjVerAssignment, SharedObjVerManager,
 };
@@ -371,8 +371,6 @@ pub struct AuthorityPerEpochStore {
     epoch_close_time: RwLock<Option<Instant>>,
     pub(crate) metrics: Arc<EpochMetrics>,
     epoch_start_configuration: Arc<EpochStartConfiguration>,
-
-    executed_in_epoch_table_enabled: once_cell::sync::OnceCell<bool>,
 
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
@@ -982,7 +980,6 @@ impl AuthorityPerEpochStore {
             epoch_close_time: Default::default(),
             metrics,
             epoch_start_configuration,
-            executed_in_epoch_table_enabled: once_cell::sync::OnceCell::new(),
             execution_component,
             chain_identifier,
             jwk_aggregator,
@@ -1079,23 +1076,6 @@ impl AuthorityPerEpochStore {
 
     pub fn get_parent_path(&self) -> PathBuf {
         self.parent_path.clone()
-    }
-
-    pub fn state_accumulator_v2_enabled(&self) -> bool {
-        let flag = match self.get_chain_identifier().chain() {
-            Chain::Unknown | Chain::Testnet => EpochFlag::StateAccumulatorV2EnabledTestnet,
-            Chain::Mainnet => EpochFlag::StateAccumulatorV2EnabledMainnet,
-        };
-
-        self.epoch_start_configuration.flags().contains(&flag)
-    }
-
-    pub fn executed_in_epoch_table_enabled(&self) -> bool {
-        *self.executed_in_epoch_table_enabled.get_or_init(|| {
-            self.epoch_start_configuration
-                .flags()
-                .contains(&EpochFlag::ExecutedInEpochTable)
-        })
     }
 
     /// Returns `&Arc<EpochStartConfiguration>`
@@ -1312,28 +1292,15 @@ impl AuthorityPerEpochStore {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn insert_tx_key_and_effects_signature(
+    pub fn insert_tx_key(
         &self,
         tx_key: &TransactionKey,
         tx_digest: &TransactionDigest,
-        effects_digest: &TransactionEffectsDigest,
-        effects_signature: Option<&AuthoritySignInfo>,
     ) -> SuiResult {
         let tables = self.tables()?;
         let mut batch = self.tables()?.effects_signatures.batch();
 
-        if self.executed_in_epoch_table_enabled() {
-            batch.insert_batch(&tables.executed_in_epoch, [(tx_digest, ())])?;
-        }
-
-        if let Some(effects_signature) = effects_signature {
-            batch.insert_batch(&tables.effects_signatures, [(tx_digest, effects_signature)])?;
-
-            batch.insert_batch(
-                &tables.signed_effects_digests,
-                [(tx_digest, effects_digest)],
-            )?;
-        }
+        batch.insert_batch(&tables.executed_in_epoch, [(tx_digest, ())])?;
 
         if !matches!(tx_key, TransactionKey::Digest(_)) {
             batch.insert_batch(&tables.transaction_key_to_digest, [(tx_key, tx_digest)])?;
@@ -1376,12 +1343,10 @@ impl AuthorityPerEpochStore {
         &self,
         digests: impl IntoIterator<Item = &'a TransactionDigest>,
     ) -> SuiResult<Vec<bool>> {
-        let tables = self.tables()?;
-        if self.executed_in_epoch_table_enabled() {
-            Ok(tables.executed_in_epoch.multi_contains_keys(digests)?)
-        } else {
-            Ok(tables.effects_signatures.multi_contains_keys(digests)?)
-        }
+        Ok(self
+            .tables()?
+            .executed_in_epoch
+            .multi_contains_keys(digests)?)
     }
 
     pub fn get_effects_signature(
@@ -4263,10 +4228,6 @@ impl AuthorityPerEpochStore {
     }
 
     pub(crate) fn check_all_executed_transactions_in_checkpoint(&self) {
-        if !self.executed_in_epoch_table_enabled() {
-            error!("Cannot check executed transactions in checkpoint because executed_in_epoch table is not enabled");
-            return;
-        }
         let tables = self.tables().unwrap();
 
         info!("Verifying that all executed transactions are in a checkpoint");
