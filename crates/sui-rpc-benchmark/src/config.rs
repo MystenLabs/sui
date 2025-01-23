@@ -9,7 +9,9 @@ pub struct BenchmarkConfig {
     pub concurrency: usize,
     /// Duration to run the benchmark in seconds
     pub duration: Duration,
-    /// Optional path to JSON RPC file for JSON RPC benchmarks
+    /// Optional path to a jsonl file for JSON RPC benchmarks.
+    /// The file contains a list of JSON RPC requests that are collected from Grafana,
+    /// and will be run concurrently by the JSON RPC benchmark runner.
     pub json_rpc_file_path: Option<String>,
 }
 
