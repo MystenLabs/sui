@@ -5,7 +5,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ModuleInfo } from './utils';
 import { JSON_FILE_EXT } from './utils';
-import internal from 'stream';
 
 
 // Data types corresponding to source map file JSON schema.
