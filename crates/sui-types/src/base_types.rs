@@ -1094,12 +1094,12 @@ impl TxContext {
         self.epoch
     }
 
-    /// Derive a globally unique object ID by hashing self.digest | self.ids_created
-    pub fn fresh_id(&mut self) -> ObjectID {
-        let id = ObjectID::derive_id(self.digest(), self.ids_created);
+    pub fn sender(&self) -> SuiAddress {
+        SuiAddress::from(ObjectID(self.sender))
+    }
 
-        self.ids_created += 1;
-        id
+    pub fn epoch_timestamp_ms(&self) -> u64 {
+        self.epoch_timestamp_ms
     }
 
     /// Return the transaction digest, to include in new objects
@@ -1107,8 +1107,20 @@ impl TxContext {
         TransactionDigest::new(self.digest.clone().try_into().unwrap())
     }
 
-    pub fn sender(&self) -> SuiAddress {
-        SuiAddress::from(ObjectID(self.sender))
+    pub fn sponsor(&self) -> Option<SuiAddress> {
+        self.sponsor.map(SuiAddress::from)
+    }
+
+    pub fn ids_created(&self) -> u64 {
+        self.ids_created
+    }
+
+    /// Derive a globally unique object ID by hashing self.digest | self.ids_created
+    pub fn fresh_id(&mut self) -> ObjectID {
+        let id = ObjectID::derive_id(self.digest(), self.ids_created);
+
+        self.ids_created += 1;
+        id
     }
 
     pub fn to_bcs_legacy_context(&self) -> Vec<u8> {
@@ -1136,6 +1148,36 @@ impl TxContext {
         }
         self.ids_created = other.ids_created;
         Ok(())
+    }
+
+    //
+    // Move test only API
+    //
+    pub fn inc_ids_created(self: &mut TxContext) {
+        self.ids_created += 1;
+    }
+
+    pub fn inc_epoch(&mut self) {
+        self.epoch += 1;
+    }
+
+    pub fn inc_epoch_timestamp(&mut self, delta_ms: u64) {
+        self.epoch_timestamp_ms += delta_ms;
+    }
+
+    pub fn replace(
+        &mut self,
+        sender: AccountAddress,
+        tx_hash: Vec<u8>,
+        epoch: u64,
+        epoch_timestamp_ms: u64,
+        ids_created: u64,
+    ) {
+        self.sender = sender;
+        self.digest = tx_hash;
+        self.epoch = epoch;
+        self.epoch_timestamp_ms = epoch_timestamp_ms;
+        self.ids_created = ids_created;
     }
 }
 
