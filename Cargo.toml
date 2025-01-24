@@ -218,6 +218,14 @@ strip = 'debuginfo'
 # Exit process with SIGABRT when any thread panics
 panic = 'abort'
 
+# Same as release, but build with lto (~50min build time).
+[profile.release-lto]
+inherits = "release"
+# Enable Link Time Optimization for better runtime performance
+lto = true
+# Use single codegen unit to enable better optimizations
+codegen-units = 1
+
 # Same as release, but build binary with debug symbols (binary size will be ~ 1GB).
 [profile.release-dbgsym]
 inherits = "release"
