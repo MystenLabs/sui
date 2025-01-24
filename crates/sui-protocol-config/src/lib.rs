@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 72;
+const MAX_PROTOCOL_VERSION: u64 = 73;
 
 // Record history of protocol version allocations here:
 //
@@ -208,7 +208,7 @@ const MAX_PROTOCOL_VERSION: u64 = 72;
 //             Max gas budget moved to 50_000 SUI
 //             Max gas price moved to 50 SUI
 //             Variants as type nodes.
-//             Enable new marker table version.
+// Version 73: Enable new marker table version.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3155,7 +3155,8 @@ impl ProtocolConfig {
                     cfg.max_gas_price = Some(50_000_000_000);
 
                     cfg.feature_flags.variant_nodes = true;
-
+                }
+                73 => {
                     // Enable new marker table version.
                     cfg.use_object_per_epoch_marker_table_v2 = Some(true);
                 }
