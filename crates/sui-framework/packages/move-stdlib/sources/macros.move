@@ -34,7 +34,7 @@ public macro fun num_divide_and_round_up<$T>($x: $T, $y: $T): $T {
     else x / y + 1
 }
 
-public macro fun num_pow<$T>($base: $T, $exponent: u8): $T {
+public macro fun num_pow($base: _, $exponent: u8): _ {
     let mut base = $base;
     let mut exponent = $exponent;
     let mut res = 1;
