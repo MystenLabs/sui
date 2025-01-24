@@ -100,14 +100,18 @@ pub struct Module {
     /// Single-token signatures are usually indexed by the `SignatureIndex` in bytecode. For example,
     /// `VecMutBorrow(SignatureIndex)`, the `SignatureIndex` maps to a single `SignatureToken`, and
     /// hence, a single type.
-    pub single_signature_token_map: BTreeMap<SignatureIndex, Type>,
+    /// [ALLOC] These are allocated in the package arena.
+    pub single_signature_token_map: BTreeMap<SignatureIndex, VMPointer<Type>>,
 
     /// a map from signatures in instantiations to the `Vec<Type>` that reperesent it.
-    pub instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>>,
+    /// [ALLOC] These are allocated in the package arena.
+    pub instantiation_signatures: SignatureCache,
 
     /// constant references carry an index into a global vector of values.
     pub constants: Vec<Constant>,
 }
+
+pub type SignatureCache = BTreeMap<SignatureIndex, VMPointer<Vec<Type>>>;
 
 // A runtime constant
 #[derive(Debug)]
@@ -126,10 +130,14 @@ pub struct Function {
     pub file_format_version: u32,
     pub is_entry: bool,
     pub index: FunctionDefinitionIndex,
+    // [ALLOC] These are allocated in the package arena.
     pub code: *const [Bytecode],
-    pub parameters: Vec<Type>,
-    pub locals: Vec<Type>,
-    pub return_: Vec<Type>,
+    // [ALLOC] This is allocated in the package arena.
+    pub parameters: VMPointer<Vec<Type>>,
+    // [ALLOC] This is in the package arena.
+    pub locals: Option<VMPointer<Vec<Type>>>,
+    // [ALLOC] This is allocated in the package arena.
+    pub return_: VMPointer<Vec<Type>>,
     pub type_parameters: Vec<AbilitySet>,
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
@@ -153,6 +161,7 @@ pub struct Function {
 // - Virtual: the function is unknown and the index is the index in the global table of vtables
 //   that will be filled in at a later time before execution.
 pub enum CallType {
+    // [ALLOC] This is allocated in the package arena.
     Direct(VMPointer<Function>),
     Virtual(VirtualTableKey),
 }
@@ -162,14 +171,14 @@ pub enum CallType {
 pub struct FunctionInstantiation {
     // index to `ModuleCache::functions` global table if a in-package call otherwise a virtual call
     pub handle: CallType,
-    pub instantiation_idx: SignatureIndex,
+    // [ALLOC] This is allocated in the package arena.
+    pub instantiation_signature: VMPointer<Vec<Type>>,
 }
 
 #[derive(Debug)]
 pub struct StructDef {
     // struct field count
     pub field_count: u16,
-    // `ModuelCache::structs` global table index
     pub idx: VirtualTableKey,
 }
 
@@ -177,16 +186,15 @@ pub struct StructDef {
 pub struct StructInstantiation {
     // struct field count
     pub field_count: u16,
-    // `ModuleCache::structs` global table index. It is the generic type.
     pub def: VirtualTableKey,
-    pub instantiation_idx: SignatureIndex,
+    // [ALLOC] This is allocated in the package arena.
+    pub instantiation_signature: VMPointer<Vec<Type>>,
 }
 
 // A field handle. The offset is the only used information when operating on a field
 #[derive(Debug)]
 pub struct FieldHandle {
     pub offset: usize,
-    // `ModuelCache::structs` global table index. It is the generic type.
     pub owner: VirtualTableKey,
 }
 
@@ -194,7 +202,6 @@ pub struct FieldHandle {
 #[derive(Debug)]
 pub struct FieldInstantiation {
     pub offset: usize,
-    // `ModuleCache::structs` global table index. It is the generic type.
     #[allow(unused)]
     pub owner: VirtualTableKey,
 }
@@ -213,9 +220,9 @@ pub struct EnumDef {
 pub struct EnumInstantiation {
     // enum variant count
     pub variant_count_map: Vec<u16>,
-    // `ModuelCache::types` global table index
     pub def: VirtualTableKey,
-    pub instantiation_idx: SignatureIndex,
+    // [ALLOC] This is allocated in the package arena.
+    pub instantiation_signature: VMPointer<Vec<Type>>,
 }
 
 #[derive(Debug)]
@@ -404,6 +411,7 @@ pub enum Bytecode {
     /// Call a well-known (usually intra-package) function. The stack has the arguments pushed
     /// first to last. The arguments are consumed and pushed to the locals of the function. Return
     /// values are pushed on the stack and available to the caller.
+    /// [ALLOC] This is allocated in the package arena.
     ///
     /// Stack transition:
     ///
@@ -658,56 +666,64 @@ pub enum Bytecode {
     Shr,
     /// Create a vector by packing a statically known number of elements from the stack. Abort the
     /// execution if there are not enough number of elements on the stack to pack from or they don't
-    /// have the same type identified by the SignatureIndex.
+    /// have the same type identified by the type.
+    /// [ALLOC] This is allocated in the package arena
     ///
     /// Stack transition:
     ///
     /// ```..., e1, e2, ..., eN -> ..., vec[e1, e2, ..., eN]```
-    VecPack(SignatureIndex, u64),
+    VecPack(VMPointer<Type>, u64),
     /// Return the length of the vector,
+    /// [ALLOC] This is allocated in the package arena
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., u64_value```
-    VecLen(SignatureIndex),
+    VecLen(VMPointer<Type>),
     /// Acquire an immutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
+    /// [ALLOC] This is allocated in the package arena
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecImmBorrow(SignatureIndex),
+    VecImmBorrow(VMPointer<Type>),
     /// Acquire a mutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
+    /// [ALLOC] This is allocated in the package arena
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecMutBorrow(SignatureIndex),
+    VecMutBorrow(VMPointer<Type>),
     /// Add an element to the end of the vector.
+    /// [ALLOC] This is allocated in the package arena
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, element -> ...```
-    VecPushBack(SignatureIndex),
+    VecPushBack(VMPointer<Type>),
     /// Pop an element from the end of vector. Aborts if the vector is empty.
+    /// [ALLOC] This is allocated in the package arena
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., element```
-    VecPopBack(SignatureIndex),
+    VecPopBack(VMPointer<Type>),
     /// Destroy the vector and unpack a statically known number of elements onto the stack. Aborts
     /// if the vector does not have a length N.
+    /// [ALLOC] This is allocated in the package arena
     ///
     /// Stack transition:
     ///
     /// ```..., vec[e1, e2, ..., eN] -> ..., e1, e2, ..., eN```
-    VecUnpack(SignatureIndex, u64),
+    VecUnpack(VMPointer<Type>, u64),
     /// Swaps the elements at two indices in the vector. Abort the execution if any of the indice
     /// is out of bounds.
+    /// [ALLOC] This is allocated in the package arena
     ///
     /// ```..., vector_reference, u64_value(1), u64_value(2) -> ...```
-    VecSwap(SignatureIndex),
+    VecSwap(VMPointer<Type>),
     /// Push a U16 constant onto the stack.
     ///
     /// Stack transition:
@@ -817,17 +833,7 @@ impl Module {
     }
 
     pub fn single_type_at(&self, idx: SignatureIndex) -> &Type {
-        self.single_signature_token_map.get(&idx).unwrap()
-    }
-
-    pub fn instantiation_signature_at(
-        &self,
-        idx: SignatureIndex,
-    ) -> Result<&Vec<Type>, PartialVMError> {
-        self.instantiation_signatures.get(&idx).ok_or_else(|| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Instantiation signature not found".to_string())
-        })
+        self.single_signature_token_map.get(&idx).unwrap().to_ref()
     }
 
     pub fn enum_at(&self, idx: EnumDefinitionIndex) -> VirtualTableKey {
@@ -896,11 +902,11 @@ impl Function {
     }
 
     pub fn arg_count(&self) -> usize {
-        self.parameters.len()
+        self.parameters.to_ref().len()
     }
 
     pub fn return_type_count(&self) -> usize {
-        self.return_.len()
+        self.return_.to_ref().len()
     }
 
     pub fn name(&self) -> &str {
@@ -1152,7 +1158,7 @@ impl PartialEq for Function {
     }
 }
 
-impl Eq for Function { }
+impl Eq for Function {}
 
 // -------------------------------------------------------------------------------------------------
 // Into
@@ -1328,14 +1334,14 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::Ge => write!(f, "Ge"),
             Bytecode::Abort => write!(f, "Abort"),
             Bytecode::Nop => write!(f, "Nop"),
-            Bytecode::VecPack(a, n) => write!(f, "VecPack({}, {})", a, n),
-            Bytecode::VecLen(a) => write!(f, "VecLen({})", a),
-            Bytecode::VecImmBorrow(a) => write!(f, "VecImmBorrow({})", a),
-            Bytecode::VecMutBorrow(a) => write!(f, "VecMutBorrow({})", a),
-            Bytecode::VecPushBack(a) => write!(f, "VecPushBack({})", a),
-            Bytecode::VecPopBack(a) => write!(f, "VecPopBack({})", a),
-            Bytecode::VecUnpack(a, n) => write!(f, "VecUnpack({}, {})", a, n),
-            Bytecode::VecSwap(a) => write!(f, "VecSwap({})", a),
+            Bytecode::VecPack(a, n) => write!(f, "VecPack({:?}, {})", a.to_ref(), n),
+            Bytecode::VecLen(a) => write!(f, "VecLen({:?})", a.to_ref()),
+            Bytecode::VecImmBorrow(a) => write!(f, "VecImmBorrow({:?})", a.to_ref()),
+            Bytecode::VecMutBorrow(a) => write!(f, "VecMutBorrow({:?})", a.to_ref()),
+            Bytecode::VecPushBack(a) => write!(f, "VecPushBack({:?})", a.to_ref()),
+            Bytecode::VecPopBack(a) => write!(f, "VecPopBack({:?})", a.to_ref()),
+            Bytecode::VecUnpack(a, n) => write!(f, "VecUnpack({:?}, {})", a.to_ref(), n),
+            Bytecode::VecSwap(a) => write!(f, "VecSwap({:?})", a.to_ref()),
             Bytecode::PackVariant(handle) => {
                 write!(f, "PackVariant({:?})", handle)
             }

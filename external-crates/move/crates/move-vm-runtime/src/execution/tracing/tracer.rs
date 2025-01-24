@@ -1245,10 +1245,10 @@ impl<'a> VMTracer<'a> {
                     .instruction(instruction, ty_args, effects, *remaining_gas, pc);
             }
 
-            B::VecPack(tok, n) => {
+            B::VecPack(ty_ptr, n) => {
                 let resolver = &machine.call_stack.current_frame.resolver;
                 let ty = resolver
-                    .instantiate_single_type(*tok, &machine.call_stack.current_frame.ty_args)
+                    .instantiate_single_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
                     .ok()?;
                 let ty = vtables.type_to_fully_annotated_layout(&ty).ok()?;
                 let ty = AnnotatedTypeLayout::Vector(Box::new(ty));
@@ -1646,15 +1646,22 @@ impl FunctionTypeInfo {
             let layout = (type_layout, ref_type);
             Some(TagWithLayoutInfoOpt { tag, layout })
         };
+        let locals = if let Some(locals) = function.locals {
+            locals.to_ref()
+        } else {
+            &vec![]
+        };
         let local_types = function
             .parameters
+            .to_ref()
             .iter()
-            .chain(function.locals.iter())
+            .chain(locals.iter())
             .map(subst_and_layout_type)
             .collect::<Option<Vec<_>>>()?;
 
         let return_types = function
             .return_
+            .to_ref()
             .iter()
             .map(subst_and_layout_type)
             .collect::<Option<Vec<_>>>()?;

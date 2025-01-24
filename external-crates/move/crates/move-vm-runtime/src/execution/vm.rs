@@ -277,9 +277,9 @@ impl<'extensions> MoveVM<'extensions> {
         let fun_ref = function.to_ref();
 
         // See TODO on LoadedModule to avoid this work
-        let parameters = fun_ref.parameters.clone();
+        let parameters = fun_ref.parameters.to_ref().clone();
 
-        let return_ = fun_ref.return_.clone();
+        let return_ = fun_ref.return_.to_ref().clone();
 
         // verify type arguments
         self.virtual_tables

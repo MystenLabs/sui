@@ -34,6 +34,14 @@ impl Arena {
         let slice = self.0.alloc_slice_fill_iter(items);
         slice as *mut [T]
     }
+
+    /// SAFETY: it is the caller's responsibility to ensure that `self` is not shared across
+    /// threads during this call. This should be fine as the translation step that uses an arena
+    /// should happen in a thread that holds that arena, with no other contention for allocation
+    /// into it, and nothing should allocate into a LoadedModule after it is loaded.
+    pub fn alloc_item<T>(&self, item: T) -> *mut T {
+        self.0.alloc(item) as *mut T
+    }
 }
 
 // -----------------------------------------------
