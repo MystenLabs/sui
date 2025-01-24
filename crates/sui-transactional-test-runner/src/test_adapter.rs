@@ -1415,7 +1415,6 @@ impl SuiTestAdapter {
         gas_budget: Option<u64>,
         policy: u8,
         gas_price: u64,
-        // dry_run: bool,
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
