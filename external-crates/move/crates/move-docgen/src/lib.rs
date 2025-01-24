@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+mod code_writer;
 mod docgen;
 
 pub use crate::docgen::*;

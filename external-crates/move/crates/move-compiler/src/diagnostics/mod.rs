@@ -201,7 +201,7 @@ pub fn report_diagnostics_to_buffer_with_mapped_files(
     writer.into_inner()
 }
 
-fn env_color() -> ColorChoice {
+pub fn env_color() -> ColorChoice {
     match read_env_var(COLOR_MODE_ENV_VAR).as_str() {
         "NONE" => ColorChoice::Never,
         "ANSI" => ColorChoice::AlwaysAnsi,

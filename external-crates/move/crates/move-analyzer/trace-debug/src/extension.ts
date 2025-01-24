@@ -81,7 +81,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                         const editor = vscode.window.activeTextEditor;
                         if (editor) {
-                            const optimized_lines = stackTraceResponse.optimized_lines;
+                            const optimized_lines = stackTraceResponse.optimizedLines;
                             const document = editor.document;
                             let decorationsArray: vscode.DecorationOptions[] = [];
 
@@ -122,6 +122,32 @@ export function activate(context: vscode.ExtensionContext) {
         const editor = vscode.window.activeTextEditor;
         if (editor) {
             editor.setDecorations(decorationType, []);
+        }
+    }));
+
+    // register custom command to toggle disassembly view
+    context.subscriptions.push(vscode.commands.registerCommand('move.toggleDisassembly', () => {
+        const session = vscode.debug.activeDebugSession;
+        if (session) {
+            session.customRequest('toggleDisassembly');
+        }
+    }));
+
+    // register custom command to toggle source view (when in disassembly view)
+    context.subscriptions.push(vscode.commands.registerCommand('move.toggleSource', () => {
+        const session = vscode.debug.activeDebugSession;
+        if (session) {
+            session.customRequest('toggleSource');
+        }
+    }));
+
+    // send custom request to the debug adapter when the active text editor changes
+    context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(async editor => {
+        if (editor) {
+            const session = vscode.debug.activeDebugSession;
+            if (session) {
+                await session.customRequest('fileChanged', editor.document.uri.fsPath);
+            }
         }
     }));
 }

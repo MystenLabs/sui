@@ -3,6 +3,7 @@
 
 use super::reroot_path;
 use clap::*;
+use move_bytecode_source_map::utils::serialize_to_json_string;
 use move_compiler::compiled_unit::NamedCompiledModule;
 use move_disassembler::disassembler::Disassembler;
 use move_package::{compilation::compiled_package::CompiledUnitWithSource, BuildConfig};
@@ -24,6 +25,9 @@ pub struct Disassemble {
     #[clap(long = "Xdebug")]
     /// Also print the raw disassembly using Rust's Debug output, at the end.
     pub debug: bool,
+    #[clap(long = "bytecode-map")]
+    /// Print the "bytecode map" (source map for disassembled bytecode)
+    pub bytecode_map: bool,
 }
 
 impl Disassemble {
@@ -34,6 +38,7 @@ impl Disassemble {
             package_name,
             module_or_script_name,
             debug,
+            bytecode_map,
         } = self;
         // Make sure the package is built
         let package = config.compile_package(&rerooted_path, &mut Vec::new())?;
@@ -66,7 +71,12 @@ impl Disassemble {
                         source_path,
                     )
                 } else {
-                    println!("{}", Disassembler::from_unit(&unit.unit).disassemble()?);
+                    let d = Disassembler::from_unit(&unit.unit);
+                    let (disassemble_string, bcode_map) = d.disassemble_with_source_map()?;
+                    if bytecode_map {
+                        println!("{}", serialize_to_json_string(&bcode_map)?);
+                    }
+                    println!("{}", disassemble_string);
                     if debug {
                         println!("\n{:#?}", &unit.unit.module)
                     }

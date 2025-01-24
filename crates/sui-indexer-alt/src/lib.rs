@@ -3,9 +3,8 @@
 
 use anyhow::Context;
 use bootstrap::bootstrap;
-use config::{ConsistencyConfig, IndexerConfig, PipelineLayer};
+use config::{IndexerConfig, PipelineLayer};
 use handlers::coin_balance_buckets::CoinBalanceBuckets;
-use handlers::coin_balance_buckets_pruner::CoinBalanceBucketsPruner;
 use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
@@ -15,6 +14,7 @@ use handlers::{
     tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
     tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
 };
+use prometheus::Registry;
 use sui_indexer_alt_framework::handlers::cp_sequence_numbers::CpSequenceNumbers;
 use sui_indexer_alt_framework::ingestion::{ClientArgs, IngestionConfig};
 use sui_indexer_alt_framework::pipeline::{
@@ -25,6 +25,7 @@ use sui_indexer_alt_framework::pipeline::{
 use sui_indexer_alt_framework::{Indexer, IndexerArgs};
 use sui_indexer_alt_schema::MIGRATIONS;
 use sui_pg_db::DbArgs;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 pub mod args;
@@ -45,7 +46,9 @@ pub async fn start_indexer(
     // TODO: There is probably a better way to handle this.
     // For instance, we could also pass in dummy genesis data in the benchmark mode.
     with_genesis: bool,
-) -> anyhow::Result<()> {
+    registry: &Registry,
+    cancel: CancellationToken,
+) -> anyhow::Result<JoinHandle<()>> {
     let IndexerConfig {
         ingestion,
         consistency,
@@ -59,7 +62,6 @@ pub async fn start_indexer(
         sum_displays,
         sum_packages,
         coin_balance_buckets,
-        coin_balance_buckets_pruner,
         cp_sequence_numbers,
         ev_emit_mod,
         ev_struct_inst,
@@ -82,11 +84,10 @@ pub async fn start_indexer(
     } = pipeline.finish();
 
     let ingestion = ingestion.finish(IngestionConfig::default());
-    let consistency = consistency.finish(ConsistencyConfig::default());
+    let consistency = consistency.finish(PrunerConfig::default());
     let committer = committer.finish(CommitterConfig::default());
     let pruner = pruner.finish(PrunerConfig::default());
 
-    let cancel = CancellationToken::new();
     let retry_interval = ingestion.retry_interval();
 
     let mut indexer = Indexer::new(
@@ -95,6 +96,7 @@ pub async fn start_indexer(
         client_args,
         ingestion,
         &MIGRATIONS,
+        registry,
         cancel.clone(),
     )
     .await?;
@@ -114,6 +116,22 @@ pub async fn start_indexer(
     // `concurrent` "write-ahead log" pipeline, with their configuration based on the supplied
     // ConsistencyConfig.
 
+    macro_rules! add_consistent {
+        ($handler:expr, $config:expr) => {
+            if let Some(layer) = $config {
+                indexer
+                    .concurrent_pipeline(
+                        $handler,
+                        ConcurrentConfig {
+                            committer: layer.finish(committer.clone()),
+                            pruner: Some(consistency.clone()),
+                        },
+                    )
+                    .await?
+            }
+        };
+    }
+
     macro_rules! add_concurrent {
         ($handler:expr, $config:expr) => {
             if let Some(layer) = $config {
@@ -123,7 +141,6 @@ pub async fn start_indexer(
                         layer.finish(ConcurrentConfig {
                             committer: committer.clone(),
                             pruner: Some(pruner.clone()),
-                            checkpoint_lag: None,
                         }),
                     )
                     .await?
@@ -147,37 +164,6 @@ pub async fn start_indexer(
         };
     }
 
-    // A consistent pipeline consists of two concurrent pipelines. The first (main) one writes
-    // new data, and the second one lags behind deleting data that has fallen out of the consistent
-    // range.
-    macro_rules! add_consistent {
-        ($main_handler:expr, $main_config:expr; $lagged_handler:expr, $lagged_config:expr) => {
-            if let Some(main_layer) = $main_config {
-                indexer
-                    .concurrent_pipeline(
-                        $main_handler,
-                        ConcurrentConfig {
-                            committer: main_layer.finish(committer.clone()),
-                            pruner: None,
-                            checkpoint_lag: None,
-                        },
-                    )
-                    .await?;
-
-                indexer
-                    .concurrent_pipeline(
-                        $lagged_handler,
-                        $lagged_config.unwrap_or_default().finish(ConcurrentConfig {
-                            committer: committer.clone(),
-                            pruner: None,
-                            checkpoint_lag: Some(consistency.consistent_range),
-                        }),
-                    )
-                    .await?;
-            }
-        };
-    }
-
     if with_genesis {
         let genesis = bootstrap(&indexer, retry_interval, cancel.clone()).await?;
 
@@ -186,14 +172,13 @@ pub async fn start_indexer(
         add_concurrent!(KvProtocolConfigs(genesis.clone()), kv_protocol_configs);
     }
 
-    // Other summary tables (without write-ahead log)
+    // Consistent pipelines
+    add_consistent!(CoinBalanceBuckets::default(), coin_balance_buckets);
+    add_consistent!(ObjInfo::default(), obj_info);
+
+    // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);
     add_sequential!(SumPackages, sum_packages);
-
-    add_consistent!(
-        CoinBalanceBuckets, coin_balance_buckets;
-        CoinBalanceBucketsPruner, coin_balance_buckets_pruner
-    );
 
     // Unpruned concurrent pipelines
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
@@ -204,7 +189,6 @@ pub async fn start_indexer(
     add_concurrent!(KvEpochStarts, kv_epoch_starts);
     add_concurrent!(KvObjects, kv_objects);
     add_concurrent!(KvTransactions, kv_transactions);
-    add_concurrent!(ObjInfo::default(), obj_info);
     add_concurrent!(ObjVersions, obj_versions);
     add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);
@@ -213,9 +197,5 @@ pub async fn start_indexer(
     add_concurrent!(TxDigests, tx_digests);
     add_concurrent!(TxKinds, tx_kinds);
 
-    let h_indexer = indexer.run().await.context("Failed to start indexer")?;
-
-    cancel.cancelled().await;
-    let _ = h_indexer.await;
-    Ok(())
+    indexer.run().await.context("Failed to start indexer")
 }

@@ -1,0 +1,10 @@
+[package]
+name = "disassembly"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+disassembly = "0x0"
+std = "0x1"

@@ -61,6 +61,7 @@ const guides = [
 					'guides/developer/sui-101/access-time',
 					'guides/developer/sui-101/sign-and-send-txn',
 					'guides/developer/sui-101/sponsor-txn',
+					'guides/developer/sui-101/avoid-equivocation',
 					{
 						type: 'category',
 						label: 'Working with PTBs',

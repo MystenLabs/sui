@@ -1807,6 +1807,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         upgrade_capability: cap.reference.object_id,
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        verify_compatibility: true,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -1925,6 +1926,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         upgrade_capability: cap.reference.object_id,
         build_config: build_config.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        verify_compatibility: true,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -2072,6 +2074,7 @@ async fn test_package_management_on_upgrade_command_conflict() -> Result<(), any
         upgrade_capability: cap.reference.object_id,
         build_config: build_config_upgrade.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        verify_compatibility: true,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }

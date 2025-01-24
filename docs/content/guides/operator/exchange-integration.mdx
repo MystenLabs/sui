@@ -48,7 +48,7 @@ You can track balance changes by calling `sui_getBalance` at predefined interval
 
 The following bash example demonstrates how to use `sui_getBalance` for address `0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3`. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate Full node.
 
-```bash
+```sh
 rpc="https://fullnode.devnet.sui.io:443"
 address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
 data="{\"jsonrpc\": \"2.0\", \"method\": \"sui_getBalance\", \"id\": 1, \"params\": [\"$address\"]}"
@@ -95,7 +95,7 @@ async fn main() -> Result<(), anyhow::Error> {
 You can also track the balance for an address by subscribing to all of the events emitted from it. Use a filter to include only the events related to SUI coins, such as when the address acquires a coin or pays for a gas fee.
 The following example demonstrates how to filter events for an address using bash and cURL:
 
-```bash
+```sh
 rpc="https://fullnode.devnet.sui.io:443"
 address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
 data="{\"jsonrpc\": \"2.0\", \"id\":1, \"method\": \"sui_getEvents\", \"params\": [{\"Recipient\": {\"AddressOwner\": \"0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3\"}}, null, null, true ]}"
@@ -108,7 +108,7 @@ You can add the `txDigest` value instead of the first `null` within the `params`
 
 The `id` field of any transaction looks like:
 
-```bash
+```sh
 "id": {
     "txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2",
     "eventSeq": 6019
@@ -117,7 +117,7 @@ The `id` field of any transaction looks like:
 
 With this data, create a `nextCursor` as follows:
 
-```bash
+```sh
 nextCursor : {"txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2","eventSeq": 6019}
 ```
 

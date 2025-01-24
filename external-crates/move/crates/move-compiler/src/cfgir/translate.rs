@@ -167,6 +167,7 @@ pub fn program(
     let mut context = Context::new(compilation_env, &info);
 
     let modules = modules(&mut context, hmodules);
+    set_constant_value_types(&info, &modules);
 
     let mut program = G::Program {
         modules,
@@ -175,6 +176,25 @@ pub fn program(
     };
     visit_program(&mut context, &mut program);
     program
+}
+
+fn set_constant_value_types(
+    info: &TypingProgramInfo,
+    modules: &UniqueMap<ModuleIdent, G::ModuleDefinition>,
+) {
+    for (mname, mdef) in modules.key_cloned_iter() {
+        for (cname, cdef) in mdef.constants.key_cloned_iter() {
+            if let Some(value) = &cdef.value {
+                info.module(&mname)
+                    .constants
+                    .get(&cname)
+                    .unwrap()
+                    .value
+                    .set(value.clone())
+                    .unwrap();
+            }
+        }
+    }
 }
 
 fn modules(

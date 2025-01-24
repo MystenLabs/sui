@@ -12,7 +12,6 @@ use crate::{
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, lexer::*, token_set::*},
     shared::{string_utils::*, *},
-    MatchedFileCommentMap,
 };
 
 use move_command_line_common::files::FileHash;
@@ -546,6 +545,29 @@ macro_rules! ok_with_loc {
             result,
         ))
     }};
+}
+
+fn match_doc_comments(context: &mut Context) -> DocComment {
+    let comment_opt = context
+        .tokens
+        .take_doc_comment()
+        .map(|(start, end, comment)| {
+            let loc = Loc::new(context.tokens.file_hash(), start, end);
+            sp(loc, comment)
+        });
+    DocComment(comment_opt)
+}
+
+fn check_no_doc_comment(context: &mut Context, loc: Loc, case: &str, doc: DocComment) {
+    if let Some(doc_loc) = doc.loc() {
+        let doc_msg = "Unexpected documentation comment";
+        let msg = format!("Documentation comments are not supported on {case}");
+        context.add_diag(diag!(
+            Syntax::InvalidDocComment,
+            (doc_loc, doc_msg),
+            (loc, msg),
+        ));
+    }
 }
 
 //**************************************************************************************************
@@ -1129,12 +1151,9 @@ fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> 
 // Parse attributes. Used to annotate a variety of AST nodes
 //      Attributes = ("#" "[" Comma<Attribute> "]")*
 fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagnostic>> {
-    let mut doc_comments = context
-        .tokens
-        .read_doc_comments()
-        .map_or_else(Vec::new, |doc_comments| vec![doc_comments]);
     let mut attributes_vec = vec![];
     while let Tok::NumSign = context.tokens.peek() {
+        let saved_doc_comments = context.tokens.take_doc_comment();
         let start_loc = context.tokens.start_loc();
         context.tokens.advance()?;
         let attributes_ = parse_comma_list(
@@ -1152,17 +1171,8 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
             end_loc,
             attributes_,
         ));
-        if let Some(new_doc_comments) = context.tokens.read_doc_comments() {
-            doc_comments.push(new_doc_comments);
-        }
+        context.tokens.restore_doc_comment(saved_doc_comments);
     }
-
-    // Attaches the doc comments to the start of the location of the member that these
-    // attributes/doc comments are attached to.
-    if !doc_comments.is_empty() {
-        context.tokens.attach_doc_comments(doc_comments.join("\n"));
-    }
-
     Ok(attributes_vec)
 }
 
@@ -1547,7 +1557,13 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
     let mut uses = vec![];
     while context.tokens.peek() == Tok::Use {
         let start_loc = context.tokens.start_loc();
-        let tmp = parse_use_decl(vec![], start_loc, Modifiers::empty(), context)?;
+        let tmp = parse_use_decl(
+            DocComment::empty(),
+            vec![],
+            start_loc,
+            Modifiers::empty(),
+            context,
+        )?;
         uses.push(tmp);
     }
 
@@ -3217,6 +3233,7 @@ fn parse_datatype_type_parameter(
 //          ("{" <Sequence> "}" | ";")
 //
 fn parse_function_decl(
+    doc: DocComment,
     attributes: Vec<Attributes>,
     start_loc: usize,
     modifiers: Modifiers,
@@ -3274,6 +3291,7 @@ fn parse_function_decl(
     );
 
     Ok(Function {
+        doc,
         attributes,
         loc,
         visibility: visibility.unwrap_or(Visibility::Internal),
@@ -3392,6 +3410,7 @@ fn parse_body(context: &mut Context, native: Option<Loc>) -> Result<FunctionBody
 // Where the two "has" statements are mutually exclusive -- an enum cannot be declared with
 // both infix and postfix ability declarations.
 fn parse_enum_decl(
+    doc: DocComment,
     attributes: Vec<Attributes>,
     start_loc: usize,
     modifiers: Modifiers,
@@ -3457,6 +3476,7 @@ fn parse_enum_decl(
         context.tokens.previous_end_loc(),
     );
     Ok(EnumDefinition {
+        doc,
         attributes,
         loc,
         abilities,
@@ -3494,7 +3514,7 @@ fn parse_enum_variant_decls(
 // Parse an enum variant definition:
 //      VariantDecl = <Identifier> ("{" Comma<FieldAnnot> "}" | "(" Comma<PosField> ")")
 fn parse_enum_variant_decl(context: &mut Context) -> Result<VariantDefinition, Box<Diagnostic>> {
-    context.tokens.match_doc_comments();
+    let doc = match_doc_comments(context);
     let start_loc = context.tokens.start_loc();
     let name = parse_identifier(context)?;
     let fields = parse_enum_variant_fields(context)?;
@@ -3504,6 +3524,7 @@ fn parse_enum_variant_decl(context: &mut Context) -> Result<VariantDefinition, B
         context.tokens.previous_end_loc(),
     );
     Ok(VariantDefinition {
+        doc,
         loc,
         name: VariantName(name),
         fields,
@@ -3581,6 +3602,7 @@ fn check_enum_visibility(visibility: Option<Visibility>, context: &mut Context) 
 // Where the two "has" statements are mutually exclusive -- a struct cannot be declared with
 // both infix and postfix ability declarations.
 fn parse_struct_decl(
+    doc: DocComment,
     attributes: Vec<Attributes>,
     start_loc: usize,
     modifiers: Modifiers,
@@ -3680,6 +3702,7 @@ fn parse_struct_decl(
         context.tokens.previous_end_loc(),
     );
     Ok(StructDefinition {
+        doc,
         attributes,
         loc,
         abilities,
@@ -3711,18 +3734,18 @@ fn parse_struct_body(
 
 // Parse a field annotated with a type:
 //      FieldAnnot = <DocComments> <Field> ":" <Type>
-fn parse_field_annot(context: &mut Context) -> Result<(Field, Type), Box<Diagnostic>> {
-    context.tokens.match_doc_comments();
+fn parse_field_annot(context: &mut Context) -> Result<(DocComment, Field, Type), Box<Diagnostic>> {
+    let doc = match_doc_comments(context);
     let f = parse_field(context)?;
     consume_token(context.tokens, Tok::Colon)?;
     let st = parse_type(context)?;
-    Ok((f, st))
+    Ok((doc, f, st))
 }
 
 // Parse a positional struct field:
 //      PosField = <DocComments> <Type>
-fn parse_positional_field(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
-    context.tokens.match_doc_comments();
+fn parse_positional_field(context: &mut Context) -> Result<(DocComment, Type), Box<Diagnostic>> {
+    let doc = match_doc_comments(context);
     if matches!(
         (context.tokens.peek(), context.tokens.lookahead()),
         (Tok::Identifier, Ok(Tok::Colon))
@@ -3739,7 +3762,7 @@ fn parse_positional_field(context: &mut Context) -> Result<Type, Box<Diagnostic>
         context.tokens.advance()?;
         context.tokens.advance()?;
     }
-    parse_type(context)
+    Ok((doc, parse_type(context)?))
 }
 
 // Parse a infix ability declaration:
@@ -3910,6 +3933,7 @@ fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context
 // Parse a constant:
 //      ConstantDecl = "const" <Identifier> ":" <Type> "=" <Exp> ";"
 fn parse_constant_decl(
+    doc: DocComment,
     attributes: Vec<Attributes>,
     start_loc: usize,
     modifiers: Modifiers,
@@ -3951,6 +3975,7 @@ fn parse_constant_decl(
         context.tokens.previous_end_loc(),
     );
     Ok(Constant {
+        doc,
         attributes,
         loc,
         signature,
@@ -3969,6 +3994,7 @@ fn parse_constant_decl(
 //
 // Note that "address" is not a token.
 fn parse_address_block(
+    doc: DocComment,
     attributes: Vec<Attributes>,
     context: &mut Context,
 ) -> Result<AddressDefinition, Box<Diagnostic>> {
@@ -4021,7 +4047,8 @@ fn parse_address_block(
 
                 let mut attributes = parse_attributes(context)?;
                 loop {
-                    let (module, next_mod_attributes) = parse_module(attributes, context)?;
+                    let doc = match_doc_comments(context);
+                    let (module, next_mod_attributes) = parse_module(doc, attributes, context)?;
 
                     if in_migration_mode {
                         context.add_diag(diag!(
@@ -4079,6 +4106,7 @@ fn parse_address_block(
         context.add_diag(diag);
     }
 
+    check_no_doc_comment(context, loc, "'address' blocks", doc);
     Ok(AddressDefinition {
         attributes,
         loc,
@@ -4135,6 +4163,7 @@ fn parse_friend_decl(
 //          "use" <LeadingNameAccess> "::" "{" <Comma<UseModule>> "}" ";" |
 //          "use" <LeadingNameAccess> "::" <UseModule>> ";"
 fn parse_use_decl(
+    doc: DocComment,
     attributes: Vec<Attributes>,
     start_loc: usize,
     modifiers: Modifiers,
@@ -4269,6 +4298,7 @@ fn parse_use_decl(
     let end_loc = context.tokens.previous_end_loc();
     let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
     Ok(UseDecl {
+        doc,
         attributes,
         loc,
         use_,
@@ -4381,6 +4411,7 @@ fn parse_use_alias(context: &mut Context) -> Result<Option<Name>, Box<Diagnostic
 // and should be used when constructing this next module - hence making them part of the returned
 // result.
 fn parse_module(
+    doc: DocComment,
     attributes: Vec<Attributes>,
     context: &mut Context,
 ) -> Result<(ModuleDefinition, Option<Vec<Attributes>>), Box<Diagnostic>> {
@@ -4483,6 +4514,7 @@ fn parse_module(
         context.tokens.previous_end_loc(),
     );
     let def = ModuleDefinition {
+        doc,
         attributes,
         loc,
         address,
@@ -4551,24 +4583,25 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
             attributes, context,
         )?)),
         _ => {
+            let doc = match_doc_comments(context);
             let start_loc = context.tokens.start_loc();
             let modifiers = parse_module_member_modifiers(context)?;
             let tok = context.tokens.peek();
             match tok {
                 Tok::Const => Ok(ModuleMember::Constant(parse_constant_decl(
-                    attributes, start_loc, modifiers, context,
+                    doc, attributes, start_loc, modifiers, context,
                 )?)),
                 Tok::Fun => Ok(ModuleMember::Function(parse_function_decl(
-                    attributes, start_loc, modifiers, context,
+                    doc, attributes, start_loc, modifiers, context,
                 )?)),
                 Tok::Struct => Ok(ModuleMember::Struct(parse_struct_decl(
-                    attributes, start_loc, modifiers, context,
+                    doc, attributes, start_loc, modifiers, context,
                 )?)),
                 Tok::Enum => Ok(ModuleMember::Enum(parse_enum_decl(
-                    attributes, start_loc, modifiers, context,
+                    doc, attributes, start_loc, modifiers, context,
                 )?)),
                 Tok::Use => Ok(ModuleMember::Use(parse_use_decl(
-                    attributes, start_loc, modifiers, context,
+                    doc, attributes, start_loc, modifiers, context,
                 )?)),
                 _ => {
                     let diag = if matches!(context.tokens.peek(), Tok::Identifier)
@@ -4711,7 +4744,8 @@ fn parse_file_def(
     match context.tokens.peek() {
         Tok::Spec | Tok::Module => {
             loop {
-                let (module, next_mod_attributes) = parse_module(attributes, context)?;
+                let doc = match_doc_comments(context);
+                let (module, next_mod_attributes) = parse_module(doc, attributes, context)?;
                 if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon) {
                     if let Some(prev) = defs.last() {
                         let msg =
@@ -4734,11 +4768,30 @@ fn parse_file_def(
                 attributes = attrs;
             }
         }
-        _ => defs.push(Definition::Address(parse_address_block(
-            attributes, context,
-        )?)),
+        _ => {
+            let doc = match_doc_comments(context);
+            defs.push(Definition::Address(parse_address_block(
+                doc, attributes, context,
+            )?))
+        }
     }
     Ok(())
+}
+
+fn report_unmatched_doc_comments(context: &mut Context) {
+    let unmatched = context.tokens.take_unmatched_doc_comments();
+    let msg = "Documentation comment cannot be matched to a language item";
+    let diags = unmatched
+        .into_iter()
+        .map(|(start, end, _)| {
+            let loc = Loc::new(context.tokens.file_hash(), start, end);
+            diag!(Syntax::InvalidDocComment, (loc, msg))
+        })
+        .collect();
+    context
+        .env
+        .diagnostic_reporter_at_top_level()
+        .add_diags(diags);
 }
 
 /// Parse the `input` string as a file of Move source code and return the
@@ -4749,15 +4802,15 @@ pub fn parse_file_string(
     file_hash: FileHash,
     input: &str,
     package: Option<Symbol>,
-) -> Result<(Vec<Definition>, MatchedFileCommentMap), Diagnostics> {
+) -> Result<Vec<Definition>, Diagnostics> {
     let edition = env.edition(package);
     let mut tokens = Lexer::new(input, file_hash, edition);
     match tokens.advance() {
         Err(err) => Err(Diagnostics::from(vec![*err])),
         Ok(..) => Ok(()),
     }?;
-    Ok((
-        parse_file(&mut Context::new(env, &mut tokens, package)),
-        tokens.check_and_get_doc_comments(env),
-    ))
+    let context = &mut Context::new(env, &mut tokens, package);
+    let result = parse_file(context);
+    report_unmatched_doc_comments(context);
+    Ok(result)
 }

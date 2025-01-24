@@ -3263,6 +3263,25 @@ impl InputObjects {
         )
     }
 
+    pub fn deleted_consensus_objects(&self) -> BTreeMap<ObjectID, SequenceNumber> {
+        self.objects
+            .iter()
+            .filter_map(|obj| {
+                if let InputObjectKind::SharedMoveObject {
+                    id,
+                    initial_shared_version,
+                    ..
+                } = obj.input_object_kind
+                {
+                    obj.is_deleted_shared_object()
+                        .then_some((id, initial_shared_version))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
         self.objects
             .into_iter()

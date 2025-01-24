@@ -3239,6 +3239,7 @@ async fn test_store_revert_wrap_move_call() {
         .commit_transaction_outputs(
             authority_state.epoch_store_for_testing().epoch(),
             &[*create_effects.transaction_digest()],
+            true,
         )
         .await;
 
@@ -3338,6 +3339,7 @@ async fn test_store_revert_unwrap_move_call() {
                 *create_effects.transaction_digest(),
                 *wrap_effects.transaction_digest(),
             ],
+            true,
         )
         .await;
 
@@ -3617,6 +3619,7 @@ async fn test_store_revert_add_ofield() {
                 *create_outer_effects.transaction_digest(),
                 *create_inner_effects.transaction_digest(),
             ],
+            true,
         )
         .await;
 
@@ -3744,6 +3747,7 @@ async fn test_store_revert_remove_ofield() {
                 *create_inner_effects.transaction_digest(),
                 *add_effects.transaction_digest(),
             ],
+            true,
         )
         .await;
 

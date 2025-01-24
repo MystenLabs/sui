@@ -82,16 +82,7 @@ pub trait AccountKeystore: Send + Sync {
         if !self.alias_exists(old_alias) {
             bail!("The provided alias {old_alias} does not exist");
         }
-        let new_alias_name = match new_alias {
-            Some(x) => validate_alias(x)?,
-            None => random_name(
-                &self
-                    .alias_names()
-                    .into_iter()
-                    .map(|x| x.to_string())
-                    .collect::<HashSet<_>>(),
-            ),
-        };
+        let new_alias_name = self.create_alias(new_alias.map(str::to_string))?;
         for a in self.aliases_mut() {
             if a.alias == old_alias {
                 let pk = &a.public_key_base64;

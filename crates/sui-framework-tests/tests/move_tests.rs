@@ -58,7 +58,7 @@ pub(crate) fn tests(path: &Path) -> datatest_stable::Result<()> {
     testing_config.filter = std::env::var("FILTER").ok().map(|s| s.to_string());
 
     assert_eq!(
-        run_move_unit_tests(path, move_config, Some(testing_config), false).unwrap(),
+        run_move_unit_tests(path, move_config, Some(testing_config), false, false).unwrap(),
         UnitTestResult::Success
     );
 

@@ -3,6 +3,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::execution::ExecutionTiming;
 use sui_types::storage::BackingStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TxContext},
@@ -44,6 +45,7 @@ pub trait Executor {
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
+        Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     );
 

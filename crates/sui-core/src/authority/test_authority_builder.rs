@@ -236,7 +236,6 @@ impl<'a> TestAuthorityBuilder<'a> {
 
         let cache_traits = build_execution_cache(
             &Default::default(),
-            &epoch_start_configuration,
             &registry,
             &authority_store,
             backpressure_manager.clone(),
@@ -377,7 +376,14 @@ impl<'a> TestAuthorityBuilder<'a> {
 
         state
             .get_cache_commit()
-            .commit_transaction_outputs(epoch_store.epoch(), &[*genesis.transaction().digest()])
+            .commit_transaction_outputs(
+                epoch_store.epoch(),
+                &[*genesis.transaction().digest()],
+                epoch_store
+                    .protocol_config()
+                    .use_object_per_epoch_marker_table_v2_as_option()
+                    .unwrap_or(false),
+            )
             .await;
 
         // We want to insert these objects directly instead of relying on genesis because

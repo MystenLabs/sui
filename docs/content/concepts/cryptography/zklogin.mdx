@@ -313,7 +313,7 @@ The following options support a zkLogin signature over either transaction data o
 1. Use the [Sui Keytool CLI](../../references/cli/keytool.mdx). This is recommended for debug usage. 
 
    ```sh
-   $SUI_BINARY keytool zk-login-sig-verify --sig $ZKLOGIN_SIG --bytes $BYTES --intent-scope 3 --network devnet --curr-epoch 3
+   $ sui keytool zk-login-sig-verify --sig $ZKLOGIN_SIG --bytes $BYTES --intent-scope 3 --network devnet --curr-epoch 3
    ```
 
 1. Use a self-hosted server endpoint and call this endpoint, as described in [zklogin-verifier](https://github.com/MystenLabs/zklogin-verifier). This provides logic flexibility.

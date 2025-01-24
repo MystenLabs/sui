@@ -32,7 +32,7 @@ pub enum BalanceChange {
     },
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = kv_transactions)]
 pub struct StoredTransaction {
     pub tx_digest: Vec<u8>,
@@ -41,9 +41,10 @@ pub struct StoredTransaction {
     pub raw_transaction: Vec<u8>,
     pub raw_effects: Vec<u8>,
     pub events: Vec<u8>,
+    pub user_signatures: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = tx_affected_addresses)]
 pub struct StoredTxAffectedAddress {
     pub tx_sequence_number: i64,
@@ -53,7 +54,7 @@ pub struct StoredTxAffectedAddress {
     pub sender: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = tx_affected_objects)]
 pub struct StoredTxAffectedObject {
     pub tx_sequence_number: i64,
@@ -63,24 +64,24 @@ pub struct StoredTxAffectedObject {
     pub sender: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = tx_balance_changes)]
 pub struct StoredTxBalanceChange {
     pub tx_sequence_number: i64,
     pub balance_changes: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = tx_calls)]
 pub struct StoredTxCalls {
-    pub tx_sequence_number: i64,
     pub package: Vec<u8>,
     pub module: String,
     pub function: String,
+    pub tx_sequence_number: i64,
     pub sender: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = tx_digests)]
 pub struct StoredTxDigest {
     pub tx_sequence_number: i64,
@@ -95,7 +96,7 @@ pub enum StoredKind {
     ProgrammableTransaction = 1,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = tx_kinds)]
 pub struct StoredTxKind {
     pub tx_sequence_number: i64,

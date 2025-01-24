@@ -9,8 +9,9 @@ use sui_pg_db::{self as db, Db};
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
-use crate::{metrics::IndexerMetrics, watermarks::CommitterWatermark};
+use crate::{metrics::IndexerMetrics, models::watermarks::CommitterWatermark};
 
 use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
 
@@ -94,12 +95,6 @@ pub struct ConcurrentConfig {
 
     /// Configuration for the pruner, that deletes old data.
     pub pruner: Option<PrunerConfig>,
-
-    /// How many checkpoints lagged behind latest seen checkpoint to hold back writes for.
-    /// This is useful if pruning is implemented as a concurrent pipeline, and it must be behind
-    /// the pipeline it tries to prune from by a certain number of checkpoints, to ensure
-    /// consistency reads remain valid for a certain amount of time.
-    pub checkpoint_lag: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -116,6 +111,9 @@ pub struct PrunerConfig {
 
     /// The maximum range to try and prune in one request, measured in checkpoints.
     pub max_chunk_size: u64,
+
+    /// The max number of tasks to run in parallel for pruning.
+    pub prune_concurrency: u64,
 }
 
 /// Values ready to be written to the database. This is an internal type used to communicate
@@ -167,6 +165,7 @@ impl Default for PrunerConfig {
             delay_ms: 120_000,
             retention: 4_000_000,
             max_chunk_size: 2_000,
+            prune_concurrency: 1,
         }
     }
 }
@@ -201,10 +200,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
+    info!(
+        pipeline = H::NAME,
+        "Starting pipeline with config: {:?}", config
+    );
     let ConcurrentConfig {
         committer: committer_config,
         pruner: pruner_config,
-        checkpoint_lag,
     } = config;
 
     let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
@@ -230,7 +232,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let collector = collector::<H>(
         committer_config.clone(),
-        checkpoint_lag,
         collector_rx,
         collector_tx,
         metrics.clone(),

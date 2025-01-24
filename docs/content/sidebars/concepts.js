@@ -63,11 +63,6 @@ const concepts = [
 					id: 'concepts/sui-move-concepts',
 				},
 				items: [
-					'concepts/sui-move-concepts/strings',
-					'concepts/sui-move-concepts/collections',
-					'concepts/sui-move-concepts/init',
-					'concepts/sui-move-concepts/entry-functions',
-					'concepts/sui-move-concepts/one-time-witness',
 					{
 						type: 'category',
 						label: 'Packages',
@@ -168,12 +163,8 @@ const concepts = [
 			id: 'concepts/tokenomics',
 		},
 		items: [
-			'concepts/tokenomics/proof-of-stake',
-			'concepts/tokenomics/validators-staking',
 			'concepts/tokenomics/staking-unstaking',
-			'concepts/tokenomics/sui-coin',
 			'concepts/tokenomics/sui-bridging',
-			'concepts/tokenomics/storage-fund',
 			'concepts/tokenomics/gas-pricing',
 			'concepts/tokenomics/gas-in-sui',
 		],

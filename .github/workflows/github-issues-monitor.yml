@@ -4,7 +4,22 @@ on:
   issues:
     types: [opened]
 
-jobs: 
+jobs:
+  comment:
+    if: ${{ !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add Comment to New Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "Thank you for opening this issue, a team member will review it shortly. Until then, please do not interact with any users that claim to be from Sui support and do not click on any links!"
+            })
+
   notify-issues:
     name: Dispatch workflow to notify slack channel on issues
     if: github.event_name == 'issues'
@@ -12,9 +27,8 @@ jobs:
     steps:
       - name: Dispatch github-issues-external-prs-monitor in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
-        with: 
+        with:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
           event-type: github-issues-external-prs-monitor
           client-payload: '{"author": "${{github.event.issue.user.login}}", "event_name": "issue", "issue_number": "${{github.event.issue.number}}"}'
-

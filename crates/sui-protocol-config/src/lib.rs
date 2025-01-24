@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 71;
+const MAX_PROTOCOL_VERSION: u64 = 72;
 
 // Record history of protocol version allocations here:
 //
@@ -204,6 +204,11 @@ const MAX_PROTOCOL_VERSION: u64 = 71;
 //             Add std::uq64_64 module to Move stdlib.
 //             Improve gas/wall time efficiency of some Move stdlib vector functions
 // Version 71: [SIP-45] Enable consensus amplification.
+// Version 72: Fix issue where `convert_type_argument_error` wasn't being used in all cases.
+//             Max gas budget moved to 50_000 SUI
+//             Max gas price moved to 50 SUI
+//             Variants as type nodes.
+//             Enable new marker table version.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -588,6 +593,19 @@ struct FeatureFlags {
     // Enable v2 native charging for natives.
     #[serde(skip_serializing_if = "is_false")]
     native_charging_v2: bool,
+
+    // Enables the new logic for collecting the subdag in the consensus linearizer. The new logic does not stop the recursion at the highest
+    // committed round for each authority, but allows to commit uncommitted blocks up to gc round (excluded) for that authority.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_linearize_subdag_v2: bool,
+
+    // Properly convert certain type argument errors in the execution layer.
+    #[serde(skip_serializing_if = "is_false")]
+    convert_type_argument_error: bool,
+
+    // Variants count as nodes
+    #[serde(skip_serializing_if = "is_false")]
+    variant_nodes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1341,6 +1359,9 @@ pub struct ProtocolConfig {
     /// SIP-45: K in the formula `amplification_factor = max(0, gas_price / reference_gas_price - K)`.
     /// This is the threshold for activating consensus amplification.
     sip_45_consensus_amplification_threshold: Option<u64>,
+
+    /// Enables use of v2 of the object per-epoch marker table with FullObjectID keys.
+    use_object_per_epoch_marker_table_v2: Option<bool>,
 }
 
 // feature flags
@@ -1731,6 +1752,23 @@ impl ProtocolConfig {
 
     pub fn native_charging_v2(&self) -> bool {
         self.feature_flags.native_charging_v2
+    }
+
+    pub fn consensus_linearize_subdag_v2(&self) -> bool {
+        let res = self.feature_flags.consensus_linearize_subdag_v2;
+        assert!(
+            !res || self.gc_depth() > 0,
+            "The consensus linearize sub dag V2 requires GC to be enabled"
+        );
+        res
+    }
+
+    pub fn convert_type_argument_error(&self) -> bool {
+        self.feature_flags.convert_type_argument_error
+    }
+
+    pub fn variant_nodes(&self) -> bool {
+        self.feature_flags.variant_nodes
     }
 }
 
@@ -2266,6 +2304,8 @@ impl ProtocolConfig {
             gas_budget_based_txn_cost_absolute_cap_commit_count: None,
 
             sip_45_consensus_amplification_threshold: None,
+
+            use_object_per_epoch_marker_table_v2: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3105,6 +3145,20 @@ impl ProtocolConfig {
                     // Enable bursts for congestion control. (10x the per-commit budget)
                     cfg.allowed_txn_cost_overage_burst_per_object_in_commit = Some(185_000_000);
                 }
+                72 => {
+                    cfg.feature_flags.convert_type_argument_error = true;
+
+                    // Invariant: max_gas_price * base_tx_cost_fixed <= max_tx_gas
+                    // max gas budget is in MIST and an absolute value 50_000 SUI
+                    cfg.max_tx_gas = Some(50_000_000_000_000);
+                    // max gas price is in MIST and an absolute value 50 SUI
+                    cfg.max_gas_price = Some(50_000_000_000);
+
+                    cfg.feature_flags.variant_nodes = true;
+
+                    // Enable new marker table version.
+                    cfg.use_object_per_epoch_marker_table_v2 = Some(true);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -3275,6 +3329,10 @@ impl ProtocolConfig {
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {
         self.feature_flags
             .consensus_round_prober_probe_accepted_rounds = val;
+    }
+
+    pub fn set_consensus_linearize_subdag_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_linearize_subdag_v2 = val;
     }
 }
 

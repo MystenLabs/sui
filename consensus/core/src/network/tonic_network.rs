@@ -6,7 +6,7 @@ use std::{
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
     pin::Pin,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use async_trait::async_trait;
@@ -32,7 +32,7 @@ use super::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
     },
-    BlockStream, NetworkClient, NetworkManager, NetworkService,
+    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
@@ -129,7 +129,10 @@ impl NetworkClient for TonicClient {
             .take_while(|b| futures::future::ready(b.is_ok()))
             .filter_map(move |b| async move {
                 match b {
-                    Ok(response) => Some(response.block),
+                    Ok(response) => Some(ExtendedSerializedBlock {
+                        block: response.block,
+                        excluded_ancestors: response.excluded_ancestors,
+                    }),
                     Err(e) => {
                         debug!("Network error received from {}: {e:?}", peer);
                         None
@@ -448,6 +451,10 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
         let block = request.into_inner().block;
+        let block = ExtendedSerializedBlock {
+            block,
+            excluded_ancestors: vec![],
+        };
         self.service
             .handle_send_block(peer_index, block)
             .await
@@ -488,7 +495,12 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             .handle_subscribe_blocks(peer_index, first_request.last_received_round)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
-            .map(|block| Ok(SubscribeBlocksResponse { block }));
+            .map(|block| {
+                Ok(SubscribeBlocksResponse {
+                    block: block.block,
+                    excluded_ancestors: block.excluded_ancestors,
+                })
+            });
         let rate_limited_stream =
             tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
                 .boxed();
@@ -775,18 +787,37 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             }
         }
 
-        let server = sui_http::Builder::new()
-            .config(
-                sui_http::Config::default()
-                    .initial_connection_window_size(64 << 20)
-                    .initial_stream_window_size(32 << 20)
-                    .http2_keepalive_interval(Some(config.keepalive_interval))
-                    .http2_keepalive_timeout(Some(config.keepalive_interval))
-                    .accept_http1(false),
-            )
-            .tls_config(tls_server_config)
-            .serve(own_address, consensus_service)
-            .unwrap();
+        let http_config = sui_http::Config::default()
+            .tcp_nodelay(true)
+            .initial_connection_window_size(64 << 20)
+            .initial_stream_window_size(32 << 20)
+            .http2_keepalive_interval(Some(config.keepalive_interval))
+            .http2_keepalive_timeout(Some(config.keepalive_interval))
+            .accept_http1(false);
+
+        // Create server
+        //
+        // During simtest crash/restart tests there may be an older instance of consensus running
+        // that is bound to the TCP port of `own_address` that hasn't finished relinquishing
+        // control of the port yet. So instead of crashing when the address is inuse, we will retry
+        // for a short/reasonable period of time before giving up.
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let server = loop {
+            match sui_http::Builder::new()
+                .config(http_config.clone())
+                .tls_config(tls_server_config.clone())
+                .serve(own_address, consensus_service.clone())
+            {
+                Ok(server) => break server,
+                Err(err) => {
+                    warn!("Error starting consensus server: {err:?}");
+                    if Instant::now() > deadline {
+                        panic!("Failed to start consensus server within required deadline");
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        };
 
         info!("Server started at: {own_address}");
         self.server = Some(server);
@@ -1013,6 +1044,9 @@ pub(crate) struct SubscribeBlocksRequest {
 pub(crate) struct SubscribeBlocksResponse {
     #[prost(bytes = "bytes", tag = "1")]
     block: Bytes,
+    // Serialized BlockRefs that are excluded from the blocks ancestors.
+    #[prost(bytes = "vec", repeated, tag = "2")]
+    excluded_ancestors: Vec<Vec<u8>>,
 }
 
 #[derive(Clone, prost::Message)]

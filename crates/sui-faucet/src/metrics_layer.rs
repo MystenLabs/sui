@@ -175,10 +175,13 @@ impl MetricsGuard {
                     self.path, elapsed, err
                 );
             } else if let Some(status) = status {
-                error!(
-                    "Request failed for path {} in {:.2}s with status: {}",
-                    self.path, elapsed, status
-                );
+                // don't log too many requests as an error, as we're flooding the logs
+                if status != StatusCode::TOO_MANY_REQUESTS {
+                    error!(
+                        "Request failed for path {} in {:.2}s with status: {}",
+                        self.path, elapsed, status
+                    );
+                }
             } else {
                 warn!("Request failed for path {} in {:.2}s", self.path, elapsed);
             }
