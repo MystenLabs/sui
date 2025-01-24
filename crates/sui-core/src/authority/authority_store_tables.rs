@@ -204,10 +204,12 @@ impl AuthorityPerpetualTables {
         let bloom_config =  KeySpaceConfig::new().with_bloom_filter();
         let objects = builder.add_key_space_config("objects", 32 + 8, MUTEXES, default_cells_per_mutex(), objects_config);
         let live_owned_object_markers = builder.add_key_space_config("live_owned_object_markers", 32 + 8 + 32 + 8, MUTEXES, default_cells_per_mutex(), bloom_config.clone());
-        let transactions = builder.add_key_space("transactions", 32, MUTEXES, default_cells_per_mutex());
-        let effects_config = bloom_config.clone().with_value_cache_size(60_000);
+        let transactions_config = KeySpaceConfig::new().with_value_cache_size(20_000);
+        let transactions = builder.add_key_space_config("transactions", 32, MUTEXES, default_cells_per_mutex(), transactions_config);
+        let effects_config = bloom_config.clone().with_value_cache_size(20_000);
         let effects = builder.add_key_space_config("effects", 32, MUTEXES, default_cells_per_mutex(), effects_config);
-        let executed_effects = builder.add_key_space_config("executed_effects",32, MUTEXES, default_cells_per_mutex(), bloom_config);
+        let executed_effects_config = bloom_config.clone().with_value_cache_size(20_000);
+        let executed_effects = builder.add_key_space_config("executed_effects",32, MUTEXES, default_cells_per_mutex(), executed_effects_config);
         let events = builder.add_key_space("events", 32 + 8, MUTEXES, default_cells_per_mutex());
         let executed_transactions_to_checkpoint =
             builder.add_key_space("executed_transactions_to_checkpoint", 32, MUTEXES, default_cells_per_mutex());
@@ -228,14 +230,12 @@ impl AuthorityPerpetualTables {
         // the size of the prefix is 25% of the useful key length, so not negligible.
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
-        let mut effects = ThDbMap::new_with_rm_prefix(&thdb, effects, digest_prefix.clone());
-        effects.log_get = true;
         Self {
             objects: ThDbMap::new(&thdb, objects),
             indirect_move_objects: ThDbMap::new(&thdb, indirect_move_objects),
             live_owned_object_markers: ThDbMap::new(&thdb, live_owned_object_markers),
             transactions: ThDbMap::new_with_rm_prefix(&thdb, transactions, digest_prefix.clone()),
-            effects,
+            effects: ThDbMap::new_with_rm_prefix(&thdb, effects, digest_prefix.clone()),
             executed_effects: ThDbMap::new_with_rm_prefix(
                 &thdb,
                 executed_effects,
