@@ -43,14 +43,14 @@ let leftovers = prepared.into_remainder_bytes();
 -  [Function `peel_address`](#sui_bcs_peel_address)
 -  [Function `peel_bool`](#sui_bcs_peel_bool)
 -  [Function `peel_u8`](#sui_bcs_peel_u8)
--  [Function `peel_num`](#sui_bcs_peel_num)
+-  [Macro function `peel_num`](#sui_bcs_peel_num)
 -  [Function `peel_u16`](#sui_bcs_peel_u16)
 -  [Function `peel_u32`](#sui_bcs_peel_u32)
 -  [Function `peel_u64`](#sui_bcs_peel_u64)
 -  [Function `peel_u128`](#sui_bcs_peel_u128)
 -  [Function `peel_u256`](#sui_bcs_peel_u256)
 -  [Function `peel_vec_length`](#sui_bcs_peel_vec_length)
--  [Function `peel_vec`](#sui_bcs_peel_vec)
+-  [Macro function `peel_vec`](#sui_bcs_peel_vec)
 -  [Function `peel_vec_address`](#sui_bcs_peel_vec_address)
 -  [Function `peel_vec_bool`](#sui_bcs_peel_vec_bool)
 -  [Function `peel_vec_u8`](#sui_bcs_peel_vec_u8)
@@ -60,7 +60,7 @@ let leftovers = prepared.into_remainder_bytes();
 -  [Function `peel_vec_u64`](#sui_bcs_peel_vec_u64)
 -  [Function `peel_vec_u128`](#sui_bcs_peel_vec_u128)
 -  [Function `peel_vec_u256`](#sui_bcs_peel_vec_u256)
--  [Function `peel_option`](#sui_bcs_peel_option)
+-  [Macro function `peel_option`](#sui_bcs_peel_option)
 -  [Function `peel_option_address`](#sui_bcs_peel_option_address)
 -  [Function `peel_option_bool`](#sui_bcs_peel_option_bool)
 -  [Function `peel_option_u8`](#sui_bcs_peel_option_u8)
@@ -314,7 +314,7 @@ Read <code>u8</code> value from bcs-serialized bytes.
 
 <a name="sui_bcs_peel_num"></a>
 
-## Function `peel_num`
+## Macro function `peel_num`
 
 
 
@@ -511,7 +511,7 @@ See more here: https://en.wikipedia.org/wiki/LEB128
 
 <a name="sui_bcs_peel_vec"></a>
 
-## Function `peel_vec`
+## Macro function `peel_vec`
 
 Peel <code>vector&lt;$T&gt;</code> from serialized bytes, where <code>$peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>| -&gt; $T</code> gives the
 functionality of peeling each value.
@@ -770,7 +770,7 @@ Peel a vector of <code>u256</code> from serialized bytes.
 
 <a name="sui_bcs_peel_option"></a>
 
-## Function `peel_option`
+## Macro function `peel_option`
 
 Peel <code>Option&lt;$T&gt;</code> from serialized bytes, where <code>$peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>| -&gt; $T</code> gives the
 functionality of peeling the inner value.

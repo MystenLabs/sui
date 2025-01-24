@@ -21,11 +21,11 @@ for external tools. The difference is otherwise not observable from within Move.
 -  [Function `internal_borrow_mut`](#sui_dynamic_object_field_internal_borrow_mut)
 -  [Function `internal_remove`](#sui_dynamic_object_field_internal_remove)
 -  [Function `internal_exists_with_type`](#sui_dynamic_object_field_internal_exists_with_type)
--  [Function `add_impl`](#sui_dynamic_object_field_add_impl)
--  [Function `borrow_impl`](#sui_dynamic_object_field_borrow_impl)
--  [Function `borrow_mut_impl`](#sui_dynamic_object_field_borrow_mut_impl)
--  [Function `remove_impl`](#sui_dynamic_object_field_remove_impl)
--  [Function `exists_with_type_impl`](#sui_dynamic_object_field_exists_with_type_impl)
+-  [Macro function `add_impl`](#sui_dynamic_object_field_add_impl)
+-  [Macro function `borrow_impl`](#sui_dynamic_object_field_borrow_impl)
+-  [Macro function `borrow_mut_impl`](#sui_dynamic_object_field_borrow_mut_impl)
+-  [Macro function `remove_impl`](#sui_dynamic_object_field_remove_impl)
+-  [Macro function `exists_with_type_impl`](#sui_dynamic_object_field_exists_with_type_impl)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -414,7 +414,7 @@ Returns none otherwise
 
 <a name="sui_dynamic_object_field_add_impl"></a>
 
-## Function `add_impl`
+## Macro function `add_impl`
 
 
 
@@ -450,7 +450,7 @@ Returns none otherwise
 
 <a name="sui_dynamic_object_field_borrow_impl"></a>
 
-## Function `borrow_impl`
+## Macro function `borrow_impl`
 
 
 
@@ -481,7 +481,7 @@ Returns none otherwise
 
 <a name="sui_dynamic_object_field_borrow_mut_impl"></a>
 
-## Function `borrow_mut_impl`
+## Macro function `borrow_mut_impl`
 
 
 
@@ -512,7 +512,7 @@ Returns none otherwise
 
 <a name="sui_dynamic_object_field_remove_impl"></a>
 
-## Function `remove_impl`
+## Macro function `remove_impl`
 
 
 
@@ -545,7 +545,7 @@ Returns none otherwise
 
 <a name="sui_dynamic_object_field_exists_with_type_impl"></a>
 
-## Function `exists_with_type_impl`
+## Macro function `exists_with_type_impl`
 
 
 

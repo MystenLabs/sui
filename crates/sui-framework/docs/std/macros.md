@@ -5,29 +5,29 @@ title: Module `std::macros`
 This module holds shared implementation of macros used in <code>std</code>
 
 
--  [Function `num_max`](#std_macros_num_max)
--  [Function `num_min`](#std_macros_num_min)
--  [Function `num_diff`](#std_macros_num_diff)
--  [Function `num_divide_and_round_up`](#std_macros_num_divide_and_round_up)
--  [Function `num_pow`](#std_macros_num_pow)
--  [Function `num_sqrt`](#std_macros_num_sqrt)
--  [Function `num_to_string`](#std_macros_num_to_string)
--  [Function `range_do`](#std_macros_range_do)
--  [Function `range_do_eq`](#std_macros_range_do_eq)
--  [Function `do`](#std_macros_do)
--  [Function `do_eq`](#std_macros_do_eq)
--  [Function `try_as_u8`](#std_macros_try_as_u8)
--  [Function `try_as_u16`](#std_macros_try_as_u16)
--  [Function `try_as_u32`](#std_macros_try_as_u32)
--  [Function `try_as_u64`](#std_macros_try_as_u64)
--  [Function `try_as_u128`](#std_macros_try_as_u128)
--  [Function `uq_from_quotient`](#std_macros_uq_from_quotient)
--  [Function `uq_from_int`](#std_macros_uq_from_int)
--  [Function `uq_add`](#std_macros_uq_add)
--  [Function `uq_sub`](#std_macros_uq_sub)
--  [Function `uq_to_int`](#std_macros_uq_to_int)
--  [Function `uq_int_mul`](#std_macros_uq_int_mul)
--  [Function `uq_int_div`](#std_macros_uq_int_div)
+-  [Macro function `num_max`](#std_macros_num_max)
+-  [Macro function `num_min`](#std_macros_num_min)
+-  [Macro function `num_diff`](#std_macros_num_diff)
+-  [Macro function `num_divide_and_round_up`](#std_macros_num_divide_and_round_up)
+-  [Macro function `num_pow`](#std_macros_num_pow)
+-  [Macro function `num_sqrt`](#std_macros_num_sqrt)
+-  [Macro function `num_to_string`](#std_macros_num_to_string)
+-  [Macro function `range_do`](#std_macros_range_do)
+-  [Macro function `range_do_eq`](#std_macros_range_do_eq)
+-  [Macro function `do`](#std_macros_do)
+-  [Macro function `do_eq`](#std_macros_do_eq)
+-  [Macro function `try_as_u8`](#std_macros_try_as_u8)
+-  [Macro function `try_as_u16`](#std_macros_try_as_u16)
+-  [Macro function `try_as_u32`](#std_macros_try_as_u32)
+-  [Macro function `try_as_u64`](#std_macros_try_as_u64)
+-  [Macro function `try_as_u128`](#std_macros_try_as_u128)
+-  [Macro function `uq_from_quotient`](#std_macros_uq_from_quotient)
+-  [Macro function `uq_from_int`](#std_macros_uq_from_int)
+-  [Macro function `uq_add`](#std_macros_uq_add)
+-  [Macro function `uq_sub`](#std_macros_uq_sub)
+-  [Macro function `uq_to_int`](#std_macros_uq_to_int)
+-  [Macro function `uq_int_mul`](#std_macros_uq_int_mul)
+-  [Macro function `uq_int_div`](#std_macros_uq_int_div)
 
 
 <pre><code></code></pre>
@@ -36,7 +36,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_max"></a>
 
-## Function `num_max`
+## Macro function `num_max`
 
 
 
@@ -63,7 +63,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_min"></a>
 
-## Function `num_min`
+## Macro function `num_min`
 
 
 
@@ -90,7 +90,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_diff"></a>
 
-## Function `num_diff`
+## Macro function `num_diff`
 
 
 
@@ -117,7 +117,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_divide_and_round_up"></a>
 
-## Function `num_divide_and_round_up`
+## Macro function `num_divide_and_round_up`
 
 
 
@@ -144,7 +144,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_pow"></a>
 
-## Function `num_pow`
+## Macro function `num_pow`
 
 
 
@@ -180,7 +180,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_sqrt"></a>
 
-## Function `num_sqrt`
+## Macro function `num_sqrt`
 
 
 
@@ -217,7 +217,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_to_string"></a>
 
-## Function `num_to_string`
+## Macro function `num_to_string`
 
 
 
@@ -251,7 +251,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_range_do"></a>
 
-## Function `range_do`
+## Macro function `range_do`
 
 
 
@@ -280,7 +280,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_range_do_eq"></a>
 
-## Function `range_do_eq`
+## Macro function `range_do_eq`
 
 
 
@@ -315,7 +315,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_do"></a>
 
-## Function `do`
+## Macro function `do`
 
 
 
@@ -339,7 +339,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_do_eq"></a>
 
-## Function `do_eq`
+## Macro function `do_eq`
 
 
 
@@ -363,7 +363,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_try_as_u8"></a>
 
-## Function `try_as_u8`
+## Macro function `try_as_u8`
 
 
 
@@ -389,7 +389,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_try_as_u16"></a>
 
-## Function `try_as_u16`
+## Macro function `try_as_u16`
 
 
 
@@ -415,7 +415,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_try_as_u32"></a>
 
-## Function `try_as_u32`
+## Macro function `try_as_u32`
 
 
 
@@ -441,7 +441,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_try_as_u64"></a>
 
-## Function `try_as_u64`
+## Macro function `try_as_u64`
 
 
 
@@ -467,7 +467,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_try_as_u128"></a>
 
-## Function `try_as_u128`
+## Macro function `try_as_u128`
 
 
 
@@ -493,7 +493,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_uq_from_quotient"></a>
 
-## Function `uq_from_quotient`
+## Macro function `uq_from_quotient`
 
 Creates a fixed-point value from a quotient specified by its numerator and denominator.
 <code>$T</code> is the underlying integer type for the fixed-point value, where <code>$T</code> has <code>$t_bits</code> bits.
@@ -547,7 +547,7 @@ plus fractional).
 
 <a name="std_macros_uq_from_int"></a>
 
-## Function `uq_from_int`
+## Macro function `uq_from_int`
 
 
 
@@ -571,7 +571,7 @@ plus fractional).
 
 <a name="std_macros_uq_add"></a>
 
-## Function `uq_add`
+## Macro function `uq_add`
 
 
 
@@ -597,7 +597,7 @@ plus fractional).
 
 <a name="std_macros_uq_sub"></a>
 
-## Function `uq_sub`
+## Macro function `uq_sub`
 
 
 
@@ -624,7 +624,7 @@ plus fractional).
 
 <a name="std_macros_uq_to_int"></a>
 
-## Function `uq_to_int`
+## Macro function `uq_to_int`
 
 
 
@@ -648,7 +648,7 @@ plus fractional).
 
 <a name="std_macros_uq_int_mul"></a>
 
-## Function `uq_int_mul`
+## Macro function `uq_int_mul`
 
 
 
@@ -687,7 +687,7 @@ plus fractional).
 
 <a name="std_macros_uq_int_div"></a>
 
-## Function `uq_int_div`
+## Macro function `uq_int_div`
 
 
 

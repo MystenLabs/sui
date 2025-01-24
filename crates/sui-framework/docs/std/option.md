@@ -24,18 +24,18 @@ This module defines the Option type and its methods to represent and handle an o
 -  [Function `destroy_some`](#std_option_destroy_some)
 -  [Function `destroy_none`](#std_option_destroy_none)
 -  [Function `to_vec`](#std_option_to_vec)
--  [Function `destroy`](#std_option_destroy)
--  [Function `do`](#std_option_do)
--  [Function `do_ref`](#std_option_do_ref)
--  [Function `do_mut`](#std_option_do_mut)
--  [Function `or`](#std_option_or)
--  [Function `and`](#std_option_and)
--  [Function `and_ref`](#std_option_and_ref)
--  [Function `map`](#std_option_map)
--  [Function `map_ref`](#std_option_map_ref)
--  [Function `filter`](#std_option_filter)
--  [Function `is_some_and`](#std_option_is_some_and)
--  [Function `destroy_or`](#std_option_destroy_or)
+-  [Macro function `destroy`](#std_option_destroy)
+-  [Macro function `do`](#std_option_do)
+-  [Macro function `do_ref`](#std_option_do_ref)
+-  [Macro function `do_mut`](#std_option_do_mut)
+-  [Macro function `or`](#std_option_or)
+-  [Macro function `and`](#std_option_and)
+-  [Macro function `and_ref`](#std_option_and_ref)
+-  [Macro function `map`](#std_option_map)
+-  [Macro function `map_ref`](#std_option_map_ref)
+-  [Macro function `filter`](#std_option_filter)
+-  [Macro function `is_some_and`](#std_option_is_some_and)
+-  [Macro function `destroy_or`](#std_option_destroy_or)
 
 
 <pre><code><b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
@@ -564,7 +564,7 @@ and an empty vector otherwise
 
 <a name="std_option_destroy"></a>
 
-## Function `destroy`
+## Macro function `destroy`
 
 Destroy <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> and call the closure <code>f</code> on the value inside if it holds one.
 
@@ -590,7 +590,7 @@ Destroy <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</
 
 <a name="std_option_do"></a>
 
-## Function `do`
+## Macro function `do`
 
 Destroy <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> and call the closure <code>f</code> on the value inside if it holds one.
 
@@ -617,7 +617,7 @@ Destroy <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</
 
 <a name="std_option_do_ref"></a>
 
-## Function `do_ref`
+## Macro function `do_ref`
 
 Execute a closure on the value inside <code>t</code> if it holds one.
 
@@ -643,7 +643,7 @@ Execute a closure on the value inside <code>t</code> if it holds one.
 
 <a name="std_option_do_mut"></a>
 
-## Function `do_mut`
+## Macro function `do_mut`
 
 Execute a closure on the mutable reference to the value inside <code>t</code> if it holds one.
 
@@ -669,7 +669,7 @@ Execute a closure on the mutable reference to the value inside <code>t</code> if
 
 <a name="std_option_or"></a>
 
-## Function `or`
+## Macro function `or`
 
 Select the first <code>Some</code> value from the two options, or <code>None</code> if both are <code>None</code>.
 Equivalent to Rust's <code>a.<a href="../std/option.md#std_option_or">or</a>(b)</code>.
@@ -701,7 +701,7 @@ Equivalent to Rust's <code>a.<a href="../std/option.md#std_option_or">or</a>(b)<
 
 <a name="std_option_and"></a>
 
-## Function `and`
+## Macro function `and`
 
 If the value is <code>Some</code>, call the closure <code>f</code> on it. Otherwise, return <code>None</code>.
 Equivalent to Rust's <code>t.and_then(f)</code>.
@@ -733,7 +733,7 @@ Equivalent to Rust's <code>t.and_then(f)</code>.
 
 <a name="std_option_and_ref"></a>
 
-## Function `and_ref`
+## Macro function `and_ref`
 
 If the value is <code>Some</code>, call the closure <code>f</code> on it. Otherwise, return <code>None</code>.
 Equivalent to Rust's <code>t.and_then(f)</code>.
@@ -761,7 +761,7 @@ Equivalent to Rust's <code>t.and_then(f)</code>.
 
 <a name="std_option_map"></a>
 
-## Function `map`
+## Macro function `map`
 
 Map an <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> to <code><a href="../std/option.md#std_option_Option">Option</a>&lt;U&gt;</code> by applying a function to a contained value.
 Equivalent to Rust's <code>t.<a href="../std/option.md#std_option_map">map</a>(f)</code>.
@@ -793,7 +793,7 @@ Equivalent to Rust's <code>t.<a href="../std/option.md#std_option_map">map</a>(f
 
 <a name="std_option_map_ref"></a>
 
-## Function `map_ref`
+## Macro function `map_ref`
 
 Map an <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> value to <code><a href="../std/option.md#std_option_Option">Option</a>&lt;U&gt;</code> by applying a function to a contained value by reference.
 Original <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> is preserved.
@@ -822,7 +822,7 @@ Equivalent to Rust's <code>t.<a href="../std/option.md#std_option_map">map</a>(f
 
 <a name="std_option_filter"></a>
 
-## Function `filter`
+## Macro function `filter`
 
 Return <code>None</code> if the value is <code>None</code>, otherwise return <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> if the predicate <code>f</code> returns true.
 
@@ -849,7 +849,7 @@ Return <code>None</code> if the value is <code>None</code>, otherwise return <co
 
 <a name="std_option_is_some_and"></a>
 
-## Function `is_some_and`
+## Macro function `is_some_and`
 
 Return <code><b>false</b></code> if the value is <code>None</code>, otherwise return the result of the predicate <code>f</code>.
 
@@ -875,7 +875,7 @@ Return <code><b>false</b></code> if the value is <code>None</code>, otherwise re
 
 <a name="std_option_destroy_or"></a>
 
-## Function `destroy_or`
+## Macro function `destroy_or`
 
 Destroy <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> and return the value inside if it holds one, or <code>default</code> otherwise.
 Equivalent to Rust's <code>t.unwrap_or(default)</code>.

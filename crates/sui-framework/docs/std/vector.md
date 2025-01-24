@@ -24,27 +24,27 @@ vectors are growable. This module has many native functions.
 -  [Function `remove`](#std_vector_remove)
 -  [Function `insert`](#std_vector_insert)
 -  [Function `swap_remove`](#std_vector_swap_remove)
--  [Function `tabulate`](#std_vector_tabulate)
--  [Function `destroy`](#std_vector_destroy)
--  [Function `do`](#std_vector_do)
--  [Function `do_ref`](#std_vector_do_ref)
--  [Function `do_mut`](#std_vector_do_mut)
--  [Function `map`](#std_vector_map)
--  [Function `map_ref`](#std_vector_map_ref)
--  [Function `filter`](#std_vector_filter)
--  [Function `partition`](#std_vector_partition)
--  [Function `find_index`](#std_vector_find_index)
--  [Function `count`](#std_vector_count)
--  [Function `fold`](#std_vector_fold)
+-  [Macro function `tabulate`](#std_vector_tabulate)
+-  [Macro function `destroy`](#std_vector_destroy)
+-  [Macro function `do`](#std_vector_do)
+-  [Macro function `do_ref`](#std_vector_do_ref)
+-  [Macro function `do_mut`](#std_vector_do_mut)
+-  [Macro function `map`](#std_vector_map)
+-  [Macro function `map_ref`](#std_vector_map_ref)
+-  [Macro function `filter`](#std_vector_filter)
+-  [Macro function `partition`](#std_vector_partition)
+-  [Macro function `find_index`](#std_vector_find_index)
+-  [Macro function `count`](#std_vector_count)
+-  [Macro function `fold`](#std_vector_fold)
 -  [Function `flatten`](#std_vector_flatten)
--  [Function `any`](#std_vector_any)
--  [Function `all`](#std_vector_all)
--  [Function `zip_do`](#std_vector_zip_do)
--  [Function `zip_do_reverse`](#std_vector_zip_do_reverse)
--  [Function `zip_do_ref`](#std_vector_zip_do_ref)
--  [Function `zip_do_mut`](#std_vector_zip_do_mut)
--  [Function `zip_map`](#std_vector_zip_map)
--  [Function `zip_map_ref`](#std_vector_zip_map_ref)
+-  [Macro function `any`](#std_vector_any)
+-  [Macro function `all`](#std_vector_all)
+-  [Macro function `zip_do`](#std_vector_zip_do)
+-  [Macro function `zip_do_reverse`](#std_vector_zip_do_reverse)
+-  [Macro function `zip_do_ref`](#std_vector_zip_do_ref)
+-  [Macro function `zip_do_mut`](#std_vector_zip_do_mut)
+-  [Macro function `zip_map`](#std_vector_zip_map)
+-  [Macro function `zip_map_ref`](#std_vector_zip_map_ref)
 
 
 <pre><code></code></pre>
@@ -532,7 +532,7 @@ Aborts if <code>i</code> is out of bounds.
 
 <a name="std_vector_tabulate"></a>
 
-## Function `tabulate`
+## Macro function `tabulate`
 
 Create a vector of length <code>n</code> by calling the function <code>f</code> on each index.
 
@@ -560,7 +560,7 @@ Create a vector of length <code>n</code> by calling the function <code>f</code> 
 
 <a name="std_vector_destroy"></a>
 
-## Function `destroy`
+## Macro function `destroy`
 
 Destroy the vector <code>v</code> by calling <code>f</code> on each element and then destroying the vector.
 Does not preserve the order of elements in the vector (starts from the end of the vector).
@@ -588,7 +588,7 @@ Does not preserve the order of elements in the vector (starts from the end of th
 
 <a name="std_vector_do"></a>
 
-## Function `do`
+## Macro function `do`
 
 Destroy the vector <code>v</code> by calling <code>f</code> on each element and then destroying the vector.
 Preserves the order of elements in the vector.
@@ -617,7 +617,7 @@ Preserves the order of elements in the vector.
 
 <a name="std_vector_do_ref"></a>
 
-## Function `do_ref`
+## Macro function `do_ref`
 
 Perform an action <code>f</code> on each element of the vector <code>v</code>. The vector is not modified.
 
@@ -643,7 +643,7 @@ Perform an action <code>f</code> on each element of the vector <code>v</code>. T
 
 <a name="std_vector_do_mut"></a>
 
-## Function `do_mut`
+## Macro function `do_mut`
 
 Perform an action <code>f</code> on each element of the vector <code>v</code>.
 The function <code>f</code> takes a mutable reference to the element.
@@ -670,7 +670,7 @@ The function <code>f</code> takes a mutable reference to the element.
 
 <a name="std_vector_map"></a>
 
-## Function `map`
+## Macro function `map`
 
 Map the vector <code>v</code> to a new vector by applying the function <code>f</code> to each element.
 Preserves the order of elements in the vector, first is called first.
@@ -699,7 +699,7 @@ Preserves the order of elements in the vector, first is called first.
 
 <a name="std_vector_map_ref"></a>
 
-## Function `map_ref`
+## Macro function `map_ref`
 
 Map the vector <code>v</code> to a new vector by applying the function <code>f</code> to each element.
 Preserves the order of elements in the vector, first is called first.
@@ -728,7 +728,7 @@ Preserves the order of elements in the vector, first is called first.
 
 <a name="std_vector_filter"></a>
 
-## Function `filter`
+## Macro function `filter`
 
 Filter the vector <code>v</code> by applying the function <code>f</code> to each element.
 Return a new vector containing only the elements for which <code>f</code> returns <code><b>true</b></code>.
@@ -757,7 +757,7 @@ Return a new vector containing only the elements for which <code>f</code> return
 
 <a name="std_vector_partition"></a>
 
-## Function `partition`
+## Macro function `partition`
 
 Split the vector <code>v</code> into two vectors by applying the function <code>f</code> to each element.
 Return a tuple containing two vectors: the first containing the elements for which <code>f</code> returns <code><b>true</b></code>,
@@ -788,7 +788,7 @@ and the second containing the elements for which <code>f</code> returns <code><b
 
 <a name="std_vector_find_index"></a>
 
-## Function `find_index`
+## Macro function `find_index`
 
 Finds the index of first element in the vector <code>v</code> that satisfies the predicate <code>f</code>.
 Returns <code>some(index)</code> if such an element is found, otherwise <code>none()</code>.
@@ -818,7 +818,7 @@ Returns <code>some(index)</code> if such an element is found, otherwise <code>no
 
 <a name="std_vector_count"></a>
 
-## Function `count`
+## Macro function `count`
 
 Count how many elements in the vector <code>v</code> satisfy the predicate <code>f</code>.
 
@@ -846,7 +846,7 @@ Count how many elements in the vector <code>v</code> satisfy the predicate <code
 
 <a name="std_vector_fold"></a>
 
-## Function `fold`
+## Macro function `fold`
 
 Reduce the vector <code>v</code> to a single value by applying the function <code>f</code> to each element.
 Similar to <code>fold_left</code> in Rust and <code>reduce</code> in Python and JavaScript.
@@ -902,7 +902,7 @@ Concatenate the vectors of <code>v</code> into a single vector, keeping the orde
 
 <a name="std_vector_any"></a>
 
-## Function `any`
+## Macro function `any`
 
 Whether any element in the vector <code>v</code> satisfies the predicate <code>f</code>.
 If the vector is empty, returns <code><b>false</b></code>.
@@ -932,7 +932,7 @@ If the vector is empty, returns <code><b>false</b></code>.
 
 <a name="std_vector_all"></a>
 
-## Function `all`
+## Macro function `all`
 
 Whether all elements in the vector <code>v</code> satisfy the predicate <code>f</code>.
 If the vector is empty, returns <code><b>true</b></code>.
@@ -962,7 +962,7 @@ If the vector is empty, returns <code><b>true</b></code>.
 
 <a name="std_vector_zip_do"></a>
 
-## Function `zip_do`
+## Macro function `zip_do`
 
 Destroys two vectors <code>v1</code> and <code>v2</code> by calling <code>f</code> to each pair of elements.
 Aborts if the vectors are not of the same length.
@@ -994,7 +994,7 @@ The order of elements in the vectors is preserved.
 
 <a name="std_vector_zip_do_reverse"></a>
 
-## Function `zip_do_reverse`
+## Macro function `zip_do_reverse`
 
 Destroys two vectors <code>v1</code> and <code>v2</code> by calling <code>f</code> to each pair of elements.
 Aborts if the vectors are not of the same length.
@@ -1025,7 +1025,7 @@ Starts from the end of the vectors.
 
 <a name="std_vector_zip_do_ref"></a>
 
-## Function `zip_do_ref`
+## Macro function `zip_do_ref`
 
 Iterate through <code>v1</code> and <code>v2</code> and apply the function <code>f</code> to references of each pair of
 elements. The vectors are not modified.
@@ -1057,7 +1057,7 @@ The order of elements in the vectors is preserved.
 
 <a name="std_vector_zip_do_mut"></a>
 
-## Function `zip_do_mut`
+## Macro function `zip_do_mut`
 
 Iterate through <code>v1</code> and <code>v2</code> and apply the function <code>f</code> to mutable references of each pair
 of elements. The vectors may be modified.
@@ -1093,7 +1093,7 @@ The order of elements in the vectors is preserved.
 
 <a name="std_vector_zip_map"></a>
 
-## Function `zip_map`
+## Macro function `zip_map`
 
 Destroys two vectors <code>v1</code> and <code>v2</code> by applying the function <code>f</code> to each pair of elements.
 The returned values are collected into a new vector.
@@ -1127,7 +1127,7 @@ The order of elements in the vectors is preserved.
 
 <a name="std_vector_zip_map_ref"></a>
 
-## Function `zip_map_ref`
+## Macro function `zip_map_ref`
 
 Iterate through <code>v1</code> and <code>v2</code> and apply the function <code>f</code> to references of each pair of
 elements. The returned values are collected into a new vector.

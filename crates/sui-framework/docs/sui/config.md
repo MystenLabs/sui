@@ -17,8 +17,8 @@ title: Module `sui::config`
 -  [Function `exists_with_type_for_next_epoch`](#sui_config_exists_with_type_for_next_epoch)
 -  [Function `borrow_for_next_epoch_mut`](#sui_config_borrow_for_next_epoch_mut)
 -  [Function `read_setting_for_next_epoch`](#sui_config_read_setting_for_next_epoch)
--  [Function `entry`](#sui_config_entry)
--  [Function `update`](#sui_config_update)
+-  [Macro function `entry`](#sui_config_entry)
+-  [Macro function `update`](#sui_config_update)
 -  [Function `read_setting`](#sui_config_read_setting)
 -  [Function `read_setting_impl`](#sui_config_read_setting_impl)
 
@@ -500,7 +500,7 @@ title: Module `sui::config`
 
 <a name="sui_config_entry"></a>
 
-## Function `entry`
+## Macro function `entry`
 
 
 
@@ -542,7 +542,7 @@ title: Module `sui::config`
 
 <a name="sui_config_update"></a>
 
-## Function `update`
+## Macro function `update`
 
 
 

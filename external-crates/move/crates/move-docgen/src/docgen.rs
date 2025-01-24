@@ -1087,8 +1087,13 @@ impl<'env> Docgen<'env> {
         let name = func_env.name();
         let full_name = format!("{}::{}", module_env.ident(), name);
         let func_info = func_env.info();
+        let header = if func_info.macro_.is_some() {
+            "Macro function"
+        } else {
+            "Function"
+        };
         self.section_header(
-            &format!("Function `{name}`"),
+            &format!("{header} `{name}`"),
             &self.label_for_module_item(module_env, name),
         );
         self.increment_section_nest();

@@ -6,16 +6,16 @@
 This module holds shared implementation of macros used in <code>std</code>
 
 
--  [Function `num_max`](#std_macros_num_max)
--  [Function `num_min`](#std_macros_num_min)
--  [Function `num_diff`](#std_macros_num_diff)
--  [Function `num_divide_and_round_up`](#std_macros_num_divide_and_round_up)
--  [Function `num_pow`](#std_macros_num_pow)
--  [Function `num_sqrt`](#std_macros_num_sqrt)
--  [Function `range_do`](#std_macros_range_do)
--  [Function `range_do_eq`](#std_macros_range_do_eq)
--  [Function `do`](#std_macros_do)
--  [Function `do_eq`](#std_macros_do_eq)
+-  [Macro function `num_max`](#std_macros_num_max)
+-  [Macro function `num_min`](#std_macros_num_min)
+-  [Macro function `num_diff`](#std_macros_num_diff)
+-  [Macro function `num_divide_and_round_up`](#std_macros_num_divide_and_round_up)
+-  [Macro function `num_pow`](#std_macros_num_pow)
+-  [Macro function `num_sqrt`](#std_macros_num_sqrt)
+-  [Macro function `range_do`](#std_macros_range_do)
+-  [Macro function `range_do_eq`](#std_macros_range_do_eq)
+-  [Macro function `do`](#std_macros_do)
+-  [Macro function `do_eq`](#std_macros_do_eq)
 
 
 <pre><code></code></pre>
@@ -24,7 +24,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_max"></a>
 
-## Function `num_max`
+## Macro function `num_max`
 
 
 
@@ -51,7 +51,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_min"></a>
 
-## Function `num_min`
+## Macro function `num_min`
 
 
 
@@ -78,7 +78,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_diff"></a>
 
-## Function `num_diff`
+## Macro function `num_diff`
 
 
 
@@ -105,7 +105,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_divide_and_round_up"></a>
 
-## Function `num_divide_and_round_up`
+## Macro function `num_divide_and_round_up`
 
 
 
@@ -132,7 +132,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_pow"></a>
 
-## Function `num_pow`
+## Macro function `num_pow`
 
 
 
@@ -168,7 +168,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_num_sqrt"></a>
 
-## Function `num_sqrt`
+## Macro function `num_sqrt`
 
 
 
@@ -205,7 +205,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_range_do"></a>
 
-## Function `range_do`
+## Macro function `range_do`
 
 
 
@@ -234,7 +234,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_range_do_eq"></a>
 
-## Function `range_do_eq`
+## Macro function `range_do_eq`
 
 
 
@@ -269,7 +269,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_do"></a>
 
-## Function `do`
+## Macro function `do`
 
 
 
@@ -293,7 +293,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <a name="std_macros_do_eq"></a>
 
-## Function `do_eq`
+## Macro function `do_eq`
 
 
 

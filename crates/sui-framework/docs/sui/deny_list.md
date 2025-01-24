@@ -28,7 +28,7 @@ list.
 -  [Function `borrow_per_type_config_mut`](#sui_deny_list_borrow_per_type_config_mut)
 -  [Function `borrow_per_type_config`](#sui_deny_list_borrow_per_type_config)
 -  [Function `per_type_exists`](#sui_deny_list_per_type_exists)
--  [Function `per_type_config_entry`](#sui_deny_list_per_type_config_entry)
+-  [Macro function `per_type_config_entry`](#sui_deny_list_per_type_config_entry)
 -  [Function `v1_add`](#sui_deny_list_v1_add)
 -  [Function `v1_per_type_list_add`](#sui_deny_list_v1_per_type_list_add)
 -  [Function `v1_remove`](#sui_deny_list_v1_remove)
@@ -772,7 +772,7 @@ meaningless to add them to the deny list.
 
 <a name="sui_deny_list_per_type_config_entry"></a>
 
-## Function `per_type_config_entry`
+## Macro function `per_type_config_entry`
 
 
 
