@@ -358,10 +358,15 @@ pub enum SuiClientCommands {
         #[clap(flatten)]
         opts: OptsWithGas,
 
-        /// Publish the package without checking whether compiling dependencies from source results
-        /// in bytecode matching the dependencies found on-chain.
+        /// Publish the package without checking whether dependency source code compiles to the
+        /// on-chain bytecode
         #[clap(long)]
         skip_dependency_verification: bool,
+
+        /// Check that the dependency source code compiles to the on-chain bytecode before
+        /// publishing the package
+        #[clap(long, conflicts_with = "skip_dependency_verification")]
+        verify_deps: bool,
 
         /// Also publish transitive dependencies that have not already been published.
         #[clap(long)]
@@ -459,10 +464,14 @@ pub enum SuiClientCommands {
         #[clap(flatten)]
         opts: OptsWithGas,
 
-        /// Publish the package without checking whether compiling dependencies from source results
-        /// in bytecode matching the dependencies found on-chain.
+        /// Upgrade the package without checking whether dependency source code compiles to the on-chain
+        /// bytecode
         #[clap(long)]
         skip_dependency_verification: bool,
+
+        /// Check that the dependency source code compiles to the on-chain bytecode before upgrading the package
+        #[clap(long, conflicts_with = "skip_dependency_verification")]
+        verify_deps: bool,
 
         /// Also publish transitive dependencies that have not already been published.
         #[clap(long)]
@@ -866,6 +875,7 @@ impl SuiClientCommands {
                 upgrade_capability,
                 build_config,
                 skip_dependency_verification,
+                verify_deps,
                 with_unpublished_dependencies,
                 opts,
             } => {
@@ -875,6 +885,8 @@ impl SuiClientCommands {
                 let chain_id = client.read_api().get_chain_identifier().await.ok();
 
                 check_protocol_version_and_warn(&client).await?;
+                let verify =
+                    check_dep_verification_flags(skip_dependency_verification, verify_deps)?;
 
                 let package_path =
                     package_path
@@ -904,7 +916,7 @@ impl SuiClientCommands {
                     &package_path,
                     upgrade_capability,
                     with_unpublished_dependencies,
-                    skip_dependency_verification,
+                    !verify,
                     env_alias,
                 )
                 .await;
@@ -961,6 +973,7 @@ impl SuiClientCommands {
                 package_path,
                 build_config,
                 skip_dependency_verification,
+                verify_deps,
                 with_unpublished_dependencies,
                 opts,
             } => {
@@ -985,6 +998,8 @@ impl SuiClientCommands {
                 let chain_id = client.read_api().get_chain_identifier().await.ok();
 
                 check_protocol_version_and_warn(&client).await?;
+                let verify =
+                    check_dep_verification_flags(skip_dependency_verification, verify_deps)?;
 
                 let package_path =
                     package_path
@@ -1008,7 +1023,7 @@ impl SuiClientCommands {
                     build_config.clone(),
                     &package_path,
                     with_unpublished_dependencies,
-                    skip_dependency_verification,
+                    !verify,
                 )
                 .await;
                 // Restore original ID, then check result.
@@ -1670,6 +1685,29 @@ impl SuiClientCommands {
         ensure!(config.get_env(&env).is_some(), "Environment config not found for [{env:?}], add new environment config using the `sui client new-env` command.");
         config.active_env = env;
         Ok(())
+    }
+}
+
+/// Process the `--skip-dependency-verification` and `--verify-dependencies` flags for a publish or
+/// upgrade command. Prints deprecation warnings as appropriate and returns true if the
+/// dependencies should be verified
+fn check_dep_verification_flags(
+    skip_dependency_verification: bool,
+    verify_dependencies: bool,
+) -> anyhow::Result<bool> {
+    match (skip_dependency_verification, verify_dependencies) {
+        (true, true) => bail!("[error]: --skip_dependency_verification and --verify_dependencies are mutually exclusive"),
+
+        (false, false) => {
+            eprintln!("{}: {}", "[warning]".bold().yellow(),
+            format!("In a future release, dependency source code will no longer be verified by default during publication and upgrade. \
+            You can opt in to source verification using `--verify-deps` or disable this warning using `--skip-dependency-verification`. \
+            You can also manually verify dependencies using `sui client verify-source`.
+            "));
+            Ok(true)
+        },
+
+        _ => Ok(verify_dependencies),
     }
 }
 
