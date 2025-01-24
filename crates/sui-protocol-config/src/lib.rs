@@ -210,6 +210,7 @@ const MAX_PROTOCOL_VERSION: u64 = 73;
 //             Variants as type nodes.
 // Version 73: Enable new marker table version.
 //             Enable consensus garbage collection and new commit rule for devnet.
+//             Enable zstd compression for consensus tonic network in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -607,6 +608,10 @@ struct FeatureFlags {
     // Variants count as nodes
     #[serde(skip_serializing_if = "is_false")]
     variant_nodes: bool,
+
+    // If true, enable zstd compression for consensus tonic network.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_zstd_compression: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1775,6 +1780,10 @@ impl ProtocolConfig {
 
     pub fn variant_nodes(&self) -> bool {
         self.feature_flags.variant_nodes
+    }
+
+    pub fn consensus_zstd_compression(&self) -> bool {
+        self.feature_flags.consensus_zstd_compression
     }
 }
 
@@ -3171,6 +3180,11 @@ impl ProtocolConfig {
                         // to be included before be considered garbage collected.
                         cfg.consensus_gc_depth = Some(60);
                         cfg.feature_flags.consensus_linearize_subdag_v2 = true;
+                    }
+
+                    if chain != Chain::Mainnet {
+                        // Enable zstd compression for consensus in testnet
+                        cfg.feature_flags.consensus_zstd_compression = true;
                     }
                 }
                 // Use this template when making changes:

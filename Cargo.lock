@@ -17020,6 +17020,7 @@ dependencies = [
  "tower-service",
  "tracing",
  "webpki-roots 0.26.3",
+ "zstd 0.13.2",
 ]
 
 [[package]]
