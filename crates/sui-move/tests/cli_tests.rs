@@ -72,4 +72,8 @@ fn get_sui_move_path() -> String {
         .to_owned()
 }
 
+#[cfg(not(msim))]
 datatest_stable::harness!(test_shell_snapshot, TEST_DIR, TEST_PATTERN);
+
+#[cfg(msim)]
+fn main() {}

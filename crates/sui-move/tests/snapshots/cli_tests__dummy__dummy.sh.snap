@@ -6,7 +6,6 @@ success: true
 exit_code: 0
 ----- stdout -----
 dummy test
-sui-move is in the path
 some dummy data
 
 ----- stderr -----
