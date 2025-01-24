@@ -1183,6 +1183,23 @@ impl CheckpointBuilder {
         let mut all_tx_digests =
             Vec::with_capacity(new_checkpoints.iter().map(|(_, c)| c.size()).sum());
 
+        // When upgrading to a data-quarantining build, we need to persist the transactions and effects
+        // to the database for crash recovery. After the upgrade this is no longer needed, because recovery
+        // is driven by replay of consensus commits.
+        // This only updates the content-addressed stores (similar to state sync), it does not mark any
+        // transactions as executed.
+        self.state
+            .get_cache_commit()
+            .persist_transactions_and_effects(
+                &new_checkpoints
+                    .iter()
+                    .flat_map(|(_, c)| {
+                        c.iter()
+                            .map(|digests| (digests.transaction, digests.effects))
+                    })
+                    .collect::<Vec<_>>(),
+            );
+
         for (summary, contents) in &new_checkpoints {
             debug!(
                 checkpoint_commit_height = height,
