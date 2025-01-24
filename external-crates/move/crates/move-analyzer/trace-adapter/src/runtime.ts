@@ -289,7 +289,9 @@ export class Runtime extends EventEmitter {
         }
 
         const opendFileExt = path.extname(openedFilePath);
-        if (opendFileExt !== MOVE_FILE_EXT && opendFileExt !== BCODE_FILE_EXT) {
+        if (opendFileExt !== MOVE_FILE_EXT
+            && opendFileExt !== BCODE_FILE_EXT
+            && opendFileExt !== JSON_FILE_EXT) {
             throw new Error(`File extension: ${opendFileExt} is not supported by trace debugger`);
         }
         const showDisassembly = opendFileExt === BCODE_FILE_EXT;

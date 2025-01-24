@@ -37,6 +37,15 @@ class MoveEvaluatableExpressionProvider {
 }
 
 /**
+ * Information about a traced function.
+ */
+interface TracedFunctionInfo {
+    pkgAddr: number;
+    module: string;
+    function: string;
+}
+
+/**
  * Called when the extension is activated.
 */
 export function activate(context: vscode.ExtensionContext) {
@@ -172,7 +181,8 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
         if (!config.type && !config.request && !config.name) {
             const editor = vscode.window.activeTextEditor;
             if (editor && (editor.document.languageId === 'move'
-                || editor.document.languageId === 'mvb')) {
+                || editor.document.languageId === 'mvb'
+                || editor.document.languageId === 'mtrace')) {
 
                 try {
                     let traceInfo = await findTraceInfo(editor);
@@ -223,9 +233,7 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
             throw new Error(`Cannot find any modules in file '${editor.document.uri.fsPath}'`);
         }
         tracedFunctions = findTracedFunctionsFromPath(pkgRoot, pkgModules);
-    } else {
-        // this is a disassembly file (.mvb) as this function is only called if
-        // the active file is either a .move or .mvb file
+    } else if (path.extname(editor.document.uri.fsPath) === '.mvb') {
         const modulePattern = /\bmodule\s+\d+\.\w+\b/g;
         const moduleSequences = editor.document.getText().match(modulePattern);
         if (!moduleSequences || moduleSequences.length === 0) {
@@ -238,6 +246,12 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
             throw new Error(`Cannot parse package address from '${pkgAddrStr}' in disassembly file '${editor.document.uri.fsPath}'`);
         }
         tracedFunctions = findTracedFunctionsFromTrace(pkgRoot, pkgAddr, module);
+    } else {
+        // this is a JSON (hopefully) trace as this function is only called if
+        // the active file is either a .move, .mvb, or .json file
+        const fpath = editor.document.uri.fsPath;
+        const tracedFunctionInfo = getTracedFunctionInfo(fpath);
+        tracedFunctions = [constructTraceInfo(fpath, tracedFunctionInfo)];
     }
     if (!tracedFunctions || tracedFunctions.length === 0) {
         throw new Error(`No traced functions found for package at '${pkgRoot}'`);
@@ -350,50 +364,84 @@ function findTracedFunctionsFromPath(pkgRoot: string, pkgModules: string[]): str
  */
 function findTracedFunctionsFromTrace(pkgRoot: string, pkgAddr: number, module: string): string[] {
     const filePaths = getTraceFiles(pkgRoot);
-
     const result: string[] = [];
     for (const p of filePaths) {
-        const fpath = path.join(pkgRoot, 'traces', p);
-
-        let traceContent = undefined;
-        try {
-            traceContent = fs.readFileSync(fpath, 'utf-8');
-        } catch {
-            throw new Error(`Error reading trace file '${fpath}'`);
-        }
-
-        const trace = JSON.parse(traceContent);
-        if (!trace) {
-            throw new Error(`Error parsing trace file '${fpath}'`);
-        }
-        if (trace.events.length === 0) {
-            throw new Error(`Empty trace file '${fpath}'`);
-        }
-        const frame = trace.events[0]?.OpenFrame?.frame;
-        const pkgAddrStrInTrace = frame?.module?.address;
-        if (!pkgAddrStrInTrace) {
-            throw new Error(`No package address for the initial frame in trace file '${fpath}'`);
-        }
-        const pkgAddrInTrace = parseInt(pkgAddrStrInTrace);
-        if (isNaN(pkgAddrInTrace)) {
-            throw new Error('Cannot parse package address '
-                + pkgAddrStrInTrace
-                + ' for the initial frame in trace file '
-                + fpath);
-        }
-        const moduleInTrace = frame?.module?.name;
-        if (!moduleInTrace) {
-            throw new Error(`No module name for the initial frame in trace file '${fpath}'`);
-        }
-        const functionInTrace = frame?.function_name;
-        if (!functionInTrace) {
-            throw new Error(`No function name for the initial frame in trace file '${fpath}'`);
-        }
-        if (pkgAddrInTrace === pkgAddr && moduleInTrace === module) {
-            result.push(path.basename(fpath, path.extname(fpath)));
+        const tracePath = path.join(pkgRoot, 'traces', p);
+        const tracedFunctionInfo = getTracedFunctionInfo(tracePath);
+        if (tracedFunctionInfo.pkgAddr === pkgAddr && tracedFunctionInfo.module === module) {
+            result.push(constructTraceInfo(tracePath, tracedFunctionInfo));
         }
     }
     return result;
+}
+
+/**
+ * Retrieves traced function info from the trace file.
+ *
+ * @param tracePath path to the trace file.
+ * @returns traced function info containing package address, module, and function itself.
+ */
+function getTracedFunctionInfo(tracePath: string): TracedFunctionInfo {
+    let traceContent = undefined;
+    try {
+        traceContent = fs.readFileSync(tracePath, 'utf-8');
+    } catch {
+        throw new Error(`Error reading trace file '${tracePath}'`);
+    }
+
+    const trace = JSON.parse(traceContent);
+    if (!trace) {
+        throw new Error(`Error parsing trace file '${tracePath}'`);
+    }
+    if (trace.events.length === 0) {
+        throw new Error(`Empty trace file '${tracePath}'`);
+    }
+    const frame = trace.events[0]?.OpenFrame?.frame;
+    const pkgAddrStrInTrace = frame?.module?.address;
+    if (!pkgAddrStrInTrace) {
+        throw new Error(`No package address for the initial frame in trace file '${tracePath}'`);
+    }
+    const pkgAddrInTrace = parseInt(pkgAddrStrInTrace);
+    if (isNaN(pkgAddrInTrace)) {
+        throw new Error('Cannot parse package address '
+            + pkgAddrStrInTrace
+            + ' for the initial frame in trace file '
+            + tracePath);
+    }
+    const moduleInTrace = frame?.module?.name;
+    if (!moduleInTrace) {
+        throw new Error(`No module name for the initial frame in trace file '${tracePath}'`);
+    }
+    const functionInTrace = frame?.function_name;
+    if (!functionInTrace) {
+        throw new Error(`No function name for the initial frame in trace file '${tracePath}'`);
+    }
+    return {
+        pkgAddr: pkgAddrInTrace,
+        module: moduleInTrace,
+        function: functionInTrace
+    };
+}
+
+/**
+ * Given trace file path and traced function, constructs a string of the form
+ * `<package>::<module>::<function_name>`, taking package from the trace file name
+ * (module name and function are the same in the file name and in the trace itself).
+ *
+ * @param tracePath path to the trace file.
+ * @param tracedFunctionInfo traced function info.
+ * @returns string of the form `<package>::<module>::<function_name>`.
+ */
+function constructTraceInfo(tracePath: string, tracedFunctionInfo: TracedFunctionInfo): string {
+    const tracedFileBaseName = path.basename(tracePath, path.extname(tracePath));
+    const fileBaseNameSuffix = '__' + tracedFunctionInfo.module + '__' + tracedFunctionInfo.function;
+    if (!tracedFileBaseName.endsWith(fileBaseNameSuffix)) {
+        throw new Error('Trace file name (' + tracedFileBaseName + ')'
+            + 'does not end with expected suffix (' + fileBaseNameSuffix + ')'
+            + ' obtained from concateneting module and entry function found in the trace');
+    }
+    const pkgName = tracedFileBaseName.substring(0, tracedFileBaseName.length - fileBaseNameSuffix.length);
+    return pkgName + '::' + tracedFunctionInfo.module + '::' + tracedFunctionInfo.function;
 }
 
 /**
