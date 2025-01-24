@@ -70,7 +70,7 @@ public macro fun num_sqrt<$T, $U>($x: $T, $bitsize: u8): $T {
     res as $T
 }
 
-public macro fun num_to_string<$T>($x: $T): String {
+public macro fun num_to_string($x: _): String {
     let mut x = $x;
     if (x == 0) {
         return b"0".to_string()
@@ -116,31 +116,31 @@ public macro fun do_eq<$T, $R: drop>($stop: $T, $f: |$T| -> $R) {
     range_do_eq!(0, $stop, $f)
 }
 
-public macro fun try_as_u8<$T>($x: $T): Option<u8> {
+public macro fun try_as_u8($x: _): Option<u8> {
     let x = $x;
     if (x > 0xFF) option::none()
     else option::some(x as u8)
 }
 
-public macro fun try_as_u16<$T>($x: $T): Option<u16> {
+public macro fun try_as_u16($x: _): Option<u16> {
     let x = $x;
     if (x > 0xFFFF) option::none()
     else option::some(x as u16)
 }
 
-public macro fun try_as_u32<$T>($x: $T): Option<u32> {
+public macro fun try_as_u32($x: _): Option<u32> {
     let x = $x;
     if (x > 0xFFFF_FFFF) option::none()
     else option::some(x as u32)
 }
 
-public macro fun try_as_u64<$T>($x: $T): Option<u64> {
+public macro fun try_as_u64($x: _): Option<u64> {
     let x = $x;
     if (x > 0xFFFF_FFFF_FFFF_FFFF) option::none()
     else option::some(x as u64)
 }
 
-public macro fun try_as_u128<$T>($x: $T): Option<u128> {
+public macro fun try_as_u128($x: _): Option<u128> {
     let x = $x;
     if (x > 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF) option::none()
     else option::some(x as u128)
