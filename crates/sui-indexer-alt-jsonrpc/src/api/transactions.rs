@@ -11,22 +11,32 @@ use sui_indexer_alt_schema::transactions::{
     BalanceChange, StoredTransaction, StoredTxBalanceChange,
 };
 use sui_json_rpc_types::{
-    BalanceChange as SuiBalanceChange, SuiEvent, SuiTransactionBlock, SuiTransactionBlockData,
-    SuiTransactionBlockEffects, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    BalanceChange as SuiBalanceChange, ObjectChange as SuiObjectChange, SuiEvent,
+    SuiTransactionBlock, SuiTransactionBlockData, SuiTransactionBlockEffects,
+    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::{
-    digests::TransactionDigest, effects::TransactionEffects, error::SuiError, event::Event,
-    signature::GenericSignature, transaction::TransactionData, TypeTag,
+    base_types::{ObjectID, SequenceNumber},
+    digests::{ObjectDigest, TransactionDigest},
+    effects::{IDOperation, ObjectChange, TransactionEffects, TransactionEffectsAPI},
+    error::SuiError,
+    event::Event,
+    object::Object,
+    signature::GenericSignature,
+    transaction::{TransactionData, TransactionDataAPI},
+    TypeTag,
 };
 use tokio::join;
 
 use crate::{
     context::Context,
-    data::{transactions::TransactionKey, tx_balance_changes::TxBalanceChangeKey},
-    error::{internal_error, invalid_params},
+    data::{
+        objects::ObjectVersionKey, transactions::TransactionKey,
+        tx_balance_changes::TxBalanceChangeKey,
+    },
+    error::{internal_error, invalid_params, pruned, rpc_bail},
 };
 
 use super::rpc_module::RpcModule;
@@ -87,10 +97,11 @@ impl TransactionsApiServer for Transactions {
 
         // Balance changes might not be present because of pruning, in which case we return
         // nothing, even if the changes were requested.
-        let balance_changes = balance_changes
-            .transpose()
-            .map_err(internal_error)?
-            .flatten();
+        let balance_changes = match balance_changes.transpose().map_err(internal_error)? {
+            Some(None) => rpc_bail!(pruned("balance changes for transaction {digest}")),
+            Some(changes) => changes,
+            None => None,
+        };
 
         let digest = TransactionDigest::try_from(transaction.tx_digest.clone())
             .map_err(E::Conversion)
@@ -129,6 +140,11 @@ impl TransactionsApiServer for Transactions {
         if let Some(balance_changes) = balance_changes {
             response.balance_changes =
                 Some(balance_changes_response(balance_changes).map_err(internal_error)?);
+        }
+
+        if options.show_object_changes {
+            response.object_changes =
+                Some(object_changes_response(ctx, digest, &transaction).await?);
         }
 
         Ok(response)
@@ -232,4 +248,175 @@ fn balance_changes_response(
     }
 
     Ok(response)
+}
+
+/// Extract the transaction's object changes. Object IDs and versions are fetched from the stored
+/// transaction, and the object contents are fetched separately by a data loader.
+async fn object_changes_response(
+    ctx: &Context,
+    digest: TransactionDigest,
+    tx: &StoredTransaction,
+) -> RpcResult<Vec<SuiObjectChange>> {
+    let tx_data: TransactionData = bcs::from_bytes(&tx.raw_transaction)
+        .map_err(Error::from)
+        .map_err(internal_error)?;
+
+    let effects: TransactionEffects = bcs::from_bytes(&tx.raw_effects)
+        .map_err(Error::from)
+        .map_err(internal_error)?;
+
+    let mut keys = vec![];
+    let native_changes = effects.object_changes();
+    for change in &native_changes {
+        let id = change.id;
+        if let Some(version) = change.input_version {
+            keys.push(ObjectVersionKey(id, version.value()));
+        }
+        if let Some(version) = change.output_version {
+            keys.push(ObjectVersionKey(id, version.value()));
+        }
+    }
+
+    let objects = ctx
+        .loader()
+        .load_many(keys)
+        .await
+        .map_err(|e| internal_error(e.to_string()))?;
+
+    // Fetch and deserialize the contents of an object, based on its object ref. Assumes that all
+    // object versions that will be fetched in this way have come from a valid transaction, and
+    // have been passed to the data loader in the call above. This means that if they cannot be
+    // found, they must have been pruned.
+    let fetch_object = |id: ObjectID,
+                        v: Option<SequenceNumber>,
+                        d: Option<ObjectDigest>|
+     -> RpcResult<Option<(Object, ObjectDigest)>> {
+        let Some(v) = v else { return Ok(None) };
+        let Some(d) = d else { return Ok(None) };
+
+        let v = v.value();
+
+        let stored = objects
+            .get(&ObjectVersionKey(id, v))
+            .ok_or_else(|| pruned(format!("Object {id} at version {v}")))?;
+
+        let bytes = stored
+            .serialized_object
+            .as_ref()
+            .ok_or_else(|| internal_error("No content for object {id} at version {v}"))?;
+
+        let o = bcs::from_bytes(bytes)
+            .map_err(Error::from)
+            .map_err(internal_error)?;
+
+        Ok(Some((o, d)))
+    };
+
+    let mut changes = Vec::with_capacity(native_changes.len());
+
+    for change in native_changes {
+        let &ObjectChange {
+            id: object_id,
+            id_operation,
+            input_version,
+            input_digest,
+            output_version,
+            output_digest,
+            ..
+        } = &change;
+
+        let input = fetch_object(object_id, input_version, input_digest)?;
+        let output = fetch_object(object_id, output_version, output_digest)?;
+
+        use IDOperation as ID;
+        changes.push(match (id_operation, input, output) {
+            (ID::Created, Some((i, _)), _) => rpc_bail!(internal_error(
+                "Unexpected input version {} for object {object_id} created by transaction {digest}",
+                i.version().value(),
+            )),
+
+            (ID::Deleted, _, Some((o, _))) => rpc_bail!(internal_error(
+                "Unexpected output version {} for object {object_id} deleted by transaction {digest}",
+                o.version().value(),
+            )),
+
+            // The following cases don't end up in the output: created and wrapped objects,
+            // unwrapped objects (and by extension, unwrapped and deleted objects), system package
+            // upgrades (which happen in place).
+            (ID::Created, _, None) => continue,
+            (ID::None, None, _) => continue,
+            (ID::None, _, Some((o, _))) if o.is_package() => continue,
+            (ID::Deleted, None, _) => continue,
+
+            (ID::Created, _, Some((o, d))) if o.is_package() => SuiObjectChange::Published {
+                package_id: object_id,
+                version: o.version(),
+                digest: d,
+                modules: o
+                    .data
+                    .try_as_package()
+                    .unwrap() // SAFETY: Match guard checks that the object is a package.
+                    .serialized_module_map()
+                    .keys()
+                    .cloned()
+                    .collect(),
+            },
+
+            (ID::Created, _, Some((o, d))) => SuiObjectChange::Created {
+                sender: tx_data.sender(),
+                owner: o.owner().clone(),
+                object_type: o
+                    .struct_tag()
+                    .ok_or_else(|| internal_error(format!("No type for object {object_id}")))?,
+                object_id,
+                version: o.version(),
+                digest: d,
+            },
+
+            (ID::None, Some((i, _)), Some((o, od))) if i.owner() != o.owner() => {
+                SuiObjectChange::Transferred {
+                    sender: tx_data.sender(),
+                    recipient: o.owner().clone(),
+                    object_type: o
+                        .struct_tag()
+                        .ok_or_else(|| internal_error(format!("No type for object {object_id}")))?,
+                    object_id,
+                    version: o.version(),
+                    digest: od,
+                }
+            }
+
+            (ID::None, Some((i, _)), Some((o, od))) => SuiObjectChange::Mutated {
+                sender: tx_data.sender(),
+                owner: o.owner().clone(),
+                object_type: o
+                    .struct_tag()
+                    .ok_or_else(|| internal_error(format!("No type for object {object_id}")))?,
+                object_id,
+                version: o.version(),
+                previous_version: i.version(),
+                digest: od,
+            },
+
+            (ID::None, Some((i, _)), None) => SuiObjectChange::Wrapped {
+                sender: tx_data.sender(),
+                object_type: i
+                    .struct_tag()
+                    .ok_or_else(|| internal_error(format!("No type for object {object_id}")))?,
+                object_id,
+                version: effects.lamport_version(),
+            },
+
+            (ID::Deleted, Some((i, _)), None) => SuiObjectChange::Deleted {
+                sender: tx_data.sender(),
+                object_type: i
+                    .struct_tag()
+                    .ok_or_else(|| internal_error(format!("No type for object {object_id}")))?,
+                object_id,
+                version: effects.lamport_version(),
+            },
+        })
+    }
+
+    Ok(changes)
 }

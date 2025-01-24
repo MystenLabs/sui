@@ -12,7 +12,7 @@ use sui_types::object::{Object, Owner};
 
 use crate::schema::{coin_balance_buckets, kv_objects, obj_info, obj_versions};
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
 #[diesel(treat_none_as_default_value = false)]
 pub struct StoredObject {
