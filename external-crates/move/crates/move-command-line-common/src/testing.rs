@@ -63,3 +63,22 @@ pub fn format_diff(expected: impl AsRef<str>, actual: impl AsRef<str>) -> String
     }
     ret
 }
+
+pub fn insta_assert<Info: serde::Serialize>(
+    input_path: impl AsRef<std::path::Path>,
+    output_path: impl AsRef<str>,
+    info: &Info,
+    contents: impl AsRef<str>,
+) {
+    let input_path = input_path.as_ref();
+    let output_path = output_path.as_ref();
+    let contents = contents.as_ref();
+    let mut settings = insta::Settings::clone_current();
+    settings.set_input_file(input_path);
+    settings.set_info(info);
+    settings.set_prepend_module_to_snapshot(false);
+    settings.set_omit_expression(true);
+    settings.bind(|| {
+        insta::assert_snapshot!(output_path, contents);
+    });
+}

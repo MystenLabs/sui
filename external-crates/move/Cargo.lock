@@ -1020,6 +1020,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
+name = "erased-discriminant"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "373f74784b51403f16c5fa6dc667488389e629811329c1c6719c25874da2ba4f"
+dependencies = [
+ "typeid",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1332,6 +1341,7 @@ dependencies = [
  "console",
  "linked-hash-map",
  "once_cell",
+ "serde",
  "similar",
 ]
 
@@ -1838,6 +1848,7 @@ dependencies = [
  "difference",
  "dirs-next",
  "hex",
+ "insta",
  "move-binary-format",
  "move-core-types",
  "once_cell",
@@ -3360,13 +3371,15 @@ dependencies = [
 
 [[package]]
 name = "serde-reflection"
-version = "0.3.6"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f05a5f801ac62a51a49d378fdb3884480041b99aced450b28990673e8ff99895"
+checksum = "e5bef77b40d103fda6c10d29c21f5c78c980e8570e1a290a648a9ff5011f96e1"
 dependencies = [
+ "erased-discriminant",
  "once_cell",
  "serde",
  "thiserror",
+ "typeid",
 ]
 
 [[package]]
@@ -4006,6 +4019,12 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width",
 ]
+
+[[package]]
+name = "typeid"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e13db2e0ccd5e14a544e8a246ba2312cd25223f616442d7f2cb0e3db614236e"
 
 [[package]]
 name = "typenum"

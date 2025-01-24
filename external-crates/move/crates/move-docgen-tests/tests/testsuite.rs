@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_command_line_common::testing::insta_assert;
 use move_docgen::{Docgen, DocgenOptions};
 use move_model_2::source_model;
 use move_package::compilation::model_builder;
@@ -46,16 +47,22 @@ fn test_move(toml_path: &Path) -> datatest_stable::Result<()> {
 
     assert!(!options.flags.exclude_impl);
     assert!(!options.flags.exclude_impl);
-    test_move_one(&test_dir.join("default"), &model, &options)?;
+    test_move_one(toml_path, &test_dir.join("default"), &model, &options)?;
 
     assert!(!options.flags.no_collapsed_sections);
     options.flags.no_collapsed_sections = true;
-    test_move_one(&test_dir.join("collapsed_sections"), &model, &options)?;
+    test_move_one(
+        toml_path,
+        &test_dir.join("collapsed_sections"),
+        &model,
+        &options,
+    )?;
 
     Ok(())
 }
 
 fn test_move_one(
+    toml_path: &Path,
     out_dir: &Path,
     model: &source_model::Model,
     doc_options: &DocgenOptions,
@@ -67,7 +74,7 @@ fn test_move_one(
             continue;
         }
         let out_path = out_dir.join(&path).to_string_lossy().to_string();
-        insta::assert_snapshot!(out_path, contents);
+        insta_assert(toml_path, out_path, doc_options, contents);
     }
     Ok(())
 }

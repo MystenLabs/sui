@@ -6344,13 +6344,13 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.41.1"
+version = "1.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e9ffc4d4892617c50a928c52b2961cb5174b6fc6ebf252b2fac9d21955c48b8"
+checksum = "6513e4067e16e69ed1db5ab56048ed65db32d10ba5fc1217f5393f8f17d8b5a5"
 dependencies = [
  "console",
- "lazy_static",
  "linked-hash-map",
+ "once_cell",
  "pest",
  "pest_derive",
  "serde",
@@ -7714,6 +7714,7 @@ dependencies = [
  "difference",
  "dirs-next",
  "hex",
+ "insta",
  "move-binary-format",
  "move-core-types",
  "once_cell",
@@ -9010,9 +9011,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.19.0"
+version = "1.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
+checksum = "1261fe7e33c73b354eab43b1273a57c8f967d0391e80353e51f764ac02cf6775"
 
 [[package]]
 name = "oorandom"
