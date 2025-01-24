@@ -19,7 +19,7 @@ Module providing debug functionality.
 
 
 
-<pre><code><b>public</b> <b>fun</b> printT(x: &T)
+<pre><code><b>public</b> <b>fun</b> <a href="../std/debug.md#std_debug_print">print</a>&lt;T&gt;(x: &T)
 </code></pre>
 
 

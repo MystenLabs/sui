@@ -49,7 +49,7 @@ The type <code>T</code> is the main way to index the event, and can contain
 phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(MyEvent&lt;<b>phantom</b> T&gt;)</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> emitT(<a href="../sui/event.md#sui_event">event</a>: T)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit">emit</a>&lt;T: <b>copy</b>, drop&gt;(<a href="../sui/event.md#sui_event">event</a>: T)
 </code></pre>
 
 

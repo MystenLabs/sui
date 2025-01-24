@@ -17,6 +17,8 @@ title: Module `sui::config`
 -  [Function `exists_with_type_for_next_epoch`](#sui_config_exists_with_type_for_next_epoch)
 -  [Function `borrow_for_next_epoch_mut`](#sui_config_borrow_for_next_epoch_mut)
 -  [Function `read_setting_for_next_epoch`](#sui_config_read_setting_for_next_epoch)
+-  [Macro function `entry`](#sui_config_entry)
+-  [Macro function `update`](#sui_config_update)
 -  [Function `read_setting`](#sui_config_read_setting)
 -  [Function `read_setting_impl`](#sui_config_read_setting_impl)
 
@@ -42,7 +44,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b> <b>struct</b> ConfigWriteCap <b>has</b> key
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/config.md#sui_config_Config">Config</a>&lt;<b>phantom</b> WriteCap&gt; <b>has</b> key
 </code></pre>
 
 
@@ -68,7 +70,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b> <b>struct</b> SettingValue <b>has</b> drop, store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/config.md#sui_config_Setting">Setting</a>&lt;Value: <b>copy</b>, drop, store&gt; <b>has</b> drop, store
 </code></pre>
 
 
@@ -94,7 +96,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b> <b>struct</b> SettingDataValue <b>has</b> drop, store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/config.md#sui_config_SettingData">SettingData</a>&lt;Value: <b>copy</b>, drop, store&gt; <b>has</b> drop, store
 </code></pre>
 
 
@@ -162,7 +164,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> newWriteCap(_cap: &<b>mut</b> WriteCap, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/config.md#sui_config_new">new</a>&lt;WriteCap&gt;(_cap: &<b>mut</b> WriteCap, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;
 </code></pre>
 
 
@@ -186,7 +188,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> shareWriteCap(<a href="../sui/config.md#sui_config">config</a>: <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;)
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/config.md#sui_config_share">share</a>&lt;WriteCap&gt;(<a href="../sui/config.md#sui_config">config</a>: <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;)
 </code></pre>
 
 
@@ -210,7 +212,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> transferWriteCap(<a href="../sui/config.md#sui_config">config</a>: <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, owner: <b>address</b>)
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/transfer.md#sui_transfer">transfer</a>&lt;WriteCap&gt;(<a href="../sui/config.md#sui_config">config</a>: <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, owner: <b>address</b>)
 </code></pre>
 
 
@@ -234,7 +236,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> add_for_next_epochWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/config.md#sui_config_add_for_next_epoch">add_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -303,7 +305,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> remove_for_next_epochWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/config.md#sui_config_remove_for_next_epoch">remove_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -362,7 +364,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> exists_with_typeWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, name: Name): bool
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/config.md#sui_config_exists_with_type">exists_with_type</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui/config.md#sui_config">config</a>: &<a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, name: Name): bool
 </code></pre>
 
 
@@ -393,7 +395,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> exists_with_type_for_next_epochWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, name: Name, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/config.md#sui_config_exists_with_type_for_next_epoch">exists_with_type_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui/config.md#sui_config">config</a>: &<a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, name: Name, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -430,7 +432,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> borrow_for_next_epoch_mutWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): &<b>mut</b> Value
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/config.md#sui_config_borrow_for_next_epoch_mut">borrow_for_next_epoch_mut</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): &<b>mut</b> Value
 </code></pre>
 
 
@@ -468,7 +470,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> read_setting_for_next_epochWriteCap, Name, Value(<a href="../sui/config.md#sui_config">config</a>: &<a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, name: Name): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/config.md#sui_config_read_setting_for_next_epoch">read_setting_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui/config.md#sui_config">config</a>: &<a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;WriteCap&gt;, name: Name): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -496,13 +498,101 @@ title: Module `sui::config`
 
 </details>
 
+<a name="sui_config_entry"></a>
+
+## Macro function `entry`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>macro</b> <b>fun</b> <b>entry</b>&lt;$WriteCap, $Name: <b>copy</b>, drop, store, $Value: <b>copy</b>, drop, store&gt;($<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;$WriteCap&gt;, $cap: &<b>mut</b> $WriteCap, $name: $Name, $initial_for_next_epoch: |&<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;$WriteCap&gt;, &<b>mut</b> $WriteCap, &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>| -&gt; $Value, $ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): &<b>mut</b> $Value
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>macro</b> <b>fun</b> <b>entry</b>&lt;
+    $WriteCap,
+    $Name: <b>copy</b> + drop + store,
+    $Value: <b>copy</b> + drop + store,
+&gt;(
+    $<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">Config</a>&lt;$WriteCap&gt;,
+    $cap: &<b>mut</b> $WriteCap,
+    $name: $Name,
+    $initial_for_next_epoch: |&<b>mut</b> <a href="../sui/config.md#sui_config_Config">Config</a>&lt;$WriteCap&gt;, &<b>mut</b> $WriteCap, &<b>mut</b> TxContext| -&gt; $Value,
+    $ctx: &<b>mut</b> TxContext,
+): &<b>mut</b> $Value {
+    <b>let</b> <a href="../sui/config.md#sui_config">config</a> = $<a href="../sui/config.md#sui_config">config</a>;
+    <b>let</b> cap = $cap;
+    <b>let</b> name = $name;
+    <b>let</b> ctx = $ctx;
+    <b>if</b> (!<a href="../sui/config.md#sui_config">config</a>.<a href="../sui/config.md#sui_config_exists_with_type_for_next_epoch">exists_with_type_for_next_epoch</a>&lt;_, _, $Value&gt;(name, ctx)) {
+        <b>let</b> initial = $initial_for_next_epoch(<a href="../sui/config.md#sui_config">config</a>, cap, ctx);
+        <a href="../sui/config.md#sui_config">config</a>.<a href="../sui/config.md#sui_config_add_for_next_epoch">add_for_next_epoch</a>(cap, name, initial, ctx);
+    };
+    <a href="../sui/config.md#sui_config">config</a>.<a href="../sui/config.md#sui_config_borrow_for_next_epoch_mut">borrow_for_next_epoch_mut</a>(cap, name, ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_config_update"></a>
+
+## Macro function `update`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>macro</b> <b>fun</b> <a href="../sui/config.md#sui_config_update">update</a>&lt;$WriteCap, $Name: <b>copy</b>, drop, store, $Value: <b>copy</b>, drop, store&gt;($<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;$WriteCap&gt;, $cap: &<b>mut</b> $WriteCap, $name: $Name, $initial_for_next_epoch: |&<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;$WriteCap&gt;, &<b>mut</b> $WriteCap, &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>| -&gt; $Value, $update_for_next_epoch: |<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$Value&gt;, &<b>mut</b> $Value| -&gt; (), $ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>macro</b> <b>fun</b> <a href="../sui/config.md#sui_config_update">update</a>&lt;
+    $WriteCap,
+    $Name: <b>copy</b> + drop + store,
+    $Value: <b>copy</b> + drop + store,
+&gt;(
+    $<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">Config</a>&lt;$WriteCap&gt;,
+    $cap: &<b>mut</b> $WriteCap,
+    $name: $Name,
+    $initial_for_next_epoch: |&<b>mut</b> <a href="../sui/config.md#sui_config_Config">Config</a>&lt;$WriteCap&gt;, &<b>mut</b> $WriteCap, &<b>mut</b> TxContext| -&gt; $Value,
+    $update_for_next_epoch: |Option&lt;$Value&gt;, &<b>mut</b> $Value|,
+    $ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> <a href="../sui/config.md#sui_config">config</a> = $<a href="../sui/config.md#sui_config">config</a>;
+    <b>let</b> cap = $cap;
+    <b>let</b> name = $name;
+    <b>let</b> ctx = $ctx;
+    <b>let</b> old_value_opt =
+        <b>if</b> (!<a href="../sui/config.md#sui_config">config</a>.<a href="../sui/config.md#sui_config_exists_with_type_for_next_epoch">exists_with_type_for_next_epoch</a>&lt;_, _, $Value&gt;(name, ctx)) {
+            <b>let</b> initial = $initial_for_next_epoch(<a href="../sui/config.md#sui_config">config</a>, cap, ctx);
+            <a href="../sui/config.md#sui_config">config</a>.<a href="../sui/config.md#sui_config_add_for_next_epoch">add_for_next_epoch</a>(cap, name, initial, ctx)
+        } <b>else</b> {
+            option::none()
+        };
+    $update_for_next_epoch(old_value_opt, <a href="../sui/config.md#sui_config">config</a>.<a href="../sui/config.md#sui_config_borrow_for_next_epoch_mut">borrow_for_next_epoch_mut</a>(cap, name, ctx));
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_config_read_setting"></a>
 
 ## Function `read_setting`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> read_settingName, Value(<a href="../sui/config.md#sui_config">config</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, name: Name, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/config.md#sui_config_read_setting">read_setting</a>&lt;Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui/config.md#sui_config">config</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, name: Name, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -537,7 +627,7 @@ title: Module `sui::config`
 
 
 
-<pre><code><b>fun</b> read_setting_implFieldSettingValue, SettingValue, SettingDataValue, Value(<a href="../sui/config.md#sui_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: u64): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+<pre><code><b>fun</b> <a href="../sui/config.md#sui_config_read_setting_impl">read_setting_impl</a>&lt;FieldSettingValue: key, SettingValue: store, SettingDataValue: store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui/config.md#sui_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: u64): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
