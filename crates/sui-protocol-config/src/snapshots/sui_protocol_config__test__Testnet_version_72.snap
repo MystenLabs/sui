@@ -346,5 +346,4 @@ max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: 3700000
 gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
-use_object_per_epoch_marker_table_v2: true
 

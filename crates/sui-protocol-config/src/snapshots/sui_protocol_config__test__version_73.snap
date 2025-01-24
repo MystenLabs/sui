@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 72
+version: 73
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -355,4 +355,5 @@ max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: 3700000
 gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
+use_object_per_epoch_marker_table_v2: true
 
