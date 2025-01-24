@@ -91,6 +91,6 @@ public macro fun do<$R: drop>($stop: u8, $f: |u8| -> $R) {
 }
 
 /// Loops applying `$f` to each number from `0` to `$stop` (inclusive)
-public macro fun do_eq<$R: drop>($stop: u8, $f: |u8| -> $R) {
+public macro fun do_eq<$R: drop>($stop: u8, $f: |u8| -> $) {
     std::macros::do_eq!($stop, $f)
 }
