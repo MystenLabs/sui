@@ -566,8 +566,9 @@ impl ModuleDefinitionResolver {
     ) -> PartialVMResult<Vec<Type>> {
         let loaded_module = &*self.module;
         let func_inst = loaded_module.function_instantiation_at(idx.0);
-        let instantiation: Vec<_> = loaded_module
-            .instantiation_signature_at(func_inst.instantiation_idx)?
+        let instantiation: Vec<_> = func_inst
+            .instantiation_signature
+            .to_ref()
             .iter()
             .map(|ty| subst(ty, type_params))
             .collect::<PartialVMResult<_>>()?;
@@ -606,8 +607,7 @@ impl ModuleDefinitionResolver {
     ) -> PartialVMResult<Type> {
         let loaded_module = &*self.module;
         let struct_inst = loaded_module.struct_instantiation_at(idx.0);
-        let instantiation =
-            loaded_module.instantiation_signature_at(struct_inst.instantiation_idx)?;
+        let instantiation = &struct_inst.instantiation_signature.to_ref();
         self.instantiate_type_common(&struct_inst.def, instantiation, ty_args)
     }
 
@@ -619,8 +619,7 @@ impl ModuleDefinitionResolver {
         let loaded_module = &*self.module;
         let handle = loaded_module.variant_instantiation_handle_at(vidx);
         let enum_inst = loaded_module.enum_instantiation_at(handle.enum_def);
-        let instantiation =
-            loaded_module.instantiation_signature_at(enum_inst.instantiation_idx)?;
+        let instantiation = &enum_inst.instantiation_signature.to_ref();
         self.instantiate_type_common(&enum_inst.def, instantiation, ty_args)
     }
 
@@ -651,16 +650,17 @@ impl ModuleDefinitionResolver {
         ))))
     }
 
+    #[allow(dead_code)]
     fn single_type_at(&self, idx: SignatureIndex) -> &Type {
         self.module.single_type_at(idx)
     }
 
     pub(crate) fn instantiate_single_type(
         &self,
-        idx: SignatureIndex,
+        ty_ptr: &VMPointer<Type>,
         ty_args: &[Type],
     ) -> PartialVMResult<Type> {
-        let ty = self.single_type_at(idx);
+        let ty = ty_ptr.to_ref();
         if !ty_args.is_empty() {
             subst(ty, ty_args)
         } else {

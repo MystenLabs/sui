@@ -21,7 +21,7 @@ Call Stack:
 
         Code:
             [10] LdU64(1)
-            [11] VecImmBorrow(2)
+            [11] VecImmBorrow(Bool)
             [12] StLoc(0)
           > [13] CallGeneric(0)
             [14] StLoc(2)

@@ -29,7 +29,7 @@ use move_binary_format::{
     },
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
-use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 struct PackageContext<'natives> {
     pub natives: &'natives NativeFunctions,
@@ -45,7 +45,7 @@ struct PackageContext<'natives> {
     // be able to remove this.
     pub compiled_modules: BinaryCache<Identifier, CompiledModule>,
 
-    // NB: All things except for types are allocated into this arena.
+    // NB: All code and signatures are allocated in this arena.
     pub package_arena: Arena,
     pub vtable: PackageVirtualTable,
 }
@@ -53,7 +53,7 @@ struct PackageContext<'natives> {
 struct FunctionContext<'pkg_ctxt, 'natives> {
     package_context: &'pkg_ctxt PackageContext<'natives>,
     module: &'pkg_ctxt CompiledModule,
-    single_signature_token_map: BTreeMap<SignatureIndex, Type>,
+    single_signature_token_map: BTreeMap<SignatureIndex, VMPointer<Type>>,
 }
 
 impl PackageContext<'_> {
@@ -215,28 +215,30 @@ fn module(
     // Initialize module data
     let type_refs = initialize_type_refs(&module.compiled_module)?;
 
-    let mut instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>> = BTreeMap::new();
+    let mut signature_cache: BTreeMap<SignatureIndex, VMPointer<Vec<Type>>> = BTreeMap::new();
 
     let structs = structs(package_context, &module.compiled_module, &type_refs)?;
     let enums = enums(package_context, &module.compiled_module, &type_refs)?;
 
     let struct_instantiations = struct_instantiations(
-        &mut instantiation_signatures,
+        package_context,
+        &mut signature_cache,
         &module.compiled_module,
         &structs,
     )?;
     let enum_instantiations = enum_instantiations(
-        &mut instantiation_signatures,
+        package_context,
+        &mut signature_cache,
         &module.compiled_module,
         &enums,
     )?;
 
     // Process functions and function instantiations
     // Function loading is effectful; they all go into the arena.
-    let single_signature_token_map = functions(package_context, module)?;
+    let single_signature_token_map = functions(package_context, &mut signature_cache, module)?;
     let function_instantiations = function_instantiations(
         package_context,
-        &mut instantiation_signatures,
+        &mut signature_cache,
         &module.compiled_module,
     )?;
 
@@ -258,7 +260,7 @@ fn module(
         field_handles,
         field_instantiations,
         single_signature_token_map,
-        instantiation_signatures,
+        instantiation_signatures: signature_cache,
         variant_handles: module.compiled_module.variant_handles().to_vec(),
         variant_instantiation_handles: module
             .compiled_module
@@ -314,7 +316,8 @@ fn structs(
 }
 
 fn struct_instantiations(
-    instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
+    package_context: &mut PackageContext<'_>,
+    signature_cache: &mut SignatureCache,
     module: &CompiledModule,
     structs: &[StructDef],
 ) -> PartialVMResult<Vec<StructInstantiation>> {
@@ -327,12 +330,13 @@ fn struct_instantiations(
             let field_count = struct_def.field_count;
 
             let instantiation_idx = struct_inst.type_parameters;
-            cache_signatures(instantiation_signatures, module, instantiation_idx)?;
+            let instantiation_signature =
+                cache_signatures(package_context, signature_cache, module, instantiation_idx)?;
 
             Ok(StructInstantiation {
                 field_count,
                 def: struct_def.idx.clone(),
-                instantiation_idx,
+                instantiation_signature,
             })
         })
         .collect()
@@ -374,7 +378,8 @@ fn enums(
 }
 
 fn enum_instantiations(
-    instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
+    package_context: &mut PackageContext<'_>,
+    signature_cache: &mut SignatureCache,
     module: &CompiledModule,
     enums: &[EnumDef],
 ) -> PartialVMResult<Vec<EnumInstantiation>> {
@@ -386,12 +391,13 @@ fn enum_instantiations(
             let enum_def = &enums[def];
             let variant_count_map = enum_def.variants.iter().map(|v| v.field_count).collect();
             let instantiation_idx = enum_inst.type_parameters;
-            cache_signatures(instantiation_signatures, module, instantiation_idx)?;
+            let instantiation_signature =
+                cache_signatures(package_context, signature_cache, module, instantiation_idx)?;
 
             Ok(EnumInstantiation {
                 variant_count_map,
                 def: enum_def.idx.clone(),
-                instantiation_idx,
+                instantiation_signature,
             })
         })
         .collect()
@@ -448,20 +454,36 @@ fn field_instantiations(
 }
 
 fn cache_signatures(
-    instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
+    package_context: &mut PackageContext<'_>,
+    signature_cache: &mut SignatureCache,
     module: &CompiledModule,
     instantiation_idx: SignatureIndex,
-) -> PartialVMResult<()> {
-    if let btree_map::Entry::Vacant(e) = instantiation_signatures.entry(instantiation_idx) {
+) -> PartialVMResult<VMPointer<Vec<Type>>> {
+    // Return it if we find it.
+    if let Some(signature) = signature_cache.get(&instantiation_idx) {
+        Ok(signature.ptr_clone())
+    } else {
+        // Create the instantiation by mapping types and collecting them into a vector
         let instantiation = module
             .signature_at(instantiation_idx)
             .0
             .iter()
             .map(|ty| make_type(module, ty))
-            .collect::<Result<Vec<_>, _>>()?;
-        e.insert(instantiation);
+            .collect::<PartialVMResult<Vec<_>>>()?;
+
+        // Allocate the vector in the package arena and create a VMPointer
+        let instantiation_ptr = VMPointer::new(
+            package_context.package_arena.alloc_item(instantiation) as *const Vec<Type>,
+        );
+
+        // Add it to the map
+        assert!(signature_cache
+            .insert(instantiation_idx, instantiation_ptr)
+            .is_none());
+
+        // Return it
+        Ok(instantiation_ptr)
     }
-    Ok(())
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -469,8 +491,9 @@ fn cache_signatures(
 
 fn functions(
     package_context: &mut PackageContext,
+    signature_cache: &mut SignatureCache,
     module: &mut input::Module,
-) -> PartialVMResult<BTreeMap<SignatureIndex, Type>> {
+) -> PartialVMResult<BTreeMap<SignatureIndex, VMPointer<Type>>> {
     let input::Module {
         compiled_module: module,
         functions: optimized_fns,
@@ -485,7 +508,7 @@ fn functions(
         .enumerate()
         .map(|(ndx, fun)| {
             let findex = FunctionDefinitionIndex(ndx as TableIndex);
-            alloc_function(package_context, findex, fun, module)
+            alloc_function(package_context, signature_cache, findex, fun, module)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
     let loaded_functions = package_context
@@ -540,7 +563,7 @@ fn functions(
 
 fn function_instantiations(
     package_context: &mut PackageContext,
-    instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
+    signature_cache: &mut SignatureCache,
     module: &CompiledModule,
 ) -> PartialVMResult<Vec<FunctionInstantiation>> {
     dbg_println!(flag: function_list_sizes, "handle size: {}", module.function_handles().len());
@@ -552,18 +575,20 @@ fn function_instantiations(
             let handle = call(package_context, module, func_inst.handle)?;
 
             let instantiation_idx = func_inst.type_parameters;
-            cache_signatures(instantiation_signatures, module, instantiation_idx)?;
+            let instantiation_signature =
+                cache_signatures(package_context, signature_cache, module, instantiation_idx)?;
 
             Ok(FunctionInstantiation {
                 handle,
-                instantiation_idx,
+                instantiation_signature,
             })
         })
         .collect()
 }
 
 fn alloc_function(
-    context: &PackageContext,
+    context: &mut PackageContext,
+    signature_cache: &mut SignatureCache,
     index: FunctionDefinitionIndex,
     def: &FunctionDefinition,
     module: &CompiledModule,
@@ -584,32 +609,22 @@ fn alloc_function(
     } else {
         (None, false)
     };
-    let parameters = module
-        .signature_at(handle.parameters)
-        .0
-        .iter()
-        .map(|tok| make_type(module, tok))
-        .collect::<PartialVMResult<Vec<_>>>()?;
+    let parameters = cache_signatures(context, signature_cache, module, handle.parameters)?;
     // Native functions do not have a code unit
     let (locals_len, locals, jump_tables) = match &def.code {
         Some(code) => (
-            parameters.len() + module.signature_at(code.locals).0.len(),
-            module
-                .signature_at(code.locals)
-                .0
-                .iter()
-                .map(|tok| make_type(module, tok))
-                .collect::<PartialVMResult<Vec<_>>>()?,
+            parameters.to_ref().len() + module.signature_at(code.locals).0.len(),
+            Some(cache_signatures(
+                context,
+                signature_cache,
+                module,
+                code.locals,
+            )?),
             code.jump_tables.clone(),
         ),
-        None => (0, vec![], vec![]),
+        None => (0, None, vec![]),
     };
-    let return_ = module
-        .signature_at(handle.return_)
-        .0
-        .iter()
-        .map(|tok| make_type(module, tok))
-        .collect::<PartialVMResult<Vec<_>>>()?;
+    let return_ = cache_signatures(context, signature_cache, module, handle.return_)?;
     let type_parameters = handle.type_parameters.clone();
     let fun = Function {
         file_format_version: module.version(),
@@ -765,36 +780,36 @@ fn bytecode(
 
         // Vectors
         input::Bytecode::VecPack(si, size) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecPack(*si, *size)
+            let vec_type = check_and_cache_vector_type(context, si)?;
+            Bytecode::VecPack(vec_type, *size)
         }
         input::Bytecode::VecLen(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecLen(*si)
+            let vec_type = check_and_cache_vector_type(context, si)?;
+            Bytecode::VecLen(vec_type)
         }
         input::Bytecode::VecImmBorrow(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecImmBorrow(*si)
+            let vec_type = check_and_cache_vector_type(context, si)?;
+            Bytecode::VecImmBorrow(vec_type)
         }
         input::Bytecode::VecMutBorrow(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecMutBorrow(*si)
+            let vec_type = check_and_cache_vector_type(context, si)?;
+            Bytecode::VecMutBorrow(vec_type)
         }
         input::Bytecode::VecPushBack(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecPushBack(*si)
+            let vec_type = check_and_cache_vector_type(context, si)?;
+            Bytecode::VecPushBack(vec_type)
         }
         input::Bytecode::VecPopBack(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecPopBack(*si)
+            let vec_type = check_and_cache_vector_type(context, si)?;
+            Bytecode::VecPopBack(vec_type)
         }
         input::Bytecode::VecUnpack(si, size) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecUnpack(*si, *size)
+            let vec_type = check_and_cache_vector_type(context, si)?;
+            Bytecode::VecUnpack(vec_type, *size)
         }
         input::Bytecode::VecSwap(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecSwap(*si)
+            let vec_type = check_and_cache_vector_type(context, si)?;
+            Bytecode::VecSwap(vec_type)
         }
 
         // Enums and Variants
@@ -1072,15 +1087,14 @@ pub fn make_type(module: &CompiledModule, tok: &SignatureToken) -> PartialVMResu
     Ok(res)
 }
 
-fn check_vector_type(
+fn check_and_cache_vector_type(
     context: &mut FunctionContext,
     signature_index: &SignatureIndex,
-) -> PartialVMResult<()> {
-    if !context
-        .single_signature_token_map
-        .contains_key(signature_index)
-    {
-        let ty = match context.module.signature_at(*signature_index).0.first() {
+) -> PartialVMResult<VMPointer<Type>> {
+    if let Some(type_) = context.single_signature_token_map.get(signature_index) {
+        Ok(type_.ptr_clone())
+    } else {
+        let sig_token = match context.module.signature_at(*signature_index).0.first() {
             None => {
                 return Err(
                     PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
@@ -1092,9 +1106,12 @@ fn check_vector_type(
             }
             Some(sig_token) => sig_token,
         };
-        context
+        let ty = make_type(context.module, sig_token)?;
+        let ty_ptr = VMPointer::new(context.package_context.package_arena.alloc_item(ty));
+        assert!(context
             .single_signature_token_map
-            .insert(*signature_index, make_type(context.module, ty)?);
+            .insert(*signature_index, ty_ptr)
+            .is_none());
+        Ok(ty_ptr)
     }
-    Ok(())
 }
