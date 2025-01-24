@@ -34,6 +34,7 @@ use sui_core::execution_cache::build_execution_cache;
 use sui_core::state_accumulator::StateAccumulatorMetrics;
 use sui_core::storage::RestReadStore;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
+use sui_exex::BoxedLaunchExEx;
 use sui_exex::ExExManagerHandle;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
@@ -52,7 +53,6 @@ use tower::ServiceBuilder;
 use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
 
-use crate::extensions::sui_exexes;
 use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
@@ -142,7 +142,6 @@ use typed_store::DBMetrics;
 
 pub mod admin;
 pub mod builder;
-pub mod extensions;
 mod handle;
 pub mod metrics;
 
@@ -288,8 +287,16 @@ impl SuiNode {
         config: NodeConfig,
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
+        exexes: Vec<(String, Box<dyn BoxedLaunchExEx>)>,
     ) -> Result<Arc<SuiNode>> {
-        Self::start_async(config, registry_service, custom_rpc_runtime, "unknown").await
+        Self::start_async(
+            config,
+            registry_service,
+            custom_rpc_runtime,
+            exexes,
+            "unknown",
+        )
+        .await
     }
 
     fn start_jwk_updater(
@@ -431,6 +438,7 @@ impl SuiNode {
         config: NodeConfig,
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
+        exexes: Vec<(String, Box<dyn BoxedLaunchExEx>)>,
         software_version: &'static str,
     ) -> Result<Arc<SuiNode>> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(&config);
@@ -819,7 +827,7 @@ impl SuiNode {
             ExExLauncher::new(
                 Arc::new(state_sync_store),
                 state_sync_handle.clone(),
-                sui_exexes(),
+                exexes,
             )
             .launch()
             .await?

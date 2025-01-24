@@ -11,6 +11,7 @@ pub mod head;
 pub mod launcher;
 pub mod manager;
 pub mod notification;
+pub mod utils;
 
 pub use context::ExExContext;
 pub use event::ExExEvent;
@@ -18,3 +19,4 @@ pub use head::{ExExHead, FinishedExExHeight};
 pub use launcher::{BoxExEx, BoxedLaunchExEx, ExExLauncher, LaunchExEx};
 pub use manager::{ExExHandle, ExExManager, ExExManagerHandle};
 pub use notification::{ExExNotification, ExExNotifications};
+pub use utils::box_exex;
