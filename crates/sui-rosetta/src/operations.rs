@@ -616,8 +616,7 @@ impl Operations {
     /// If GasCoin is transferred as a part of transferObjects, operations need to be
     /// updated such that:
     /// 1) gas owner needs to be assigned back to the previous owner
-    /// 2) SuiBalanceChange type needs to be converted to PaySui for
-    ///    previous and new gas owners and their balances need to be adjusted for the gas
+    /// 2) balances of previous and new gas owners need to be adjusted for the gas
     fn process_gascoin_transfer(
         coin_change_operations: &mut impl Iterator<Item = Operation>,
         tx: SuiTransactionBlockKind,
@@ -646,11 +645,10 @@ impl Operations {
                             .amount
                             .as_mut()
                             .ok_or_else(|| anyhow!("Missing amount for a balance-change"))?;
+                        // adjust the balances for previous and new gas_owners
                         if account.address == prev_gas_owner && amount.currency == *SUI {
-                            // previous owner's balance needs to be adjusted for gas
                             amount.value -= gas_used;
                         } else if account.address == new_gas_owner && amount.currency == *SUI {
-                            // new owner's balance needs to be adjusted for gas
                             amount.value += gas_used;
                         }
                     }

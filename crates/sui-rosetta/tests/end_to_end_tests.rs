@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
 use anyhow::anyhow;
 use rand::rngs::OsRng;
 use rand::seq::IteratorRandom;
 use rosetta_client::start_rosetta_test_server;
 use serde_json::json;
 use shared_crypto::intent::Intent;
+use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::time::Duration;
@@ -706,8 +706,7 @@ async fn test_balance_from_obj_merge_to_gas() {
     let test_cluster = TestClusterBuilder::new().build().await;
     const SENDER: &str = "0x6293e2b4434265fa60ac8ed96342b7a288c0e43ffe737ba40feb24f06fed305d";
     const RECIPIENT: &str = "0x0e3225553e3b945b4cde5621a980297c45b96002f33c95d3306e58013129ee7c";
-    // let sender = test_cluster.get_address_0();
-    // let recipient = test_cluster.get_address_1();
+    const VAULT_BALANCE: i128 = 200000000000;
     let client = test_cluster.wallet.get_client().await.unwrap();
     let response: SuiTransactionBlockResponse = serde_json::from_value(json!({
       "digest": "GL2e3C8M1XGXfbyTbNmWcEhXg3kKF1fJViYwEzFdd8iu",
@@ -860,21 +859,21 @@ async fn test_balance_from_obj_merge_to_gas() {
         "operations: {}",
         serde_json::to_string_pretty(&operations).unwrap()
     );
-    let pay_sui_sender = operations
+    let sui_sender = operations
         .clone()
         .into_iter()
         .find(|op| {
-            op.type_ == OperationType::PaySui
+            op.type_ == OperationType::SuiBalanceChange
                 && op.account
                     == Some(AccountIdentifier::from(
                         SuiAddress::from_str(SENDER).unwrap(),
                     ))
         })
         .unwrap();
-    let pay_sui_recipient = operations
+    let sui_recipient = operations
         .into_iter()
         .find(|op| {
-            op.type_ == OperationType::PaySui
+            op.type_ == OperationType::SuiBalanceChange
                 && op.account
                     == Some(AccountIdentifier::from(
                         SuiAddress::from_str(RECIPIENT).unwrap(),
@@ -882,8 +881,8 @@ async fn test_balance_from_obj_merge_to_gas() {
         })
         .unwrap();
     assert_eq!(
-        -pay_sui_sender.amount.unwrap().value,
-        pay_sui_recipient.amount.unwrap().value
+        -sui_sender.amount.unwrap().value + VAULT_BALANCE,
+        sui_recipient.amount.unwrap().value
     );
 }
 
@@ -892,7 +891,7 @@ async fn test_balance_from_obj_merge_to_gas() {
 /// returned to sender.
 /// This checks to see when GAS_COST is transferred back to the sender, which is an edge case.
 /// In this case `process_gascoin_transfer` should be not processed.
-/// 
+///
 /// ```move
 /// public fun amount_to_coin(self: &mut Vault, amount: u64, ctx: &mut TxContext): Coin<SUI> {
 ///     self.balance.split(amount).into_coin(ctx)
