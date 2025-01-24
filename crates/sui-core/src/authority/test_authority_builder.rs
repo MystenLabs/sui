@@ -236,7 +236,6 @@ impl<'a> TestAuthorityBuilder<'a> {
 
         let cache_traits = build_execution_cache(
             &Default::default(),
-            &epoch_start_configuration,
             &registry,
             &authority_store,
             backpressure_manager.clone(),

@@ -5,7 +5,7 @@
   "publisher": "mysten",
   "icon": "images/move.png",
   "license": "Apache-2.0",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "preview": true,
   "repository": {
     "url": "https://github.com/MystenLabs/sui.git",
@@ -23,7 +23,41 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "breakpoints": [{ "language": "move" }],
+    "commands": [
+        {
+          "command": "move.toggleDisassembly",
+          "title": "Toggle disassembly view",
+          "category": "Move"
+        },
+        {
+          "command": "move.toggleSource",
+          "title": "Toggle source view",
+          "category": "Move"
+        }
+    ],
+    "languages": [
+        {
+          "id": "move",
+          "aliases": [
+            "Move",
+            "move"
+          ],
+          "extensions": [
+            ".move"
+          ]
+        },
+        {
+          "id": "mvb",
+          "aliases": [
+            "MVB",
+            "mvb"
+          ],
+          "extensions": [
+            ".mvb"
+          ]
+        }
+      ],
+    "breakpoints": [{ "language": "move" }, { "language": "mvb" }],
     "debuggers": [
       {
         "type": "move-debug",
@@ -34,7 +68,8 @@
           "--nolazy"
         ],
         "languages": [
-          "move"
+          "move",
+          "mvb"
         ],
         "configurationAttributes": {
           "launch": {
@@ -70,6 +105,16 @@
             }
           }
         }
+      }
+    ]
+  },
+  "menus": {
+    "commandPalette": [
+      {
+        "command": "move.toggleDisassembly"
+      },
+      {
+        "command": "move.toggleSource"
       }
     ]
   },

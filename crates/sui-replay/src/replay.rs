@@ -764,21 +764,22 @@ impl LocalExec {
             )
             .expect("Failed to create gas status")
         };
-        let (inner_store, gas_status, effects, result) = executor.execute_transaction_to_effects(
-            &self,
-            protocol_config,
-            metrics.clone(),
-            expensive_checks,
-            &certificate_deny_set,
-            &tx_info.executed_epoch,
-            tx_info.epoch_start_timestamp,
-            CheckedInputObjects::new_for_replay(input_objects.clone()),
-            tx_info.gas.clone(),
-            gas_status,
-            transaction_kind.clone(),
-            tx_info.sender,
-            *tx_digest,
-        );
+        let (inner_store, gas_status, effects, _timings, result) = executor
+            .execute_transaction_to_effects(
+                &self,
+                protocol_config,
+                metrics.clone(),
+                expensive_checks,
+                &certificate_deny_set,
+                &tx_info.executed_epoch,
+                tx_info.epoch_start_timestamp,
+                CheckedInputObjects::new_for_replay(input_objects.clone()),
+                tx_info.gas.clone(),
+                gas_status,
+                transaction_kind.clone(),
+                tx_info.sender,
+                *tx_digest,
+            );
 
         if let Err(err) = self.pretty_print_for_tracing(
             &gas_status,
@@ -924,7 +925,7 @@ impl LocalExec {
         .unwrap();
         let (kind, signer, gas) = executable.transaction_data().execution_parts();
         let executor = sui_execution::executor(&protocol_config, true, None).unwrap();
-        let (_, _, effects, exec_res) = executor.execute_transaction_to_effects(
+        let (_, _, effects, _timings, exec_res) = executor.execute_transaction_to_effects(
             &store,
             &protocol_config,
             Arc::new(LimitsMetrics::new(&Registry::new())),

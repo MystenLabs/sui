@@ -3,7 +3,7 @@
 
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
-use sui_config::{ExecutionCacheConfig, NodeConfig};
+use sui_config::NodeConfig;
 
 use std::fmt;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
@@ -19,8 +19,6 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
 
-use crate::execution_cache::{choose_execution_cache, ExecutionCacheConfigType};
-
 #[enum_dispatch]
 pub trait EpochStartConfigTrait {
     fn epoch_digest(&self) -> CheckpointDigest;
@@ -31,14 +29,6 @@ pub trait EpochStartConfigTrait {
     fn coin_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn bridge_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn bridge_committee_initiated(&self) -> bool;
-
-    fn execution_cache_type(&self) -> ExecutionCacheConfigType {
-        if self.flags().contains(&EpochFlag::WritebackCacheEnabled) {
-            ExecutionCacheConfigType::WritebackCache
-        } else {
-            ExecutionCacheConfigType::PassthroughCache
-        }
-    }
 
     fn use_version_assignment_tables_v3(&self) -> bool {
         self.flags()
@@ -57,51 +47,34 @@ pub trait EpochStartConfigTrait {
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
 pub enum EpochFlag {
     // The deprecated flags have all been in production for long enough that
-    // we can have deleted the old code paths they were guarding.
+    // we have deleted the old code paths they were guarding.
     // We retain them here in order not to break deserialization.
     _InMemoryCheckpointRootsDeprecated = 0,
     _PerEpochFinalizedTransactionsDeprecated = 1,
     _ObjectLockSplitTablesDeprecated = 2,
-
-    WritebackCacheEnabled = 3,
-
-    // This flag was "burned" because it was deployed with a broken version of the code. The
-    // new flags below are required to enable state accumulator v2
+    _WritebackCacheEnabledDeprecated = 3,
     _StateAccumulatorV2EnabledDeprecated = 4,
-    StateAccumulatorV2EnabledTestnet = 5,
-    StateAccumulatorV2EnabledMainnet = 6,
-
-    ExecutedInEpochTable = 7,
+    _StateAccumulatorV2EnabledTestnetDeprecated = 5,
+    _StateAccumulatorV2EnabledMainnetDeprecated = 6,
+    _ExecutedInEpochTableDeprecated = 7,
 
     UseVersionAssignmentTablesV3 = 8,
 }
 
 impl EpochFlag {
-    pub fn default_flags_for_new_epoch(config: &NodeConfig) -> Vec<Self> {
-        Self::default_flags_impl(&config.execution_cache)
+    pub fn default_flags_for_new_epoch(_config: &NodeConfig) -> Vec<Self> {
+        // NodeConfig arg is not currently used, but we keep it here for future
+        // flags that might depend on the config.
+        Self::default_flags_impl()
     }
 
     /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
     pub fn default_for_no_config() -> Vec<Self> {
-        Self::default_flags_impl(&Default::default())
+        Self::default_flags_impl()
     }
 
-    fn default_flags_impl(cache_config: &ExecutionCacheConfig) -> Vec<Self> {
-        let mut new_flags = vec![
-            EpochFlag::ExecutedInEpochTable,
-            EpochFlag::StateAccumulatorV2EnabledTestnet,
-            EpochFlag::StateAccumulatorV2EnabledMainnet,
-            EpochFlag::UseVersionAssignmentTablesV3,
-        ];
-
-        if matches!(
-            choose_execution_cache(cache_config),
-            ExecutionCacheConfigType::WritebackCache
-        ) {
-            new_flags.push(EpochFlag::WritebackCacheEnabled);
-        }
-
-        new_flags
+    fn default_flags_impl() -> Vec<Self> {
+        vec![EpochFlag::UseVersionAssignmentTablesV3]
     }
 }
 
@@ -118,16 +91,20 @@ impl fmt::Display for EpochFlag {
             EpochFlag::_ObjectLockSplitTablesDeprecated => {
                 write!(f, "ObjectLockSplitTables (DEPRECATED)")
             }
-            EpochFlag::WritebackCacheEnabled => write!(f, "WritebackCacheEnabled"),
+            EpochFlag::_WritebackCacheEnabledDeprecated => {
+                write!(f, "WritebackCacheEnabled (DEPRECATED)")
+            }
             EpochFlag::_StateAccumulatorV2EnabledDeprecated => {
                 write!(f, "StateAccumulatorV2EnabledDeprecated (DEPRECATED)")
             }
-            EpochFlag::ExecutedInEpochTable => write!(f, "ExecutedInEpochTable"),
-            EpochFlag::StateAccumulatorV2EnabledTestnet => {
-                write!(f, "StateAccumulatorV2EnabledTestnet")
+            EpochFlag::_ExecutedInEpochTableDeprecated => {
+                write!(f, "ExecutedInEpochTable (DEPRECATED)")
             }
-            EpochFlag::StateAccumulatorV2EnabledMainnet => {
-                write!(f, "StateAccumulatorV2EnabledMainnet")
+            EpochFlag::_StateAccumulatorV2EnabledTestnetDeprecated => {
+                write!(f, "StateAccumulatorV2EnabledTestnet (DEPRECATED)")
+            }
+            EpochFlag::_StateAccumulatorV2EnabledMainnetDeprecated => {
+                write!(f, "StateAccumulatorV2EnabledMainnet (DEPRECATED)")
             }
             EpochFlag::UseVersionAssignmentTablesV3 => {
                 write!(f, "UseVersionAssignmentTablesV3")

@@ -17,11 +17,11 @@ prometheus.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
-opentelemetry = { version = "0.25.0" }
-opentelemetry_sdk = { version = "0.25.0", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.25.0", features = ["grpc-tonic"] }
-tracing-opentelemetry = { version = "0.26.0" }
-opentelemetry-proto = { version = "0.25" }
+opentelemetry = { version = "0.27.1" }
+opentelemetry_sdk = { version = "0.27.1", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.27.0", features = ["grpc-tonic"] }
+tracing-opentelemetry = { version = "0.28.0" }
+opentelemetry-proto = { version = "0.27" }
 tokio = { workspace = true, features = ["full"] }
 futures.workspace = true
 clap.workspace = true

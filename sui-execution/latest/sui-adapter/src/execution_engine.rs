@@ -51,7 +51,7 @@ mod checked {
     };
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
-    use sui_types::execution::is_certificate_denied;
+    use sui_types::execution::{is_certificate_denied, ExecutionTiming, ResultWithTimings};
     use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::{CongestedObjects, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
@@ -96,6 +96,7 @@ mod checked {
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
+        Vec<ExecutionTiming>,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
         let input_objects = input_objects.into_inner();
@@ -132,7 +133,7 @@ mod checked {
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
         let deny_cert = is_certificate_denied(&transaction_digest, certificate_deny_set);
-        let (gas_cost_summary, execution_result) = execute_transaction::<Mode>(
+        let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
             &mut temporary_store,
             transaction_kind,
             &mut gas_charger,
@@ -229,6 +230,7 @@ mod checked {
             inner,
             gas_charger.into_gas_status(),
             effects,
+            timings,
             execution_result,
         )
     }
@@ -260,7 +262,8 @@ mod checked {
             tx_context,
             &mut gas_charger,
             pt,
-        )?;
+        )
+        .map_err(|(e, _)| e)?;
         temporary_store.update_object_version_and_prev_tx();
         Ok(temporary_store.into_inner())
     }
@@ -281,6 +284,7 @@ mod checked {
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
+        Vec<ExecutionTiming>,
     ) {
         gas_charger.smash_gas(temporary_store);
 
@@ -296,67 +300,79 @@ mod checked {
         // We must charge object read here during transaction execution, because if this fails
         // we must still ensure an effect is committed and all objects versions incremented
         let result = gas_charger.charge_input_objects(temporary_store);
-        let mut result = result.and_then(|()| {
-            let mut execution_result = if deny_cert {
-                Err(ExecutionError::new(
-                    ExecutionErrorKind::CertificateDenied,
-                    None,
-                ))
-            } else if contains_deleted_input {
-                Err(ExecutionError::new(
-                    ExecutionErrorKind::InputObjectDeleted,
-                    None,
-                ))
-            } else if let Some((cancelled_objects, reason)) = cancelled_objects {
-                match reason {
-                    SequenceNumber::CONGESTED => Err(ExecutionError::new(
-                        ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
-                            congested_objects: CongestedObjects(cancelled_objects),
-                        },
-                        None,
-                    )),
-                    SequenceNumber::RANDOMNESS_UNAVAILABLE => Err(ExecutionError::new(
-                        ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable,
-                        None,
-                    )),
-                    _ => panic!("invalid cancellation reason SequenceNumber: {reason}"),
-                }
-            } else {
-                execution_loop::<Mode>(
-                    temporary_store,
-                    transaction_kind,
-                    tx_ctx,
-                    move_vm,
-                    gas_charger,
-                    protocol_config,
-                    metrics.clone(),
-                )
-            };
 
-            let meter_check = check_meter_limit(
-                temporary_store,
-                gas_charger,
-                protocol_config,
-                metrics.clone(),
+        let result: ResultWithTimings<Mode::ExecutionResults, ExecutionError> =
+            result.map_err(|e| (e, vec![])).and_then(
+                |()| -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
+                    let mut execution_result: ResultWithTimings<
+                        Mode::ExecutionResults,
+                        ExecutionError,
+                    > = if deny_cert {
+                        Err((
+                            ExecutionError::new(ExecutionErrorKind::CertificateDenied, None),
+                            vec![],
+                        ))
+                    } else if contains_deleted_input {
+                        Err((
+                            ExecutionError::new(ExecutionErrorKind::InputObjectDeleted, None),
+                            vec![],
+                        ))
+                    } else if let Some((cancelled_objects, reason)) = cancelled_objects {
+                        match reason {
+                            SequenceNumber::CONGESTED => Err((ExecutionError::new(
+                                ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
+                                    congested_objects: CongestedObjects(cancelled_objects),
+                                },
+                                None,
+                            ), vec![])),
+                            SequenceNumber::RANDOMNESS_UNAVAILABLE => Err((ExecutionError::new(
+                                ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable,
+                                None,
+                            ), vec![])),
+                            _ => panic!("invalid cancellation reason SequenceNumber: {reason}"),
+                        }
+                    } else {
+                        execution_loop::<Mode>(
+                            temporary_store,
+                            transaction_kind,
+                            tx_ctx,
+                            move_vm,
+                            gas_charger,
+                            protocol_config,
+                            metrics.clone(),
+                        )
+                    };
+
+                    let meter_check = check_meter_limit(
+                        temporary_store,
+                        gas_charger,
+                        protocol_config,
+                        metrics.clone(),
+                    );
+                    if let Err(e) = meter_check {
+                        execution_result = Err((e, vec![]));
+                    }
+
+                    if execution_result.is_ok() {
+                        let gas_check = check_written_objects_limit::<Mode>(
+                            temporary_store,
+                            gas_charger,
+                            protocol_config,
+                            metrics,
+                        );
+                        if let Err(e) = gas_check {
+                            execution_result = Err((e, vec![]));
+                        }
+                    }
+
+                    execution_result
+                },
             );
-            if let Err(e) = meter_check {
-                execution_result = Err(e);
-            }
 
-            if execution_result.is_ok() {
-                let gas_check = check_written_objects_limit::<Mode>(
-                    temporary_store,
-                    gas_charger,
-                    protocol_config,
-                    metrics,
-                );
-                if let Err(e) = gas_check {
-                    execution_result = Err(e);
-                }
-            }
-
-            execution_result
-        });
+        let (mut result, timings) = match result {
+            Ok((r, t)) => (Ok(r), t),
+            Err((e, t)) => (Err(e), t),
+        };
 
         let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
         // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
@@ -383,7 +399,7 @@ mod checked {
             result = Err(e);
         }
 
-        (cost_summary, result)
+        (cost_summary, result, timings)
     }
 
     #[instrument(name = "run_conservation_checks", level = "debug", skip_all)]
@@ -550,7 +566,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-    ) -> Result<Mode::ExecutionResults, ExecutionError> {
+    ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
         let result = match transaction_kind {
             TransactionKind::ChangeEpoch(change_epoch) => {
                 let builder = ProgrammableTransactionBuilder::new();
@@ -563,8 +579,9 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
-                )?;
-                Ok(Mode::empty_results())
+                )
+                .map_err(|e| (e, vec![]))?;
+                Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::Genesis(GenesisTransaction { objects }) => {
                 if tx_ctx.epoch() != 0 {
@@ -584,7 +601,7 @@ mod checked {
                         }
                     }
                 }
-                Ok(Mode::empty_results())
+                Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::ConsensusCommitPrologue(prologue) => {
                 setup_consensus_commit(
@@ -597,7 +614,7 @@ mod checked {
                     metrics,
                 )
                 .expect("ConsensusCommitPrologue cannot fail");
-                Ok(Mode::empty_results())
+                Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::ConsensusCommitPrologueV2(prologue) => {
                 setup_consensus_commit(
@@ -610,7 +627,7 @@ mod checked {
                     metrics,
                 )
                 .expect("ConsensusCommitPrologueV2 cannot fail");
-                Ok(Mode::empty_results())
+                Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::ConsensusCommitPrologueV3(prologue) => {
                 setup_consensus_commit(
@@ -623,7 +640,7 @@ mod checked {
                     metrics,
                 )
                 .expect("ConsensusCommitPrologueV3 cannot fail");
-                Ok(Mode::empty_results())
+                Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::ProgrammableTransaction(pt) => {
                 programmable_transactions::execution::execute::<Mode>(
@@ -652,8 +669,9 @@ mod checked {
                                 gas_charger,
                                 protocol_config,
                                 metrics,
-                            )?;
-                            return Ok(Mode::empty_results());
+                            )
+                            .map_err(|e| (e, vec![]))?;
+                            return Ok((Mode::empty_results(), vec![]));
                         }
                         EndOfEpochTransactionKind::AuthenticatorStateCreate => {
                             assert!(protocol_config.enable_jwk_consensus_updates());
@@ -696,8 +714,9 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
-                )?;
-                Ok(Mode::empty_results())
+                )
+                .map_err(|e| (e, vec![]))?;
+                Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::RandomnessStateUpdate(randomness_state_update) => {
                 setup_randomness_state_update(
@@ -708,11 +727,14 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
-                )?;
-                Ok(Mode::empty_results())
+                )
+                .map_err(|e| (e, vec![]))?;
+                Ok((Mode::empty_results(), vec![]))
             }
         }?;
-        temporary_store.check_execution_results_consistency()?;
+        temporary_store
+            .check_execution_results_consistency()
+            .map_err(|e| (e, vec![]))?;
         Ok(result)
     }
 
@@ -886,13 +908,13 @@ mod checked {
         #[cfg(msim)]
         let result = maybe_modify_result(result, change_epoch.epoch);
 
-        if result.is_err() {
+        if let Err(err) = &result {
             tracing::error!(
-            "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
-            result.as_ref().err(),
-            temporary_store.objects(),
-            change_epoch,
-        );
+                "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
+                err.0,
+                temporary_store.objects(),
+                change_epoch,
+            );
             temporary_store.drop_writes();
             // Must reset the storage rebate since we are re-executing.
             gas_charger.reset_storage_cost_and_rebate();
@@ -911,6 +933,7 @@ mod checked {
                     gas_charger,
                     advance_epoch_safe_mode_pt,
                 )
+                .map_err(|(e, _)| e)
                 .expect("Advance epoch with safe mode must succeed");
             }
         }
@@ -980,6 +1003,7 @@ mod checked {
                     gas_charger,
                     publish_pt,
                 )
+                .map_err(|(e, _)| e)
                 .expect("System Package Publish must succeed");
             } else {
                 let mut new_package = Object::new_system_package(
@@ -1048,6 +1072,8 @@ mod checked {
             gas_charger,
             pt,
         )
+        .map_err(|(e, _)| e)?;
+        Ok(())
     }
 
     fn setup_authenticator_state_create(
@@ -1189,6 +1215,8 @@ mod checked {
             gas_charger,
             pt,
         )
+        .map_err(|(e, _)| e)?;
+        Ok(())
     }
 
     fn setup_authenticator_state_expire(
@@ -1255,6 +1283,8 @@ mod checked {
             gas_charger,
             pt,
         )
+        .map_err(|(e, _)| e)?;
+        Ok(())
     }
 
     fn setup_coin_deny_list_state_create(
