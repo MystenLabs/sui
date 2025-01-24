@@ -2085,7 +2085,7 @@ fn struct_new_diag(
         Vec::<(Loc, String)>::new(),
         vec![
             "Structs cannot be added during a 'dependency only' upgrade.".to_string(),
-            format!("Remove the struct '{struct_name}' from it's module.",),
+            format!("Remove the struct '{struct_name}' from its module.",),
         ],
     ));
 
@@ -2156,7 +2156,7 @@ fn enum_new_diag(
         Vec::<(Loc, String)>::new(),
         vec![
             "Enums cannot be added during a 'dependency only' upgrade.".to_string(),
-            format!("Remove the enum '{enum_name}' from it's module.",),
+            format!("Remove the enum '{enum_name}' from its module.",),
         ],
     ));
 
@@ -2230,7 +2230,7 @@ fn function_new_diag(
         Vec::<(Loc, String)>::new(),
         vec![
             "Functions cannot be added during a 'dependency only' upgrade.".to_string(),
-            format!("Remove the function '{function_name}' from it's module."),
+            format!("Remove the function '{function_name}' from its module."),
         ],
     ));
 
