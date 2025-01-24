@@ -902,13 +902,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     );
                     self.execute_txn(transaction).await?
                 } else if dry_run {
+                    let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                    let gas_price = gas_price.unwrap_or(self.gas_price);
                     let sender_address = self.get_sender(sender).address;
                     let transaction = TransactionData::new_programmable(
                         sender_address,
                         vec![],
                         ProgrammableTransaction { inputs, commands },
-                        0,
-                        0,
+                        gas_budget,
+                        gas_price,
                     );
                     self.dry_run(transaction).await?
                 } else {
