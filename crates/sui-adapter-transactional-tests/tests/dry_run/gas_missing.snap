@@ -1,0 +1,73 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 8-32:
+//# publish
+created: object(1,0)
+mutated: object(0,3)
+gas summary: computation_cost: 1000000, storage_cost: 5745600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 33-36:
+//# programmable --sender A --inputs @B
+//> TransferObjects([Gas], Input(0))
+// Return a small amount of coin to A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 37-41:
+//# programmable --sender B --inputs 2 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+// Account A now has 3,0
+created: object(3,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 42-44:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 2u64,
+    },
+}
+
+task 5, lines 45-48:
+//# programmable --sender A --inputs 100 --dry-run --gas-payment 3,0
+//> 0: test::m::large_vector(Input(0));
+// Give A enough gas to send transaction after rebates, it should still fail
+Error: Error checking transaction input objects: GasBalanceTooLow { gas_balance: 2, needed_gas_amount: 5000000000 }
+
+task 6, lines 49-53:
+//# programmable --sender B --inputs 2499999999 @A
+//> SplitCoins(Gas, [Input(0), Input(0)]);
+//> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(1))
+// Account A now has 6,0 6,1 that are 2 gas short of the needed amount
+created: object(6,0), object(6,1)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 54-57:
+//# programmable --sender A --inputs 100 --dry-run --gas-payment 6,0 --gas-payment 6,1
+//> 0: test::m::large_vector(Input(0));
+// Include 3,0 in the gas payment, it should succeed
+Error: Error checking transaction input objects: GasBalanceTooLow { gas_balance: 4999999998, needed_gas_amount: 5000000000 }
+
+task 8, lines 58-59:
+//# programmable --sender A --inputs 100 --dry-run --gas-payment 6,0 --gas-payment 6,1 --gas-payment 3,0
+//> 0: test::m::large_vector(Input(0));
+created: object(8,0)
+mutated: object(6,0)
+deleted: object(3,0), object(6,1)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2934360, non_refundable_storage_fee: 29640
