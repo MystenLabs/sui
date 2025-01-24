@@ -237,6 +237,8 @@ pub struct PolicyConfig {
     pub connection_blocklist_ttl_sec: u64,
     #[serde(default)]
     pub proxy_blocklist_ttl_sec: u64,
+    #[serde(default = "default_signer_blocklist_ttl_sec")]
+    pub signer_blocklist_ttl_sec: u64,
     #[serde(default)]
     pub spam_policy_type: PolicyType,
     #[serde(default)]
@@ -263,8 +265,9 @@ impl Default for PolicyConfig {
     fn default() -> Self {
         Self {
             client_id_source: default_client_id_source(),
-            connection_blocklist_ttl_sec: 0,
+            connection_blocklist_ttl_sec: default_connection_blocklist_ttl_sec(),
             proxy_blocklist_ttl_sec: 0,
+            signer_blocklist_ttl_sec: default_signer_blocklist_ttl_sec(),
             spam_policy_type: PolicyType::NoOp,
             error_policy_type: PolicyType::NoOp,
             channel_capacity: 100,
@@ -282,6 +285,11 @@ pub fn default_client_id_source() -> ClientIdSource {
 pub fn default_connection_blocklist_ttl_sec() -> u64 {
     60
 }
+
+pub fn default_signer_blocklist_ttl_sec() -> u64 {
+    60
+}
+
 pub fn default_channel_capacity() -> usize {
     100
 }

@@ -31,12 +31,17 @@ use tracing::{debug, error, info, trace, warn};
 pub const METRICS_INTERVAL_SECS: u64 = 2;
 pub const DEFAULT_DRAIN_TIMEOUT_SECS: u64 = 300;
 
-type Blocklist = Arc<DashMap<IpAddr, SystemTime>>;
+enum BlocklistKey {
+    Ip(IpAddr),
+    Signer(SuiAddress),
+}
+type Blocklist = Arc<DashMap<BlocklistKey, SystemTime>>;
 
 #[derive(Clone)]
 struct Blocklists {
     clients: Blocklist,
     proxied_clients: Blocklist,
+    signers: Blocklist,
 }
 
 #[derive(Clone)]
@@ -126,6 +131,7 @@ impl TrafficController {
         let blocklists = Blocklists {
             clients: Arc::new(DashMap::new()),
             proxied_clients: Arc::new(DashMap::new()),
+            signers: Arc::new(DashMap::new()),
         };
         let tally_loop_blocklists = blocklists.clone();
         let clear_loop_blocklists = blocklists.clone();
@@ -206,7 +212,12 @@ impl TrafficController {
     }
 
     /// Handle check with dry-run mode considered
-    pub async fn check(&self, client: &Option<IpAddr>, proxied_client: &Option<IpAddr>) -> bool {
+    pub async fn check(
+        &self,
+        client: &Option<IpAddr>,
+        proxied_client: &Option<IpAddr>,
+        signers: &Option<NonEmpty<SuiAddress>>,
+    ) -> bool {
         let check_with_dry_run_maybe = |allowed| -> bool {
             match (allowed, self.dry_run_mode()) {
                 // check succeeded
@@ -229,7 +240,7 @@ impl TrafficController {
             }
             Acl::Blocklists(blocklists) => {
                 let allowed = self
-                    .check_blocklists(blocklists, client, proxied_client)
+                    .check_blocklists(blocklists, client, proxied_client, signers)
                     .await;
                 check_with_dry_run_maybe(allowed)
             }
@@ -242,20 +253,31 @@ impl TrafficController {
         blocklists: &Blocklists,
         client: &Option<IpAddr>,
         proxied_client: &Option<IpAddr>,
+        signers: &Option<NonEmpty<SuiAddress>>,
     ) -> bool {
         let client_check = self.check_and_clear_blocklist(
-            client,
+            client.as_ref().map(|ip| BlocklistKey::Ip(ip.clone())),
             blocklists.clients.clone(),
             &self.metrics.connection_ip_blocklist_len,
         );
         let proxied_client_check = self.check_and_clear_blocklist(
-            proxied_client,
+            proxied_client.map(|ip| BlocklistKey::Ip(ip.clone())),
             blocklists.proxied_clients.clone(),
             &self.metrics.proxy_ip_blocklist_len,
         );
-        let (client_check, proxied_client_check) =
-            futures::future::join(client_check, proxied_client_check).await;
-        client_check && proxied_client_check
+        let signers_check = match signers {
+            Some(signers) => signers.iter().all(|signer| {
+                self.check_and_clear_blocklist(
+                    Some(BlocklistKey::Signer(signer.clone())),
+                    blocklists.signers.clone(),
+                    &self.metrics.signer_ip_blocklist_len,
+                )
+            }),
+            None => true,
+        };
+        let (client_check, proxied_client_check, signers_check) =
+            futures::future::join3(client_check, proxied_client_check, signers_check).await;
+        client_check && proxied_client_check && signers_check
     }
 
     pub fn dry_run_mode(&self) -> bool {
@@ -264,12 +286,12 @@ impl TrafficController {
 
     async fn check_and_clear_blocklist(
         &self,
-        client: &Option<IpAddr>,
+        key: Option<BlocklistKey>,
         blocklist: Blocklist,
         blocklist_len_gauge: &IntGauge,
     ) -> bool {
-        let client = match client {
-            Some(client) => client,
+        let key = match key {
+            Some(key) => key,
             None => return true,
         };
         let now = SystemTime::now();
@@ -455,9 +477,10 @@ async fn handle_error_tally(
         return Ok(());
     }
     trace!(
-        "Handling error_type {:?} from client {:?}",
+        "Handling error_type {:?} from client IP: {:?}, signers: {:?}",
         error_type,
         tally.direct,
+        tally.signers,
     );
     metrics
         .tally_error_types
@@ -497,6 +520,12 @@ async fn handle_spam_tally(
     if !(tally.spam_weight.is_sampled() && policy_config.spam_sample_rate.is_sampled()) {
         return Ok(());
     }
+    trace!(
+        "Handling spam_type {:?} from client IP: {:?}, signers: {:?}",
+        spam_type,
+        tally.direct,
+        tally.signers,
+    );
     let resp = policy.handle_tally(tally.clone());
     metrics.tally_handled.inc();
     if let Some(fw_config) = fw_config {
@@ -527,10 +556,12 @@ async fn handle_policy_response(
     let PolicyResponse {
         block_client,
         block_proxied_client,
+        block_signers,
     } = response;
     let PolicyConfig {
         connection_blocklist_ttl_sec,
         proxy_blocklist_ttl_sec,
+        signer_blocklist_ttl_sec,
         ..
     } = policy_config;
     if let Some(client) = block_client {
@@ -563,8 +594,27 @@ async fn handle_policy_response(
             metrics.proxy_ip_blocklist_len.inc();
         }
     }
+    if let Some(signers) = block_signers {
+        for signer in signers {
+            if blocklists
+                .signers
+                .insert(
+                    signer,
+                    SystemTime::now() + Duration::from_secs(*signer_blocklist_ttl_sec),
+                )
+                .is_none()
+            {
+                debug!("Blocking signer: {:?}", signer);
+                metrics.requests_blocked_at_protocol.inc();
+                metrics.signer_ip_blocklist_len.inc();
+            }
+        }
+    }
 }
 
+// NOTE: signer blocking is not supported in policy enforcement delegation,
+// as network firewalls likely will not support checking application layer
+// identities such as signer addresses.
 async fn delegate_policy_response(
     response: PolicyResponse,
     policy_config: &PolicyConfig,
@@ -575,6 +625,7 @@ async fn delegate_policy_response(
     let PolicyResponse {
         block_client,
         block_proxied_client,
+        ..
     } = response;
     let PolicyConfig {
         connection_blocklist_ttl_sec,
@@ -771,7 +822,7 @@ impl TrafficSim {
 
         while start.elapsed() < duration {
             let client = Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, task_num)));
-            let allowed = controller.check(&client, &None).await;
+            let allowed = controller.check(&client, &None, &None).await;
             if allowed {
                 if currently_blocked {
                     total_time_blocked += time_blocked_start.elapsed();
@@ -784,6 +835,7 @@ impl TrafficSim {
                     // TODO add weight adjustments
                     None,
                     Weight::one(),
+                    None,
                 ));
             } else {
                 if !currently_blocked {

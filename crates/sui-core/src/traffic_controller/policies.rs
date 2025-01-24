@@ -1,4 +1,3 @@
-// Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -6,6 +5,7 @@ use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use count_min_sketch::CountMinSketch32;
 use mysten_metrics::spawn_monitored_task;
+use nonempty::{nonempty, NonEmpty};
 use parking_lot::RwLock;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, VecDeque};
@@ -26,15 +26,28 @@ enum ClientType {
 }
 
 #[derive(Hash, Eq, PartialEq, Debug)]
-struct SketchKey {
+struct IpSketchKey {
     salt: u64,
     ip_addr: IpAddr,
     client_type: ClientType,
 }
 
+#[derive(Hash, Eq, PartialEq, Debug)]
+struct SignerSketchKey {
+    salt: u64,
+    signer: SuiAddress,
+}
+
+#[derive(Hash, Eq, PartialEq, Debug)]
+enum SketchKey {
+    Ip(IpSketchKey),
+    Signer(SignerSketchKey),
+}
+
 struct HighestRates {
     direct: BinaryHeap<Reverse<(u64, IpAddr)>>,
     proxied: BinaryHeap<Reverse<(u64, IpAddr)>>,
+    signer: BinaryHeap<Reverse<(u64, SuiAddress)>>,
     capacity: usize,
 }
 
@@ -48,9 +61,12 @@ pub struct TrafficSketch {
     /// expect 100,000, which can be represented in 17 bits, but not 16. We can
     /// potentially lower the memory consumption by using CountMinSketch16, which
     /// will reliably support up to ~65,000 unique IP addresses in the window.
-    sketches: VecDeque<CountMinSketch32<SketchKey>>,
+    ip_sketches: VecDeque<CountMinSketch32<IpSketchKey>>,
+    signer_sketches: VecDeque<CountMinSketch32<SignerSketchKey>>,
+
     window_size: Duration,
     update_interval: Duration,
+    num_sketches: usize,
     last_reset_time: Instant,
     current_sketch_index: usize,
     /// Used for metrics collection and logging purposes,
@@ -107,10 +123,19 @@ impl TrafficSketch {
             .expect("Failed to estimate memory for CountMinSketch32");
         assert!(mem_estimate < 128_000_000, "Memory estimate for traffic sketch exceeds 128MB. Reduce window size or increase update interval.");
 
-        let mut sketches = VecDeque::with_capacity(num_sketches as usize);
+        let mut ip_sketches = VecDeque::with_capacity(num_sketches as usize);
+        let mut signer_sketches = VecDeque::with_capacity(num_sketches as usize);
         for _ in 0..num_sketches {
-            sketches.push_back(
-                CountMinSketch32::<SketchKey>::new(
+            ip_sketches.push_back(
+                CountMinSketch32::<IpSketchKey>::new(
+                    sketch_capacity,
+                    sketch_probability,
+                    sketch_tolerance,
+                )
+                .expect("Failed to create CountMinSketch32"),
+            );
+            signer_sketches.push_back(
+                CountMinSketch32::<SignerSketchKey>::new(
                     sketch_capacity,
                     sketch_probability,
                     sketch_tolerance,
@@ -119,7 +144,9 @@ impl TrafficSketch {
             );
         }
         Self {
-            sketches,
+            ip_sketches,
+            signer_sketches,
+            num_sketches,
             window_size,
             update_interval,
             last_reset_time: Instant::now(),
@@ -127,6 +154,7 @@ impl TrafficSketch {
             highest_rates: HighestRates {
                 direct: BinaryHeap::with_capacity(highest_rates_capacity),
                 proxied: BinaryHeap::with_capacity(highest_rates_capacity),
+                signer: BinaryHeap::with_capacity(highest_rates_capacity),
                 capacity: highest_rates_capacity,
             },
         }
@@ -137,38 +165,60 @@ impl TrafficSketch {
         let current_time = Instant::now();
         let mut elapsed = current_time.duration_since(self.last_reset_time);
         while elapsed >= self.update_interval {
-            self.rotate_window();
+            self.rotate_windows();
             elapsed -= self.update_interval;
         }
         // Increment in the current active sketch
-        self.sketches[self.current_sketch_index].increment(key);
+        match key {
+            SketchKey::Ip(ip_key) => self.ip_sketches[self.current_sketch_index].increment(ip_key),
+            SketchKey::Signer(signer_key) => {
+                self.signer_sketches[self.current_sketch_index].increment(signer_key)
+            }
+        }
     }
 
     fn get_request_rate(&mut self, key: &SketchKey) -> f64 {
-        let count: u32 = self
-            .sketches
-            .iter()
-            .map(|sketch| sketch.estimate(key))
-            .sum();
+        let count: u32 = match key {
+            SketchKey::Ip(ip_key) => self
+                .ip_sketches
+                .iter()
+                .map(|sketch| sketch.estimate(ip_key))
+                .sum(),
+            SketchKey::Signer(signer_key) => self
+                .signer_sketches
+                .iter()
+                .map(|sketch| sketch.estimate(signer_key))
+                .sum(),
+        };
         let rate = count as f64 / self.window_size.as_secs() as f64;
         self.update_highest_rates(key, rate);
         rate
     }
 
     fn update_highest_rates(&mut self, key: &SketchKey, rate: f64) {
-        match key.client_type {
-            ClientType::Direct => {
+        match key {
+            SketchKey::Ip(ip_key) => match ip_key.client_type {
+                ClientType::Direct => {
+                    Self::update_highest_rate(
+                        &mut self.highest_rates.direct,
+                        ip_key.ip_addr,
+                        rate,
+                        self.highest_rates.capacity,
+                    );
+                }
+                ClientType::ThroughFullnode => {
+                    Self::update_highest_rate(
+                        &mut self.highest_rates.proxied,
+                        ip_key.ip_addr,
+                        rate,
+                        self.highest_rates.capacity,
+                    );
+                }
+            },
+            SketchKey::Signer(signer_key) => {
                 Self::update_highest_rate(
-                    &mut self.highest_rates.direct,
-                    key.ip_addr,
-                    rate,
-                    self.highest_rates.capacity,
-                );
-            }
-            ClientType::ThroughFullnode => {
-                Self::update_highest_rate(
-                    &mut self.highest_rates.proxied,
-                    key.ip_addr,
+                    &mut self.highest_rates.signer,
+                    signer_key.signer,
                     rate,
                     self.highest_rates.capacity,
                 );
@@ -215,9 +265,10 @@ impl TrafficSketch {
             .copied()
     }
 
-    fn rotate_window(&mut self) {
-        self.current_sketch_index = (self.current_sketch_index + 1) % self.sketches.len();
-        self.sketches[self.current_sketch_index].clear();
+    fn rotate_windows(&mut self) {
+        self.current_sketch_index = (self.current_sketch_index + 1) % self.num_sketches;
+        self.ip_sketches[self.current_sketch_index].clear();
+        self.signer_sketches[self.current_sketch_index].clear();
         self.last_reset_time = Instant::now();
     }
 }
@@ -255,6 +306,7 @@ impl TrafficTally {
 pub struct PolicyResponse {
     pub block_client: Option<IpAddr>,
     pub block_proxied_client: Option<IpAddr>,
+    pub block_signers: Option<NonEmpty<SuiAddress>>,
 }
 
 pub trait Policy {
@@ -372,18 +424,18 @@ impl FreqThresholdPolicy {
 
     pub fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
         let block_client = if let Some(source) = tally.direct {
-            let key = SketchKey {
+            let key = SketchKey::Ip(IpSketchKey {
                 salt: self.salt,
                 ip_addr: source,
                 client_type: ClientType::Direct,
-            };
+            });
             self.sketch.increment_count(&key);
             let req_rate = self.sketch.get_request_rate(&key);
             trace!(
-                "FreqThresholdPolicy handling tally -- req_rate: {:?}, client_threshold: {:?}, client: {:?}",
+                "handle_tally: client: {:?}, req_rate: {:?}, client_threshold: {:?}",
+                source,
                 req_rate,
                 self.client_threshold,
-                source,
             );
             if req_rate >= self.client_threshold as f64 {
                 Some(source)
@@ -394,13 +446,20 @@ impl FreqThresholdPolicy {
             None
         };
         let block_proxied_client = if let Some(source) = tally.through_fullnode {
-            let key = SketchKey {
+            let key = SketchKey::Ip(IpSketchKey {
                 salt: self.salt,
                 ip_addr: source,
                 client_type: ClientType::ThroughFullnode,
-            };
+            });
             self.sketch.increment_count(&key);
-            if self.sketch.get_request_rate(&key) >= self.proxied_client_threshold as f64 {
+            let req_rate = self.sketch.get_request_rate(&key);
+            trace!(
+                "handle_tally: proxied client: {:?}, req_rate: {:?}, proxied_client_threshold: {:?}",
+                source,
+                req_rate,
+                self.proxied_client_threshold,
+            );
+            if req_rate >= self.proxied_client_threshold as f64 {
                 Some(source)
             } else {
                 None
@@ -408,9 +467,39 @@ impl FreqThresholdPolicy {
         } else {
             None
         };
+        // we tally each signer individually, and only add to the blocklist
+        // the signers that are above the threshold
+        let block_signers = if let Some(signers) = tally.signers {
+            signers
+                .iter()
+                .map(|signer| {
+                    let key = SketchKey::Signer(SignerSketchKey {
+                        salt: self.salt,
+                        signer,
+                    });
+                    self.sketch.increment_count(&key);
+                    let req_rate = self.sketch.get_request_rate(&key);
+                    trace!(
+                        "handle_tally: signer: {:?}, req_rate: {:?}, signer_threshold: {:?}",
+                        signer,
+                        req_rate,
+                        self.signer_threshold,
+                    );
+                    if req_rate >= self.signer_threshold as f64 {
+                        Some(signer)
+                    } else {
+                        None
+                    }
+                })
+                .filter(|signer| signer.is_some())
+                .collect::<Option<NonEmpty<_>>>()
+        } else {
+            None
+        };
         PolicyResponse {
             block_client,
             block_proxied_client,
+            block_signers,
         }
     }
 
@@ -480,6 +569,7 @@ impl TestNConnIPPolicy {
                 None
             },
             block_proxied_client: None,
+            block_signers: None,
         }
     }
 

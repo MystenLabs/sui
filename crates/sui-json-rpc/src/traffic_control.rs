@@ -98,6 +98,7 @@ fn handle_traffic_resp(
         // to provide a weight distribution based on the method being called.
         spam_weight: Weight::one(),
         timestamp: SystemTime::now(),
+        signers: None,
     });
 }
 

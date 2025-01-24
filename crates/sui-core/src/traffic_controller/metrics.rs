@@ -11,6 +11,7 @@ pub struct TrafficControllerMetrics {
     pub tallies: IntCounter,
     pub connection_ip_blocklist_len: IntGauge,
     pub proxy_ip_blocklist_len: IntGauge,
+    pub signer_ip_blocklist_len: IntGauge,
     pub requests_blocked_at_protocol: IntCounter,
     pub blocks_delegated_to_firewall: IntCounter,
     pub firewall_delegation_request_fail: IntCounter,
@@ -50,6 +51,12 @@ impl TrafficControllerMetrics {
                 "Number of proxy IP addresses (IP addresses as collected \
                     via some mechanism through proxy node such as fullnode) \
                     in the protocol layer blocklist",
+                registry
+            )
+            .unwrap(),
+            signer_ip_blocklist_len: register_int_gauge_with_registry!(
+                "signer_ip_blocklist_len",
+                "Number of signer IP addresses in the protocol layer blocklist",
                 registry
             )
             .unwrap(),

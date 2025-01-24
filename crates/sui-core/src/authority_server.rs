@@ -459,10 +459,10 @@ impl ValidatorService {
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
-        let signers: NonEmpty<_> = transaction.clone().intent_message().value.signers();
         let transaction = epoch_store.verify_transaction(transaction).tap_err(|_| {
             metrics.signature_errors.inc();
         })?;
+        let signers: NonEmpty<_> = transaction.intent_message().value.signers();
         drop(tx_verif_metrics_guard);
 
         let tx_digest = transaction.digest();
@@ -486,7 +486,7 @@ impl ValidatorService {
             return Err(error.into());
         }
 
-        Ok((tonic::Response::new(info), Weight::zero()))
+        Ok((tonic::Response::new(info), Weight::zero(), signers))
     }
 
     async fn handle_transaction_v2(
@@ -538,8 +538,7 @@ impl ValidatorService {
         let transaction = epoch_store.verify_transaction(transaction).tap_err(|_| {
             metrics.signature_errors.inc();
         })?;
-        // IMPORTANT: we cannot extract
-        let signers: NonEmpty<_> = transaction.clone().intent_message().value.signers();
+        let signers: NonEmpty<_> = transaction.intent_message().value.signers();
         drop(tx_verif_metrics_guard);
 
         // Enable Trace Propagation across spans/processes using tx_digest
@@ -573,6 +572,7 @@ impl ValidatorService {
                     auxiliary_data: None, // We don't have any aux data generated presently
                 }),
                 Weight::zero(),
+                signers,
             ));
         }
 
@@ -601,6 +601,7 @@ impl ValidatorService {
                     .remove(0),
                 ),
                 spam_weight,
+                signers,
             )
         })
     }
@@ -707,7 +708,7 @@ impl ValidatorService {
             }
         }
 
-        let verified_certificates_and_senders = {
+        let (verified_certificates, signers) = {
             let _timer = self.metrics.cert_verification_latency.start_timer();
             let verified_certs = epoch_store
                 .signature_verifier
@@ -717,9 +718,9 @@ impl ValidatorService {
                 .collect::<Result<Vec<_>, _>>()?;
             let signers = certificates
                 .iter()
-                .map(|cert| cert.clone().intent_message().value.signers())
-                .collect::<Vec<_>>();
-            verified_certs.into_iter().zip(signers).collect::<Vec<_>>()
+                .flat_map(|cert| cert.clone().intent_message().value.signers())
+                .collect::<NonEmpty<SuiAddress>>();
+            (verified_certs, signers)
         };
         let consensus_transactions =
             NonEmpty::collect(verified_certificates.iter().map(|certificate| {
@@ -763,7 +764,7 @@ impl ValidatorService {
             None
         };
 
-        Ok((responses, weight))
+        Ok((responses, weight, signers))
     }
 
     async fn handle_submit_to_consensus(
@@ -886,7 +887,7 @@ impl ValidatorService {
 struct ServiceResponse<T> {
     response: tonic::Response<T>,
     weight: Weight,
-    signers: Option<NonEmpty<SuiAddress>>,
+    signers: NonEmpty<SuiAddress>,
 }
 
 type WrappedServiceResponse<T> = Result<ServiceResponse<T>, tonic::Status>;
@@ -1345,7 +1346,7 @@ impl ValidatorService {
                 response: result,
                 weight: spam_weight,
                 signers,
-            }) => (None, spam_weight.clone(), signers, Ok(result)),
+            }) => (None, spam_weight.clone(), Some(signers), Ok(result)),
             Err(status) => (
                 Some(SuiError::from(status.clone())),
                 Weight::zero(),
