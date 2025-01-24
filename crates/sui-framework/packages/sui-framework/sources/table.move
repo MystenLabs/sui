@@ -71,7 +71,7 @@ public fun remove<K: copy + drop + store, V: store>(table: &mut Table<K, V>, k: 
     v
 }
 
-/// Returns true iff there is a value associated with the key `k: K` in table `table: &Table<K, V>`
+/// Returns true if there is a value associated with the key `k: K` in table `table: &Table<K, V>`
 public fun contains<K: copy + drop + store, V: store>(table: &Table<K, V>, k: K): bool {
     field::exists_with_type<K, V>(&table.id, k)
 }
@@ -81,7 +81,7 @@ public fun length<K: copy + drop + store, V: store>(table: &Table<K, V>): u64 {
     table.size
 }
 
-/// Returns true iff the table is empty (if `length` returns `0`)
+/// Returns true if the table is empty (if `length` returns `0`)
 public fun is_empty<K: copy + drop + store, V: store>(table: &Table<K, V>): bool {
     table.size == 0
 }

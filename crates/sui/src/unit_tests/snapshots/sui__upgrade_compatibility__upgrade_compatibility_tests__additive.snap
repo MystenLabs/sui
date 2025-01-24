@@ -2,7 +2,7 @@
 source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
 expression: normalize_path(err.to_string())
 ---
-error[Compatibility E01008]: missing declaration
+error[Compatibility E01007]: missing declaration
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:18
   │
 4 │ module upgrades::upgrades {
@@ -11,7 +11,7 @@ error[Compatibility E01008]: missing declaration
   = enums cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
   = add missing enum 'EnumToRemove' back to the module 'upgrades'.
 
-error[Compatibility E01008]: missing declaration
+error[Compatibility E01007]: missing declaration
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:18
   │
 4 │ module upgrades::upgrades {
@@ -20,7 +20,7 @@ error[Compatibility E01008]: missing declaration
   = functions cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
   = add missing function 'function_to_remove' back to the module 'upgrades'.
 
-error[Compatibility E01008]: missing declaration
+error[Compatibility E01007]: missing declaration
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:18
   │
 4 │ module upgrades::upgrades {

@@ -144,6 +144,54 @@ impl BlockManager {
         (accepted_blocks, missing_blocks)
     }
 
+    /// Tries to find the provided block_refs in DagState and BlockManager,
+    /// and returns missing block refs.
+    pub(crate) fn try_find_blocks(&mut self, mut block_refs: Vec<BlockRef>) -> BTreeSet<BlockRef> {
+        let _s = monitored_scope("BlockManager::try_find_blocks");
+
+        block_refs.sort_by_key(|b| b.round);
+        debug!(
+            "Trying to find blocks: {}",
+            block_refs.iter().map(|b| b.to_string()).join(",")
+        );
+
+        let mut missing_blocks = BTreeSet::new();
+
+        for (found, block_ref) in self
+            .dag_state
+            .read()
+            .contains_blocks(block_refs.clone())
+            .into_iter()
+            .zip(block_refs.iter())
+        {
+            if found || self.suspended_blocks.contains_key(block_ref) {
+                continue;
+            }
+            // Fetches the block if it is not in dag state or suspended.
+            missing_blocks.insert(*block_ref);
+            if self.missing_blocks.insert(*block_ref) {
+                let block_ref_hostname =
+                    &self.context.committee.authority(block_ref.author).hostname;
+                self.context
+                    .metrics
+                    .node_metrics
+                    .block_manager_missing_blocks_by_authority
+                    .with_label_values(&[block_ref_hostname])
+                    .inc();
+            }
+        }
+
+        let metrics = &self.context.metrics.node_metrics;
+        metrics
+            .missing_blocks_total
+            .inc_by(missing_blocks.len() as u64);
+        metrics
+            .block_manager_missing_blocks
+            .set(self.missing_blocks.len() as i64);
+
+        missing_blocks
+    }
+
     // TODO: remove once timestamping is refactored to the new approach.
     // Verifies each block's timestamp based on its ancestors, and persists in store all the valid blocks that should be accepted. Method
     // returns the accepted and persisted blocks.
@@ -314,6 +362,7 @@ impl BlockManager {
                 // Add the ancestor to the missing blocks set only if it doesn't already exist in the suspended blocks - meaning
                 // that we already have its payload.
                 if !self.suspended_blocks.contains_key(ancestor) {
+                    // Fetches the block if it is not in dag state or suspended.
                     ancestors_to_fetch.insert(*ancestor);
                     if self.missing_blocks.insert(*ancestor) {
                         self.context
@@ -1066,5 +1115,89 @@ mod tests {
 
         // Other blocks should be rejected and there should be no remaining suspended block.
         assert!(block_manager.suspended_blocks().is_empty());
+    }
+
+    #[tokio::test]
+    async fn try_find_blocks() {
+        // GIVEN
+        let (context, _key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let mut block_manager =
+            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+
+        // create a DAG
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder
+            .layers(1..=2) // 2 rounds
+            .authorities(vec![
+                AuthorityIndex::new_for_test(0),
+                AuthorityIndex::new_for_test(2),
+            ]) // Create equivocating blocks for 2 authorities
+            .equivocate(3)
+            .build();
+
+        // Take only the blocks of round 2 and try to accept them
+        let round_2_blocks = dag_builder
+            .blocks
+            .iter()
+            .filter_map(|(_, block)| (block.round() == 2).then_some(block.clone()))
+            .collect::<Vec<VerifiedBlock>>();
+
+        // All blocks should be missing
+        let missing_block_refs_from_find =
+            block_manager.try_find_blocks(round_2_blocks.iter().map(|b| b.reference()).collect());
+        assert_eq!(missing_block_refs_from_find.len(), 10);
+        assert!(missing_block_refs_from_find
+            .iter()
+            .all(|block_ref| block_ref.round == 2));
+
+        // Try accept blocks which will cause blocks to be suspended and added to missing
+        // in block manager.
+        let (accepted_blocks, missing) = block_manager.try_accept_blocks(round_2_blocks.clone());
+        assert!(accepted_blocks.is_empty());
+
+        let missing_block_refs = round_2_blocks.first().unwrap().ancestors();
+        let missing_block_refs_from_accept =
+            missing_block_refs.iter().cloned().collect::<BTreeSet<_>>();
+        assert_eq!(missing, missing_block_refs_from_accept);
+        assert_eq!(
+            block_manager.missing_blocks(),
+            missing_block_refs_from_accept
+        );
+
+        // No blocks should be accepted and block manager should have made note
+        // of the missing & suspended blocks.
+        // Now we can check get the result of try find block with all of the blocks
+        // from newly created but not accepted round 3.
+        dag_builder.layer(3).build();
+
+        let round_3_blocks = dag_builder
+            .blocks
+            .iter()
+            .filter_map(|(_, block)| (block.round() == 3).then_some(block.reference()))
+            .collect::<Vec<BlockRef>>();
+
+        let missing_block_refs_from_find = block_manager.try_find_blocks(
+            round_2_blocks
+                .iter()
+                .map(|b| b.reference())
+                .chain(round_3_blocks.into_iter())
+                .collect(),
+        );
+
+        assert_eq!(missing_block_refs_from_find.len(), 4);
+        assert!(missing_block_refs_from_find
+            .iter()
+            .all(|block_ref| block_ref.round == 3));
+        assert_eq!(
+            block_manager.missing_blocks(),
+            missing_block_refs_from_accept
+                .into_iter()
+                .chain(missing_block_refs_from_find.into_iter())
+                .collect()
+        );
     }
 }

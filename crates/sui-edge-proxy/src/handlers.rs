@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::PeerConfig;
+use crate::config::{LoggingConfig, PeerConfig};
 use crate::metrics::AppMetrics;
 use axum::{
     body::Body,
@@ -11,6 +11,7 @@ use axum::{
     response::Response,
 };
 use bytes::Bytes;
+use rand::Rng;
 use std::time::Instant;
 use tracing::{debug, warn};
 
@@ -35,6 +36,7 @@ pub struct AppState {
     read_peer: PeerConfig,
     execution_peer: PeerConfig,
     metrics: AppMetrics,
+    logging_config: LoggingConfig,
 }
 
 impl AppState {
@@ -43,12 +45,14 @@ impl AppState {
         read_peer: PeerConfig,
         execution_peer: PeerConfig,
         metrics: AppMetrics,
+        logging_config: LoggingConfig,
     ) -> Self {
         Self {
             client,
             read_peer,
             execution_peer,
             metrics,
+            logging_config,
         }
     }
 }
@@ -111,6 +115,31 @@ async fn proxy_request(
         body_bytes.len(),
         peer_type
     );
+    if matches!(peer_type, PeerRole::Read) {
+        let user_agent = parts
+            .headers
+            .get("user-agent")
+            .and_then(|h| h.to_str().ok());
+        let is_health_check = matches!(user_agent, Some(ua) if ua.contains("GoogleHC/1.0"));
+        let is_grafana_agent = matches!(user_agent, Some(ua) if ua.contains("GrafanaAgent"));
+        let is_grpc = parts
+            .headers
+            .get("content-type")
+            .and_then(|h| h.to_str().ok())
+            .map(|ct| ct.contains("grpc"))
+            .unwrap_or(false);
+
+        let should_sample = !is_health_check && !is_grafana_agent && !is_grpc;
+        let rate = state.logging_config.read_request_sample_rate;
+        if should_sample && rand::thread_rng().gen::<f64>() < rate {
+            tracing::info!(
+                headers = ?parts.headers,
+                body = ?body_bytes,
+                peer_type = ?peer_type,
+                "Sampled read request"
+            );
+        }
+    }
 
     let metrics = &state.metrics;
     let peer_type_str = peer_type.as_str();
@@ -141,7 +170,7 @@ async fn proxy_request(
         .client
         .request(parts.method.clone(), target_url)
         .headers(headers)
-        .body(body_bytes);
+        .body(body_bytes.clone());
     debug!("Request builder: {:?}", request_builder);
 
     let upstream_start = Instant::now();
@@ -205,5 +234,6 @@ async fn proxy_request(
             resp.headers_mut().insert(name, value);
         }
     }
+
     Ok(resp)
 }

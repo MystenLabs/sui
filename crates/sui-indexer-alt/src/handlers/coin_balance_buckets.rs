@@ -180,9 +180,12 @@ impl Handler for CoinBalanceBuckets {
     ) -> anyhow::Result<usize> {
         use sui_indexer_alt_schema::schema::coin_balance_buckets::dsl;
 
-        let to_prune = self.pruning_lookup_table.take(from, to_exclusive)?;
+        let to_prune = self
+            .pruning_lookup_table
+            .get_prune_info(from, to_exclusive)?;
 
         if to_prune.is_empty() {
+            self.pruning_lookup_table.gc_prune_info(from, to_exclusive);
             return Ok(0);
         }
 
@@ -212,6 +215,7 @@ impl Handler for CoinBalanceBuckets {
             dsl::cp_sequence_number,
         );
         let rows_deleted = sql_query(query).execute(conn).await?;
+        self.pruning_lookup_table.gc_prune_info(from, to_exclusive);
         Ok(rows_deleted)
     }
 }

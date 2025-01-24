@@ -21,7 +21,7 @@ bridge-indexer --config-path config.yaml
 
 ```yaml
 ---
-remote_store_url: https://storage.googleapis/mysten-mainnet-checkpoints
+remote_store_url: https://checkpoints.mainnet.sui.io
 eth_rpc_url: {eth rpc url}
 sui_rpc_url: {sui rpc url}
 

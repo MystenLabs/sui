@@ -1,0 +1,39 @@
+[package]
+name = "sui-indexer-alt-e2e-tests"
+version = "0.1.0"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lints]
+workspace = true
+
+[[test]]
+name = "tests"
+harness = false
+
+[dependencies]
+
+[target.'cfg(msim)'.dependencies]
+msim.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+datatest-stable.workspace = true
+diesel = { workspace = true, features = ["chrono"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+prometheus.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+telemetry-subscribers.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+url.workspace = true
+
+sui-indexer-alt.workspace = true
+sui-indexer-alt-framework.workspace = true
+sui-indexer-alt-jsonrpc.workspace = true
+sui-pg-db.workspace = true
+sui-transactional-test-runner.workspace = true

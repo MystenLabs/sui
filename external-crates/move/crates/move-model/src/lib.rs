@@ -9,7 +9,6 @@ use std::{
     rc::Rc,
 };
 
-use codespan::ByteIndex;
 use codespan_reporting::diagnostic::{Diagnostic, Label, LabelStyle};
 use itertools::Itertools;
 #[allow(unused_imports)]
@@ -114,7 +113,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
             .set_flags(flags)
             .set_warning_filter(warning_filter)
             .run::<PASS_PARSER>()?;
-    let (comment_map, compiler) = match comments_and_compiler_res {
+    let compiler = match comments_and_compiler_res {
         Err((_pass, diags)) => {
             // Add source files so that the env knows how to translate locations of parse errors
             let empty_alias = Rc::new(BTreeMap::new());
@@ -171,18 +170,6 @@ pub fn run_model_builder_with_options_and_compilation_flags<
                 is_dep,
             );
         }
-    }
-
-    // Add any documentation comments found by the Move compiler to the env.
-    for (fhash, documentation) in comment_map {
-        let file_id = env.get_file_id(fhash).expect("file name defined");
-        env.add_documentation(
-            file_id,
-            documentation
-                .into_iter()
-                .map(|(idx, s)| (ByteIndex(idx), s))
-                .collect(),
-        )
     }
 
     // Step 2: run the compiler up to expansion

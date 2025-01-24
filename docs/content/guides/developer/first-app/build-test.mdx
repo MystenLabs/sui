@@ -172,11 +172,11 @@ Test result: OK. Total tests: 2; passed: 2; failed: 0
 
 Each module in a package can include a special initializer function that runs at publication time. The goal of an initializer function is to pre-initialize module-specific data (for example, to create singleton objects). The initializer function must have the following properties for it to execute at publication:
 
-- Function name must be `init`
-- The parameter list must end with either a `&mut TxContext` or a `&TxContext` type
-- No return values
-- Private visibility
-- Optionally, the parameter list starts by accepting the module's [one-time witness by value](../../../concepts/sui-move-concepts/one-time-witness.mdx)
+- Function name must be `init`.
+- The parameter list must end with either a `&mut TxContext` or a `&TxContext` type.
+- No return values.
+- Private visibility.
+- Optionally, the parameter list starts by accepting the module's one-time witness by value. See [One Time Witness](https://move-book.com/programmability/one-time-witness.html) in The Move Book for more information.
 
 For example, the following `init` functions are all valid:
 

@@ -189,17 +189,20 @@ impl StateSnapshotUploader {
             tokio::select! {
                 _now = interval.tick() => {
                     let missing_epochs = self.get_missing_epochs().await;
-                    if let Ok(epochs) = missing_epochs {
-                        let first_missing_epoch = epochs.first().cloned().unwrap_or(0);
-                        self.metrics.first_missing_state_snapshot_epoch.set(first_missing_epoch as i64);
-                        if let Err(err) = self.upload_state_snapshot_to_object_store(epochs).await {
-                            self.metrics.state_snapshot_upload_err.inc();
-                            error!("Failed to upload state snapshot to remote store with err: {:?}", err);
-                        } else {
-                            debug!("Successfully completed snapshot upload loop");
+                    match missing_epochs {
+                        Ok(epochs) => {
+                            let first_missing_epoch = epochs.first().cloned().unwrap_or(0);
+                            self.metrics.first_missing_state_snapshot_epoch.set(first_missing_epoch as i64);
+                            if let Err(err) = self.upload_state_snapshot_to_object_store(epochs).await {
+                                self.metrics.state_snapshot_upload_err.inc();
+                                error!("Failed to upload state snapshot to remote store with err: {:?}", err);
+                            } else {
+                                debug!("Successfully completed snapshot upload loop");
+                            }
                         }
-                    } else {
-                        error!("Failed to find missing state snapshot in remote store");
+                        Err(err) => {
+                            error!("Failed to find missing state snapshot in remote store: {:?}", err);
+                        }
                     }
                 },
                 _ = recv.recv() => break,

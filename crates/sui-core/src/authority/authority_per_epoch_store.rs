@@ -34,7 +34,8 @@ use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
 use sui_types::base_types::{
-    AuthorityName, ConsensusObjectSequenceKey, EpochId, ObjectID, SequenceNumber, TransactionDigest,
+    AuthorityName, ConsensusObjectSequenceKey, EpochId, FullObjectID, ObjectID, SequenceNumber,
+    TransactionDigest,
 };
 use sui_types::base_types::{ConciseableName, ObjectRef};
 use sui_types::committee::Committee;
@@ -723,7 +724,7 @@ impl AuthorityEpochTables {
         impl Iterator<Item = ((CheckpointSequenceNumber, u64), CheckpointSignatureMessage)> + '_,
     > {
         let key = (checkpoint_seq, starting_index);
-        debug!("Scanning pending checkpoint signatures from {:?}", key);
+        trace!("Scanning pending checkpoint signatures from {:?}", key);
         let iter = self
             .pending_checkpoint_signatures
             .unbounded_iter()
@@ -1437,7 +1438,7 @@ impl AuthorityPerEpochStore {
                                 error: "no assigned shared versions".to_string(),
                             })?;
 
-                        let initial_shared_version =
+                        let modified_initial_shared_version =
                             if self.epoch_start_config().use_version_assignment_tables_v3() {
                                 *initial_shared_version
                             } else {
@@ -1447,7 +1448,7 @@ impl AuthorityPerEpochStore {
                             };
                         // If we found assigned versions, but they are missing the assignment for
                         // this object, it indicates a serious inconsistency!
-                        let Some(version) = assigned_shared_versions.get(&(*id, initial_shared_version)) else {
+                        let Some(version) = assigned_shared_versions.get(&(*id, modified_initial_shared_version)) else {
                             panic!(
                                 "Shared object version should have been assigned. key: {key:?}, \
                                 obj id: {id:?}, initial_shared_version: {initial_shared_version:?}, \
@@ -1455,13 +1456,13 @@ impl AuthorityPerEpochStore {
                             )
                         };
                         InputKey::VersionedObject {
-                            id: *id,
+                            id: FullObjectID::new(*id, Some(*initial_shared_version)),
                             version: *version,
                         }
                     }
                     InputObjectKind::MovePackage(id) => InputKey::Package { id: *id },
                     InputObjectKind::ImmOrOwnedMoveObject(objref) => InputKey::VersionedObject {
-                        id: objref.0,
+                        id: FullObjectID::new(objref.0, None),
                         version: objref.1,
                     },
                 })
@@ -2658,7 +2659,7 @@ impl AuthorityPerEpochStore {
             .is_consensus_message_processed(&transaction.transaction.key())
             .expect("Storage error")
         {
-            debug!(
+            trace!(
                 consensus_index=?transaction.consensus_index.transaction_index,
                 tracking_id=?transaction.transaction.get_tracking_id(),
                 "handle_consensus_transaction UserTransaction [skip]",

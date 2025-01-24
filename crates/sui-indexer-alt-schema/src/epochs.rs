@@ -6,7 +6,7 @@ use sui_field_count::FieldCount;
 
 use crate::schema::{kv_epoch_ends, kv_epoch_starts, kv_feature_flags, kv_protocol_configs};
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = kv_epoch_ends)]
 #[diesel(treat_none_as_default_value = false)]
 pub struct StoredEpochEnd {

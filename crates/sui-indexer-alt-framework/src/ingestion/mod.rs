@@ -210,7 +210,7 @@ mod tests {
                 ingest_concurrency,
                 ..Default::default()
             },
-            Arc::new(test_metrics()),
+            test_metrics(),
             cancel,
         )
         .unwrap()

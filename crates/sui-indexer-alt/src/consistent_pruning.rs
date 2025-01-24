@@ -56,7 +56,7 @@ impl PruningLookupTable {
     /// Given a range of checkpoints to prune (from inclusive, to_exclusive exclusive), return the set of objects
     /// that should be pruned, and for each object the checkpoint upper bound (exclusive) that
     /// the objects should be pruned at.
-    pub fn take(
+    pub fn get_prune_info(
         &self,
         cp_from: u64,
         cp_to_exclusive: u64,
@@ -73,20 +73,26 @@ impl PruningLookupTable {
         for cp in cp_from..cp_to_exclusive {
             let info = self
                 .table
-                .remove(&cp)
-                .ok_or_else(|| anyhow::anyhow!("Prune info for checkpoint {cp} not found"))?
-                .1
-                .info;
-            for (object_id, update_kind) in info {
+                .get(&cp)
+                .ok_or_else(|| anyhow::anyhow!("Prune info for checkpoint {cp} not found"))?;
+            for (object_id, update_kind) in &info.value().info {
                 let prune_checkpoint = match update_kind {
                     UpdateKind::Mutate => cp,
                     UpdateKind::Delete => cp + 1,
                 };
-                let entry = result.entry(object_id).or_default();
+                let entry = result.entry(*object_id).or_default();
                 *entry = (*entry).max(prune_checkpoint);
             }
         }
         Ok(result)
+    }
+
+    // Remove prune info for checkpoints that we no longer need.
+    // NOTE: Only call this when we have successfully pruned all the checkpoints in the range.
+    pub fn gc_prune_info(&self, cp_from: u64, cp_to_exclusive: u64) {
+        for cp in cp_from..cp_to_exclusive {
+            self.table.remove(&cp);
+        }
     }
 }
 
@@ -111,10 +117,14 @@ mod tests {
         table.insert(2, info2);
 
         // Prune checkpoints 1-2
-        let result = table.take(1, 3).unwrap();
+        let result = table.get_prune_info(1, 3).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[&obj1], 1);
         assert_eq!(result[&obj2], 2);
+
+        // Remove prune info for checkpoints 1-2
+        table.gc_prune_info(1, 3);
+        assert!(table.table.is_empty());
     }
 
     #[test]
@@ -133,7 +143,7 @@ mod tests {
         table.insert(2, info2);
 
         // Prune checkpoints 1-2
-        let result = table.take(1, 3).unwrap();
+        let result = table.get_prune_info(1, 3).unwrap();
         assert_eq!(result.len(), 1);
         // For deleted objects, we prune up to and including the deletion checkpoint
         assert_eq!(result[&obj], 3);
@@ -149,7 +159,7 @@ mod tests {
         table.insert(1, info);
 
         // Try to prune checkpoint that doesn't exist in the lookup table.
-        assert!(table.take(2, 3).is_err());
+        assert!(table.get_prune_info(2, 3).is_err());
     }
 
     #[test]
@@ -168,7 +178,7 @@ mod tests {
         table.insert(2, info2);
 
         // Prune checkpoints 1-2
-        let result = table.take(1, 3).unwrap();
+        let result = table.get_prune_info(1, 3).unwrap();
         assert_eq!(result.len(), 1);
         // Should use the latest mutation checkpoint
         assert_eq!(result[&obj], 2);

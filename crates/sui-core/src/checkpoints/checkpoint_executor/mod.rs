@@ -442,7 +442,14 @@ impl CheckpointExecutor {
         let cache_commit = self.state.get_cache_commit();
         debug!(seq = ?checkpoint.sequence_number, "committing checkpoint transactions to disk");
         cache_commit
-            .commit_transaction_outputs(epoch_store.epoch(), all_tx_digests)
+            .commit_transaction_outputs(
+                epoch_store.epoch(),
+                all_tx_digests,
+                epoch_store
+                    .protocol_config()
+                    .use_object_per_epoch_marker_table_v2_as_option()
+                    .unwrap_or(false),
+            )
             .await;
 
         epoch_store
@@ -657,7 +664,14 @@ impl CheckpointExecutor {
 
                     let cache_commit = self.state.get_cache_commit();
                     cache_commit
-                        .commit_transaction_outputs(cur_epoch, &[change_epoch_tx_digest])
+                        .commit_transaction_outputs(
+                            cur_epoch,
+                            &[change_epoch_tx_digest],
+                            epoch_store
+                                .protocol_config()
+                                .use_object_per_epoch_marker_table_v2_as_option()
+                                .unwrap_or(false),
+                        )
                         .await;
                     fail_point_async!("prune-and-compact");
 

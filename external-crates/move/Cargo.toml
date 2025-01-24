@@ -132,6 +132,7 @@ whoami = { version = "1.2.1" }
 x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
 z3tracer = "0.8.0"
 inline_colorization = "0.1.6"
+insta = "1.42.0"
 
 bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
 enum-compat-util = { path = "crates/enum-compat-util"}
@@ -154,6 +155,7 @@ move-core-types = { path = "crates/move-core-types" }
 move-coverage = { path = "crates/move-coverage" }
 move-disassembler = { path = "crates/move-disassembler" }
 move-docgen = { path = "crates/move-docgen" }
+move-docgen-tests = { path = "crates/move-docgen-tests" }
 move-ir-compiler = { path = "crates/move-ir-compiler" }
 move-ir-to-bytecode = { path = "crates/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "crates/move-ir-to-bytecode-syntax" }
@@ -162,7 +164,6 @@ move-model = { path = "crates/move-model" }
 move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
 move-proc-macros = { path = "crates/move-proc-macros"}
-move-prover = { path = "crates/move-prover" }
 move-prover-test-utils = { path = "crates/move-prover-test-utils" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stdlib = { path = "crates/move-stdlib" }

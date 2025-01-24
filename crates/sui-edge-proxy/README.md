@@ -169,3 +169,31 @@ Now that this has been deployed, ingress traffic can be pointed at the edge-prox
 ## Troubleshooting / Debugging
 
 If you find any issues with the Sui Edge Proxy or would like to request a feature, please open an issue in the [sui repository](https://github.com/MystenLabs/sui/issues/new).
+
+## Local Development
+
+To run the Sui Edge Proxy locally and issue test JSON-RPC requests:
+
+1. Create or modify your local config YAML ("sui-edge-proxy-config.yaml") as needed, an example is provided in the repo.
+2. In one terminal, run:
+
+   ```bash
+   RUST_LOG=debug cargo run -- --config=sui-edge-proxy-config.yaml
+   ```
+
+   This will start up the proxy listening on the configured port (e.g. 127.0.0.1:8080).
+
+3. In another terminal, send a test JSON RPC request using curl. For example:
+
+   ```bash
+   curl --silent --location --request POST '127.0.0.1:8080' \
+   --header 'Content-Type: application/json' \
+   --data-raw '{
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "sui_getLatestCheckpointSequenceNumber",
+       "params": []
+   }'
+   ```
+
+   You should see debug logs in your first terminal and a JSON response in the second.

@@ -112,6 +112,11 @@
       { "source": "/concepts/tokenomics/sui-coin", "destination": "/concepts/tokenomics#sui-coin", "permanent": true },
       { "source": "/concepts/tokenomics/storage-fund", "destination": "/concepts/tokenomics#storage-fund", "permanent": true },
       { "source": "/concepts/tokenomics/proof-of-stake", "destination": "/concepts/tokenomics#proof-of-stake", "permanent": true },
-      { "source": "/concepts/tokenomics/validators-staking", "destination": "/concepts/tokenomics#validators-and-staking-pools", "permanent": true }
+      { "source": "/concepts/tokenomics/validators-staking", "destination": "/concepts/tokenomics#validators-and-staking-pools", "permanent": true },
+      { "source": "/concepts/sui-move-concepts/strings", "destination": "/concepts/sui-move-concepts", "permanent": true },
+      { "source": "/concepts/sui-move-concepts/collections", "destination": "/concepts/sui-move-concepts", "permanent": true },
+      { "source": "/concepts/sui-move-concepts/init", "destination": "/concepts/sui-move-concepts", "permanent": true },
+      { "source": "/concepts/sui-move-concepts/entry-functions", "destination": "/concepts/sui-move-concepts", "permanent": true },
+      { "source": "/concepts/sui-move-concepts/one-time-witness", "destination": "/concepts/sui-move-concepts", "permanent": true }
     ]
   }

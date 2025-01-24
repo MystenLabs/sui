@@ -47,6 +47,7 @@ async fn main() {
         config.read_peer.clone(),
         config.execution_peer.clone(),
         app_metrics,
+        config.logging,
     );
 
     let app = Router::new()
