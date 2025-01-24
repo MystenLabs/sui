@@ -4,6 +4,7 @@
 use std::{sync::Arc, time::Duration};
 
 use fastcrypto::traits::KeyPair;
+use futures::FutureExt;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
@@ -30,11 +31,10 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
     let epoch_store = state.epoch_store_for_testing();
     let accumulator = Arc::new(StateAccumulator::new_for_tests(
         state.get_accumulator_store().clone(),
-        &epoch_store,
     ));
     let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
 
-    let (checkpoint_service, _) = CheckpointService::spawn(
+    let checkpoint_service = CheckpointService::build(
         state.clone(),
         state.get_checkpoint_store().clone(),
         epoch_store.clone(),
@@ -46,6 +46,7 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
         3,
         100_000,
     );
+    checkpoint_service.spawn().now_or_never().unwrap();
     checkpoint_service
 }
 

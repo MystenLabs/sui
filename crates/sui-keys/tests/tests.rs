@@ -163,6 +163,19 @@ fn update_alias_test() {
     let update = keystore.update_alias("o", None).unwrap();
     let aliases = keystore.alias_names();
     assert_eq!(vec![&update], aliases);
+
+    // check that updating alias does not allow duplicates
+    keystore
+        .generate_and_add_new_key(
+            SignatureScheme::ED25519,
+            Some("my_alias_test".to_string()),
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(keystore
+        .update_alias("my_alias_test", Some(&update))
+        .is_err());
 }
 
 #[test]

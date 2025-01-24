@@ -5,7 +5,7 @@ use crate::schema::{ev_emit_mod, ev_struct_inst};
 use diesel::prelude::*;
 use sui_field_count::FieldCount;
 
-#[derive(Insertable, Debug, Clone, Eq, PartialEq, Ord, PartialOrd, FieldCount)]
+#[derive(Insertable, Debug, Clone, Eq, PartialEq, Ord, PartialOrd, FieldCount, Queryable)]
 #[diesel(table_name = ev_emit_mod)]
 pub struct StoredEvEmitMod {
     pub package: Vec<u8>,
@@ -14,7 +14,7 @@ pub struct StoredEvEmitMod {
     pub sender: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone, Eq, PartialEq, Ord, PartialOrd, FieldCount)]
+#[derive(Insertable, Debug, Clone, Eq, PartialEq, Ord, PartialOrd, FieldCount, Queryable)]
 #[diesel(table_name = ev_struct_inst)]
 pub struct StoredEvStructInst {
     pub package: Vec<u8>,

@@ -21,6 +21,11 @@ for external tools. The difference is otherwise not observable from within Move.
 -  [Function `internal_borrow_mut`](#sui_dynamic_object_field_internal_borrow_mut)
 -  [Function `internal_remove`](#sui_dynamic_object_field_internal_remove)
 -  [Function `internal_exists_with_type`](#sui_dynamic_object_field_internal_exists_with_type)
+-  [Macro function `add_impl`](#sui_dynamic_object_field_add_impl)
+-  [Macro function `borrow_impl`](#sui_dynamic_object_field_borrow_impl)
+-  [Macro function `borrow_mut_impl`](#sui_dynamic_object_field_borrow_mut_impl)
+-  [Macro function `remove_impl`](#sui_dynamic_object_field_remove_impl)
+-  [Macro function `exists_with_type_impl`](#sui_dynamic_object_field_exists_with_type_impl)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -43,7 +48,7 @@ for external tools. The difference is otherwise not observable from within Move.
 
 
 
-<pre><code><b>public</b> <b>struct</b> WrapperName <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -71,7 +76,7 @@ Adds a dynamic object field to the object <code><a href="../sui/object.md#sui_ob
 Aborts with <code>EFieldAlreadyExists</code> if the object already has that field with that name.
 
 
-<pre><code><b>public</b> <b>fun</b> addName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name, value: Value)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_add">add</a>&lt;Name: <b>copy</b>, drop, store, Value: key, store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name, value: Value)
 </code></pre>
 
 
@@ -104,7 +109,7 @@ Aborts with <code>EFieldTypeMismatch</code> if the field exists, but the value o
 specified type.
 
 
-<pre><code><b>public</b> <b>fun</b> borrowName, Value(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &Value
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>&lt;Name: <b>copy</b>, drop, store, Value: key, store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &Value
 </code></pre>
 
 
@@ -132,7 +137,7 @@ Aborts with <code>EFieldTypeMismatch</code> if the field exists, but the value o
 specified type.
 
 
-<pre><code><b>public</b> <b>fun</b> borrow_mutName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &<b>mut</b> Value
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_borrow_mut">borrow_mut</a>&lt;Name: <b>copy</b>, drop, store, Value: key, store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &<b>mut</b> Value
 </code></pre>
 
 
@@ -164,7 +169,7 @@ Aborts with <code>EFieldTypeMismatch</code> if the field exists, but the value o
 specified type.
 
 
-<pre><code><b>public</b> <b>fun</b> removeName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): Value
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_remove">remove</a>&lt;Name: <b>copy</b>, drop, store, Value: key, store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): Value
 </code></pre>
 
 
@@ -193,7 +198,7 @@ Returns true if and only if the <code><a href="../sui/object.md#sui_object">obje
 <code>name: Name</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> exists_Name(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_">exists_</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
 </code></pre>
 
 
@@ -220,7 +225,7 @@ Returns true if and only if the <code><a href="../sui/object.md#sui_object">obje
 <code>name: Name</code> with an assigned value of type <code>Value</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> exists_with_typeName, Value(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_with_type">exists_with_type</a>&lt;Name: <b>copy</b>, drop, store, Value: key, store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
 </code></pre>
 
 
@@ -249,7 +254,7 @@ Returns the ID of the object associated with the dynamic object field
 Returns none otherwise
 
 
-<pre><code><b>public</b> <b>fun</b> idName(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_id">id</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>&gt;
 </code></pre>
 
 
@@ -276,7 +281,7 @@ Returns none otherwise
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> internal_addName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name, value: Value)
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_internal_add">internal_add</a>&lt;Name: <b>copy</b>, drop, store, Value: key&gt;(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name, value: Value)
 </code></pre>
 
 
@@ -305,7 +310,7 @@ Returns none otherwise
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> internal_borrowName, Value(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &Value
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_internal_borrow">internal_borrow</a>&lt;Name: <b>copy</b>, drop, store, Value: key&gt;(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &Value
 </code></pre>
 
 
@@ -332,7 +337,7 @@ Returns none otherwise
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> internal_borrow_mutName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &<b>mut</b> Value
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_internal_borrow_mut">internal_borrow_mut</a>&lt;Name: <b>copy</b>, drop, store, Value: key&gt;(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): &<b>mut</b> Value
 </code></pre>
 
 
@@ -359,7 +364,7 @@ Returns none otherwise
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> internal_removeName, Value(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): Value
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_internal_remove">internal_remove</a>&lt;Name: <b>copy</b>, drop, store, Value: key&gt;(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): Value
 </code></pre>
 
 
@@ -386,7 +391,7 @@ Returns none otherwise
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> internal_exists_with_typeName, Value(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_internal_exists_with_type">internal_exists_with_type</a>&lt;Name: <b>copy</b>, drop, store, Value: key&gt;(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
 </code></pre>
 
 
@@ -400,6 +405,169 @@ Returns none otherwise
     name: Name,
 ): bool {
     <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_with_type_impl">exists_with_type_impl</a>!&lt;_, Value&gt;(<a href="../sui/object.md#sui_object">object</a>, name)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_object_field_add_impl"></a>
+
+## Macro function `add_impl`
+
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_add_impl">add_impl</a>&lt;$Name: <b>copy</b>, drop, store, $Value: key&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $value: $Value)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_add_impl">add_impl</a>&lt;$Name: <b>copy</b> + drop + store, $Value: key&gt;(
+    // we <b>use</b> &<b>mut</b> UID in several spots <b>for</b> access control
+    $<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+    $name: $Name,
+    $value: $Value,
+) {
+    <b>let</b> <a href="../sui/object.md#sui_object">object</a> = $<a href="../sui/object.md#sui_object">object</a>;
+    <b>let</b> name = $name;
+    <b>let</b> value = $value;
+    <b>let</b> key = <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    <b>let</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_id">id</a> = <a href="../sui/object.md#sui_object_id">object::id</a>(&value);
+    field::add(<a href="../sui/object.md#sui_object">object</a>, key, <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_id">id</a>);
+    <b>let</b> (field, _) = field::field_info&lt;<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a>&lt;$Name&gt;&gt;(<a href="../sui/object.md#sui_object">object</a>, key);
+    add_child_object(field.to_address(), value);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_object_field_borrow_impl"></a>
+
+## Macro function `borrow_impl`
+
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_borrow_impl">borrow_impl</a>&lt;$Name: <b>copy</b>, drop, store, $Value: key&gt;($<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name): &$Value
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_borrow_impl">borrow_impl</a>&lt;$Name: <b>copy</b> + drop + store, $Value: key&gt;(
+    $<a href="../sui/object.md#sui_object">object</a>: &UID,
+    $name: $Name,
+): &$Value {
+    <b>let</b> <a href="../sui/object.md#sui_object">object</a> = $<a href="../sui/object.md#sui_object">object</a>;
+    <b>let</b> name = $name;
+    <b>let</b> key = <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    <b>let</b> (field, value_id) = field::field_info&lt;<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a>&lt;$Name&gt;&gt;(<a href="../sui/object.md#sui_object">object</a>, key);
+    borrow_child_object&lt;$Value&gt;(field, value_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_object_field_borrow_mut_impl"></a>
+
+## Macro function `borrow_mut_impl`
+
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_borrow_mut_impl">borrow_mut_impl</a>&lt;$Name: <b>copy</b>, drop, store, $Value: key&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name): &<b>mut</b> $Value
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_borrow_mut_impl">borrow_mut_impl</a>&lt;$Name: <b>copy</b> + drop + store, $Value: key&gt;(
+    $<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+    $name: $Name,
+): &<b>mut</b> $Value {
+    <b>let</b> <a href="../sui/object.md#sui_object">object</a> = $<a href="../sui/object.md#sui_object">object</a>;
+    <b>let</b> name = $name;
+    <b>let</b> key = <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    <b>let</b> (field, value_id) = field::field_info_mut&lt;<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a>&lt;$Name&gt;&gt;(<a href="../sui/object.md#sui_object">object</a>, key);
+    borrow_child_object_mut&lt;$Value&gt;(field, value_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_object_field_remove_impl"></a>
+
+## Macro function `remove_impl`
+
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_remove_impl">remove_impl</a>&lt;$Name: <b>copy</b>, drop, store, $Value: key&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name): $Value
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_remove_impl">remove_impl</a>&lt;$Name: <b>copy</b> + drop + store, $Value: key&gt;(
+    $<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+    $name: $Name,
+): $Value {
+    <b>let</b> <a href="../sui/object.md#sui_object">object</a> = $<a href="../sui/object.md#sui_object">object</a>;
+    <b>let</b> name = $name;
+    <b>let</b> key = <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    <b>let</b> (field, value_id) = field::field_info&lt;<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a>&lt;$Name&gt;&gt;(<a href="../sui/object.md#sui_object">object</a>, key);
+    <b>let</b> value = remove_child_object&lt;$Value&gt;(field.to_address(), value_id);
+    field::remove&lt;<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a>&lt;$Name&gt;, ID&gt;(<a href="../sui/object.md#sui_object">object</a>, key);
+    value
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_object_field_exists_with_type_impl"></a>
+
+## Macro function `exists_with_type_impl`
+
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_with_type_impl">exists_with_type_impl</a>&lt;$Name: <b>copy</b>, drop, store, $Value: key&gt;($<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_with_type_impl">exists_with_type_impl</a>&lt;$Name: <b>copy</b> + drop + store, $Value: key&gt;(
+    $<a href="../sui/object.md#sui_object">object</a>: &UID,
+    $name: $Name,
+): bool {
+    <b>let</b> <a href="../sui/object.md#sui_object">object</a> = $<a href="../sui/object.md#sui_object">object</a>;
+    <b>let</b> name = $name;
+    <b>let</b> key = <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    <b>if</b> (!field::exists_with_type&lt;<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a>&lt;$Name&gt;, ID&gt;(<a href="../sui/object.md#sui_object">object</a>, key)) <b>return</b> <b>false</b>;
+    <b>let</b> (field, value_id) = field::field_info&lt;<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a>&lt;$Name&gt;&gt;(<a href="../sui/object.md#sui_object">object</a>, key);
+    field::has_child_object_with_ty&lt;$Value&gt;(field.to_address(), value_id)
 }
 </code></pre>
 

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use sui_data_ingestion::{
     ArchivalConfig, ArchivalReducer, ArchivalWorker, BlobTaskConfig, BlobWorker,
-    DynamoDBProgressStore, KVStoreTaskConfig, KVStoreWorker,
+    DynamoDBProgressStore,
 };
 use sui_data_ingestion_core::{DataIngestionMetrics, ReaderOptions};
 use sui_data_ingestion_core::{IndexerExecutor, WorkerPool};
@@ -22,7 +22,6 @@ use tokio::sync::oneshot;
 enum Task {
     Archival(ArchivalConfig),
     Blob(BlobTaskConfig),
-    KV(KVStoreTaskConfig),
     BigTableKV(BigTableTaskConfig),
 }
 
@@ -164,14 +163,6 @@ async fn main() -> Result<()> {
             Task::Blob(blob_config) => {
                 let worker_pool = WorkerPool::new(
                     BlobWorker::new(blob_config),
-                    task_config.name,
-                    task_config.concurrency,
-                );
-                executor.register(worker_pool).await?;
-            }
-            Task::KV(kv_config) => {
-                let worker_pool = WorkerPool::new(
-                    KVStoreWorker::new(kv_config).await,
                     task_config.name,
                     task_config.concurrency,
                 );

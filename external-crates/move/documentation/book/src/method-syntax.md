@@ -4,7 +4,7 @@ As a syntactic convience, some functions in Move can be called as "methods" on a
 by using the `.` operator to call the function, where the value on the left-hand side of the `.` is
 the first argument to the function (sometimes called the receiver). The type of that value
 statically determines which function is called. This is an important difference from some other
-langauges, where this syntax might indicate a dynamic call, where the function to be called is
+languages, where this syntax might indicate a dynamic call, where the function to be called is
 determined at runtime. In Move, all function calls are statically determined.
 
 In short, this syntax exists to make it easier to call functions without having to create an alias

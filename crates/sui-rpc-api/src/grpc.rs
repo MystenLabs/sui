@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use http::{Request, Response};
-use std::convert::Infallible;
+use std::{convert::Infallible, pin::Pin, sync::Arc};
 use tap::Pipe;
 use tonic::{
     body::{boxed, BoxBody},
     server::NamedService,
 };
 use tower::{Service, ServiceExt};
+
+use crate::subscription::SubscriptionServiceHandle;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -46,11 +48,11 @@ impl Services {
 }
 
 #[tonic::async_trait]
-impl crate::proto::node::node_service_server::NodeService for crate::RpcService {
+impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcService {
     async fn get_node_info(
         &self,
-        _request: tonic::Request<crate::proto::node::GetNodeInfoRequest>,
-    ) -> Result<tonic::Response<crate::proto::node::GetNodeInfoResponse>, tonic::Status> {
+        _request: tonic::Request<crate::proto::node::v2::GetNodeInfoRequest>,
+    ) -> Result<tonic::Response<crate::proto::node::v2::GetNodeInfoResponse>, tonic::Status> {
         self.get_node_info()
             .map(Into::into)
             .map(tonic::Response::new)
@@ -59,12 +61,14 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn get_committee(
         &self,
-        request: tonic::Request<crate::proto::node::GetCommitteeRequest>,
-    ) -> std::result::Result<tonic::Response<crate::proto::node::GetCommitteeResponse>, tonic::Status>
-    {
+        request: tonic::Request<crate::proto::node::v2::GetCommitteeRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2::GetCommitteeResponse>,
+        tonic::Status,
+    > {
         let committee = self.get_committee(request.into_inner().epoch)?;
 
-        crate::proto::node::GetCommitteeResponse {
+        crate::proto::node::v2::GetCommitteeResponse {
             committee: Some(committee.into()),
         }
         .pipe(tonic::Response::new)
@@ -73,9 +77,11 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn get_object(
         &self,
-        request: tonic::Request<crate::proto::node::GetObjectRequest>,
-    ) -> std::result::Result<tonic::Response<crate::proto::node::GetObjectResponse>, tonic::Status>
-    {
+        request: tonic::Request<crate::proto::node::v2::GetObjectRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2::GetObjectResponse>,
+        tonic::Status,
+    > {
         let request = request.into_inner();
         let object_id = request
             .object_id
@@ -94,9 +100,9 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn get_transaction(
         &self,
-        request: tonic::Request<crate::proto::node::GetTransactionRequest>,
+        request: tonic::Request<crate::proto::node::v2::GetTransactionRequest>,
     ) -> std::result::Result<
-        tonic::Response<crate::proto::node::GetTransactionResponse>,
+        tonic::Response<crate::proto::node::v2::GetTransactionResponse>,
         tonic::Status,
     > {
         let request = request.into_inner();
@@ -121,9 +127,9 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn get_checkpoint(
         &self,
-        request: tonic::Request<crate::proto::node::GetCheckpointRequest>,
+        request: tonic::Request<crate::proto::node::v2::GetCheckpointRequest>,
     ) -> std::result::Result<
-        tonic::Response<crate::proto::node::GetCheckpointResponse>,
+        tonic::Response<crate::proto::node::v2::GetCheckpointResponse>,
         tonic::Status,
     > {
         let request = request.into_inner();
@@ -155,9 +161,9 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn get_full_checkpoint(
         &self,
-        request: tonic::Request<crate::proto::node::GetFullCheckpointRequest>,
+        request: tonic::Request<crate::proto::node::v2::GetFullCheckpointRequest>,
     ) -> std::result::Result<
-        tonic::Response<crate::proto::node::GetFullCheckpointResponse>,
+        tonic::Response<crate::proto::node::v2::GetFullCheckpointResponse>,
         tonic::Status,
     > {
         let request = request.into_inner();
@@ -195,9 +201,9 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
 
     async fn execute_transaction(
         &self,
-        request: tonic::Request<crate::proto::node::ExecuteTransactionRequest>,
+        request: tonic::Request<crate::proto::node::v2::ExecuteTransactionRequest>,
     ) -> std::result::Result<
-        tonic::Response<crate::proto::node::ExecuteTransactionResponse>,
+        tonic::Response<crate::proto::node::v2::ExecuteTransactionResponse>,
         tonic::Status,
     > {
         let request = request.into_inner();
@@ -273,4 +279,119 @@ impl crate::proto::node::node_service_server::NodeService for crate::RpcService 
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
+}
+
+use crate::proto::node::v2alpha::SubscribeCheckpointsResponse;
+
+#[tonic::async_trait]
+impl crate::proto::node::v2alpha::subscription_service_server::SubscriptionService
+    for SubscriptionServiceHandle
+{
+    /// Server streaming response type for the SubscribeCheckpoints method.
+    type SubscribeCheckpointsStream = Pin<
+        Box<
+            dyn tokio_stream::Stream<Item = Result<SubscribeCheckpointsResponse, tonic::Status>>
+                + Send,
+        >,
+    >;
+
+    async fn subscribe_checkpoints(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::SubscribeCheckpointsRequest>,
+    ) -> Result<tonic::Response<Self::SubscribeCheckpointsStream>, tonic::Status> {
+        let options = request.into_inner().options.unwrap_or_default();
+
+        let Some(mut receiver) = self.register_subscription().await else {
+            return Err(tonic::Status::unavailable(
+                "too many existing subscriptions",
+            ));
+        };
+
+        let response = Box::pin(async_stream::stream! {
+            while let Some(checkpoint) = receiver.recv().await {
+                let Some(cursor) = checkpoint.sequence_number else {
+                    yield Err(tonic::Status::internal("unable to determine cursor"));
+                    break;
+                };
+
+                let checkpoint = apply_checkpont_options(&options, Arc::unwrap_or_clone(checkpoint));
+                let response = SubscribeCheckpointsResponse {
+                    cursor: Some(cursor),
+                    checkpoint: Some(checkpoint),
+                };
+
+                yield Ok(response);
+            }
+        });
+
+        Ok(tonic::Response::new(response))
+    }
+}
+
+// Go through all of the fields of the checkpoint and apply the provided 'options'.
+//
+// This function assumes that the provided checkpoint has all fields populated and that applying
+// the requested options is a matter of removing the data that the request didn't ask for.
+fn apply_checkpont_options(
+    options: &crate::proto::node::v2::GetFullCheckpointOptions,
+    mut checkpoint: crate::proto::node::v2::GetFullCheckpointResponse,
+) -> crate::proto::node::v2::GetFullCheckpointResponse {
+    if !options.summary() {
+        checkpoint.summary = None;
+    }
+    if !options.summary_bcs() {
+        checkpoint.summary_bcs = None;
+    }
+    if !options.signature() {
+        checkpoint.signature = None;
+    }
+    if !options.contents() {
+        checkpoint.contents = None;
+    }
+    if !options.contents_bcs() {
+        checkpoint.contents_bcs = None;
+    }
+
+    for transaction in checkpoint.transactions.iter_mut() {
+        if !options.transaction() {
+            transaction.transaction = None;
+        }
+        if !options.transaction_bcs() {
+            transaction.transaction_bcs = None;
+        }
+        if !options.effects() {
+            transaction.effects = None;
+        }
+        if !options.effects_bcs() {
+            transaction.effects_bcs = None;
+        }
+        if !options.events() {
+            transaction.events = None;
+        }
+        if !options.events_bcs() {
+            transaction.events_bcs = None;
+        }
+        if !options.input_objects() {
+            transaction.input_objects = None;
+        }
+        if !options.output_objects() {
+            transaction.output_objects = None;
+        }
+
+        for object in transaction
+            .input_objects
+            .iter_mut()
+            .chain(transaction.output_objects.iter_mut())
+            .flat_map(|objects| objects.objects.iter_mut())
+        {
+            if !options.object() {
+                object.object = None;
+            }
+            if !options.object_bcs() {
+                object.object_bcs = None;
+            }
+        }
+    }
+
+    checkpoint
 }

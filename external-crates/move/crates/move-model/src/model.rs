@@ -737,7 +737,7 @@ impl GlobalEnv {
             .expect("file_id undefined")
     }
 
-    /// Maps a an index which was obtained by `file_id_to_idx` back to a FileId.
+    /// Maps an index which was obtained by `file_id_to_idx` back to a FileId.
     pub fn file_idx_to_id(&self, file_idx: u16) -> FileId {
         *self
             .file_idx_to_id

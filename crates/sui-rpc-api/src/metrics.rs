@@ -7,7 +7,8 @@ use std::{borrow::Cow, sync::Arc, time::Instant};
 use mysten_network::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 
 #[derive(Clone)]
@@ -191,5 +192,30 @@ fn code_as_str(code: tonic::Code) -> &'static str {
         tonic::Code::Unavailable => "unavailable",
         tonic::Code::DataLoss => "data-loss",
         tonic::Code::Unauthenticated => "unauthenticated",
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct SubscriptionMetrics {
+    pub inflight_subscribers: IntGauge,
+    pub last_recieved_checkpoint: IntGauge,
+}
+
+impl SubscriptionMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            inflight_subscribers: register_int_gauge_with_registry!(
+                "subscription_inflight_subscribers",
+                "Total in-flight subscriptions",
+                registry,
+            )
+            .unwrap(),
+            last_recieved_checkpoint: register_int_gauge_with_registry!(
+                "subscription_last_recieved_checkpoint",
+                "Last recieved checkpoint by the subscription service",
+                registry,
+            )
+            .unwrap(),
+        }
     }
 }

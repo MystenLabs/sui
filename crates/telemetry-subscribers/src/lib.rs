@@ -381,13 +381,11 @@ impl TelemetryConfig {
 
         if config.enable_otlp_tracing {
             let trace_file = env::var("TRACE_FILE").ok();
-
-            let config = opentelemetry_sdk::trace::Config::default()
-                .with_resource(Resource::new(vec![opentelemetry::KeyValue::new(
-                    "service.name",
-                    service_name.clone(),
-                )]))
-                .with_sampler(Sampler::ParentBased(Box::new(sampler.clone())));
+            let resource = Resource::new(vec![opentelemetry::KeyValue::new(
+                "service.name",
+                service_name.clone(),
+            )]);
+            let sampler = Sampler::ParentBased(Box::new(sampler.clone()));
 
             // We can either do file output or OTLP, but not both. tracing-opentelemetry
             // only supports a single tracer at a time.
@@ -398,7 +396,8 @@ impl TelemetryConfig {
                 let processor = BatchSpanProcessor::builder(exporter, runtime::Tokio).build();
 
                 let p = TracerProvider::builder()
-                    .with_config(config)
+                    .with_resource(resource)
+                    .with_sampler(sampler)
                     .with_span_processor(processor)
                     .build();
 
@@ -409,20 +408,17 @@ impl TelemetryConfig {
             } else {
                 let endpoint = env::var("OTLP_ENDPOINT")
                     .unwrap_or_else(|_| "http://localhost:4317".to_string());
-
-                let p = opentelemetry_otlp::new_pipeline()
-                    .tracing()
-                    .with_exporter(
-                        opentelemetry_otlp::new_exporter()
-                            .tonic()
-                            .with_endpoint(endpoint),
-                    )
-                    .with_trace_config(config)
-                    .install_batch(runtime::Tokio)
-                    .expect("Could not create async Tracer");
-
-                let tracer = p.tracer(service_name);
-
+                let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
+                    .with_tonic()
+                    .with_endpoint(endpoint)
+                    .build()
+                    .unwrap();
+                let tracer_provider = opentelemetry_sdk::trace::TracerProvider::builder()
+                    .with_resource(resource)
+                    .with_sampler(sampler)
+                    .with_batch_exporter(otlp_exporter, runtime::Tokio)
+                    .build();
+                let tracer = tracer_provider.tracer(service_name);
                 tracing_opentelemetry::layer().with_tracer(tracer)
             };
 

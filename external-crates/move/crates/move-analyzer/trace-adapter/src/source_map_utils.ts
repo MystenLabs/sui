@@ -4,6 +4,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ModuleInfo } from './utils';
+import { JSON_FILE_EXT } from './utils';
+
 
 // Data types corresponding to source map file JSON schema.
 
@@ -64,6 +66,20 @@ export interface IFileLoc {
 }
 
 /**
+ * Describes a local variable (or a parameter).
+ */
+export interface ILocalInfo {
+    /**
+     * Name as seen in the source code.
+     */
+    name: string;
+    /**
+     * Name as seen in the bytecode (internal compiler name).
+     */
+    internalName: string;
+}
+
+/**
  * Describes a function in the source map.
  */
 export interface ISourceMapFunction {
@@ -72,10 +88,10 @@ export interface ISourceMapFunction {
      */
     pcLocs: IFileLoc[],
     /**
-     * Names of local variables by their index in the frame
+     * Local variables info by their index in the frame
      * (parameters first, then actual locals).
      */
-    localsNames: string[],
+    localsInfo: ILocalInfo[],
     /**
      * Location of function definition start.
      */
@@ -126,7 +142,7 @@ export function readAllSourceMaps(
             const stats = fs.statSync(filePath);
             if (stats.isDirectory()) {
                 processDirectory(filePath);
-            } else if (path.extname(f) === '.json') {
+            } else if (path.extname(f) === JSON_FILE_EXT) {
                 const sourceMap = readSourceMap(filePath, filesMap, allSourceMapLinesMap);
                 sourceMapsMap.set(JSON.stringify(sourceMap.modInfo), sourceMap);
             }
@@ -231,28 +247,26 @@ function readSourceMap(
             prevLoc = currentFileStartLoc;
         }
 
-        const localsNames: string[] = [];
+        const localsNames: ILocalInfo[] = [];
         for (const param of funEntry.parameters) {
-            const paramName = param[0].split("#")[0];
+            let paramName = param[0].split("#")[0];
             if (!paramName) {
-                localsNames.push(param[0]);
-            } else {
-                localsNames.push(paramName);
+                paramName = param[0];
             }
+            localsNames.push({ name: paramName, internalName: param[0] });
         }
 
         for (const local of funEntry.locals) {
-            const localsName = local[0].split("#")[0];
+            let localsName = local[0].split("#")[0];
             if (!localsName) {
-                localsNames.push(local[0]);
-            } else {
-                localsNames.push(localsName);
+                localsName = local[0];
             }
+            localsNames.push({ name: localsName, internalName: local[0] });
         }
         // compute start and end of function definition
         const startLoc = byteOffsetToLineColumn(fileInfo, funEntry.location.start);
         const endLoc = byteOffsetToLineColumn(fileInfo, funEntry.location.end);
-        functions.set(funName, { pcLocs, localsNames, startLoc, endLoc });
+        functions.set(funName, { pcLocs, localsInfo: localsNames, startLoc, endLoc });
     }
     return { filePath: fileInfo.path, fileHash, modInfo, functions, optimizedLines: [] };
 }

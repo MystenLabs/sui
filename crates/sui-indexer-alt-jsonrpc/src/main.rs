@@ -13,6 +13,7 @@ async fn main() -> anyhow::Result<()> {
     let Args {
         db_args,
         rpc_args,
+        system_package_task_args,
         metrics_args,
     } = Args::parse();
 
@@ -28,7 +29,15 @@ async fn main() -> anyhow::Result<()> {
 
     let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
 
-    let h_rpc = start_rpc(db_args, rpc_args, metrics.registry(), cancel.child_token()).await?;
+    let h_rpc = start_rpc(
+        db_args,
+        rpc_args,
+        system_package_task_args,
+        metrics.registry(),
+        cancel.child_token(),
+    )
+    .await?;
+
     let h_metrics = metrics.run().await?;
 
     let _ = h_rpc.await;

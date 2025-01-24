@@ -173,7 +173,7 @@ extension configuration and data. <code>Ext</code> is a phantom type that is use
 to identify the extension witness.
 
 
-<pre><code><b>public</b> <b>struct</b> ExtensionKeyExt <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;<b>phantom</b> Ext&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -254,7 +254,7 @@ extension witness is required to allow extensions define their set of
 permissions in the custom <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_add">add</a></code> call.
 
 
-<pre><code><b>public</b> <b>fun</b> addExt(_ext: Ext, self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>, permissions: u128, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_add">add</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>, permissions: u128, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -296,7 +296,7 @@ extension completely, it keeps it from performing any protected actions.
 The storage is still available to the extension (until it's removed).
 
 
-<pre><code><b>public</b> <b>fun</b> disableExt(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_disable">disable</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>)
 </code></pre>
 
 
@@ -325,7 +325,7 @@ Re-enable the extension allowing it to call protected actions (eg
 owner can disable them via <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_disable">disable</a></code> call.
 
 
-<pre><code><b>public</b> <b>fun</b> enableExt(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_enable">enable</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>)
 </code></pre>
 
 
@@ -353,7 +353,7 @@ Remove an extension from the Kiosk. Can only be performed by the owner,
 the extension storage must be empty for the transaction to succeed.
 
 
-<pre><code><b>public</b> <b>fun</b> removeExt(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_remove">remove</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>)
 </code></pre>
 
 
@@ -386,7 +386,7 @@ Get immutable access to the extension storage. Can only be performed by
 the extension as long as the extension is installed.
 
 
-<pre><code><b>public</b> <b>fun</b> storageExt(_ext: Ext, self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_storage">storage</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>
 </code></pre>
 
 
@@ -423,7 +423,7 @@ Extensions should be crafted carefully, and the KioskOwner should be
 aware of the risks.
 
 
-<pre><code><b>public</b> <b>fun</b> storage_mutExt(_ext: Ext, self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_storage_mut">storage_mut</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>
 </code></pre>
 
 
@@ -454,7 +454,7 @@ To prevent non-tradable items from being placed into <code>Kiosk</code> the meth
 requires a <code>TransferPolicy</code> for the placed type to exist.
 
 
-<pre><code><b>public</b> <b>fun</b> placeExt, T(_ext: Ext, self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, item: T, _policy: &<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a>&lt;Ext: drop, T: key, store&gt;(_ext: Ext, self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, item: T, _policy: &<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -487,7 +487,7 @@ Protected action: lock an item in the Kiosk. Can be performed by an
 authorized extension. The extension must have the <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> permission.
 
 
-<pre><code><b>public</b> <b>fun</b> lockExt, T(_ext: Ext, self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, item: T, _policy: &<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_lock">lock</a>&lt;Ext: drop, T: key, store&gt;(_ext: Ext, self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, item: T, _policy: &<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -519,7 +519,7 @@ authorized extension. The extension must have the <code><a href="../sui/kiosk_ex
 Check whether an extension of type <code>Ext</code> is installed.
 
 
-<pre><code><b>public</b> <b>fun</b> is_installedExt(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_is_installed">is_installed</a>&lt;Ext: drop&gt;(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
 </code></pre>
 
 
@@ -544,7 +544,7 @@ Check whether an extension of type <code>Ext</code> is installed.
 Check whether an extension of type <code>Ext</code> is enabled.
 
 
-<pre><code><b>public</b> <b>fun</b> is_enabledExt(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext: drop&gt;(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
 </code></pre>
 
 
@@ -569,7 +569,7 @@ Check whether an extension of type <code>Ext</code> is enabled.
 Check whether an extension of type <code>Ext</code> can <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code> into Kiosk.
 
 
-<pre><code><b>public</b> <b>fun</b> can_placeExt(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_can_place">can_place</a>&lt;Ext: drop&gt;(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
 </code></pre>
 
 
@@ -595,7 +595,7 @@ Check whether an extension of type <code>Ext</code> can <code><a href="../sui/ki
 Locking also enables <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> can_lockExt(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_can_lock">can_lock</a>&lt;Ext: drop&gt;(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): bool
 </code></pre>
 
 
@@ -620,7 +620,7 @@ Locking also enables <code><a href="../sui/kiosk_extension.md#sui_kiosk_extensio
 Internal: get a read-only access to the Extension.
 
 
-<pre><code><b>fun</b> extensionExt(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<a href="../sui/kiosk_extension.md#sui_kiosk_extension_Extension">sui::kiosk_extension::Extension</a>
+<pre><code><b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_extension">extension</a>&lt;Ext: drop&gt;(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<a href="../sui/kiosk_extension.md#sui_kiosk_extension_Extension">sui::kiosk_extension::Extension</a>
 </code></pre>
 
 
@@ -645,7 +645,7 @@ Internal: get a read-only access to the Extension.
 Internal: get a mutable access to the Extension.
 
 
-<pre><code><b>fun</b> extension_mutExt(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<b>mut</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_Extension">sui::kiosk_extension::Extension</a>
+<pre><code><b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>): &<b>mut</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_Extension">sui::kiosk_extension::Extension</a>
 </code></pre>
 
 

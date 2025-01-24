@@ -18,8 +18,6 @@ import {
     Runtime,
     RuntimeEvents,
     RuntimeValueType,
-    IRuntimeVariableLoc,
-    IRuntimeGlobalLoc,
     IRuntimeVariableScope,
     CompoundType,
     IRuntimeRefValue,
@@ -40,7 +38,7 @@ interface CustomizedStackTraceResponse extends DebugProtocol.StackTraceResponse 
     body: {
         stackFrames: StackFrame[];
         totalFrames?: number;
-        optimized_lines: number[];
+        optimizedLines: number[];
     };
 }
 
@@ -95,6 +93,8 @@ export class MoveDebugSession extends LoggingDebugSession {
      * Handles to create variable scopes and compound variable values.
      */
     private variableHandles: Handles<IRuntimeVariableScope | CompoundType>;
+
+    private count: number = 0;
 
     public constructor() {
         super();
@@ -169,7 +169,8 @@ export class MoveDebugSession extends LoggingDebugSession {
         // make VS Code send setExpression request
         response.body.supportsSetExpression = false;
 
-        // make VS Code send disassemble request
+        // make VS Code send disassemble request (it's false
+        // as we handle this differently through custom commands)
         response.body.supportsDisassembleRequest = false;
         response.body.supportsSteppingGranularity = false;
         response.body.supportsInstructionBreakpoints = false;
@@ -185,6 +186,27 @@ export class MoveDebugSession extends LoggingDebugSession {
 
         this.sendResponse(response);
         this.sendEvent(new InitializedEvent());
+    }
+
+    /**
+     * Intercepts all requests sent to the debug adapter to handle custom ones.
+     *
+     * @param request request to be dispatched.
+     */
+    protected dispatchRequest(request: DebugProtocol.Request): void {
+        if (request.command === 'toggleDisassembly') {
+            this.runtime.toggleDisassembly();
+            this.sendEvent(new StoppedEvent('toggle disassembly', MoveDebugSession.THREAD_ID));
+        } else if (request.command === 'toggleSource') {
+            this.runtime.toggleSource();
+            this.sendEvent(new StoppedEvent('toggle source', MoveDebugSession.THREAD_ID));
+        } else if (request.command === 'fileChanged') {
+            const newFile = String(request.arguments);
+            const changedFile = this.runtime.setCurrentMoveFileFromPath(newFile);
+            logger.log('Current Move file changed to ' + changedFile);
+        } else {
+            super.dispatchRequest(request);
+        }
     }
 
     protected async launchRequest(
@@ -222,12 +244,22 @@ export class MoveDebugSession extends LoggingDebugSession {
             const stack_height = runtimeStack.frames.length;
             response.body = {
                 stackFrames: runtimeStack.frames.map(frame => {
-                    const fileName = path.basename(frame.file);
-                    return new StackFrame(frame.id, frame.name, new Source(fileName, frame.file), frame.line);
+                    const fileName = frame.showDisassembly
+                        ? path.basename(frame.bcodeFilePath!)
+                        : path.basename(frame.srcFilePath);
+                    const frameSource = frame.showDisassembly
+                        ? new Source(fileName, frame.bcodeFilePath!)
+                        : new Source(fileName, frame.srcFilePath);
+                    const currentLine = frame.showDisassembly
+                        ? frame.bcodeLine!
+                        : frame.srcLine;
+                    return new StackFrame(frame.id, frame.name, frameSource, currentLine);
                 }).reverse(),
                 totalFrames: stack_height,
-                optimized_lines: stack_height > 0
-                    ? runtimeStack.frames[stack_height - 1].optimizedLines
+                optimizedLines: stack_height > 0
+                    ? (runtimeStack.frames[stack_height - 1].showDisassembly
+                        ? runtimeStack.frames[stack_height - 1].optimizedBcodeLines!
+                        : runtimeStack.frames[stack_height - 1].optimizedSrcLines)
                     : []
             };
         } catch (err) {
@@ -273,6 +305,11 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         try {
             const scopes = this.getScopes(args.frameId);
+            const changedFile = this.runtime.setCurrentMoveFileFromFrame(args.frameId);
+            logger.log('Current Move file changed to '
+                + changedFile
+                + ' for frame id '
+                + args.frameId);
             response.body = {
                 scopes
             };
@@ -280,7 +317,6 @@ export class MoveDebugSession extends LoggingDebugSession {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
         }
-
         this.sendResponse(response);
     }
 
@@ -428,9 +464,33 @@ export class MoveDebugSession extends LoggingDebugSession {
     private convertRuntimeVariables(runtimeScope: IRuntimeVariableScope): DebugProtocol.Variable[] {
         const variables: DebugProtocol.Variable[] = [];
         const runtimeVariables = runtimeScope.locals;
+        let showDisassembly = false;
+        if (runtimeVariables.length > 0) {
+            // there can be undefined entries in the variables array,
+            // so find any non-undefined one (they will all point to
+            // the same frame)
+            const firstVar = runtimeVariables.find(v => v);
+            if (firstVar) {
+                const varFrame = this.runtime.stack().frames[firstVar.frameIdx];
+                if (varFrame) {
+                    showDisassembly = varFrame.showDisassembly;
+                }
+            }
+        }
         runtimeVariables.forEach(v => {
             if (v) {
-                variables.push(this.convertRuntimeValue(v.value, v.name, [], v.type));
+                const varName = showDisassembly
+                    ? v.info.internalName
+                    : v.info.name;
+                const dapVar = this.convertRuntimeValue(v.value, varName, [], v.type);
+                if (showDisassembly || !varName.includes('%')) {
+                    // Don't show "artificial" variables generated by the compiler
+                    // for enum and macro execution when showing source code as they
+                    // would be quite confusing for the user without knowing compilation
+                    // internals. On the other hand, it make sense to show them when showing
+                    // disassembly
+                    variables.push(dapVar);
+                }
             }
         });
         return variables;
@@ -565,7 +625,6 @@ export class MoveDebugSession extends LoggingDebugSession {
         }
         this.sendResponse(response);
     }
-
 
     protected disconnectRequest(
         response: DebugProtocol.DisconnectResponse,

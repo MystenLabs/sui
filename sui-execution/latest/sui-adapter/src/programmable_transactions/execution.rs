@@ -29,6 +29,7 @@ mod checked {
     };
     use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
     use serde::{de::DeserializeSeed, Deserialize};
+    use std::time::Instant;
     use std::{
         collections::{BTreeMap, BTreeSet},
         fmt,
@@ -36,6 +37,7 @@ mod checked {
     };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::execution::{ExecutionTiming, ResultWithTimings};
     use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
     use sui_types::storage::{get_package_objects, PackageObject};
@@ -74,6 +76,34 @@ mod checked {
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
+    ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
+        let mut timings = vec![];
+        let result = execute_inner::<Mode>(
+            &mut timings,
+            protocol_config,
+            metrics,
+            vm,
+            state_view,
+            tx_context,
+            gas_charger,
+            pt,
+        );
+
+        match result {
+            Ok(result) => Ok((result, timings)),
+            Err(e) => Err((e, timings)),
+        }
+    }
+
+    pub fn execute_inner<Mode: ExecutionMode>(
+        timings: &mut Vec<ExecutionTiming>,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+        vm: &MoveVM,
+        state_view: &mut dyn ExecutionState,
+        tx_context: &mut TxContext,
+        gas_charger: &mut GasCharger,
+        pt: ProgrammableTransaction,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         let ProgrammableTransaction { inputs, commands } = pt;
         let mut context = ExecutionContext::new(
@@ -88,6 +118,7 @@ mod checked {
         // execute commands
         let mut mode_results = Mode::empty_results();
         for (idx, command) in commands.into_iter().enumerate() {
+            let start = Instant::now();
             if let Err(err) = execute_command::<Mode>(&mut context, &mut mode_results, command) {
                 let object_runtime: &ObjectRuntime = context.object_runtime();
                 // We still need to record the loaded child objects for replay
@@ -95,8 +126,10 @@ mod checked {
                 // we do not save the wrapped objects since on error, they should not be modified
                 drop(context);
                 state_view.save_loaded_runtime_objects(loaded_runtime_objects);
+                timings.push(ExecutionTiming::Abort(start.elapsed()));
                 return Err(err.with_command_index(idx));
             };
+            timings.push(ExecutionTiming::Success(start.elapsed()));
         }
 
         // Save loaded objects table in case we fail in post execution

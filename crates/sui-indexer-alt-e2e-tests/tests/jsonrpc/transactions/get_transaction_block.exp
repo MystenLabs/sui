@@ -1,0 +1,903 @@
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 12-46:
+//# publish
+created: object(1,0), object(1,1)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9211200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 48-54:
+//# programmable --sender A --inputs object(1,0) 42 @A
+//> 0: test::counter::inc(Input(0));
+//> 1: test::counter::inc_by(Input(0), Input(1));
+//> 2: sui::coin::value<sui::sui::SUI>(Gas);
+//> 3: test::counter::inc_by(Input(0), Result(2));
+//> 4: test::counter::take(Input(0), Input(1));
+//> 5: TransferObjects([Result(4)], Input(2))
+events: Event { package_id: test, transaction_module: Identifier("counter"), sender: A, type_: StructTag { address: test, module: Identifier("counter"), name: Identifier("NFTMinted"), type_params: [] }, contents: [41, 96, 231, 235, 135, 134, 117, 102, 3, 204, 210, 31, 140, 81, 38, 14, 171, 188, 201, 196, 121, 128, 155, 196, 248, 198, 125, 113, 60, 127, 239, 247] }
+created: object(2,0)
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 1346796, non_refundable_storage_fee: 13604
+
+task 3, line 56:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 58-62:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "digest": "FqrQYPLunNvAQKn2EKrWAHc32942bjovH6VeFDgPQUQs"
+  }
+}
+
+task 5, lines 64-68:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32602,
+    "message": "Transaction not found: 11111111111111111111111111111111"
+  }
+}
+
+task 6, lines 70-80:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "digest": "FqrQYPLunNvAQKn2EKrWAHc32942bjovH6VeFDgPQUQs",
+    "rawTransaction": "AAADAQFVgoNgXuarD3xAE3cOojA9IQQR26dH+uxMEfbX1R6dhgIAAAAAAAAAAQAIKgAAAAAAAAAAIPzMmkIbuxPBpmoaqY8K11Ap7elIV3ecaRW0T5QGi5IeBgDsz8HPY4GWIqXu67rnTG9rf6ekBFETZGH2d5atP48z/gdjb3VudGVyA2luYwABAQAAAOzPwc9jgZYipe7ruudMb2t/p6QEURNkYfZ3lq0/jzP+B2NvdW50ZXIGaW5jX2J5AAIBAAABAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIEY29pbgV2YWx1ZQEHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIDc3VpA1NVSQABAADsz8HPY4GWIqXu67rnTG9rf6ekBFETZGH2d5atP48z/gdjb3VudGVyBmluY19ieQACAQAAAgIAAOzPwc9jgZYipe7ruudMb2t/p6QEURNkYfZ3lq0/jzP+B2NvdW50ZXIEdGFrZQACAQAAAQEAAQECBAABAgD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHgG/9elqSlwPc0glnHq/39mZQFwCuenA0NWexmmlOxBMegEAAAAAAAAAIKEd8xRTuu+n68ZlWvsLrCmzFa8z+W8E5apBshZjx/M//MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh7oAwAAAAAAAADyBSoBAAAAAA==",
+    "rawEffects": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      64,
+      66,
+      15,
+      0,
+      0,
+      0,
+      0,
+      0,
+      192,
+      32,
+      56,
+      0,
+      0,
+      0,
+      0,
+      0,
+      236,
+      140,
+      20,
+      0,
+      0,
+      0,
+      0,
+      0,
+      36,
+      53,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      32,
+      220,
+      135,
+      91,
+      245,
+      94,
+      173,
+      245,
+      146,
+      181,
+      140,
+      59,
+      176,
+      38,
+      179,
+      59,
+      185,
+      90,
+      176,
+      34,
+      173,
+      99,
+      238,
+      151,
+      236,
+      47,
+      147,
+      95,
+      134,
+      165,
+      19,
+      235,
+      140,
+      1,
+      2,
+      0,
+      0,
+      0,
+      1,
+      32,
+      35,
+      234,
+      81,
+      115,
+      57,
+      243,
+      103,
+      224,
+      175,
+      29,
+      141,
+      219,
+      189,
+      113,
+      214,
+      68,
+      130,
+      116,
+      106,
+      7,
+      113,
+      255,
+      34,
+      214,
+      131,
+      51,
+      107,
+      133,
+      226,
+      136,
+      224,
+      247,
+      2,
+      32,
+      33,
+      96,
+      204,
+      109,
+      165,
+      71,
+      188,
+      85,
+      187,
+      139,
+      69,
+      34,
+      243,
+      29,
+      142,
+      35,
+      254,
+      32,
+      23,
+      233,
+      154,
+      186,
+      96,
+      24,
+      108,
+      237,
+      183,
+      181,
+      10,
+      7,
+      247,
+      26,
+      32,
+      221,
+      81,
+      192,
+      236,
+      185,
+      4,
+      19,
+      137,
+      211,
+      93,
+      227,
+      108,
+      152,
+      189,
+      2,
+      229,
+      194,
+      247,
+      14,
+      181,
+      1,
+      61,
+      241,
+      62,
+      33,
+      28,
+      12,
+      188,
+      144,
+      73,
+      7,
+      241,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3,
+      41,
+      96,
+      231,
+      235,
+      135,
+      134,
+      117,
+      102,
+      3,
+      204,
+      210,
+      31,
+      140,
+      81,
+      38,
+      14,
+      171,
+      188,
+      201,
+      196,
+      121,
+      128,
+      155,
+      196,
+      248,
+      198,
+      125,
+      113,
+      60,
+      127,
+      239,
+      247,
+      0,
+      1,
+      32,
+      126,
+      22,
+      145,
+      146,
+      124,
+      26,
+      49,
+      95,
+      145,
+      147,
+      125,
+      201,
+      39,
+      120,
+      225,
+      15,
+      254,
+      207,
+      64,
+      27,
+      22,
+      94,
+      36,
+      157,
+      253,
+      97,
+      75,
+      239,
+      138,
+      119,
+      175,
+      171,
+      0,
+      252,
+      204,
+      154,
+      66,
+      27,
+      187,
+      19,
+      193,
+      166,
+      106,
+      26,
+      169,
+      143,
+      10,
+      215,
+      80,
+      41,
+      237,
+      233,
+      72,
+      87,
+      119,
+      156,
+      105,
+      21,
+      180,
+      79,
+      148,
+      6,
+      139,
+      146,
+      30,
+      1,
+      85,
+      130,
+      131,
+      96,
+      94,
+      230,
+      171,
+      15,
+      124,
+      64,
+      19,
+      119,
+      14,
+      162,
+      48,
+      61,
+      33,
+      4,
+      17,
+      219,
+      167,
+      71,
+      250,
+      236,
+      76,
+      17,
+      246,
+      215,
+      213,
+      30,
+      157,
+      134,
+      1,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      32,
+      8,
+      187,
+      214,
+      160,
+      189,
+      68,
+      36,
+      168,
+      209,
+      42,
+      181,
+      76,
+      230,
+      154,
+      178,
+      60,
+      232,
+      212,
+      184,
+      234,
+      131,
+      17,
+      90,
+      251,
+      62,
+      243,
+      106,
+      204,
+      220,
+      131,
+      101,
+      241,
+      2,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      32,
+      51,
+      146,
+      165,
+      254,
+      55,
+      171,
+      56,
+      11,
+      40,
+      150,
+      38,
+      170,
+      157,
+      12,
+      67,
+      243,
+      59,
+      11,
+      42,
+      189,
+      229,
+      229,
+      71,
+      29,
+      100,
+      7,
+      175,
+      219,
+      213,
+      162,
+      167,
+      36,
+      2,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      191,
+      245,
+      233,
+      106,
+      74,
+      92,
+      15,
+      115,
+      72,
+      37,
+      156,
+      122,
+      191,
+      223,
+      217,
+      153,
+      64,
+      92,
+      2,
+      185,
+      233,
+      192,
+      208,
+      213,
+      158,
+      198,
+      105,
+      165,
+      59,
+      16,
+      76,
+      122,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      32,
+      161,
+      29,
+      243,
+      20,
+      83,
+      186,
+      239,
+      167,
+      235,
+      198,
+      101,
+      90,
+      251,
+      11,
+      172,
+      41,
+      179,
+      21,
+      175,
+      51,
+      249,
+      111,
+      4,
+      229,
+      170,
+      65,
+      178,
+      22,
+      99,
+      199,
+      243,
+      63,
+      0,
+      252,
+      204,
+      154,
+      66,
+      27,
+      187,
+      19,
+      193,
+      166,
+      106,
+      26,
+      169,
+      143,
+      10,
+      215,
+      80,
+      41,
+      237,
+      233,
+      72,
+      87,
+      119,
+      156,
+      105,
+      21,
+      180,
+      79,
+      148,
+      6,
+      139,
+      146,
+      30,
+      1,
+      32,
+      114,
+      196,
+      58,
+      191,
+      102,
+      185,
+      166,
+      160,
+      211,
+      88,
+      87,
+      226,
+      103,
+      38,
+      180,
+      219,
+      201,
+      133,
+      52,
+      178,
+      16,
+      75,
+      6,
+      13,
+      233,
+      0,
+      163,
+      95,
+      139,
+      44,
+      222,
+      167,
+      0,
+      252,
+      204,
+      154,
+      66,
+      27,
+      187,
+      19,
+      193,
+      166,
+      106,
+      26,
+      169,
+      143,
+      10,
+      215,
+      80,
+      41,
+      237,
+      233,
+      72,
+      87,
+      119,
+      156,
+      105,
+      21,
+      180,
+      79,
+      148,
+      6,
+      139,
+      146,
+      30,
+      0,
+      0,
+      0
+    ]
+  }
+}
+
+task 7, lines 82-92:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "digest": "FqrQYPLunNvAQKn2EKrWAHc32942bjovH6VeFDgPQUQs",
+    "transaction": {
+      "data": {
+        "messageVersion": "v1",
+        "transaction": {
+          "kind": "ProgrammableTransaction",
+          "inputs": [
+            {
+              "type": "object",
+              "objectType": "sharedObject",
+              "objectId": "0x558283605ee6ab0f7c4013770ea2303d210411dba747faec4c11f6d7d51e9d86",
+              "initialSharedVersion": "2",
+              "mutable": true
+            },
+            {
+              "type": "pure",
+              "valueType": "u64",
+              "value": "42"
+            },
+            {
+              "type": "pure",
+              "valueType": "address",
+              "value": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "transactions": [
+            {
+              "MoveCall": {
+                "package": "0xeccfc1cf63819622a5eeebbae74c6f6b7fa7a40451136461f67796ad3f8f33fe",
+                "module": "counter",
+                "function": "inc",
+                "arguments": [
+                  {
+                    "Input": 0
+                  }
+                ]
+              }
+            },
+            {
+              "MoveCall": {
+                "package": "0xeccfc1cf63819622a5eeebbae74c6f6b7fa7a40451136461f67796ad3f8f33fe",
+                "module": "counter",
+                "function": "inc_by",
+                "arguments": [
+                  {
+                    "Input": 0
+                  },
+                  {
+                    "Input": 1
+                  }
+                ]
+              }
+            },
+            {
+              "MoveCall": {
+                "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                "module": "coin",
+                "function": "value",
+                "type_arguments": [
+                  "0x2::sui::SUI"
+                ],
+                "arguments": [
+                  "GasCoin"
+                ]
+              }
+            },
+            {
+              "MoveCall": {
+                "package": "0xeccfc1cf63819622a5eeebbae74c6f6b7fa7a40451136461f67796ad3f8f33fe",
+                "module": "counter",
+                "function": "inc_by",
+                "arguments": [
+                  {
+                    "Input": 0
+                  },
+                  {
+                    "Result": 2
+                  }
+                ]
+              }
+            },
+            {
+              "MoveCall": {
+                "package": "0xeccfc1cf63819622a5eeebbae74c6f6b7fa7a40451136461f67796ad3f8f33fe",
+                "module": "counter",
+                "function": "take",
+                "arguments": [
+                  {
+                    "Input": 0
+                  },
+                  {
+                    "Input": 1
+                  }
+                ]
+              }
+            },
+            {
+              "TransferObjects": [
+                [
+                  {
+                    "Result": 4
+                  }
+                ],
+                {
+                  "Input": 2
+                }
+              ]
+            }
+          ]
+        },
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "gasData": {
+          "payment": [
+            {
+              "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+              "version": 1,
+              "digest": "Bqw8MjtPSgoFarHYSq7HN77R9utjvxqtSFD32ydKXsiW"
+            }
+          ],
+          "owner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+          "price": "1000",
+          "budget": "5000000000"
+        }
+      },
+      "txSignatures": [
+        "AER38jSf17YdkZqbJEPRwjAuX3kp0JL4vbLqU/pxl7D7X2MREYLcCnMbT+jF+txsUbVMfJroYTwYfx3t0ish7gR/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
+      ]
+    },
+    "effects": {
+      "messageVersion": "v1",
+      "status": {
+        "status": "success"
+      },
+      "executedEpoch": "0",
+      "gasUsed": {
+        "computationCost": "1000000",
+        "storageCost": "3678400",
+        "storageRebate": "1346796",
+        "nonRefundableStorageFee": "13604"
+      },
+      "modifiedAtVersions": [
+        {
+          "objectId": "0x558283605ee6ab0f7c4013770ea2303d210411dba747faec4c11f6d7d51e9d86",
+          "sequenceNumber": "2"
+        },
+        {
+          "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+          "sequenceNumber": "1"
+        }
+      ],
+      "sharedObjects": [
+        {
+          "objectId": "0x558283605ee6ab0f7c4013770ea2303d210411dba747faec4c11f6d7d51e9d86",
+          "version": 2,
+          "digest": "b6PSDcJ7F2jMDTvZMSsbuqexkSi2hDoiZQL46YxECNC"
+        }
+      ],
+      "transactionDigest": "FqrQYPLunNvAQKn2EKrWAHc32942bjovH6VeFDgPQUQs",
+      "created": [
+        {
+          "owner": {
+            "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "reference": {
+            "objectId": "0x2960e7eb8786756603ccd21f8c51260eabbcc9c479809bc4f8c67d713c7feff7",
+            "version": 3,
+            "digest": "9VCL8EztoKtT8h9294KcMTBy5TLZRncvYdRMvmepmKCv"
+          }
+        }
+      ],
+      "mutated": [
+        {
+          "owner": {
+            "Shared": {
+              "initial_shared_version": 2
+            }
+          },
+          "reference": {
+            "objectId": "0x558283605ee6ab0f7c4013770ea2303d210411dba747faec4c11f6d7d51e9d86",
+            "version": 3,
+            "digest": "4UKVNcXyHWS2CtNG7pDLdMZjsibnRBsXQaiRP5sARUHh"
+          }
+        },
+        {
+          "owner": {
+            "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "reference": {
+            "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+            "version": 3,
+            "digest": "8j12PP5NaZ6Tn5rGVHb2SkU5rtYeV9G1md1fRRqBZ15Y"
+          }
+        }
+      ],
+      "gasObject": {
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "reference": {
+          "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+          "version": 3,
+          "digest": "8j12PP5NaZ6Tn5rGVHb2SkU5rtYeV9G1md1fRRqBZ15Y"
+        }
+      },
+      "eventsDigest": "3RCW6N38LzHG9yvdaWzk1Beaum5a3JSWP73MDLmygo3t",
+      "dependencies": [
+        "3FJ4fSrf7toVCANccxAbeJ5A1iSzwKLghCYcaz9atbCD",
+        "FtwQTnaYQ7BDSpxR9gtbr2B5XBjMGYXgv3KQngEak3ix"
+      ]
+    }
+  }
+}
+
+task 8, lines 95-104:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "digest": "FqrQYPLunNvAQKn2EKrWAHc32942bjovH6VeFDgPQUQs",
+    "events": [
+      {
+        "id": {
+          "txDigest": "FqrQYPLunNvAQKn2EKrWAHc32942bjovH6VeFDgPQUQs",
+          "eventSeq": "0"
+        },
+        "packageId": "0xeccfc1cf63819622a5eeebbae74c6f6b7fa7a40451136461f67796ad3f8f33fe",
+        "transactionModule": "counter",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "type": "0xeccfc1cf63819622a5eeebbae74c6f6b7fa7a40451136461f67796ad3f8f33fe::counter::NFTMinted",
+        "parsedJson": {
+          "id": "0x2960e7eb8786756603ccd21f8c51260eabbcc9c479809bc4f8c67d713c7feff7"
+        },
+        "bcsEncoding": "base64",
+        "bcs": "KWDn64eGdWYDzNIfjFEmDqu8ycR5gJvE+MZ9cTx/7/c=",
+        "timestampMs": "0"
+      }
+    ]
+  }
+}

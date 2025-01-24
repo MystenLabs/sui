@@ -1,0 +1,18 @@
+---
+source: crates/sui-move/tests/cli_tests.rs
+description: tests/tests/new_tests/new_files.sh
+---
+success: true
+exit_code: 0
+----- stdout -----
+==== files in project ====
+.gitignore
+Move.toml
+sources
+tests
+==== files in sources ====
+example.move
+==== files in tests =====
+example_tests.move
+
+----- stderr -----

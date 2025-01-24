@@ -34,10 +34,10 @@ Data ingestion for your indexer supports several checkpoint stream sources.
 
 The most straightforward stream source is to subscribe to a remote store of checkpoint contents. Mysten Labs provides the following buckets:
 
-- Testnet: `https://storage.googleapis.com/mysten-testnet-checkpoints`
-- Mainnet: `https://storage.googleapis.com/mysten-mainnet-checkpoints`
+- Testnet: `https://checkpoints.testnet.sui.io`
+- Mainnet: `https://checkpoints.mainnet.sui.io`
 
-The checkpoint files are stored in the following format: `https://storage.googleapis.com/mysten-testnet-checkpoints/<checkpoint_id>.chk`. You can download the checkpoint file by sending an HTTP GET request to the relevant URL. Try it yourself for checkpoint 1 at [https://storage.googleapis.com/mysten-testnet-checkpoints/1.chk](https://storage.googleapis.com/mysten-testnet-checkpoints/1.chk).
+The checkpoint files are stored in the following format: `https://checkpoints.testnet.sui.io/<checkpoint_id>.chk`. You can download the checkpoint file by sending an HTTP GET request to the relevant URL. Try it yourself for checkpoint 1 at [https://checkpoints.testnet.sui.io/1.chk](https://checkpoints.testnet.sui.io/1.chk).
 
 ```mermaid
 flowchart LR
@@ -112,7 +112,7 @@ Specify both a local and remote store as a fallback to ensure constant data flow
 ```rust
 executor.run(
     PathBuf::from("./chk".to_string()), // path to a local directory
-    Some("https://storage.googleapis/mysten-testnet-checkpoints".to_string()), // Remote Checkpoint Store
+    Some("https://checkpoints.testnet.sui.io".to_string()), // Remote Checkpoint Store
     vec![], // optional remote store access options
     ReaderOptions::default(),
     exit_receiver,

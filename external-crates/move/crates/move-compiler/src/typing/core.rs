@@ -1424,6 +1424,7 @@ pub fn make_constant_type(
     let (defined_loc, signature) = {
         let ConstantInfo {
             doc: _,
+            index: _,
             attributes: _,
             defined_loc,
             signature,

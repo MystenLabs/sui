@@ -456,6 +456,14 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 if let Some(cmd) = cmd {
                     let mut context = WalletContext::new(&config_path, None, None)?;
+                    // we need to allow switching from localnet to another network; if a local
+                    // network is not running and we want to switch to another network, the code
+                    // will throw a low level network error because it cannot connect to the
+                    // network to fetch the api version.
+                    if let SuiClientCommands::Switch { .. } = cmd {
+                        cmd.execute(&mut context).await?.print(!json);
+                        return Ok(());
+                    }
                     if let Err(e) = context.get_client().await?.check_api_version() {
                         eprintln!("{}", format!("[warning] {e}").yellow().bold());
                     }

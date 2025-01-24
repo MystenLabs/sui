@@ -11,8 +11,8 @@ pub use reqwest;
 use tap::Pipe;
 use tonic::metadata::MetadataMap;
 
-use crate::proto::node::node_service_client::NodeServiceClient;
-use crate::proto::node::{
+use crate::proto::node::v2::node_service_client::NodeServiceClient;
+use crate::proto::node::v2::{
     ExecuteTransactionResponse, GetCheckpointResponse, GetFullCheckpointResponse, GetObjectResponse,
 };
 use crate::proto::types::Bcs;
@@ -78,10 +78,10 @@ impl Client {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
     ) -> Result<CertifiedCheckpointSummary> {
-        let request = crate::proto::node::GetCheckpointRequest {
+        let request = crate::proto::node::v2::GetCheckpointRequest {
             sequence_number,
             digest: None,
-            options: Some(crate::proto::node::GetCheckpointOptions {
+            options: Some(crate::proto::node::v2::GetCheckpointOptions {
                 summary: Some(false),
                 summary_bcs: Some(true),
                 signature: Some(true),
@@ -112,10 +112,10 @@ impl Client {
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Result<CheckpointData> {
-        let request = crate::proto::node::GetFullCheckpointRequest {
+        let request = crate::proto::node::v2::GetFullCheckpointRequest {
             sequence_number: Some(sequence_number),
             digest: None,
-            options: Some(crate::proto::node::GetFullCheckpointOptions {
+            options: Some(crate::proto::node::v2::GetFullCheckpointOptions {
                 summary: Some(false),
                 summary_bcs: Some(true),
                 signature: Some(true),
@@ -163,10 +163,10 @@ impl Client {
         object_id: ObjectID,
         version: Option<u64>,
     ) -> Result<Object> {
-        let request = crate::proto::node::GetObjectRequest {
+        let request = crate::proto::node::v2::GetObjectRequest {
             object_id: Some(sui_sdk_types::ObjectId::from(object_id).into()),
             version,
-            options: Some(crate::proto::node::GetObjectOptions {
+            options: Some(crate::proto::node::v2::GetObjectOptions {
                 object: Some(false),
                 object_bcs: Some(true),
             }),
@@ -190,16 +190,16 @@ impl Client {
             .map(|signature| signature.as_ref().to_vec().into())
             .collect();
 
-        let request = crate::proto::node::ExecuteTransactionRequest {
+        let request = crate::proto::node::v2::ExecuteTransactionRequest {
             transaction: None,
             transaction_bcs: Some(
                 crate::proto::types::Bcs::serialize(&transaction.inner().intent_message.value)
                     .map_err(|e| Status::from_error(e.into()))?,
             ),
             signatures: None,
-            signatures_bytes: Some(crate::proto::node::UserSignaturesBytes { signatures }),
+            signatures_bytes: Some(crate::proto::node::v2::UserSignaturesBytes { signatures }),
 
-            options: Some(crate::proto::node::ExecuteTransactionOptions {
+            options: Some(crate::proto::node::v2::ExecuteTransactionOptions {
                 effects: Some(false),
                 effects_bcs: Some(true),
                 events: Some(false),
@@ -279,7 +279,7 @@ fn checkpoint_data_try_from_proto(
         )
         .map(
             |(
-                crate::proto::node::FullCheckpointTransaction {
+                crate::proto::node::v2::FullCheckpointTransaction {
                     transaction_bcs,
                     effects_bcs,
                     events_bcs,

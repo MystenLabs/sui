@@ -16,8 +16,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     metrics::IndexerMetrics,
+    models::watermarks::PrunerWatermark,
     pipeline::logging::{LoggerWatermark, WatermarkLogger},
-    watermarks::PrunerWatermark,
 };
 
 use super::{Handler, PrunerConfig};

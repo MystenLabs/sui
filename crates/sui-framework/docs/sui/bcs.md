@@ -43,12 +43,14 @@ let leftovers = prepared.into_remainder_bytes();
 -  [Function `peel_address`](#sui_bcs_peel_address)
 -  [Function `peel_bool`](#sui_bcs_peel_bool)
 -  [Function `peel_u8`](#sui_bcs_peel_u8)
+-  [Macro function `peel_num`](#sui_bcs_peel_num)
 -  [Function `peel_u16`](#sui_bcs_peel_u16)
 -  [Function `peel_u32`](#sui_bcs_peel_u32)
 -  [Function `peel_u64`](#sui_bcs_peel_u64)
 -  [Function `peel_u128`](#sui_bcs_peel_u128)
 -  [Function `peel_u256`](#sui_bcs_peel_u256)
 -  [Function `peel_vec_length`](#sui_bcs_peel_vec_length)
+-  [Macro function `peel_vec`](#sui_bcs_peel_vec)
 -  [Function `peel_vec_address`](#sui_bcs_peel_vec_address)
 -  [Function `peel_vec_bool`](#sui_bcs_peel_vec_bool)
 -  [Function `peel_vec_u8`](#sui_bcs_peel_vec_u8)
@@ -58,6 +60,7 @@ let leftovers = prepared.into_remainder_bytes();
 -  [Function `peel_vec_u64`](#sui_bcs_peel_vec_u64)
 -  [Function `peel_vec_u128`](#sui_bcs_peel_vec_u128)
 -  [Function `peel_vec_u256`](#sui_bcs_peel_vec_u256)
+-  [Macro function `peel_option`](#sui_bcs_peel_option)
 -  [Function `peel_option_address`](#sui_bcs_peel_option_address)
 -  [Function `peel_option_bool`](#sui_bcs_peel_option_bool)
 -  [Function `peel_option_u8`](#sui_bcs_peel_option_u8)
@@ -151,7 +154,7 @@ Get BCS serialized bytes for any value.
 Re-exports stdlib <code><a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> to_bytesT(value: &T): vector&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_to_bytes">to_bytes</a>&lt;T&gt;(value: &T): vector&lt;u8&gt;
 </code></pre>
 
 
@@ -302,6 +305,40 @@ Read <code>u8</code> value from bcs-serialized bytes.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_u8">peel_u8</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>): u8 {
     <b>assert</b>!(<a href="../sui/bcs.md#sui_bcs">bcs</a>.bytes.length() &gt;= 1, <a href="../sui/bcs.md#sui_bcs_EOutOfRange">EOutOfRange</a>);
     <a href="../sui/bcs.md#sui_bcs">bcs</a>.bytes.pop_back()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_bcs_peel_num"></a>
+
+## Macro function `peel_num`
+
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_num">peel_num</a>&lt;$I, $T&gt;($<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>, $len: u64, $bits: $I): $T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_num">peel_num</a>&lt;$I, $T&gt;($<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>, $len: u64, $bits: $I): $T {
+    <b>let</b> <a href="../sui/bcs.md#sui_bcs">bcs</a> = $<a href="../sui/bcs.md#sui_bcs">bcs</a>;
+    <b>assert</b>!(<a href="../sui/bcs.md#sui_bcs">bcs</a>.bytes.length() &gt;= $len, <a href="../sui/bcs.md#sui_bcs_EOutOfRange">EOutOfRange</a>);
+    <b>let</b> <b>mut</b> value: $T = 0;
+    <b>let</b> <b>mut</b> i: $I = 0;
+    <b>let</b> bits = $bits;
+    <b>while</b> (i &lt; bits) {
+        <b>let</b> byte = <a href="../sui/bcs.md#sui_bcs">bcs</a>.bytes.pop_back() <b>as</b> $T;
+        value = value + (byte &lt;&lt; (i <b>as</b> u8));
+        i = i + 8;
+    };
+    value
 }
 </code></pre>
 
@@ -465,6 +502,40 @@ See more here: https://en.wikipedia.org/wiki/LEB128
         shift = shift + 7;
     };
     total
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_bcs_peel_vec"></a>
+
+## Macro function `peel_vec`
+
+Peel <code>vector&lt;$T&gt;</code> from serialized bytes, where <code>$peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>| -&gt; $T</code> gives the
+functionality of peeling each value.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_vec">peel_vec</a>&lt;$T&gt;($<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>, $peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>| -&gt; $T): vector&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_vec">peel_vec</a>&lt;$T&gt;($<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>, $peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>| -&gt; $T): vector&lt;$T&gt; {
+    <b>let</b> <a href="../sui/bcs.md#sui_bcs">bcs</a> = $<a href="../sui/bcs.md#sui_bcs">bcs</a>;
+    <b>let</b> len = <a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_vec_length">peel_vec_length</a>();
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> <b>mut</b> res = vector[];
+    <b>while</b> (i &lt; len) {
+        res.push_back($peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>));
+        i = i + 1;
+    };
+    res
 }
 </code></pre>
 
@@ -690,6 +761,34 @@ Peel a vector of <code>u256</code> from serialized bytes.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_vec_u256">peel_vec_u256</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>): vector&lt;u256&gt; {
     <a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_vec">peel_vec</a>!(|<a href="../sui/bcs.md#sui_bcs">bcs</a>| <a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_u256">peel_u256</a>())
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_bcs_peel_option"></a>
+
+## Macro function `peel_option`
+
+Peel <code>Option&lt;$T&gt;</code> from serialized bytes, where <code>$peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>| -&gt; $T</code> gives the
+functionality of peeling the inner value.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option">peel_option</a>&lt;$T&gt;($<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>, $peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>| -&gt; $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option">peel_option</a>&lt;$T&gt;($<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>, $peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>| -&gt; $T): Option&lt;$T&gt; {
+    <b>let</b> <a href="../sui/bcs.md#sui_bcs">bcs</a> = $<a href="../sui/bcs.md#sui_bcs">bcs</a>;
+    <b>if</b> (<a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_bool">peel_bool</a>()) option::some($peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>))
+    <b>else</b> option::none()
 }
 </code></pre>
 

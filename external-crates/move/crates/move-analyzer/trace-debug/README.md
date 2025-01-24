@@ -8,6 +8,7 @@ Currently we support trace-debugging of Move unit tests only. and the following 
 - stepping forward through the trace (step, next, step out, and continue commands)
 - tracking local variable values (including enums/structs and references)
 - line breakpoints
+- disassembly view (disassembled bytecode view) with support for stepping and setting breakpoints in disassembled bytecode files
 
 Note that support for trace-debugging macros and enums is limited at this point - stepping through macros or code related to enums may result in somewhat unexpected results due to how these constructs are handled internally by the Move execution framework. In particular, variable value tracking may be affected when trace-debugging these constructs. Work is ongoing to improve state-of-the-art - improvement suggestions and bug reports files as issues agains Sui's GitHub [repository](https://github.com/MystenLabs/sui) are greatly appreciated.
 
@@ -31,7 +32,7 @@ If you have [Mysten's Move extension](https://marketplace.visualstudio.com/items
 
 If you plan to use the Trace Debugging Extension by itself, you need to generate the traces using command-line interface of `sui` binary. See [here](https://docs.sui.io/guides/developer/getting-started/sui-install) for instructions on how to install `sui` binary. Note that the `sui` binary must be built with the `tracing` feature flag. If your version of the `sui` binary was not built with this feature flag, an attempt to trace test execution will fail. In this case you may have to build the `sui` binary from source following these [instructions](https://docs.sui.io/guides/developer/getting-started/sui-install#install-sui-binaries-from-source).
 
-Once the `sui` binary is installed, you generate traces for all test files in a given package by running the following command in the package's root directory:
+Once the `sui` binary is installed, you generate traces for all test files in a given package, as well as disassembled bytecode for all the modules (to support disassembly view) by running the following command in the package's root directory:
 ```shell
 sui move test --trace-execution
 ```
@@ -43,4 +44,4 @@ sui move test FILTER_STRING --trace-execution
 
 ## Trace-debugging a test
 
-Once traces are generated, open a Move file containing the test you want to trace-debug and execute `Run->Start Debug` command. The first time you execute this command, you will have to choose the debugging configuration for Move files, of which there should be only one available. Then you will have to choose a test to trace-debug if there is more than one test in a file (otherwise a trace-debugging session for a single test will start automatically).
+Once traces are generated, open a Move file containing the test you want to trace-debug and execute `Run->Start Debug` command. The first time you execute this command, you will have to choose the debugging configuration for Move files, of which there should be only one available. Then you will have to choose a test to trace-debug if there is more than one test in a file (otherwise a trace-debugging session for a single test will start automatically). You can switch between source (regular) view and the disassembly view (where you can inspect and step through disassembled bytecode for lower-level view for Move code execution) by using **Move: Toggle disassembly view** and **Move: Toggle source view** commands from VSCode's command palette.

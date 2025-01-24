@@ -53,7 +53,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b> <b>struct</b> LeafV <b>has</b> <a href="../deepbook/critbit.md#deepbook_critbit_drop">drop</a>, store
+<pre><code><b>public</b> <b>struct</b> <a href="../deepbook/critbit.md#deepbook_critbit_Leaf">Leaf</a>&lt;V&gt; <b>has</b> <a href="../deepbook/critbit.md#deepbook_critbit_drop">drop</a>, store
 </code></pre>
 
 
@@ -130,7 +130,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b> <b>struct</b> CritbitTreeV <b>has</b> store
+<pre><code><b>public</b> <b>struct</b> <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">CritbitTree</a>&lt;V: store&gt; <b>has</b> store
 </code></pre>
 
 
@@ -272,7 +272,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> newV(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_new">new</a>&lt;V: store&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;
 </code></pre>
 
 
@@ -304,7 +304,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> sizeV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;): u64
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_size">size</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;): u64
 </code></pre>
 
 
@@ -328,7 +328,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> is_emptyV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;): bool
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_is_empty">is_empty</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;): bool
 </code></pre>
 
 
@@ -352,7 +352,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b> <b>fun</b> min_leafV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;): (u64, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_min_leaf">min_leaf</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;): (u64, u64)
 </code></pre>
 
 
@@ -378,7 +378,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b> <b>fun</b> max_leafV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;): (u64, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_max_leaf">max_leaf</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;): (u64, u64)
 </code></pre>
 
 
@@ -404,7 +404,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b> <b>fun</b> previous_leafV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): (u64, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_previous_leaf">previous_leaf</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): (u64, u64)
 </code></pre>
 
 
@@ -441,7 +441,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b> <b>fun</b> next_leafV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): (u64, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_next_leaf">next_leaf</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): (u64, u64)
 </code></pre>
 
 
@@ -478,7 +478,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>fun</b> left_most_leafV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, root: u64): u64
+<pre><code><b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_left_most_leaf">left_most_leaf</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, root: u64): u64
 </code></pre>
 
 
@@ -506,7 +506,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>fun</b> right_most_leafV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, root: u64): u64
+<pre><code><b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_right_most_leaf">right_most_leaf</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, root: u64): u64
 </code></pre>
 
 
@@ -534,7 +534,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> insert_leafV(tree: &<b>mut</b> <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64, value: V): u64
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_insert_leaf">insert_leaf</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64, value: V): u64
 </code></pre>
 
 
@@ -625,7 +625,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b> <b>fun</b> find_leafV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): (bool, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_find_leaf">find_leaf</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): (bool, u64)
 </code></pre>
 
 
@@ -658,7 +658,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> find_closest_keyV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): u64
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_find_closest_key">find_closest_key</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): u64
 </code></pre>
 
 
@@ -687,7 +687,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> remove_leaf_by_indexV(tree: &<b>mut</b> <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, index: u64): V
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_remove_leaf_by_index">remove_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, index: u64): V
 </code></pre>
 
 
@@ -755,7 +755,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> borrow_mut_leaf_by_indexV(tree: &<b>mut</b> <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, index: u64): &<b>mut</b> V
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_borrow_mut_leaf_by_index">borrow_mut_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, index: u64): &<b>mut</b> V
 </code></pre>
 
 
@@ -780,7 +780,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b> <b>fun</b> borrow_leaf_by_indexV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, index: u64): &V
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_borrow_leaf_by_index">borrow_leaf_by_index</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, index: u64): &V
 </code></pre>
 
 
@@ -805,7 +805,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b> <b>fun</b> borrow_leaf_by_keyV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): &V
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_borrow_leaf_by_key">borrow_leaf_by_key</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): &V
 </code></pre>
 
 
@@ -831,7 +831,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> dropV(tree: <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_drop">drop</a>&lt;V: <a href="../deepbook/critbit.md#deepbook_critbit_drop">drop</a>, store&gt;(tree: <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;)
 </code></pre>
 
 
@@ -865,7 +865,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> destroy_emptyV(tree: <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_destroy_empty">destroy_empty</a>&lt;V: store&gt;(tree: <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;)
 </code></pre>
 
 
@@ -900,7 +900,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>fun</b> get_closest_leaf_index_by_keyV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): u64
+<pre><code><b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_get_closest_leaf_index_by_key">get_closest_leaf_index_by_key</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, key: u64): u64
 </code></pre>
 
 
@@ -935,7 +935,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>fun</b> update_childV(tree: &<b>mut</b> <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, parent_index: u64, new_child: u64, <a href="../deepbook/critbit.md#deepbook_critbit_is_left_child">is_left_child</a>: bool)
+<pre><code><b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_update_child">update_child</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, parent_index: u64, new_child: u64, <a href="../deepbook/critbit.md#deepbook_critbit_is_left_child">is_left_child</a>: bool)
 </code></pre>
 
 
@@ -969,7 +969,7 @@ title: Module `deepbook::critbit`
 
 
 
-<pre><code><b>fun</b> is_left_childV(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, parent_index: u64, index: u64): bool
+<pre><code><b>fun</b> <a href="../deepbook/critbit.md#deepbook_critbit_is_left_child">is_left_child</a>&lt;V: store&gt;(tree: &<a href="../deepbook/critbit.md#deepbook_critbit_CritbitTree">deepbook::critbit::CritbitTree</a>&lt;V&gt;, parent_index: u64, index: u64): bool
 </code></pre>
 
 

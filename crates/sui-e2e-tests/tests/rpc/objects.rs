@@ -4,10 +4,10 @@
 use sui_macros::sim_test;
 use sui_rpc_api::client::sdk::Client;
 use sui_rpc_api::client::Client as CoreClient;
-use sui_rpc_api::proto::node::node_service_client::NodeServiceClient;
-use sui_rpc_api::proto::node::GetObjectOptions;
-use sui_rpc_api::proto::node::GetObjectRequest;
-use sui_rpc_api::proto::node::GetObjectResponse;
+use sui_rpc_api::proto::node::v2::node_service_client::NodeServiceClient;
+use sui_rpc_api::proto::node::v2::GetObjectOptions;
+use sui_rpc_api::proto::node::v2::GetObjectRequest;
+use sui_rpc_api::proto::node::v2::GetObjectResponse;
 use sui_sdk_types::ObjectId;
 use test_cluster::TestClusterBuilder;
 
