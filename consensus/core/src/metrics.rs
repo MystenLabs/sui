@@ -16,7 +16,7 @@ use crate::network::metrics::NetworkMetrics;
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.000_001, 0.000_050, 0.000_100, 0.000_500, 0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25,
     0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5,
-    4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.,
+    4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10., 20., 30., 60., 120.,
 ];
 
 const NUM_BUCKETS: &[f64] = &[
@@ -112,6 +112,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
     pub(crate) core_add_blocks_batch_size: Histogram,
+    pub(crate) core_check_block_refs_batch_size: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
     pub(crate) core_skipped_proposals: IntCounterVec,
@@ -126,7 +127,11 @@ pub(crate) struct NodeMetrics {
     pub(crate) fetch_blocks_scheduler_skipped: IntCounterVec,
     pub(crate) synchronizer_fetched_blocks_by_peer: IntCounterVec,
     pub(crate) synchronizer_missing_blocks_by_authority: IntCounterVec,
+    pub(crate) synchronizer_current_missing_blocks_by_authority: IntGaugeVec,
     pub(crate) synchronizer_fetched_blocks_by_authority: IntCounterVec,
+    pub(crate) network_received_excluded_ancestors_from_authority: IntCounterVec,
+    pub(crate) network_excluded_ancestors_sent_to_fetch: IntCounterVec,
+    pub(crate) network_excluded_ancestors_count_by_authority: IntCounterVec,
     pub(crate) invalid_blocks: IntCounterVec,
     pub(crate) rejected_blocks: IntCounterVec,
     pub(crate) rejected_future_blocks: IntCounterVec,
@@ -179,12 +184,15 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetch_loop_latency: Histogram,
     pub(crate) commit_sync_fetch_once_latency: Histogram,
     pub(crate) commit_sync_fetch_once_errors: IntCounterVec,
-    pub(crate) round_prober_quorum_round_gaps: IntGaugeVec,
-    pub(crate) round_prober_low_quorum_round: IntGaugeVec,
-    pub(crate) round_prober_current_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_received_quorum_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_accepted_quorum_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_low_received_quorum_round: IntGaugeVec,
+    pub(crate) round_prober_low_accepted_quorum_round: IntGaugeVec,
+    pub(crate) round_prober_current_received_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_current_accepted_round_gaps: IntGaugeVec,
     pub(crate) round_prober_propagation_delays: Histogram,
     pub(crate) round_prober_last_propagation_delay: IntGauge,
-    pub(crate) round_prober_request_errors: IntCounter,
+    pub(crate) round_prober_request_errors: IntCounterVec,
     pub(crate) uptime: Histogram,
 }
 
@@ -282,6 +290,12 @@ impl NodeMetrics {
                 NUM_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
+            core_check_block_refs_batch_size: register_histogram_with_registry!(
+                "core_check_block_refs_batch_size",
+                "The number of excluded blocks received from Core for search on a single batch",
+                NUM_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             core_lock_dequeued: register_int_counter_with_registry!(
                 "core_lock_dequeued",
                 "Number of dequeued core requests",
@@ -353,15 +367,39 @@ impl NodeMetrics {
                 &["peer", "type"],
                 registry,
             ).unwrap(),
+            synchronizer_missing_blocks_by_authority: register_int_counter_vec_with_registry!(
+                "synchronizer_missing_blocks_by_authority",
+                "Number of missing blocks per block author, as observed by the synchronizer during periodic sync.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            synchronizer_current_missing_blocks_by_authority: register_int_gauge_vec_with_registry!(
+                "synchronizer_current_missing_blocks_by_authority",
+                "Current number of missing blocks per block author, as observed by the synchronizer during periodic sync.",
+                &["authority"],
+                registry,
+            ).unwrap(),
             synchronizer_fetched_blocks_by_authority: register_int_counter_vec_with_registry!(
                 "synchronizer_fetched_blocks_by_authority",
                 "Number of fetched blocks per block author via the synchronizer",
                 &["authority", "type"],
                 registry,
             ).unwrap(),
-            synchronizer_missing_blocks_by_authority: register_int_counter_vec_with_registry!(
-                "synchronizer_missing_blocks_by_authority",
-                "Number of missing blocks per block author, as observed by the synchronizer during periodic sync.",
+            network_received_excluded_ancestors_from_authority: register_int_counter_vec_with_registry!(
+                "network_received_excluded_ancestors_from_authority",
+                "Number of excluded ancestors received from each authority.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            network_excluded_ancestors_count_by_authority: register_int_counter_vec_with_registry!(
+                "network_excluded_ancestors_count_by_authority",
+                "Total number of excluded ancestors per authority.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            network_excluded_ancestors_sent_to_fetch: register_int_counter_vec_with_registry!(
+                "network_excluded_ancestors_sent_to_fetch",
+                "Number of excluded ancestors sent to fetch.",
                 &["authority"],
                 registry,
             ).unwrap(),
@@ -654,21 +692,39 @@ impl NodeMetrics {
                 &["authority", "error"],
                 registry
             ).unwrap(),
-            round_prober_quorum_round_gaps: register_int_gauge_vec_with_registry!(
-                "round_prober_quorum_round_gaps",
-                "Round gaps among peers for blocks proposed from each authority",
+            round_prober_received_quorum_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_received_quorum_round_gaps",
+                "Received round gaps among peers for blocks proposed from each authority",
                 &["authority"],
                 registry
             ).unwrap(),
-            round_prober_low_quorum_round: register_int_gauge_vec_with_registry!(
-                "round_prober_low_quorum_round",
+            round_prober_accepted_quorum_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_accepted_quorum_round_gaps",
+                "Accepted round gaps among peers for blocks proposed & accepted from each authority",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_low_received_quorum_round: register_int_gauge_vec_with_registry!(
+                "round_prober_low_received_quorum_round",
                 "Low quorum round among peers for blocks proposed from each authority",
                 &["authority"],
                 registry
             ).unwrap(),
-            round_prober_current_round_gaps: register_int_gauge_vec_with_registry!(
-                "round_prober_current_round_gaps",
-                "Round gaps from local last proposed round to the low quorum round of each peer. Can be negative.",
+            round_prober_low_accepted_quorum_round: register_int_gauge_vec_with_registry!(
+                "round_prober_low_accepted_quorum_round",
+                "Low quorum round among peers for blocks proposed & accepted from each authority",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_current_received_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_current_received_round_gaps",
+                "Received round gaps from local last proposed round to the low received quorum round of each peer. Can be negative.",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_current_accepted_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_current_accepted_round_gaps",
+                "Accepted round gaps from local last proposed & accepted round to the low accepted quorum round of each peer. Can be negative.",
                 &["authority"],
                 registry
             ).unwrap(),
@@ -683,9 +739,10 @@ impl NodeMetrics {
                 "Most recent propagation delay observed by RoundProber",
                 registry
             ).unwrap(),
-            round_prober_request_errors: register_int_counter_with_registry!(
+            round_prober_request_errors: register_int_counter_vec_with_registry!(
                 "round_prober_request_errors",
-                "Number of timeouts when probing against peers",
+                "Number of errors when probing against peers per error type",
+                &["error_type"],
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

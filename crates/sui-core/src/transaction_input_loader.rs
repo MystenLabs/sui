@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority::authority_per_epoch_store::CertLockGuard, execution_cache::ObjectCacheRead,
+    authority::{
+        authority_per_epoch_store::{AuthorityPerEpochStore, CertLockGuard},
+        epoch_start_configuration::EpochStartConfigTrait,
+    },
+    execution_cache::ObjectCacheRead,
 };
 use itertools::izip;
 use mysten_common::fatal;
@@ -10,9 +14,9 @@ use once_cell::unsync::OnceCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::{
-    base_types::{EpochId, ObjectRef, TransactionDigest},
+    base_types::{EpochId, FullObjectID, ObjectRef, SequenceNumber, TransactionDigest},
     error::{SuiError, SuiResult, UserInputError},
-    storage::{GetSharedLocks, ObjectKey},
+    storage::{FullObjectKey, ObjectKey},
     transaction::{
         InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjectReadResultKind, ReceivingObjects, TransactionKey,
@@ -43,6 +47,8 @@ impl TransactionInputLoader {
         input_object_kinds: &[InputObjectKind],
         receiving_objects: &[ObjectRef],
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<(InputObjects, ReceivingObjects)> {
         // Length of input_object_kinds have been checked via validity_check() for ProgrammableTransaction.
         let mut input_results = vec![None; input_object_kinds.len()];
@@ -61,14 +67,21 @@ impl TransactionInputLoader {
                         object: ObjectReadResultKind::Object(package),
                     });
                 }
-                InputObjectKind::SharedMoveObject { id, .. } => match self.cache.get_object(id) {
+                InputObjectKind::SharedMoveObject {
+                    id,
+                    initial_shared_version,
+                    ..
+                } => match self.cache.get_object(id) {
                     Some(object) => {
                         input_results[i] = Some(ObjectReadResult::new(*kind, object.into()))
                     }
                     None => {
-                        if let Some((version, digest)) = self
-                            .cache
-                            .get_last_shared_object_deletion_info(id, epoch_id)
+                        if let Some((version, digest)) =
+                            self.cache.get_last_shared_object_deletion_info(
+                                FullObjectID::new(*id, Some(*initial_shared_version)),
+                                epoch_id,
+                                use_object_per_epoch_marker_table_v2,
+                            )
                         {
                             input_results[i] = Some(ObjectReadResult {
                                 input_object_kind: *kind,
@@ -97,8 +110,11 @@ impl TransactionInputLoader {
             });
         }
 
-        let receiving_results =
-            self.read_receiving_objects_for_signing(receiving_objects, epoch_id)?;
+        let receiving_results = self.read_receiving_objects_for_signing(
+            receiving_objects,
+            epoch_id,
+            use_object_per_epoch_marker_table_v2,
+        )?;
 
         Ok((
             input_results
@@ -112,7 +128,7 @@ impl TransactionInputLoader {
 
     /// Read the inputs for a transaction that is ready to be executed.
     ///
-    /// shared_lock_store is used to resolve the versions of any shared input objects.
+    /// epoch_store is used to resolve the versions of any shared input objects.
     ///
     /// This function panics if any inputs are not available, as TransactionManager should already
     /// have verified that the transaction is ready to be executed.
@@ -127,13 +143,13 @@ impl TransactionInputLoader {
     #[instrument(level = "trace", skip_all)]
     pub fn read_objects_for_execution(
         &self,
-        shared_lock_store: &impl GetSharedLocks,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_key: &TransactionKey,
         _tx_lock: &CertLockGuard, // see below for why this is needed
         input_object_kinds: &[InputObjectKind],
         epoch_id: EpochId,
     ) -> SuiResult<InputObjects> {
-        let shared_locks_cell: OnceCell<Option<HashMap<_, _>>> = OnceCell::new();
+        let assigned_shared_versions_cell: OnceCell<Option<HashMap<_, _>>> = OnceCell::new();
 
         let mut results = vec![None; input_object_kinds.len()];
         let mut object_keys = Vec::with_capacity(input_object_kinds.len());
@@ -156,25 +172,43 @@ impl TransactionInputLoader {
                     object_keys.push(objref.into());
                     fetches.push((i, input));
                 }
-                InputObjectKind::SharedMoveObject { id, .. } => {
-                    let shared_locks = shared_locks_cell
+                InputObjectKind::SharedMoveObject {
+                    id,
+                    initial_shared_version,
+                    ..
+                } => {
+                    let assigned_shared_versions = assigned_shared_versions_cell
                         .get_or_init(|| {
-                            shared_lock_store
-                                .get_shared_locks(tx_key)
-                                .expect("loading shared locks should not fail")
-                                .map(|locks| locks.into_iter().collect())
+                            epoch_store
+                                .get_assigned_shared_object_versions(tx_key)
+                                .expect("loading assigned shared versions should not fail")
+                                .map(|versions| versions.into_iter().collect())
                         })
                         .as_ref()
                         .unwrap_or_else(|| {
                             // Important to hold the _tx_lock here - otherwise it would be possible
-                            // for a concurrent execution of the same tx to enter this point after the
-                            // first execution has finished and the shared locks have been deleted.
-                            fatal!("Failed to get shared locks for transaction {tx_key:?}");
+                            // for a concurrent execution of the same tx to enter this point after
+                            // the first execution has finished and the assigned shared versions
+                            // have been deleted.
+                            fatal!(
+                                "Failed to get assigned shared versions for transaction {tx_key:?}"
+                            );
                         });
 
-                    // If we find a set of locks but an object is missing, it indicates a serious inconsistency:
-                    let version = shared_locks.get(id).unwrap_or_else(|| {
-                        panic!("Shared object locks should have been set. key: {tx_key:?}, obj id: {id:?}")
+                    let initial_shared_version = if epoch_store
+                        .epoch_start_config()
+                        .use_version_assignment_tables_v3()
+                    {
+                        *initial_shared_version
+                    } else {
+                        // (before ConsensusV2 objects, we didn't track initial shared
+                        // version for shared object locks)
+                        SequenceNumber::UNKNOWN
+                    };
+                    // If we find a set of assigned versions but an object is missing, it indicates
+                    // a serious inconsistency:
+                    let version = assigned_shared_versions.get(&(*id, initial_shared_version)).unwrap_or_else(|| {
+                        panic!("Shared object version should have been assigned. key: {tx_key:?}, obj id: {id:?}")
                     });
                     if version.is_cancelled() {
                         // Do not need to fetch shared object for cancelled transaction.
@@ -206,11 +240,18 @@ impl TransactionInputLoader {
                     input_object_kind: *input_object_kind,
                     object: obj.into(),
                 },
-                (None, InputObjectKind::SharedMoveObject { id, .. }) => {
+                (None, InputObjectKind::SharedMoveObject { id, initial_shared_version, .. }) => {
                     assert!(key.1.is_valid());
                     // Check if the object was deleted by a concurrently certified tx
                     let version = key.1;
-                    if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(id, version, epoch_id) {
+                    if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(
+                        FullObjectKey::new(
+                            FullObjectID::new(*id, Some(*initial_shared_version)),
+                            version,
+                        ),
+                        epoch_id,
+                        epoch_store.protocol_config().use_object_per_epoch_marker_table_v2_as_option().unwrap_or(false),
+                    ) {
                         ObjectReadResult {
                             input_object_kind: *input,
                             object: ObjectReadResultKind::DeletedSharedObject(version, dependency),
@@ -237,16 +278,20 @@ impl TransactionInputLoader {
         &self,
         receiving_objects: &[ObjectRef],
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<ReceivingObjects> {
         let mut receiving_results = Vec::with_capacity(receiving_objects.len());
         for objref in receiving_objects {
             // Note: the digest is checked later in check_transaction_input
             let (object_id, version, _) = objref;
 
-            if self
-                .cache
-                .have_received_object_at_version(object_id, *version, epoch_id)
-            {
+            // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+            if self.cache.have_received_object_at_version(
+                FullObjectKey::new(FullObjectID::new(*object_id, None), *version),
+                epoch_id,
+                use_object_per_epoch_marker_table_v2,
+            ) {
                 receiving_results.push(ReceivingObjectReadResult::new(
                     *objref,
                     ReceivingObjectReadResultKind::PreviouslyReceivedObject,

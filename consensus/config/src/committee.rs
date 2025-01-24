@@ -68,11 +68,6 @@ impl Committee {
         self.total_stake
     }
 
-    pub fn n_percent_stake_threshold(&self, n: u64) -> Stake {
-        assert!(n <= 100, "n must be between 0 and 100");
-        self.total_stake * n / 100
-    }
-
     pub fn quorum_threshold(&self) -> Stake {
         self.quorum_threshold
     }
@@ -180,15 +175,9 @@ impl AuthorityIndex {
     }
 }
 
-// TODO: re-evaluate formats for production debugging.
 impl Display for AuthorityIndex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.value() < 26 {
-            let c = (b'A' + self.value() as u8) as char;
-            f.write_str(c.to_string().as_str())
-        } else {
-            write!(f, "[{:02}]", self.value())
-        }
+        write!(f, "[{}]", self.value())
     }
 }
 

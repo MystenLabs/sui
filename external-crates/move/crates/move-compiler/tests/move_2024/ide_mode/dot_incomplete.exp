@@ -31,3 +31,21 @@ error[E01002]: unexpected token
    │         Unexpected 'let'
    │         Expected an identifier or a decimal number
 
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:18:9
+   │
+18 │         let _tmp5 = _s.                  // incomplete without `;` (unexpected `}`)
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:19:5
+   │
+19 │     }
+   │     ^
+   │     │
+   │     Unexpected '}'
+   │     Expected an identifier or a decimal number
+

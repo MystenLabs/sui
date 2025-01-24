@@ -19,7 +19,7 @@ use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_data_ingestion_core::Worker;
-use sui_rest_api::CheckpointData;
+use sui_rpc_api::CheckpointData;
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
 };
@@ -47,6 +47,7 @@ use crate::tables::{
 use crate::writers::csv_writer::CSVWriter;
 use crate::writers::parquet_writer::ParquetWriter;
 use crate::writers::AnalyticsWriter;
+use gcp_bigquery_client::model::query_response::ResultSet;
 
 pub mod analytics_metrics;
 pub mod analytics_processor;
@@ -252,13 +253,14 @@ impl BQMaxCheckpointReader {
 #[async_trait::async_trait]
 impl MaxCheckpointReader for BQMaxCheckpointReader {
     async fn max_checkpoint(&self) -> Result<i64> {
-        let mut result = self
+        let result = self
             .client
             .job()
             .query(&self.project_id, QueryRequest::new(&self.query))
             .await?;
-        if result.next_row() {
-            let max_checkpoint = result.get_i64(0)?.ok_or(anyhow!("No rows returned"))?;
+        let mut result_set = ResultSet::new_from_query_response(result);
+        if result_set.next_row() {
+            let max_checkpoint = result_set.get_i64(0)?.ok_or(anyhow!("No rows returned"))?;
             Ok(max_checkpoint)
         } else {
             Ok(-1)

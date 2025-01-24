@@ -14,6 +14,7 @@ use move_core_types::language_storage::TypeTag;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::time::Duration;
 
 /// A type containing all of the information needed to work with a deleted shared object in
 /// execution and when committing the execution effects of the transaction. This holds:
@@ -169,6 +170,12 @@ impl ExecutionResultsV2 {
         }
     }
 }
+
+pub enum ExecutionTiming {
+    Success(Duration),
+    Abort(Duration),
+}
+pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
 
 /// If a transaction digest shows up in this list, when executing such transaction,
 /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do

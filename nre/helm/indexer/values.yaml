@@ -30,7 +30,7 @@ env:
   RPC_CLIENT:
     value: "https://public-rpc.mainnet.sui.io"
   REMOTE_STORE:
-    value: "https://checkpoints.mainnet.sui.io"
+    value: "https://storage.googleapis/mysten-mainnet-checkpoints"
   DB_URL:
     valueFrom:
       secretKeyRef:

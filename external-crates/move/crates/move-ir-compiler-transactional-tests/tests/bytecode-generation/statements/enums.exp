@@ -5,7 +5,6 @@ task 0, lines 1-71:
 // Move bytecode v7
 module 3d8.M {
 
-
 enum T has drop {
 	X {  },
 	Y { f: u64 }
@@ -15,8 +14,8 @@ f(): T {
 B0:
 	0: PackVariant(VariantHandleIndex(0))
 	1: Ret
-
 }
+
 f1(): T {
 L0:	loc0: T
 L1:	loc1: u64
@@ -29,8 +28,8 @@ B0:
 	5: StLoc[1](loc1: u64)
 	6: PackVariant(VariantHandleIndex(0))
 	7: Ret
-
 }
+
 f2(): T {
 L0:	loc0: T
 L1:	loc1: u64
@@ -55,6 +54,7 @@ Jump tables:
 		Variant1 => jump 7
 	}
 }
+
 f3(): T {
 L0:	loc0: T
 L1:	loc1: u64
@@ -80,6 +80,7 @@ Jump tables:
 		Variant1 => jump 7
 	}
 }
+
 f4(): T {
 L0:	loc0: T
 L1:	loc1: u64
@@ -105,4 +106,6 @@ Jump tables:
 		Variant1 => jump 7
 	}
 }
+
 }
+

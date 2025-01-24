@@ -1,6 +1,0 @@
-{
-	"private": true,
-	"import": "../dist/esm/verify/index.js",
-	"main": "../dist/cjs/verify/index.js",
-	"sideEffects": false
-}

@@ -1,0 +1,18 @@
+---
+source: crates/sui-move/tests/cli_tests.rs
+description: tests/tests/new_tests/gitignore_has_build.sh
+---
+success: true
+exit_code: 0
+----- stdout -----
+ignore1
+build/*
+ignore2
+
+==== files in example/ ====
+.gitignore
+Move.toml
+sources
+tests
+
+----- stderr -----

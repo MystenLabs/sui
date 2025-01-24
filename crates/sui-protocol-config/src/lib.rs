@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 69;
+const MAX_PROTOCOL_VERSION: u64 = 73;
 
 // Record history of protocol version allocations here:
 //
@@ -198,6 +198,17 @@ const MAX_PROTOCOL_VERSION: u64 = 69;
 // Version 69: Sets number of rounds allowed for fastpath voting in consensus.
 //             Enable smart ancestor selection in devnet.
 //             Enable G1Uncompressed group in testnet.
+// Version 70: Enable smart ancestor selection in testnet.
+//             Enable probing for accepted rounds in round prober in testnet
+//             Add new gas model version to update charging of native functions.
+//             Add std::uq64_64 module to Move stdlib.
+//             Improve gas/wall time efficiency of some Move stdlib vector functions
+// Version 71: [SIP-45] Enable consensus amplification.
+// Version 72: Fix issue where `convert_type_argument_error` wasn't being used in all cases.
+//             Max gas budget moved to 50_000 SUI
+//             Max gas price moved to 50 SUI
+//             Variants as type nodes.
+// Version 73: Enable new marker table version.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -500,8 +511,11 @@ struct FeatureFlags {
     // Controls whether consensus handler should record consensus determined shared object version
     // assignments in consensus commit prologue transaction.
     // The purpose of doing this is to enable replaying transaction without transaction effects.
+    // V2 also records initial shared versions for consensus objects.
     #[serde(skip_serializing_if = "is_false")]
     record_consensus_determined_version_assignments_in_prologue: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    record_consensus_determined_version_assignments_in_prologue_v2: bool,
 
     // Run verification of framework upgrades using a new/fresh VM.
     #[serde(skip_serializing_if = "is_false")]
@@ -571,6 +585,27 @@ struct FeatureFlags {
     // Use smart ancestor selection in consensus.
     #[serde(skip_serializing_if = "is_false")]
     consensus_smart_ancestor_selection: bool,
+
+    // Probe accepted rounds in round prober.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_round_prober_probe_accepted_rounds: bool,
+
+    // Enable v2 native charging for natives.
+    #[serde(skip_serializing_if = "is_false")]
+    native_charging_v2: bool,
+
+    // Enables the new logic for collecting the subdag in the consensus linearizer. The new logic does not stop the recursion at the highest
+    // committed round for each authority, but allows to commit uncommitted blocks up to gc round (excluded) for that authority.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_linearize_subdag_v2: bool,
+
+    // Properly convert certain type argument errors in the execution layer.
+    #[serde(skip_serializing_if = "is_false")]
+    convert_type_argument_error: bool,
+
+    // Variants count as nodes
+    #[serde(skip_serializing_if = "is_false")]
+    variant_nodes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1273,9 +1308,15 @@ pub struct ProtocolConfig {
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
 
-    /// If >0, congestion control will allow up to one transaction per object to exceed
-    /// the configured maximum accumulated cost by the given amount.
+    /// If >0, congestion control will allow the configured maximum accumulated cost per object
+    /// to be exceeded by at most the given amount. Only one limit-exceeding transaction per
+    /// object will be allowed, unless bursting is configured below.
     max_txn_cost_overage_per_object_in_commit: Option<u64>,
+
+    /// If >0, congestion control will allow transactions in total cost equaling the
+    /// configured amount to exceed the configured maximum accumulated cost per object.
+    /// As above, up to one transaction per object exceeding the burst limit will be allowed.
+    allowed_txn_cost_overage_burst_per_object_in_commit: Option<u64>,
 
     /// Minimum interval of commit timestamps between consecutive checkpoints.
     min_checkpoint_interval_ms: Option<u64>,
@@ -1314,6 +1355,13 @@ pub struct ProtocolConfig {
     /// Adds an absolute cap on the maximum transaction cost when using TotalGasBudgetWithCap at
     /// the given multiple of the per-commit budget.
     gas_budget_based_txn_cost_absolute_cap_commit_count: Option<u64>,
+
+    /// SIP-45: K in the formula `amplification_factor = max(0, gas_price / reference_gas_price - K)`.
+    /// This is the threshold for activating consensus amplification.
+    sip_45_consensus_amplification_threshold: Option<u64>,
+
+    /// Enables use of v2 of the object per-epoch marker table with FullObjectID keys.
+    use_object_per_epoch_marker_table_v2: Option<bool>,
 }
 
 // feature flags
@@ -1543,6 +1591,11 @@ impl ProtocolConfig {
             .record_consensus_determined_version_assignments_in_prologue
     }
 
+    pub fn record_consensus_determined_version_assignments_in_prologue_v2(&self) -> bool {
+        self.feature_flags
+            .record_consensus_determined_version_assignments_in_prologue_v2
+    }
+
     pub fn prepend_prologue_tx_in_consensus_commit_in_checkpoints(&self) -> bool {
         self.feature_flags
             .prepend_prologue_tx_in_consensus_commit_in_checkpoints
@@ -1690,6 +1743,32 @@ impl ProtocolConfig {
 
     pub fn consensus_smart_ancestor_selection(&self) -> bool {
         self.feature_flags.consensus_smart_ancestor_selection
+    }
+
+    pub fn consensus_round_prober_probe_accepted_rounds(&self) -> bool {
+        self.feature_flags
+            .consensus_round_prober_probe_accepted_rounds
+    }
+
+    pub fn native_charging_v2(&self) -> bool {
+        self.feature_flags.native_charging_v2
+    }
+
+    pub fn consensus_linearize_subdag_v2(&self) -> bool {
+        let res = self.feature_flags.consensus_linearize_subdag_v2;
+        assert!(
+            !res || self.gc_depth() > 0,
+            "The consensus linearize sub dag V2 requires GC to be enabled"
+        );
+        res
+    }
+
+    pub fn convert_type_argument_error(&self) -> bool {
+        self.feature_flags.convert_type_argument_error
+    }
+
+    pub fn variant_nodes(&self) -> bool {
+        self.feature_flags.variant_nodes
     }
 }
 
@@ -2204,6 +2283,8 @@ impl ProtocolConfig {
 
             max_txn_cost_overage_per_object_in_commit: None,
 
+            allowed_txn_cost_overage_burst_per_object_in_commit: None,
+
             min_checkpoint_interval_ms: None,
 
             checkpoint_summary_version_specific_data: None,
@@ -2221,6 +2302,10 @@ impl ProtocolConfig {
             gas_budget_based_txn_cost_cap_factor: None,
 
             gas_budget_based_txn_cost_absolute_cap_commit_count: None,
+
+            sip_45_consensus_amplification_threshold: None,
+
+            use_object_per_epoch_marker_table_v2: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2970,6 +3055,111 @@ impl ProtocolConfig {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
                     }
                 }
+                70 => {
+                    if chain != Chain::Mainnet {
+                        // Enable smart ancestor selection for testnet
+                        cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                        // Enable probing for accepted rounds in round prober for testnet
+                        cfg.feature_flags
+                            .consensus_round_prober_probe_accepted_rounds = true;
+                    }
+
+                    cfg.poseidon_bn254_cost_per_block = Some(388);
+
+                    cfg.gas_model_version = Some(9);
+                    cfg.feature_flags.native_charging_v2 = true;
+                    cfg.bls12381_bls12381_min_sig_verify_cost_base = Some(44064);
+                    cfg.bls12381_bls12381_min_pk_verify_cost_base = Some(49282);
+                    cfg.ecdsa_k1_secp256k1_verify_keccak256_cost_base = Some(1470);
+                    cfg.ecdsa_k1_secp256k1_verify_sha256_cost_base = Some(1470);
+                    cfg.ecdsa_r1_secp256r1_verify_sha256_cost_base = Some(4225);
+                    cfg.ecdsa_r1_secp256r1_verify_keccak256_cost_base = Some(4225);
+                    cfg.ecvrf_ecvrf_verify_cost_base = Some(4848);
+                    cfg.ed25519_ed25519_verify_cost_base = Some(1802);
+
+                    // Manually changed to be "under cost"
+                    cfg.ecdsa_r1_ecrecover_keccak256_cost_base = Some(1173);
+                    cfg.ecdsa_r1_ecrecover_sha256_cost_base = Some(1173);
+                    cfg.ecdsa_k1_ecrecover_keccak256_cost_base = Some(500);
+                    cfg.ecdsa_k1_ecrecover_sha256_cost_base = Some(500);
+
+                    cfg.groth16_prepare_verifying_key_bls12381_cost_base = Some(53838);
+                    cfg.groth16_prepare_verifying_key_bn254_cost_base = Some(82010);
+                    cfg.groth16_verify_groth16_proof_internal_bls12381_cost_base = Some(72090);
+                    cfg.groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input =
+                        Some(8213);
+                    cfg.groth16_verify_groth16_proof_internal_bn254_cost_base = Some(115502);
+                    cfg.groth16_verify_groth16_proof_internal_bn254_cost_per_public_input =
+                        Some(9484);
+
+                    cfg.hash_keccak256_cost_base = Some(10);
+                    cfg.hash_blake2b256_cost_base = Some(10);
+
+                    // group ops
+                    cfg.group_ops_bls12381_decode_scalar_cost = Some(7);
+                    cfg.group_ops_bls12381_decode_g1_cost = Some(2848);
+                    cfg.group_ops_bls12381_decode_g2_cost = Some(3770);
+                    cfg.group_ops_bls12381_decode_gt_cost = Some(3068);
+
+                    cfg.group_ops_bls12381_scalar_add_cost = Some(10);
+                    cfg.group_ops_bls12381_g1_add_cost = Some(1556);
+                    cfg.group_ops_bls12381_g2_add_cost = Some(3048);
+                    cfg.group_ops_bls12381_gt_add_cost = Some(188);
+
+                    cfg.group_ops_bls12381_scalar_sub_cost = Some(10);
+                    cfg.group_ops_bls12381_g1_sub_cost = Some(1550);
+                    cfg.group_ops_bls12381_g2_sub_cost = Some(3019);
+                    cfg.group_ops_bls12381_gt_sub_cost = Some(497);
+
+                    cfg.group_ops_bls12381_scalar_mul_cost = Some(11);
+                    cfg.group_ops_bls12381_g1_mul_cost = Some(4842);
+                    cfg.group_ops_bls12381_g2_mul_cost = Some(9108);
+                    cfg.group_ops_bls12381_gt_mul_cost = Some(27490);
+
+                    cfg.group_ops_bls12381_scalar_div_cost = Some(91);
+                    cfg.group_ops_bls12381_g1_div_cost = Some(5091);
+                    cfg.group_ops_bls12381_g2_div_cost = Some(9206);
+                    cfg.group_ops_bls12381_gt_div_cost = Some(27804);
+
+                    cfg.group_ops_bls12381_g1_hash_to_base_cost = Some(2962);
+                    cfg.group_ops_bls12381_g2_hash_to_base_cost = Some(8688);
+
+                    cfg.group_ops_bls12381_g1_msm_base_cost = Some(62648);
+                    cfg.group_ops_bls12381_g2_msm_base_cost = Some(131192);
+                    cfg.group_ops_bls12381_g1_msm_base_cost_per_input = Some(1333);
+                    cfg.group_ops_bls12381_g2_msm_base_cost_per_input = Some(3216);
+
+                    cfg.group_ops_bls12381_uncompressed_g1_to_g1_cost = Some(677);
+                    cfg.group_ops_bls12381_g1_to_uncompressed_g1_cost = Some(2099);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_base_cost = Some(77);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_cost_per_term = Some(26);
+
+                    cfg.group_ops_bls12381_pairing_cost = Some(26897);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_max_terms = Some(1200);
+
+                    cfg.validator_validate_metadata_cost_base = Some(20000);
+                }
+                71 => {
+                    cfg.sip_45_consensus_amplification_threshold = Some(5);
+
+                    // Enable bursts for congestion control. (10x the per-commit budget)
+                    cfg.allowed_txn_cost_overage_burst_per_object_in_commit = Some(185_000_000);
+                }
+                72 => {
+                    cfg.feature_flags.convert_type_argument_error = true;
+
+                    // Invariant: max_gas_price * base_tx_cost_fixed <= max_tx_gas
+                    // max gas budget is in MIST and an absolute value 50_000 SUI
+                    cfg.max_tx_gas = Some(50_000_000_000_000);
+                    // max gas price is in MIST and an absolute value 50 SUI
+                    cfg.max_gas_price = Some(50_000_000_000);
+
+                    cfg.feature_flags.variant_nodes = true;
+                }
+                73 => {
+                    // Enable new marker table version.
+                    cfg.use_object_per_epoch_marker_table_v2 = Some(true);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -3135,6 +3325,15 @@ impl ProtocolConfig {
     pub fn set_disallow_new_modules_in_deps_only_packages_for_testing(&mut self, val: bool) {
         self.feature_flags
             .disallow_new_modules_in_deps_only_packages = val;
+    }
+
+    pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {
+        self.feature_flags
+            .consensus_round_prober_probe_accepted_rounds = val;
+    }
+
+    pub fn set_consensus_linearize_subdag_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_linearize_subdag_v2 = val;
     }
 }
 

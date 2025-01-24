@@ -14,11 +14,11 @@ To create a local Sui repository:
 1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub.
 1. Click the **Fork** button to create a copy of the repository in your account.
 
-    ![Fork Sui repo](./images/fork.png)
+   ![Fork Sui repo](./images/fork.png)
 
 1. In your forked repository on GitHub, click the green `Code <>` button and copy the **HTTPS** URL GitHub provides.
 
-    ![Copy URL](./images/gh-url.png)
+   ![Copy URL](./images/gh-url.png)
 
 1. Open a terminal or console on your system at the location you want to save the repository locally. Type `git clone ` and paste the URL you copied in the previous step and press `Enter`.
 1. Type `cd sui` to make `sui` the active directory.
@@ -30,7 +30,6 @@ You can use any [branching strategy](https://docs.github.com/en/pull-requests/co
 Be sure to synchronize your fork frequently to keep it up-to-date with active development.
 
 :::
-
 
 ## Sui repository and how to contribute
 
@@ -51,14 +50,13 @@ The root folder of the Sui monorepo has the following top-level folders:
 - [kiosk](https://github.com/MystenLabs/sui/tree/main/kiosk): Contains the source code of the Mysten Labs Kiosk extensions and rules, as well as examples.
 - [nre](https://github.com/MystenLabs/sui/tree/main/nre): Contains information about node and network reliability engineering.
 - [scripts](https://github.com/MystenLabs/sui/tree/main/scripts): Contains a number of scripts that are used internally.
-- [sdk](https://github.com/MystenLabs/sui/tree/main/sdk): Contains the source code for different tools and SDKs, such as the Sui TypeScript SDK, Kiosk SDK, BCS, zkLogin, dApp kit, and others.
 - [sui-execution](https://github.com/MystenLabs/sui/tree/main/sui-execution): Contains the source code responsible for abstracting access to the execution layer.
 
 The following primary directories offer a good starting point for exploring the Sui codebase:
 
 - [move](https://github.com/MystenLabs/sui/tree/main/external-crates/move) - Move VM, compiler, and tools.
 - [consensus](https://github.com/MystenLabs/sui/tree/main/consensus) - Consensus engine.
-- [typescript-sdk](https://github.com/MystenLabs/sui/tree/main/sdk/typescript/) - the Sui TypeScript SDK.
+- [typescript-sdk](https://github.com/MystenLabs/ts-sdks/tree/main/packages/typescript/) - the Sui TypeScript SDK.
 - [wallet](https://github.com/MystenLabs/sui/tree/main/apps/wallet) - Chrome extension wallet for Sui.
 - [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - the Sui command line tool.
 - [sui-core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - Core Sui components.

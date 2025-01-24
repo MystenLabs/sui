@@ -38,7 +38,6 @@ exclude = [
     "external-crates/move/crates/move-model",
     "external-crates/move/crates/move-package",
     "external-crates/move/crates/move-proc-macros",
-    "external-crates/move/crates/move-prover",
     "external-crates/move/crates/move-prover-test-utils",
     "external-crates/move/crates/move-stackless-bytecode",
     "external-crates/move/crates/move-stdlib",
@@ -65,7 +64,6 @@ exclude = [
     "external-crates/move/move-execution/v2/crates/move-bytecode-verifier",
     "external-crates/move/move-execution/v2/crates/move-stdlib-natives",
     "external-crates/move/move-execution/v2/crates/move-vm-runtime",
-    "sdk/move-bytecode-template",
 ]
 
 members = [
@@ -115,8 +113,15 @@ members = [
     "crates/sui-graphql-rpc",
     "crates/sui-graphql-rpc-client",
     "crates/sui-graphql-rpc-headers",
+    "crates/sui-http",
     "crates/sui-indexer",
     "crates/sui-indexer-alt",
+    "crates/sui-indexer-alt-e2e-tests",
+    "crates/sui-indexer-alt-framework",
+    "crates/sui-indexer-alt-jsonrpc",
+    "crates/sui-indexer-alt-metrics",
+    "crates/sui-indexer-alt-restorer",
+    "crates/sui-indexer-alt-schema",
     "crates/sui-indexer-builder",
     "crates/sui-json",
     "crates/sui-json-rpc",
@@ -131,8 +136,8 @@ members = [
     "crates/sui-move",
     "crates/sui-move-build",
     "crates/sui-move-lsp",
+    "crates/sui-mvr-graphql-e2e-tests",
     "crates/sui-mvr-graphql-rpc",
-    "crates/sui-mvr-indexer",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",
@@ -141,14 +146,14 @@ members = [
     "crates/sui-package-dump",
     "crates/sui-package-management",
     "crates/sui-package-resolver",
-    "crates/sui-pg-temp-db",
+    "crates/sui-pg-db",
     "crates/sui-proc-macros",
     "crates/sui-protocol-config",
     "crates/sui-protocol-config-macros",
     "crates/sui-proxy",
     "crates/sui-replay",
-    "crates/sui-rest-api",
     "crates/sui-rosetta",
+    "crates/sui-rpc-api",
     "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
     "crates/sui-security-watchdog",
@@ -183,16 +188,6 @@ members = [
     "crates/typed-store-error",
     "crates/typed-store-workspace-hack",
     "crates/x",
-    "narwhal/config",
-    "narwhal/crypto",
-    "narwhal/executor",
-    "narwhal/network",
-    "narwhal/node",
-    "narwhal/primary",
-    "narwhal/storage",
-    "narwhal/test-utils",
-    "narwhal/types",
-    "narwhal/worker",
     "sui-execution",
     "sui-execution/cut",
     "sui-execution/latest/sui-adapter",
@@ -211,7 +206,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.39.0"
+version = "1.42.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -222,6 +217,14 @@ split-debuginfo = 'packed'
 strip = 'debuginfo'
 # Exit process with SIGABRT when any thread panics
 panic = 'abort'
+
+# Same as release, but build with lto (~50min build time).
+[profile.release-lto]
+inherits = "release"
+# Enable Link Time Optimization for better runtime performance
+lto = true
+# Use single codegen unit to enable better optimizations
+codegen-units = 1
 
 # Same as release, but build binary with debug symbols (binary size will be ~ 1GB).
 [profile.release-dbgsym]
@@ -270,7 +273,6 @@ atomic_float = "0.1"
 aws-config = "0.56"
 aws-sdk-ec2 = "0.29.0"
 aws-sdk-dynamodb = "0.29.0"
-aws-sdk-s3 = "0.29.0"
 aws-smithy-http = "0.56"
 aws-smithy-runtime-api = "0.56"
 axum = { version = "0.7", default-features = false, features = [
@@ -365,6 +367,7 @@ hyper = "1"
 hyper-util = "0.1.6"
 hyper-rustls = { version = "0.27", default-features = false, features = [
     "webpki-roots",
+    "http1",
     "http2",
     "ring",
     "tls12",
@@ -375,17 +378,12 @@ indexmap = { version = "2.1.0", features = ["serde"] }
 indicatif = "0.17.2"
 inquire = "0.6.0"
 insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
+insta-cmd = "0.6.0"
 integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
 itertools = "0.13.0"
 jemalloc-ctl = "^0.5"
-jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
-    "server",
-    "macros",
-    "ws-client",
-    "http-client",
-    "jsonrpsee-core",
-] }
+jsonrpsee = { version = "0.24.7", features = ["server", "macros", "ws-client", "http-client", "jsonrpsee-core"] }
 json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
 leb128 = "0.2.5"
 lru = "0.10"
@@ -398,8 +396,8 @@ moka = { version = "0.12", default-features = false, features = [
     "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9c6636c399d5c60a1759f1670b1c07b3d408799a", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9c6636c399d5c60a1759f1670b1c07b3d408799a", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e06fc6fa9aeb978ffc621f8b27c06a404042279f", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e06fc6fa9aeb978ffc621f8b27c06a404042279f", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
@@ -414,8 +412,9 @@ once_cell = "1.18.0"
 ouroboros = "0.17"
 parking_lot = "0.12.1"
 parquet = "52"
+pin-project-lite = "0.2.13"
 pkcs8 = { version = "0.9.0", features = ["std"] }
-pprof = { version = "0.13.0", features = ["cpp", "frame-pointer"] }
+pprof = { version = "0.14.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
 prettytable-rs = "0.10.0"
 proc-macro2 = "1.0.47"
@@ -424,8 +423,8 @@ prometheus-http-query = { version = "0.8", default-features = false, features = 
     "rustls-tls",
 ] }
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
-proptest = "1.1.0"
-proptest-derive = "0.3.0"
+proptest = "1.6.0"
+proptest-derive = "0.5"
 prost = "0.13"
 prost-build = "0.13"
 prost-types = "0.13.1"
@@ -467,7 +466,7 @@ scopeguard = "1.1"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde-env = "0.2.0"
 serde-name = "0.2.1"
-serde-reflection = "0.3.6"
+serde-reflection = "0.5"
 serde_json = { version = "1.0.95", features = ["preserve_order"] }
 serde_repr = "0.1"
 serde_test = "1.0.147"
@@ -497,7 +496,7 @@ tempfile = "3.3.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
-tokio = "1.36.0"
+tokio = "1.43.0"
 tokio-retry = "0.3"
 tokio-rustls = { version = "0.26", default-features = false, features = [
     "tls12",
@@ -507,9 +506,10 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.12", features = ["transport"] }
+tonic = { version = "0.12", features = ["transport", "tls-webpki-roots"] }
 tonic-build = { version = "0.12", features = ["prost", "transport"] }
 tonic-health = "0.12"
+tonic-reflection = "0.12"
 tonic-rustls = "0.1.0"
 tower = { version = "0.4.12", features = [
     "full",
@@ -545,12 +545,13 @@ unescape = "0.1.0"
 ureq = "2.9.1"
 url = "2.3.1"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
+walkdir = "2.5.0"
 webpki = { version = "0.102", package = "rustls-webpki", features = [
     "alloc",
     "std",
 ] }
 wiremock = "0.5"
-x509-parser = "0.14.0"
+x509-parser = { version = "0.14.0", features = ["verify"] }
 zstd = "0.12.3"
 zeroize = "1.6.0"
 versions = "4.1.0"
@@ -577,7 +578,6 @@ move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
 move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
 move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
-move-prover = { path = "external-crates/move/crates/move-prover" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-interpreter" }
@@ -596,6 +596,9 @@ passkey-authenticator = { version = "0.2.0" }
 coset = "0.3"
 p256 = { version = "0.13.2", features = ["ecdsa"] }
 
+p384 = { version = "0.13.0", default-features = false, features = ["ecdsa","sha384"] }
+ciborium = "0.2"
+
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
 anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
@@ -604,7 +607,8 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f769
 
 # core-types with json format for REST api
 # sui-sdk-types = { version = "0.0.1", features = ["hash", "serde", "schemars"] }
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "31bd9da32a8057edc45da8f5e6a8f25b83919b93", features = ["hash", "serde", "schemars"] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cb174b66714ea643e4b78bbfadb3f9c17e635460", features = ["hash", "serde"] }
+sui-sdk-transaction-builder = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cb174b66714ea643e4b78bbfadb3f9c17e635460", package = "sui-transaction-builder" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -645,7 +649,14 @@ sui-graphql-rpc = { path = "crates/sui-graphql-rpc" }
 sui-graphql-rpc-client = { path = "crates/sui-graphql-rpc-client" }
 sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
+sui-http = { path = "crates/sui-http" }
 sui-indexer = { path = "crates/sui-indexer" }
+sui-indexer-alt = { path = "crates/sui-indexer-alt" }
+sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework" }
+sui-indexer-alt-jsonrpc = { path = "crates/sui-indexer-alt-jsonrpc" }
+sui-indexer-alt-metrics = { path = "crates/sui-indexer-alt-metrics" }
+sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }
+sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }
 sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }
@@ -659,7 +670,6 @@ sui-move = { path = "crates/sui-move" }
 sui-move-build = { path = "crates/sui-move-build" }
 sui-move-lsp = { path = "crates/sui-move-lsp" }
 sui-mvr-graphql-rpc = { path = "crates/sui-mvr-graphql-rpc" }
-sui-mvr-indexer = { path = "crates/sui-mvr-indexer" }
 sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }
 sui-open-rpc = { path = "crates/sui-open-rpc" }
@@ -667,7 +677,7 @@ sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
 sui-package-dump = { path = "crates/sui-package-dump" }
 sui-package-management = { path = "crates/sui-package-management" }
 sui-package-resolver = { path = "crates/sui-package-resolver" }
-sui-pg-temp-db = { path = "crates/sui-pg-temp-db" }
+sui-pg-db = { path = "crates/sui-pg-db" }
 sui-proc-macros = { path = "crates/sui-proc-macros" }
 sui-protocol-config = { path = "crates/sui-protocol-config" }
 sui-protocol-config-macros = { path = "crates/sui-protocol-config-macros" }
@@ -689,7 +699,7 @@ sui-telemetry = { path = "crates/sui-telemetry" }
 sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
-sui-rest-api = { path = "crates/sui-rest-api" }
+sui-rpc-api = { path = "crates/sui-rpc-api" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
 sui-transaction-checks = { path = "crates/sui-transaction-checks" }
@@ -706,17 +716,6 @@ x = { path = "crates/x" }
 
 consensus-config = { path = "consensus/config" }
 consensus-core = { path = "consensus/core" }
-
-narwhal-config = { path = "narwhal/config" }
-narwhal-crypto = { path = "narwhal/crypto" }
-narwhal-executor = { path = "narwhal/executor" }
-narwhal-network = { path = "narwhal/network" }
-narwhal-node = { path = "narwhal/node" }
-narwhal-primary = { path = "narwhal/primary" }
-narwhal-storage = { path = "narwhal/storage" }
-narwhal-test-utils = { path = "narwhal/test-utils" }
-narwhal-types = { path = "narwhal/types" }
-narwhal-worker = { path = "narwhal/worker" }
 
 sui-execution = { path = "sui-execution" }
 # sui-move-natives = { path = "sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }

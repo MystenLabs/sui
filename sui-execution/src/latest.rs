@@ -7,6 +7,7 @@ use std::{collections::HashSet, sync::Arc};
 use move_binary_format::CompiledModule;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::execution::ExecutionTiming;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TxContext},
     committee::EpochId,
@@ -83,6 +84,7 @@ impl executor::Executor for Executor {
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
+        Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
         execute_transaction_to_effects::<execution_mode::Normal>(
@@ -125,7 +127,7 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
-        if skip_all_checks {
+        let (inner_temp_store, gas_status, effects, _timings, result) = if skip_all_checks {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
@@ -159,7 +161,8 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 certificate_deny_set,
             )
-        }
+        };
+        (inner_temp_store, gas_status, effects, result)
     }
 
     fn update_genesis_state(

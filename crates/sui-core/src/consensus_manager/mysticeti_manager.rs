@@ -167,7 +167,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             *boot_counter += 1;
         } else {
             info!(
-                "Node has not participated in previous run. Boot counter will not increment {}",
+                "Node has not participated in previous epoch consensus. Boot counter ({}) will not increment.",
                 *boot_counter
             );
         }
@@ -200,6 +200,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         let consensus_transaction_handler = ConsensusTransactionHandler::new(
             epoch_store.clone(),
             consensus_handler.transaction_manager_sender().clone(),
+            consensus_handler_initializer.backpressure_subscriber(),
             consensus_handler_initializer.metrics().clone(),
         );
         let handler = MysticetiConsensusHandler::new(

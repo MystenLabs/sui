@@ -42,13 +42,10 @@ roaring.workspace = true
 enum_dispatch.workspace = true
 eyre.workspace = true
 indexmap.workspace = true
-jsonrpsee.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-command-line-common.workspace = true
 move-core-types.workspace = true
-move-disassembler.workspace = true
-move-ir-types.workspace = true
 move-vm-test-utils.workspace = true
 move-vm-types.workspace = true
 move-vm-profiler.workspace = true
@@ -77,6 +74,11 @@ lru.workspace = true
 
 sui-sdk-types.workspace = true
 
+ciborium.workspace = true
+x509-parser.workspace = true
+p384.workspace = true
+rustls-pemfile.workspace = true
+
 [dev-dependencies]
 bincode.workspace = true
 criterion.workspace = true
@@ -95,6 +97,10 @@ passkey-authenticator.workspace = true
 
 [[bench]]
 name = "accumulator_bench"
+harness = false
+
+[[bench]]
+name = "nitro_attestation_bench"
 harness = false
 
 [features]

@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
-use crate::base_types::{MoveObjectType, ObjectIDParseError};
+use crate::base_types::{FullObjectID, FullObjectRef, MoveObjectType, ObjectIDParseError};
 use crate::coin::{Coin, CoinMetadata, TreasuryCap};
 use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
@@ -539,6 +539,17 @@ impl Owner {
         }
     }
 
+    // Returns initial_shared_version for Shared objects, and start_version for ConsensusV2 objects.
+    pub fn start_version(&self) -> Option<SequenceNumber> {
+        match self {
+            Self::Shared {
+                initial_shared_version,
+            } => Some(*initial_shared_version),
+            Self::ConsensusV2 { start_version, .. } => Some(*start_version),
+            Self::Immutable | Self::AddressOwner(_) | Self::ObjectOwner(_) => None,
+        }
+    }
+
     pub fn is_immutable(&self) -> bool {
         matches!(self, Owner::Immutable)
     }
@@ -553,6 +564,10 @@ impl Owner {
 
     pub fn is_shared(&self) -> bool {
         matches!(self, Owner::Shared { .. })
+    }
+
+    pub fn is_consensus(&self) -> bool {
+        matches!(self, Owner::Shared { .. } | Owner::ConsensusV2 { .. })
     }
 }
 
@@ -800,6 +815,10 @@ impl ObjectInner {
         self.owner.is_shared()
     }
 
+    pub fn is_consensus(&self) -> bool {
+        self.owner.is_consensus()
+    }
+
     pub fn get_single_owner(&self) -> Option<SuiAddress> {
         self.owner.get_owner_address().ok()
     }
@@ -819,6 +838,10 @@ impl ObjectInner {
         (self.id(), self.version(), self.digest())
     }
 
+    pub fn compute_full_object_reference(&self) -> FullObjectRef {
+        (self.full_id(), self.version(), self.digest())
+    }
+
     pub fn digest(&self) -> ObjectDigest {
         ObjectDigest::new(default_hash(self))
     }
@@ -829,6 +852,15 @@ impl ObjectInner {
         match &self.data {
             Move(v) => v.id(),
             Package(m) => m.id(),
+        }
+    }
+
+    pub fn full_id(&self) -> FullObjectID {
+        let id = self.id();
+        if let Some(start_version) = self.owner.start_version() {
+            FullObjectID::Consensus((id, start_version))
+        } else {
+            FullObjectID::Fastpath(id)
         }
     }
 
@@ -1079,7 +1111,7 @@ impl Object {
     pub fn with_id_owner_version_for_testing(
         id: ObjectID,
         version: SequenceNumber,
-        owner: SuiAddress,
+        owner: Owner,
     ) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_().into(),
@@ -1088,7 +1120,7 @@ impl Object {
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         ObjectInner {
-            owner: Owner::AddressOwner(owner),
+            owner,
             data,
             previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,

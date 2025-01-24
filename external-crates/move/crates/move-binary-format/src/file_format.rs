@@ -44,6 +44,7 @@ use move_core_types::{
 use proptest::{collection::vec, prelude::*, strategy::BoxedStrategy};
 use ref_cast::RefCast;
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use std::ops::BitOr;
 use variant_count::VariantCount;
 
@@ -564,7 +565,7 @@ impl FunctionDefinition {
         self.code.is_none()
     }
 
-    // Deprecated public bit, deprecated in favor a the Visibility enum
+    // Deprecated public bit, deprecated in favor of the Visibility enum
     pub const DEPRECATED_PUBLIC_BIT: u8 = 0b01;
 
     /// A native function implemented in Rust.
@@ -791,6 +792,17 @@ impl Ability {
     }
 }
 
+impl Display for Ability {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Ability::Copy => write!(f, "copy"),
+            Ability::Drop => write!(f, "drop"),
+            Ability::Store => write!(f, "store"),
+            Ability::Key => write!(f, "key"),
+        }
+    }
+}
+
 /// A set of `Ability`s
 #[derive(Clone, Eq, Copy, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
@@ -845,7 +857,7 @@ impl AbilitySet {
     }
 
     pub fn remove(self, ability: Ability) -> Self {
-        Self(self.0 & (!(ability as u8)))
+        self.difference(Self::singleton(ability))
     }
 
     pub fn intersect(self, other: Self) -> Self {
@@ -854,6 +866,10 @@ impl AbilitySet {
 
     pub fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
+    }
+
+    pub fn difference(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
     }
 
     #[inline]
@@ -2571,6 +2587,24 @@ impl CompiledModule {
         result
     }
 
+    pub fn find_function_def_by_name(
+        &self,
+        name: impl AsRef<str>,
+    ) -> Option<(FunctionDefinitionIndex, &FunctionDefinition)> {
+        let name: &str = name.as_ref();
+        self.function_defs()
+            .iter()
+            .enumerate()
+            .find_map(|(idx, def)| {
+                let handle = self.function_handle_at(def.function);
+                if name == self.identifier_at(handle.name).as_str() {
+                    Some((FunctionDefinitionIndex::new(idx as TableIndex), def))
+                } else {
+                    None
+                }
+            })
+    }
+
     pub fn module_handles(&self) -> &[ModuleHandle] {
         &self.module_handles
     }
@@ -2671,18 +2705,32 @@ impl CompiledModule {
         self.enum_defs().iter().find(|d| d.enum_handle == idx)
     }
 
-    pub fn find_struct_def_by_name(&self, name: &IdentStr) -> Option<&StructDefinition> {
-        self.struct_defs().iter().find(|def| {
-            let handle = self.datatype_handle_at(def.struct_handle);
-            name == self.identifier_at(handle.name)
-        })
+    pub fn find_struct_def_by_name(
+        &self,
+        name: &str,
+    ) -> Option<(StructDefinitionIndex, &StructDefinition)> {
+        self.struct_defs()
+            .iter()
+            .enumerate()
+            .find(|(_idx, def)| {
+                let handle = self.datatype_handle_at(def.struct_handle);
+                name == self.identifier_at(handle.name).as_str()
+            })
+            .map(|(idx, def)| (StructDefinitionIndex(idx as TableIndex), def))
     }
 
-    pub fn find_enum_def_by_name(&self, name: &IdentStr) -> Option<&EnumDefinition> {
-        self.enum_defs().iter().find(|def| {
-            let handle = self.datatype_handle_at(def.enum_handle);
-            name == self.identifier_at(handle.name)
-        })
+    pub fn find_enum_def_by_name(
+        &self,
+        name: &str,
+    ) -> Option<(EnumDefinitionIndex, &EnumDefinition)> {
+        self.enum_defs()
+            .iter()
+            .enumerate()
+            .find(|(_idx, def)| {
+                let handle = self.datatype_handle_at(def.enum_handle);
+                name == self.identifier_at(handle.name).as_str()
+            })
+            .map(|(idx, def)| (EnumDefinitionIndex(idx as TableIndex), def))
     }
 
     // Return the `AbilitySet` of a `SignatureToken` given a context.

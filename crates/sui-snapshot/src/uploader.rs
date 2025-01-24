@@ -22,6 +22,7 @@ use sui_storage::object_store::util::{
     run_manifest_update_loop,
 };
 use sui_storage::FileCompression;
+use sui_types::digests::ChainIdentifier;
 use sui_types::messages_checkpoint::CheckpointCommitment::ECMHLiveObjectSetDigest;
 use tracing::{debug, error, info};
 
@@ -66,6 +67,9 @@ pub struct StateSnapshotUploader {
     /// Time interval to check for presence of new db checkpoint
     interval: Duration,
     metrics: Arc<StateSnapshotUploaderMetrics>,
+    /// The chain identifier is derived from the genesis checkpoint and used to identify the
+    /// network.
+    chain_identifier: ChainIdentifier,
 }
 
 impl StateSnapshotUploader {
@@ -76,6 +80,7 @@ impl StateSnapshotUploader {
         interval_s: u64,
         registry: &Registry,
         checkpoint_store: Arc<CheckpointStore>,
+        chain_identifier: ChainIdentifier,
     ) -> Result<Arc<Self>> {
         let db_checkpoint_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::File),
@@ -96,6 +101,7 @@ impl StateSnapshotUploader {
             snapshot_store: snapshot_store_config.make()?,
             interval: Duration::from_secs(interval_s),
             metrics: StateSnapshotUploaderMetrics::new(registry),
+            chain_identifier,
         }))
     }
 
@@ -140,7 +146,7 @@ impl StateSnapshotUploader {
                     .expect("Expected at least one commitment")
                     .clone();
                 state_snapshot_writer
-                    .write(*epoch, db, state_hash_commitment)
+                    .write(*epoch, db, state_hash_commitment, self.chain_identifier)
                     .await?;
                 info!("State snapshot creation successful for epoch: {}", *epoch);
                 // Drop marker in the output directory that upload completed successfully
@@ -183,17 +189,20 @@ impl StateSnapshotUploader {
             tokio::select! {
                 _now = interval.tick() => {
                     let missing_epochs = self.get_missing_epochs().await;
-                    if let Ok(epochs) = missing_epochs {
-                        let first_missing_epoch = epochs.first().cloned().unwrap_or(0);
-                        self.metrics.first_missing_state_snapshot_epoch.set(first_missing_epoch as i64);
-                        if let Err(err) = self.upload_state_snapshot_to_object_store(epochs).await {
-                            self.metrics.state_snapshot_upload_err.inc();
-                            error!("Failed to upload state snapshot to remote store with err: {:?}", err);
-                        } else {
-                            debug!("Successfully completed snapshot upload loop");
+                    match missing_epochs {
+                        Ok(epochs) => {
+                            let first_missing_epoch = epochs.first().cloned().unwrap_or(0);
+                            self.metrics.first_missing_state_snapshot_epoch.set(first_missing_epoch as i64);
+                            if let Err(err) = self.upload_state_snapshot_to_object_store(epochs).await {
+                                self.metrics.state_snapshot_upload_err.inc();
+                                error!("Failed to upload state snapshot to remote store with err: {:?}", err);
+                            } else {
+                                debug!("Successfully completed snapshot upload loop");
+                            }
                         }
-                    } else {
-                        error!("Failed to find missing state snapshot in remote store");
+                        Err(err) => {
+                            error!("Failed to find missing state snapshot in remote store: {:?}", err);
+                        }
                     }
                 },
                 _ = recv.recv() => break,

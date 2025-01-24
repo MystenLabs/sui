@@ -60,7 +60,7 @@ module base::ascii {
         bytes: vector<u8>,
     }
 
-    /// Returns `true` if `byte` is an printable ASCII character. Returns `false` otherwise.
+    /// Returns `true` if `byte` is a printable ASCII character. Returns `false` otherwise.
     public fun is_printable_char(byte: u8): bool {
        byte >= 0x20 && // Disallow metacharacters
        byte <= 0x7E // Don't allow DEL metacharacter

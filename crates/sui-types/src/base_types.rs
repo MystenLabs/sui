@@ -135,6 +135,32 @@ pub struct ObjectID(
     AccountAddress,
 );
 
+#[serde_as]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum FullObjectID {
+    Fastpath(ObjectID),
+    Consensus(ConsensusObjectSequenceKey),
+}
+
+impl FullObjectID {
+    pub fn new(object_id: ObjectID, start_version: Option<SequenceNumber>) -> Self {
+        if let Some(start_version) = start_version {
+            Self::Consensus((object_id, start_version))
+        } else {
+            Self::Fastpath(object_id)
+        }
+    }
+
+    pub fn id(&self) -> ObjectID {
+        match &self {
+            FullObjectID::Fastpath(object_id) => *object_id,
+            FullObjectID::Consensus(consensus_object_sequence_key) => {
+                consensus_object_sequence_key.0
+            }
+        }
+    }
+}
+
 pub type VersionDigest = (SequenceNumber, ObjectDigest);
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
@@ -154,6 +180,12 @@ pub fn update_object_ref_for_testing(object_ref: ObjectRef) -> ObjectRef {
         ObjectDigest::new([0; 32]),
     )
 }
+
+pub type FullObjectRef = (FullObjectID, SequenceNumber, ObjectDigest);
+
+/// Represents an distinct stream of object versions for a Shared or ConsensusV2 object,
+/// based on the object ID and start version.
+pub type ConsensusObjectSequenceKey = (ObjectID, SequenceNumber);
 
 /// Wrapper around StructTag with a space-efficient representation for common types like coins
 /// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win.
@@ -1068,6 +1100,9 @@ impl SequenceNumber {
     pub const CONGESTED: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 2);
     pub const RANDOMNESS_UNAVAILABLE: SequenceNumber =
         SequenceNumber(SequenceNumber::MAX.value() + 3);
+    // Used to represent a sequence number whose value is unknown.
+    // For internal use only. This should never appear on chain.
+    pub const UNKNOWN: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 4);
 
     pub const fn new() -> Self {
         SequenceNumber(0)

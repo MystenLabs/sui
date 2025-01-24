@@ -76,6 +76,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         fullnode_rpc_port: 9000,
         epoch_duration_ms: None,
         no_full_node: false,
+        committee_size: None,
         indexer_feature_args: IndexerArgs::for_testing(),
     }
     .execute()
@@ -90,6 +91,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         epoch_duration_ms: None,
         benchmark_ips: None,
         with_faucet: false,
+        committee_size: None,
     }
     .execute()
     .await?;
@@ -129,6 +131,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         epoch_duration_ms: None,
         benchmark_ips: None,
         with_faucet: false,
+        committee_size: None,
     }
     .execute()
     .await;
@@ -1804,6 +1807,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         upgrade_capability: cap.reference.object_id,
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        verify_compatibility: true,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -1922,6 +1926,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         upgrade_capability: cap.reference.object_id,
         build_config: build_config.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        verify_compatibility: true,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -2069,6 +2074,7 @@ async fn test_package_management_on_upgrade_command_conflict() -> Result<(), any
         upgrade_capability: cap.reference.object_id,
         build_config: build_config_upgrade.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        verify_compatibility: true,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }

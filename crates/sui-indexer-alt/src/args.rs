@@ -5,10 +5,11 @@ use std::path::PathBuf;
 
 #[cfg(feature = "benchmark")]
 use crate::benchmark::BenchmarkArgs;
-use crate::db::DbArgs;
-use crate::ingestion::ClientArgs;
 use crate::IndexerArgs;
 use clap::Subcommand;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_metrics::MetricsArgs;
+use sui_pg_db::DbArgs;
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
@@ -29,6 +30,9 @@ pub enum Command {
 
         #[command(flatten)]
         indexer_args: IndexerArgs,
+
+        #[command(flatten)]
+        metrics_args: MetricsArgs,
 
         /// Path to the indexer's configuration TOML file.
         #[arg(long)]

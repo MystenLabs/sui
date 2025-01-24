@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_test_utils::{
+use crate::authority::auth_unit_test_utils::{
     publish_package_on_single_authority, upgrade_package_on_single_authority,
 };
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
@@ -354,6 +354,7 @@ async fn test_package_denied() {
         .commit_transaction_outputs(
             state.epoch_store_for_testing().epoch(),
             &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
+            true,
         )
         .await;
 

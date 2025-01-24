@@ -5,6 +5,7 @@ use std::{time::Duration, vec};
 
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::object::Owner;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
@@ -59,7 +60,7 @@ fn get_input_keys(objects: &[Object]) -> Vec<InputKey> {
     objects
         .iter()
         .map(|object| InputKey::VersionedObject {
-            id: object.id(),
+            id: object.full_id(),
             version: object.version(),
         })
         .collect()
@@ -120,8 +121,11 @@ async fn transaction_manager_basics() {
     transaction_manager.check_empty_for_testing();
 
     // Enqueue a transaction with a new gas object, empty input.
-    let gas_object_new =
-        Object::with_id_owner_version_for_testing(ObjectID::random(), 0.into(), owner);
+    let gas_object_new = Object::with_id_owner_version_for_testing(
+        ObjectID::random(),
+        0.into(),
+        Owner::AddressOwner(owner),
+    );
     let transaction = make_transaction(gas_object_new.clone(), vec![]);
     let tx_start_time = Instant::now();
     transaction_manager.enqueue(vec![transaction.clone()], &state.epoch_store_for_testing());
@@ -195,7 +199,9 @@ async fn transaction_manager_object_dependency() {
         })
         .collect();
     let shared_object = Object::shared_for_testing();
+    let initial_shared_version = shared_object.owner().start_version().unwrap();
     let shared_object_2 = Object::shared_for_testing();
+    let initial_shared_version_2 = shared_object_2.owner().start_version().unwrap();
 
     let state = init_state_with_objects(
         [
@@ -216,7 +222,7 @@ async fn transaction_manager_object_dependency() {
     let shared_version = 1000.into();
     let shared_object_arg_read = ObjectArg::SharedObject {
         id: shared_object.id(),
-        initial_shared_version: 0.into(),
+        initial_shared_version,
         mutable: false,
     };
     let transaction_read_0 = make_transaction(
@@ -231,21 +237,33 @@ async fn transaction_manager_object_dependency() {
         .epoch_store_for_testing()
         .set_shared_object_versions_for_testing(
             transaction_read_0.digest(),
-            &vec![(shared_object.id(), shared_version)],
+            vec![(
+                (
+                    shared_object.id(),
+                    shared_object.owner().start_version().unwrap(),
+                ),
+                shared_version,
+            )],
         )
         .unwrap();
     state
         .epoch_store_for_testing()
         .set_shared_object_versions_for_testing(
             transaction_read_1.digest(),
-            &vec![(shared_object.id(), shared_version)],
+            vec![(
+                (
+                    shared_object.id(),
+                    shared_object.owner().start_version().unwrap(),
+                ),
+                shared_version,
+            )],
         )
         .unwrap();
 
     // Enqueue one transaction with the same shared object in mutable mode.
     let shared_object_arg_default = ObjectArg::SharedObject {
         id: shared_object.id(),
-        initial_shared_version: 0.into(),
+        initial_shared_version,
         mutable: true,
     };
     let transaction_default = make_transaction(
@@ -256,7 +274,13 @@ async fn transaction_manager_object_dependency() {
         .epoch_store_for_testing()
         .set_shared_object_versions_for_testing(
             transaction_default.digest(),
-            &vec![(shared_object.id(), shared_version)],
+            vec![(
+                (
+                    shared_object.id(),
+                    shared_object.owner().start_version().unwrap(),
+                ),
+                shared_version,
+            )],
         )
         .unwrap();
 
@@ -264,7 +288,7 @@ async fn transaction_manager_object_dependency() {
     let shared_version_2 = 1000.into();
     let shared_object_arg_read_2 = ObjectArg::SharedObject {
         id: shared_object_2.id(),
-        initial_shared_version: 0.into(),
+        initial_shared_version: initial_shared_version_2,
         mutable: false,
     };
     let transaction_read_2 = make_transaction(
@@ -278,9 +302,21 @@ async fn transaction_manager_object_dependency() {
         .epoch_store_for_testing()
         .set_shared_object_versions_for_testing(
             transaction_read_2.digest(),
-            &vec![
-                (shared_object.id(), shared_version),
-                (shared_object_2.id(), shared_version_2),
+            vec![
+                (
+                    (
+                        shared_object.id(),
+                        shared_object.owner().start_version().unwrap(),
+                    ),
+                    shared_version,
+                ),
+                (
+                    (
+                        shared_object_2.id(),
+                        shared_object_2.owner().start_version().unwrap(),
+                    ),
+                    shared_version_2,
+                ),
             ],
         )
         .unwrap();
@@ -304,7 +340,7 @@ async fn transaction_manager_object_dependency() {
     // Notify TM about availability of the first shared object.
     transaction_manager.objects_available(
         vec![InputKey::VersionedObject {
-            id: shared_object.id(),
+            id: shared_object.full_id(),
             version: shared_version,
         }],
         &state.epoch_store_for_testing(),
@@ -341,7 +377,7 @@ async fn transaction_manager_object_dependency() {
     // Make shared_object_2 available.
     transaction_manager.objects_available(
         vec![InputKey::VersionedObject {
-            id: shared_object_2.id(),
+            id: shared_object_2.full_id(),
             version: shared_version_2,
         }],
         &state.epoch_store_for_testing(),
@@ -386,7 +422,11 @@ async fn transaction_manager_receiving_notify_commit() {
     let obj_id = ObjectID::random();
     let object_arguments: Vec<_> = (0..10)
         .map(|i| {
-            let object = Object::with_id_owner_version_for_testing(obj_id, i.into(), owner);
+            let object = Object::with_id_owner_version_for_testing(
+                obj_id,
+                i.into(),
+                Owner::AddressOwner(owner),
+            );
             // Every other transaction receives the object, and we create a run of multiple receives in
             // a row at the beginning to test that the TM doesn't get stuck in either configuration of:
             // ImmOrOwnedObject => Receiving,
@@ -435,7 +475,7 @@ async fn transaction_manager_receiving_notify_commit() {
         transaction_manager.notify_commit(
             txn.digest(),
             vec![InputKey::VersionedObject {
-                id: object.id(),
+                id: object.full_id(),
                 version: object.version().next(),
             }],
             &state.epoch_store_for_testing(),
@@ -475,8 +515,10 @@ async fn transaction_manager_receiving_object_ready_notifications() {
     transaction_manager.check_empty_for_testing();
 
     let obj_id = ObjectID::random();
-    let receiving_object_new0 = Object::with_id_owner_version_for_testing(obj_id, 0.into(), owner);
-    let receiving_object_new1 = Object::with_id_owner_version_for_testing(obj_id, 1.into(), owner);
+    let receiving_object_new0 =
+        Object::with_id_owner_version_for_testing(obj_id, 0.into(), Owner::AddressOwner(owner));
+    let receiving_object_new1 =
+        Object::with_id_owner_version_for_testing(obj_id, 1.into(), Owner::AddressOwner(owner));
     let receiving_object_arg0 =
         ObjectArg::Receiving(receiving_object_new0.compute_object_reference());
     let receive_object_transaction0 = make_transaction(
@@ -561,8 +603,10 @@ async fn transaction_manager_receiving_object_ready_notifications_multiple_of_sa
     transaction_manager.check_empty_for_testing();
 
     let obj_id = ObjectID::random();
-    let receiving_object_new0 = Object::with_id_owner_version_for_testing(obj_id, 0.into(), owner);
-    let receiving_object_new1 = Object::with_id_owner_version_for_testing(obj_id, 1.into(), owner);
+    let receiving_object_new0 =
+        Object::with_id_owner_version_for_testing(obj_id, 0.into(), Owner::AddressOwner(owner));
+    let receiving_object_new1 =
+        Object::with_id_owner_version_for_testing(obj_id, 1.into(), Owner::AddressOwner(owner));
     let receiving_object_arg0 =
         ObjectArg::Receiving(receiving_object_new0.compute_object_reference());
     let receive_object_transaction0 = make_transaction(
@@ -661,8 +705,11 @@ async fn transaction_manager_receiving_object_ready_if_current_version_greater()
             Object::with_id_owner_for_testing(gas_object_id, owner)
         })
         .collect();
-    let receiving_object =
-        Object::with_id_owner_version_for_testing(ObjectID::random(), 10.into(), owner);
+    let receiving_object = Object::with_id_owner_version_for_testing(
+        ObjectID::random(),
+        10.into(),
+        Owner::AddressOwner(owner),
+    );
     gas_objects.push(receiving_object.clone());
     let state = init_state_with_objects(gas_objects.clone()).await;
 
@@ -674,10 +721,16 @@ async fn transaction_manager_receiving_object_ready_if_current_version_greater()
     // TM should be empty at the beginning.
     transaction_manager.check_empty_for_testing();
 
-    let receiving_object_new0 =
-        Object::with_id_owner_version_for_testing(receiving_object.id(), 0.into(), owner);
-    let receiving_object_new1 =
-        Object::with_id_owner_version_for_testing(receiving_object.id(), 1.into(), owner);
+    let receiving_object_new0 = Object::with_id_owner_version_for_testing(
+        receiving_object.id(),
+        0.into(),
+        Owner::AddressOwner(owner),
+    );
+    let receiving_object_new1 = Object::with_id_owner_version_for_testing(
+        receiving_object.id(),
+        1.into(),
+        Owner::AddressOwner(owner),
+    );
     let receiving_object_arg0 =
         ObjectArg::Receiving(receiving_object_new0.compute_object_reference());
     let receive_object_transaction0 = make_transaction(
@@ -725,7 +778,9 @@ async fn transaction_manager_with_cancelled_transactions() {
     let (owner, _keypair) = deterministic_random_account_key();
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), owner);
     let shared_object_1 = Object::shared_for_testing();
+    let initial_shared_version_1 = shared_object_1.owner().start_version().unwrap();
     let shared_object_2 = Object::shared_for_testing();
+    let initial_shared_version_2 = shared_object_2.owner().start_version().unwrap();
     let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), owner);
 
     let state = init_state_with_objects(vec![
@@ -745,12 +800,12 @@ async fn transaction_manager_with_cancelled_transactions() {
     // Enqueue one transaction with 2 shared object inputs and 1 owned input.
     let shared_object_arg_1 = ObjectArg::SharedObject {
         id: shared_object_1.id(),
-        initial_shared_version: 0.into(),
+        initial_shared_version: initial_shared_version_1,
         mutable: true,
     };
     let shared_object_arg_2 = ObjectArg::SharedObject {
         id: shared_object_2.id(),
-        initial_shared_version: 0.into(),
+        initial_shared_version: initial_shared_version_2,
         mutable: true,
     };
 
@@ -772,9 +827,21 @@ async fn transaction_manager_with_cancelled_transactions() {
         .epoch_store_for_testing()
         .set_shared_object_versions_for_testing(
             cancelled_transaction.digest(),
-            &vec![
-                (shared_object_1.id(), SequenceNumber::CANCELLED_READ),
-                (shared_object_2.id(), SequenceNumber::CONGESTED),
+            vec![
+                (
+                    (
+                        shared_object_1.id(),
+                        shared_object_1.owner().start_version().unwrap(),
+                    ),
+                    SequenceNumber::CANCELLED_READ,
+                ),
+                (
+                    (
+                        shared_object_2.id(),
+                        shared_object_2.owner().start_version().unwrap(),
+                    ),
+                    SequenceNumber::CONGESTED,
+                ),
             ],
         )
         .unwrap();
@@ -793,7 +860,7 @@ async fn transaction_manager_with_cancelled_transactions() {
     // Notify TM about availability of the owned object.
     transaction_manager.objects_available(
         vec![InputKey::VersionedObject {
-            id: owned_object.id(),
+            id: owned_object.full_id(),
             version: owned_version,
         }],
         &state.epoch_store_for_testing(),

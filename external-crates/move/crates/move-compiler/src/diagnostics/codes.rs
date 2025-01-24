@@ -15,7 +15,7 @@ pub enum Severity {
     Bug = 4,
 }
 
-/// A an optional prefix to distinguish between different types of warnings (internal vs. possibly
+/// An optional prefix to distinguish between different types of warnings (internal vs. possibly
 /// multiple externally provided ones).
 pub type ExternalPrefix = Option<&'static str>;
 /// The ID for a diagnostic, consisting of an optional prefix, a category, and a code.
@@ -290,7 +290,7 @@ codes!(
         InvalidTransfer: { msg: "invalid transfer of references", severity: NonblockingError },
         AmbiguousVariableUsage: { msg: "ambiguous usage of variable", severity: NonblockingError },
     ],
-    BytecodeGeneration: [
+    CodeGeneration: [
         UnfoldableConstant: { msg: "cannot compute constant value", severity: NonblockingError },
     ],
     // errors for any unused code or items

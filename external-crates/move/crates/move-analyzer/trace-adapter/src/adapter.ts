@@ -38,7 +38,7 @@ interface CustomizedStackTraceResponse extends DebugProtocol.StackTraceResponse 
     body: {
         stackFrames: StackFrame[];
         totalFrames?: number;
-        optimized_lines: number[];
+        optimizedLines: number[];
     };
 }
 
@@ -93,6 +93,8 @@ export class MoveDebugSession extends LoggingDebugSession {
      * Handles to create variable scopes and compound variable values.
      */
     private variableHandles: Handles<IRuntimeVariableScope | CompoundType>;
+
+    private count: number = 0;
 
     public constructor() {
         super();
@@ -167,7 +169,8 @@ export class MoveDebugSession extends LoggingDebugSession {
         // make VS Code send setExpression request
         response.body.supportsSetExpression = false;
 
-        // make VS Code send disassemble request
+        // make VS Code send disassemble request (it's false
+        // as we handle this differently through custom commands)
         response.body.supportsDisassembleRequest = false;
         response.body.supportsSteppingGranularity = false;
         response.body.supportsInstructionBreakpoints = false;
@@ -183,6 +186,27 @@ export class MoveDebugSession extends LoggingDebugSession {
 
         this.sendResponse(response);
         this.sendEvent(new InitializedEvent());
+    }
+
+    /**
+     * Intercepts all requests sent to the debug adapter to handle custom ones.
+     *
+     * @param request request to be dispatched.
+     */
+    protected dispatchRequest(request: DebugProtocol.Request): void {
+        if (request.command === 'toggleDisassembly') {
+            this.runtime.toggleDisassembly();
+            this.sendEvent(new StoppedEvent('toggle disassembly', MoveDebugSession.THREAD_ID));
+        } else if (request.command === 'toggleSource') {
+            this.runtime.toggleSource();
+            this.sendEvent(new StoppedEvent('toggle source', MoveDebugSession.THREAD_ID));
+        } else if (request.command === 'fileChanged') {
+            const newFile = String(request.arguments);
+            const changedFile = this.runtime.setCurrentMoveFileFromPath(newFile);
+            logger.log('Current Move file changed to ' + changedFile);
+        } else {
+            super.dispatchRequest(request);
+        }
     }
 
     protected async launchRequest(
@@ -220,12 +244,22 @@ export class MoveDebugSession extends LoggingDebugSession {
             const stack_height = runtimeStack.frames.length;
             response.body = {
                 stackFrames: runtimeStack.frames.map(frame => {
-                    const fileName = path.basename(frame.file);
-                    return new StackFrame(frame.id, frame.name, new Source(fileName, frame.file), frame.line);
+                    const fileName = frame.showDisassembly
+                        ? path.basename(frame.bcodeFilePath!)
+                        : path.basename(frame.srcFilePath);
+                    const frameSource = frame.showDisassembly
+                        ? new Source(fileName, frame.bcodeFilePath!)
+                        : new Source(fileName, frame.srcFilePath);
+                    const currentLine = frame.showDisassembly
+                        ? frame.bcodeLine!
+                        : frame.srcLine;
+                    return new StackFrame(frame.id, frame.name, frameSource, currentLine);
                 }).reverse(),
                 totalFrames: stack_height,
-                optimized_lines: stack_height > 0
-                    ? runtimeStack.frames[stack_height - 1].optimizedLines
+                optimizedLines: stack_height > 0
+                    ? (runtimeStack.frames[stack_height - 1].showDisassembly
+                        ? runtimeStack.frames[stack_height - 1].optimizedBcodeLines!
+                        : runtimeStack.frames[stack_height - 1].optimizedSrcLines)
                     : []
             };
         } catch (err) {
@@ -271,6 +305,11 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         try {
             const scopes = this.getScopes(args.frameId);
+            const changedFile = this.runtime.setCurrentMoveFileFromFrame(args.frameId);
+            logger.log('Current Move file changed to '
+                + changedFile
+                + ' for frame id '
+                + args.frameId);
             response.body = {
                 scopes
             };
@@ -278,7 +317,6 @@ export class MoveDebugSession extends LoggingDebugSession {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
         }
-
         this.sendResponse(response);
     }
 
@@ -296,32 +334,48 @@ export class MoveDebugSession extends LoggingDebugSession {
         name: string,
         type?: string
     ): DebugProtocol.Variable {
-        const frameID = value.loc.frameID;
-        const localIndex = value.loc.localIndex;
+        const indexedLoc = value.indexedLoc;
         const runtimeStack = this.runtime.stack();
-        const frame = runtimeStack.frames.find(frame => frame.id === frameID);
-        if (!frame) {
-            throw new Error('No frame found for id '
-                + frameID
-                + ' when converting ref value for local index '
-                + localIndex);
-        }
-        // a local will be in one of the scopes at a position corresponding to its local index
-        let local = undefined;
-        for (const scope of frame.locals) {
-            local = scope[localIndex];
-            if (local) {
-                break;
+        if ('globalIndex' in indexedLoc.loc) {
+            // global location
+            const globalValue = runtimeStack.globals.get(indexedLoc.loc.globalIndex);
+            if (!globalValue) {
+                throw new Error('No global found for index '
+                    + indexedLoc.loc.globalIndex
+                    + ' when converting ref value ');
             }
+            const indexPath = [...indexedLoc.indexPath];
+            return this.convertRuntimeValue(globalValue, name, indexPath, type);
+        } else if ('frameID' in indexedLoc.loc && 'localIndex' in indexedLoc.loc) {
+            // local variable
+            const frameID = indexedLoc.loc.frameID;
+            const localIndex = indexedLoc.loc.localIndex;
+            const frame = runtimeStack.frames.find(frame => frame.id === frameID);
+            if (!frame) {
+                throw new Error('No frame found for id '
+                    + frameID
+                    + ' when converting ref value for local index '
+                    + localIndex);
+            }
+            // a local will be in one of the scopes at a position corresponding to its local index
+            let local = undefined;
+            for (const scope of frame.locals) {
+                local = scope[localIndex];
+                if (local) {
+                    break;
+                }
+            }
+            if (!local) {
+                throw new Error('No local found for index '
+                    + localIndex
+                    + ' when converting ref value for frame id '
+                    + frameID);
+            }
+            const indexPath = [...indexedLoc.indexPath];
+            return this.convertRuntimeValue(local.value, name, indexPath, type);
+        } else {
+            throw new Error('Invalid runtime location');
         }
-        if (!local) {
-            throw new Error('No local found for index '
-                + localIndex
-                + ' when converting ref value for frame id '
-                + frameID);
-        }
-
-        return this.convertRuntimeValue(local.value, name, type);
     }
 
     /**
@@ -329,15 +383,22 @@ export class MoveDebugSession extends LoggingDebugSession {
      *
      * @param value variable value
      * @param name variable name
+     * @param indexPath a path to actual value for compound types (e.g, [1, 7] means
+     * first field/vector element and then seventh field/vector element)
      * @param type optional variable type
      * @returns a DAP variable.
+     * @throws Error with a descriptive error message if conversion has failed.
      */
     private convertRuntimeValue(
         value: RuntimeValueType,
         name: string,
+        indexPath: number[],
         type?: string
     ): DebugProtocol.Variable {
         if (typeof value === 'string') {
+            if (indexPath.length > 0) {
+                throw new Error('Cannot index into a string');
+            }
             return {
                 name,
                 type,
@@ -345,6 +406,13 @@ export class MoveDebugSession extends LoggingDebugSession {
                 variablesReference: 0
             };
         } else if (Array.isArray(value)) {
+            if (indexPath.length > 0) {
+                const index = indexPath.pop();
+                if (index === undefined || index >= value.length) {
+                    throw new Error('Index path for an array is invalid');
+                }
+                return this.convertRuntimeValue(value[index], name, indexPath, type);
+            }
             const compoundValueReference = this.variableHandles.create(value);
             return {
                 name,
@@ -353,6 +421,13 @@ export class MoveDebugSession extends LoggingDebugSession {
                 variablesReference: compoundValueReference
             };
         } else if ('fields' in value) {
+            if (indexPath.length > 0) {
+                const index = indexPath.pop();
+                if (index === undefined || index >= value.fields.length) {
+                    throw new Error('Index path for a compound type is invalid');
+                }
+                return this.convertRuntimeValue(value.fields[index][1], name, indexPath, type);
+            }
             const compoundValueReference = this.variableHandles.create(value);
             // use type if available as it will have information about whether
             // it's a reference or not (e.g., `&mut 0x42::mod::SomeStruct`),
@@ -373,6 +448,9 @@ export class MoveDebugSession extends LoggingDebugSession {
                 variablesReference: compoundValueReference
             };
         } else {
+            if (indexPath.length > 0) {
+                throw new Error('Cannot index into a reference value');
+            }
             return this.convertRefValue(value, name, type);
         }
     }
@@ -386,9 +464,33 @@ export class MoveDebugSession extends LoggingDebugSession {
     private convertRuntimeVariables(runtimeScope: IRuntimeVariableScope): DebugProtocol.Variable[] {
         const variables: DebugProtocol.Variable[] = [];
         const runtimeVariables = runtimeScope.locals;
+        let showDisassembly = false;
+        if (runtimeVariables.length > 0) {
+            // there can be undefined entries in the variables array,
+            // so find any non-undefined one (they will all point to
+            // the same frame)
+            const firstVar = runtimeVariables.find(v => v);
+            if (firstVar) {
+                const varFrame = this.runtime.stack().frames[firstVar.frameIdx];
+                if (varFrame) {
+                    showDisassembly = varFrame.showDisassembly;
+                }
+            }
+        }
         runtimeVariables.forEach(v => {
             if (v) {
-                variables.push(this.convertRuntimeValue(v.value, v.name, v.type));
+                const varName = showDisassembly
+                    ? v.info.internalName
+                    : v.info.name;
+                const dapVar = this.convertRuntimeValue(v.value, varName, [], v.type);
+                if (showDisassembly || !varName.includes('%')) {
+                    // Don't show "artificial" variables generated by the compiler
+                    // for enum and macro execution when showing source code as they
+                    // would be quite confusing for the user without knowing compilation
+                    // internals. On the other hand, it make sense to show them when showing
+                    // disassembly
+                    variables.push(dapVar);
+                }
             }
         });
         return variables;
@@ -410,11 +512,11 @@ export class MoveDebugSession extends LoggingDebugSession {
                     if (Array.isArray(variableHandle)) {
                         for (let i = 0; i < variableHandle.length; i++) {
                             const v = variableHandle[i];
-                            variables.push(this.convertRuntimeValue(v, String(i)));
+                            variables.push(this.convertRuntimeValue(v, String(i), []));
                         }
                     } else {
                         variableHandle.fields.forEach(([fname, fvalue]) => {
-                            variables.push(this.convertRuntimeValue(fvalue, fname));
+                            variables.push(this.convertRuntimeValue(fvalue, fname, []));
                         });
                     }
                 }
@@ -523,7 +625,6 @@ export class MoveDebugSession extends LoggingDebugSession {
         }
         this.sendResponse(response);
     }
-
 
     protected disconnectRequest(
         response: DebugProtocol.DisconnectResponse,

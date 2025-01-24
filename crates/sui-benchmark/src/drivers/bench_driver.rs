@@ -26,6 +26,7 @@ use crate::drivers::driver::Driver;
 use crate::drivers::HistogramWrapper;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
+use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};
 use crate::{ExecutionEffects, ValidatorProxy};
 use std::collections::{BTreeMap, VecDeque};
@@ -737,7 +738,10 @@ async fn run_bench_worker(
      -> NextOp {
         match result {
             Ok(effects) => {
-                assert!(payload.get_failure_type().is_none());
+                assert!(
+                    payload.get_failure_type().is_none()
+                        || payload.get_failure_type() == Some(ExpectedFailureType::NoFailure)
+                );
                 let latency = start.elapsed();
                 let time_from_start = total_benchmark_start_time.elapsed();
 
@@ -796,8 +800,15 @@ async fn run_bench_worker(
                 }
             }
             Err(err) => {
-                error!("{}", err);
+                tracing::error!(
+                    "Transaction execution got error: {}. Transaction digest: {:?}",
+                    err,
+                    transaction.digest()
+                );
                 match payload.get_failure_type() {
+                    Some(ExpectedFailureType::NoFailure) => {
+                        panic!("Transaction failed unexpectedly");
+                    }
                     Some(_) => {
                         metrics_cloned
                             .num_expected_error
@@ -917,10 +928,10 @@ async fn run_bench_worker(
                 if let Some(b) = retry_queue.pop_front() {
                     let tx = b.0;
                     let payload = b.1;
-                    if payload.get_failure_type().is_some() {
-                        num_expected_error_txes += 1;
-                    } else {
-                        num_error_txes += 1;
+                    match payload.get_failure_type() {
+                        Some(ExpectedFailureType::NoFailure) => num_error_txes += 1,
+                        Some(_) => num_expected_error_txes += 1,
+                        None => num_error_txes += 1,
                     }
                     num_submitted += 1;
                     metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();

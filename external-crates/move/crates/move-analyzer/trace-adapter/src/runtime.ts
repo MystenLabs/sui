@@ -6,7 +6,12 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import toml from 'toml';
-import { IFileInfo, ISourceMap, readAllSourceMaps } from './source_map_utils';
+import {
+    IFileInfo,
+    ILocalInfo,
+    ISourceMap,
+    readAllSourceMaps
+} from './source_map_utils';
 import {
     TraceEffectKind,
     TraceEvent,
@@ -14,6 +19,11 @@ import {
     TraceInstructionKind,
     readTrace,
 } from './trace_utils';
+import { JSON_FILE_EXT } from './utils';
+import { info } from 'console';
+
+const MOVE_FILE_EXT = ".move";
+const BCODE_FILE_EXT = ".mvb";
 
 /**
  * Describes the runtime variable scope (e.g., local variables
@@ -46,11 +56,27 @@ export interface IRuntimeVariableLoc {
 }
 
 /**
+ * Global location (typically used for values
+ * computed in native functions)
+ */
+export interface IRuntimeGlobalLoc {
+    globalIndex: number;
+}
+
+/**
+ * Location where a runtime value is stored.
+ */
+export interface IRuntimeLoc {
+    loc: IRuntimeVariableLoc | IRuntimeGlobalLoc;
+    indexPath: number[];
+}
+
+/**
  * Value of a reference in the runtime.
  */
 export interface IRuntimeRefValue {
     mutable: boolean;
-    loc: IRuntimeVariableLoc
+    indexedLoc: IRuntimeLoc;
 }
 
 /**
@@ -67,9 +93,10 @@ export interface IRuntimeCompoundValue {
  * Describes a runtime local variable.
  */
 interface IRuntimeVariable {
-    name: string;
+    info: ILocalInfo;
     value: RuntimeValueType;
     type: string;
+    frameIdx: number;
 }
 
 /**
@@ -86,39 +113,65 @@ interface IRuntimeStackFrame {
      */
     name: string;
     /**
-     *  Path to the file containing currently executing instruction.
-     */
-    file: string;
+    *  Path to the source file containing currently executing instruction.
+    */
+    srcFilePath: string;
     /**
-     *  File hash of the file containing currently executing instruction.
-     */
-    fileHash: string;
+    *  Path to the disassembled bytecode file containing currently executing instruction.
+    */
+    bcodeFilePath: undefined | string;
     /**
-     * Current line in the file corresponding to currently viewed instruction.
+     *  File hash of the source file containing currently executing instruction.
      */
-    line: number; // 1-based
+    srcFileHash: string;
+    /**
+     *  File hash of the disassembled bytecode file containing currently executing instruction.
+     */
+    bcodeFileHash: undefined | string;
+    /**
+     * Current line in the source file corresponding to currently viewed instruction.
+     */
+    srcLine: number; // 1-based
+    /**
+     * Current line in the disassembled bytecode file corresponding to currently viewed instruction.
+     */
+    bcodeLine: undefined | number; // 1-based
     /**
      *  Local variable types by variable frame index.
      */
     localsTypes: string[];
     /**
-     *  Local variable names by variable frame index.
+     * Local variables info by their index in the frame
+     * (parameters first, then actual locals).
      */
-    localsNames: string[];
+    localsInfo: ILocalInfo[];
     /**
      * Local variables per scope (local scope at 0 and then following block scopes),
      * indexed by variable frame index.
      */
     locals: (IRuntimeVariable | undefined)[][];
     /**
-     * Line of the last call instruction that was processed in this frame.
+     * Line in the source file of the last call instruction that was processed in this frame.
      * It's needed to make sure that step/next into/over call works correctly.
      */
-    lastCallInstructionLine: number | undefined;
+    lastCallInstructionSrcLine: number | undefined;
+    /**
+     * Line in the disassembled bytecode file of the last call instruction that was processed in this frame.
+     * It's needed to make sure that step/next into/over call works correctly.
+     */
+    lastCallInstructionBcodeLine: number | undefined;
     /**
      * Lines that are not present in the source map.
      */
-    optimizedLines: number[]
+    optimizedSrcLines: number[];
+    /**
+     * Lines that are not present in the bytecode map.
+     */
+    optimizedBcodeLines: undefined | number[];
+    /**
+     * Disassembly view is shown for this frame.
+     */
+    showDisassembly: boolean;
 }
 
 /**
@@ -127,6 +180,7 @@ interface IRuntimeStackFrame {
  */
 export interface IRuntimeStack {
     frames: IRuntimeStackFrame[];
+    globals: Map<number, RuntimeValueType>;
 }
 
 /**
@@ -173,7 +227,8 @@ export class Runtime extends EventEmitter {
     private trace = {
         events: [] as TraceEvent[],
         localLifetimeEnds: new Map<number, number[]>(),
-        tracedLines: new Map<string, Set<number>>()
+        tracedSrcLines: new Map<string, Set<number>>(),
+        tracedBcodeLines: new Map<string, Set<number>>()
     };
 
     /**
@@ -184,7 +239,10 @@ export class Runtime extends EventEmitter {
     /**
      * Current frame stack.
      */
-    private frameStack = { frames: [] as IRuntimeStackFrame[] };
+    private frameStack = {
+        frames: [] as IRuntimeStackFrame[],
+        globals: new Map<number, RuntimeValueType>()
+    };
 
     /**
      * Map of file hashes to file info.
@@ -195,6 +253,17 @@ export class Runtime extends EventEmitter {
      * Map of line breakpoints, keyed on a file path.
      */
     private lineBreakpoints = new Map<string, Set<number>>();
+
+    /**
+     * Map of file hashes to files representing disassembled bytecode.
+     */
+    private bcodeFilesMap = new Map<string, IFileInfo>();
+
+    /**
+     * A Move file currently opened in the editor window that
+     * corresponds to one of the frames on the stack.
+     */
+    private currentMoveFile: string | undefined = undefined;
 
     /**
      * Start a trace viewing session and set up the initial state of the runtime.
@@ -218,17 +287,17 @@ export class Runtime extends EventEmitter {
             throw Error(`Cannot find package name in manifest file: ${manifest_path}`);
         }
 
-        // create file maps for all files in the `build` directory, including both package source
+        // create file maps for all files in the `sources` directory, including both package source
         // files and source files for dependencies
-        this.hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'sources'));
+        hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'sources'), this.filesMap, MOVE_FILE_EXT);
         // update with files from the actual "sources" directory rather than from the "build" directory
-        this.hashToFileMap(path.join(pkgRoot, 'sources'));
+        hashToFileMap(path.join(pkgRoot, 'sources'), this.filesMap, MOVE_FILE_EXT);
 
         // create source maps for all modules in the `build` directory
         const sourceMapsModMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'source_maps'), this.filesMap);
 
         // reconstruct trace file path from trace info
-        const traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + '.json');
+        const traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + JSON_FILE_EXT);
 
         // create a mapping from file hash to its corresponding source map
         const sourceMapsHashMap = new Map<string, ISourceMap>;
@@ -236,7 +305,16 @@ export class Runtime extends EventEmitter {
             sourceMapsHashMap.set(sourceMap.fileHash, sourceMap);
         }
 
-        this.trace = readTrace(traceFilePath, sourceMapsModMap, sourceMapsHashMap, this.filesMap);
+        const disassemblyDir = path.join(pkgRoot, 'build', pkg_name, 'disassembly');
+        let bcodeMapsModMap = new Map<string, ISourceMap>();
+        if (fs.existsSync(disassemblyDir)) {
+            // create file maps for all bytecode files in the `disassembly` directory
+            hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'disassembly'), this.bcodeFilesMap, BCODE_FILE_EXT);
+            // created bytecode maps for disassembled bytecode files
+            bcodeMapsModMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'disassembly'), this.bcodeFilesMap);
+        }
+
+        this.trace = readTrace(traceFilePath, sourceMapsHashMap, sourceMapsModMap, bcodeMapsModMap, this.filesMap, this.bcodeFilesMap);
 
         // start trace viewing session with the first trace event
         this.eventIndex = 0;
@@ -250,13 +328,16 @@ export class Runtime extends EventEmitter {
             this.newStackFrame(
                 currentEvent.id,
                 currentEvent.name,
-                currentEvent.fileHash,
+                currentEvent.srcFileHash,
+                currentEvent.bcodeFileHash,
                 currentEvent.localsTypes,
                 currentEvent.localsNames,
-                currentEvent.optimizedLines
+                currentEvent.optimizedSrcLines,
+                currentEvent.optimizedBcodeLines
             );
         this.frameStack = {
-            frames: [newFrame]
+            frames: [newFrame],
+            globals: new Map<number, RuntimeValueType>()
         };
         this.step(/* next */ false, /* stopAtCloseFrame */ false);
     }
@@ -290,15 +371,15 @@ export class Runtime extends EventEmitter {
         if (currentEvent.type === TraceEventKind.Instruction) {
             const stackHeight = this.frameStack.frames.length;
             if (stackHeight <= 0) {
-                throw new Error('No frame on the stack when processing Instruction event on line: '
-                    + currentEvent.loc.line
-                    + ' in column: '
-                    + currentEvent.loc.column);
+                // this should never happen
+                throw new Error('No frame on the stack when processing Instruction event when stepping');
             }
             const currentFrame = this.frameStack.frames[stackHeight - 1];
             // remember last call instruction line before it (potentially) changes
             // in the `instruction` call below
-            const lastCallInstructionLine = currentFrame.lastCallInstructionLine;
+            const lastCallInstructionLine = currentFrame.showDisassembly
+                ? currentFrame.lastCallInstructionBcodeLine
+                : currentFrame.lastCallInstructionSrcLine;
             let [sameLine, currentLine] = this.instruction(currentFrame, currentEvent);
             // do not attempt to skip events on the same line if the previous event
             // was a switch to/from an inlined frame - we want execution to stop before
@@ -385,15 +466,15 @@ export class Runtime extends EventEmitter {
             if (!currentFrame) {
                 throw new Error('No frame to pop when processing `ReplaceInlinedFrame` event');
             }
-            currentFrame.fileHash = currentEvent.fileHash;
-            currentFrame.optimizedLines = currentEvent.optimizedLines;
-            const currentFile = this.filesMap.get(currentFrame.fileHash);
+            currentFrame.srcFileHash = currentEvent.fileHash;
+            currentFrame.optimizedSrcLines = currentEvent.optimizedLines;
+            const currentFile = this.filesMap.get(currentFrame.srcFileHash);
             if (!currentFile) {
                 throw new Error('Cannot find file with hash '
-                    + currentFrame.fileHash
+                    + currentFrame.srcFileHash
                     + ' when processing `ReplaceInlinedFrame` event');
             }
-            currentFrame.file = currentFile.path;
+            currentFrame.srcFilePath = currentFile.path;
             this.frameStack.frames.push(currentFrame);
             return this.step(next, stopAtCloseFrame);
         } else if (currentEvent.type === TraceEventKind.OpenFrame) {
@@ -408,11 +489,19 @@ export class Runtime extends EventEmitter {
                         return ExecutionResult.Exception;
                     }
                 }
-                // if native function executed successfully, then the next event
-                // should be CloseFrame
-                if (this.trace.events.length <= this.eventIndex + 1 ||
-                    this.trace.events[this.eventIndex + 1].type !== TraceEventKind.CloseFrame) {
-                    throw new Error('Expected an CloseFrame event after native OpenFrame event');
+                // process optional effects until reaching CloseFrame for the native function
+                while (true) {
+                    const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ true);
+                    if (executionResult === ExecutionResult.Exception) {
+                        return executionResult;
+                    }
+                    if (executionResult === ExecutionResult.TraceEnd) {
+                        throw new Error('Cannot find CloseFrame event for native function');
+                    }
+                    const currentEvent = this.trace.events[this.eventIndex];
+                    if (currentEvent.type === TraceEventKind.CloseFrame) {
+                        break;
+                    }
                 }
                 // skip over CloseFrame as there is no frame to pop
                 this.eventIndex++;
@@ -424,19 +513,29 @@ export class Runtime extends EventEmitter {
                 this.newStackFrame(
                     currentEvent.id,
                     currentEvent.name,
-                    currentEvent.fileHash,
+                    currentEvent.srcFileHash,
+                    currentEvent.bcodeFileHash,
                     currentEvent.localsTypes,
                     currentEvent.localsNames,
-                    currentEvent.optimizedLines
+                    currentEvent.optimizedSrcLines,
+                    currentEvent.optimizedBcodeLines
                 );
             // set values of parameters in the new frame
             this.frameStack.frames.push(newFrame);
             for (let i = 0; i < currentEvent.paramValues.length; i++) {
-                localWrite(newFrame, i, currentEvent.paramValues[i]);
+                localWrite(
+                    newFrame,
+                    this.frameStack.frames.length - 1,
+                    i,
+                    currentEvent.paramValues[i]
+                );
             }
 
-            if (next) {
-                // step out of the frame right away
+            if (next && (!newFrame.showDisassembly || newFrame.id >= 0)) {
+                // step out of the frame right away if this frame is not inlined
+                // (id >= 0) or if we are NOT showing disassembly for it
+                // (otherwise we will see instructions skipped in the disassembly
+                // view for apparently no reason)
                 return this.stepOut(next);
             } else {
                 return this.step(next, stopAtCloseFrame);
@@ -448,9 +547,18 @@ export class Runtime extends EventEmitter {
                 return ExecutionResult.Ok;
             } else {
                 // pop the top frame from the stack
-                if (this.frameStack.frames.length <= 0) {
+                const framesLength = this.frameStack.frames.length;
+                if (framesLength <= 0) {
                     throw new Error('No frame to pop at CloseFrame event with ID: '
                         + currentEvent.id);
+                }
+                const currentFrameID = this.frameStack.frames[framesLength - 1].id;
+                if (currentFrameID !== currentEvent.id) {
+                    throw new Error('Frame ID mismatch at CloseFrame event with ID: '
+                        + currentEvent.id
+                        + ' (current frame ID: '
+                        + currentFrameID
+                        + ')');
                 }
                 this.frameStack.frames.pop();
                 return this.step(next, stopAtCloseFrame);
@@ -462,18 +570,29 @@ export class Runtime extends EventEmitter {
                 return ExecutionResult.Exception;
             }
             if (effect.type === TraceEffectKind.Write) {
-                const traceLocation = effect.loc;
-                const traceValue = effect.value;
-                const frame = this.frameStack.frames.find(
-                    frame => frame.id === traceLocation.frameID
-                );
-                if (!frame) {
-                    throw new Error('Cannot find frame with ID: '
-                        + traceLocation.frameID
-                        + ' when processing Write effect for local variable at index: '
-                        + traceLocation.localIndex);
+                const traceLocation = effect.indexedLoc.loc;
+                if ('globalIndex' in traceLocation) {
+                    const globalValue = effect.value;
+                    this.frameStack.globals.set(traceLocation.globalIndex, globalValue);
+                } else if ('frameID' in traceLocation && 'localIndex' in traceLocation) {
+                    const traceValue = effect.value;
+                    let frame = undefined;
+                    let frameIdx = 0;
+                    for (const f of this.frameStack.frames) {
+                        if (f.id === traceLocation.frameID) {
+                            frame = f;
+                            break;
+                        }
+                        frameIdx++;
+                    }
+                    if (!frame) {
+                        throw new Error('Cannot find frame with ID: '
+                            + traceLocation.frameID
+                            + ' when processing Write effect for local variable at index: '
+                            + traceLocation.localIndex);
+                    }
+                    localWrite(frame, frameIdx, traceLocation.localIndex, traceValue);
                 }
-                localWrite(frame, traceLocation.localIndex, traceValue);
             }
             return this.step(next, stopAtCloseFrame);
         } else {
@@ -546,17 +665,21 @@ export class Runtime extends EventEmitter {
             if (currentEvent.type === TraceEventKind.Instruction) {
                 const stackHeight = this.frameStack.frames.length;
                 if (stackHeight <= 0) {
-                    throw new Error('No frame on the stack when processing Instruction event on line: '
-                        + currentEvent.loc.line
-                        + ' in column: '
-                        + currentEvent.loc.column);
+                    // this should never happen
+                    throw new Error('No frame on the stack when processing Instruction event when continuing');
                 }
                 const currentFrame = this.frameStack.frames[stackHeight - 1];
-                const breakpoints = this.lineBreakpoints.get(currentFrame.file);
+                const filePath = currentFrame.showDisassembly
+                    ? currentFrame.bcodeFilePath!
+                    : currentFrame.srcFilePath;
+                const breakpoints = this.lineBreakpoints.get(filePath);
                 if (!breakpoints) {
                     continue;
                 }
-                if (breakpoints.has(currentEvent.loc.line)) {
+                const instLine = currentFrame.showDisassembly
+                    ? currentEvent.bcodeLoc!.line
+                    : currentEvent.srcLoc.line;
+                if (breakpoints.has(instLine)) {
                     this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
                     return ExecutionResult.Ok;
                 }
@@ -567,14 +690,20 @@ export class Runtime extends EventEmitter {
     /**
      * Sets line breakpoints for a file (resetting any existing ones).
      *
-     * @param path file path.
+     * @param filePath file path.
      * @param lines breakpoints lines.
      * @returns array of booleans indicating if a breakpoint was set on a line.
      * @throws Error with a descriptive error message if breakpoints cannot be set.
      */
-    public setLineBreakpoints(path: string, lines: number[]): boolean[] {
+    public setLineBreakpoints(filePath: string, lines: number[]): boolean[] {
         const breakpoints = new Set<number>();
-        const tracedLines = this.trace.tracedLines.get(path);
+        const fileExt = path.extname(filePath);
+        if (fileExt !== MOVE_FILE_EXT && fileExt !== BCODE_FILE_EXT) {
+            return [];
+        }
+        const tracedLines = fileExt === MOVE_FILE_EXT
+            ? this.trace.tracedSrcLines.get(filePath)
+            : this.trace.tracedBcodeLines.get(filePath);
         // Set all breakpoints to invalid and validate the correct ones in the loop,
         // otherwise let them all be invalid if there are no traced lines.
         // Valid breakpoints are those that are on lines that have at least
@@ -588,7 +717,7 @@ export class Runtime extends EventEmitter {
                 }
             }
         }
-        this.lineBreakpoints.set(path, breakpoints);
+        this.lineBreakpoints.set(filePath, breakpoints);
         return validated;
     }
 
@@ -626,21 +755,97 @@ export class Runtime extends EventEmitter {
                 }
             }
         }
-        const loc = instructionEvent.loc;
         if (instructionEvent.kind === TraceInstructionKind.CALL ||
             instructionEvent.kind === TraceInstructionKind.CALL_GENERIC) {
-            currentFrame.lastCallInstructionLine = loc.line;
+            currentFrame.lastCallInstructionSrcLine = instructionEvent.srcLoc.line;
+            currentFrame.lastCallInstructionBcodeLine = instructionEvent.bcodeLoc?.line;
         }
 
-        if (loc.line === currentFrame.line) {
+        const instLine = currentFrame.showDisassembly
+            ? instructionEvent.bcodeLoc!.line
+            : instructionEvent.srcLoc.line;
+        const frameLine = currentFrame.showDisassembly
+            ? currentFrame.bcodeLine!
+            : currentFrame.srcLine;
+
+        if (instLine === frameLine) {
             // so that instructions on the same line can be bypassed
-            return [true, loc.line];
+            return [true, instLine];
         } else {
-            currentFrame.line = loc.line;
-            return [false, loc.line];
+            currentFrame.srcLine = instructionEvent.srcLoc.line;
+            currentFrame.bcodeLine = instructionEvent.bcodeLoc?.line;
+            return [false, instLine];
         }
     }
 
+    /**
+     * Given a path to afile, sets the currently opened Move file to that path
+     * if this file that corresponds to one of the frames on the stack.
+     *
+     * @param filePath path to the currently opened Move file.
+     * @returns path to newly modified currently opened Move file
+     * or `undefined` if the file cannot be found.
+     */
+    public setCurrentMoveFileFromPath(filePath: string): string | undefined {
+        if (this.frameStack.frames.find(frame =>
+            frame.showDisassembly
+                ? frame.bcodeFilePath === filePath
+                : frame.srcFilePath === filePath)) {
+            this.currentMoveFile = filePath;
+        } else {
+            this.currentMoveFile = undefined;
+        }
+        return this.currentMoveFile;
+    }
+
+    /**
+     * Given a frame ID, sets the currently opened Move file to the file
+     * corresponding to the frame with that ID.
+     *
+     * @param frameId frame identifier.
+     *
+     * @returns path to newly modified currently opened Move file
+     * or `undefined` if the file cannot be found.
+     */
+    public setCurrentMoveFileFromFrame(frameId: number): string | undefined {
+        const frame = this.frameStack.frames.find(frame => frame.id === frameId);
+        if (frame) {
+            this.currentMoveFile = frame.showDisassembly
+                ? frame.bcodeFilePath
+                : frame.srcFilePath;
+        } else {
+            this.currentMoveFile = undefined;
+        }
+        return this.currentMoveFile;
+    }
+
+    /**
+     * Toggles disassembly view for all frames on the stack whose
+     * source is the currently opened Move file.
+     */
+    public toggleDisassembly(): void {
+        if (this.currentMoveFile) {
+            this.frameStack.frames.forEach(frame => {
+                if (frame.srcFilePath === this.currentMoveFile
+                    && frame.bcodeFileHash !== undefined
+                    && frame.bcodeFilePath !== undefined
+                    && frame.bcodeLine !== undefined
+                    && frame.optimizedBcodeLines !== undefined) {
+                    frame.showDisassembly = true;
+                }
+            });
+        }
+    }
+
+    public toggleSource(): void {
+        if (this.currentMoveFile) {
+            this.frameStack.frames.forEach(frame => {
+                if (frame.bcodeFilePath === this.currentMoveFile) {
+                    frame.showDisassembly = false;
+                }
+            });
+        }
+    }
 
     /**
      * Creates a new runtime stack frame based on info from the `OpenFrame` trace event.
@@ -648,25 +853,46 @@ export class Runtime extends EventEmitter {
      * @param frameID frame identifier from the trace event.
      * @param funName function name.
      * @param modInfo information about module containing the function.
+     * @param srcFileHash hash of the source file containing the function.
+     * @param bcodeFileHash hash of the disassembled bytecode file containing the function.
      * @param localsTypes types of local variables in the frame.
-     * @param localsNames names of local variables in the frame.
-     * @param optimizedLines lines that are not present in the source map.
+     * @param localsInfo information about local variables in the frame.
+     * @param optimizedSrcLines lines that are not present in the source map.
+     * @param optimizedBcodeLines lines that are not present in the bytecode map.
      * @returns new frame.
      * @throws Error with a descriptive error message if frame cannot be constructed.
      */
     private newStackFrame(
         frameID: number,
         funName: string,
-        fileHash: string,
+        srcFileHash: string,
+        bcodeFileHash: undefined | string,
         localsTypes: string[],
-        localsNames: string[],
-        optimizedLines: number[]
+        localsInfo: ILocalInfo[],
+        optimizedSrcLines: number[],
+        optimizedBcodeLines: undefined | number[]
     ): IRuntimeStackFrame {
-        const currentFile = this.filesMap.get(fileHash);
+        const currentFile = this.filesMap.get(srcFileHash);
 
         if (!currentFile) {
-            throw new Error(`Cannot find file with hash: ${fileHash}`);
+            throw new Error(`Cannot find file with hash: ${srcFileHash}`);
         }
+        const srcFilePath = currentFile.path;
+        let bcodeFilePath = undefined;
+        if (bcodeFileHash) {
+            const bcodeFile = this.bcodeFilesMap.get(bcodeFileHash);
+            if (bcodeFile) {
+                bcodeFilePath = bcodeFile.path;
+            }
+        }
+
+        // when creating a new frame maintain the invariant
+        // that all frames that belong to modules in the same
+        // file get the same view
+        const showDisassembly = this.frameStack.frames.find(
+            frame => frame.showDisassembly
+                && frame.bcodeFilePath === bcodeFilePath
+        ) !== undefined;
 
         let locals = [];
         // create first scope for local variables
@@ -674,14 +900,21 @@ export class Runtime extends EventEmitter {
         const stackFrame: IRuntimeStackFrame = {
             id: frameID,
             name: funName,
-            file: currentFile.path,
-            fileHash,
-            line: 0, // line will be updated when next event (Instruction) is processed
+            srcFilePath,
+            bcodeFilePath,
+            srcFileHash,
+            bcodeFileHash,
+            // lines will be updated when next event (Instruction) is processed
+            srcLine: 0,
+            bcodeLine: 0,
             localsTypes,
-            localsNames,
+            localsInfo,
             locals,
-            lastCallInstructionLine: undefined,
-            optimizedLines
+            lastCallInstructionSrcLine: undefined,
+            lastCallInstructionBcodeLine: undefined,
+            optimizedSrcLines,
+            optimizedBcodeLines,
+            showDisassembly
         };
 
         if (this.trace.events.length <= this.eventIndex + 1 ||
@@ -705,34 +938,6 @@ export class Runtime extends EventEmitter {
         }, 0);
     }
 
-    /**
-     * Creates a map from a file hash to file information for all Move source files in a directory.
-     *
-     * @param directory path to the directory containing Move source files.
-     * @param filesMap map to update with file information.
-     */
-    private hashToFileMap(directory: string): void {
-        const processDirectory = (dir: string) => {
-            const files = fs.readdirSync(dir);
-            for (const f of files) {
-                const filePath = path.join(dir, f);
-                const stats = fs.statSync(filePath);
-                if (stats.isDirectory()) {
-                    processDirectory(filePath);
-                } else if (path.extname(f) === '.move') {
-                    const content = fs.readFileSync(filePath, 'utf8');
-                    const numFileHash = computeFileHash(content);
-                    const lines = content.split('\n');
-                    const fileInfo = { path: filePath, content, lines };
-                    const fileHash = Buffer.from(numFileHash).toString('base64');
-                    this.filesMap.set(fileHash, fileInfo);
-                }
-            }
-        };
-
-        processDirectory(directory);
-    }
-
     //
     // Utility functions for testing and debugging.
     //
@@ -750,23 +955,29 @@ export class Runtime extends EventEmitter {
     public toString(): string {
         let res = 'current frame stack:\n';
         for (const frame of this.frameStack.frames) {
-            const fileName = path.basename(frame.file);
+            const fileName = frame.showDisassembly ?
+                path.basename(frame.bcodeFilePath!) :
+                path.basename(frame.srcFilePath);
+            const line = frame.showDisassembly ? frame.bcodeLine : frame.srcLine;
             res += this.singleTab
                 + 'function: '
                 + frame.name
                 + ' ('
                 + fileName
                 + ':'
-                + frame.line
+                + line
                 + ')\n';
             for (let i = 0; i < frame.locals.length; i++) {
                 res += this.singleTab + this.singleTab + 'scope ' + i + ' :\n';
                 for (let j = 0; j < frame.locals[i].length; j++) {
                     const local = frame.locals[i][j];
-                    if (local) {
-                        res += this.varToString(this.singleTab
-                            + this.singleTab
-                            + this.singleTab, local) + '\n';
+                    if (local && (frame.showDisassembly || !isGeneratedLocal(local.info))) {
+                        // don't show "artificial" locals outside of the disassembly view
+                        res += this.varToString(
+                            this.singleTab + this.singleTab + this.singleTab,
+                            local,
+                            frame.showDisassembly
+                        ) + '\n';
                     }
                 }
             }
@@ -786,10 +997,18 @@ export class Runtime extends EventEmitter {
      * Returns a string representation of a runtime variable.
      *
      * @param variable runtime variable.
+     *
      * @returns string representation of the variable.
      */
-    private varToString(tabs: string, variable: IRuntimeVariable): string {
-        return this.valueToString(tabs, variable.value, variable.name, variable.type);
+    private varToString(
+        tabs: string,
+        variable: IRuntimeVariable,
+        showDisassembly: boolean
+    ): string {
+        let varName = showDisassembly
+            ? variable.info.internalName
+            : variable.info.name;
+        return this.valueToString(tabs, variable.value, varName, [], variable.type);
     }
 
     /**
@@ -804,7 +1023,7 @@ export class Runtime extends EventEmitter {
             : compoundValue.type;
         let res = '(' + type + ') {\n';
         for (const [name, value] of compoundValue.fields) {
-            res += this.valueToString(tabs + this.singleTab, value, name);
+            res += this.valueToString(tabs + this.singleTab, value, name, []);
         }
         res += tabs + '}\n';
         return res;
@@ -824,22 +1043,35 @@ export class Runtime extends EventEmitter {
         name: string,
         type?: string
     ): string {
+        const indexedLoc = refValue.indexedLoc;
         let res = '';
-        const frame = this.frameStack.frames.find(frame => frame.id === refValue.loc.frameID);
-        let local = undefined;
-        if (!frame) {
-            return res;
-        }
-        for (const scope of frame.locals) {
-            local = scope[refValue.loc.localIndex];
-            if (local) {
-                break;
+        if ('globalIndex' in indexedLoc.loc) {
+            // global location
+            const globalValue = this.frameStack.globals.get(indexedLoc.loc.globalIndex);
+            if (globalValue) {
+                const indexPath = [...indexedLoc.indexPath];
+                return this.valueToString(tabs, globalValue, name, indexPath, type);
             }
+        } else if ('frameID' in indexedLoc.loc && 'localIndex' in indexedLoc.loc) {
+            const frameID = indexedLoc.loc.frameID;
+            const frame = this.frameStack.frames.find(frame => frame.id === frameID);
+            let local = undefined;
+            if (!frame) {
+                return res;
+            }
+            for (const scope of frame.locals) {
+                local = scope[indexedLoc.loc.localIndex];
+                if (local) {
+                    break;
+                }
+            }
+            if (!local) {
+                return res;
+            }
+            const indexPath = [...indexedLoc.indexPath];
+            return this.valueToString(tabs, local.value, name, indexPath, type);
         }
-        if (!local) {
-            return res;
-        }
-        return this.valueToString(tabs, local.value, name, type);
+        return res;
     }
 
     /**
@@ -847,6 +1079,8 @@ export class Runtime extends EventEmitter {
      *
      * @param value runtime value.
      * @param name name of the variable containing the value.
+     * @param indexPath a path to actual value for compound types (e.g, [1, 7] means
+     * first field/vector element and then seventh field/vector element)
      * @param type optional type of the variable containing the value.
      * @returns string representation of the value.
      */
@@ -854,6 +1088,7 @@ export class Runtime extends EventEmitter {
         tabs: string,
         value: RuntimeValueType,
         name: string,
+        indexPath: number[],
         type?: string
     ): string {
         let res = '';
@@ -863,19 +1098,32 @@ export class Runtime extends EventEmitter {
                 res += tabs + 'type: ' + type + '\n';
             }
         } else if (Array.isArray(value)) {
-            res += tabs + name + ' : [\n';
-            for (let i = 0; i < value.length; i++) {
-                res += this.valueToString(tabs + this.singleTab, value[i], String(i));
+            if (indexPath.length > 0) {
+                const index = indexPath.pop();
+                if (index !== undefined) {
+                    res += this.valueToString(tabs, value[index], name, indexPath, type);
+                }
+            } else {
+                res += tabs + name + ' : [\n';
+                for (let i = 0; i < value.length; i++) {
+                    res += this.valueToString(tabs + this.singleTab, value[i], String(i), indexPath);
+                }
+                res += tabs + ']\n';
+                if (type) {
+                    res += tabs + 'type: ' + type + '\n';
+                }
             }
-            res += tabs + ']\n';
-            if (type) {
-                res += tabs + 'type: ' + type + '\n';
-            }
-            return res;
         } else if ('fields' in value) {
-            res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
-            if (type) {
-                res += tabs + 'type: ' + type + '\n';
+            if (indexPath.length > 0) {
+                const index = indexPath.pop();
+                if (index !== undefined) {
+                    res += this.valueToString(tabs, value.fields[index][1], name, indexPath, type);
+                }
+            } else {
+                res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
+                if (type) {
+                    res += tabs + 'type: ' + type + '\n';
+                }
             }
         } else {
             res += this.refValueToString(tabs, value, name, type);
@@ -885,14 +1133,60 @@ export class Runtime extends EventEmitter {
 }
 
 /**
+ * Checks if a given local is generated by the compiler
+ * (as opposed to being declared in the source code).
+ *
+ * @param local local variable info.
+ * @returns `true` if the local is generated, `false` otherwise.
+ */
+function isGeneratedLocal(local: ILocalInfo): boolean {
+    return local.name.includes('%') || local.internalName.includes('%');
+}
+
+/**
+ * Creates a map from a file hash to file information for all Move source files in a directory.
+ *
+ * @param directory path to the directory containing Move source files.
+ * @param filesMap map to update with file information.
+ */
+function hashToFileMap(
+    directory: string,
+    filesMap: Map<string, IFileInfo>,
+    extension: String
+): void {
+    const processDirectory = (dir: string) => {
+        const files = fs.readdirSync(dir);
+        for (const f of files) {
+            const filePath = path.join(dir, f);
+            const stats = fs.statSync(filePath);
+            if (stats.isDirectory()) {
+                processDirectory(filePath);
+            } else if (path.extname(f) === extension) {
+                const content = fs.readFileSync(filePath, 'utf8');
+                const numFileHash = computeFileHash(content);
+                const lines = content.split('\n');
+                const fileInfo = { path: filePath, content, lines };
+                const fileHash = Buffer.from(numFileHash).toString('base64');
+                filesMap.set(fileHash, fileInfo);
+            }
+        }
+    };
+
+    processDirectory(directory);
+}
+
+
+/**
  * Handles a write to a local variable in a stack frame.
  *
  * @param frame stack frame frame.
+ * @param frameIdx index of the frame in the stack.
  * @param localIndex variable index in the frame.
  * @param runtimeValue variable value.
  */
 function localWrite(
     frame: IRuntimeStackFrame,
+    frameIdx: number,
     localIndex: number,
     value: RuntimeValueType
 ): void {
@@ -903,39 +1197,41 @@ function localWrite(
             + ' in function: '
             + frame.name);
     }
-    const name = frame.localsNames[localIndex];
-    if (!name) {
+    const localInfo = frame.localsInfo[localIndex];
+    if (!localInfo) {
         throw new Error('Cannot find local variable at index: '
             + localIndex
             + ' in function: '
             + frame.name);
     }
 
-    if (name.includes('%')) {
-        // don't show "artificial" variables generated by the compiler
-        // for enum and macro execution as they would be quite confusing
-        // for the user without knowing compilation internals
-        return;
-    }
-
-
     const scopesCount = frame.locals.length;
     if (scopesCount <= 0) {
         throw new Error("There should be at least one variable scope in function"
             + frame.name);
     }
-    // If a variable has the same name but a different index (it is shadowed)
+    // If a variable has the same name in the source but a different index (it is shadowed)
     // it has to be put in a different scope (e.g., locals[1], locals[2], etc.).
     // Find scope already containing variable name, if any, starting from
     // the outermost one
     let existingVarScope = -1;
-    for (let i = scopesCount - 1; i >= 0; i--) {
-        const existingVarIndex = frame.locals[i].findIndex(runtimeVar => {
-            return runtimeVar && runtimeVar.name === name;
-        });
-        if (existingVarIndex !== -1 && existingVarIndex !== localIndex) {
-            existingVarScope = i;
-            break;
+    if (!isGeneratedLocal(localInfo)) {
+        // Locals generated by the compiler are only shown in the disassembly view
+        // where they have distinct names. In the source view, their names may not
+        // be distinct (as variable names are subject to split on `#` character
+        // to recover source names from compiler-level names), but if we shadowed
+        // them, we would end up in empty scopes in the source view (as compiler-generated
+        // locals are not there), and in the disassembly view, there is not need for
+        // shadow scopes due to their distinct names. In summary, compiler-generated
+        // variables don't need to be put in shadow scopes.
+        for (let i = scopesCount - 1; i >= 0; i--) {
+            const existingVarIndex = frame.locals[i].findIndex(runtimeVar => {
+                return runtimeVar && runtimeVar.info.name === localInfo.name;
+            });
+            if (existingVarIndex !== -1 && existingVarIndex !== localIndex) {
+                existingVarScope = i;
+                break;
+            }
         }
     }
     if (existingVarScope >= 0) {
@@ -943,10 +1239,10 @@ function localWrite(
         if (!shadowedScope) {
             frame.locals.push([]);
         }
-        frame.locals[existingVarScope + 1][localIndex] = { name, value, type };
+        frame.locals[existingVarScope + 1][localIndex] = { info: localInfo, value, type, frameIdx };
     } else {
         // put variable in the "main" locals scope
-        frame.locals[0][localIndex] = { name, value, type };
+        frame.locals[0][localIndex] = { info: localInfo, value, type, frameIdx };
     }
 }
 

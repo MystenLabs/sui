@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use fastcrypto::traits::Signer;
-use move_core_types::language_storage::StructTag;
 use rand::rngs::OsRng;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
@@ -28,8 +27,9 @@ use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, VersionNumber};
 use sui_types::crypto::AuthoritySignature;
 use sui_types::digests::ConsensusCommitDigest;
+use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::Object;
-use sui_types::storage::{ObjectStore, ReadStore, RestStateReader};
+use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
@@ -235,7 +235,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
                 round,
                 timestamp_ms,
                 ConsensusCommitDigest::default(),
-                Vec::new(),
+                ConsensusDeterminedVersionAssignments::empty_for_testing(),
             );
 
         self.execute_transaction(consensus_commit_prologue_transaction.into())
@@ -549,16 +549,7 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
     }
 }
 
-impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RestStateReader for Simulacrum<T, V> {
-    fn get_transaction_checkpoint(
-        &self,
-        _digest: &sui_types::digests::TransactionDigest,
-    ) -> sui_types::storage::error::Result<
-        Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
-    > {
-        todo!()
-    }
-
+impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for Simulacrum<T, V> {
     fn get_lowest_available_checkpoint_objects(
         &self,
     ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
@@ -577,38 +568,8 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RestStateReader for
             .into())
     }
 
-    fn account_owned_objects_info_iter(
-        &self,
-        _owner: SuiAddress,
-        _cursor: Option<ObjectID>,
-    ) -> sui_types::storage::error::Result<
-        Box<dyn Iterator<Item = sui_types::storage::AccountOwnedObjectInfo> + '_>,
-    > {
-        todo!()
-    }
-
-    fn dynamic_field_iter(
-        &self,
-        _parent: ObjectID,
-        _cursor: Option<ObjectID>,
-    ) -> sui_types::storage::error::Result<
-        Box<
-            dyn Iterator<
-                    Item = (
-                        sui_types::storage::DynamicFieldKey,
-                        sui_types::storage::DynamicFieldIndexInfo,
-                    ),
-                > + '_,
-        >,
-    > {
-        todo!()
-    }
-
-    fn get_coin_info(
-        &self,
-        _coin_type: &StructTag,
-    ) -> sui_types::storage::error::Result<Option<sui_types::storage::CoinInfo>> {
-        todo!()
+    fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
+        None
     }
 }
 

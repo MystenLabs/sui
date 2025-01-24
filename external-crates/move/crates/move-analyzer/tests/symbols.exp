@@ -700,5 +700,5 @@ public fun vector::singleton<Element>(
 	e: Element
 ): vector<Element>
 
- Return an vector of size one containing element `e`.
+ Return a vector of size one containing element `e`.
 

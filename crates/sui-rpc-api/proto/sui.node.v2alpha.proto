@@ -1,0 +1,25 @@
+// The sui.node.v2alpha package contains experimental services that have yet to
+// stabilize
+//
+// Everything in here is subject to change and there is no gaurentee about
+// stability or breaking changes.
+
+syntax = "proto3";
+
+package sui.node.v2alpha;
+
+import "sui.node.v2.proto";
+
+service SubscriptionService {
+  rpc SubscribeCheckpoints(SubscribeCheckpointsRequest) returns (stream SubscribeCheckpointsResponse);
+}
+
+message SubscribeCheckpointsRequest {
+  optional sui.node.v2.GetFullCheckpointOptions options = 1;
+}
+
+message SubscribeCheckpointsResponse {
+  // The checkpoint sequence number and value of the current cursor into the checkpoint stream
+  optional uint64 cursor = 1;
+  optional sui.node.v2.GetFullCheckpointResponse checkpoint = 2;
+}

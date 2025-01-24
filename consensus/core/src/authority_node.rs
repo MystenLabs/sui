@@ -4,6 +4,7 @@
 use std::{sync::Arc, time::Instant};
 
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use itertools::Itertools;
 use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
@@ -176,11 +177,25 @@ where
         registry: Registry,
         boot_counter: u64,
     ) -> Self {
-        info!(
-            "Starting consensus authority {}\n{:#?}\n{:#?}\n{:?}\nBoot counter: {}",
-            own_index, committee, parameters, protocol_config.version, boot_counter
+        assert!(
+            committee.is_valid_index(own_index),
+            "Invalid own index {}",
+            own_index
         );
-        assert!(committee.is_valid_index(own_index));
+        let own_hostname = &committee.authority(own_index).hostname;
+        info!(
+            "Starting consensus authority {} {}, {:?}, boot counter {}",
+            own_index, own_hostname, protocol_config.version, boot_counter
+        );
+        info!(
+            "Consensus authorities: {}",
+            committee
+                .authorities()
+                .map(|(i, a)| format!("{}: {}", i, a.hostname))
+                .join(", ")
+        );
+        info!("Consensus parameters: {:?}", parameters);
+        info!("Consensus committee: {:?}", committee);
         let context = Arc::new(Context::new(
             own_index,
             committee,
@@ -256,7 +271,8 @@ where
             block_manager,
             // For streaming RPC, Core will be notified when consumer is available.
             // For non-streaming RPC, there is no way to know so default to true.
-            !N::Client::SUPPORT_STREAMING,
+            // When there is only one (this) authority, assume subscriber exists.
+            !N::Client::SUPPORT_STREAMING || context.committee.size() == 1,
             commit_observer,
             core_signals,
             protocol_keypair,
@@ -486,6 +502,10 @@ mod tests {
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
 
+        if gc_depth == 0 {
+            protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
+        }
+
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
             .map(|_| TempDir::new().unwrap())
             .collect::<Vec<_>>();
@@ -575,6 +595,105 @@ mod tests {
 
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
+    async fn test_small_committee(
+        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(1, 2, 3)] num_authorities: usize,
+    ) {
+        let db_registry = Registry::new();
+        DBMetrics::init(&db_registry);
+
+        let (committee, keypairs) = local_committee_and_keys(0, vec![1; num_authorities]);
+        let protocol_config: ProtocolConfig = ProtocolConfig::get_for_max_version_UNSAFE();
+
+        let temp_dirs = (0..num_authorities)
+            .map(|_| TempDir::new().unwrap())
+            .collect::<Vec<_>>();
+
+        let mut output_receivers = Vec::with_capacity(committee.size());
+        let mut authorities: Vec<ConsensusAuthority> = Vec::with_capacity(committee.size());
+        let mut boot_counters = vec![0; num_authorities];
+
+        for (index, _authority_info) in committee.authorities() {
+            let (authority, receiver) = make_authority(
+                index,
+                &temp_dirs[index.value()],
+                committee.clone(),
+                keypairs.clone(),
+                network_type,
+                boot_counters[index],
+                protocol_config.clone(),
+            )
+            .await;
+            boot_counters[index] += 1;
+            output_receivers.push(receiver);
+            authorities.push(authority);
+        }
+
+        const NUM_TRANSACTIONS: u8 = 15;
+        let mut submitted_transactions = BTreeSet::<Vec<u8>>::new();
+        for i in 0..NUM_TRANSACTIONS {
+            let txn = vec![i; 16];
+            submitted_transactions.insert(txn.clone());
+            authorities[i as usize % authorities.len()]
+                .transaction_client()
+                .submit(vec![txn])
+                .await
+                .unwrap();
+        }
+
+        for receiver in &mut output_receivers {
+            let mut expected_transactions = submitted_transactions.clone();
+            loop {
+                let committed_subdag =
+                    tokio::time::timeout(Duration::from_secs(1), receiver.recv())
+                        .await
+                        .unwrap()
+                        .unwrap();
+                for b in committed_subdag.blocks {
+                    for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
+                        assert!(
+                            expected_transactions.remove(&txn),
+                            "Transaction not submitted or already seen: {:?}",
+                            txn
+                        );
+                    }
+                }
+                assert_eq!(committed_subdag.reputation_scores_desc, vec![]);
+                if expected_transactions.is_empty() {
+                    break;
+                }
+            }
+        }
+
+        // Stop authority 0.
+        let index = committee.to_authority_index(0).unwrap();
+        authorities.remove(index.value()).stop().await;
+        sleep(Duration::from_secs(10)).await;
+
+        // Restart authority 0 and let it run.
+        let (authority, receiver) = make_authority(
+            index,
+            &temp_dirs[index.value()],
+            committee.clone(),
+            keypairs.clone(),
+            network_type,
+            boot_counters[index],
+            protocol_config.clone(),
+        )
+        .await;
+        boot_counters[index] += 1;
+        output_receivers[index] = receiver;
+        authorities.insert(index.value(), authority);
+        sleep(Duration::from_secs(10)).await;
+
+        // Stop all authorities and exit.
+        for authority in authorities {
+            authority.stop().await;
+        }
+    }
+
+    #[rstest]
+    #[tokio::test(flavor = "current_thread")]
     async fn test_amnesia_recovery_success(
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
         #[values(0, 5, 10)] gc_depth: u32,
@@ -592,6 +711,10 @@ mod tests {
 
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
+
+        if gc_depth == 0 {
+            protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
+        }
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();

@@ -4,9 +4,7 @@
 use std::mem;
 
 use sui_default_config::DefaultConfig;
-use tracing::warn;
-
-use crate::{
+use sui_indexer_alt_framework::{
     ingestion::IngestionConfig,
     pipeline::{
         concurrent::{ConcurrentConfig, PrunerConfig},
@@ -14,6 +12,7 @@ use crate::{
         CommitterConfig,
     },
 };
+use tracing::warn;
 
 /// Trait for merging configuration structs together.
 pub trait Merge {
@@ -21,13 +20,13 @@ pub trait Merge {
 }
 
 #[DefaultConfig]
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct IndexerConfig {
     /// How checkpoints are read by the indexer.
     pub ingestion: IngestionLayer,
 
-    /// How wide the consistent read range is.
-    pub consistency: ConsistencyLayer,
+    /// Configuration for the retention on consistent pipelines.
+    pub consistency: PrunerLayer,
 
     /// Default configuration for committers that is shared by all pipelines. Pipelines can
     /// override individual settings in their own configuration sections.
@@ -47,19 +46,6 @@ pub struct IndexerConfig {
     pub extra: toml::Table,
 }
 
-#[derive(Clone)]
-pub struct ConsistencyConfig {
-    /// How often to check whether write-ahead logs related to the consistent range can be
-    /// pruned.
-    pub consistent_pruning_interval_ms: u64,
-
-    /// How long to wait before honouring reader low watermarks.
-    pub pruner_delay_ms: u64,
-
-    /// Number of checkpoints to delay indexing summary tables for.
-    pub consistent_range: Option<u64>,
-}
-
 // Configuration layers apply overrides over a base configuration. When reading configs from a
 // file, we read them into layer types, and then apply those layers onto an existing configuration
 // (such as the default configuration) to `finish()` them.
@@ -74,17 +60,6 @@ pub struct IngestionLayer {
     pub checkpoint_buffer_size: Option<usize>,
     pub ingest_concurrency: Option<usize>,
     pub retry_interval_ms: Option<u64>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
-}
-
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-pub struct ConsistencyLayer {
-    consistent_pruning_interval_ms: Option<u64>,
-    pruner_delay_ms: Option<u64>,
-    consistent_range: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -128,6 +103,7 @@ pub struct PrunerLayer {
     pub delay_ms: Option<u64>,
     pub retention: Option<u64>,
     pub max_chunk_size: Option<u64>,
+    pub prune_concurrency: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -137,17 +113,16 @@ pub struct PrunerLayer {
 #[derive(Clone, Default, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct PipelineLayer {
-    // Consistent pipelines (a sequential pipeline with a write-ahead log)
-    pub sum_coin_balances: Option<CommitterLayer>,
-    pub wal_coin_balances: Option<CommitterLayer>,
-    pub sum_obj_types: Option<CommitterLayer>,
-    pub wal_obj_types: Option<CommitterLayer>,
+    // Consistent pipelines
+    pub coin_balance_buckets: Option<CommitterLayer>,
+    pub obj_info: Option<CommitterLayer>,
 
-    // Sequential pipelines without a write-ahead log
+    // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
     pub sum_packages: Option<SequentialLayer>,
 
     // All concurrent pipelines
+    pub cp_sequence_numbers: Option<ConcurrentLayer>,
     pub ev_emit_mod: Option<ConcurrentLayer>,
     pub ev_struct_inst: Option<ConcurrentLayer>,
     pub kv_checkpoints: Option<ConcurrentLayer>,
@@ -157,7 +132,6 @@ pub struct PipelineLayer {
     pub kv_objects: Option<ConcurrentLayer>,
     pub kv_protocol_configs: Option<ConcurrentLayer>,
     pub kv_transactions: Option<ConcurrentLayer>,
-    pub obj_info: Option<ConcurrentLayer>,
     pub obj_versions: Option<ConcurrentLayer>,
     pub tx_affected_addresses: Option<ConcurrentLayer>,
     pub tx_affected_objects: Option<ConcurrentLayer>,
@@ -177,7 +151,11 @@ impl IndexerConfig {
         let mut example: Self = Default::default();
 
         example.ingestion = IngestionConfig::default().into();
-        example.consistency = ConsistencyConfig::default().into();
+        example.consistency = PrunerLayer {
+            interval_ms: Some(60_000),
+            retention: Some(4 * 60 * 60),
+            ..Default::default()
+        };
         example.committer = CommitterConfig::default().into();
         example.pruner = PrunerConfig::default().into();
         example.pipeline = PipelineLayer::example();
@@ -200,19 +178,6 @@ impl IngestionLayer {
                 .unwrap_or(base.checkpoint_buffer_size),
             ingest_concurrency: self.ingest_concurrency.unwrap_or(base.ingest_concurrency),
             retry_interval_ms: self.retry_interval_ms.unwrap_or(base.retry_interval_ms),
-        }
-    }
-}
-
-impl ConsistencyLayer {
-    pub fn finish(self, base: ConsistencyConfig) -> ConsistencyConfig {
-        check_extra("consistency", self.extra);
-        ConsistencyConfig {
-            consistent_pruning_interval_ms: self
-                .consistent_pruning_interval_ms
-                .unwrap_or(base.consistent_pruning_interval_ms),
-            pruner_delay_ms: self.pruner_delay_ms.unwrap_or(base.pruner_delay_ms),
-            consistent_range: self.consistent_range.or(base.consistent_range),
         }
     }
 }
@@ -270,6 +235,7 @@ impl PrunerLayer {
             delay_ms: self.delay_ms.unwrap_or(base.delay_ms),
             retention: self.retention.unwrap_or(base.retention),
             max_chunk_size: self.max_chunk_size.unwrap_or(base.max_chunk_size),
+            prune_concurrency: self.prune_concurrency.unwrap_or(base.prune_concurrency),
         }
     }
 }
@@ -279,12 +245,11 @@ impl PipelineLayer {
     /// configure.
     pub fn example() -> Self {
         PipelineLayer {
-            sum_coin_balances: Some(Default::default()),
-            wal_coin_balances: Some(Default::default()),
-            sum_obj_types: Some(Default::default()),
-            wal_obj_types: Some(Default::default()),
+            coin_balance_buckets: Some(Default::default()),
+            obj_info: Some(Default::default()),
             sum_displays: Some(Default::default()),
             sum_packages: Some(Default::default()),
+            cp_sequence_numbers: Some(Default::default()),
             ev_emit_mod: Some(Default::default()),
             ev_struct_inst: Some(Default::default()),
             kv_checkpoints: Some(Default::default()),
@@ -294,7 +259,6 @@ impl PipelineLayer {
             kv_objects: Some(Default::default()),
             kv_protocol_configs: Some(Default::default()),
             kv_transactions: Some(Default::default()),
-            obj_info: Some(Default::default()),
             obj_versions: Some(Default::default()),
             tx_affected_addresses: Some(Default::default()),
             tx_affected_objects: Some(Default::default()),
@@ -335,21 +299,6 @@ impl Merge for IngestionLayer {
             checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
             ingest_concurrency: other.ingest_concurrency.or(self.ingest_concurrency),
             retry_interval_ms: other.retry_interval_ms.or(self.retry_interval_ms),
-            extra: Default::default(),
-        }
-    }
-}
-
-impl Merge for ConsistencyLayer {
-    fn merge(self, other: ConsistencyLayer) -> ConsistencyLayer {
-        check_extra("consistency", self.extra);
-        check_extra("consistency", other.extra);
-        ConsistencyLayer {
-            consistent_pruning_interval_ms: other
-                .consistent_pruning_interval_ms
-                .or(self.consistent_pruning_interval_ms),
-            pruner_delay_ms: other.pruner_delay_ms.or(self.pruner_delay_ms),
-            consistent_range: other.consistent_range.or(self.consistent_range),
             extra: Default::default(),
         }
     }
@@ -407,6 +356,7 @@ impl Merge for PrunerLayer {
                 (None, None) => None,
             },
             max_chunk_size: other.max_chunk_size.or(self.max_chunk_size),
+            prune_concurrency: other.prune_concurrency.or(self.prune_concurrency),
             extra: Default::default(),
         }
     }
@@ -417,12 +367,11 @@ impl Merge for PipelineLayer {
         check_extra("pipeline", self.extra);
         check_extra("pipeline", other.extra);
         PipelineLayer {
-            sum_coin_balances: self.sum_coin_balances.merge(other.sum_coin_balances),
-            wal_coin_balances: self.wal_coin_balances.merge(other.wal_coin_balances),
-            sum_obj_types: self.sum_obj_types.merge(other.sum_obj_types),
-            wal_obj_types: self.wal_obj_types.merge(other.wal_obj_types),
+            coin_balance_buckets: self.coin_balance_buckets.merge(other.coin_balance_buckets),
+            obj_info: self.obj_info.merge(other.obj_info),
             sum_displays: self.sum_displays.merge(other.sum_displays),
             sum_packages: self.sum_packages.merge(other.sum_packages),
+            cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers),
             ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod),
             ev_struct_inst: self.ev_struct_inst.merge(other.ev_struct_inst),
             kv_checkpoints: self.kv_checkpoints.merge(other.kv_checkpoints),
@@ -432,7 +381,6 @@ impl Merge for PipelineLayer {
             kv_objects: self.kv_objects.merge(other.kv_objects),
             kv_protocol_configs: self.kv_protocol_configs.merge(other.kv_protocol_configs),
             kv_transactions: self.kv_transactions.merge(other.kv_transactions),
-            obj_info: self.obj_info.merge(other.obj_info),
             obj_versions: self.obj_versions.merge(other.obj_versions),
             tx_affected_addresses: self
                 .tx_affected_addresses
@@ -457,33 +405,12 @@ impl<T: Merge> Merge for Option<T> {
     }
 }
 
-impl Default for ConsistencyConfig {
-    fn default() -> Self {
-        Self {
-            consistent_pruning_interval_ms: 300_000,
-            pruner_delay_ms: 120_000,
-            consistent_range: None,
-        }
-    }
-}
-
 impl From<IngestionConfig> for IngestionLayer {
     fn from(config: IngestionConfig) -> Self {
         Self {
             checkpoint_buffer_size: Some(config.checkpoint_buffer_size),
             ingest_concurrency: Some(config.ingest_concurrency),
             retry_interval_ms: Some(config.retry_interval_ms),
-            extra: Default::default(),
-        }
-    }
-}
-
-impl From<ConsistencyConfig> for ConsistencyLayer {
-    fn from(config: ConsistencyConfig) -> Self {
-        Self {
-            consistent_pruning_interval_ms: Some(config.consistent_pruning_interval_ms),
-            pruner_delay_ms: Some(config.pruner_delay_ms),
-            consistent_range: config.consistent_range,
             extra: Default::default(),
         }
     }
@@ -527,6 +454,7 @@ impl From<PrunerConfig> for PrunerLayer {
             delay_ms: Some(config.delay_ms),
             retention: Some(config.retention),
             max_chunk_size: Some(config.max_chunk_size),
+            prune_concurrency: Some(config.prune_concurrency),
             extra: Default::default(),
         }
     }
@@ -560,55 +488,8 @@ mod tests {
     }
 
     #[test]
-    fn merge_simple() {
-        let this = ConsistencyLayer {
-            consistent_pruning_interval_ms: None,
-            pruner_delay_ms: Some(2000),
-            consistent_range: Some(3000),
-            extra: Default::default(),
-        };
-
-        let that = ConsistencyLayer {
-            consistent_pruning_interval_ms: Some(1000),
-            pruner_delay_ms: None,
-            consistent_range: Some(4000),
-            extra: Default::default(),
-        };
-
-        let this_then_that = this.clone().merge(that.clone());
-        let that_then_this = that.clone().merge(this.clone());
-
-        assert_matches!(
-            this_then_that,
-            ConsistencyLayer {
-                consistent_pruning_interval_ms: Some(1000),
-                pruner_delay_ms: Some(2000),
-                consistent_range: Some(4000),
-                extra: _,
-            }
-        );
-
-        assert_matches!(
-            that_then_this,
-            ConsistencyLayer {
-                consistent_pruning_interval_ms: Some(1000),
-                pruner_delay_ms: Some(2000),
-                consistent_range: Some(3000),
-                extra: _,
-            }
-        );
-    }
-
-    #[test]
     fn merge_recursive() {
         let this = PipelineLayer {
-            sum_coin_balances: None,
-            sum_obj_types: Some(CommitterLayer {
-                write_concurrency: Some(5),
-                collect_interval_ms: Some(500),
-                watermark_interval_ms: None,
-                extra: Default::default(),
-            }),
             sum_displays: Some(SequentialLayer {
                 committer: Some(CommitterLayer {
                     write_concurrency: Some(10),
@@ -619,17 +500,20 @@ mod tests {
                 checkpoint_lag: Some(100),
                 extra: Default::default(),
             }),
+            sum_packages: None,
+            ev_emit_mod: Some(ConcurrentLayer {
+                committer: Some(CommitterLayer {
+                    write_concurrency: Some(5),
+                    collect_interval_ms: Some(500),
+                    watermark_interval_ms: None,
+                    extra: Default::default(),
+                }),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 
         let that = PipelineLayer {
-            sum_coin_balances: Some(CommitterLayer {
-                write_concurrency: Some(10),
-                collect_interval_ms: None,
-                watermark_interval_ms: Some(1000),
-                extra: Default::default(),
-            }),
-            sum_obj_types: None,
             sum_displays: Some(SequentialLayer {
                 committer: Some(CommitterLayer {
                     write_concurrency: Some(5),
@@ -640,6 +524,16 @@ mod tests {
                 checkpoint_lag: Some(200),
                 extra: Default::default(),
             }),
+            sum_packages: Some(SequentialLayer {
+                committer: Some(CommitterLayer {
+                    write_concurrency: Some(10),
+                    collect_interval_ms: None,
+                    watermark_interval_ms: Some(1000),
+                    extra: Default::default(),
+                }),
+                ..Default::default()
+            }),
+            ev_emit_mod: None,
             ..Default::default()
         };
 
@@ -649,18 +543,6 @@ mod tests {
         assert_matches!(
             this_then_that,
             PipelineLayer {
-                sum_coin_balances: Some(CommitterLayer {
-                    write_concurrency: Some(10),
-                    collect_interval_ms: None,
-                    watermark_interval_ms: Some(1000),
-                    extra: _,
-                }),
-                sum_obj_types: Some(CommitterLayer {
-                    write_concurrency: Some(5),
-                    collect_interval_ms: Some(500),
-                    watermark_interval_ms: None,
-                    extra: _,
-                }),
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(5),
@@ -671,6 +553,26 @@ mod tests {
                     checkpoint_lag: Some(200),
                     extra: _,
                 }),
+                sum_packages: Some(SequentialLayer {
+                    committer: Some(CommitterLayer {
+                        write_concurrency: Some(10),
+                        collect_interval_ms: None,
+                        watermark_interval_ms: Some(1000),
+                        extra: _,
+                    }),
+                    checkpoint_lag: None,
+                    extra: _,
+                }),
+                ev_emit_mod: Some(ConcurrentLayer {
+                    committer: Some(CommitterLayer {
+                        write_concurrency: Some(5),
+                        collect_interval_ms: Some(500),
+                        watermark_interval_ms: None,
+                        extra: _,
+                    }),
+                    pruner: None,
+                    extra: _,
+                }),
                 ..
             },
         );
@@ -678,18 +580,6 @@ mod tests {
         assert_matches!(
             that_then_this,
             PipelineLayer {
-                sum_coin_balances: Some(CommitterLayer {
-                    write_concurrency: Some(10),
-                    collect_interval_ms: None,
-                    watermark_interval_ms: Some(1000),
-                    extra: _,
-                }),
-                sum_obj_types: Some(CommitterLayer {
-                    write_concurrency: Some(5),
-                    collect_interval_ms: Some(500),
-                    watermark_interval_ms: None,
-                    extra: _,
-                }),
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(10),
@@ -698,6 +588,26 @@ mod tests {
                         extra: _,
                     }),
                     checkpoint_lag: Some(100),
+                    extra: _,
+                }),
+                sum_packages: Some(SequentialLayer {
+                    committer: Some(CommitterLayer {
+                        write_concurrency: Some(10),
+                        collect_interval_ms: None,
+                        watermark_interval_ms: Some(1000),
+                        extra: _,
+                    }),
+                    checkpoint_lag: None,
+                    extra: _,
+                }),
+                ev_emit_mod: Some(ConcurrentLayer {
+                    committer: Some(CommitterLayer {
+                        write_concurrency: Some(5),
+                        collect_interval_ms: Some(500),
+                        watermark_interval_ms: None,
+                        extra: _,
+                    }),
+                    pruner: None,
                     extra: _,
                 }),
                 ..
@@ -712,6 +622,7 @@ mod tests {
             delay_ms: Some(100),
             retention: Some(200),
             max_chunk_size: Some(300),
+            prune_concurrency: Some(1),
             extra: Default::default(),
         };
 
@@ -720,6 +631,7 @@ mod tests {
             delay_ms: None,
             retention: Some(500),
             max_chunk_size: Some(600),
+            prune_concurrency: Some(2),
             extra: Default::default(),
         };
 
@@ -733,6 +645,7 @@ mod tests {
                 delay_ms: Some(100),
                 retention: Some(500),
                 max_chunk_size: Some(600),
+                prune_concurrency: Some(2),
                 extra: _,
             },
         );
@@ -744,6 +657,7 @@ mod tests {
                 delay_ms: Some(100),
                 retention: Some(500),
                 max_chunk_size: Some(300),
+                prune_concurrency: Some(1),
                 extra: _,
             },
         );
@@ -831,6 +745,7 @@ mod tests {
                 delay_ms: 200,
                 retention: 300,
                 max_chunk_size: 400,
+                prune_concurrency: 1,
             }),
         };
 
@@ -847,6 +762,7 @@ mod tests {
                     delay_ms: 200,
                     retention: 300,
                     max_chunk_size: 400,
+                    prune_concurrency: 1,
                 }),
             },
         );

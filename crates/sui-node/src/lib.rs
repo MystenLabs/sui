@@ -17,17 +17,18 @@ use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use sui_core::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
+use sui_core::authority::authority_store_tables::{
+    AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
+};
+use sui_core::authority::backpressure::BackpressureManager;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
-use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
@@ -38,10 +39,12 @@ use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
-use sui_rest_api::RestMetrics;
+use sui_rpc_api::subscription::SubscriptionService;
+use sui_rpc_api::RpcMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
@@ -91,7 +94,7 @@ use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::jsonrpc_index::IndexStore;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
-use sui_core::rest_index::RestIndexStore;
+use sui_core::rpc_index::RpcIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
@@ -218,6 +221,7 @@ mod simulator {
 pub use simulator::set_jwk_injector;
 #[cfg(msim)]
 use simulator::*;
+use sui_core::authority::authority_store_pruner::ObjectsCompactionFilter;
 use sui_core::{
     consensus_handler::ConsensusHandlerInitializer, safe_client::SafeClientMetricsBase,
     validator_tx_finalizer::ValidatorTxFinalizer,
@@ -228,7 +232,7 @@ pub struct SuiNode {
     config: NodeConfig,
     validator_components: Mutex<Option<ValidatorComponents>>,
     /// The http server responsible for serving JSON-RPC as well as the experimental rest service
-    _http_server: Option<tokio::task::JoinHandle<()>>,
+    _http_server: Option<sui_http::ServerHandle>,
     state: Arc<AuthorityState>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
@@ -248,6 +252,8 @@ pub struct SuiNode {
     /// Broadcast channel to notify state-sync for new validator peers.
     trusted_peer_change_tx: watch::Sender<TrustedPeerChangeEvent>,
 
+    backpressure_manager: Arc<BackpressureManager>,
+
     _db_checkpoint_handle: Option<tokio::sync::broadcast::Sender<()>>,
 
     #[cfg(msim)]
@@ -264,6 +270,8 @@ pub struct SuiNode {
     // TODO: Eventually we can make this auth aggregator a shared reference so that this
     // update will automatically propagate to other uses.
     auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
+
+    subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -464,9 +472,25 @@ impl SuiNode {
             None,
         ));
 
+        let mut pruner_db = None;
+        if config
+            .authority_store_pruning_config
+            .enable_compaction_filter
+        {
+            pruner_db = Some(Arc::new(AuthorityPrunerTables::open(
+                &config.db_path().join("store"),
+            )));
+        }
+        let compaction_filter = pruner_db
+            .clone()
+            .map(|db| ObjectsCompactionFilter::new(db, &prometheus_registry));
+
         // By default, only enable write stall on validators for perpetual db.
         let enable_write_stall = config.enable_db_write_stall.unwrap_or(is_validator);
-        let perpetual_tables_options = AuthorityPerpetualTablesOptions { enable_write_stall };
+        let perpetual_tables_options = AuthorityPerpetualTablesOptions {
+            enable_write_stall,
+            compaction_filter,
+        };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
             Some(perpetual_tables_options),
@@ -474,6 +498,10 @@ impl SuiNode {
         let is_genesis = perpetual_tables
             .database_is_empty()
             .expect("Database read should not fail at init.");
+
+        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+        let backpressure_manager =
+            BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
 
         let store =
             AuthorityStore::open(perpetual_tables, &genesis, &config, &prometheus_registry).await?;
@@ -490,9 +518,9 @@ impl SuiNode {
 
         let cache_traits = build_execution_cache(
             &config.execution_cache,
-            &epoch_start_configuration,
             &prometheus_registry,
             &store,
+            backpressure_manager.clone(),
         );
 
         let auth_agg = {
@@ -559,7 +587,6 @@ impl SuiNode {
 
         info!("creating checkpoint store");
 
-        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         checkpoint_store.insert_genesis_checkpoint(
             genesis.checkpoint(),
             genesis.checkpoint_contents().clone(),
@@ -588,12 +615,9 @@ impl SuiNode {
             None
         };
 
-        let rest_index = if is_full_node
-            && config.enable_experimental_rest_api
-            && config.enable_index_processing
-        {
-            Some(Arc::new(RestIndexStore::new(
-                config.db_path().join("rest_index"),
+        let rpc_index = if is_full_node && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
+            Some(Arc::new(RpcIndexStore::new(
+                &config.db_path(),
                 &store,
                 &checkpoint_store,
                 &epoch_store,
@@ -604,8 +628,6 @@ impl SuiNode {
         };
 
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
-        // It's ok if the value is already set due to data races.
-        let _ = CHAIN_IDENTIFIER.set(chain_identifier);
 
         info!("creating archive reader");
         // Create network
@@ -655,8 +677,12 @@ impl SuiNode {
 
         info!("start snapshot upload");
         // Start uploading state snapshot to remote store
-        let state_snapshot_handle =
-            Self::start_state_snapshot(&config, &prometheus_registry, checkpoint_store.clone())?;
+        let state_snapshot_handle = Self::start_state_snapshot(
+            &config,
+            &prometheus_registry,
+            checkpoint_store.clone(),
+            chain_identifier,
+        )?;
 
         // Start uploading db checkpoints to remote store
         info!("start db checkpoint");
@@ -696,7 +722,7 @@ impl SuiNode {
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
-            rest_index,
+            rpc_index,
             checkpoint_store.clone(),
             &prometheus_registry,
             genesis.objects(),
@@ -705,6 +731,8 @@ impl SuiNode {
             config.indirect_objects_threshold,
             archive_readers,
             validator_tx_finalizer,
+            chain_identifier,
+            pruner_db,
         )
         .await;
         // ensure genesis txn was executed
@@ -762,7 +790,7 @@ impl SuiNode {
             None
         };
 
-        let http_server = build_http_server(
+        let (http_server, subscription_service_checkpoint_sender) = build_http_server(
             state.clone(),
             state_sync_store,
             &transaction_orchestrator.clone(),
@@ -775,7 +803,6 @@ impl SuiNode {
 
         let accumulator = Arc::new(StateAccumulator::new(
             cache_traits.accumulator_store.clone(),
-            &epoch_store,
             StateAccumulatorMetrics::new(&prometheus_registry),
         ));
 
@@ -814,6 +841,7 @@ impl SuiNode {
                 state_sync_handle.clone(),
                 randomness_handle.clone(),
                 Arc::downgrade(&accumulator),
+                backpressure_manager.clone(),
                 connection_monitor_status.clone(),
                 &registry_service,
                 sui_node_metrics.clone(),
@@ -848,6 +876,7 @@ impl SuiNode {
             end_of_epoch_channel,
             connection_monitor_status,
             trusted_peer_change_tx,
+            backpressure_manager,
 
             _db_checkpoint_handle: db_checkpoint_handle,
 
@@ -859,6 +888,7 @@ impl SuiNode {
             shutdown_channel_tx: shutdown_channel,
 
             auth_agg,
+            subscription_service_checkpoint_sender,
         };
 
         info!("SuiNode started!");
@@ -955,6 +985,7 @@ impl SuiNode {
         config: &NodeConfig,
         prometheus_registry: &Registry,
         checkpoint_store: Arc<CheckpointStore>,
+        chain_identifier: ChainIdentifier,
     ) -> Result<Option<tokio::sync::broadcast::Sender<()>>> {
         if let Some(remote_store_config) = &config.state_snapshot_write_config.object_store_config {
             let snapshot_uploader = StateSnapshotUploader::new(
@@ -964,6 +995,7 @@ impl SuiNode {
                 60,
                 prometheus_registry,
                 checkpoint_store,
+                chain_identifier,
             )?;
             Ok(Some(snapshot_uploader.start()))
         } else {
@@ -1192,6 +1224,7 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         randomness_handle: randomness::Handle,
         accumulator: Weak<StateAccumulator>,
+        backpressure_manager: Arc<BackpressureManager>,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
@@ -1264,6 +1297,7 @@ impl SuiNode {
             consensus_manager,
             consensus_store_pruner,
             accumulator,
+            backpressure_manager,
             validator_server_handle,
             validator_overload_monitor_handle,
             checkpoint_metrics,
@@ -1284,13 +1318,14 @@ impl SuiNode {
         consensus_manager: ConsensusManager,
         consensus_store_pruner: ConsensusStorePruner,
         accumulator: Weak<StateAccumulator>,
+        backpressure_manager: Arc<BackpressureManager>,
         validator_server_handle: JoinHandle<Result<()>>,
         validator_overload_monitor_handle: Option<JoinHandle<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Result<ValidatorComponents> {
-        let (checkpoint_service, checkpoint_service_tasks) = Self::start_checkpoint_service(
+        let checkpoint_service = Self::start_checkpoint_service(
             config,
             consensus_adapter.clone(),
             checkpoint_store,
@@ -1344,6 +1379,7 @@ impl SuiNode {
             epoch_store.clone(),
             low_scoring_authorities,
             throughput_calculator,
+            backpressure_manager,
         );
 
         consensus_manager
@@ -1360,6 +1396,8 @@ impl SuiNode {
                 ),
             )
             .await;
+
+        let checkpoint_service_tasks = checkpoint_service.spawn().await;
 
         if epoch_store.authenticator_state_enabled() {
             Self::start_jwk_updater(
@@ -1392,7 +1430,7 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         accumulator: Weak<StateAccumulator>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
-    ) -> (Arc<CheckpointService>, JoinSet<()>) {
+    ) -> Arc<CheckpointService> {
         let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
         let epoch_duration_ms = epoch_store.epoch_start_state().epoch_duration_ms();
 
@@ -1417,7 +1455,7 @@ impl SuiNode {
         let max_checkpoint_size_bytes =
             epoch_store.protocol_config().max_checkpoint_size_bytes() as usize;
 
-        CheckpointService::spawn(
+        CheckpointService::build(
             state.clone(),
             checkpoint_store,
             epoch_store,
@@ -1482,7 +1520,6 @@ impl SuiNode {
         let tls_config = sui_tls::create_rustls_server_config(
             config.network_key_pair().copy().private(),
             SUI_TLS_SERVER_NAME.to_string(),
-            sui_tls::AllowAll,
         );
         let server = server_builder
             .bind(config.network_address(), Some(tls_config))
@@ -1556,8 +1593,10 @@ impl SuiNode {
                 self.checkpoint_store.clone(),
                 self.state.clone(),
                 accumulator.clone(),
+                self.backpressure_manager.clone(),
                 self.config.checkpoint_executor_config.clone(),
                 checkpoint_executor_metrics.clone(),
+                self.subscription_service_checkpoint_sender.clone(),
             );
 
             let run_with_range = self.config.run_with_range;
@@ -1732,7 +1771,6 @@ impl SuiNode {
                     .metrics();
                 let new_accumulator = Arc::new(StateAccumulator::new(
                     self.state.get_accumulator_store().clone(),
-                    &new_epoch_store,
                     accumulator_metrics,
                 ));
                 let weak_accumulator = Arc::downgrade(&new_accumulator);
@@ -1754,6 +1792,7 @@ impl SuiNode {
                             consensus_manager,
                             consensus_store_pruner,
                             weak_accumulator,
+                            self.backpressure_manager.clone(),
                             validator_server_handle,
                             validator_overload_monitor_handle,
                             checkpoint_metrics,
@@ -1784,7 +1823,6 @@ impl SuiNode {
                     .metrics();
                 let new_accumulator = Arc::new(StateAccumulator::new(
                     self.state.get_accumulator_store().clone(),
-                    &new_epoch_store,
                     accumulator_metrics,
                 ));
                 let weak_accumulator = Arc::downgrade(&new_accumulator);
@@ -1803,6 +1841,7 @@ impl SuiNode {
                             self.state_sync_handle.clone(),
                             self.randomness_handle.clone(),
                             weak_accumulator,
+                            self.backpressure_manager.clone(),
                             self.connection_monitor_status.clone(),
                             &self.registry_service,
                             self.metrics.clone(),
@@ -1976,8 +2015,8 @@ fn build_kv_store(
         )
     })?;
 
-    let network_str = match state.get_chain_identifier().map(|c| c.chain()) {
-        Some(Chain::Mainnet) => "/mainnet",
+    let network_str = match state.get_chain_identifier().chain() {
+        Chain::Mainnet => "/mainnet",
         _ => {
             info!("using local db only for kv store");
             return Ok(Arc::new(db_store));
@@ -2007,10 +2046,13 @@ pub async fn build_http_server(
     prometheus_registry: &Registry,
     _custom_runtime: Option<Handle>,
     software_version: &'static str,
-) -> Result<Option<tokio::task::JoinHandle<()>>> {
+) -> Result<(
+    Option<sui_http::ServerHandle>,
+    Option<tokio::sync::mpsc::Sender<CheckpointData>>,
+)> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
-        return Ok(None);
+        return Ok((None, None));
     }
 
     let mut router = axum::Router::new();
@@ -2065,7 +2107,11 @@ pub async fn build_http_server(
                     reverse_registry_id,
                 )
             } else {
-                sui_json_rpc::name_service::NameServiceConfig::default()
+                match state.get_chain_identifier().chain() {
+                    Chain::Mainnet => sui_json_rpc::name_service::NameServiceConfig::mainnet(),
+                    Chain::Testnet => sui_json_rpc::name_service::NameServiceConfig::testnet(),
+                    Chain::Unknown => sui_json_rpc::name_service::NameServiceConfig::default(),
+                }
             };
 
         server.register_module(IndexerApi::new(
@@ -2085,94 +2131,47 @@ pub async fn build_http_server(
 
     router = router.merge(json_rpc_router);
 
-    if config.enable_experimental_rest_api {
-        let mut rest_service = sui_rest_api::RestService::new(
+    let (subscription_service_checkpoint_sender, subscription_service_handle) =
+        SubscriptionService::build(prometheus_registry);
+    let rpc_router = {
+        let mut rpc_service = sui_rpc_api::RpcService::new(
             Arc::new(RestReadStore::new(state.clone(), store)),
             software_version,
         );
 
-        if let Some(config) = config.rest.clone() {
-            rest_service.with_config(config);
+        if let Some(config) = config.rpc.clone() {
+            rpc_service.with_config(config);
         }
 
-        rest_service.with_metrics(RestMetrics::new(prometheus_registry));
+        rpc_service.with_metrics(RpcMetrics::new(prometheus_registry));
+        rpc_service.with_subscription_service(subscription_service_handle);
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {
-            rest_service.with_executor(transaction_orchestrator.clone())
+            rpc_service.with_executor(transaction_orchestrator.clone())
         }
 
-        router = router.merge(rest_service.into_router());
-    }
-    // TODO: Remove this health check when experimental REST API becomes default
-    // This is a copy of the health check in crates/sui-rest-api/src/health.rs
-    router = router
-        .route("/health", axum::routing::get(health_check_handler))
-        .route_layer(axum::Extension(state));
+        rpc_service.into_router().await
+    };
 
-    let listener = tokio::net::TcpListener::bind(&config.json_rpc_address)
-        .await
-        .unwrap();
-    let addr = listener.local_addr().unwrap();
-
-    router = router.layer(axum::middleware::from_fn(server_timing_middleware));
-
-    let handle = tokio::spawn(async move {
-        axum::serve(
-            listener,
-            router.into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .await
-        .unwrap()
-    });
-
-    info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
-
-    Ok(Some(handle))
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct Threshold {
-    pub threshold_seconds: Option<u32>,
-}
-
-async fn health_check_handler(
-    axum::extract::Query(Threshold { threshold_seconds }): axum::extract::Query<Threshold>,
-    axum::Extension(state): axum::Extension<Arc<AuthorityState>>,
-) -> impl axum::response::IntoResponse {
-    if let Some(threshold_seconds) = threshold_seconds {
-        // Attempt to get the latest checkpoint
-        let summary = match state
-            .get_checkpoint_store()
-            .get_highest_executed_checkpoint()
-        {
-            Ok(Some(summary)) => summary,
-            Ok(None) => {
-                warn!("Highest executed checkpoint not found");
-                return (axum::http::StatusCode::SERVICE_UNAVAILABLE, "down");
+    let layers = ServiceBuilder::new()
+        .map_request(|mut request: axum::http::Request<_>| {
+            if let Some(connect_info) = request.extensions().get::<sui_http::ConnectInfo>() {
+                let axum_connect_info = axum::extract::ConnectInfo(connect_info.remote_addr);
+                request.extensions_mut().insert(axum_connect_info);
             }
-            Err(err) => {
-                warn!("Failed to retrieve highest executed checkpoint: {:?}", err);
-                return (axum::http::StatusCode::SERVICE_UNAVAILABLE, "down");
-            }
-        };
+            request
+        })
+        .layer(axum::middleware::from_fn(server_timing_middleware));
 
-        // Calculate the threshold time based on the provided threshold_seconds
-        let latest_chain_time = summary.timestamp();
-        let threshold =
-            std::time::SystemTime::now() - Duration::from_secs(threshold_seconds as u64);
+    router = router.merge(rpc_router).layer(layers);
 
-        // Check if the latest checkpoint is within the threshold
-        if latest_chain_time < threshold {
-            warn!(
-                ?latest_chain_time,
-                ?threshold,
-                "failing healthcheck due to checkpoint lag"
-            );
-            return (axum::http::StatusCode::SERVICE_UNAVAILABLE, "down");
-        }
-    }
-    // if health endpoint is responding and no threshold is given, respond success
-    (axum::http::StatusCode::OK, "up")
+    let handle = sui_http::Builder::new()
+        .serve(&config.json_rpc_address, router)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    info!(local_addr =? handle.local_addr(), "Sui JSON-RPC server listening on {}", handle.local_addr());
+
+    Ok((Some(handle), Some(subscription_service_checkpoint_sender)))
 }
 
 #[cfg(not(test))]

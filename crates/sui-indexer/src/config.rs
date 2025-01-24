@@ -142,7 +142,13 @@ pub struct IngestionConfig {
 
     /// Whether to delete processed checkpoint files from the local directory,
     /// when running Fullnode-colocated indexer.
-    #[arg(long, default_value_t = true)]
+    #[arg(
+        long,
+        default_value_t = true,
+        default_missing_value = "true",
+        num_args = 0..=1,
+        require_equals = false,
+    )]
     pub gc_checkpoint_files: bool,
 }
 

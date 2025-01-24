@@ -26,11 +26,12 @@ use sui_types::execution_status::{
     TypeArgumentError,
 };
 use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
-use sui_types::messages_checkpoint::CertifiedCheckpointSummary;
+use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointCommitment};
+use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
-use sui_types::transaction::{SenderSignedData, TransactionData};
+use sui_types::transaction::{GenesisObject, SenderSignedData, TransactionData};
 use sui_types::type_input::{StructInput, TypeInput};
 use sui_types::{
     base_types::MoveObjectType_,
@@ -204,6 +205,9 @@ fn get_registry() -> Result<Registry> {
         .trace_type::<ObjectInfoRequestKind>(&samples)
         .unwrap();
     tracer.trace_type::<TransactionKind>(&samples).unwrap();
+    tracer
+        .trace_type::<ConsensusDeterminedVersionAssignments>(&samples)
+        .unwrap();
     tracer.trace_type::<MoveObjectType>(&samples).unwrap();
     tracer.trace_type::<MoveObjectType_>(&samples).unwrap();
     tracer
@@ -275,6 +279,13 @@ fn get_registry() -> Result<Registry> {
         .unwrap();
 
     tracer.trace_type::<CheckpointData>(&samples).unwrap();
+
+    tracer.trace_type::<TransactionData>(&samples).unwrap();
+    tracer.trace_type::<GenesisObject>(&samples).unwrap();
+    tracer.trace_type::<CheckpointCommitment>(&samples).unwrap();
+    tracer
+        .trace_type::<sui_types::object::Authenticator>(&samples)
+        .unwrap();
 
     tracer.registry()
 }

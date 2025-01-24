@@ -4357,6 +4357,54 @@ to_raw
 from_raw
 	public fun
 	0x1::uq32_32
+UQ64_64
+	public struct
+	0x1::uq64_64
+from_quotient
+	public fun
+	0x1::uq64_64
+from_int
+	public fun
+	0x1::uq64_64
+add
+	public fun
+	0x1::uq64_64
+sub
+	public fun
+	0x1::uq64_64
+mul
+	public fun
+	0x1::uq64_64
+div
+	public fun
+	0x1::uq64_64
+to_int
+	public fun
+	0x1::uq64_64
+int_mul
+	public fun
+	0x1::uq64_64
+int_div
+	public fun
+	0x1::uq64_64
+le
+	public fun
+	0x1::uq64_64
+lt
+	public fun
+	0x1::uq64_64
+ge
+	public fun
+	0x1::uq64_64
+gt
+	public fun
+	0x1::uq64_64
+to_raw
+	public fun
+	0x1::uq64_64
+from_raw
+	public fun
+	0x1::uq64_64
 empty
 	public fun
 	0x1::vector

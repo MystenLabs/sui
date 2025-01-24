@@ -6,6 +6,7 @@ use crate::{
     client_ptb::ptb::PTB,
     displays::Pretty,
     key_identity::{get_identity_address, KeyIdentity},
+    upgrade_compatibility::check_compatibility,
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
 use std::{
@@ -42,11 +43,11 @@ use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Coin, DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, DynamicFieldPage,
-    SuiCoinMetadata, SuiData, SuiExecutionStatus, SuiObjectData, SuiObjectDataOptions,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData, SuiProtocolConfigValue, SuiRawData,
-    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    Coin, DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, DynamicFieldInfo,
+    DynamicFieldPage, SuiCoinMetadata, SuiData, SuiExecutionStatus, SuiObjectData,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData,
+    SuiProtocolConfigValue, SuiRawData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
@@ -66,7 +67,6 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
-    dynamic_field::DynamicFieldInfo,
     error::SuiError,
     gas::GasCostSummary,
     gas_coin::GasCoin,
@@ -94,11 +94,14 @@ use tabled::{
     },
 };
 
+use sui_types::digests::ChainIdentifier;
 use tracing::{debug, info};
 
 #[path = "unit_tests/profiler_tests.rs"]
 #[cfg(test)]
 mod profiler_tests;
+
+static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 /// Only to be used within CLI
 pub const GAS_SAFE_OVERHEAD: u64 = 1000;
@@ -458,6 +461,10 @@ pub enum SuiClientCommands {
         #[clap(flatten)]
         opts: OptsWithGas,
 
+        /// Verify package compatibility locally before publishing.
+        #[clap(long)]
+        verify_compatibility: bool,
+
         /// Publish the package without checking whether compiling dependencies from source results
         /// in bytecode matching the dependencies found on-chain.
         #[clap(long)]
@@ -664,7 +671,7 @@ impl OptsWithGas {
     }
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 struct FaucetResponse {
     error: Option<String>,
 }
@@ -865,6 +872,7 @@ impl SuiClientCommands {
                 upgrade_capability,
                 build_config,
                 skip_dependency_verification,
+                verify_compatibility,
                 with_unpublished_dependencies,
                 opts,
             } => {
@@ -872,6 +880,21 @@ impl SuiClientCommands {
                 let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
                 let chain_id = client.read_api().get_chain_identifier().await.ok();
+                let protocol_version = client
+                    .read_api()
+                    .get_protocol_config(None)
+                    .await?
+                    .protocol_version;
+                let protocol_config = ProtocolConfig::get_for_version(
+                    protocol_version,
+                    match chain_id
+                        .as_ref()
+                        .and_then(ChainIdentifier::from_chain_short_id)
+                    {
+                        Some(chain_id) => chain_id.chain(),
+                        None => Chain::Unknown,
+                    },
+                );
 
                 check_protocol_version_and_warn(&client).await?;
 
@@ -916,8 +939,26 @@ impl SuiClientCommands {
                         previous_id,
                     )?;
                 }
-                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
-                    upgrade_result?;
+                let (
+                    package_id,
+                    compiled_modules,
+                    dependencies,
+                    package_digest,
+                    upgrade_policy,
+                    compiled_module,
+                ) = upgrade_result?;
+
+                if verify_compatibility {
+                    check_compatibility(
+                        &client,
+                        package_id,
+                        compiled_module,
+                        package_path,
+                        upgrade_policy,
+                        protocol_config,
+                    )
+                    .await?;
+                }
 
                 let tx_kind = client
                     .transaction_builder()
@@ -1443,6 +1484,10 @@ impl SuiClientCommands {
             SuiClientCommands::Faucet { address, url } => {
                 let address = get_identity_address(address, context)?;
                 let url = if let Some(url) = url {
+                    ensure!(
+                        !url.starts_with("https://faucet.testnet.sui.io"),
+                        "For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}"
+                    );
                     url
                 } else {
                     let active_env = context.config.get_active_env();
@@ -1450,7 +1495,9 @@ impl SuiClientCommands {
                     if let Ok(env) = active_env {
                         let network = match env.rpc.as_str() {
                             SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v1/gas",
-                            SUI_TESTNET_URL => "https://faucet.testnet.sui.io/v1/gas",
+                            SUI_TESTNET_URL => {
+                                bail!("For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}");
+                            }
                             SUI_LOCAL_NETWORK_URL | SUI_LOCAL_NETWORK_URL_0 => "http://127.0.0.1:9123/gas",
                             _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
                         };
@@ -2552,7 +2599,8 @@ pub async fn request_tokens_from_faucet(
     let client = reqwest::Client::new();
     let resp = client
         .post(&url)
-        .header("Content-Type", "application/json")
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .header(http::header::USER_AGENT, USER_AGENT)
         .json(&json_body)
         .send()
         .await?;
@@ -2565,6 +2613,12 @@ pub async fn request_tokens_from_faucet(
                 bail!("Faucet request was unsuccessful: {err}")
             } else {
                 println!("Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.");
+            }
+        }
+        StatusCode::BAD_REQUEST => {
+            let faucet_resp: FaucetResponse = resp.json().await?;
+            if let Some(err) = faucet_resp.error {
+                bail!("Faucet request was unsuccessful. {err}");
             }
         }
         StatusCode::TOO_MANY_REQUESTS => {
@@ -2763,18 +2817,20 @@ pub async fn estimate_gas_budget(
     sponsor: Option<SuiAddress>,
 ) -> Result<u64, anyhow::Error> {
     let client = context.get_client().await?;
-    let Ok(SuiClientCommandResult::DryRun(dry_run)) =
-        execute_dry_run(context, signer, kind, None, gas_price, gas_payment, sponsor).await
-    else {
-        bail!("Could not automatically determine the gas budget. Please supply one using the --gas-budget flag.")
-    };
-
-    let rgp = client.read_api().get_reference_gas_price().await?;
-
-    Ok(estimate_gas_budget_from_gas_cost(
-        dry_run.effects.gas_cost_summary(),
-        rgp,
-    ))
+    let dry_run =
+        execute_dry_run(context, signer, kind, None, gas_price, gas_payment, sponsor).await;
+    if let Ok(SuiClientCommandResult::DryRun(dry_run)) = dry_run {
+        let rgp = client.read_api().get_reference_gas_price().await?;
+        return Ok(estimate_gas_budget_from_gas_cost(
+            dry_run.effects.gas_cost_summary(),
+            rgp,
+        ));
+    } else {
+        bail!(
+            "Could not determine the gas budget. Error: {}",
+            dry_run.unwrap_err()
+        )
+    }
 }
 
 pub fn estimate_gas_budget_from_gas_cost(

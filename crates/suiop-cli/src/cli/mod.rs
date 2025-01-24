@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod ci;
+pub mod ci;
 pub mod docker;
 mod env;
 mod iam;

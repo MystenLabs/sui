@@ -17,9 +17,7 @@ module test::return_expression {
         // and top comment
         return; // another trailing
 
-        return {
-            a + b
-        };
+        return { a + b };
 
         return vector[
             first_return_value,
@@ -31,9 +29,7 @@ module test::return_expression {
             do_something_very_very_nasty_and_its_super_long_too_hahahahaa()
         } else return;
 
-        return ({
-                a + b
-            }, first_return_value, second_return_value);
+        return ({ a + b }, first_return_value, second_return_value);
 
         return if (some_value) {
             some_value

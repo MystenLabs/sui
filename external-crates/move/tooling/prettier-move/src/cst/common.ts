@@ -5,7 +5,7 @@ import { Node } from '..';
 import { MoveOptions, printFn, treeFn } from '../printer';
 import { AstPath, doc, Doc } from 'prettier';
 import { list, printIdentifier, shouldBreakFirstChild } from '../utilities';
-const { group, ifBreak, softline, indent, join, line } = doc.builders;
+const { group, join, line } = doc.builders;
 
 /**
  * Creates a callback function to print common nodes.
@@ -42,6 +42,8 @@ export default function (path: AstPath<Node>): treeFn | null {
 			return printBindUnpack;
 		case Common.BindFields:
 			return printBindFields;
+		case Common.MutBindField:
+			return printMutBindField;
 		case Common.BindField:
 			return printBindField;
 		case Common.BindList:
@@ -58,6 +60,12 @@ export default function (path: AstPath<Node>): treeFn | null {
 			return printBindPositionalFields;
 		case Common.BindVar:
 			return printBindVar;
+		case Common.MutBindVar:
+			return printMutBindVar;
+		case Common.ImmRef:
+			return printImmRef;
+		case Common.MutRef:
+			return printMutRef;
 
 		case Common.Label:
 			return printLabel;
@@ -99,6 +107,7 @@ export enum Common {
 
 	BindUnpack = 'bind_unpack',
 	BindFields = 'bind_fields',
+	MutBindField = 'mut_bind_field',
 	BindField = 'bind_field',
 	BindList = 'bind_list',
 	BindNamedFields = 'bind_named_fields',
@@ -107,7 +116,9 @@ export enum Common {
 	AtBind = 'at_bind',
 	BindPositionalFields = 'bind_positional_fields',
 	BindVar = 'bind_var',
-	LambdaBindings = 'lambda_bindings',
+	MutBindVar = 'mut_bind_var',
+	ImmRef = 'imm_ref',
+	MutRef = 'mut_ref',
 
 	Label = 'label',
 	Alias = 'alias',
@@ -137,10 +148,9 @@ export function printModuleAccess(path: AstPath<Node>, _opt: MoveOptions, print:
  * Print `ref_type` node.
  */
 export function printRefType(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
-	const ref = path.node.child(0)!.text == '&' ? ['&'] : ['&mut '];
 	return group([
-		...ref,
-		path.call(print, 'nonFormattingChildren', 0), // type
+		path.call(print, 'nonFormattingChildren', 0), // ref_type
+		path.call(print, 'nonFormattingChildren', 1), // type
 	]);
 }
 
@@ -219,13 +229,14 @@ function printBindField(path: AstPath<Node>, _opt: MoveOptions, print: printFn):
 
 	// if there's only one child, we can just print it
 	// if there're two, they will be joined
-	return join(
-		': ',
-		path.map((path) => {
-			if (path.node.type == Common.BindVar) return print(path);
-			return path.node.previousSibling?.type == 'mut' ? ['mut ', print(path)] : print(path);
-		}, 'nonFormattingChildren'),
-	);
+	return join(': ', path.map(print, 'nonFormattingChildren'));
+}
+
+/**
+ * Print `mut_bind_field` node.
+ */
+function printMutBindField(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
+	return ['mut ', path.call(print, 'nonFormattingChildren', 0)];
 }
 
 /**
@@ -287,12 +298,30 @@ function printBindPositionalFields(path: AstPath<Node>, options: MoveOptions, pr
 
 /**
  * Print `bind_var` node.
- *
- * If it has `mut` before the value, we print it. `mut` is not a named child.
  */
 function printBindVar(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
-	let isMut = path.node.previousSibling?.type == 'mut';
-	return [isMut ? ['mut '] : '', path.call(print, 'nonFormattingChildren', 0)];
+	return path.call(print, 'nonFormattingChildren', 0);
+}
+
+/**
+ * Print `mut_bind_var` node.
+ */
+function printMutBindVar(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
+	return ['mut ', path.call(print, 'nonFormattingChildren', 0)];
+}
+
+/**
+ * Print `imm_ref` node.
+ */
+function printImmRef(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
+	return '&';
+}
+
+/**
+ * Print `mut_ref` node.
+ */
+function printMutRef(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
+	return '&mut ';
 }
 
 /**

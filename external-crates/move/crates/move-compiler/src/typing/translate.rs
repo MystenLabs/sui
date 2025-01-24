@@ -8,7 +8,7 @@ use crate::{
     editions::{FeatureGate, Flavor},
     expansion::ast::{
         AbilitySet, Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend,
-        ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, TargetKind, Value_, Visibility,
+        ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
     },
     ice, ice_assert,
     naming::ast::{
@@ -16,8 +16,8 @@ use crate::{
         TParamID, Type, TypeName, TypeName_, Type_,
     },
     parser::ast::{
-        Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, UnaryOp_,
-        VariantName,
+        Ability_, BinOp, BinOp_, ConstantName, DatatypeName, DocComment, Field, FunctionName,
+        TargetKind, UnaryOp_, VariantName,
     },
     shared::{
         ide::{DotAutocompleteInfo, IDEAnnotation, MacroCallInfo},
@@ -256,6 +256,7 @@ fn module<'env>(
     assert!(context.new_friends.is_empty());
 
     let N::ModuleDefinition {
+        doc,
         loc,
         warning_filter,
         package_name,
@@ -328,6 +329,7 @@ fn module<'env>(
 
     let use_funs = context.finish_use_funs_scope(&used_methods);
     let typed_module = T::ModuleDefinition {
+        doc,
         loc,
         warning_filter,
         package_name,
@@ -365,6 +367,7 @@ fn finalize_ide_info(context: &mut Context) {
 
 fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Function {
     let N::Function {
+        doc,
         warning_filter,
         index,
         attributes,
@@ -397,6 +400,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     context.in_macro_function = false;
     context.pop_warning_filter_scope();
     T::Function {
+        doc,
         warning_filter,
         index,
         attributes,
@@ -471,6 +475,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
     assert!(context.constraints.is_empty());
 
     let N::Constant {
+        doc,
         warning_filter,
         index,
         attributes,
@@ -513,6 +518,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
     context.pop_warning_filter_scope();
 
     T::Constant {
+        doc,
         warning_filter,
         index,
         attributes,
@@ -791,9 +797,10 @@ fn struct_def(context: &mut Context, _sloc: Loc, s: &mut N::StructDefinition) {
     };
 
     // instantiate types and check constraints
-    for (_field_loc, _field, idx_ty) in field_map.iter() {
-        let loc = idx_ty.1.loc;
-        let inst_ty = core::instantiate(context, idx_ty.1.clone());
+    for (_field_loc, _field, idx_doc_ty) in field_map.iter() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
+        let loc = ty.loc;
+        let inst_ty = core::instantiate(context, ty.clone());
         context.add_base_type_constraint(loc, "Invalid field type", inst_ty.clone());
     }
     core::solve_constraints(context);
@@ -807,9 +814,10 @@ fn struct_def(context: &mut Context, _sloc: Loc, s: &mut N::StructDefinition) {
             .iter()
             .map(|tp| sp(tp.param.user_specified_name.loc, Type_::Anything)),
     );
-    for (_field_loc, _field, idx_ty) in field_map.iter() {
-        let loc = idx_ty.1.loc;
-        let subst_ty = core::subst_tparams(tparam_subst, idx_ty.1.clone());
+    for (_field_loc, _field, idx_doc_ty) in field_map.iter() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
+        let loc = ty.loc;
+        let subst_ty = core::subst_tparams(tparam_subst, ty.clone());
         for declared_ability in declared_abilities {
             let required = declared_ability.value.requires();
             let msg = format!(
@@ -822,8 +830,9 @@ fn struct_def(context: &mut Context, _sloc: Loc, s: &mut N::StructDefinition) {
     }
     core::solve_constraints(context);
 
-    for (_field_loc, _field_, idx_ty) in field_map.iter_mut() {
-        expand::type_(context, &mut idx_ty.1);
+    for (_field_loc, _field_, idx_doc_ty) in field_map.iter_mut() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
+        expand::type_(context, ty);
     }
     check_type_params_usage(context, &s.type_parameters, field_map);
     context.pop_warning_filter_scope();
@@ -862,9 +871,10 @@ fn variant_def(
     };
 
     // instantiate types and check constraints
-    for (_field_loc, _field, idx_ty) in field_map.iter() {
-        let loc = idx_ty.1.loc;
-        let inst_ty = core::instantiate(context, idx_ty.1.clone());
+    for (_field_loc, _field, idx_doc_ty) in field_map.iter() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
+        let loc = ty.loc;
+        let inst_ty = core::instantiate(context, ty.clone());
         context.add_base_type_constraint(loc, "Invalid field type", inst_ty.clone());
     }
     core::solve_constraints(context);
@@ -877,9 +887,10 @@ fn variant_def(
             .iter()
             .map(|tp| sp(tp.param.user_specified_name.loc, Type_::Anything)),
     );
-    for (_field_loc, _field, idx_ty) in field_map.iter() {
-        let loc = idx_ty.1.loc;
-        let subst_ty = core::subst_tparams(tparam_subst, idx_ty.1.clone());
+    for (_field_loc, _field, idx_doc_ty) in field_map.iter() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
+        let loc = ty.loc;
+        let subst_ty = core::subst_tparams(tparam_subst, ty.clone());
         for declared_ability in enum_abilities {
             let required = declared_ability.value.requires();
             let msg = format!(
@@ -892,23 +903,24 @@ fn variant_def(
     }
     core::solve_constraints(context);
 
-    for (_field_loc, _field_, idx_ty) in field_map.iter_mut() {
-        expand::type_(context, &mut idx_ty.1);
+    for (_field_loc, _field_, idx_doc_ty) in field_map.iter_mut() {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
+        expand::type_(context, ty);
     }
     field_map
         .into_iter()
-        .map(|(_, _, idx_ty)| idx_ty.clone())
+        .map(|(_, _, (idx, (_, ty)))| (*idx, ty.clone()))
         .collect::<Vec<_>>()
 }
 
 fn check_type_params_usage(
     context: &mut Context,
     type_parameters: &[N::DatatypeTypeParameter],
-    field_map: &Fields<Type>,
+    field_map: &Fields<(DocComment, Type)>,
 ) {
     let has_unresolved = field_map
         .iter()
-        .any(|(_, _, ty)| has_unresolved_error_type(&ty.1));
+        .any(|(_loc, _n, (_idx, (_doc, ty)))| has_unresolved_error_type(ty));
 
     if has_unresolved {
         return;
@@ -923,10 +935,11 @@ fn check_type_params_usage(
         .filter(|ty_param| ty_param.is_phantom)
         .map(|param| param.param.id)
         .collect();
-    for (_, _, idx_ty) in field_map.iter() {
+    for (_loc, _f, idx_doc_ty) in field_map {
+        let (_idx, (_doc, ty)) = idx_doc_ty;
         visit_type_params(
             context,
-            &idx_ty.1,
+            ty,
             ParamPos::FIELD,
             &mut |context, loc, param, pos| {
                 let param_is_phantom = phantom_params.contains(&param.id);
@@ -2972,7 +2985,7 @@ fn add_struct_field_types<T>(
             return fields.map(|f, (idx, x)| (idx, (context.error_type(f.loc()), x)));
         }
     };
-    for (_, f_, _) in &fields_ty {
+    for (_loc, f_, _idx_doc_ty) in &fields_ty {
         if fields.get_(f_).is_none() {
             let msg = format!("Missing {} for field '{}' in '{}::{}'", verb, f_, m, n);
             context.add_diag(diag!(TypeSafety::TooFewArguments, (loc, msg)))
@@ -2987,7 +3000,7 @@ fn add_struct_field_types<T>(
                 ));
                 context.error_type(f.loc())
             }
-            Some((_, fty)) => fty,
+            Some((_idx, (_doc, fty))) => fty,
         };
         (idx, (fty, x))
     })
@@ -3020,7 +3033,7 @@ fn add_variant_field_types<T>(
             }
         }
     };
-    for (_, f_, _) in &fields_ty {
+    for (_loc, f_, _idx_doc_ty) in &fields_ty {
         if fields.get_(f_).is_none() {
             let msg = format!(
                 "Missing {} for field '{}' in '{}::{}::{}'",
@@ -3041,7 +3054,7 @@ fn add_variant_field_types<T>(
                 ));
                 context.error_type(f.loc())
             }
-            Some((_, fty)) => fty,
+            Some((_idx, (_doc, fty))) => fty,
         };
         (idx, (fty, x))
     })
@@ -4054,9 +4067,12 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
     ) = &mut e.exp
     {
         let ConstantInfo {
+            doc: _,
+            index: _,
             attributes,
             defined_loc,
             signature: _,
+            value: _,
         } = context.constant_info(module_ident, constant_name);
         const_name = Some((*defined_loc, *constant_name));
         let has_error_annotation =

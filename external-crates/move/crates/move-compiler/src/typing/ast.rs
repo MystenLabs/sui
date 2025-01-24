@@ -3,22 +3,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
-    expansion::ast::{
-        Address, Attributes, Fields, Friend, ModuleIdent, Mutability, TargetKind, Value, Visibility,
+    diagnostics::{
+        warning_filters::{WarningFilters, WarningFiltersTable},
+        DiagnosticReporter,
     },
+    expansion::ast::{
+        Address, Attributes, Fields, Friend, ModuleIdent, Mutability, Value, Visibility,
+    },
+    ice,
     naming::ast::{
         BlockLabel, EnumDefinition, FunctionSignature, Neighbor, StructDefinition, SyntaxMethods,
         Type, Type_, UseFuns, Var,
     },
     parser::ast::{
-        BinOp, ConstantName, DatatypeName, Field, FunctionName, UnaryOp, VariantName,
-        ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
+        BinOp, ConstantName, DatatypeName, DocComment, Field, FunctionName, TargetKind, UnaryOp,
+        VariantName, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name},
 };
 use move_core_types::parsing::address::NumericalAddress;
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeSet, VecDeque},
@@ -44,6 +49,7 @@ pub struct Program {
 
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
+    pub doc: DocComment,
     pub loc: Loc,
     pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
@@ -78,6 +84,7 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Function {
+    pub doc: DocComment,
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
@@ -100,6 +107,7 @@ pub struct Function {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Constant {
+    pub doc: DocComment,
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
@@ -334,6 +342,37 @@ impl BuiltinFunction_ {
     }
 }
 
+impl Exp {
+    pub fn is_unit(&self, diags: &DiagnosticReporter) -> bool {
+        self.exp.value.is_unit(diags, self.exp.loc)
+    }
+}
+
+impl UnannotatedExp_ {
+    #[growing_stack]
+    pub fn is_unit(&self, diags: &DiagnosticReporter, loc: Loc) -> bool {
+        match &self {
+            Self::Unit { .. } => true,
+            Self::Annotate(inner, _) => inner.is_unit(diags),
+            Self::Block((_, seq)) if seq.is_empty() => {
+                diags.add_diag(ice!((loc, "Unexpected empty block without a value")));
+                false
+            }
+            Self::Block((_, seq)) if seq.len() == 1 => seq[0].value.is_unit(diags),
+            _ => false,
+        }
+    }
+}
+
+impl SequenceItem_ {
+    pub fn is_unit(&self, diags: &DiagnosticReporter) -> bool {
+        match &self {
+            Self::Seq(e) => e.is_unit(diags),
+            Self::Declare(_) | Self::Bind(_, _, _) => false,
+        }
+    }
+}
+
 pub fn explist(loc: Loc, mut es: Vec<Exp>) -> Exp {
     match es.len() {
         0 => {
@@ -416,6 +455,7 @@ impl AstDebug for Program {
 impl AstDebug for ModuleDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let ModuleDefinition {
+            doc,
             loc: _,
             warning_filter,
             package_name,
@@ -432,20 +472,13 @@ impl AstDebug for ModuleDefinition {
             constants,
             functions,
         } = self;
+        doc.ast_debug(w);
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
             w.writeln(format!("{}", n))
         }
         attributes.ast_debug(w);
-        w.writeln(match target_kind {
-            TargetKind::Source {
-                is_root_package: true,
-            } => "root module",
-            TargetKind::Source {
-                is_root_package: false,
-            } => "dependency module",
-            TargetKind::External => "external module",
-        });
+        target_kind.ast_debug(w);
         w.writeln(format!("dependency order #{}", dependency_order));
         for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
             w.write(format!("{mident} is"));
@@ -486,6 +519,7 @@ impl AstDebug for (FunctionName, &Function) {
         let (
             name,
             Function {
+                doc,
                 warning_filter,
                 index,
                 attributes,
@@ -498,6 +532,7 @@ impl AstDebug for (FunctionName, &Function) {
                 body,
             },
         ) = self;
+        doc.ast_debug(w);
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
         w.write("(");
@@ -535,6 +570,7 @@ impl AstDebug for (ConstantName, &Constant) {
         let (
             name,
             Constant {
+                doc,
                 warning_filter,
                 index,
                 attributes,
@@ -543,6 +579,7 @@ impl AstDebug for (ConstantName, &Constant) {
                 value,
             },
         ) = self;
+        doc.ast_debug(w);
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
         w.write(format!("const#{index} {name}:"));

@@ -63,9 +63,11 @@ const address = keypair.getPublicKey().toSuiAddress();
 </TabItem>
 <TabItem value="cli" label="CLI">
 
-```shell
-sui keytool import "TEST_MNEMONIC" ed25519 "m/44'/784'/0'/0'/0'"
-sui client new-address ed25519 "m/44'/784'/0'/0'/0'"
+```sh
+$ sui keytool import "TEST_MNEMONIC" ed25519 "m/44'/784'/0'/0'/0'"
+```
+```sh
+$ sui client new-address ed25519 "m/44'/784'/0'/0'/0'"
 ```
 
 </TabItem>
