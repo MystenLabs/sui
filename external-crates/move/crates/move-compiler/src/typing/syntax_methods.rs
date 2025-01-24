@@ -173,7 +173,6 @@ fn validate_index_syntax_methods(
         index_fn,
         Some(mut_tparam_types),
     );
-    // context.current_module = None;
 
     let index_params = index_ty.params.iter().map(|(_, t1)| t1);
     let mut_params = mut_finfo.signature.parameters.iter().map(|(_, _, ty)| ty);

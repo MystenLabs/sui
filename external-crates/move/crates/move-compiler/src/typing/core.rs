@@ -334,6 +334,7 @@ fn report_unused_use_funs(reporter: &mut DiagnosticReporter, use_funs: &N::UseFu
         let unused = methods.iter().filter(|(_, _, uf)| !uf.used);
         for (_, method, use_fun) in unused {
             let N::UseFun {
+                doc: _,
                 loc,
                 kind,
                 attributes: _,
@@ -647,12 +648,14 @@ impl<'env> ModuleContext<'env> {
                             fields
                                 .iter()
                                 .enumerate()
-                                .map(|(idx, (_, _, (_, t)))| (format!("{}", idx).into(), t.clone()))
+                                .map(|(idx, (_, _, (_, (_, t))))| {
+                                    (format!("{}", idx).into(), t.clone())
+                                })
                                 .collect::<Vec<_>>()
                         } else {
                             fields
                                 .key_cloned_iter()
-                                .map(|(k, (_, t))| (k.value(), t.clone()))
+                                .map(|(k, (_, (_, t)))| (k.value(), t.clone()))
                                 .collect::<Vec<_>>()
                         }
                     }
