@@ -23,7 +23,9 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use sui_core::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
+use sui_core::authority::authority_store_tables::{
+    AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
+};
 use sui_core::authority::backpressure::BackpressureManager;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
@@ -219,6 +221,7 @@ mod simulator {
 pub use simulator::set_jwk_injector;
 #[cfg(msim)]
 use simulator::*;
+use sui_core::authority::authority_store_pruner::ObjectsCompactionFilter;
 use sui_core::{
     consensus_handler::ConsensusHandlerInitializer, safe_client::SafeClientMetricsBase,
     validator_tx_finalizer::ValidatorTxFinalizer,
@@ -469,9 +472,25 @@ impl SuiNode {
             None,
         ));
 
+        let mut pruner_db = None;
+        if config
+            .authority_store_pruning_config
+            .enable_compaction_filter
+        {
+            pruner_db = Some(Arc::new(AuthorityPrunerTables::open(
+                &config.db_path().join("store"),
+            )));
+        }
+        let compaction_filter = pruner_db
+            .clone()
+            .map(|db| ObjectsCompactionFilter::new(db, &prometheus_registry));
+
         // By default, only enable write stall on validators for perpetual db.
         let enable_write_stall = config.enable_db_write_stall.unwrap_or(is_validator);
-        let perpetual_tables_options = AuthorityPerpetualTablesOptions { enable_write_stall };
+        let perpetual_tables_options = AuthorityPerpetualTablesOptions {
+            enable_write_stall,
+            compaction_filter,
+        };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
             Some(perpetual_tables_options),
@@ -713,6 +732,7 @@ impl SuiNode {
             archive_readers,
             validator_tx_finalizer,
             chain_identifier,
+            pruner_db,
         )
         .await;
         // ensure genesis txn was executed

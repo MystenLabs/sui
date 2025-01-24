@@ -15,6 +15,7 @@ arc-swap.workspace = true
 async-trait.workspace = true
 axum.workspace = true
 bcs.workspace = true
+bincode.workspace = true
 bytes.workspace = true
 consensus-core.workspace = true
 consensus-config.workspace = true
