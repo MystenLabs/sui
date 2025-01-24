@@ -462,8 +462,9 @@ impl ValidatorService {
         let transaction = epoch_store.verify_transaction(transaction).tap_err(|_| {
             metrics.signature_errors.inc();
         })?;
-        let signers: NonEmpty<_> = transaction.intent_message().value.signers();
         drop(tx_verif_metrics_guard);
+        let signers: NonEmpty<_> = transaction.intent_message().value.signers();
+        self.handle_signers_traffic_req(signers).await?;
 
         let tx_digest = transaction.digest();
 
@@ -538,9 +539,9 @@ impl ValidatorService {
         let transaction = epoch_store.verify_transaction(transaction).tap_err(|_| {
             metrics.signature_errors.inc();
         })?;
-        let signers: NonEmpty<_> = transaction.intent_message().value.signers();
         drop(tx_verif_metrics_guard);
-
+        let signers: NonEmpty<_> = transaction.intent_message().value.signers();
+        self.handle_signers_traffic_req(signers).await?;
         // Enable Trace Propagation across spans/processes using tx_digest
         let tx_digest = transaction.digest();
         let span = error_span!("validator_state_process_tx_v2", ?tx_digest);
@@ -720,6 +721,7 @@ impl ValidatorService {
                 .iter()
                 .flat_map(|cert| cert.clone().intent_message().value.signers())
                 .collect::<NonEmpty<SuiAddress>>();
+            self.handle_signers_traffic_req(signers).await?;
             (verified_certs, signers)
         };
         let consensus_transactions =
@@ -1323,9 +1325,25 @@ impl ValidatorService {
         }
     }
 
-    async fn handle_traffic_req(&self, client: Option<IpAddr>) -> Result<(), tonic::Status> {
+    async fn handle_ip_traffic_req(&self, client: Option<IpAddr>) -> Result<(), tonic::Status> {
         if let Some(traffic_controller) = &self.traffic_controller {
-            if !traffic_controller.check(&client, &None).await {
+            if !traffic_controller.check(&client, &None, &None).await {
+                // Entity in blocklist
+                Err(tonic::Status::from_error(SuiError::TooManyRequests.into()))
+            } else {
+                Ok(())
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn handle_signers_traffic_req(
+        &self,
+        signers: NonEmpty<SuiAddress>,
+    ) -> Result<(), tonic::Status> {
+        if let Some(traffic_controller) = &self.traffic_controller {
+            if !traffic_controller.check(&None, &None, &Some(signers)).await {
                 // Entity in blocklist
                 Err(tonic::Status::from_error(SuiError::TooManyRequests.into()))
             } else {
@@ -1414,7 +1432,7 @@ macro_rules! handle_with_decoration {
         let client = $self.get_client_ip_addr(&$request, $self.client_id_source.as_ref().unwrap());
 
         // check if either IP is blocked, in which case return early
-        $self.handle_traffic_req(client.clone()).await?;
+        $self.handle_ip_traffic_req(client.clone()).await?;
 
         // handle traffic tallying
         let wrapped_response = $self.$func_name($request).await;
