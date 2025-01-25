@@ -569,7 +569,7 @@ and an empty vector otherwise
 Destroy <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> and call the closure <code>f</code> on the value inside if it holds one.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_destroy">destroy</a>&lt;$T&gt;($o: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |$T| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_destroy">destroy</a>&lt;$T, $R: drop&gt;($o: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |$T| -&gt; $R)
 </code></pre>
 
 
@@ -578,7 +578,7 @@ Destroy <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_destroy">destroy</a>&lt;$T&gt;($o: <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |$T|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_destroy">destroy</a>&lt;$T, $R: drop&gt;($o: <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |$T| -&gt; $R) {
     <b>let</b> o = $o;
     o.<a href="../std/option.md#std_option_do">do</a>!($f);
 }
@@ -595,7 +595,7 @@ Destroy <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</
 Destroy <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> and call the closure <code>f</code> on the value inside if it holds one.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do">do</a>&lt;$T&gt;($o: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |$T| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do">do</a>&lt;$T, $R: drop&gt;($o: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |$T| -&gt; $R)
 </code></pre>
 
 
@@ -604,9 +604,9 @@ Destroy <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do">do</a>&lt;$T&gt;($o: <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |$T|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do">do</a>&lt;$T, $R: drop&gt;($o: <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |$T| -&gt; $R) {
     <b>let</b> o = $o;
-    <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>()) $f(o.<a href="../std/option.md#std_option_destroy_some">destroy_some</a>())
+    <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>()) { $f(o.<a href="../std/option.md#std_option_destroy_some">destroy_some</a>()); }
     <b>else</b> o.<a href="../std/option.md#std_option_destroy_none">destroy_none</a>()
 }
 </code></pre>
@@ -622,7 +622,7 @@ Destroy <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</
 Execute a closure on the value inside <code>t</code> if it holds one.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do_ref">do_ref</a>&lt;$T&gt;($o: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |&$T| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do_ref">do_ref</a>&lt;$T, $R: drop&gt;($o: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |&$T| -&gt; $R)
 </code></pre>
 
 
@@ -631,9 +631,9 @@ Execute a closure on the value inside <code>t</code> if it holds one.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do_ref">do_ref</a>&lt;$T&gt;($o: &<a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&$T|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do_ref">do_ref</a>&lt;$T, $R: drop&gt;($o: &<a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&$T| -&gt; $R) {
     <b>let</b> o = $o;
-    <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>()) $f(o.<a href="../std/option.md#std_option_borrow">borrow</a>());
+    <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>()) { $f(o.<a href="../std/option.md#std_option_borrow">borrow</a>()); }
 }
 </code></pre>
 
@@ -648,7 +648,7 @@ Execute a closure on the value inside <code>t</code> if it holds one.
 Execute a closure on the mutable reference to the value inside <code>t</code> if it holds one.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do_mut">do_mut</a>&lt;$T&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |&<b>mut</b> $T| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do_mut">do_mut</a>&lt;$T, $R: drop&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |&<b>mut</b> $T| -&gt; $R)
 </code></pre>
 
 
@@ -657,9 +657,9 @@ Execute a closure on the mutable reference to the value inside <code>t</code> if
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do_mut">do_mut</a>&lt;$T&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&<b>mut</b> $T|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_do_mut">do_mut</a>&lt;$T, $R: drop&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&<b>mut</b> $T| -&gt; $R) {
     <b>let</b> o = $o;
-    <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>()) $f(o.<a href="../std/option.md#std_option_borrow_mut">borrow_mut</a>());
+    <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>()) { $f(o.<a href="../std/option.md#std_option_borrow_mut">borrow_mut</a>()); }
 }
 </code></pre>
 
