@@ -13,6 +13,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
+use mysten_common::debug_fatal;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -44,9 +45,12 @@ use sui_rpc_api::RpcMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
+use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::transaction::VerifiedCertificate;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::sync::{broadcast, mpsc, watch, Mutex};
@@ -832,6 +836,8 @@ impl SuiNode {
         let sui_node_metrics = Arc::new(SuiNodeMetrics::new(&registry_service.default_registry()));
 
         let validator_components = if state.is_validator(&epoch_store) {
+            Self::reexecute_pending_consensus_certs(&epoch_store, &state).await;
+
             let components = Self::construct_validator_components(
                 config.clone(),
                 state.clone(),
@@ -1325,7 +1331,7 @@ impl SuiNode {
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Result<ValidatorComponents> {
-        let checkpoint_service = Self::start_checkpoint_service(
+        let checkpoint_service = Self::build_checkpoint_service(
             config,
             consensus_adapter.clone(),
             checkpoint_store,
@@ -1421,7 +1427,7 @@ impl SuiNode {
         })
     }
 
-    fn start_checkpoint_service(
+    fn build_checkpoint_service(
         config: &NodeConfig,
         consensus_adapter: Arc<ConsensusAdapter>,
         checkpoint_store: Arc<CheckpointStore>,
@@ -1530,6 +1536,67 @@ impl SuiNode {
         let grpc_server = spawn_monitored_task!(server.serve().map_err(Into::into));
 
         Ok(grpc_server)
+    }
+
+    async fn reexecute_pending_consensus_certs(
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        state: &Arc<AuthorityState>,
+    ) {
+        let pending_consensus_certificates = epoch_store
+            .get_all_pending_consensus_transactions()
+            .into_iter()
+            .filter_map(|tx| {
+                match tx.kind {
+                    // shared object txns will be re-executed by consensus replay
+                    ConsensusTransactionKind::CertifiedTransaction(tx)
+                        if !tx.contains_shared_object() =>
+                    {
+                        let tx = *tx;
+                        // we only need to re-execute if we previously signed the effects (which indicates we
+                        // returned the effects to a client).
+                        if let Some(fx_digest) = epoch_store
+                            .get_signed_effects_digest(tx.digest())
+                            .expect("db error")
+                        {
+                            // new_unchecked is safe because we never submit a transaction to consensus
+                            // without verifying it
+                            let tx = VerifiedExecutableTransaction::new_from_certificate(
+                                VerifiedCertificate::new_unchecked(tx),
+                            );
+                            Some((tx, fx_digest))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let digests = pending_consensus_certificates
+            .iter()
+            .map(|(tx, _)| *tx.digest())
+            .collect::<Vec<_>>();
+
+        info!("reexecuting pending consensus certificates: {:?}", digests);
+
+        state.enqueue_with_expected_effects_digest(pending_consensus_certificates, epoch_store);
+
+        // If this times out, the validator will still almost certainly start up fine. But, it is
+        // possible that it may temporarily "forget" about transactions that it had previously
+        // executed. This could confuse clients in some circumstances. However, the transactions
+        // are still in pending_consensus_certificates, so we cannot lose any finality guarantees.
+        if tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            state
+                .get_transaction_cache_reader()
+                .notify_read_executed_effects_digests(&digests),
+        )
+        .await
+        .is_err()
+        {
+            debug_fatal!("Timed out waiting for effects digests to be executed");
+        }
     }
 
     pub fn state(&self) -> Arc<AuthorityState> {

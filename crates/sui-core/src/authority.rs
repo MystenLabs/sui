@@ -3037,7 +3037,7 @@ impl AuthorityState {
             .enqueue_certificates(certs, epoch_store)
     }
 
-    pub(crate) fn enqueue_with_expected_effects_digest(
+    pub fn enqueue_with_expected_effects_digest(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
         epoch_store: &AuthorityPerEpochStore,
