@@ -7,6 +7,7 @@ use anyhow::anyhow;
 use futures::future::OptionFuture;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use move_core_types::annotated_value::{MoveDatatypeLayout, MoveTypeLayout};
+use serde::{Deserialize, Serialize};
 use sui_indexer_alt_schema::transactions::{
     BalanceChange, StoredTransaction, StoredTxBalanceChange,
 };
@@ -56,6 +57,16 @@ trait TransactionsApi {
 }
 
 pub(crate) struct Transactions(pub Context);
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TransactionsConfig {
+    /// The default page size limit when querying transactions, if none is provided.
+    pub default_page_size: usize,
+
+    /// The largest acceptable page size when querying transactions. Requesting a page larger than
+    /// this is a user error.
+    pub max_page_size: usize,
+}
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
@@ -158,6 +169,15 @@ impl RpcModule for Transactions {
 
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
+    }
+}
+
+impl Default for TransactionsConfig {
+    fn default() -> Self {
+        Self {
+            default_page_size: 50,
+            max_page_size: 100,
+        }
     }
 }
 

@@ -21,7 +21,7 @@ use serde_json::{json, Value};
 use sui_indexer_alt::{config::IndexerConfig, start_indexer};
 use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, IndexerArgs};
 use sui_indexer_alt_jsonrpc::{
-    data::system_package_task::SystemPackageTaskArgs, start_rpc, RpcArgs,
+    config::RpcConfig, data::system_package_task::SystemPackageTaskArgs, start_rpc, RpcArgs,
 };
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
@@ -96,6 +96,8 @@ impl OffchainCluster {
             ..Default::default()
         };
 
+        let rpc_config = RpcConfig::example();
+
         // This configuration controls how often the RPC service checks for changes to system
         // packages. The default polling interval is probably too slow for changes to get picked
         // up, so tests that rely on this behaviour will always fail, but this is better than flaky
@@ -119,6 +121,7 @@ impl OffchainCluster {
             db_args,
             rpc_args,
             system_package_task_args,
+            rpc_config,
             &registry,
             cancel.child_token(),
         )
