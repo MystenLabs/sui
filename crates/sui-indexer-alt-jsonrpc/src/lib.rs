@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use api::rpc_module::RpcModule;
-use api::transactions::Transactions;
+use api::transactions::{Transactions, TransactionsConfig};
+use config::RpcConfig;
 use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use jsonrpsee::server::{RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
@@ -25,6 +26,7 @@ use crate::context::Context;
 
 mod api;
 pub mod args;
+pub mod config;
 mod context;
 pub mod data;
 mod error;
@@ -195,9 +197,17 @@ pub async fn start_rpc(
     db_args: DbArgs,
     rpc_args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
+    rpc_config: RpcConfig,
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
+    let RpcConfig {
+        transactions,
+        extra: _,
+    } = rpc_config.finish();
+
+    let _transactions_config = transactions.finish(TransactionsConfig::default());
+
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
 
