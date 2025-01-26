@@ -116,6 +116,7 @@ pub struct ObjectRuntime<'a> {
 #[derive(Tid)]
 pub struct TransactionContext {
     pub(crate) tx_context: Rc<RefCell<TxContext>>,
+    pub(crate) digest: Option<GlobalValue>,
 }
 
 pub enum TransferResult {
@@ -747,7 +748,10 @@ pub fn get_all_uids(
 
 impl TransactionContext {
     pub fn new(tx_context: Rc<RefCell<TxContext>>) -> Self {
-        Self { tx_context }
+        Self {
+            tx_context,
+            digest: None,
+        }
     }
 
     pub fn sender(&self) -> SuiAddress {
@@ -764,6 +768,15 @@ impl TransactionContext {
 
     pub fn digest(&self) -> TransactionDigest {
         self.tx_context.borrow().digest()
+    }
+
+    pub fn move_digest_ref(&mut self) -> PartialVMResult<Value> {
+        if self.digest.is_none() {
+            let digest = self.tx_context.borrow().digest().into_inner();
+            let digest = Value::vector_u8(digest);
+            self.digest = Some(GlobalValue::cached(digest)?);
+        }
+        self.digest.as_ref().unwrap().borrow_global()
     }
 
     pub fn sponsor(&self) -> Option<SuiAddress> {

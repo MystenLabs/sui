@@ -31,7 +31,13 @@ use self::{
     transfer::{
         TransferFreezeObjectCostParams, TransferInternalCostParams, TransferShareObjectCostParams,
     },
-    tx_context::TxContextDeriveIdCostParams,
+    tx_context::{
+        TxContextDeriveIdCostParams, TxContextDigestCostParams, TxContextEpochCostParams,
+        TxContextEpochTimestampMsCostParams, TxContextFreshIdCostParams,
+        TxContextIdsCreatedCostParams, TxContextIncEpochCostParams,
+        TxContextIncEpochTimestampCostParams, TxContextIncIdsCretedCostParams,
+        TxContextReplaceCostParams, TxContextSenderCostParams, TxContextSponsorCostParams,
+    },
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
@@ -113,6 +119,18 @@ pub struct NativesCostTable {
 
     // TxContext
     pub tx_context_derive_id_cost_params: TxContextDeriveIdCostParams,
+
+    pub tx_context_sender_cost_params: TxContextSenderCostParams,
+    pub tx_context_epoch_cost_params: TxContextEpochCostParams,
+    pub tx_context_epoch_timestamp_ms_cost_params: TxContextEpochTimestampMsCostParams,
+    pub tx_context_digest_cost_params: TxContextDigestCostParams,
+    pub tx_context_sponsor_cost_params: TxContextSponsorCostParams,
+    pub tx_context_ids_created_cost_params: TxContextIdsCreatedCostParams,
+    pub tx_context_replace_cost_params: TxContextReplaceCostParams,
+    pub tx_context_inc_epoch_timestamp_cost_params: TxContextIncEpochTimestampCostParams,
+    pub tx_context_inc_epoch_cost_params: TxContextIncEpochCostParams,
+    pub tx_context_inc_ids_created_cost_params: TxContextIncIdsCretedCostParams,
+    pub tx_context_fresh_id_cost_params: TxContextFreshIdCostParams,
 
     // Type
     pub type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams,
@@ -340,6 +358,73 @@ impl NativesCostTable {
             },
             tx_context_derive_id_cost_params: TxContextDeriveIdCostParams {
                 tx_context_derive_id_cost_base: protocol_config
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+
+            tx_context_sender_cost_params: TxContextSenderCostParams {
+                tx_context_sender_cost_base: protocol_config
+                    // .tx_context_sender_cost_base()
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            tx_context_epoch_cost_params: TxContextEpochCostParams {
+                tx_context_epoch_cost_base: protocol_config
+                    // .tx_context_epoch_cost_base()
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            tx_context_epoch_timestamp_ms_cost_params: TxContextEpochTimestampMsCostParams {
+                tx_context_epoch_timestamp_ms_cost_base: protocol_config
+                    // .tx_context_epoch_timestamp_ms_cost_base()
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            tx_context_digest_cost_params: TxContextDigestCostParams {
+                tx_context_digest_cost_base: protocol_config
+                    // .tx_context_digest_cost_base()
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            tx_context_sponsor_cost_params: TxContextSponsorCostParams {
+                tx_context_sponsor_cost_base: protocol_config
+                    // .tx_context_sponsor_cost_base()
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            tx_context_ids_created_cost_params: TxContextIdsCreatedCostParams {
+                tx_context_ids_created_cost_base: protocol_config
+                    // .tx_context_ids_created_cost_base()
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            tx_context_replace_cost_params: TxContextReplaceCostParams {
+                tx_context_replace_cost_base: protocol_config
+                    // .tx_context_replace_cost_base()
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            tx_context_inc_epoch_timestamp_cost_params: TxContextIncEpochTimestampCostParams {
+                tx_context_inc_epoch_timestamp_cost_base: protocol_config
+                    // .tx_context_inc_epoch_timestamp_cost_base()
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            tx_context_inc_epoch_cost_params: TxContextIncEpochCostParams {
+                tx_context_inc_epoch_cost_base: protocol_config
+                    // .tx_context_inc_epoch_cost_base()
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            tx_context_inc_ids_created_cost_params: TxContextIncIdsCretedCostParams {
+                tx_context_inc_ids_created_cost_base: protocol_config
+                    // .tx_context_inc_ids_created_cost_base()
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            tx_context_fresh_id_cost_params: TxContextFreshIdCostParams {
+                tx_context_fresh_id_cost_base: protocol_config
+                    // .tx_context_fresh_id_cost_base()
                     .tx_context_derive_id_cost_base()
                     .into(),
             },
@@ -1030,6 +1115,35 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "derive_id",
             make_native!(tx_context::derive_id),
         ),
+        (
+            "tx_context",
+            "epoch_timestamp_ms",
+            make_native!(tx_context::epoch_timestamp_ms),
+        ),
+        ("tx_context", "digest", make_native!(tx_context::digest)),
+        ("tx_context", "sponsor", make_native!(tx_context::sponsor)),
+        (
+            "tx_context",
+            "ids_created",
+            make_native!(tx_context::ids_created),
+        ),
+        ("tx_context", "fresh_id", make_native!(tx_context::fresh_id)),
+        (
+            "tx_context",
+            "inc_ids_created",
+            make_native!(tx_context::inc_ids_created),
+        ),
+        (
+            "tx_context",
+            "inc_epoch",
+            make_native!(tx_context::inc_epoch),
+        ),
+        (
+            "tx_context",
+            "inc_epoch_timestamp",
+            make_native!(tx_context::inc_epoch_timestamp),
+        ),
+        ("tx_context", "replace", make_native!(tx_context::replace)),
         (
             "types",
             "is_one_time_witness",
