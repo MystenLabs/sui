@@ -504,7 +504,16 @@ mod tests {
     async fn test_handle_already_committed() {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
-        let context = Arc::new(Context::new_for_test(num_authorities).0);
+        let (mut context, _) = Context::new_for_test(num_authorities);
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(0);
+        context
+            .protocol_config
+            .set_consensus_linearize_subdag_v2_for_testing(false);
+
+        let context = Arc::new(context);
+
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
             Arc::new(MemStore::new()),
@@ -618,10 +627,10 @@ mod tests {
             .protocol_config
             .set_consensus_gc_depth_for_testing(gc_depth);
 
-        if gc_depth > 0 {
+        if gc_depth == 0 {
             context
                 .protocol_config
-                .set_consensus_linearize_subdag_v2_for_testing(true);
+                .set_consensus_linearize_subdag_v2_for_testing(false);
         }
 
         let context = Arc::new(context);

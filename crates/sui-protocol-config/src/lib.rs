@@ -209,6 +209,7 @@ const MAX_PROTOCOL_VERSION: u64 = 73;
 //             Max gas price moved to 50 SUI
 //             Variants as type nodes.
 // Version 73: Enable new marker table version.
+//             Enable consensus garbage collection and new commit rule for devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1718,7 +1719,12 @@ impl ProtocolConfig {
     }
 
     pub fn gc_depth(&self) -> u32 {
-        self.consensus_gc_depth.unwrap_or(0)
+        if cfg!(msim) {
+            // exercise a very low gc_depth
+            5
+        } else {
+            self.consensus_gc_depth.unwrap_or(0)
+        }
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {
@@ -3159,6 +3165,13 @@ impl ProtocolConfig {
                 73 => {
                     // Enable new marker table version.
                     cfg.use_object_per_epoch_marker_table_v2 = Some(true);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Assuming a round rate of max 15/sec, then using a gc depth of 60 allow blocks within a window of ~4 seconds
+                        // to be included before be considered garbage collected.
+                        cfg.consensus_gc_depth = Some(60);
+                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
