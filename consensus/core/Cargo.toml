@@ -6,6 +6,13 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 publish = false
 
+[lib]
+name = "consensus_core"
+
+[[bin]]
+name = "dag_analyzer"
+path = "src/dag_analyzer/main.rs"
+
 [lints]
 workspace = true
 
