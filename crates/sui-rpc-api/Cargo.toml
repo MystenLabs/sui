@@ -29,6 +29,7 @@ tower.workspace = true
 tracing.workspace = true
 tokio-stream.workspace = true
 async-stream.workspace = true
+base64.workspace = true
 
 fastcrypto.workspace = true
 sui-types.workspace = true
