@@ -116,7 +116,8 @@ $ sui client active-address
 
 ### Request a SUI coin from faucet
 
-If you use one of the standard public RPCs (for example, `fullnode.testnet.sui.io:443`), you can use the `faucet` command to request gas coins. If you use a custom faucet service, then pass in the URL to the faucet using the `--url` option.
+If you use one of the standard public RPCs (for example, `fullnode.devnet.sui.io:443`), you can use the `faucet` command to request gas coins. If you use a custom faucet service, then pass in the URL to the faucet using the `--url` option.
+The `faucet` command works for a local network, as well. If you start your network with a custom faucet port, include the `--url` option. 
 
 ```sh
 $ sui client faucet
