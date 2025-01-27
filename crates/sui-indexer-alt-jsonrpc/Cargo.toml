@@ -19,6 +19,7 @@ bcs.workspace = true
 clap.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+hex.workspace = true
 jsonrpsee = { workspace = true, features = ["macros", "server"] }
 pin-project-lite.workspace = true
 prometheus.workspace = true
@@ -45,3 +46,7 @@ sui-types.workspace = true
 [dev-dependencies]
 reqwest.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
+
+sui-indexer-alt-framework.workspace = true
+sui-indexer-alt.workspace = true
