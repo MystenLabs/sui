@@ -13518,7 +13518,7 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "tokio",
- "tower-http 0.6.2",
+ "tower-http 0.5.2",
  "tracing",
 ]
 
@@ -17180,29 +17180,16 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "403fa3b783d4b626a8ad51d766ab03cb6d2dbfc46b1c5d4448395e6628dc9697"
 dependencies = [
- "async-compression",
  "base64 0.22.1",
  "bitflags 2.6.0",
  "bytes",
- "futures-core",
- "futures-util",
  "http 1.1.0",
  "http-body 1.0.1",
- "http-body-util",
- "http-range-header",
- "httpdate",
- "iri-string",
  "mime",
- "mime_guess",
- "percent-encoding",
  "pin-project-lite",
- "tokio",
- "tokio-util 0.7.10",
- "tower 0.5.1",
  "tower-layer",
  "tower-service",
  "tracing",
- "uuid 1.2.2",
 ]
 
 [[package]]
