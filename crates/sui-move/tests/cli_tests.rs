@@ -33,6 +33,10 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
             fs::copy(srcfile, dstfile)?;
         }
     }
+    //    let tempdir = tempfile::tempdir()?;
+    //    let sandbox = tempdir.path();
+    //
+    //    fs_extra::dir::copy(srcdir, sandbox, &Default::default())?;
 
     // set up command
     let mut shell = Command::new("bash");
@@ -44,7 +48,8 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     // run it; snapshot test output
     let output = shell.output()?;
     let result = format!(
-        "success: {:?}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
+        "----- script -----\n{}\n----- results -----\nsuccess: {:?}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
+        fs::read_to_string(path)?,
         output.status.success(),
         output.status.code().unwrap_or(!0),
         String::from_utf8_lossy(&output.stdout),

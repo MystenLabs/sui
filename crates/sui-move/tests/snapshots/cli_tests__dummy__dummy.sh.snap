@@ -2,6 +2,16 @@
 source: crates/sui-move/tests/cli_tests.rs
 description: tests/tests/dummy/dummy.sh
 ---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# simple test just to make sure the test runner works
+echo "dummy test"
+cat data/data.txt
+sui-move new dummy
+
+----- results -----
 success: true
 exit_code: 0
 ----- stdout -----
