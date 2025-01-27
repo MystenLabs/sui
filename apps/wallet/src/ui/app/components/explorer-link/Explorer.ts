@@ -13,7 +13,7 @@ const API_ENV_TO_EXPLORER_ENV: Record<API_ENV, string | undefined> = {
 	[API_ENV.customRPC]: '',
 };
 
-const EXPLORER_LINK = 'https://suiexplorer.com/';
+const EXPLORER_LINK = 'https://suiscan.xyz/';
 
 //TODO - this is a temporary solution, we should have a better way to get the explorer url
 function getExplorerUrl(path: string, apiEnv: API_ENV = DEFAULT_API_ENV, customRPC: string) {
