@@ -22,6 +22,10 @@ module a::m {
     public fun t4<T: key + store>(p: &mut UID, s: Receiving<T>): T {
         transfer::receive(p, s)
     }
+
+    public fun t5<T: key + store>(s: T, p: vector<address>) {
+        transfer::multiparty_transfer(s, p)
+    }
 }
 
 module sui::object {
@@ -40,6 +44,14 @@ module sui::transfer {
     }
 
     public fun public_transfer<T: key + store>(_: T, _: address) {
+        abort 0
+    }
+
+    public fun multiparty_transfer<T: key>(_: T, _: vector<address>) {
+        abort 0
+    }
+
+    public fun public_multiparty_transfer<T: key + store>(_: T, _: vector<address>) {
         abort 0
     }
 
