@@ -204,11 +204,12 @@ impl AuthorityPerpetualTables {
         let bloom_config =  KeySpaceConfig::new().with_bloom_filter();
         let objects = builder.add_key_space_config("objects", 32 + 8, MUTEXES, default_cells_per_mutex(), objects_config);
         let live_owned_object_markers = builder.add_key_space_config("live_owned_object_markers", 32 + 8 + 32 + 8, MUTEXES, default_cells_per_mutex(), bloom_config.clone());
-        let transactions_config = KeySpaceConfig::new().with_value_cache_size(20_000);
+        const VALUE_CACHE_SIZE: usize = 20_000;
+        let transactions_config = KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE);
         let transactions = builder.add_key_space_config("transactions", 32, MUTEXES, default_cells_per_mutex(), transactions_config);
-        let effects_config = bloom_config.clone().with_value_cache_size(20_000);
+        let effects_config = bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE);
         let effects = builder.add_key_space_config("effects", 32, MUTEXES, default_cells_per_mutex(), effects_config);
-        let executed_effects_config = bloom_config.clone().with_value_cache_size(20_000);
+        let executed_effects_config = bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE);
         let executed_effects = builder.add_key_space_config("executed_effects",32, MUTEXES, default_cells_per_mutex(), executed_effects_config);
         let events = builder.add_key_space("events", 32 + 8, MUTEXES, default_cells_per_mutex());
         let executed_transactions_to_checkpoint =
