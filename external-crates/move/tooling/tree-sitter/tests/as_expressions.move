@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 module foo::bar {
     fun f(): u64 {
         1 as u64;

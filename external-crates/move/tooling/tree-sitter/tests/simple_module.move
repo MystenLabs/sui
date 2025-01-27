@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 module sui::foo {
     public struct Bar { x: u64 }
 
@@ -7,7 +10,7 @@ module sui::foo {
 
     fun h(x: Bar): u64 { x.x }
 
-    fun j(x: Bar): u64 { 
+    fun j(x: Bar): u64 {
         let mut x = x.x();
         x.foo!()
     }

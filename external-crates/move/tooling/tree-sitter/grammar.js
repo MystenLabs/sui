@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 const PRECEDENCE = {
   assign: 1,
   implies: 2, // ==>

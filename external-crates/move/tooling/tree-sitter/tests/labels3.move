@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 module 0x42::M {
 
     fun foo(_: &u64) {}

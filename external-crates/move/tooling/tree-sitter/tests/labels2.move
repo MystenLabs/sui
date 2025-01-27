@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 module a::m {
     // cases that need parens
     fun t(cond: bool): u64 {

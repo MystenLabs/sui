@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 module a::m;
 
 public struct Point(u64, u64) has copy, drop, store;

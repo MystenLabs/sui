@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 module beep::boop {
     fun f(x: MyEnum): u8 {
         match (x) {

@@ -1,4 +1,6 @@
-/// Module: kek
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 module kek::kek {
     public struct Kek {
         a: u8,

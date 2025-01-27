@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 module 0x42::m {
 
     public struct NBase has copy, drop { t: u64 }
@@ -97,4 +100,3 @@ module 0x42::m {
     }
 
 }
-

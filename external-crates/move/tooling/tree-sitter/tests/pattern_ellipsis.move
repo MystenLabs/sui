@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 module 0x42::m {
     public enum X has drop {
         A { x: u64 },
@@ -49,4 +52,3 @@ module 0x42::m {
         }
     }
 }
-

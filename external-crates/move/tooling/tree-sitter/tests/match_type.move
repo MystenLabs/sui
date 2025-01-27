@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 module 0x42::m;
 fun t0(): u64 {
     let Bla<T>(x) = 0;
