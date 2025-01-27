@@ -42,7 +42,7 @@ const ESharedObjectOperationNotSupported: u64 = 4;
 const ENotSupported: u64 = 5;
 
 #[error]
-const EInvalidMultipartySize: vector<u8> =
+const EInvalidMultipartyPermissions: vector<u8> =
     b"Multiparty transfer is currently limited to one party.";
 
 /// Transfer ownership of `obj` to `recipient`. `obj` must have the `key` attribute,
@@ -75,8 +75,8 @@ public fun public_transfer<T: key + store>(obj: T, recipient: address) {
 /// This function has custom rules performed by the Sui Move bytecode verifier that ensures that `T`
 /// is an object defined in the module where `transfer` is invoked. Use `public_multiparty_transfer`
 /// to transfer an object with `store` outside of its module.
-public fun multiparty_transfer<T: key>(obj: T, party_members: vector<address>) {
-    assert!(party_members.length() == 1, EInvalidMultipartySize);
+public fun multiparty_transfer<T: key>(obj: T, multiparty_permissions: sui::multiparty::Multiparty) {
+    assert!(multiparty_permissions.is_single_owner(), EInvalidMultipartyPermissions);
     multiparty_transfer_impl(obj, party_members)
 }
 
@@ -89,7 +89,7 @@ public fun multiparty_transfer<T: key>(obj: T, party_members: vector<address>) {
 /// object must be used in consensus and cannot be used in the fast path.
 /// The object must have `store` to be transferred outside of its module.
 public fun public_multiparty_transfer<T: key + store>(obj: T, party_members: vector<address>) {
-    assert!(party_members.length() == 1, EInvalidMultipartySize);
+    assert!(party_members.length() == 1, EInvalidMultipartyPermissions);
     multiparty_transfer_impl(obj, party_members)
 }
 
