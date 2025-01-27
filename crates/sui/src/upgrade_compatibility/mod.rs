@@ -641,6 +641,7 @@ upgrade_codes!(
         Missing: { msg: "missing declaration" },
         VersionMismatch: { msg: "file format version downgrade" },
         FriendMismatch: { msg: "friend mismatch" },
+        NewDeclaration: { msg: "new declaration" },
     ],
     Enums: [
         VariantMismatch: { msg: "variant mismatch" },
@@ -2076,20 +2077,15 @@ fn struct_new_diag(
         .context("Unable to get struct source map")?;
 
     diags.add(Diagnostic::new(
-        Declarations::TypeMismatch,
+        Declarations::NewDeclaration,
         (
             struct_sourcemap.definition_location,
-            format!("New unexpected struct '{}'.", struct_name),
+            format!("New unexpected struct '{struct_name}'."),
         ),
         Vec::<(Loc, String)>::new(),
         vec![
-            "Structs are part of a module's public interface \
-            and cannot be removed or changed during an upgrade."
-                .to_string(),
-            format!(
-                "Restore the original struct '{struct_name}' including the ordering.",
-                struct_name = struct_name,
-            ),
+            "Structs cannot be added during a 'dependency only' upgrade.".to_string(),
+            format!("Remove the struct '{struct_name}' from its module.",),
         ],
     ));
 
@@ -2155,17 +2151,12 @@ fn enum_new_diag(
         .definition_location;
 
     diags.add(Diagnostic::new(
-        Enums::VariantMismatch,
-        (def_loc, format!("New unexpected enum '{}'.", enum_name)),
+        Declarations::NewDeclaration,
+        (def_loc, format!("New unexpected enum '{enum_name}'.")),
         Vec::<(Loc, String)>::new(),
         vec![
-            "Enums are part of a module's public interface and cannot \
-            be changed during an upgrade."
-                .to_string(),
-            format!(
-                "Restore the original enum '{enum_name}' including the ordering.",
-                enum_name = enum_name,
-            ),
+            "Enums cannot be added during a 'dependency only' upgrade.".to_string(),
+            format!("Remove the enum '{enum_name}' from its module.",),
         ],
     ));
 
@@ -2231,20 +2222,15 @@ fn function_new_diag(
         .definition_location;
 
     diags.add(Diagnostic::new(
-        Functions_::SignatureMismatch,
+        Declarations::NewDeclaration,
         (
             def_loc,
             format!("New unexpected function '{}'.", function_name),
         ),
         Vec::<(Loc, String)>::new(),
         vec![
-            "Functions are part of a module's public interface and cannot \
-            be changed during an upgrade."
-                .to_string(),
-            format!(
-                "Restore the original function '{function_name}' including the ordering.",
-                function_name = function_name,
-            ),
+            "Functions cannot be added during a 'dependency only' upgrade.".to_string(),
+            format!("Remove the function '{function_name}' from its module."),
         ],
     ));
 
