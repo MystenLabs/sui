@@ -97,7 +97,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route(ASSETS_PATH, get(assets))
         .route(SUMMARY_PATH, get(summary))
         .route(DEEP_SUPPLY_PATH, get(deep_supply))
-        .layer(cors) // Apply the CORS middleware
+        .layer(cors)
         .with_state(state)
 }
 
