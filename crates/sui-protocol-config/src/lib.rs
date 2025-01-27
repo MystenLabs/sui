@@ -1719,7 +1719,12 @@ impl ProtocolConfig {
     }
 
     pub fn gc_depth(&self) -> u32 {
-        self.consensus_gc_depth.unwrap_or(0)
+        if cfg!(msim) {
+            // exercise a very low gc_depth
+            5
+        } else {
+            self.consensus_gc_depth.unwrap_or(0)
+        }
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {

@@ -1535,6 +1535,9 @@ mod test {
 
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(0);
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -2314,6 +2317,9 @@ mod test {
         const CACHED_ROUNDS: Round = 1;
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(0);
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
