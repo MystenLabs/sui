@@ -12,7 +12,10 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::process;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
+
+// Loki has a limit of 10000 logs per request.
+const MAX_LOGS_PER_REQUEST: u64 = 10000;
 
 /// structs below are to mimic the parsed structure of LokiResponse.
 #[derive(Debug, Deserialize)]
@@ -49,6 +52,41 @@ fn extract_body_from_message(message: &str) -> Option<String> {
     None
 }
 
+async fn fetch_logs(
+    client: &reqwest::Client,
+    url: &str,
+    query: &str,
+    start: &str,
+    end: &str,
+    limit: u64,
+    offset: Option<u64>,
+) -> Result<LokiResponse, Box<dyn Error>> {
+    let mut params = vec![
+        ("query".to_string(), query.to_string()),
+        ("start".to_string(), start.to_string()),
+        ("end".to_string(), end.to_string()),
+        ("limit".to_string(), limit.to_string()),
+    ];
+    if let Some(o) = offset {
+        params.push(("start_from".to_string(), o.to_string()));
+    }
+
+    let resp = client
+        .get(url)
+        .header(ACCEPT, "application/json")
+        .query(&params)
+        .send()
+        .await?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let error_body = resp.text().await?;
+        error!("Error response: {}", error_body);
+        return Err(format!("Request failed with status: {}", status).into());
+    }
+    Ok(resp.json().await?)
+}
+
 #[tokio::main]
 async fn main() {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
@@ -82,46 +120,58 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let one_day_ago = now - chrono::Duration::days(1);
     let start = env::var("START").unwrap_or(one_day_ago.format("%Y-%m-%dT%H:%M:%SZ").to_string());
     let end = env::var("END").unwrap_or(now.format("%Y-%m-%dT%H:%M:%SZ").to_string());
+    let limit: Option<u64> = env::var("LIMIT").ok().and_then(|l| l.parse().ok());
     let client = reqwest::Client::new();
-    let mut query_params = vec![
-        ("query", query.as_str()),
-        ("start", start.as_str()),
-        ("end", end.as_str()),
-    ];
-    let limit = env::var("LIMIT").ok();
-    if let Some(ref l) = limit {
-        query_params.push(("limit", l));
-    }
 
-    let resp = client
-        .get(&grafana_url)
-        .header(ACCEPT, "application/json")
-        .query(&query_params)
-        .send()
+    let mut all_logs = Vec::new();
+    let mut offset = None;
+    loop {
+        let chunk_limit = match limit {
+            Some(l) => {
+                let fetched = all_logs.len() as u64;
+                if fetched >= l {
+                    break;
+                }
+                std::cmp::min(MAX_LOGS_PER_REQUEST, l - fetched)
+            }
+            None => MAX_LOGS_PER_REQUEST,
+        };
+
+        let response = fetch_logs(
+            &client,
+            &grafana_url,
+            &query,
+            &start,
+            &end,
+            chunk_limit,
+            offset,
+        )
         .await?;
-    if !resp.status().is_success() {
-        warn!("Request failed with status: {}", resp.status());
-        let error_body = resp.text().await?;
-        error!("Error response: {}", error_body);
-        return Ok(());
+        let batch: Vec<_> = response
+            .data
+            .result
+            .into_iter()
+            .flat_map(|result| {
+                result
+                    .values
+                    .into_iter()
+                    .map(|(_, message)| GrafanaLog { message })
+            })
+            .collect();
+        // If we have no logs, break
+        if batch.is_empty() {
+            break;
+        }
+
+        let batch_len = batch.len();
+        all_logs.extend(batch);
+        offset = Some(offset.unwrap_or(0) + batch_len as u64);
     }
 
-    let loki_response: LokiResponse = resp.json().await?;
-    let logs: Vec<GrafanaLog> = loki_response
-        .data
-        .result
-        .into_iter()
-        .flat_map(|result| {
-            result
-                .values
-                .into_iter()
-                .map(|(_, message)| GrafanaLog { message })
-        })
-        .collect();
-    info!("Found {} logs.", logs.len());
+    info!("Found {} logs.", all_logs.len());
 
     let mut method_map: HashMap<String, Vec<String>> = HashMap::new();
-    for log_entry in logs {
+    for log_entry in all_logs {
         if let Some(body_content) = extract_body_from_message(&log_entry.message) {
             if let Ok(parsed) = serde_json::from_str::<Value>(&body_content) {
                 let method = parsed
