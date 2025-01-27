@@ -7,6 +7,7 @@ use crate::{
     schema::{self},
     sui_deepbook_indexer::PgDeepbookPersistent,
 };
+use axum::http::Method;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -22,8 +23,7 @@ use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::{net::TcpListener, task::JoinHandle};
-use tower_http::cors::{Any, CorsLayer, AllowMethods};
-use axum::http::Method;
+use tower_http::cors::{AllowMethods, Any, CorsLayer};
 
 use std::str::FromStr;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiObjectResponse};
