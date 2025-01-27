@@ -34,6 +34,7 @@ tempfile.workspace = true
 axum.workspace = true
 bigdecimal = { version = "0.4.5" }
 serde_json = { version = "1.0", features = ["preserve_order"] }
+tower-http = { version = "0.6.2", features = ["full"] }
 
 [dev-dependencies]
 hex-literal = "0.3.4"

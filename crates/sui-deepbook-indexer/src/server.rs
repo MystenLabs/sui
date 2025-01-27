@@ -22,6 +22,8 @@ use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::{net::TcpListener, task::JoinHandle};
+use tower_http::cors::{Any, CorsLayer, AllowMethods};
+use axum::http::Method;
 
 use std::str::FromStr;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiObjectResponse};
@@ -69,6 +71,11 @@ pub fn run_server(socket_address: SocketAddr, state: PgDeepbookPersistent) -> Jo
 }
 
 pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
+    let cors = CorsLayer::new()
+        .allow_methods(AllowMethods::list(vec![Method::GET, Method::OPTIONS]))
+        .allow_headers(Any)
+        .allow_origin(Any);
+
     Router::new()
         .route("/", get(health_check))
         .route(GET_POOLS_PATH, get(get_pools))
@@ -90,6 +97,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route(ASSETS_PATH, get(assets))
         .route(SUMMARY_PATH, get(summary))
         .route(DEEP_SUPPLY_PATH, get(deep_supply))
+        .layer(cors) // Apply the CORS middleware
         .with_state(state)
 }
 
