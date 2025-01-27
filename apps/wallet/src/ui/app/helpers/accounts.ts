@@ -22,9 +22,9 @@ export function getAccountBackgroundByType(account: SerializedUIAccount) {
 	if (!isZkLoginAccountSerializedUI(account)) return 'bg-gradients-graph-cards';
 	switch (account.provider) {
 		case 'google':
-			return 'bg-google bg-no-repeat bg-cover';
+			return 'bg-google bg-no-repeat bg-cover bg-center';
 		case 'twitch':
-			return 'bg-twitch-image bg-no-repeat bg-cover';
+			return 'bg-gradients-twitch bg-no-repeat bg-cover';
 		default:
 			return `bg-gradients-graph-cards`;
 	}

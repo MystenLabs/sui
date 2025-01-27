@@ -1,39 +1,52 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
+import { ChevronRight12 } from '@mysten/icons';
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
 import cn from 'clsx';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
-interface CollapsibleProps {
-	title: string;
+type ControlledCollapsibleProps = {
+	isOpen: boolean;
+	onOpenChange: (isOpen: boolean) => void;
+	defaultOpen?: never;
+};
+
+type UncontrolledCollapsibleProps = {
 	defaultOpen?: boolean;
+	isOpen?: never;
+	onOpenChange?: never;
+};
+
+type CollapsibleProps = {
+	title: string;
 	children: ReactNode | ReactNode[];
 	shade?: 'lighter' | 'darker';
-	isOpen?: boolean;
-	onOpenChange?: (isOpen: boolean) => void;
-}
+} & (ControlledCollapsibleProps | UncontrolledCollapsibleProps);
 
 export function Collapsible({
 	title,
 	children,
-	defaultOpen,
+	defaultOpen = false,
 	isOpen,
 	onOpenChange,
 	shade = 'lighter',
 }: CollapsibleProps) {
-	const [open, setOpen] = useState(isOpen ?? defaultOpen ?? false);
+	const [open, setOpen] = useState(isOpen ?? defaultOpen);
 
 	const handleOpenChange = (isOpen: boolean) => {
 		setOpen(isOpen);
 		onOpenChange?.(isOpen);
 	};
 
+	useEffect(() => {
+		setOpen(Boolean(isOpen));
+	}, [isOpen]);
+
 	return (
 		<CollapsiblePrimitive.Root
 			className="flex flex-shrink-0 justify-start flex-col w-full gap-3"
-			open={isOpen ?? open}
+			open={open}
 			onOpenChange={handleOpenChange}
 		>
 			<CollapsiblePrimitive.Trigger className="flex items-center gap-2 w-full bg-transparent border-none p-0 cursor-pointer group">
@@ -52,12 +65,16 @@ export function Collapsible({
 					})}
 				/>
 				<div
-					className={cn('group-hover:text-hero inline-flex', {
-						'text-steel': shade === 'darker',
-						'text-gray-45': shade === 'lighter',
-					})}
+					className={cn(
+						'group-hover:text-hero inline-flex transition-transform',
+						{
+							'text-steel': shade === 'darker',
+							'text-gray-45': shade === 'lighter',
+						},
+						open ? 'transform rotate-90' : '',
+					)}
 				>
-					{open ? <ChevronDown12 /> : <ChevronRight12 />}
+					<ChevronRight12 />
 				</div>
 			</CollapsiblePrimitive.Trigger>
 
