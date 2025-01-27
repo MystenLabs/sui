@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fs_extra::dir::CopyOptions;
 use insta_cmd::get_cargo_bin;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use walkdir::WalkDir;
 
 // [test_shell_snapshot] is run on every file matching [TEST_PATTERN] in [TEST_DIR]; this runs the
 // files as shell scripts and compares their output to the snapshots; use `cargo insta test
@@ -21,22 +21,9 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     // copy files into temporary directory
     let srcdir = path.parent().unwrap();
     let tmpdir = tempfile::tempdir()?;
-    let sandbox = tmpdir.path().join("sandbox");
+    let sandbox = tmpdir.path();
 
-    for entry in WalkDir::new(srcdir) {
-        let entry = entry.unwrap();
-        let srcfile = entry.path();
-        let dstfile = sandbox.join(srcfile.strip_prefix(srcdir)?);
-        if srcfile.is_dir() {
-            fs::create_dir_all(dstfile)?;
-        } else {
-            fs::copy(srcfile, dstfile)?;
-        }
-    }
-    //    let tempdir = tempfile::tempdir()?;
-    //    let sandbox = tempdir.path();
-    //
-    //    fs_extra::dir::copy(srcdir, sandbox, &Default::default())?;
+    fs_extra::dir::copy(srcdir, sandbox, &CopyOptions::new().content_only(true))?;
 
     // set up command
     let mut shell = Command::new("bash");

@@ -49,6 +49,7 @@ tempfile.workspace = true
 walkdir.workspace = true
 insta-cmd.workspace = true
 insta.workspace = true
+fs_extra.workspace = true
 
 move-package.workspace = true
 

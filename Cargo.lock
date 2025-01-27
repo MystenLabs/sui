@@ -14515,6 +14515,7 @@ dependencies = [
  "clap",
  "colored",
  "datatest-stable",
+ "fs_extra",
  "futures",
  "insta",
  "insta-cmd",
