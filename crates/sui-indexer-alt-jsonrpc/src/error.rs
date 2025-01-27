@@ -2,43 +2,112 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-//! # Error
-//!
-//! Helper functions for propagating errors from within the service as JSON-RPC errors. Components
-//! in the service may return errors in a variety of types. Bodies of JSON-RPC method handlers are
-//! responsible for assigning an error code for these errors.
-
-use std::fmt::Display;
+use std::{convert::Infallible, fmt::Display};
 
 use jsonrpsee::types::{
     error::{INTERNAL_ERROR_CODE, INVALID_PARAMS_CODE},
     ErrorObject,
 };
 
-/// Macro wrapping a call to an RPC error constructor (above) which adds support for format
-/// strings, and immediate early return:
-///
-///  rpc_bail!(internal_error("hello, {}", "world"))
-///
-/// Becomes
-///
-///  return Err(internal_error(format!("hello, {}", "world")))
+/// Like anyhow's `bail!`, but for returning an internal error.
 macro_rules! rpc_bail {
-    ($kind:ident ( $fmt:literal $(,$x:expr)* $(,)? ) ) => {
-        return Err(crate::error::$kind(format!($fmt, $($x),*)))
+    ($($arg:tt)*) => {
+        return Err(crate::error::internal_error!($($arg)*))
     };
 }
 
+/// Like anyhow's `anyhow!`, but for returning an internal error.
+macro_rules! internal_error {
+    ($($arg:tt)*) => {
+        crate::error::RpcError::InternalError(anyhow::anyhow!($($arg)*))
+    };
+}
+
+pub(crate) use internal_error;
 pub(crate) use rpc_bail;
 
-pub(crate) fn internal_error(err: impl ToString) -> ErrorObject<'static> {
-    ErrorObject::owned(INTERNAL_ERROR_CODE, err.to_string(), None::<()>)
+/// Behaves exactly like `anyhow::Context`, but only adds context to `RpcError::InternalError`.
+pub(crate) trait InternalContext<T, E: std::error::Error> {
+    fn internal_context<C>(self, c: C) -> Result<T, RpcError<E>>
+    where
+        C: Display + Send + Sync + 'static;
+
+    fn with_internal_context<C, F>(self, f: F) -> Result<T, RpcError<E>>
+    where
+        C: Display + Send + Sync + 'static,
+        F: FnOnce() -> C;
 }
 
-pub(crate) fn invalid_params(err: impl ToString) -> ErrorObject<'static> {
-    ErrorObject::owned(INVALID_PARAMS_CODE, err.to_string(), None::<()>)
+/// This type represents two kinds of errors: Invalid Params (the user's fault), and Internal
+/// Errors (the service's fault). Each RpcModule is responsible for defining its own structured
+/// user errors, while internal errors are represented with anyhow everywhere.
+///
+/// The internal error type defaults to `Infallible`, meaning there are no reasons the response
+/// might fail because of user input.
+///
+/// This representation was chosen to encourage a pattern where errors that are presented to users
+/// have a single source of truth for how they should be displayed, while internal errors encourage
+/// the addition of context (extra information to build a trace of why something went wrong).
+///
+/// User errors must be explicitly wrapped with `invalid_params` while internal errors are
+/// implicitly converted using the `?` operator. This asymmetry comes from the fact that we could
+/// populate `E` with `anyhow::Error`, which would then cause `From` impls to overlap if we
+/// supported conversion from both `E` and `anyhow::Error`.
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum RpcError<E: std::error::Error = Infallible> {
+    #[error("Invalid Params: {0}")]
+    InvalidParams(E),
+
+    #[error("Internal Error: {0:#}")]
+    InternalError(#[from] anyhow::Error),
 }
 
-pub(crate) fn pruned(what: impl Display) -> ErrorObject<'static> {
-    ErrorObject::owned(INVALID_PARAMS_CODE, format!("{what} pruned"), None::<()>)
+impl<T, E: std::error::Error> InternalContext<T, E> for Result<T, RpcError<E>> {
+    /// Wrap an internal error with additional context.
+    fn internal_context<C>(self, c: C) -> Result<T, RpcError<E>>
+    where
+        C: Display + Send + Sync + 'static,
+    {
+        use RpcError as E;
+        if let Err(E::InternalError(e)) = self {
+            Err(E::InternalError(e.context(c)))
+        } else {
+            self
+        }
+    }
+
+    /// Wrap an internal error with additional context that is lazily evaluated only once an
+    /// internal error has occured.
+    fn with_internal_context<C, F>(self, f: F) -> Result<T, RpcError<E>>
+    where
+        C: Display + Send + Sync + 'static,
+        F: FnOnce() -> C,
+    {
+        use RpcError as E;
+        if let Err(E::InternalError(e)) = self {
+            Err(E::InternalError(e.context(f())))
+        } else {
+            self
+        }
+    }
+}
+
+impl<E: std::error::Error> From<RpcError<E>> for ErrorObject<'static> {
+    fn from(err: RpcError<E>) -> Self {
+        use RpcError as E;
+        match &err {
+            E::InvalidParams(_) => {
+                ErrorObject::owned(INVALID_PARAMS_CODE, err.to_string(), None::<()>)
+            }
+
+            E::InternalError(_) => {
+                ErrorObject::owned(INTERNAL_ERROR_CODE, err.to_string(), None::<()>)
+            }
+        }
+    }
+}
+
+/// Helper function to convert a user error into the `RpcError` type.
+pub(crate) fn invalid_params<E: std::error::Error>(err: E) -> RpcError<E> {
+    RpcError::InvalidParams(err)
 }

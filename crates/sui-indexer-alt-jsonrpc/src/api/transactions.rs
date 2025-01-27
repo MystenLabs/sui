@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 
-use anyhow::anyhow;
+use anyhow::Context as _;
 use futures::future::OptionFuture;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use move_core_types::annotated_value::{MoveDatatypeLayout, MoveTypeLayout};
@@ -22,7 +22,6 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
     effects::{IDOperation, ObjectChange, TransactionEffects, TransactionEffectsAPI},
-    error::SuiError,
     event::Event,
     object::Object,
     signature::GenericSignature,
@@ -37,7 +36,7 @@ use crate::{
         objects::ObjectVersionKey, transactions::TransactionKey,
         tx_balance_changes::TxBalanceChangeKey,
     },
-    error::{internal_error, invalid_params, pruned, rpc_bail},
+    error::{internal_error, invalid_params, rpc_bail, InternalContext, RpcError},
 };
 
 use super::rpc_module::RpcModule;
@@ -70,17 +69,17 @@ pub struct TransactionsConfig {
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
-    #[error("Transaction not found: {0}")]
+    #[error("Transaction {0} not found")]
     NotFound(TransactionDigest),
 
-    #[error("Error converting to response: {0}")]
-    Conversion(SuiError),
+    #[error("Balance changes for transaction {0} have been pruned")]
+    BalanceChangesPruned(TransactionDigest),
 
-    #[error("Error resolving type information: {0}")]
-    Resolution(anyhow::Error),
-
-    #[error("Deserialization error: {0}")]
-    Deserialization(#[from] bcs::Error),
+    #[error(
+        "Transaction {0} affected object {} pruned at version {2}",
+        .1.to_canonical_display(/* with_prefix */ true),
+    )]
+    ObjectPruned(TransactionDigest, ObjectID, u64),
 }
 
 #[async_trait::async_trait]
@@ -90,75 +89,11 @@ impl TransactionsApiServer for Transactions {
         digest: TransactionDigest,
         options: SuiTransactionBlockResponseOptions,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        use Error as E;
-
         let Self(ctx) = self;
 
-        let transaction = ctx.loader().load_one(TransactionKey(digest));
-        let balance_changes: OptionFuture<_> = options
-            .show_balance_changes
-            .then(|| ctx.loader().load_one(TxBalanceChangeKey(digest)))
-            .into();
-
-        let (transaction, balance_changes) = join!(transaction, balance_changes);
-
-        let transaction = transaction
-            .map_err(internal_error)?
-            .ok_or_else(|| invalid_params(E::NotFound(digest)))?;
-
-        // Balance changes might not be present because of pruning, in which case we return
-        // nothing, even if the changes were requested.
-        let balance_changes = match balance_changes.transpose().map_err(internal_error)? {
-            Some(None) => rpc_bail!(pruned("balance changes for transaction {digest}")),
-            Some(changes) => changes,
-            None => None,
-        };
-
-        let digest = TransactionDigest::try_from(transaction.tx_digest.clone())
-            .map_err(E::Conversion)
-            .map_err(internal_error)?;
-
-        let mut response = SuiTransactionBlockResponse::new(digest);
-
-        if options.show_input {
-            response.transaction = Some(
-                input_response(ctx, &transaction)
-                    .await
-                    .map_err(internal_error)?,
-            );
-        }
-
-        if options.show_raw_input {
-            response.raw_transaction = transaction.raw_transaction.clone();
-        }
-
-        if options.show_effects {
-            response.effects = Some(effects_response(&transaction).map_err(internal_error)?);
-        }
-
-        if options.show_raw_effects {
-            response.raw_effects = transaction.raw_effects.clone();
-        }
-
-        if options.show_events {
-            response.events = Some(
-                events_response(ctx, digest, &transaction)
-                    .await
-                    .map_err(internal_error)?,
-            );
-        }
-
-        if let Some(balance_changes) = balance_changes {
-            response.balance_changes =
-                Some(balance_changes_response(balance_changes).map_err(internal_error)?);
-        }
-
-        if options.show_object_changes {
-            response.object_changes =
-                Some(object_changes_response(ctx, digest, &transaction).await?);
-        }
-
-        Ok(response)
+        Ok(transaction_response(ctx, digest, options)
+            .await
+            .with_internal_context(|| format!("Failed to get transaction {digest}"))?)
     }
 }
 
@@ -181,26 +116,97 @@ impl Default for TransactionsConfig {
     }
 }
 
+/// Fetch the necessary data from the stores in `ctx` and transform it to build a response for the
+/// transaction identified by `digest`, according to the response `options`.
+async fn transaction_response(
+    ctx: &Context,
+    digest: TransactionDigest,
+    options: SuiTransactionBlockResponseOptions,
+) -> Result<SuiTransactionBlockResponse, RpcError<Error>> {
+    let transaction = ctx.loader().load_one(TransactionKey(digest));
+    let balance_changes: OptionFuture<_> = options
+        .show_balance_changes
+        .then(|| ctx.loader().load_one(TxBalanceChangeKey(digest)))
+        .into();
+
+    let (transaction, balance_changes) = join!(transaction, balance_changes);
+
+    let transaction = transaction
+        .context("Failed to fetch transaction from store")?
+        .ok_or_else(|| invalid_params(Error::NotFound(digest)))?;
+
+    // Balance changes might not be present because of pruning, in which case we return
+    // nothing, even if the changes were requested.
+    let balance_changes = match balance_changes
+        .transpose()
+        .context("Failed to fetch balance changes from store")?
+    {
+        Some(None) => return Err(invalid_params(Error::BalanceChangesPruned(digest))),
+        Some(changes) => changes,
+        None => None,
+    };
+
+    let digest = TransactionDigest::try_from(transaction.tx_digest.clone())
+        .context("Failed to deserialize transaction digest")?;
+
+    let mut response = SuiTransactionBlockResponse::new(digest);
+
+    if options.show_input {
+        response.transaction = Some(input_response(ctx, &transaction).await?);
+    }
+
+    if options.show_raw_input {
+        response.raw_transaction = transaction.raw_transaction.clone();
+    }
+
+    if options.show_effects {
+        response.effects = Some(effects_response(&transaction)?);
+    }
+
+    if options.show_raw_effects {
+        response.raw_effects = transaction.raw_effects.clone();
+    }
+
+    if options.show_events {
+        response.events = Some(events_response(ctx, digest, &transaction).await?);
+    }
+
+    if let Some(balance_changes) = balance_changes {
+        response.balance_changes = Some(balance_changes_response(balance_changes)?);
+    }
+
+    if options.show_object_changes {
+        response.object_changes = Some(object_changes_response(ctx, digest, &transaction).await?);
+    }
+
+    Ok(response)
+}
+
 /// Extract a representation of the transaction's input data from the stored form.
 async fn input_response(
     ctx: &Context,
     tx: &StoredTransaction,
-) -> Result<SuiTransactionBlock, Error> {
-    let data: TransactionData = bcs::from_bytes(&tx.raw_transaction)?;
-    let tx_signatures: Vec<GenericSignature> = bcs::from_bytes(&tx.user_signatures)?;
+) -> Result<SuiTransactionBlock, RpcError<Error>> {
+    let data: TransactionData =
+        bcs::from_bytes(&tx.raw_transaction).context("Failed to deserialize TransactionData")?;
+    let tx_signatures: Vec<GenericSignature> =
+        bcs::from_bytes(&tx.user_signatures).context("Failed to deserialize user signatures")?;
 
     Ok(SuiTransactionBlock {
         data: SuiTransactionBlockData::try_from_with_package_resolver(data, ctx.package_resolver())
             .await
-            .map_err(Error::Resolution)?,
+            .context("Failed to resolve types in transaction data")?,
         tx_signatures,
     })
 }
 
 /// Extract a representation of the transaction's effects from the stored form.
-fn effects_response(tx: &StoredTransaction) -> Result<SuiTransactionBlockEffects, Error> {
-    let effects: TransactionEffects = bcs::from_bytes(&tx.raw_effects)?;
-    effects.try_into().map_err(Error::Conversion)
+fn effects_response(tx: &StoredTransaction) -> Result<SuiTransactionBlockEffects, RpcError<Error>> {
+    let effects: TransactionEffects =
+        bcs::from_bytes(&tx.raw_effects).context("Failed to deserialize TransactionEffects")?;
+    Ok(effects
+        .try_into()
+        .context("Failed to convert Effects into response")?)
 }
 
 /// Extract the transaction's events from its stored form.
@@ -208,10 +214,8 @@ async fn events_response(
     ctx: &Context,
     digest: TransactionDigest,
     tx: &StoredTransaction,
-) -> Result<SuiTransactionBlockEvents, Error> {
-    use Error as E;
-
-    let events: Vec<Event> = bcs::from_bytes(&tx.events)?;
+) -> Result<SuiTransactionBlockEvents, RpcError<Error>> {
+    let events: Vec<Event> = bcs::from_bytes(&tx.events).context("Failed to deserialize Events")?;
     let mut sui_events = Vec::with_capacity(events.len());
 
     for (ix, event) in events.into_iter().enumerate() {
@@ -219,16 +223,18 @@ async fn events_response(
             .package_resolver()
             .type_layout(event.type_.clone().into())
             .await
-            .map_err(|e| E::Resolution(e.into()))?
-        {
+            .with_context(|| {
+                format!(
+                    "Failed to resolve layout for {}",
+                    event.type_.to_canonical_display(/* with_prefix */ true)
+                )
+            })? {
             MoveTypeLayout::Struct(s) => MoveDatatypeLayout::Struct(s),
             MoveTypeLayout::Enum(e) => MoveDatatypeLayout::Enum(e),
-            _ => {
-                return Err(E::Resolution(anyhow!(
-                    "Event {ix} from {digest} is not a struct or enum: {}",
-                    event.type_.to_canonical_string(/* with_prefix */ true)
-                )));
-            }
+            _ => rpc_bail!(
+                "Event {ix} is not a struct or enum: {}",
+                event.type_.to_canonical_string(/* with_prefix */ true)
+            ),
         };
 
         let sui_event = SuiEvent::try_from(
@@ -238,7 +244,7 @@ async fn events_response(
             Some(tx.timestamp_ms as u64),
             layout,
         )
-        .map_err(E::Conversion)?;
+        .with_context(|| format!("Failed to convert Event {ix} into response"))?;
 
         sui_events.push(sui_event)
     }
@@ -249,8 +255,9 @@ async fn events_response(
 /// Extract the transaction's balance changes from their stored form.
 fn balance_changes_response(
     balance_changes: StoredTxBalanceChange,
-) -> Result<Vec<SuiBalanceChange>, Error> {
-    let balance_changes: Vec<BalanceChange> = bcs::from_bytes(&balance_changes.balance_changes)?;
+) -> Result<Vec<SuiBalanceChange>, RpcError<Error>> {
+    let balance_changes: Vec<BalanceChange> = bcs::from_bytes(&balance_changes.balance_changes)
+        .context("Failed to deserialize BalanceChanges")?;
     let mut response = Vec::with_capacity(balance_changes.len());
 
     for BalanceChange::V1 {
@@ -259,7 +266,9 @@ fn balance_changes_response(
         amount,
     } in balance_changes
     {
-        let coin_type = TypeTag::from_str(&coin_type).map_err(Error::Resolution)?;
+        let coin_type = TypeTag::from_str(&coin_type)
+            .with_context(|| format!("Invalid coin type: {coin_type:?}"))?;
+
         response.push(SuiBalanceChange {
             owner,
             coin_type,
@@ -276,14 +285,11 @@ async fn object_changes_response(
     ctx: &Context,
     digest: TransactionDigest,
     tx: &StoredTransaction,
-) -> RpcResult<Vec<SuiObjectChange>> {
-    let tx_data: TransactionData = bcs::from_bytes(&tx.raw_transaction)
-        .map_err(Error::from)
-        .map_err(internal_error)?;
-
-    let effects: TransactionEffects = bcs::from_bytes(&tx.raw_effects)
-        .map_err(Error::from)
-        .map_err(internal_error)?;
+) -> Result<Vec<SuiObjectChange>, RpcError<Error>> {
+    let tx_data: TransactionData =
+        bcs::from_bytes(&tx.raw_transaction).context("Failed to deserialize TransactionData")?;
+    let effects: TransactionEffects =
+        bcs::from_bytes(&tx.raw_effects).context("Failed to deserialize TransactionEffects")?;
 
     let mut keys = vec![];
     let native_changes = effects.object_changes();
@@ -301,7 +307,7 @@ async fn object_changes_response(
         .loader()
         .load_many(keys)
         .await
-        .map_err(|e| internal_error(e.to_string()))?;
+        .context("Failed to fetch object contents")?;
 
     // Fetch and deserialize the contents of an object, based on its object ref. Assumes that all
     // object versions that will be fetched in this way have come from a valid transaction, and
@@ -310,7 +316,7 @@ async fn object_changes_response(
     let fetch_object = |id: ObjectID,
                         v: Option<SequenceNumber>,
                         d: Option<ObjectDigest>|
-     -> RpcResult<Option<(Object, ObjectDigest)>> {
+     -> Result<Option<(Object, ObjectDigest)>, RpcError<Error>> {
         let Some(v) = v else { return Ok(None) };
         let Some(d) = d else { return Ok(None) };
 
@@ -318,16 +324,15 @@ async fn object_changes_response(
 
         let stored = objects
             .get(&ObjectVersionKey(id, v))
-            .ok_or_else(|| pruned(format!("Object {id} at version {v}")))?;
+            .ok_or_else(|| invalid_params(Error::ObjectPruned(digest, id, v)))?;
 
         let bytes = stored
             .serialized_object
             .as_ref()
-            .ok_or_else(|| internal_error("No content for object {id} at version {v}"))?;
+            .with_context(|| format!("No content for object {id} at version {v}"))?;
 
         let o = bcs::from_bytes(bytes)
-            .map_err(Error::from)
-            .map_err(internal_error)?;
+            .with_context(|| format!("Failed to deserialize object {id} at version {v}"))?;
 
         Ok(Some((o, d)))
     };
@@ -350,15 +355,15 @@ async fn object_changes_response(
 
         use IDOperation as ID;
         changes.push(match (id_operation, input, output) {
-            (ID::Created, Some((i, _)), _) => rpc_bail!(internal_error(
+            (ID::Created, Some((i, _)), _) => rpc_bail!(
                 "Unexpected input version {} for object {object_id} created by transaction {digest}",
                 i.version().value(),
-            )),
+            ),
 
-            (ID::Deleted, _, Some((o, _))) => rpc_bail!(internal_error(
+            (ID::Deleted, _, Some((o, _))) => rpc_bail!(
                 "Unexpected output version {} for object {object_id} deleted by transaction {digest}",
                 o.version().value(),
-            )),
+            ),
 
             // The following cases don't end up in the output: created and wrapped objects,
             // unwrapped objects (and by extension, unwrapped and deleted objects), system package
@@ -387,7 +392,7 @@ async fn object_changes_response(
                 owner: o.owner().clone(),
                 object_type: o
                     .struct_tag()
-                    .ok_or_else(|| internal_error(format!("No type for object {object_id}")))?,
+                    .ok_or_else(|| internal_error!("No type for object {object_id}"))?,
                 object_id,
                 version: o.version(),
                 digest: d,
@@ -399,7 +404,7 @@ async fn object_changes_response(
                     recipient: o.owner().clone(),
                     object_type: o
                         .struct_tag()
-                        .ok_or_else(|| internal_error(format!("No type for object {object_id}")))?,
+                        .ok_or_else(|| internal_error!("No type for object {object_id}"))?,
                     object_id,
                     version: o.version(),
                     digest: od,
@@ -411,7 +416,7 @@ async fn object_changes_response(
                 owner: o.owner().clone(),
                 object_type: o
                     .struct_tag()
-                    .ok_or_else(|| internal_error(format!("No type for object {object_id}")))?,
+                    .ok_or_else(|| internal_error!("No type for object {object_id}"))?,
                 object_id,
                 version: o.version(),
                 previous_version: i.version(),
@@ -422,7 +427,7 @@ async fn object_changes_response(
                 sender: tx_data.sender(),
                 object_type: i
                     .struct_tag()
-                    .ok_or_else(|| internal_error(format!("No type for object {object_id}")))?,
+                    .ok_or_else(|| internal_error!("No type for object {object_id}"))?,
                 object_id,
                 version: effects.lamport_version(),
             },
@@ -431,7 +436,7 @@ async fn object_changes_response(
                 sender: tx_data.sender(),
                 object_type: i
                     .struct_tag()
-                    .ok_or_else(|| internal_error(format!("No type for object {object_id}")))?,
+                    .ok_or_else(|| internal_error!("No type for object {object_id}"))?,
                 object_id,
                 version: effects.lamport_version(),
             },

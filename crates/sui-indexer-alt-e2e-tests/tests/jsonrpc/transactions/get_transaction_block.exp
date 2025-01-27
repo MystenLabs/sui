@@ -51,7 +51,7 @@ Response: {
   "id": 1,
   "error": {
     "code": -32602,
-    "message": "Transaction not found: 11111111111111111111111111111111"
+    "message": "Invalid Params: Transaction 11111111111111111111111111111111 not found"
   }
 }
 
