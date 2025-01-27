@@ -173,7 +173,6 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
     // This will generate the linkage context based on the transitive dependencies of the
     // provided package modules if the package's dependencies are in the data cache, or error
     // otherwise.
-    // TODO: It would be great, longer term, to move this to the trait and reuse it.
     fn generate_linkage_context(
         &self,
         runtime_package_id: RuntimePackageId,

@@ -275,10 +275,7 @@ impl<'extensions> MoveVM<'extensions> {
             .map_err(|err| err.finish(Location::Undefined))?;
 
         let fun_ref = function.to_ref();
-
-        // See TODO on LoadedModule to avoid this work
         let parameters = fun_ref.parameters.to_ref().clone();
-
         let return_ = fun_ref.return_.to_ref().clone();
 
         // verify type arguments

@@ -59,12 +59,23 @@ pub fn validate_for_publish(
     Ok(validated_package)
 }
 
+/// Verify a package for upgrade. Note that this does _not_ do compatibility checking.
+/// Compatibility checking is of no concern to the Move runtime, though specific adapters and
+/// execution layers may choose to enforce it.
 pub fn validate_for_upgrade(
-    _previous: verification::ast::Package,
-    _package: SerializedPackage,
-    _dependencies: BTreeMap<RuntimePackageId, verification::ast::Package>,
+    natives: &NativeFunctions,
+    vm_config: &VMConfig,
+    runtime_package_id: RuntimePackageId,
+    package: SerializedPackage,
+    dependencies: BTreeMap<RuntimePackageId, &verification::ast::Package>,
 ) -> VMResult<verification::ast::Package> {
-    todo!()
+    validate_for_publish(
+        natives,
+        vm_config,
+        runtime_package_id,
+        package,
+        dependencies,
+    )
 }
 
 /// Verify a set of packages for VM execution, ensuring linkage is correct and there are no cycles.

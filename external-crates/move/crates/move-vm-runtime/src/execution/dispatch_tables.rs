@@ -52,7 +52,7 @@ use tracing::error;
 /// the transaction.
 ///
 /// TODO(tzakian): The representation can be optimized to use a more efficient data structure for
-/// vtable/cross-package function resolution but we will keep it simple for now.
+/// vtable/cross-package function resolution (e.g., caching) but we keep it simple for now.
 #[derive(Debug, Clone)]
 pub struct VMDispatchTables {
     pub(crate) vm_config: Arc<VMConfig>,

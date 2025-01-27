@@ -289,8 +289,7 @@ impl MachineState {
         }
         debug_writeln!(buf, "Operand Stack:")?;
         for (idx, val) in self.operand_stack.value.iter().enumerate() {
-            // TODO: Currently we do not know the types of the values on the operand stack.
-            // Revisit.
+            // [FUTURE] Currently we do not know the types of the values on the operand stack.
             debug_write!(buf, "    [{}] ", idx)?;
             values::debug::print_value(buf, val)?;
             debug_writeln!(buf)?;

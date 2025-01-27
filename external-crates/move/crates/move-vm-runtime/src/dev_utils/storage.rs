@@ -316,26 +316,57 @@ impl<'a, 'b, S: ModuleResolver> ModuleResolver for DeltaStorage<'a, 'b, S> {
         &self,
         ids: &[AccountAddress],
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-        ids.iter()
-            .map(|storage_id| {
-                if let Some(account_storage) = self.delta.accounts().get(storage_id) {
-                    let module_bytes: Vec<_> = account_storage
-                        .modules()
-                        .values()
-                        .map(|op| op.clone().ok())
-                        .collect::<Option<_>>()
-                        .unwrap_or_default();
+        // First pass: Split IDs into those found in delta.accounts() and those not found
+        let (found_in_delta, not_found_in_delta): (Vec<_>, Vec<_>) = ids
+            .iter()
+            .partition(|storage_id| self.delta.accounts().contains_key(storage_id));
 
-                    Ok(Some(SerializedPackage::raw_package(
-                        module_bytes,
-                        *storage_id,
-                    )))
-                } else {
-                    // TODO: Can optimize this to do a two-pass bulk lookup if we want
-                    Ok(self.base.get_packages(&[*storage_id])?[0].clone())
-                }
+        // Prepare results for those found in delta
+        let mut results: Vec<Option<SerializedPackage>> = found_in_delta
+            .iter()
+            .map(|storage_id| {
+                let account_storage = self
+                    .delta
+                    .accounts()
+                    .get(storage_id)
+                    .expect("Key must exist as it was filtered earlier");
+                let module_bytes: Vec<_> = account_storage
+                    .modules()
+                    .values()
+                    .map(|op| op.clone().ok())
+                    .collect::<Option<_>>()
+                    .unwrap_or_default();
+
+                Ok(Some(SerializedPackage::raw_package(
+                    module_bytes,
+                    *storage_id,
+                )))
             })
-            .collect::<Result<Vec<_>, Self::Error>>()
+            .collect::<Result<Vec<_>, Self::Error>>()?;
+
+        // Perform a bulk lookup for IDs not found in delta
+        if !not_found_in_delta.is_empty() {
+            let base_results = self.base.get_packages(&not_found_in_delta)?;
+
+            // Extend results with those from the base lookup
+            results.extend(base_results.into_iter());
+        }
+
+        // Match the output order of the input `ids`
+        let mut final_results = Vec::with_capacity(ids.len());
+        let mut found_in_delta_iter = found_in_delta.into_iter();
+        let mut not_found_in_delta_iter = not_found_in_delta.into_iter();
+        for id in ids {
+            if found_in_delta_iter.as_slice().first() == Some(id) {
+                found_in_delta_iter.next();
+                final_results.push(results.remove(0)); // Add result from `results`
+            } else if not_found_in_delta_iter.as_slice().first() == Some(id) {
+                not_found_in_delta_iter.next();
+                final_results.push(results.remove(0)); // Add result from `base.get_packages`
+            }
+        }
+
+        Ok(final_results)
     }
 }
 

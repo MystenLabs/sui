@@ -473,7 +473,7 @@ fn cache_signatures(
 
         // Allocate the vector in the package arena and create a VMPointer
         let instantiation_ptr = VMPointer::new(
-            package_context.package_arena.alloc_item(instantiation) as *const Vec<Type>,
+            package_context.package_arena.alloc_item(instantiation)? as *const Vec<Type>,
         );
 
         // Add it to the map
@@ -513,7 +513,7 @@ fn functions(
         .collect::<PartialVMResult<Vec<_>>>()?;
     let loaded_functions = package_context
         .package_arena
-        .alloc_slice(prealloc_functions.into_iter());
+        .alloc_slice(prealloc_functions)?;
 
     package_context.insert_and_make_module_function_vtable(
         self_id,
@@ -654,9 +654,8 @@ fn code(
         function_bytecode
             .iter()
             .map(|bc| bytecode(context, bc))
-            .collect::<PartialVMResult<Vec<Bytecode>>>()?
-            .into_iter(),
-    );
+            .collect::<PartialVMResult<Vec<Bytecode>>>()?,
+    )?;
     Ok(result as *const [Bytecode])
 }
 
@@ -1107,7 +1106,7 @@ fn check_and_cache_vector_type(
             Some(sig_token) => sig_token,
         };
         let ty = make_type(context.module, sig_token)?;
-        let ty_ptr = VMPointer::new(context.package_context.package_arena.alloc_item(ty));
+        let ty_ptr = VMPointer::new(context.package_context.package_arena.alloc_item(ty)?);
         assert!(context
             .single_signature_token_map
             .insert(*signature_index, ty_ptr)

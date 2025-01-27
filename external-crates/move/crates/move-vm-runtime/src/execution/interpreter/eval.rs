@@ -48,12 +48,10 @@ struct RunContext<'vm_cache, 'native, 'native_lifetimes, 'tracer, 'trace_builder
     vtables: &'vm_cache VMDispatchTables,
     vm_config: Arc<VMConfig>,
     extensions: &'native mut NativeContextExtensions<'native_lifetimes>,
-    // TODO: consider making this `Option<&mut VMTracer<'_>>` and passing it like that everywhere?
     tracer: &'tracer mut Option<VMTracer<'trace_builder>>,
 }
 
 impl RunContext<'_, '_, '_, '_, '_> {
-    // TODO: The Run Context should hold this, not go get it from the Loader.
     fn vm_config(&self) -> &VMConfig {
         &self.vm_config
     }
@@ -578,9 +576,9 @@ fn op_step_impl(
 
             gas_meter.charge_unpack(true, struct_.field_views())?;
 
-            // TODO: Whether or not we want this gas metering in the loop is
-            // questionable.  However, if we don't have it in the loop we could wind up
-            // doing a fair bit of work before charging for it.
+            // TODO: Whether or not we want this gas metering in the loop is questionable. However,
+            // if we don't have it in the loop we could wind up doing a fair bit of work before
+            // charging for it.
             for value in struct_.unpack()? {
                 state.push_operand(value)?;
             }
