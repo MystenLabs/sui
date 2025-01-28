@@ -787,15 +787,22 @@ async fn trades(
         .map(|t| t * 1000) // Convert to milliseconds
         .unwrap_or_else(|| end_time - 24 * 60 * 60 * 1000);
 
+    // Parse limit (default to 1 if not provided)
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(1);
+
     let (pool_id, base_decimals, quote_decimals) = pool_data;
     let base_decimals = base_decimals as u8;
     let quote_decimals = quote_decimals as u8;
 
-    // Fetch all trades within the time range for the pool
+    // Fetch latest trades (sorted by timestamp in descending order) within the time range, applying the limit
     let trades = schema::order_fills::table
         .filter(schema::order_fills::pool_id.eq(pool_id))
         .filter(schema::order_fills::checkpoint_timestamp_ms.between(start_time, end_time))
-        .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
+        .order_by(schema::order_fills::checkpoint_timestamp_ms.desc()) // Ensures latest trades come first
+        .limit(limit) // Apply limit to get the most recent trades
         .select((
             schema::order_fills::maker_order_id,
             schema::order_fills::taker_order_id,
