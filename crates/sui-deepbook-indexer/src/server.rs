@@ -864,6 +864,8 @@ async fn trades(
 
                 HashMap::from([
                     ("trade_id".to_string(), Value::from(trade_id.to_string())),
+                    ("maker_order_id".to_string(), Value::from(maker_order_id)),
+                    ("taker_order_id".to_string(), Value::from(taker_order_id)),
                     (
                         "maker_balance_manager_id".to_string(),
                         Value::from(maker_balance_manager_id),
