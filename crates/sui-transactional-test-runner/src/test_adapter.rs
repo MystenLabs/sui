@@ -904,10 +904,14 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 } else if dry_run {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
-                    let sender_address = self.get_sender(sender).address;
+                    let sender = self.get_sender(sender);
+                    let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
+
+                    let payment = self.get_payment(sponsor, gas_payment);
+
                     let transaction = TransactionData::new_programmable(
-                        sender_address,
-                        vec![],
+                        sender.address,
+                        vec![payment],
                         ProgrammableTransaction { inputs, commands },
                         gas_budget,
                         gas_price,
@@ -1401,6 +1405,7 @@ impl<'a> SuiTestAdapter {
         gas_budget: Option<u64>,
         policy: u8,
         gas_price: u64,
+        // dry_run: bool,
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
@@ -1494,6 +1499,19 @@ impl<'a> SuiTestAdapter {
         })
     }
 
+    fn get_payment(&self, sponsor: &TestAccount, payment: Option<FakeID>) -> ObjectRef {
+        let payment = if let Some(payment) = payment {
+            self.fake_to_real_object_id(payment)
+                .expect("Could not find specified payment object")
+        } else {
+            sponsor.gas
+        };
+
+        self.get_object(&payment, None)
+            .unwrap()
+            .compute_object_reference()
+    }
+
     fn sign_sponsor_txn(
         &self,
         sender: Option<String>,
@@ -1508,17 +1526,7 @@ impl<'a> SuiTestAdapter {
         let sender = self.get_sender(sender);
         let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
 
-        let payment = if let Some(payment) = payment {
-            self.fake_to_real_object_id(payment)
-                .expect("Could not find specified payment object")
-        } else {
-            sponsor.gas
-        };
-
-        let payment_ref = self
-            .get_object(&payment, None)
-            .unwrap()
-            .compute_object_reference();
+        let payment_ref = self.get_payment(sender, payment);
 
         let data = txn_data(sender.address, sponsor.address, payment_ref);
         if sender.address == sponsor.address {
