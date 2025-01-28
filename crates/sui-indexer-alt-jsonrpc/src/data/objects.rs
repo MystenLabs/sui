@@ -10,19 +10,19 @@ use sui_types::base_types::ObjectID;
 
 use super::reader::{ReadError, Reader};
 
-/// Key for fetching a particular version of an object.
+/// Key for fetching the contents a particular version of an object.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct ObjectVersionKey(pub ObjectID, pub u64);
+pub(crate) struct VersionedObjectKey(pub ObjectID, pub u64);
 
 #[async_trait::async_trait]
-impl Loader<ObjectVersionKey> for Reader {
+impl Loader<VersionedObjectKey> for Reader {
     type Value = StoredObject;
     type Error = Arc<ReadError>;
 
     async fn load(
         &self,
-        keys: &[ObjectVersionKey],
-    ) -> Result<HashMap<ObjectVersionKey, StoredObject>, Self::Error> {
+        keys: &[VersionedObjectKey],
+    ) -> Result<HashMap<VersionedObjectKey, StoredObject>, Self::Error> {
         use kv_objects::dsl as o;
 
         if keys.is_empty() {
@@ -33,7 +33,7 @@ impl Loader<ObjectVersionKey> for Reader {
 
         let mut query = o::kv_objects.into_boxed();
 
-        for ObjectVersionKey(id, version) in keys {
+        for VersionedObjectKey(id, version) in keys {
             query = query.or_filter(
                 o::object_id
                     .eq(id.into_bytes())
