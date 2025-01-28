@@ -170,6 +170,10 @@ impl BlockManager {
             // Fetches the block if it is not in dag state or suspended.
             missing_blocks.insert(*block_ref);
             if self.missing_blocks.insert(*block_ref) {
+                // We want to report this as a missing ancestor even if there is no block that is actually references it right now. That will allow us
+                // to seamlessly GC the block later if needed.
+                self.missing_ancestors.entry(*block_ref).or_default();
+
                 let block_ref_hostname =
                     &self.context.committee.authority(block_ref.author).hostname;
                 self.context
@@ -993,6 +997,14 @@ mod tests {
                 assert!(accepted_blocks.is_empty());
             }
             assert!(!block_manager.is_empty());
+
+            // AND also call the try_to_find method with some non existing block refs. Those should be cleaned up as well once GC kicks in.
+            let non_existing_refs = (1..=3)
+                .map(|round| {
+                    BlockRef::new(round, AuthorityIndex::new_for_test(0), BlockDigest::MIN)
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(block_manager.try_find_blocks(non_existing_refs).len(), 3);
 
             // AND
             // Trigger a commit which will advance GC round
