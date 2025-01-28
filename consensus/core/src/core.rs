@@ -253,6 +253,7 @@ impl Core {
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
     /// The method returns:
     /// - The references of ancestors missing their block
+    #[tracing::instrument(skip_all)]
     pub(crate) fn add_blocks(
         &mut self,
         blocks: Vec<VerifiedBlock>,
@@ -306,6 +307,7 @@ impl Core {
 
     // Adds the commits and blocks that have been synced via the commit syncer. We are using the commit info in order to skip running the decision rule and immediately commit
     // the corresponding leaders and sub dags.
+    #[tracing::instrument(skip_all)]
     pub(crate) fn add_commits(
         &mut self,
         commits: Vec<TrustedCommit>,

@@ -532,6 +532,7 @@ impl BlockManager {
 
     // Tries to accept blocks that have been committed. Returns all the blocks that have been accepted, both from the ones
     // provided and any children blocks.
+    #[tracing::instrument(skip_all)]
     pub(crate) fn try_accept_committed_blocks(
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
