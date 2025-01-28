@@ -1,8 +1,0 @@
-@use '_values/colors';
-
-.container {
-	display: flex;
-	flex-flow: column nowrap;
-	background-color: colors.$gray-40;
-	border-radius: 10px;
-}

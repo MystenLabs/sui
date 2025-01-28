@@ -22,5 +22,3 @@ CHANGELOG.md
 /consensus/ @MystenLabs/consensus
 /crates/sui-core/src/consensus_handler.rs @MystenLabs/consensus
 /crates/sui-core/src/consensus_adapter.rs @MystenLabs/consensus
-
-apps/ @MystenLabs/fe-and-apps
