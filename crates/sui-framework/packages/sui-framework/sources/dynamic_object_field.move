@@ -197,8 +197,19 @@ macro fun log_operation<$T>($op: vector<u8>, $key: &$T) {
     let op = $op;
     let bytes = sui::bcs::to_bytes($key);
     let hash = sui::hex::encode(bytes);
+    let type_name = {
+        let type_name = std::type_name::get<$T>();
+        if (type_name.is_primitive()) {
+            type_name.into_string()
+        } else {
+            let mod = type_name.get_module();
+            type_name.into_string().substring(mod.length(), type_name.borrow_string().length())
+        }
+    };
+
     let mut str = op.to_string();
     str.append_utf8(b": ");
+    str.append(type_name.to_string());
     str.append_utf8(hash);
     std::debug::print(&str);
 }
