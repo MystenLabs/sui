@@ -1,0 +1,22 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/with_network/dummy.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# simple test just to make sure the test runner works with the network
+sui client --client.config $CONFIG envs
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+╭──────────┬────────────────────────┬────────╮
+│ alias    │ url                    │ active │
+├──────────┼────────────────────────┼────────┤
+│ localnet │ http://127.0.0.1:53065 │ *      │
+╰──────────┴────────────────────────┴────────╯
+
+----- stderr -----
