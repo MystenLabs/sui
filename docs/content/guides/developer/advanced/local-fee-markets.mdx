@@ -1,26 +1,27 @@
 ---
-title: Object-based Local Fee Markets
+title: Object-Based Local Fee Markets
 description: Object-based local fee markets limit the rate of transactions writing to a single shared object, preventing the network from becoming overloaded with checkpoints that take too long to execute.
 ---
 
 Object-based local fee markets limit the rate of transactions writing to a single shared object, preventing the network from becoming overloaded with checkpoints that take too long to execute.
 
-The Sui network’s object-based architecture allows processing many different user transactions massively in parallel, in a way that’s not possible on most other networks. However, if multiple transactions are all writing to the same shared object, they must execute in sequential order. There is a limit to how many transactions the network can process that touch one specific object.
+The Sui network object-based architecture allows processing many different user transactions massively in parallel, in a way that's not possible on most other networks. However, if multiple transactions are all writing to the same shared object, they must execute in sequential order. There is a limit to how many transactions the network can process that touch one specific object.
 
-If you see transactions fail with the error `ExecutionCancelledDueToSharedObjectCongestion`, you are observing object-based local fee markets at work! Continue reading to learn:
-- How transaction space is allocated on a congested shared object.
-- How to bid for priority access to limited space.
-- How to structure your applications and transactions for maximum throughput.
+If you see transactions fail with the error `ExecutionCancelledDueToSharedObjectCongestion`, you are observing object-based local fee markets at work. Continue reading to learn how:
+
+- Transaction space is allocated on a congested shared object.
+- To bid for priority access to limited space.
+- To structure your applications and transactions for maximum throughput.
 
 ## How object-based local fee markets work
 
 Sui's local fee market algorithm runs every time a new batch of sequenced transactions is received from consensus.
 
-1. All transactions are **sorted in order of gas price**.
+1. Sui sorts all transactions in order of gas price, with higher gas prices at the top.
 
-1. Each transaction's **execution cost is estimated** using the [`TotalGasBudgetWithCap`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs#L143) heuristic.
+1. Sui estimates each transaction's execution cost using the [`TotalGasBudgetWithCap`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs#L143) heuristic.
 
-1. The [`SharedObjectCongestionTracker`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs) keeps a running tally of how much per-object congestion budget is used. If *all* shared objects used by the transaction have enough budget left, the transaction is **scheduled**. In that case, it consumes budget for the *mutable* shared objects that it uses. (*Immutable* shared objects don't consume any budget, because multiple immutable uses of a shared object can be executed in parallel.) Otherwise it is **deferred** until the next commit.
+1. The [`SharedObjectCongestionTracker`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs) keeps a running tally of how much per-object congestion budget is used. If all shared objects used by the transaction have enough budget left, the transaction is scheduled. In that case, it consumes budget for the mutable shared objects that it uses. Keep in mind that immutable shared objects don't consume any budget, because multiple immutable uses of a shared object can execute in parallel. If the transaction is not scheduled, it is deferred until the next commit.
 
 ### Priority ordering of transactions
 
@@ -28,31 +29,31 @@ Transaction priority is determined solely by gas price. If you want your transac
 
 ### Cost estimation of transactions
 
-:::note
+:::info
 
-We are actively developing an improved algorithm for estimating transaction execution cost. This document describes how the current algorithm works.
+An improved algorithm is in active development for estimating transaction execution cost. This topic will be updated to reflect any future changes.
 
 :::
 
-Sui limits the per-commit execution capacity of each shared object. If transactions touching a shared object have a low estimated cost, more of them can fit. If they have a high estimated cost, not as many will fit.  
+Sui limits the per-commit execution capacity of each shared object. If transactions touching a shared object have a low estimated cost, more of them can fit. If they have a high estimated cost, not as many can fit.  
 
-How is the estimated cost of a transaction determined for local fee market purposes? We use a heuristic called [`TotalGasBudgetWithCap`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs#L143).
+Sui uses the `TotalGasBudgetWithCap` heuristic to estimate cost of a transaction for local fee market purposes.
 
-- A transaction's initial estimated cost is simply its **gas budget**. (Unfortunately, the final gas cost of a transaction is not known until after execution, which is too late for us to use in scheduling.)
+- A transaction's initial estimated cost is its gas budget. Unfortunately, the final gas cost of a transaction is not known until after execution, which is too late to use in scheduling.
 
 - For transactions with a very high gas budget, the estimated cost is then lowered to an upper limit that is determined based on the number of `MoveCall`s and the number of Move `Input`s in each call.
 
 ### Transaction deferral
 
-If a transaction is not able to be scheduled because it's trying to use a congested shared object with no space left, it will be **deferred**. This means that validators will hold onto the transaction try again to schedule it with the next commit, each time prioritizing all waiting transactions by gas price.
+If the network is unable to schedule a transaction because it's trying to use a congested shared object with no space left, it becomes "deferred". This means that validators hold onto the transaction and attempt to schedule it with the next commit, each time prioritizing all waiting transactions by gas price.
 
-If a transaction has been deferred for several commits without successfully being scheduled, we cancel it with the `ExecutionCancelledDueToSharedObjectCongestion` error. You'll need to try it again with a higher gas price, or at a time when the shared objects it depends on are not as congested.
+If a transaction is deferred for several commits without successful scheduling, it's cancelled and returns an `ExecutionCancelledDueToSharedObjectCongestion` error. In this case, you either need to try again with a higher gas price, or at a time when the shared objects it depends on are not as congested.
 
 ### Determining total per-object capacity
 
-At the protocol level, Sui is configured with a fixed per-commit limit and burst capacity for each shared object. On average, a shared object's activity cannot exceed the per-commit limit. However, the limit may be exceeded temporarily by short bursts of traffic.
+At the protocol level, Sui is configured with a fixed per-commit limit and burst capacity for each shared object. On average, a shared object's activity cannot exceed the per-commit limit. However, short bursts of traffic might exceed the limit temporarily.
 
-There is no way to increase the total execution capacity of a particular shared object. That limit is set by the network to ensure that validators, full nodes, and indexers can all execute checkpoints in a reasonable amount of time.
+There is no way to increase the total execution capacity of a particular shared object. The network sets that limit to ensure that validators, Full nodes, and indexers can all execute checkpoints in a reasonable amount of time.
 
 ## Practical takeaways
 
