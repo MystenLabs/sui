@@ -29,6 +29,7 @@ use sui_core::authority::authority_store_tables::{
 };
 use sui_core::authority::backpressure::BackpressureManager;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
+use sui_core::authority::execution_time_estimator::ExecutionTimeObserver;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
@@ -1363,6 +1364,12 @@ impl SuiNode {
                     .await?;
             }
         }
+
+        ExecutionTimeObserver::spawn(
+            &epoch_store,
+            Box::new(consensus_adapter.clone()),
+            config.local_execution_time_channel_capacity,
+        );
 
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
             None,

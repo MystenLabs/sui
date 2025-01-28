@@ -98,6 +98,21 @@ impl SuiTxValidator {
                     // TODO(fastpath): move deterministic verifications of user transactions here,
                     // for example validity_check() and verify_transaction().
                 }
+
+                ConsensusTransactionKind::ExecutionTimeObservation(obs) => {
+                    if obs.estimates.len()
+                        > epoch_store
+                            .protocol_config()
+                            .max_programmable_tx_commands()
+                            .try_into()
+                            .unwrap()
+                    {
+                        return Err(SuiError::UnexpectedMessage(format!(
+                            "ExecutionTimeObservation contains too many estimates: {}",
+                            obs.estimates.len()
+                        )));
+                    }
+                }
             }
         }
 
