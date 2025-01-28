@@ -10,12 +10,19 @@ use move_core_types::{
 use lasso::{Spur, ThreadedRodeo};
 
 /// A wrapper around a lasso ThreadedRoade with some niceties to make it easier to use in the VM.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct IdentifierInterner(ThreadedRodeo);
 
 pub type IdentifierKey = Spur;
 
+const STRING_SLOTS: usize = 1_000_000_000;
+
 impl IdentifierInterner {
+    pub fn new() -> Self {
+        let rodeo = ThreadedRodeo::with_capacity(lasso::Capacity::for_strings(STRING_SLOTS));
+        Self(rodeo)
+    }
+
     /// Resolve a string in the interner or produce an invariant violation (as they should always be
     /// there). The `key_type` is used to make a more-informative error message.
     pub fn resolve_string(&self, key: &IdentifierKey, key_type: &str) -> PartialVMResult<String> {
