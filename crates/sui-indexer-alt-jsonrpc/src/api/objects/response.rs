@@ -6,7 +6,7 @@ use sui_json_rpc_types::{
     SuiObjectData, SuiObjectDataOptions, SuiObjectRef, SuiPastObjectResponse,
 };
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
+    base_types::{ObjectID, ObjectType, SequenceNumber},
     digests::ObjectDigest,
     object::Object,
 };
@@ -48,15 +48,17 @@ fn object(
     object_id: ObjectID,
     version: SequenceNumber,
     bytes: &[u8],
-    _options: &SuiObjectDataOptions,
+    options: &SuiObjectDataOptions,
 ) -> Result<SuiObjectData, RpcError> {
     let object: Object = bcs::from_bytes(bytes).context("Failed to deserialize object")?;
+
+    let type_ = options.show_type.then(|| ObjectType::from(&object));
 
     Ok(SuiObjectData {
         object_id,
         version,
         digest: object.digest(),
-        type_: None,
+        type_,
         owner: None,
         previous_transaction: None,
         storage_rebate: None,

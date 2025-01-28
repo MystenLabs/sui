@@ -7,6 +7,10 @@
 // 2. ...at its first version
 // 3. ...after it has been modified
 // 4. ...after it has been deleted
+// 5. Show the type of a non-existent object verson
+// 6. Show the type of an object version
+// 7. Show the type of a deleted object version
+
 
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -43,4 +47,40 @@
 {
   "method": "sui_tryGetPastObject",
   "params": ["@{obj_1_0}", 4]
+}
+
+//# run-jsonrpc
+{
+  "method": "sui_tryGetPastObject",
+  "params": [
+    "@{obj_1_0}",
+    1,
+    {
+      "showType": true
+    }
+  ]
+}
+
+//# run-jsonrpc
+{
+  "method": "sui_tryGetPastObject",
+  "params": [
+    "@{obj_1_0}",
+    2,
+    {
+      "showType": true
+    }
+  ]
+}
+
+//# run-jsonrpc
+{
+  "method": "sui_tryGetPastObject",
+  "params": [
+    "@{obj_1_0}",
+    4,
+    {
+      "showType": true
+    }
+  ]
 }
