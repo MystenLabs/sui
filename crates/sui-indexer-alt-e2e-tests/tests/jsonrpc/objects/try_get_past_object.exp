@@ -1,9 +1,9 @@
-processed 9 tasks
+processed 12 tasks
 
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 11-13:
+task 1, lines 15-17:
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -11,25 +11,25 @@ created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 15-17:
+task 2, lines 19-21:
 //# programmable --sender A --inputs 43 object(1,0)
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: MergeCoins(Input(1), [Result(0)])
 mutated: object(0,0), object(1,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 3, lines 19-20:
+task 3, lines 23-24:
 //# programmable --sender A --inputs object(1,0)
 //> 0: MergeCoins(Gas, [Input(0)])
 mutated: object(0,0)
 deleted: object(1,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 4, line 22:
+task 4, line 26:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 24-28:
+task 5, lines 28-32:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -43,7 +43,7 @@ Response: {
   }
 }
 
-task 6, lines 30-34:
+task 6, lines 34-38:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -58,7 +58,7 @@ Response: {
   }
 }
 
-task 7, lines 36-40:
+task 7, lines 40-44:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -73,11 +73,56 @@ Response: {
   }
 }
 
-task 8, lines 42-46:
+task 8, lines 46-50:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
   "id": 3,
+  "result": {
+    "status": "ObjectDeleted",
+    "details": {
+      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "version": 4,
+      "digest": "7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz"
+    }
+  }
+}
+
+task 9, lines 52-62:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "status": "VersionNotFound",
+    "details": [
+      "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      1
+    ]
+  }
+}
+
+task 10, lines 64-74:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 5,
+  "result": {
+    "status": "VersionFound",
+    "details": {
+      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "version": "2",
+      "digest": "4wV3VBJGNaMCv9zfjSna8c4as6EkuYoqTHHjueS6S745",
+      "type": "0x2::coin::Coin<0x2::sui::SUI>"
+    }
+  }
+}
+
+task 11, lines 76-86:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 6,
   "result": {
     "status": "ObjectDeleted",
     "details": {
