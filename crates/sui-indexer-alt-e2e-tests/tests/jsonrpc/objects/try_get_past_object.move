@@ -56,7 +56,8 @@
     1,
     {
       "showType": true,
-      "showOwner": true
+      "showOwner": true,
+      "showPreviousTransaction": true
     }
   ]
 }
@@ -69,7 +70,8 @@
     2,
     {
       "showType": true,
-      "showOwner": true
+      "showOwner": true,
+      "showPreviousTransaction": true
     }
   ]
 }
@@ -82,7 +84,8 @@
     4,
     {
       "showType": true,
-      "showOwner": true
+      "showOwner": true,
+      "showPreviousTransaction": true
     }
   ]
 }

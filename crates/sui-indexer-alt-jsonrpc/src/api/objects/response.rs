@@ -54,6 +54,9 @@ fn object(
 
     let type_ = options.show_type.then(|| ObjectType::from(&object));
     let owner = options.show_owner.then(|| object.owner().clone());
+    let previous_transaction = options
+        .show_previous_transaction
+        .then(|| object.previous_transaction);
 
     Ok(SuiObjectData {
         object_id,
@@ -61,7 +64,7 @@ fn object(
         digest: object.digest(),
         type_,
         owner,
-        previous_transaction: None,
+        previous_transaction,
         storage_rebate: None,
         display: None,
         content: None,
