@@ -7,10 +7,9 @@
 // 2. ...at its first version
 // 3. ...after it has been modified
 // 4. ...after it has been deleted
-// 5. Show the type of a non-existent object verson
-// 6. Show the type of an object version
-// 7. Show the type of a deleted object version
-
+// 5. Show the details of a non-existent object verson
+// 6. Show the details of an object version
+// 7. Show the details of a deleted object version
 
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -56,7 +55,8 @@
     "@{obj_1_0}",
     1,
     {
-      "showType": true
+      "showType": true,
+      "showOwner": true
     }
   ]
 }
@@ -68,7 +68,8 @@
     "@{obj_1_0}",
     2,
     {
-      "showType": true
+      "showType": true,
+      "showOwner": true
     }
   ]
 }
@@ -80,7 +81,8 @@
     "@{obj_1_0}",
     4,
     {
-      "showType": true
+      "showType": true,
+      "showOwner": true
     }
   ]
 }

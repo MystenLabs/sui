@@ -53,13 +53,14 @@ fn object(
     let object: Object = bcs::from_bytes(bytes).context("Failed to deserialize object")?;
 
     let type_ = options.show_type.then(|| ObjectType::from(&object));
+    let owner = options.show_owner.then(|| object.owner().clone());
 
     Ok(SuiObjectData {
         object_id,
         version,
         digest: object.digest(),
         type_,
-        owner: None,
+        owner,
         previous_transaction: None,
         storage_rebate: None,
         display: None,
