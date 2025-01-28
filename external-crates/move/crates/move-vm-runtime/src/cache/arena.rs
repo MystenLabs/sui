@@ -48,18 +48,18 @@ impl Arena {
 
         // Allocate memory for the slice
         if let Ok(ptr) = self.0.try_alloc_layout(layout) {
+            let mut_ptr = ptr.as_ptr() as *mut T;
+
+            // Move the items into the allocated memory -- essentially `memcpy`
             unsafe {
-                let slice_ptr = ptr.as_ptr() as *mut T;
-
-                // Move the items into the allocated memory
-                std::ptr::copy_nonoverlapping(items.as_ptr(), slice_ptr, len);
-
-                // Prevent the original vector from dropping its data
-                std::mem::forget(items);
-
-                // Return the raw pointer to the allocated slice
-                Ok(std::slice::from_raw_parts_mut(slice_ptr, len) as *mut [T])
+                std::ptr::copy_nonoverlapping(items.as_ptr(), mut_ptr, len);
             }
+
+            // Prevent the original vector from dropping its data
+            std::mem::forget(items);
+
+            // Return the raw pointer to the allocated slice
+            unsafe { Ok(std::slice::from_raw_parts_mut(mut_ptr, len)) }
         } else {
             Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)

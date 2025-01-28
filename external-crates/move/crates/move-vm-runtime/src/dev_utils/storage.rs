@@ -349,7 +349,7 @@ impl<'a, 'b, S: ModuleResolver> ModuleResolver for DeltaStorage<'a, 'b, S> {
             let base_results = self.base.get_packages(&not_found_in_delta)?;
 
             // Extend results with those from the base lookup
-            results.extend(base_results.into_iter());
+            results.extend(base_results);
         }
 
         // Match the output order of the input `ids`
