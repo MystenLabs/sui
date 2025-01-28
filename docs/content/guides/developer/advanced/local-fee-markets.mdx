@@ -45,7 +45,7 @@ Sui uses the `TotalGasBudgetWithCap` heuristic to estimate cost of a transaction
 
 ### Transaction deferral
 
-If the network is unable to schedule a transaction because it's trying to use a congested shared object with no space left, it becomes "deferred". This means that validators hold onto the transaction and attempt to schedule it with the next commit, each time prioritizing all waiting transactions by gas price.
+If the network is unable to schedule a transaction because it's trying to use a congested shared object with no space left, it becomes deferred. This means that validators hold onto the transaction and attempt to schedule it with the next commit, each time prioritizing all waiting transactions by gas price.
 
 If a transaction is deferred for several commits without successful scheduling, it's cancelled and returns an `ExecutionCancelledDueToSharedObjectCongestion` error. In this case, you either need to try again with a higher gas price, or at a time when the shared objects it depends on are not as congested.
 
