@@ -848,14 +848,30 @@ async fn trades(
     let trade_data: Vec<HashMap<String, Value>> = trades
         .into_iter()
         .map(
-            |(maker_order_id, taker_order_id, price, base_quantity, quote_quantity, timestamp, taker_is_bid, maker_balance_manager_id, taker_balance_manager_id)| {
+            |(
+                maker_order_id,
+                taker_order_id,
+                price,
+                base_quantity,
+                quote_quantity,
+                timestamp,
+                taker_is_bid,
+                maker_balance_manager_id,
+                taker_balance_manager_id,
+            )| {
                 let trade_id = calculate_trade_id(&maker_order_id, &taker_order_id).unwrap_or(0);
                 let trade_type = if taker_is_bid { "buy" } else { "sell" };
 
                 HashMap::from([
                     ("trade_id".to_string(), Value::from(trade_id.to_string())),
-                    ("maker_balance_manager_id".to_string(), Value::from(maker_balance_manager_id)),
-                    ("taker_balance_manager_id".to_string(), Value::from(taker_balance_manager_id)),
+                    (
+                        "maker_balance_manager_id".to_string(),
+                        Value::from(maker_balance_manager_id),
+                    ),
+                    (
+                        "taker_balance_manager_id".to_string(),
+                        Value::from(taker_balance_manager_id),
+                    ),
                     (
                         "price".to_string(),
                         Value::from(price as f64 / price_factor as f64),
