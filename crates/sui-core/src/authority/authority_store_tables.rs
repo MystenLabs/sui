@@ -202,8 +202,10 @@ impl AuthorityPerpetualTables {
         // *** Key spaces with MUTEXES * default_cells_per_mutex() cells
         let objects_config = KeySpaceConfig::new().with_compactor(Box::new(objects_compactor));
         let bloom_config =  KeySpaceConfig::new().with_bloom_filter();
-        let objects = builder.add_key_space_config("objects", 32 + 8, MUTEXES, default_cells_per_mutex(), objects_config);
-        let live_owned_object_markers = builder.add_key_space_config("live_owned_object_markers", 32 + 8 + 32 + 8, MUTEXES, default_cells_per_mutex(), bloom_config.clone());
+        let objects_cells_per_mutex = default_cells_per_mutex() * 4;
+        let objects = builder.add_key_space_config("objects", 32 + 8, MUTEXES, objects_cells_per_mutex, objects_config);
+        let live_owned_object_markers_cells_per_mutex = default_cells_per_mutex() * 4;
+        let live_owned_object_markers = builder.add_key_space_config("live_owned_object_markers", 32 + 8 + 32 + 8, MUTEXES, live_owned_object_markers_cells_per_mutex, bloom_config.clone());
         const VALUE_CACHE_SIZE: usize = 20_000;
         let transactions_config = KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE);
         let transactions = builder.add_key_space_config("transactions", 32, MUTEXES, default_cells_per_mutex(), transactions_config);
