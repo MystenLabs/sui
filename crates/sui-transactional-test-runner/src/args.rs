@@ -192,6 +192,8 @@ pub struct RunGraphqlCommand {
 pub struct RunJsonRpcCommand {
     #[clap(long = "show-headers")]
     pub show_headers: bool,
+    #[clap(long, num_args(1..))]
+    pub cursors: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]
