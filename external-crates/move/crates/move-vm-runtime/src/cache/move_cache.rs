@@ -6,8 +6,8 @@
 // and publishing packages to the VM.
 
 use crate::{
-    jit, natives::functions::NativeFunctions,
-    shared::types::PackageStorageId, validation::verification,
+    jit, natives::functions::NativeFunctions, shared::types::PackageStorageId,
+    validation::verification,
 };
 use move_vm_config::runtime::VMConfig;
 use parking_lot::RwLock;
