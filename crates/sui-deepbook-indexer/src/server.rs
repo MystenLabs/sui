@@ -793,14 +793,30 @@ async fn trades(
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(1);
 
+    // Parse optional filters for balance managers
+    let maker_balance_manager_filter = params.get("maker_balance_manager_id").cloned();
+    let taker_balance_manager_filter = params.get("taker_balance_manager_id").cloned();
+
     let (pool_id, base_decimals, quote_decimals) = pool_data;
     let base_decimals = base_decimals as u8;
     let quote_decimals = quote_decimals as u8;
 
-    // Fetch latest trades (sorted by timestamp in descending order) within the time range, applying the limit
-    let trades = schema::order_fills::table
+    // Build the query dynamically
+    let mut query = schema::order_fills::table
         .filter(schema::order_fills::pool_id.eq(pool_id))
         .filter(schema::order_fills::checkpoint_timestamp_ms.between(start_time, end_time))
+        .into_boxed();
+
+    // Apply optional filters if parameters are provided
+    if let Some(maker_id) = maker_balance_manager_filter {
+        query = query.filter(schema::order_fills::maker_balance_manager_id.eq(maker_id));
+    }
+    if let Some(taker_id) = taker_balance_manager_filter {
+        query = query.filter(schema::order_fills::taker_balance_manager_id.eq(taker_id));
+    }
+
+    // Fetch latest trades (sorted by timestamp in descending order) within the time range, applying the limit
+    let trades = query
         .order_by(schema::order_fills::checkpoint_timestamp_ms.desc()) // Ensures latest trades come first
         .limit(limit) // Apply limit to get the most recent trades
         .select((
@@ -811,8 +827,10 @@ async fn trades(
             schema::order_fills::quote_quantity,
             schema::order_fills::checkpoint_timestamp_ms,
             schema::order_fills::taker_is_bid,
+            schema::order_fills::maker_balance_manager_id,
+            schema::order_fills::taker_balance_manager_id,
         ))
-        .load::<(String, String, i64, i64, i64, i64, bool)>(connection)
+        .load::<(String, String, i64, i64, i64, i64, bool, String, String)>(connection)
         .await
         .map_err(|_| {
             DeepBookError::InternalError(format!(
@@ -830,12 +848,14 @@ async fn trades(
     let trade_data: Vec<HashMap<String, Value>> = trades
         .into_iter()
         .map(
-            |(maker_order_id, taker_order_id, price, base_quantity, quote_quantity, timestamp, taker_is_bid)| {
+            |(maker_order_id, taker_order_id, price, base_quantity, quote_quantity, timestamp, taker_is_bid, maker_balance_manager_id, taker_balance_manager_id)| {
                 let trade_id = calculate_trade_id(&maker_order_id, &taker_order_id).unwrap_or(0);
                 let trade_type = if taker_is_bid { "buy" } else { "sell" };
 
                 HashMap::from([
                     ("trade_id".to_string(), Value::from(trade_id.to_string())),
+                    ("maker_balance_manager_id".to_string(), Value::from(maker_balance_manager_id)),
+                    ("taker_balance_manager_id".to_string(), Value::from(taker_balance_manager_id)),
                     (
                         "price".to_string(),
                         Value::from(price as f64 / price_factor as f64),
