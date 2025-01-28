@@ -653,7 +653,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
 
                 Ok(Some(output.join("\n")))
             }
-            SuiSubcommand::RunJsonRpc(RunJsonRpcCommand { show_headers }) => {
+            SuiSubcommand::RunJsonRpc(RunJsonRpcCommand {
+                show_headers,
+                cursors,
+            }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing JSON-RPC query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
 
@@ -667,7 +670,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
                     .await;
 
-                let interpolated = self.interpolate_query(&contents, &[], highest_checkpoint)?;
+                let interpolated =
+                    self.interpolate_query(&contents, &cursors, highest_checkpoint)?;
 
                 #[derive(Deserialize)]
                 struct Query {
