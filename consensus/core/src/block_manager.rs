@@ -536,6 +536,11 @@ impl BlockManager {
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
     ) -> Vec<VerifiedBlock> {
+        assert!(
+            self.dag_state.read().gc_enabled(),
+            "GC should be enabled when accepting committed blocks"
+        );
+
         // Just accept the blocks
         let _s = monitored_scope("BlockManager::try_accept_committed_blocks");
         let mut accepted_blocks = vec![];
@@ -1092,6 +1097,64 @@ mod tests {
                 assert!(dag_state.read().contains_block(&block.reference()));
             }
         }
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn try_accept_committed_blocks() {
+        // GIVEN
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        // We set the gc depth to 4
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        // We "fake" the commit for round 6, so GC round moves to (commit_round - gc_depth = 6 - 4 = 2)
+        let last_commit = TrustedCommit::new_for_test(
+            10,
+            CommitDigest::MIN,
+            context.clock.timestamp_utc_ms(),
+            BlockRef::new(6, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+            vec![],
+        );
+        dag_state.write().set_last_commit(last_commit);
+        assert_eq!(
+            dag_state.read().gc_round(),
+            2,
+            "GC round should have moved to round 2"
+        );
+
+        let mut block_manager =
+            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+
+        // create a DAG of 12 rounds
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=12).build();
+
+        // Now try to accept via the normal acceptance block path the blocks of rounds 7 ~ 12. None of them should be accepted
+        let blocks = dag_builder.blocks(7..=12);
+        let (accepted_blocks, missing) = block_manager.try_accept_blocks(blocks.clone());
+        assert!(accepted_blocks.is_empty());
+        assert_eq!(missing.len(), 4);
+
+        // Now try to accept via the committed blocks path the blocks of rounds 3 ~ 6. All of them should be accepted and also the blocks
+        // of rounds 7 ~ 12 should be unsuspended and accepted as well.
+        let blocks = dag_builder.blocks(3..=6);
+
+        // WHEN
+        let mut accepted_blocks = block_manager.try_accept_committed_blocks(blocks);
+
+        // THEN
+        accepted_blocks.sort_by_key(|b| b.reference());
+
+        let mut all_blocks = dag_builder.blocks(3..=12);
+        all_blocks.sort_by_key(|b| b.reference());
+
+        assert_eq!(accepted_blocks, all_blocks);
+        assert!(block_manager.is_empty());
     }
 
     struct TestBlockVerifier {

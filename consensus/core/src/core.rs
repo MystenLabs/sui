@@ -1,7 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, iter, sync::Arc, time::Duration, vec};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    iter,
+    sync::Arc,
+    time::Duration,
+    vec,
+};
 
 #[cfg(test)]
 use consensus_config::{local_committee_and_keys, Stake};
@@ -669,6 +675,11 @@ impl Core {
             .with_label_values(&["Core::try_commit"])
             .start_timer();
 
+        let mut synced_commits_map = BTreeMap::new();
+        for commit in &synced_commits {
+            synced_commits_map.insert(commit.index(), commit.reference());
+        }
+
         if !synced_commits.is_empty() {
             info!(
                 "Will try to commit synced commits first : {:?}",
@@ -795,6 +806,16 @@ impl Core {
                 .try_unsuspend_blocks_for_latest_gc_round();
 
             committed_sub_dags.extend(subdags);
+        }
+
+        // Sanity check: for commits that have been linearized using the synced commits, ensure that the same sub dag has been committed.
+        for sub_dag in &committed_sub_dags {
+            if let Some(commit_ref) = synced_commits_map.remove(&sub_dag.commit_ref.index) {
+                assert_eq!(
+                    commit_ref, sub_dag.commit_ref,
+                    "Synced commit has different reference than the committed sub dag"
+                );
+            }
         }
 
         // Notify about our own committed blocks
@@ -1367,6 +1388,7 @@ mod test {
     use crate::{
         block::{genesis_blocks, TestBlock},
         block_verifier::NoopBlockVerifier,
+        commit::CommitAPI,
         leader_scoring::ReputationScores,
         storage::{mem_store::MemStore, Store, WriteBatch},
         test_dag_builder::DagBuilder,
@@ -3107,6 +3129,160 @@ mod test {
                     .reputation_scores,
                 expected_reputation_scores
             );
+        }
+    }
+
+    // This will test the following scenarios:
+    // * We do have synced commits
+    #[tokio::test]
+    async fn try_commit_with_synced_commits() {
+        telemetry_subscribers::init_for_testing();
+
+        let (context, mut key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        }));
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
+        let leader_schedule = Arc::new(
+            LeaderSchedule::from_store(context.clone(), dag_state.clone())
+                .with_num_commits_per_schedule(10),
+        );
+
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        // Need at least one subscriber to the block broadcast channel.
+        let _block_receiver = signal_receivers.block_broadcast_receiver();
+
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            commit_consumer,
+            dag_state.clone(),
+            store.clone(),
+            leader_schedule.clone(),
+        );
+
+        let mut core = Core::new(
+            context.clone(),
+            leader_schedule,
+            transaction_consumer,
+            block_manager,
+            true,
+            commit_observer,
+            signals,
+            key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
+            true,
+        );
+
+        // No new block should have been produced
+        assert_eq!(
+            core.last_proposed_round(),
+            GENESIS_ROUND,
+            "No block should have been created other than genesis"
+        );
+
+        // create a DAG of 12 rounds
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=12).build();
+
+        // Store all blocks up to round 6 which should be enough to decide up to leader 4
+        dag_builder.print();
+        let blocks = dag_builder.blocks(1..=6);
+
+        for block in blocks {
+            dag_state.write().accept_block(block);
+        }
+
+        // Get all the committed sub dags up to round 10
+        let sub_dags_and_commits = dag_builder.get_sub_dag_and_commits(1..=10);
+
+        // Now try to commit up to the latest leader (round = 4). Do not provide any synced commits.
+        let committed_sub_dags = core.try_commit(vec![]).unwrap();
+
+        // We should have committed up to round 4
+        assert_eq!(committed_sub_dags.len(), 4);
+
+        // Now try to commit providing the synced commits. We'll try 3 different scenarios
+        // 1. Provide sync commits that are all before the last committed round
+        // 2. Provide sync commits that are before and after the last committed round
+        // 3. Provide sync commits that are all after the last committed round and also there are additional blocks so can run the direct decide rule as well
+
+        println!("Case 1. Provide sync commits that are all before the last committed round.");
+
+        // Highest synced commit should be for leader of round 4.
+        let synced_commits = sub_dags_and_commits
+            .iter()
+            .take(4)
+            .map(|(_, c)| c.clone())
+            .collect::<Vec<_>>();
+        assert!(
+            synced_commits.last().unwrap().index()
+                <= committed_sub_dags.last().unwrap().commit_ref.index,
+            "Highest synced commit should older than the highest committed index."
+        );
+
+        // Try commit using the synced commits
+        let committed_sub_dags = core.try_commit(synced_commits).expect("Should not fail");
+
+        // Nothing should be committed
+        assert!(committed_sub_dags.is_empty());
+
+        println!("Case 2. Provide sync commits that are all after the last committed round");
+
+        // Highest synced commit should be for leader of round 4.
+        let synced_commits = sub_dags_and_commits
+            .iter()
+            .take(5)
+            .map(|(_, c)| c.clone())
+            .collect::<Vec<_>>();
+
+        // Try commit using the synced commits
+        let committed_sub_dags = core
+            .try_commit(synced_commits.clone())
+            .expect("Should not fail");
+
+        // The sub dag of index 5 should be committed.
+        assert_eq!(committed_sub_dags.len(), 1);
+        let committed_sub_dag = committed_sub_dags.first().unwrap();
+        assert_eq!(committed_sub_dag.commit_ref.index, 5);
+
+        println!("Case 3. Provide sync commits that are all after the last committed round and also there are additional blocks so can run the direct decide rule as well");
+
+        let synced_commits = sub_dags_and_commits
+            .iter()
+            .skip(5)
+            .take(1)
+            .map(|(_, c)| c.clone())
+            .collect::<Vec<_>>();
+
+        // Now also add the blocks up to round 12
+        let blocks = dag_builder.blocks(7..=12);
+        for block in blocks {
+            dag_state.write().accept_block(block);
+        }
+
+        // Try commit using the synced commits
+        let committed_sub_dags = core
+            .try_commit(synced_commits.clone())
+            .expect("Should not fail");
+
+        // We expect all the sub dags up to leader round 10 to be committed.
+        assert_eq!(committed_sub_dags.len(), 5);
+
+        for i in 6..=10 {
+            let committed_sub_dag = &committed_sub_dags[i - 6];
+            assert_eq!(committed_sub_dag.commit_ref.index, i as u32);
         }
     }
 
