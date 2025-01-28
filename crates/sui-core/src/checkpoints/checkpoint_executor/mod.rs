@@ -436,7 +436,7 @@ impl CheckpointExecutor {
 
     /// Post processing and plumbing after we executed a checkpoint. This function is guaranteed
     /// to be called in the order of checkpoint sequence number.
-    #[instrument(level = "debug", skip_all)]
+    #[instrument(level = "info", skip_all, fields(seq = ?checkpoint.sequence_number()))]
     async fn process_executed_checkpoint(
         &self,
         epoch_store: &AuthorityPerEpochStore,
@@ -447,7 +447,7 @@ impl CheckpointExecutor {
     ) {
         // Commit all transaction effects to disk
         let cache_commit = self.state.get_cache_commit();
-        debug!(seq = ?checkpoint.sequence_number, "committing checkpoint transactions to disk");
+        debug!("committing checkpoint transactions to disk");
         cache_commit
             .commit_transaction_outputs(
                 epoch_store.epoch(),
@@ -1040,8 +1040,8 @@ fn extract_end_of_epoch_tx(
     let change_epoch_tx = VerifiedExecutableTransaction::new_from_checkpoint(
         (*change_epoch_tx.unwrap_or_else(||
             panic!(
-                "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
-                digests.transaction,
+                "state-sync should have ensured that transaction with digests {:?} exists for checkpoint: {checkpoint:?}",
+                digests
             )
         )).clone(),
         epoch_store.epoch(),
@@ -1100,16 +1100,15 @@ fn get_unexecuted_transactions(
 
     // Remove the change epoch transaction so that we can special case its execution.
     checkpoint.end_of_epoch_data.as_ref().tap_some(|_| {
-        let change_epoch_tx_digest = execution_digests
+        let digests = execution_digests
             .pop()
-            .expect("Final checkpoint must have at least one transaction")
-            .transaction;
+            .expect("Final checkpoint must have at least one transaction");
 
         let change_epoch_tx = cache_reader
-            .get_transaction_block(&change_epoch_tx_digest)
+            .get_transaction_block(&digests.transaction)
             .unwrap_or_else(||
                 panic!(
-                    "state-sync should have ensured that transaction with digest {change_epoch_tx_digest:?} exists for checkpoint: {}",
+                    "state-sync should have ensured that transaction with digests {digests:?} exists for checkpoint: {}",
                     checkpoint.sequence_number()
                 )
             );
@@ -1138,7 +1137,7 @@ fn get_unexecuted_transactions(
             let maybe_randomness_tx = cache_reader.get_transaction_block(&first_digest.transaction)
             .unwrap_or_else(||
                 panic!(
-                    "state-sync should have ensured that transaction with digest {first_digest:?} exists for checkpoint: {}",
+                    "state-sync should have ensured that transaction with digests {first_digest:?} exists for checkpoint: {}",
                     checkpoint.sequence_number()
                 )
             );
