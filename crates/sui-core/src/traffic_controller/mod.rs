@@ -479,9 +479,15 @@ async fn run_tally_loop(
             }
             // process channel for receiving new policy config
             Ok(config) = reconfigure_rx.recv() => {
+                info!(
+                    "Received new traffic control policy. Reconfiguring traffic \
+                    controller with the following: {:?}",
+                    config,
+                );
                 // mutate the policy config
                 spam_policy = TrafficControlPolicy::from_spam_config(config.clone()).await;
                 error_policy = TrafficControlPolicy::from_error_config(config.clone()).await;
+                info!("Traffic controller reconfiguration complete");
             }
         }
 

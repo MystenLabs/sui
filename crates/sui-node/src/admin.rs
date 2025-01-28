@@ -87,7 +87,7 @@ const RANDOMNESS_INJECT_PARTIAL_SIGS_ROUTE: &str = "/randomness-inject-partial-s
 const RANDOMNESS_INJECT_FULL_SIG_ROUTE: &str = "/randomness-inject-full-sig";
 const GET_TX_COST_ROUTE: &str = "/get-tx-cost";
 const DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE: &str = "/dump-consensus-tx-cost-estimates";
-const RECONFIGURE_TRAFFIC_CONTROL: &str = "/reconfigure-traffic-control";
+const TRAFFIC_CONTROL: &str = "/traffic-control";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -132,10 +132,7 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, tracing_handle: Tra
             DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE,
             get(dump_consensus_tx_cost_estimates),
         )
-        .route(
-            RECONFIGURE_TRAFFIC_CONTROL,
-            post(reconfigure_traffic_control),
-        )
+        .route(TRAFFIC_CONTROL, post(traffic_control))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -510,7 +507,7 @@ struct TrafficControlConfig {
     dry_run: Option<bool>,
 }
 
-async fn reconfigure_traffic_control(
+async fn traffic_control(
     State(state): State<Arc<AppState>>,
     args: Query<TrafficControlConfig>,
 ) -> (StatusCode, String) {
