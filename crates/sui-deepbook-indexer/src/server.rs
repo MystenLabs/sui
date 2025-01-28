@@ -753,6 +753,7 @@ async fn price_change_24h(
 
 async fn trades(
     Path(pool_name): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
     // Fetch all pools to map names to IDs and decimals
@@ -768,13 +769,32 @@ async fn trades(
         .await
         .map_err(|_| DeepBookError::InternalError(format!("Pool '{}' not found", pool_name)))?;
 
+    // Parse start_time and end_time
+    let end_time = params
+        .get("end_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64
+        });
+
+    let start_time = params
+        .get("start_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| end_time - 24 * 60 * 60 * 1000);
+
     let (pool_id, base_decimals, quote_decimals) = pool_data;
     let base_decimals = base_decimals as u8;
     let quote_decimals = quote_decimals as u8;
 
-    // Fetch the last trade for the pool from the order_fills table
-    let last_trade = schema::order_fills::table
+    // Fetch all trades within the time range for the pool
+    let trades = schema::order_fills::table
         .filter(schema::order_fills::pool_id.eq(pool_id))
+        .filter(schema::order_fills::checkpoint_timestamp_ms.between(start_time, end_time))
         .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
         .select((
             schema::order_fills::maker_order_id,
@@ -785,51 +805,50 @@ async fn trades(
             schema::order_fills::checkpoint_timestamp_ms,
             schema::order_fills::taker_is_bid,
         ))
-        .first::<(String, String, i64, i64, i64, i64, bool)>(connection)
+        .load::<(String, String, i64, i64, i64, i64, bool)>(connection)
         .await
         .map_err(|_| {
-            DeepBookError::InternalError(format!("No trades found for pool '{}'", pool_name))
+            DeepBookError::InternalError(format!(
+                "No trades found for pool '{}' in the specified time range",
+                pool_name
+            ))
         })?;
-
-    let (
-        maker_order_id,
-        taker_order_id,
-        price,
-        base_quantity,
-        quote_quantity,
-        timestamp,
-        taker_is_bid,
-    ) = last_trade;
-
-    // Calculate the `trade_id` using the external function
-    let trade_id = calculate_trade_id(&maker_order_id, &taker_order_id)?;
 
     // Conversion factors for decimals
     let base_factor = 10u64.pow(base_decimals as u32);
     let quote_factor = 10u64.pow(quote_decimals as u32);
     let price_factor = 10u64.pow((9 - base_decimals + quote_decimals) as u32);
-    let trade_type = if taker_is_bid { "buy" } else { "sell" };
 
-    // Prepare the trade data
-    let trade = HashMap::from([
-        ("trade_id".to_string(), Value::from(trade_id.to_string())), // Computed from `maker_id` and `taker_id`
-        (
-            "price".to_string(),
-            Value::from(price as f64 / price_factor as f64),
-        ),
-        (
-            "base_volume".to_string(),
-            Value::from(base_quantity as f64 / base_factor as f64),
-        ),
-        (
-            "quote_volume".to_string(),
-            Value::from(quote_quantity as f64 / quote_factor as f64),
-        ),
-        ("timestamp".to_string(), Value::from(timestamp as u64)),
-        ("type".to_string(), Value::from(trade_type)), // Trade type (buy/sell)
-    ]);
+    // Map trades to JSON format
+    let trade_data: Vec<HashMap<String, Value>> = trades
+        .into_iter()
+        .map(
+            |(maker_order_id, taker_order_id, price, base_quantity, quote_quantity, timestamp, taker_is_bid)| {
+                let trade_id = calculate_trade_id(&maker_order_id, &taker_order_id).unwrap_or(0);
+                let trade_type = if taker_is_bid { "buy" } else { "sell" };
 
-    Ok(Json(vec![trade]))
+                HashMap::from([
+                    ("trade_id".to_string(), Value::from(trade_id.to_string())),
+                    (
+                        "price".to_string(),
+                        Value::from(price as f64 / price_factor as f64),
+                    ),
+                    (
+                        "base_volume".to_string(),
+                        Value::from(base_quantity as f64 / base_factor as f64),
+                    ),
+                    (
+                        "quote_volume".to_string(),
+                        Value::from(quote_quantity as f64 / quote_factor as f64),
+                    ),
+                    ("timestamp".to_string(), Value::from(timestamp as u64)),
+                    ("type".to_string(), Value::from(trade_type)),
+                ])
+            },
+        )
+        .collect();
+
+    Ok(Json(trade_data))
 }
 
 async fn trade_count(
