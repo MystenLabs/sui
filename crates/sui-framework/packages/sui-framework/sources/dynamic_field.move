@@ -49,6 +49,9 @@ public fun add<Name: copy + drop + store, Value: store>(
         name,
         value,
     };
+
+    log_operation!(b"add", &name);
+
     add_child_object(object_addr, field)
 }
 
@@ -60,6 +63,7 @@ public fun borrow<Name: copy + drop + store, Value: store>(object: &UID, name: N
     let object_addr = object.to_address();
     let hash = hash_type_and_key(object_addr, name);
     let field = borrow_child_object<Field<Name, Value>>(object, hash);
+    log_operation!(b"borrow", &name);
     &field.value
 }
 
@@ -74,6 +78,7 @@ public fun borrow_mut<Name: copy + drop + store, Value: store>(
     let object_addr = object.to_address();
     let hash = hash_type_and_key(object_addr, name);
     let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
+    log_operation!(b"borrow_mut", &name);
     &mut field.value
 }
 
@@ -87,6 +92,7 @@ public fun remove<Name: copy + drop + store, Value: store>(object: &mut UID, nam
     let hash = hash_type_and_key(object_addr, name);
     let Field { id, name: _, value } = remove_child_object<Field<Name, Value>>(object_addr, hash);
     id.delete();
+    log_operation!(b"remove", &name);
     value
 }
 
@@ -95,6 +101,7 @@ public fun remove<Name: copy + drop + store, Value: store>(object: &mut UID, nam
 public fun exists_<Name: copy + drop + store>(object: &UID, name: Name): bool {
     let object_addr = object.to_address();
     let hash = hash_type_and_key(object_addr, name);
+    log_operation!(b"exists_", &name);
     has_child_object(object_addr, hash)
 }
 
@@ -118,6 +125,7 @@ public fun exists_with_type<Name: copy + drop + store, Value: store>(
 ): bool {
     let object_addr = object.to_address();
     let hash = hash_type_and_key(object_addr, name);
+    log_operation!(b"exists_with_type", &name);
     has_child_object_with_ty<Field<Name, Value>>(object_addr, hash)
 }
 
@@ -168,3 +176,13 @@ public(package) native fun remove_child_object<Child: key>(parent: address, id: 
 public(package) native fun has_child_object(parent: address, id: address): bool;
 
 public(package) native fun has_child_object_with_ty<Child: key>(parent: address, id: address): bool;
+
+macro fun log_operation<$T>($op: vector<u8>, $key: &$T) {
+    let op = $op;
+    let bytes = sui::bcs::to_bytes($key);
+    let hash = sui::hex::encode(bytes);
+    let mut str = op.to_string();
+    str.append_utf8(b": ");
+    str.append_utf8(hash);
+    std::debug::print(&str);
+}

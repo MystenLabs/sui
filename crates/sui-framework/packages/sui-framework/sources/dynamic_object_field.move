@@ -29,6 +29,7 @@ public fun add<Name: copy + drop + store, Value: key + store>(
     name: Name,
     value: Value,
 ) {
+    log_operation!(b"o_add", &name);
     add_impl!(object, name, value)
 }
 
@@ -37,6 +38,7 @@ public fun add<Name: copy + drop + store, Value: key + store>(
 /// Aborts with `EFieldTypeMismatch` if the field exists, but the value object does not have the
 /// specified type.
 public fun borrow<Name: copy + drop + store, Value: key + store>(object: &UID, name: Name): &Value {
+    log_operation!(b"o_borrow", &name);
     borrow_impl!(object, name)
 }
 
@@ -48,6 +50,7 @@ public fun borrow_mut<Name: copy + drop + store, Value: key + store>(
     object: &mut UID,
     name: Name,
 ): &mut Value {
+    log_operation!(b"o_borrow_mut", &name);
     borrow_mut_impl!(object, name)
 }
 
@@ -60,6 +63,7 @@ public fun remove<Name: copy + drop + store, Value: key + store>(
     object: &mut UID,
     name: Name,
 ): Value {
+    log_operation!(b"o_remove", &name);
     remove_impl!(object, name)
 }
 
@@ -76,6 +80,7 @@ public fun exists_with_type<Name: copy + drop + store, Value: key + store>(
     object: &UID,
     name: Name,
 ): bool {
+    log_operation!(b"o_exists_with_type", &name);
     exists_with_type_impl!<_, Value>(object, name)
 }
 
@@ -186,4 +191,14 @@ macro fun exists_with_type_impl<$Name: copy + drop + store, $Value: key>(
     if (!field::exists_with_type<Wrapper<$Name>, ID>(object, key)) return false;
     let (field, value_id) = field::field_info<Wrapper<$Name>>(object, key);
     field::has_child_object_with_ty<$Value>(field.to_address(), value_id)
+}
+
+macro fun log_operation<$T>($op: vector<u8>, $key: &$T) {
+    let op = $op;
+    let bytes = sui::bcs::to_bytes($key);
+    let hash = sui::hex::encode(bytes);
+    let mut str = op.to_string();
+    str.append_utf8(b": ");
+    str.append_utf8(hash);
+    std::debug::print(&str);
 }
