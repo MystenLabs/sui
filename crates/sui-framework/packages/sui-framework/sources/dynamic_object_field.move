@@ -210,6 +210,7 @@ macro fun log_operation<$T>($op: vector<u8>, $key: &$T) {
     let mut str = op.to_string();
     str.append_utf8(b": ");
     str.append(type_name.to_string());
+    str.append_utf8(b"; ");
     str.append_utf8(hash);
     std::debug::print(&str);
 }
