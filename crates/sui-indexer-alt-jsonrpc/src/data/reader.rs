@@ -9,7 +9,6 @@ use diesel::pg::Pg;
 use diesel::query_builder::QueryFragment;
 use diesel::query_dsl::methods::LimitDsl;
 use diesel::result::Error as DieselError;
-use diesel::sql_query;
 use diesel_async::methods::LoadQuery;
 use diesel_async::RunQueryDsl;
 use prometheus::Registry;
@@ -108,26 +107,6 @@ impl<'p> Connection<'p> {
 
         let _guard = self.metrics.db_latency.start_timer();
         let res = query.get_results(&mut self.conn).await;
-
-        if res.is_ok() {
-            self.metrics.db_requests_succeeded.inc();
-        } else {
-            self.metrics.db_requests_failed.inc();
-        }
-
-        Ok(res?)
-    }
-
-    // TODO: Use the `RawSqlQuery` from GraphQL implementation.
-    pub(crate) async fn raw_query<U>(&mut self, query: &str) -> Result<Vec<U>, ReadError>
-    where
-        U: diesel::QueryableByName<diesel::pg::Pg> + Send + 'static,
-    {
-        debug!("Raw query: {}", query);
-
-        let _guard = self.metrics.db_latency.start_timer();
-
-        let res = sql_query(query).load::<U>(&mut self.conn).await;
 
         if res.is_ok() {
             self.metrics.db_requests_succeeded.inc();
