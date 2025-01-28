@@ -215,6 +215,6 @@ pub fn normalize_path(path: &str) -> &str {
 pub fn is_path_tracked(path: &str) -> bool {
     matches!(
         path,
-        "/v1/gas" | "/gas" | "/v1/status" | "/v1/faucet_web_gas"
+        "/v1/gas" | "/gas" | "/v1/status" | "/v1/faucet_web_gas" | "/v1/faucet_discord"
     )
 }
