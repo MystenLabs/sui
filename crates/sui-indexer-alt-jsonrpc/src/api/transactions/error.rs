@@ -5,6 +5,12 @@ use sui_types::{base_types::ObjectID, digests::TransactionDigest};
 
 #[derive(thiserror::Error, Debug)]
 pub(super) enum Error {
+    #[error("Cannot filter by function name {function:?} without specifying a module")]
+    MissingModule { function: String },
+
+    #[error("Transaction {0} not found")]
+    NotFound(TransactionDigest),
+
     #[error("Pagination issue: {0}")]
     Pagination(#[from] crate::paginate::Error),
 
@@ -16,9 +22,6 @@ pub(super) enum Error {
         .1.to_canonical_display(/* with_prefix */ true),
     )]
     PrunedObject(TransactionDigest, ObjectID, u64),
-
-    #[error("Transaction {0} not found")]
-    NotFound(TransactionDigest),
 
     #[error("{0}")]
     Unsupported(&'static str),
