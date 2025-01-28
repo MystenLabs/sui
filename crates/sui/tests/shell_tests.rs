@@ -6,18 +6,26 @@ use insta_cmd::get_cargo_bin;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use sui_config::SUI_CLIENT_CONFIG;
+use test_cluster::{TestCluster, TestClusterBuilder};
 
-// [test_shell_snapshot] is run on every file matching [TEST_PATTERN] in [TEST_DIR]; this runs the
-// files as shell scripts and compares their output to the snapshots; use `cargo insta test
-// --review` to update the snapshots.
+// [test_shell_snapshot] is run on every file matching [TEST_PATTERN] in [TEST_DIR], and
+// [test_shell_snapshot_with_net] is run on every file matching [TEST_PATTERN] in [TEST_NET_DIR].
+//
+// These run the files as shell scripts and compares their output to the snapshots; use `cargo
+// insta test --review` to update the snapshots.
 
-const TEST_DIR: &str = "tests/tests";
-const TEST_PATTERN: &str = r"^test.*\.sh$";
+const TEST_DIR: &str = "tests/shell_tests";
+const TEST_NET_DIR: &str = "tests/shell_tests_net";
+const TEST_PATTERN: &str = r"\.sh$";
 
 /// run the bash script at [path], comparing its output to the insta snapshot of the same name.
 /// The script is run in a temporary working directory that contains a copy of the parent directory
-/// of [path], with the `sui-move` binary on the path.
-fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
+/// of [path], with the `sui` binary on the path.
+///
+/// If [cluster] is provided, the config file for the cluster is passed as the `CONFIG` environment
+/// variable.
+fn run_shell(path: &Path, cluster: Option<TestCluster>) -> datatest_stable::Result<()> {
     // copy files into temporary directory
     let srcdir = path.parent().unwrap();
     let tmpdir = tempfile::tempdir()?;
@@ -28,9 +36,13 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     // set up command
     let mut shell = Command::new("bash");
     shell
-        .env("PATH", format!("/bin:/usr/bin:{}", get_sui_move_path()))
+        .env("PATH", format!("/bin:/usr/bin:{}", get_sui_bin_path()))
         .current_dir(sandbox)
         .arg(path.file_name().unwrap());
+
+    if let Some(test) = cluster {
+        shell.env("CONFIG", test.swarm.dir().join(SUI_CLIENT_CONFIG));
+    }
 
     // run it; snapshot test output
     let output = shell.output()?;
@@ -44,7 +56,7 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     );
 
     let snapshot_name: String = path
-        .strip_prefix("tests/tests")?
+        .strip_prefix("tests/shell_tests")?
         .to_string_lossy()
         .to_string();
 
@@ -55,13 +67,23 @@ fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     Ok(())
 }
 
-fn get_sui_move_path() -> String {
-    get_cargo_bin("sui-move")
+/// return the path to the `sui` binary that is currently under test
+fn get_sui_bin_path() -> String {
+    get_cargo_bin("sui")
         .parent()
         .unwrap()
         .to_str()
         .expect("directory name is valid UTF-8")
         .to_owned()
+}
+
+fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
+    run_shell(path, None)
+}
+
+#[tokio::main]
+async fn test_shell_snapshot_with_net(path: &Path) -> datatest_stable::Result<()> {
+    run_shell(path, Some(TestClusterBuilder::new().build().await))
 }
 
 #[cfg(not(msim))]

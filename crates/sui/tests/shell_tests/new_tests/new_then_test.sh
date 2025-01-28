@@ -1,12 +1,11 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-# tests that sui-move new followed by sui-move build succeeds
-
-sui-move new example
+# check that sui move new followed by sui move test succeeds
+sui move new example
 
 # we mangle the generated toml file to replace the framework dependency with a local dependency
-FRAMEWORK_DIR=$(echo $CARGO_MANIFEST_DIR | sed 's#/crates/sui-move##g')
+FRAMEWORK_DIR=$(echo $CARGO_MANIFEST_DIR | sed 's#/crates/sui##g')
 cat example/Move.toml \
   | sed 's#\(Sui = .*\)git = "[^"]*", \(.*\)#\1\2#' \
   | sed 's#\(Sui = .*\), rev = "[^"]*"\(.*\)#\1\2#' \
@@ -15,4 +14,4 @@ cat example/Move.toml \
   > Move.toml
 mv Move.toml example/Move.toml
 
-cd example && sui-move build
+cd example && sui move test
