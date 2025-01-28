@@ -403,7 +403,6 @@ pub fn open_thdb(
 fn thdb_config() -> Config {
     let mut config = Config::default();
     modify_frag_size(&mut config);
-    config.max_loaded_entries = 256;
     // run snapshot every 64 Gb written to wal
     config.snapshot_written_bytes = 64 * 1024 * 1024 * 1024;
     config.max_dirty_keys = 1024;
