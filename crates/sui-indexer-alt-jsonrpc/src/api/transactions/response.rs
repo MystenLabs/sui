@@ -29,7 +29,7 @@ use tokio::join;
 use crate::{
     context::Context,
     data::{
-        objects::ObjectVersionKey, transactions::TransactionKey,
+        objects::VersionedObjectKey, transactions::TransactionKey,
         tx_balance_changes::TxBalanceChangeKey,
     },
     error::{internal_error, invalid_params, rpc_bail, RpcError},
@@ -217,10 +217,10 @@ async fn object_changes(
     for change in &native_changes {
         let id = change.id;
         if let Some(version) = change.input_version {
-            keys.push(ObjectVersionKey(id, version.value()));
+            keys.push(VersionedObjectKey(id, version.value()));
         }
         if let Some(version) = change.output_version {
-            keys.push(ObjectVersionKey(id, version.value()));
+            keys.push(VersionedObjectKey(id, version.value()));
         }
     }
 
@@ -244,7 +244,7 @@ async fn object_changes(
         let v = v.value();
 
         let stored = objects
-            .get(&ObjectVersionKey(id, v))
+            .get(&VersionedObjectKey(id, v))
             .ok_or_else(|| invalid_params(Error::PrunedObject(digest, id, v)))?;
 
         let bytes = stored

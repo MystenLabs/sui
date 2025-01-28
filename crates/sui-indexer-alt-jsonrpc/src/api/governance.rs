@@ -27,7 +27,7 @@ use sui_types::{
 
 use crate::{
     context::Context,
-    data::{object_versions::LatestObjectKey, objects::ObjectVersionKey},
+    data::{object_versions::LatestObjectVersionKey, objects::VersionedObjectKey},
     error::{internal_error, rpc_bail, InternalContext, RpcError},
 };
 
@@ -94,9 +94,10 @@ async fn rgp_response(ctx: &Context) -> Result<BigInt<u64>, RpcError> {
 async fn latest_sui_system_state_response(
     ctx: &Context,
 ) -> Result<SuiSystemStateSummary, RpcError> {
-    let wrapper: SuiSystemStateWrapper = fetch_latest(ctx, SUI_SYSTEM_STATE_OBJECT_ID)
-        .await
-        .internal_context("Failed to fetch system state wrapper object")?;
+    let wrapper: SuiSystemStateWrapper =
+        fetch_latest_for_system_state(ctx, SUI_SYSTEM_STATE_OBJECT_ID)
+            .await
+            .internal_context("Failed to fetch system state wrapper object")?;
 
     let inner_id = derive_dynamic_field_id(
         SUI_SYSTEM_STATE_OBJECT_ID,
@@ -106,12 +107,12 @@ async fn latest_sui_system_state_response(
     .context("Failed to derive inner system state field ID")?;
 
     Ok(match wrapper.version {
-        1 => fetch_latest::<Field<u64, SuiSystemStateInnerV1>>(ctx, inner_id)
+        1 => fetch_latest_for_system_state::<Field<u64, SuiSystemStateInnerV1>>(ctx, inner_id)
             .await
             .internal_context("Failed to fetch inner system state object")?
             .value
             .into_sui_system_state_summary(),
-        2 => fetch_latest::<Field<u64, SuiSystemStateInnerV2>>(ctx, inner_id)
+        2 => fetch_latest_for_system_state::<Field<u64, SuiSystemStateInnerV2>>(ctx, inner_id)
             .await
             .internal_context("Failed to fetch inner system state object")?
             .value
@@ -127,20 +128,20 @@ async fn latest_sui_system_state_response(
 /// API, but it does not generalize beyond that, because it assumes that the objects being loaded
 /// are never deleted or wrapped and have always existed (because it loads using `LatestObjectKey`
 /// directly without checking the live object set).
-async fn fetch_latest<T: DeserializeOwned>(
+async fn fetch_latest_for_system_state<T: DeserializeOwned>(
     ctx: &Context,
     object_id: ObjectID,
 ) -> Result<T, RpcError> {
     let loader = ctx.loader();
 
     let latest_version = loader
-        .load_one(LatestObjectKey(object_id))
+        .load_one(LatestObjectVersionKey(object_id))
         .await
         .context("Failed to load latest version")?
         .ok_or_else(|| internal_error!("No latest version found"))?;
 
     let stored = loader
-        .load_one(ObjectVersionKey(
+        .load_one(VersionedObjectKey(
             object_id,
             latest_version.object_version as u64,
         ))

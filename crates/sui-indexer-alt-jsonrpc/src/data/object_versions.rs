@@ -16,17 +16,17 @@ use super::reader::{ReadError, Reader};
 /// Key for fetching the latest version of an object, not accounting for deletions or wraps. If the
 /// object has been deleted or wrapped, the version before the delete/wrap is returned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct LatestObjectKey(pub ObjectID);
+pub(crate) struct LatestObjectVersionKey(pub ObjectID);
 
 #[async_trait::async_trait]
-impl Loader<LatestObjectKey> for Reader {
+impl Loader<LatestObjectVersionKey> for Reader {
     type Value = StoredObjVersion;
     type Error = Arc<ReadError>;
 
     async fn load(
         &self,
-        keys: &[LatestObjectKey],
-    ) -> Result<HashMap<LatestObjectKey, StoredObjVersion>, Self::Error> {
+        keys: &[LatestObjectVersionKey],
+    ) -> Result<HashMap<LatestObjectVersionKey, StoredObjVersion>, Self::Error> {
         use obj_versions::dsl as v;
 
         if keys.is_empty() {
