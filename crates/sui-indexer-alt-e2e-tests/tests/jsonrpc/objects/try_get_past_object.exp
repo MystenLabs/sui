@@ -88,7 +88,7 @@ Response: {
   }
 }
 
-task 9, lines 51-62:
+task 9, lines 51-63:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -102,7 +102,7 @@ Response: {
   }
 }
 
-task 10, lines 64-75:
+task 10, lines 65-77:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -116,12 +116,13 @@ Response: {
       "type": "0x2::coin::Coin<0x2::sui::SUI>",
       "owner": {
         "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-      }
+      },
+      "previousTransaction": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk"
     }
   }
 }
 
-task 11, lines 77-88:
+task 11, lines 79-91:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
