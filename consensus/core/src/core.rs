@@ -304,38 +304,6 @@ impl Core {
         Ok(missing_block_refs)
     }
 
-    /// Checks if provided block refs have been accepted. If not, missing block refs are kept for synchronizations.
-    /// Returns the references of missing blocks among the input blocks.
-    pub(crate) fn check_block_refs(
-        &mut self,
-        block_refs: Vec<BlockRef>,
-    ) -> ConsensusResult<BTreeSet<BlockRef>> {
-        let _scope = monitored_scope("Core::check_block_refs");
-        let _s = self
-            .context
-            .metrics
-            .node_metrics
-            .scope_processing_time
-            .with_label_values(&["Core::check_block_refs"])
-            .start_timer();
-        self.context
-            .metrics
-            .node_metrics
-            .core_check_block_refs_batch_size
-            .observe(block_refs.len() as f64);
-
-        // Try to find them via the block manager
-        let missing_block_refs = self.block_manager.try_find_blocks(block_refs);
-
-        if !missing_block_refs.is_empty() {
-            trace!(
-                "Missing block refs: {}",
-                missing_block_refs.iter().map(|b| b.to_string()).join(", ")
-            );
-        }
-        Ok(missing_block_refs)
-    }
-
     // Adds the commits and blocks that have been synced via the commit syncer. We are using the commit info in order to skip running the decision rule and immediately commit
     // the corresponding leaders and sub dags.
     pub(crate) fn add_commits(
@@ -375,6 +343,38 @@ impl Core {
         }
 
         self.add_blocks(blocks)
+    }
+
+    /// Checks if provided block refs have been accepted. If not, missing block refs are kept for synchronizations.
+    /// Returns the references of missing blocks among the input blocks.
+    pub(crate) fn check_block_refs(
+        &mut self,
+        block_refs: Vec<BlockRef>,
+    ) -> ConsensusResult<BTreeSet<BlockRef>> {
+        let _scope = monitored_scope("Core::check_block_refs");
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::check_block_refs"])
+            .start_timer();
+        self.context
+            .metrics
+            .node_metrics
+            .core_check_block_refs_batch_size
+            .observe(block_refs.len() as f64);
+
+        // Try to find them via the block manager
+        let missing_block_refs = self.block_manager.try_find_blocks(block_refs);
+
+        if !missing_block_refs.is_empty() {
+            trace!(
+                "Missing block refs: {}",
+                missing_block_refs.iter().map(|b| b.to_string()).join(", ")
+            );
+        }
+        Ok(missing_block_refs)
     }
 
     /// If needed, signals a new clock round and sets up leader timeout.
