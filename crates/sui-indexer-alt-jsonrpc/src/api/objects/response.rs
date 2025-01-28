@@ -57,6 +57,7 @@ fn object(
     let previous_transaction = options
         .show_previous_transaction
         .then(|| object.previous_transaction);
+    let storage_rebate = options.show_storage_rebate.then(|| object.storage_rebate);
 
     Ok(SuiObjectData {
         object_id,
@@ -65,7 +66,7 @@ fn object(
         type_,
         owner,
         previous_transaction,
-        storage_rebate: None,
+        storage_rebate,
         display: None,
         content: None,
         bcs: None,
