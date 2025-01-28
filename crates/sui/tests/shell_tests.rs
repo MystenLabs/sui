@@ -3,9 +3,9 @@
 
 use fs_extra::dir::CopyOptions;
 use insta_cmd::get_cargo_bin;
+use std::fs;
 use std::path::Path;
 use std::process::Command;
-use std::{fs, thread};
 use sui_config::SUI_CLIENT_CONFIG;
 use test_cluster::TestClusterBuilder;
 
@@ -44,7 +44,10 @@ async fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     // set up command
     let mut shell = Command::new("bash");
     shell
-        .env("PATH", format!("/bin:/usr/bin:{}", get_sui_bin_path()))
+        .env(
+            "PATH",
+            format!("{}:{}", get_sui_bin_path(), std::env::var("PATH")?),
+        )
         .current_dir(sandbox)
         .arg(path.file_name().unwrap());
 

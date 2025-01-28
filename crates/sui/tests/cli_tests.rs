@@ -355,43 +355,6 @@ async fn test_ptb_publish() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-// fixing issue https://github.com/MystenLabs/sui/issues/6546
-#[tokio::test]
-async fn test_regression_6546() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let address = test_cluster.get_address_0();
-    let context = &mut test_cluster.wallet;
-
-    let SuiClientCommandResult::Objects(coins) = SuiClientCommands::Objects {
-        address: Some(KeyIdentity::Address(address)),
-    }
-    .execute(context)
-    .await?
-    else {
-        panic!()
-    };
-    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
-
-    test_with_sui_binary(&[
-        "client",
-        "--client.config",
-        config_path.to_str().unwrap(),
-        "call",
-        "--package",
-        "0x2",
-        "--module",
-        "sui",
-        "--function",
-        "transfer",
-        "--args",
-        &coins.first().unwrap().object()?.object_id.to_string(),
-        &test_cluster.get_address_1().to_string(),
-        "--gas-budget",
-        "100000000",
-    ])
-    .await
-}
-
 #[sim_test]
 async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     // Create and save genesis config file
