@@ -17,8 +17,8 @@ use crate::shared::types::{PackageStorageId, RuntimePackageId};
 pub struct LinkageContext {
     // Linkage Table. This is a table indicating, for a given Address, how it should be linked.
     // This is purely for versioning. Assume some Package P is published at V1 and V2 as:
-    //  P V1 -> 0xCAFE
-    //  P V2 -> 0xDEAD
+    //   P V1 -> 0xCAFE
+    //   P V2 -> 0xDEAD
     // All calls to P in the root package will call 0xCAFE as the Runtime ID, but during loading
     // and JIT compilation we need to rewrite these. The linkage table here will redirect 0xCAFE to
     // 0xDEAD for this purpose.
@@ -88,7 +88,6 @@ impl LinkageContext {
 
     /// Translate the runtime fully-qualified struct name to the on-chain `ModuleId` that originally
     /// defined that type.
-    /// TODO: FIX THIS WHEN THE TYPE ORIGIN TABLE EXISTS
     pub fn defining_module(
         &self,
         module_id: &ModuleId,

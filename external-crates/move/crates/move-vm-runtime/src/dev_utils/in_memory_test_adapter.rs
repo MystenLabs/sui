@@ -120,7 +120,8 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
         package: SerializedPackage,
     ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)> {
         let Some(storage_id) = package.linkage_table.get(&runtime_id).cloned() else {
-            // TODO: VM error instead?
+            // NB: This is a panic because it means something went really wrong -- we should always
+            // panic if we expect a package to exist and it is not there.
             panic!("Did not find runtime ID {runtime_id} in linkage context.");
         };
         assert_eq!(storage_id, package.storage_id);
@@ -140,7 +141,8 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
         package: verif_ast::Package,
     ) -> VMResult<()> {
         let Some(storage_id) = package.linkage_table.get(&runtime_id).cloned() else {
-            // TODO: VM error instead?
+            // NB: This is a panic because it means something went really wrong -- we should always
+            // panic if we expect a package to exist and it is not there.
             panic!("Did not find runtime ID {runtime_id} in linkage context.");
         };
         assert!(storage_id == package.storage_id);
