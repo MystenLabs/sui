@@ -5,9 +5,7 @@ use std::str::FromStr;
 
 use anyhow::Context as _;
 use futures::future::OptionFuture;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use move_core_types::annotated_value::{MoveDatatypeLayout, MoveTypeLayout};
-use serde::{Deserialize, Serialize};
 use sui_indexer_alt_schema::transactions::{
     BalanceChange, StoredTransaction, StoredTxBalanceChange,
 };
@@ -16,8 +14,6 @@ use sui_json_rpc_types::{
     SuiTransactionBlock, SuiTransactionBlockData, SuiTransactionBlockEffects,
     SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
-use sui_open_rpc::Module;
-use sui_open_rpc_macros::open_rpc;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
@@ -36,154 +32,79 @@ use crate::{
         objects::ObjectVersionKey, transactions::TransactionKey,
         tx_balance_changes::TxBalanceChangeKey,
     },
-    error::{internal_error, invalid_params, rpc_bail, InternalContext, RpcError},
+    error::{internal_error, invalid_params, rpc_bail, RpcError},
 };
 
-use super::rpc_module::RpcModule;
-
-#[open_rpc(namespace = "sui", tag = "Transactions API")]
-#[rpc(server, namespace = "sui")]
-trait TransactionsApi {
-    /// Fetch a transaction by its transaction digest.
-    #[method(name = "getTransactionBlock")]
-    async fn get_transaction_block(
-        &self,
-        /// The digest of the queried transaction.
-        digest: TransactionDigest,
-        /// Options controlling the output format.
-        options: SuiTransactionBlockResponseOptions,
-    ) -> RpcResult<SuiTransactionBlockResponse>;
-}
-
-pub(crate) struct Transactions(pub Context);
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct TransactionsConfig {
-    /// The default page size limit when querying transactions, if none is provided.
-    pub default_page_size: usize,
-
-    /// The largest acceptable page size when querying transactions. Requesting a page larger than
-    /// this is a user error.
-    pub max_page_size: usize,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
-    #[error("Transaction {0} not found")]
-    NotFound(TransactionDigest),
-
-    #[error("Balance changes for transaction {0} have been pruned")]
-    BalanceChangesPruned(TransactionDigest),
-
-    #[error(
-        "Transaction {0} affected object {} pruned at version {2}",
-        .1.to_canonical_display(/* with_prefix */ true),
-    )]
-    ObjectPruned(TransactionDigest, ObjectID, u64),
-}
-
-#[async_trait::async_trait]
-impl TransactionsApiServer for Transactions {
-    async fn get_transaction_block(
-        &self,
-        digest: TransactionDigest,
-        options: SuiTransactionBlockResponseOptions,
-    ) -> RpcResult<SuiTransactionBlockResponse> {
-        let Self(ctx) = self;
-
-        Ok(transaction_response(ctx, digest, options)
-            .await
-            .with_internal_context(|| format!("Failed to get transaction {digest}"))?)
-    }
-}
-
-impl RpcModule for Transactions {
-    fn schema(&self) -> Module {
-        TransactionsApiOpenRpc::module_doc()
-    }
-
-    fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
-        self.into_rpc()
-    }
-}
-
-impl Default for TransactionsConfig {
-    fn default() -> Self {
-        Self {
-            default_page_size: 50,
-            max_page_size: 100,
-        }
-    }
-}
+use super::error::Error;
 
 /// Fetch the necessary data from the stores in `ctx` and transform it to build a response for the
 /// transaction identified by `digest`, according to the response `options`.
-async fn transaction_response(
+pub(super) async fn transaction(
     ctx: &Context,
     digest: TransactionDigest,
-    options: SuiTransactionBlockResponseOptions,
+    options: &SuiTransactionBlockResponseOptions,
 ) -> Result<SuiTransactionBlockResponse, RpcError<Error>> {
-    let transaction = ctx.loader().load_one(TransactionKey(digest));
-    let balance_changes: OptionFuture<_> = options
+    let stored_tx = ctx.loader().load_one(TransactionKey(digest));
+    let stored_bc: OptionFuture<_> = options
         .show_balance_changes
         .then(|| ctx.loader().load_one(TxBalanceChangeKey(digest)))
         .into();
 
-    let (transaction, balance_changes) = join!(transaction, balance_changes);
+    let (stored_tx, stored_bc) = join!(stored_tx, stored_bc);
 
-    let transaction = transaction
+    let stored_tx = stored_tx
         .context("Failed to fetch transaction from store")?
         .ok_or_else(|| invalid_params(Error::NotFound(digest)))?;
 
     // Balance changes might not be present because of pruning, in which case we return
     // nothing, even if the changes were requested.
-    let balance_changes = match balance_changes
+    let stored_bc = match stored_bc
         .transpose()
         .context("Failed to fetch balance changes from store")?
     {
-        Some(None) => return Err(invalid_params(Error::BalanceChangesPruned(digest))),
+        Some(None) => return Err(invalid_params(Error::PrunedBalanceChanges(digest))),
         Some(changes) => changes,
         None => None,
     };
 
-    let digest = TransactionDigest::try_from(transaction.tx_digest.clone())
+    let digest = TransactionDigest::try_from(stored_tx.tx_digest.clone())
         .context("Failed to deserialize transaction digest")?;
 
     let mut response = SuiTransactionBlockResponse::new(digest);
 
     if options.show_input {
-        response.transaction = Some(input_response(ctx, &transaction).await?);
+        response.transaction = Some(input(ctx, &stored_tx).await?);
     }
 
     if options.show_raw_input {
-        response.raw_transaction = transaction.raw_transaction.clone();
+        response.raw_transaction = stored_tx.raw_transaction.clone();
     }
 
     if options.show_effects {
-        response.effects = Some(effects_response(&transaction)?);
+        response.effects = Some(effects(&stored_tx)?);
     }
 
     if options.show_raw_effects {
-        response.raw_effects = transaction.raw_effects.clone();
+        response.raw_effects = stored_tx.raw_effects.clone();
     }
 
     if options.show_events {
-        response.events = Some(events_response(ctx, digest, &transaction).await?);
+        response.events = Some(events(ctx, digest, &stored_tx).await?);
     }
 
-    if let Some(balance_changes) = balance_changes {
-        response.balance_changes = Some(balance_changes_response(balance_changes)?);
+    if let Some(changes) = stored_bc {
+        response.balance_changes = Some(balance_changes(changes)?);
     }
 
     if options.show_object_changes {
-        response.object_changes = Some(object_changes_response(ctx, digest, &transaction).await?);
+        response.object_changes = Some(object_changes(ctx, digest, &stored_tx).await?);
     }
 
     Ok(response)
 }
 
 /// Extract a representation of the transaction's input data from the stored form.
-async fn input_response(
+async fn input(
     ctx: &Context,
     tx: &StoredTransaction,
 ) -> Result<SuiTransactionBlock, RpcError<Error>> {
@@ -201,7 +122,7 @@ async fn input_response(
 }
 
 /// Extract a representation of the transaction's effects from the stored form.
-fn effects_response(tx: &StoredTransaction) -> Result<SuiTransactionBlockEffects, RpcError<Error>> {
+fn effects(tx: &StoredTransaction) -> Result<SuiTransactionBlockEffects, RpcError<Error>> {
     let effects: TransactionEffects =
         bcs::from_bytes(&tx.raw_effects).context("Failed to deserialize TransactionEffects")?;
     Ok(effects
@@ -210,7 +131,7 @@ fn effects_response(tx: &StoredTransaction) -> Result<SuiTransactionBlockEffects
 }
 
 /// Extract the transaction's events from its stored form.
-async fn events_response(
+async fn events(
     ctx: &Context,
     digest: TransactionDigest,
     tx: &StoredTransaction,
@@ -253,7 +174,7 @@ async fn events_response(
 }
 
 /// Extract the transaction's balance changes from their stored form.
-fn balance_changes_response(
+fn balance_changes(
     balance_changes: StoredTxBalanceChange,
 ) -> Result<Vec<SuiBalanceChange>, RpcError<Error>> {
     let balance_changes: Vec<BalanceChange> = bcs::from_bytes(&balance_changes.balance_changes)
@@ -281,7 +202,7 @@ fn balance_changes_response(
 
 /// Extract the transaction's object changes. Object IDs and versions are fetched from the stored
 /// transaction, and the object contents are fetched separately by a data loader.
-async fn object_changes_response(
+async fn object_changes(
     ctx: &Context,
     digest: TransactionDigest,
     tx: &StoredTransaction,
@@ -324,7 +245,7 @@ async fn object_changes_response(
 
         let stored = objects
             .get(&ObjectVersionKey(id, v))
-            .ok_or_else(|| invalid_params(Error::ObjectPruned(digest, id, v)))?;
+            .ok_or_else(|| invalid_params(Error::PrunedObject(digest, id, v)))?;
 
         let bytes = stored
             .serialized_object

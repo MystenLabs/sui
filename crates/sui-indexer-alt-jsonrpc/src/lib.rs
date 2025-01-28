@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use api::rpc_module::RpcModule;
-use api::transactions::{Transactions, TransactionsConfig};
+use api::transactions::{QueryTransactions, Transactions, TransactionsConfig};
 use config::RpcConfig;
 use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use jsonrpsee::server::{RpcServiceBuilder, ServerBuilder};
@@ -31,6 +31,7 @@ mod context;
 pub mod data;
 mod error;
 mod metrics;
+mod paginate;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct RpcArgs {
@@ -206,7 +207,7 @@ pub async fn start_rpc(
         extra: _,
     } = rpc_config.finish();
 
-    let _transactions_config = transactions.finish(TransactionsConfig::default());
+    let transactions_config = transactions.finish(TransactionsConfig::default());
 
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
@@ -220,6 +221,7 @@ pub async fn start_rpc(
     );
 
     rpc.add_module(Governance(context.clone()))?;
+    rpc.add_module(QueryTransactions(context.clone(), transactions_config))?;
     rpc.add_module(Transactions(context.clone()))?;
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
