@@ -57,7 +57,8 @@
     {
       "showType": true,
       "showOwner": true,
-      "showPreviousTransaction": true
+      "showPreviousTransaction": true,
+      "showStorageRebate": true
     }
   ]
 }
@@ -71,7 +72,8 @@
     {
       "showType": true,
       "showOwner": true,
-      "showPreviousTransaction": true
+      "showPreviousTransaction": true,
+      "showStorageRebate": true
     }
   ]
 }
@@ -85,7 +87,8 @@
     {
       "showType": true,
       "showOwner": true,
-      "showPreviousTransaction": true
+      "showPreviousTransaction": true,
+      "showStorageRebate": true
     }
   ]
 }

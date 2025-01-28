@@ -88,7 +88,7 @@ Response: {
   }
 }
 
-task 9, lines 51-63:
+task 9, lines 51-64:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -102,7 +102,7 @@ Response: {
   }
 }
 
-task 10, lines 65-77:
+task 10, lines 66-79:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -117,12 +117,13 @@ Response: {
       "owner": {
         "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
       },
-      "previousTransaction": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk"
+      "previousTransaction": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk",
+      "storageRebate": "988000"
     }
   }
 }
 
-task 11, lines 79-91:
+task 11, lines 81-94:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
