@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_store::InputObject, 
-    environment::ReplayEnvironment, 
-    errors::ReplayError, 
+    data_store::InputObject, environment::ReplayEnvironment, errors::ReplayError,
     execution::ReplayExecutor,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress}, digests::{ObjectDigest, TransactionDigest}, effects::{TransactionEffects, TransactionEffectsAPI}, transaction::{
-        CallArg, Command, InputObjectKind, InputObjects, ObjectArg, ObjectReadResult, ObjectReadResultKind, TransactionData, TransactionDataAPI, TransactionKind
-    }
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    digests::{ObjectDigest, TransactionDigest},
+    effects::{TransactionEffects, TransactionEffectsAPI},
+    transaction::{
+        CallArg, Command, InputObjectKind, InputObjects, ObjectArg, ObjectReadResult,
+        ObjectReadResultKind, TransactionData, TransactionDataAPI, TransactionKind,
+    },
 };
 use tracing::info;
 
@@ -31,36 +33,32 @@ pub struct ReplayTransaction {
 }
 
 impl ReplayTransaction {
-    pub async fn load(
-        env: &mut ReplayEnvironment,
-        tx_digest: &str,
-    ) -> Result<Self, ReplayError> {
+    pub async fn load(env: &mut ReplayEnvironment, tx_digest: &str) -> Result<Self, ReplayError> {
         // load transaction data and effects
-        let txn_data = env
-            .data_store
-            .transaction_data(tx_digest)
-            .await?;
-        info!("Transaction data: {:#?}", txn_data); 
-        let effects = env
-            .data_store
-            .transaction_effects(tx_digest)
-            .await?;
+        let txn_data = env.data_store.transaction_data(tx_digest).await?;
+        info!("Transaction data: {:#?}", txn_data);
+        let effects = env.data_store.transaction_effects(tx_digest).await?;
         info!("Transaction effects: {:#?}", effects);
 
         let (input_object_ids, packages) = get_input_ids(&txn_data)?;
         info!("Input Object IDs: {:#?}", input_object_ids);
         let effects_object_ids = get_effects_ids(&effects)?;
         info!("Effects Object IDs: {:#?}", effects_object_ids);
-        let mut input_versions = effects_object_ids.into_iter().map(|input| {
-            (input.object_id, input.version.unwrap())
-        })
-        .collect::<BTreeMap<_, _>>();
+        let mut input_versions = effects_object_ids
+            .into_iter()
+            .map(|input| (input.object_id, input.version.unwrap()))
+            .collect::<BTreeMap<_, _>>();
         for input_object in input_object_ids.iter() {
-            input_versions.entry(input_object.object_id).or_insert(input_object.version.unwrap());
+            input_versions
+                .entry(input_object.object_id)
+                .or_insert(input_object.version.unwrap());
         }
         let object_versions = input_versions
             .into_iter()
-            .map(|(object_id, version)| InputObject{ object_id, version: Some(version) })
+            .map(|(object_id, version)| InputObject {
+                object_id,
+                version: Some(version),
+            })
             .collect::<BTreeSet<InputObject>>();
 
         env.load_objects(&object_versions).await?;
@@ -71,12 +69,13 @@ impl ReplayTransaction {
         let reference_gas_price = env.epoch_info.rgp(epoch)?;
 
         info!("Object Versions: {:#?}", object_versions);
-        let input_objects = get_input_objects_for_replay(env, &txn_data, tx_digest, &object_versions)?;
+        let input_objects =
+            get_input_objects_for_replay(env, &txn_data, tx_digest, &object_versions)?;
 
         let digest = tx_digest.parse().map_err(|e| {
             let err = format!("{:?}", e);
             let digest = tx_digest.to_string();
-            ReplayError::FailedToParseDigest {digest, err}
+            ReplayError::FailedToParseDigest { digest, err }
         })?;
 
         let gas = txn_data.gas_data().payment.clone();
@@ -85,26 +84,26 @@ impl ReplayTransaction {
         let gas_budget = txn_data.gas_budget();
         let kind = txn_data.into_kind();
 
-        let protocol_config = env.epoch_info.protocol_config(epoch, env.data_store.chain())
+        let protocol_config = env
+            .epoch_info
+            .protocol_config(epoch, env.data_store.chain())
             .unwrap_or_else(|e| panic!("Failed to get protocl config: {:?}", e));
-        let executor = ReplayExecutor::new(protocol_config, None)
-            .unwrap_or_else(|e| panic!("{:?}", e));
+        let executor =
+            ReplayExecutor::new(protocol_config, None).unwrap_or_else(|e| panic!("{:?}", e));
 
-        Ok(
-            Self {
-                executor,
-                digest,
-                kind,
-                epoch,
-                epoch_start_timestamp,
-                sender,
-                input_objects,
-                gas,
-                gas_budget,
-                gas_price,
-                reference_gas_price,
-            },
-        )
+        Ok(Self {
+            executor,
+            digest,
+            kind,
+            epoch,
+            epoch_start_timestamp,
+            sender,
+            input_objects,
+            gas,
+            gas_budget,
+            gas_price,
+            reference_gas_price,
+        })
     }
 }
 
@@ -115,11 +114,9 @@ fn get_input_ids(
         .gas_data()
         .payment
         .iter()
-        .map(|(id, seq_num, _)| {
-            InputObject {
-                object_id: *id,
-                version: Some(seq_num.value()),
-            }
+        .map(|(id, seq_num, _)| InputObject {
+            object_id: *id,
+            version: Some(seq_num.value()),
         })
         .collect::<BTreeSet<_>>();
     if let TransactionKind::ProgrammableTransaction(ptb) = txn_data.kind() {
@@ -129,9 +126,10 @@ fn get_input_ids(
             .filter_map(|input| {
                 if let CallArg::Object(call_arg) = input {
                     match call_arg {
-                        ObjectArg::ImmOrOwnedObject((id, seq_num, _digest)) => {
-                            Some(InputObject { object_id: *id, version: Some(seq_num.value()) })
-                        }
+                        ObjectArg::ImmOrOwnedObject((id, seq_num, _digest)) => Some(InputObject {
+                            object_id: *id,
+                            version: Some(seq_num.value()),
+                        }),
                         ObjectArg::SharedObject {
                             id: _,
                             initial_shared_version: _,
@@ -140,9 +138,10 @@ fn get_input_ids(
                             // Some(InputObject { object_id: *id, version: Some(initial_shared_version.value()) })
                             None
                         }
-                        ObjectArg::Receiving((id, seq_num, _digest)) => {
-                            Some(InputObject { object_id: *id, version: Some(seq_num.value()) })
-                        }
+                        ObjectArg::Receiving((id, seq_num, _digest)) => Some(InputObject {
+                            object_id: *id,
+                            version: Some(seq_num.value()),
+                        }),
                     }
                 } else {
                     None
@@ -168,7 +167,7 @@ fn get_input_ids(
     }
 }
 
-fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<InputObject>, ReplayError>  {
+fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<InputObject>, ReplayError> {
     // let object_ids = effects
     //     .object_changes()
     //     .iter()
@@ -205,11 +204,10 @@ fn get_input_objects_for_replay(
 ) -> Result<InputObjects, ReplayError> {
     let object_versions = object_versions
         .iter()
-        .map(|input| {
-            (input.object_id, input.version.unwrap())
-        })
-        .collect::<BTreeMap<_, _>>(); 
-    let deleted_shared_info_map: BTreeMap<ObjectID, (TransactionDigest, SequenceNumber)> = BTreeMap::new();
+        .map(|input| (input.object_id, input.version.unwrap()))
+        .collect::<BTreeMap<_, _>>();
+    let deleted_shared_info_map: BTreeMap<ObjectID, (TransactionDigest, SequenceNumber)> =
+        BTreeMap::new();
     let mut resolved_input_objs = vec![];
     let input_objects_kind = txn
         .input_objects()
@@ -220,94 +218,82 @@ fn get_input_objects_for_replay(
     for kind in input_objects_kind.iter() {
         match kind {
             InputObjectKind::MovePackage(object_id) => {
-                let package = env
-                    .package_objects
-                    .get(object_id)
-                    .ok_or_else(|| {
-                        ReplayError::PackageNotFound {
-                            pkg: object_id.to_string(),
-                        }
-                    })?;
+                let package = env.package_objects.get(object_id).ok_or_else(|| {
+                    ReplayError::PackageNotFound {
+                        pkg: object_id.to_string(),
+                    }
+                })?;
                 resolved_input_objs.push(ObjectReadResult {
                     input_object_kind: InputObjectKind::MovePackage(*object_id),
                     object: ObjectReadResultKind::Object(package.clone()),
                 });
             }
             InputObjectKind::ImmOrOwnedMoveObject((obj_id, _version, _digest)) => {
-                let version = *object_versions
-                    .get(obj_id)
-                    .ok_or_else(|| {
-                        ReplayError::ObjectVersionNotFound {
-                            address: obj_id.to_string(),
-                            version: None,
-                        }
-                    })?;                        
+                let version = *object_versions.get(obj_id).ok_or_else(|| {
+                    ReplayError::ObjectVersionNotFound {
+                        address: obj_id.to_string(),
+                        version: None,
+                    }
+                })?;
                 // let version = version.value();
-                let object = env
-                    .objects
-                    .get(obj_id)
-                    .ok_or_else(|| {
-                        ReplayError::ObjectNotFound {
+                let object =
+                    env.objects
+                        .get(obj_id)
+                        .ok_or_else(|| ReplayError::ObjectNotFound {
                             address: obj_id.to_string(),
                             version: Some(version),
-                        }
-                    })
-                    .and_then(|versions| {
-                        versions
-                            .get(&version)
-                            .cloned()
-                            .ok_or_else(|| {
+                        })
+                        .and_then(|versions| {
+                            versions.get(&version).cloned().ok_or_else(|| {
                                 ReplayError::ObjectNotFound {
                                     address: obj_id.to_string(),
                                     version: Some(version),
                                 }
                             })
-                    })?;                        
-                let input_object_kind = InputObjectKind::ImmOrOwnedMoveObject(
-                    object.compute_object_reference(),
-                );
+                        })?;
+                let input_object_kind =
+                    InputObjectKind::ImmOrOwnedMoveObject(object.compute_object_reference());
                 resolved_input_objs.push(ObjectReadResult {
                     input_object_kind,
                     object: ObjectReadResultKind::Object(object),
                 });
             }
-            InputObjectKind::SharedMoveObject{ id, initial_shared_version, mutable} => {
+            InputObjectKind::SharedMoveObject {
+                id,
+                initial_shared_version,
+                mutable,
+            } => {
                 let input_object_kind = InputObjectKind::SharedMoveObject {
                     id: *id,
                     initial_shared_version: *initial_shared_version,
                     mutable: *mutable,
                 };
-                let version = *object_versions
-                    .get(id)
-                    .ok_or_else(|| {
-                        ReplayError::ObjectVersionNotFound {
+                let version =
+                    *object_versions
+                        .get(id)
+                        .ok_or_else(|| ReplayError::ObjectVersionNotFound {
                             address: id.to_string(),
                             version: None,
-                        }
-                    })?;                        
+                        })?;
                 // let version = initial_shared_version.value();
                 let is_deleted = deleted_shared_info_map.contains_key(id);
                 if !is_deleted {
-                    let object = ObjectReadResultKind::Object(env
-                        .objects
-                        .get(id)
-                        .ok_or_else(|| {
-                            ReplayError::ObjectNotFound {
+                    let object = ObjectReadResultKind::Object(
+                        env.objects
+                            .get(id)
+                            .ok_or_else(|| ReplayError::ObjectNotFound {
                                 address: id.to_string(),
                                 version: Some(version),
-                            }
-                        })
-                        .and_then(|versions| {
-                            versions
-                                .get(&version)
-                                .cloned()
-                                .ok_or_else(|| {
+                            })
+                            .and_then(|versions| {
+                                versions.get(&version).cloned().ok_or_else(|| {
                                     ReplayError::ObjectNotFound {
                                         address: id.to_string(),
                                         version: Some(version),
                                     }
                                 })
-                        })?);                        
+                            })?,
+                    );
                     resolved_input_objs.push(ObjectReadResult {
                         input_object_kind,
                         object,
