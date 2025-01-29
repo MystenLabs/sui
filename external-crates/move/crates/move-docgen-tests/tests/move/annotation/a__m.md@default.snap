@@ -1,6 +1,14 @@
 ---
 source: crates/move-docgen-tests/tests/testsuite.rs
-expression: contents
+info:
+  section_level_start: 1
+  exclude_private_fun: false
+  exclude_impl: false
+  toc_depth: 3
+  no_collapsed_sections: false
+  include_dep_diagrams: false
+  include_call_diagrams: false
+input_file: crates/move-docgen-tests/tests/move/annotation/Move.toml
 ---
 <a name="a_m"></a>
 
@@ -78,13 +86,16 @@ This is a doc comment above a function with an annotation. Above the annotation.
 
 
 
-##### Implementation
+<details>
+<summary>Implementation</summary>
 
 
 <pre><code><b>fun</b> <a href="../a/m.md#a_m_test">test</a>() { }
 </code></pre>
 
 
+
+</details>
 
 <a name="a_m_test1"></a>
 
@@ -98,8 +109,13 @@ This is a doc comment above a function with an annotation. Below the annotation.
 
 
 
-##### Implementation
+<details>
+<summary>Implementation</summary>
 
 
 <pre><code><b>fun</b> <a href="../a/m.md#a_m_test1">test1</a>() { }
 </code></pre>
+
+
+
+</details>

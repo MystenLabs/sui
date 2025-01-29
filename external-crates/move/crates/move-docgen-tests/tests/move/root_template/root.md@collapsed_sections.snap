@@ -1,6 +1,14 @@
 ---
 source: crates/move-docgen-tests/tests/testsuite.rs
-expression: contents
+info:
+  section_level_start: 1
+  exclude_private_fun: false
+  exclude_impl: false
+  toc_depth: 3
+  no_collapsed_sections: true
+  include_dep_diagrams: false
+  include_call_diagrams: false
+input_file: crates/move-docgen-tests/tests/move/root_template/Move.toml
 ---
 <a name="@A_Root_Documentation_Template_0"></a>
 
