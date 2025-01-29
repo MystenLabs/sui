@@ -64,31 +64,49 @@ pub fn format_diff(expected: impl AsRef<str>, actual: impl AsRef<str>) -> String
     ret
 }
 
+/// See `insta_assert!` for documentation.
 pub struct InstaOptions<Info: serde::Serialize> {
     pub info: Option<Info>,
 }
 
 impl<Info: serde::Serialize> InstaOptions<Info> {
+    /// See `insta_assert!` for documentation.
     pub fn new() -> Self {
         Self { info: None }
     }
 }
 
 impl InstaOptions<()> {
+    /// See `insta_assert!` for documentation.
     pub fn none() -> Self {
         Self { info: None }
     }
 }
 
-// fn t() {
-//     let mut settings = insta::Settings::clone_current();
-//     settings.set_input_file(i);
-
-//     insta::assert_snapshot!(o, c);
-
-// }
-
 #[macro_export]
+/// A wrapper around `insta::assert_snapshort` to promote uniformity in the Move codebase, intended
+/// to be used with datatest-stable and as a replacement for the hand-rolled baseline tests.
+/// The snapshot file will be saved in the same directory as the input file with the name specified.
+/// In essence, it will be saved at the path `{input_path}/{name}.snap`.
+///
+/// For ease of use and reviewing, `insta_assert` should be used at most once per test. When it
+/// fails, it will stop the test. So if there are multiple snapshots in a given test, it would
+/// require multiple test runs to review all the failures.
+///
+/// # Arguments
+/// The macro has three required arguments:
+/// - `name`: The name of the test. This will be used to name the snapshot file. For datatest this
+///           should likely be the file name.
+/// - `input_path`: The path to the input file. This is used to determine the snapshot path.
+/// - `contents`: The contents to snapshot.
+///
+///
+/// The macro also accepts an optional arguments to that are used with `InstaOptions` to customize
+/// the snapshot. If needed the `InstaOptions` struct can be used directly by specifying the
+/// `options` argument. Options include:
+/// - `info`: Additional information to include in the header of the snapshot file. This can be
+///           useful for debugging tests. The value can be any type that implements
+///           `serde::Serialize`.
 macro_rules! insta_assert {
     {
         name: $name:expr,
