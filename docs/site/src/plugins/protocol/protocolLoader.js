@@ -72,7 +72,14 @@ const protocolInject = async function (source) {
       } else {
         if (contents[i] !== "") {
           prevBlank = false;
-          if (contents[i].includes("<a name=")) {
+          if (contents[i].startsWith("|")) {
+            // Header row should have right number of bars
+            const bars = contents[i].split("|").length - 1;
+            for (let j = i; j < contents.length; j++){
+              if (contents[j].split("|").length - 1 === bars){
+                output.push(contents[j]);
+              } else if ()
+            }
             output.push(contents[i]);
           } else {
             output.push(contents[i]);
