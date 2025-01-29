@@ -37,21 +37,6 @@ const fullnodeProtocolPlugin = (context, options) => {
         },
       };
     },
-    /*async contentLoaded({ content, actions }) {
-      const { createData, addRoute } = actions;
-      const jsonDataPath = await createData(
-        "doc.json",
-        JSON.stringify(content),
-      );
-
-      addRoute({
-        path: options.route || "/generated-doc",
-        component: "@site/src/components/Protocol",
-        modules: {
-          jsonData: jsonDataPath,
-        },
-      });
-    },*/
   };
 };
 

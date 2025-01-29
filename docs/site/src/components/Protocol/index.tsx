@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 import React, { useState, useEffect } from "react";
 
 export default function Protocol(props) {
@@ -7,7 +8,7 @@ export default function Protocol(props) {
   const [proto, setProto] = useState(toc[0]);
   const [messages, setMessages] = useState(toc[0].messages);
   const [moveRight, setMoveRight] = useState(false);
-  const triggerY = 140; // Y-position where movement happens
+  const triggerY = 140;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -31,6 +32,7 @@ export default function Protocol(props) {
     const selectedProto = toc[selected]; // Get the selected protocol
     setProto(selectedProto);
     setMessages(selectedProto.messages);
+    window.location.hash = `#${selectedProto.link}`;
   };
   const handleMessageChange = (e) => {
     const selected = e.target.value;
@@ -43,9 +45,16 @@ export default function Protocol(props) {
 
   return (
     <div
-      className={`max-xl:hidden sticky top-24 left-0 transition delay-150 ease-in-out] ${moveRight ? "translate-x-1/2" : ""}`}
+      className={`max-xl:hidden sticky top-16 py-4 -mx-4 backdrop-blur-sm border-sui-ghost-white dark:border-sui-ghost-dark ${moveRight ? "border-solid border-x-0 border-t-0 border-b" : ""}`}
     >
-      <select className="p-2 w-[200px]" onChange={handleProtoChange}>
+      <style>
+        {`
+          h2, h3 {
+            scroll-margin:126px !important;
+          }
+        `}
+      </style>
+      <select className="p-2 ml-4 w-[200px]" onChange={handleProtoChange}>
         {toc.map((item, i) => {
           return (
             <option key={i} value={i}>
@@ -54,7 +63,7 @@ export default function Protocol(props) {
           );
         })}
       </select>
-      <select className="p-2 w-[200px]" onChange={handleMessageChange}>
+      <select className="p-2 ml-4 w-[200px]" onChange={handleMessageChange}>
         {messages.map((message) => {
           return (
             <option key={message.name} value={message.name}>

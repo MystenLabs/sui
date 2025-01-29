@@ -8,8 +8,6 @@ const protocolInject = async function (source) {
   const options = this.getOptions();
   const spec = JSON.parse(options.protocolSpec);
   const toc = [];
-
-  //const output = `<Protocol toc={${JSON.stringify(toc)}}/>\n${output.join("\n")}`;
   const createId = (name) => {
     return name.replace(/[\._]/g, "-").replace(/\//g, "_");
   };
@@ -39,6 +37,7 @@ const protocolInject = async function (source) {
   });
 
   let content = [`<Protocol toc={${JSON.stringify(toc)}}/>`];
+
   for (const file of spec.files) {
     content.push(`\n## ${file.name} {#${createId(file.name)}}`);
     content.push(
@@ -52,30 +51,37 @@ const protocolInject = async function (source) {
           .replace(/</g, "&#lt;")
           .replace(/^(#{1,2})\s(?!#)/gm, "### ")}`,
       );
+      const cellStyle = "p-4 border border-solid align-center";
       if (message.fields.length > 0) {
-        content.push("| Field | Type | Label | Description |");
-        content.push("|---|---|---|---|");
+        content.push(
+          `\n<table class="w-full table table-fixed">\n<thead>\n<tr>\n<th class="${cellStyle} w-[21%]">Field</th><th class="${cellStyle} w-[23%]">Type</th><th class="${cellStyle} w-[9%] whitespace-nowrap truncate">Label</th><th class="${cellStyle} w-[47%]">Description</th>\n</tr>\n</thead>\n<tbody>`,
+        );
 
         for (const field of message.fields) {
           content.push(
-            `| ${field.name} | [${field.type}](#${createId(field.fullType)}) | ${field.label} | ${field.description
+            `<tr>\n<td class="${cellStyle}">${field.name}</td><td class="${cellStyle}">[${field.type}](#${createId(field.fullType)})</td><td class="${cellStyle} whitespace-nowrap truncate">${field.label}</td><td class="${cellStyle}">${field.description
               .replace(/{/g, "&#123;")
               .replace(/\n\/?/g, "")
-              .replace(/<(http.*)>/g, "$1")} |`,
+              .replace(/<(http.*)>/g, "$1")}</td>\n</tr>`,
           );
         }
+        content.push(`</tbody>\n</table>\n`);
       }
     }
   }
+
   content.push("\n## Scalar Value Types");
+  const cellStyle = "p-4 border border-solid align-center text-center";
   for (const scalar of spec.scalarValueTypes) {
     content.push(`\n### ${scalar.protoType}`);
     content.push(`${scalar.notes.replace(/{/g, "&#123;")}`);
-    content.push("| C++ | Java | Python | Go | C# | PHP | Ruby |");
-    content.push("|---|---|---|---|---|---|---|");
     content.push(
-      `|${scalar.cppType}|${scalar.javaType}|${scalar.pythonType}|${scalar.goType}|${scalar.csType}|${scalar.phpType}|${scalar.rubyType}|`,
+      `\n<table class="w-full table table-fixed">\n<thead>\n<tr>\n<th class="${cellStyle}">C++</th><th class="${cellStyle}">Java</th><th class="${cellStyle}">Python</th><th class="${cellStyle}">Go</th><th class="${cellStyle}">C#</th><th class="${cellStyle}">PHP</th><th class="${cellStyle}">Ruby</th>\n</tr>\n</thead>\n<tbody>`,
     );
+    content.push(
+      `<tr>\n<td class="${cellStyle}">${scalar.cppType}</td><td class="${cellStyle}">${scalar.javaType}</td><td class="${cellStyle}">${scalar.pythonType}</td><td class="${cellStyle}">${scalar.goType}</td><td class="${cellStyle}">${scalar.csType}</td><td class="${cellStyle}">${scalar.phpType}</td><td class="${cellStyle}">${scalar.rubyType}</td>\n</tr>`,
+    );
+    content.push(`</tbody>\n</table>\n`);
   }
 
   return (
