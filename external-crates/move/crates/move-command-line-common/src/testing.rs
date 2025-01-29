@@ -91,43 +91,46 @@ impl InstaOptions<()> {
 #[macro_export]
 macro_rules! insta_assert {
     {
+        name: $name:expr,
         input_path: $input:expr,
-        output_name: $output:expr,
         contents: $contents:expr,
         options: $options:expr
         $(,)?
     } => {{
-        let i: &Path = $input.as_ref();
-        let o = $output;
+        let name = $name;
+        let i: &std::path::Path = $input.as_ref();
+        let i = i.canonicalize().unwrap();
         let c = $contents;
         let $crate::testing::InstaOptions { info } = $options;
         let mut settings = insta::Settings::clone_current();
-        settings.set_input_file(i.canonicalize().unwrap());
+        settings.set_input_file(&i);
+        settings.set_snapshot_path(i.parent().unwrap());
         if let Some(info) = info {
             settings.set_info(info);
         }
         settings.set_prepend_module_to_snapshot(false);
         settings.set_omit_expression(true);
         settings.bind(|| {
-            insta::assert_snapshot!(o, c);
+            insta::assert_snapshot!(name, c);
         });
     }};
     {
+        name: $name:expr,
         input_path: $input:expr,
-        output_name: $output:expr,
         contents: $contents:expr
         $(,)?
     } => {{
         insta_assert! {
+            name: $name,
             input_path: $input,
-            output_name: $output,
+            output_path: $output,
             contents: $contents,
             options: $crate::testing::InstaOptions::none(),
         }
     }};
     {
+        name: $name:expr,
         input_path: $input:expr,
-        output_name: $output:expr,
         contents: $contents:expr,
         $($k:ident: $v:expr),+$(,)?
     } => {{
@@ -136,8 +139,8 @@ macro_rules! insta_assert {
             opts.$k = Some($v);
         )+
         insta_assert! {
+            name: $name,
             input_path: $input,
-            output_name: $output,
             contents: $contents,
             options: opts
         }

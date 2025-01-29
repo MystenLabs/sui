@@ -47,23 +47,18 @@ fn test_move(toml_path: &Path) -> datatest_stable::Result<()> {
 
     assert!(!options.flags.exclude_impl);
     assert!(!options.flags.exclude_impl);
-    test_move_one(toml_path, &test_dir.join("default"), &model, &options)?;
+    test_move_one(toml_path, "default", &model, &options)?;
 
     assert!(!options.flags.no_collapsed_sections);
     options.flags.no_collapsed_sections = true;
-    test_move_one(
-        toml_path,
-        &test_dir.join("collapsed_sections"),
-        &model,
-        &options,
-    )?;
+    test_move_one(toml_path, "collapsed_sections", &model, &options)?;
 
     Ok(())
 }
 
 fn test_move_one(
     toml_path: &Path,
-    out_dir: &Path,
+    prefix: &str,
     model: &source_model::Model,
     doc_options: &DocgenOptions,
 ) -> anyhow::Result<()> {
@@ -73,10 +68,9 @@ fn test_move_one(
         if path.contains("dependencies") {
             continue;
         }
-        let out_path = out_dir.join(&path).to_string_lossy().to_string();
         insta_assert! {
+            name: format!("{prefix}/{path}"),
             input_path: toml_path,
-            output_name: out_path,
             contents: contents,
             info: &doc_options.flags,
         };
