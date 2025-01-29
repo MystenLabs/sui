@@ -355,43 +355,6 @@ async fn test_ptb_publish() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-// fixing issue https://github.com/MystenLabs/sui/issues/6546
-#[tokio::test]
-async fn test_regression_6546() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let address = test_cluster.get_address_0();
-    let context = &mut test_cluster.wallet;
-
-    let SuiClientCommandResult::Objects(coins) = SuiClientCommands::Objects {
-        address: Some(KeyIdentity::Address(address)),
-    }
-    .execute(context)
-    .await?
-    else {
-        panic!()
-    };
-    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
-
-    test_with_sui_binary(&[
-        "client",
-        "--client.config",
-        config_path.to_str().unwrap(),
-        "call",
-        "--package",
-        "0x2",
-        "--module",
-        "sui",
-        "--function",
-        "transfer",
-        "--args",
-        &coins.first().unwrap().object()?.object_id.to_string(),
-        &test_cluster.get_address_1().to_string(),
-        "--gas-budget",
-        "100000000",
-    ])
-    .await
-}
-
 #[sim_test]
 async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     // Create and save genesis config file
@@ -3941,59 +3904,6 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
     );
 
     insta::assert_snapshot!(error_string);
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_move_build_bytecode_with_address_resolution() -> Result<(), anyhow::Error> {
-    let test_cluster = TestClusterBuilder::new().build().await;
-    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
-
-    // Package setup: a simple package depends on another and copied to tmpdir
-    let mut simple_package_path = PathBuf::from(TEST_DATA_DIR);
-    simple_package_path.push("simple");
-
-    let mut depends_on_simple_package_path = PathBuf::from(TEST_DATA_DIR);
-    depends_on_simple_package_path.push("depends_on_simple");
-
-    let tmp_dir = tempfile::tempdir().unwrap();
-
-    fs_extra::dir::copy(
-        &simple_package_path,
-        &tmp_dir,
-        &fs_extra::dir::CopyOptions::default(),
-    )?;
-
-    fs_extra::dir::copy(
-        &depends_on_simple_package_path,
-        &tmp_dir,
-        &fs_extra::dir::CopyOptions::default(),
-    )?;
-
-    // Publish simple package.
-    let simple_tmp_dir = tmp_dir.path().join("simple");
-    test_with_sui_binary(&[
-        "client",
-        "--client.config",
-        config_path.to_str().unwrap(),
-        "publish",
-        simple_tmp_dir.to_str().unwrap(),
-    ])
-    .await?;
-
-    // Build the package that depends on 'simple' package. Addresses must resolve successfully
-    // from the `Move.lock` for this command to succeed at all.
-    let depends_on_simple_tmp_dir = tmp_dir.path().join("depends_on_simple");
-    test_with_sui_binary(&[
-        "move",
-        "--client.config",
-        config_path.to_str().unwrap(),
-        "build",
-        "--dump-bytecode-as-base64",
-        "--path",
-        depends_on_simple_tmp_dir.to_str().unwrap(),
-    ])
-    .await?;
     Ok(())
 }
 

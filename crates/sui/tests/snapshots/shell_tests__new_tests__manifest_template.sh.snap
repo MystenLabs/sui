@@ -1,7 +1,15 @@
 ---
-source: crates/sui-move/tests/cli_tests.rs
-description: tests/tests/new_tests/manifest_template.sh
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/new_tests/manifest_template.sh
 ---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+sui move new example
+cat example/Move.toml
+
+----- results -----
 success: true
 exit_code: 0
 ----- stdout -----
