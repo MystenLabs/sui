@@ -106,6 +106,7 @@ impl InstaOptions<(), String> {
 ///
 /// # Arguments
 /// The macro has three required arguments:
+///
 /// - `name`: The name of the test. This will be used to name the snapshot file. For datatest this
 ///           should likely be the file name.
 /// - `input_path`: The path to the input file. This is used to determine the snapshot path.
@@ -115,7 +116,8 @@ impl InstaOptions<(), String> {
 /// The macro also accepts an optional arguments to that are used with `InstaOptions` to customize
 /// the snapshot. If needed the `InstaOptions` struct can be used directly by specifying the
 /// `options` argument. Options include:
-/// - `info`: Additional information to include in the header of the snapshot file. This can be
+///
+///  - `info`: Additional information to include in the header of the snapshot file. This can be
 ///           useful for debugging tests. The value can be any type that implements
 ///           `serde::Serialize`.
 /// - `suffix`: A suffix to append to the snapshot file name. This changes the snapshot path to
@@ -124,8 +126,10 @@ impl InstaOptions<(), String> {
 /// # Updating snapshots
 ///
 /// After running the test, the `.snap` files can be updated in two ways:
+///
 /// 1. By using `cargo insta review`, which will open an interactive UI to review the changes.
 /// 2. Running the tests with the environment variable `INSTA_UPDATE=alawys`
+///
 /// See https://docs.rs/insta/latest/insta/#updating-snapshots for more information.
 macro_rules! insta_assert {
     {
