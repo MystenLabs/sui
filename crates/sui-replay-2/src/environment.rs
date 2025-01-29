@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_store::{DataStore, InputObject}, epoch_store::EpochStore, errors::ReplayError,
+    data_store::{DataStore, InputObject},
+    epoch_store::EpochStore,
+    errors::ReplayError,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet}, fmt::Debug, ops::Bound,
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+    ops::Bound,
 };
 use sui_types::{
-    base_types::ObjectID,
-    digests::TransactionDigest, 
-    move_package::MovePackage, 
-    object::Object, 
+    base_types::ObjectID, digests::TransactionDigest, move_package::MovePackage, object::Object,
 };
 use tracing::debug;
 
@@ -89,9 +90,7 @@ impl ReplayEnvironment {
             .fetch_packages(packages)
             .await?
             .into_iter()
-            .map(|pkg| {
-                (pkg.id(), pkg)
-            })
+            .map(|pkg| (pkg.id(), pkg))
             .collect::<BTreeMap<_, _>>();
 
         let deps = get_packages_deps(&loaded_packages);
@@ -99,9 +98,7 @@ impl ReplayEnvironment {
             .fetch_packages(&deps)
             .await?
             .into_iter()
-            .map(|pkg| {
-                (pkg.id(), pkg)
-            })
+            .map(|pkg| (pkg.id(), pkg))
             .chain(loaded_packages)
             .collect::<BTreeMap<_, _>>();
 
@@ -117,8 +114,7 @@ impl ReplayEnvironment {
                 version: None,
             })
             .collect::<BTreeSet<_>>();
-        self
-            .data_store
+        self.data_store
             .load_objects(&pkg_ids)
             .await?
             .into_iter()
@@ -135,13 +131,12 @@ impl ReplayEnvironment {
         pkg_id: &ObjectID,
         epoch: u64,
     ) -> Result<(MovePackage, TransactionDigest), ReplayError> {
-        let pkgs = self
-            .system_packages
-            .get(pkg_id);
+        let pkgs = self.system_packages.get(pkg_id);
         let (pkg, digest) = match pkgs {
             Some(versions) => {
-                if let Some((_, pkg)) = 
-                    versions.range((Bound::Unbounded, Bound::Included(&epoch))).next_back() 
+                if let Some((_, pkg)) = versions
+                    .range((Bound::Unbounded, Bound::Included(&epoch)))
+                    .next_back()
                 {
                     Ok((pkg.clone(), self.epoch_info.epoch_digest(epoch)?))
                 } else {
@@ -151,11 +146,9 @@ impl ReplayEnvironment {
                     })
                 }
             }
-            None => {
-                Err(ReplayError::MissingSystemPackage {
-                    pkg: pkg_id.to_string(),
-                })
-            }
+            None => Err(ReplayError::MissingSystemPackage {
+                pkg: pkg_id.to_string(),
+            }),
         }?;
         Ok((pkg, digest))
     }
@@ -174,7 +167,6 @@ impl ReplayEnvironment {
         }
         Ok(packages)
     }
-    
 }
 
 fn get_packages_deps(packages: &BTreeMap<ObjectID, MovePackage>) -> BTreeSet<ObjectID> {
@@ -187,7 +179,7 @@ fn get_packages_deps(packages: &BTreeMap<ObjectID, MovePackage>) -> BTreeSet<Obj
     packages.values().any(|pkg| deps.remove(&pkg.id()));
     deps
 }
-    
+
 //
 // Friendly Debug implementation for ReplayEnvironment. To remove when convenient
 //
@@ -250,8 +242,7 @@ fn print_objects(
                 writeln!(
                     f,
                     "Package: {}[{}] (should not reach here)",
-                    obj_id,
-                    version,
+                    obj_id, version,
                 )?;
             }
         }

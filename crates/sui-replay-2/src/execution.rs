@@ -57,7 +57,7 @@ pub fn execute_transaction_to_effects(
         env,
         epoch: txn.epoch,
     };
-    let (_inner_store, gas_status, effects, _, result) =
+    let (_inner_store, gas_status, effects, _execution_timing, result) =
         txn.executor.executor.execute_transaction_to_effects(
             &store,
             &protocol_config,
@@ -162,7 +162,7 @@ impl ChildObjectResolver for ReplayStore<'_> {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
-            use_object_per_epoch_marker_table_v2
+            use_object_per_epoch_marker_table_v2,
         )
     }
 }

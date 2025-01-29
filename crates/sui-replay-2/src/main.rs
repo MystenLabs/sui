@@ -4,11 +4,8 @@
 use clap::*;
 use core::panic;
 use sui_replay_2::{
-    data_store::DataStore, 
-    environment::ReplayEnvironment, 
-    execution, 
-    replay_txn_data::ReplayTransaction, 
-    ReplayCommand,
+    data_store::DataStore, environment::ReplayEnvironment, execution,
+    replay_txn_data::ReplayTransaction, ReplayCommand,
 };
 use tracing::{debug, info};
 
@@ -25,15 +22,15 @@ async fn main() {
         ReplayCommand::ReplayTransaction {
             node,
             tx_digest,
-            show_effects:_,
-            verify:_,
-            config_objects:_, 
+            show_effects: _,
+            verify: _,
+            config_objects: _,
         } => {
             //
             // create DataStore
             let data_store = DataStore::new(node)
                 .unwrap_or_else(|e| panic!("Failed to create data store: {:?}", e));
-            
+
             //
             // create ReplayEnvironment
             let mut env = ReplayEnvironment::new(data_store)
@@ -45,9 +42,9 @@ async fn main() {
             // load transaction data
             let replay_txn = ReplayTransaction::load(&mut env, &tx_digest)
                 .await
-                .unwrap_or_else(|e: sui_replay_2::errors::ReplayError| 
+                .unwrap_or_else(|e: sui_replay_2::errors::ReplayError| {
                     panic!("Failed to get transaction data: {:?}", e)
-                );
+                });
             debug!("After Transaction Load: {:?}", env);
 
             //

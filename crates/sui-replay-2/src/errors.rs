@@ -19,49 +19,77 @@ pub enum ReplayError {
     #[error("Transaction effects {} not found on {:?}", digest, node)]
     TransactionEffectsNotFound { digest: String, node: Node },
     #[error("Failed to retrieve change epoch events: {}", err)]
-    ChangeEpochEventsFailure {err: String},
+    ChangeEpochEventsFailure { err: String },
 
     #[error("Missing ProtocolConfig for epoch {}", epoch)]
-    MissingProtocolConfigForEpoch {epoch: u64},
+    MissingProtocolConfigForEpoch { epoch: u64 },
     #[error("Missing RGP for epoch {}", epoch)]
-    MissingRGPForEpoch {epoch: u64},
+    MissingRGPForEpoch { epoch: u64 },
     #[error("Missing timestamp for epoch {}", epoch)]
-    MissingTimestampForEpoch {epoch: u64},
+    MissingTimestampForEpoch { epoch: u64 },
     #[error("Missing digest for epoch {}", epoch)]
-    MissingDigestForEpoch {epoch: u64},
+    MissingDigestForEpoch { epoch: u64 },
     #[error("Missing system package {}", pkg)]
     MissingSystemPackage { pkg: String },
     #[error("Cannot find epoch for package {} at epoch {}", pkg, epoch)]
     MissingPackageAtEpoch { pkg: String, epoch: u64 },
     #[error("Cannot find package epoch for {}", pkg)]
-    MissingPackageEpoch {pkg: String},
+    MissingPackageEpoch { pkg: String },
 
     #[error("Failed to get executor: {}", err)]
-    ExecutorError {err: String},
+    ExecutorError { err: String },
     #[error("Failed to get packages for {}: {}", pkg, err)]
-    PackagesRetrievalError {pkg: String, err: String},
+    PackagesRetrievalError { pkg: String, err: String },
     #[error("Package not found {}", pkg)]
-    PackageNotFound {pkg: String},
+    PackageNotFound { pkg: String },
     #[error("Cannot load package {}: {}", pkg, err)]
-    LoadPackageError {pkg: String, err: String},
+    LoadPackageError { pkg: String, err: String },
     #[error("Failed to load object {}[{:?}]: {}", address, version, err)]
-    ObjectLoadError {address: String, version: Option<u64>, err: String},
+    ObjectLoadError {
+        address: String,
+        version: Option<u64>,
+        err: String,
+    },
     #[error("Object not found {}[{:?}]", address, version)]
-    ObjectNotFound {address: String, version: Option<u64>},
+    ObjectNotFound {
+        address: String,
+        version: Option<u64>,
+    },
     #[error("Object version not found {}[{:?}]", address, version)]
-    ObjectVersionNotFound {address: String, version: Option<u64>},
+    ObjectVersionNotFound {
+        address: String,
+        version: Option<u64>,
+    },
     #[error("Cannot convert TransactionKind for transaction {}: {:?}", digest, err)]
-    TransactionKindError {digest: String, err: String},
+    TransactionKindError { digest: String, err: String },
     #[error("Cannot find epoch timestamp in transaction {}", digest)]
     NoEpochTimestamp { digest: String },
-    #[error("Fail to create object digest {}, for transaction {}: {}", object_digest, digest, err)]
-    ObjectDigestError { digest: String, object_digest: String, err: String },
-    #[error("Fail to create object id {}, for transaction {}: {}", object_id, digest, err)]
-    ObjectIDError { digest: String, object_id: String, err: String },
+    #[error(
+        "Fail to create object digest {}, for transaction {}: {}",
+        object_digest,
+        digest,
+        err
+    )]
+    ObjectDigestError {
+        digest: String,
+        object_digest: String,
+        err: String,
+    },
+    #[error(
+        "Fail to create object id {}, for transaction {}: {}",
+        object_id,
+        digest,
+        err
+    )]
+    ObjectIDError {
+        digest: String,
+        object_id: String,
+        err: String,
+    },
     #[error("Failed to create client for host {}: {}", host, err)]
     ClientCreationError { host: String, err: String },
     #[error("Cannot get input objects for transaction {}: {}", digest, err)]
-    InputObjectsError {digest: String, err: String},
+    InputObjectsError { digest: String, err: String },
 
     #[error("Cannot convert package {}: {}", pkg, err)]
     PackageConversionError { pkg: String, err: String },
