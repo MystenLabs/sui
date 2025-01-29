@@ -6,8 +6,6 @@ description: tests/shell_tests/with_network/move_build_bytecode_with_address_res
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-# fixing issue https://github.com/MystenLabs/sui/issues/6546
-
 sui client --client.config $CONFIG \
   publish simple \
   --json | jq '.effects.status'
