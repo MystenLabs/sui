@@ -21,6 +21,7 @@ use sui_types::{
     crypto::{RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
     digests::TransactionDigest,
     error::SuiError,
+    traffic_control::TrafficControlReconfigParams,
 };
 use telemetry_subscribers::TracingHandle;
 use tokio::sync::oneshot;
@@ -73,6 +74,9 @@ use tracing::info;
 // Get the estimated cost of a transaction
 //
 //  $ curl 'http://127.0.0.1:1337/get-tx-cost?tx=<tx_digest>'
+// Reconfigure traffic control policy
+//
+//  $ curl 'http://127.0.0.1:1337/traffic-control?error_threshold=100&spam_threshold=100&dry_run=true'
 
 const LOGGING_ROUTE: &str = "/logging";
 const TRACING_ROUTE: &str = "/enable-tracing";
@@ -500,6 +504,7 @@ async fn dump_consensus_tx_cost_estimates(
     (StatusCode::OK, format!("{:#?}", estimates))
 }
 
+<<<<<<< HEAD
 #[derive(Deserialize)]
 struct TrafficControlConfig {
     error_threshold: Option<u64>,
@@ -507,21 +512,15 @@ struct TrafficControlConfig {
     dry_run: Option<bool>,
 }
 
+=======
+>>>>>>> 28e5bffc0f (Change in approach - use arcswap to exfiltrate state, atomic swap references with a new instance containing old data, then shutdown old instance)
 async fn traffic_control(
     State(state): State<Arc<AppState>>,
-    args: Query<TrafficControlConfig>,
+    args: Query<TrafficControlReconfigParams>,
 ) -> (StatusCode, String) {
-    let Query(TrafficControlConfig {
-        error_threshold,
-        spam_threshold,
-        dry_run,
-    }) = args;
-    match state
-        .node
-        .state()
-        .reconfigure_traffic_control(error_threshold, spam_threshold, dry_run)
-    {
+    let Query(params) = args;
+    match state.node.state().reconfigure_traffic_control(params).await {
         Ok(()) => (StatusCode::OK, "traffic control configured\n".to_string()),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
 }

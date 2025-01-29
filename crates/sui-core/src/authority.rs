@@ -67,8 +67,9 @@ use sui_types::layout_resolver::into_struct_layout;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::traffic_control::PolicyConfig;
-use sui_types::traffic_control::RemoteFirewallConfig;
+use sui_types::traffic_control::{
+    PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
+};
 use sui_types::transaction_executor::SimulateTransactionResult;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
@@ -870,7 +871,7 @@ pub struct AuthorityState {
     pub(crate) congestion_tracker: Arc<CongestionTracker>,
 
     /// Traffic controller for Sui core servers (json-rpc, validator service)
-    pub traffic_controller: Option<Arc<TrafficController>>,
+    pub traffic_controller: Option<Arc<ArcSwap<TrafficController>>>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1589,20 +1590,45 @@ impl AuthorityState {
         Ok((effects, execution_error_opt))
     }
 
-    pub fn reconfigure_traffic_control(
+    pub async fn reconfigure_traffic_control(
         &self,
-        error_threshold: Option<u64>,
-        spam_threshold: Option<u64>,
-        dry_run: Option<bool>,
-    ) -> SuiResult<()> {
-        self.traffic_controller
-            .as_ref()
-            .map(|traffic_controller| {
-                traffic_controller.reconfigure_no_clear(error_threshold, spam_threshold, dry_run)
-            })
-            .unwrap_or(Err(SuiError::InvalidAdminRequest(
-                "traffic controller not enabled".to_string(),
-            )))
+        params: TrafficControlReconfigParams,
+    ) -> Result<(), SuiError> {
+        if let Some(traffic_controller) = self.traffic_controller.as_ref() {
+            let (acl, mut config, metrics, fw_config, spam_policy, error_policy) =
+                traffic_controller.load().exfiltrate().await;
+            if spam_policy.is_none() {
+                return Err(SuiError::InvalidAdminRequest(
+                    "spam policy is not previously initialized".to_string(),
+                ));
+            }
+            if error_policy.is_none() {
+                return Err(SuiError::InvalidAdminRequest(
+                    "error policy is not previously initialized".to_string(),
+                ));
+            }
+            let mut spam_policy = spam_policy.unwrap();
+            let mut error_policy = error_policy.unwrap();
+            TrafficController::admin_reconfigure_policy(
+                &mut config,
+                &mut spam_policy,
+                &mut error_policy,
+                params,
+            )?;
+            let new_traffic_controller = TrafficController::from_state(
+                acl,
+                config,
+                spam_policy,
+                error_policy,
+                metrics,
+                fw_config,
+            )
+            .await;
+            // do atomic swap
+            let old_traffic_controller = traffic_controller.swap(Arc::new(new_traffic_controller));
+            old_traffic_controller.shutdown();
+        }
+        Ok(())
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -3056,14 +3082,20 @@ impl AuthorityState {
         let input_loader =
             TransactionInputLoader::new(execution_cache_trait_pointers.object_cache_reader.clone());
         let epoch = epoch_store.epoch();
-        let traffic_controller_metrics = TrafficControllerMetrics::new(prometheus_registry);
-        let traffic_controller = policy_config.clone().map(|policy| {
-            Arc::new(TrafficController::init(
-                policy,
-                traffic_controller_metrics,
-                firewall_config.clone(),
-            ))
-        });
+        let traffic_controller_metrics =
+            Arc::new(TrafficControllerMetrics::new(prometheus_registry));
+        let traffic_controller = if let Some(policy_config) = policy_config {
+            Some(Arc::new(ArcSwap::new(Arc::new(
+                TrafficController::init(
+                    policy_config,
+                    traffic_controller_metrics,
+                    firewall_config.clone(),
+                )
+                .await,
+            ))))
+        } else {
+            None
+        };
         let state = Arc::new(AuthorityState {
             name,
             secret,

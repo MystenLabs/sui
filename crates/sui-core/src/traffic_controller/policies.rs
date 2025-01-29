@@ -14,7 +14,7 @@ use std::hash::Hash;
 use std::time::Duration;
 use std::time::{Instant, SystemTime};
 use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, Weight};
-use tracing::{info, trace};
+use tracing::{info, trace, warn};
 
 const HIGHEST_RATES_CAPACITY: usize = 20;
 
@@ -271,6 +271,19 @@ pub enum TrafficControlPolicy {
     TestPanicOnInvocation(TestPanicOnInvocationPolicy),
 }
 
+// impl CloneToUnit for TrafficControlPolicy {
+//     fn clone_to_unit(&self) -> Self {
+//         match self {
+//             Self::FreqThreshold(_) => Self::FreqThreshold(FreqThresholdPolicy::default()),
+//             Self::NoOp(_) => Self::NoOp(NoOpPolicy::default()),
+//             Self::TestNConnIP(_) => Self::TestNConnIP(TestNConnIPPolicy::default()),
+//             Self::TestPanicOnInvocation(_) => {
+//                 Self::TestPanicOnInvocation(TestPanicOnInvocationPolicy::default())
+//             }
+//         }
+//     }
+// }
+
 impl Policy for TrafficControlPolicy {
     fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
         match self {
@@ -317,10 +330,10 @@ impl TrafficControlPolicy {
 ////////////// *** Policy definitions *** //////////////
 
 pub struct FreqThresholdPolicy {
-    config: PolicyConfig,
+    pub config: PolicyConfig,
+    pub client_threshold: u64,
+    pub proxied_client_threshold: u64,
     sketch: TrafficSketch,
-    client_threshold: u64,
-    proxied_client_threshold: u64,
     /// Unique salt to be added to all keys in the sketch. This
     /// ensures that false positives are not correlated across
     /// all nodes at the same time. For Sui validators for example,
@@ -439,13 +452,14 @@ impl NoOpPolicy {
 
 #[derive(Clone)]
 pub struct TestNConnIPPolicy {
-    config: PolicyConfig,
+    pub threshold: u64,
+    pub config: PolicyConfig,
     frequencies: Arc<RwLock<HashMap<IpAddr, u64>>>,
-    threshold: u64,
 }
 
 impl TestNConnIPPolicy {
     pub async fn new(config: PolicyConfig, threshold: u64) -> Self {
+        warn!("TESTING -- Creating new TestNConnIPPolicy");
         let frequencies = Arc::new(RwLock::new(HashMap::new()));
         let frequencies_clone = frequencies.clone();
         spawn_monitored_task!(run_clear_frequencies(
@@ -461,8 +475,10 @@ impl TestNConnIPPolicy {
 
     fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
         let client = if let Some(client) = tally.direct {
+            warn!("TESTING -- Handling tally for client: {:?}", client);
             client
         } else {
+            warn!("TESTING -- No client to handle tally for");
             return PolicyResponse::default();
         };
 
@@ -470,10 +486,16 @@ impl TestNConnIPPolicy {
         let mut frequencies = self.frequencies.write();
         let count = frequencies.entry(client).or_insert(0);
         *count += 1;
+        warn!(
+            "TESTING -- Count for client: {:?}, count: {:?}",
+            client, *count
+        );
         PolicyResponse {
             block_client: if *count >= self.threshold {
+                warn!("TESTING -- Blocking client: {:?}", client);
                 Some(client)
             } else {
+                warn!("TESTING -- Not blocking client: {:?}", client);
                 None
             },
             block_proxied_client: None,
@@ -488,6 +510,7 @@ impl TestNConnIPPolicy {
 async fn run_clear_frequencies(frequencies: Arc<RwLock<HashMap<IpAddr, u64>>>, window_secs: u64) {
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(window_secs)).await;
+        warn!("TESTING -- Clearing frequencies");
         frequencies.write().clear();
     }
 }

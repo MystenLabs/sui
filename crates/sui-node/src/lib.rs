@@ -2220,7 +2220,7 @@ async fn build_http_servers(
     let mut router = axum::Router::new();
 
     let json_rpc_router = {
-        let traffic_controller = state.traffic_controller.as_ref().cloned();
+        let traffic_controller = state.traffic_controller.clone();
         let mut server = JsonRpcServerBuilder::new(
             env!("CARGO_PKG_VERSION"),
             prometheus_registry,
