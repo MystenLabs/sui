@@ -153,7 +153,7 @@ mod handle;
 pub mod metrics;
 
 pub struct ValidatorComponents {
-    validator_server_handle: ValidatorGrpcServerHandle,
+    validator_server_handle: SpawnOnce,
     validator_overload_monitor_handle: Option<JoinHandle<()>>,
     consensus_manager: ConsensusManager,
     consensus_store_pruner: ConsensusStorePruner,
@@ -1331,7 +1331,7 @@ impl SuiNode {
         consensus_store_pruner: ConsensusStorePruner,
         accumulator: Weak<StateAccumulator>,
         backpressure_manager: Arc<BackpressureManager>,
-        validator_server_handle: ValidatorGrpcServerHandle,
+        validator_server_handle: SpawnOnce,
         validator_overload_monitor_handle: Option<JoinHandle<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
@@ -1511,7 +1511,7 @@ impl SuiNode {
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
         prometheus_registry: &Registry,
-    ) -> Result<ValidatorGrpcServerHandle> {
+    ) -> Result<SpawnOnce> {
         let validator_service = ValidatorService::new(
             state.clone(),
             consensus_adapter,
@@ -1540,9 +1540,7 @@ impl SuiNode {
         let local_addr = server.local_addr();
         info!("Listening to traffic on {local_addr}");
 
-        Ok(ValidatorGrpcServerHandle::new(
-            server.serve().map_err(Into::into),
-        ))
+        Ok(SpawnOnce::new(server.serve().map_err(Into::into)))
     }
 
     async fn reexecute_pending_consensus_certs(
@@ -2051,14 +2049,14 @@ impl SuiNode {
     }
 }
 
-enum ValidatorGrpcServerHandle {
-    // Mutex is only needed to make ValidatorGrpcServerHandle Send
+enum SpawnOnce {
+    // Mutex is only needed to make SpawnOnce Send
     Unstarted(Mutex<BoxFuture<'static, Result<()>>>),
     #[allow(unused)]
     Started(JoinHandle<Result<()>>),
 }
 
-impl ValidatorGrpcServerHandle {
+impl SpawnOnce {
     pub fn new(future: impl Future<Output = Result<()>> + Send + 'static) -> Self {
         Self::Unstarted(Mutex::new(Box::pin(future)))
     }
