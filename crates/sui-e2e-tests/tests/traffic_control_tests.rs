@@ -34,6 +34,7 @@ use test_cluster::{TestCluster, TestClusterBuilder};
 
 #[tokio::test]
 async fn test_validator_traffic_control_noop() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
@@ -58,6 +59,7 @@ async fn test_validator_traffic_control_noop() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_noop() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
@@ -77,6 +79,7 @@ async fn test_fullnode_traffic_control_noop() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
@@ -102,6 +105,7 @@ async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_ok() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
@@ -122,6 +126,7 @@ async fn test_fullnode_traffic_control_ok() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_validator_traffic_control_dry_run() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let n = 5;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
@@ -148,6 +153,7 @@ async fn test_validator_traffic_control_dry_run() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_dry_run() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let txn_count = 15;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
@@ -211,6 +217,7 @@ async fn test_fullnode_traffic_control_dry_run() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_validator_traffic_control_error_blocked() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let n = 5;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
@@ -257,9 +264,10 @@ async fn test_validator_traffic_control_error_blocked() -> Result<(), anyhow::Er
 #[tokio::test]
 async fn test_validator_traffic_control_error_blocked_with_policy_reconfig(
 ) -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let n = 5;
     let policy_config = PolicyConfig {
-        connection_blocklist_ttl_sec: 1,
+        connection_blocklist_ttl_sec: 100,
         // Test that any N requests will cause an IP to be added to the blocklist.
         error_policy_type: PolicyType::TestNConnIP(n - 1),
         dry_run: true,
@@ -303,10 +311,15 @@ async fn test_validator_traffic_control_error_blocked_with_policy_reconfig(
     for node in test_cluster.all_validator_handles() {
         node.with(|node| {
             node.state()
-                .reconfigure_traffic_control(None, None, Some(false))
+                .reconfigure_traffic_control(TrafficControlReconfigParams {
+                    policy_config: None,
+                    fw_config: None,
+                    dry_run: Some(false),
+                })
                 .unwrap();
         });
     }
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     // If Node and TrafficController has not crashed, blocklist and policy freq state should still
     // be intact. A single additional erroneous request from the client should trigger enforcement.
     let response = auth_client.handle_transaction(tx.clone(), None).await;
@@ -320,6 +333,7 @@ async fn test_validator_traffic_control_error_blocked_with_policy_reconfig(
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let txn_count = 15;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 3,
@@ -388,6 +402,7 @@ async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Erro
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_error_blocked() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let txn_count = 5;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 3,
@@ -445,6 +460,7 @@ async fn test_fullnode_traffic_control_error_blocked() -> Result<(), anyhow::Err
 
 #[tokio::test]
 async fn test_validator_traffic_control_error_delegated() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let n = 5;
     let port = 65000;
     let policy_config = PolicyConfig {
@@ -514,6 +530,7 @@ async fn test_validator_traffic_control_error_delegated() -> Result<(), anyhow::
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let txn_count = 10;
     let port = 65001;
     let policy_config = PolicyConfig {
@@ -594,6 +611,7 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
 
 #[tokio::test]
 async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 3,
         spam_policy_type: PolicyType::TestNConnIP(10),
@@ -650,7 +668,8 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_traffic_control_manual_set_dead_mans_switch() -> Result<(), anyhow::Error> {
-    let drain_path = tempfile::tempdir().unwrap().keep().join("drain");
+    telemetry_subscribers::init_for_testing();
+    let drain_path = tempfile::tempdir().unwrap().into_path().join("drain");
     assert!(!drain_path.exists(), "Expected drain file to not yet exist",);
     File::create(&drain_path).expect("Failed to touch nodefw drain file");
     assert!(drain_path.exists(), "Expected drain file to exist",);
@@ -661,6 +680,7 @@ async fn test_traffic_control_manual_set_dead_mans_switch() -> Result<(), anyhow
 
 #[sim_test]
 async fn test_traffic_sketch_no_blocks() {
+    telemetry_subscribers::init_for_testing();
     let sketch_config = FreqThresholdConfig {
         client_threshold: 10_100,
         proxied_client_threshold: 10_100,
@@ -701,6 +721,7 @@ async fn test_traffic_sketch_no_blocks() {
 #[ignore]
 #[sim_test]
 async fn test_traffic_sketch_with_slow_blocks() {
+    telemetry_subscribers::init_for_testing();
     let sketch_config = FreqThresholdConfig {
         client_threshold: 9_900,
         proxied_client_threshold: 9_900,
@@ -740,6 +761,7 @@ async fn test_traffic_sketch_with_slow_blocks() {
 
 #[sim_test]
 async fn test_traffic_sketch_with_sampled_spam() {
+    telemetry_subscribers::init_for_testing();
     let sketch_config = FreqThresholdConfig {
         client_threshold: 4_500,
         proxied_client_threshold: 4_500,
@@ -777,6 +799,7 @@ async fn test_traffic_sketch_with_sampled_spam() {
 
 #[sim_test]
 async fn test_traffic_sketch_allowlist_mode() {
+    telemetry_subscribers::init_for_testing();
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 1,
@@ -802,6 +825,7 @@ async fn test_traffic_sketch_allowlist_mode() {
 }
 
 async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let context = &mut test_cluster.wallet;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
