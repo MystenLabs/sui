@@ -1,20 +1,14 @@
 ---
 source: crates/move-docgen-tests/tests/testsuite.rs
 info:
-  output_directory: output
-  doc_path:
-    - doc
-  root_doc_templates: []
-  references_file: ~
-  compile_relative_to_output_dir: true
-  flags:
-    section_level_start: 1
-    exclude_private_fun: false
-    exclude_impl: false
-    toc_depth: 3
-    no_collapsed_sections: true
-    include_dep_diagrams: false
-    include_call_diagrams: false
+  section_level_start: 1
+  exclude_private_fun: false
+  exclude_impl: false
+  toc_depth: 3
+  no_collapsed_sections: true
+  include_dep_diagrams: false
+  include_call_diagrams: false
+input_file: crates/move-docgen-tests/tests/move/annotation/Move.toml
 ---
 <a name="a_m"></a>
 

@@ -80,6 +80,14 @@ impl InstaOptions<()> {
     }
 }
 
+// fn t() {
+//     let mut settings = insta::Settings::clone_current();
+//     settings.set_input_file(i);
+
+//     insta::assert_snapshot!(o, c);
+
+// }
+
 #[macro_export]
 macro_rules! insta_assert {
     {
@@ -89,12 +97,12 @@ macro_rules! insta_assert {
         options: $options:expr
         $(,)?
     } => {{
-        let i = $input;
+        let i: &Path = $input.as_ref();
         let o = $output;
         let c = $contents;
         let $crate::testing::InstaOptions { info } = $options;
         let mut settings = insta::Settings::clone_current();
-        settings.set_input_file(i);
+        settings.set_input_file(i.canonicalize().unwrap());
         if let Some(info) = info {
             settings.set_info(info);
         }

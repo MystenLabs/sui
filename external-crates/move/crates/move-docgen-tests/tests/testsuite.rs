@@ -78,7 +78,7 @@ fn test_move_one(
             input_path: toml_path,
             output_name: out_path,
             contents: contents,
-            info: doc_options,
+            info: &doc_options.flags,
         };
     }
     Ok(())
