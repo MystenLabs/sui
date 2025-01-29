@@ -10,4 +10,4 @@ error[Compatibility E01006]: module missing
   │ ╰──^ Package is missing module 'identifier'
   │  
   = Modules which are part package cannot be removed during an upgrade.
-  = add missing module 'identifier' back to the package.
+  = Add missing module 'identifier' back to the package.
