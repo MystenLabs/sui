@@ -8,8 +8,8 @@ error[Compatibility E01001]: missing public declaration
 4 │ module upgrades::enum_ {
   │                  ^^^^^ enum 'EnumToBeRemoved' is missing
   │
-  = enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
-  = add missing enum 'EnumToBeRemoved' back to the module 'enum_'.
+  = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+  = Add missing enum 'EnumToBeRemoved' back to the module 'enum_'.
 
 error[Compatibility E01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/func.move:4:18
@@ -17,8 +17,8 @@ error[Compatibility E01001]: missing public declaration
 4 │ module upgrades::func_ {
   │                  ^^^^^ public function 'fun_to_be_removed' is missing
   │
-  = public functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
-  = add missing public function 'fun_to_be_removed' back to the module 'func_'.
+  = Public functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+  = Add missing public function 'fun_to_be_removed' back to the module 'func_'.
 
 error[Compatibility E01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/func.move:7:9
@@ -35,8 +35,8 @@ error[Compatibility E01001]: missing public declaration
 4 │ module upgrades::struct_ {
   │                  ^^^^^^^ struct 'StructToBeRemoved' is missing
   │
-  = structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
-  = add missing struct 'StructToBeRemoved' back to the module 'struct_'.
+  = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+  = Add missing struct 'StructToBeRemoved' back to the module 'struct_'.
 
 error[Compatibility E01006]: module missing
   ┌─ /fixtures/upgrade_errors/declaration_errors_v2/Move.toml:1:1
@@ -47,7 +47,7 @@ error[Compatibility E01006]: module missing
   │ ╰────────────────────────────────────────────────────────────────────────^ Package is missing module 'missing_module'
   │  
   = Modules which are part package cannot be removed during an upgrade.
-  = add missing module 'missing_module' back to the package.
+  = Add missing module 'missing_module' back to the package.
 
 
 Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.
