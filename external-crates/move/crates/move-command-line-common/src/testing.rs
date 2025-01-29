@@ -94,7 +94,8 @@ impl InstaOptions<(), String> {
 /// A wrapper around `insta::assert_snapshort` to promote uniformity in the Move codebase, intended
 /// to be used with datatest-stable and as a replacement for the hand-rolled baseline tests.
 /// The snapshot file will be saved in the same directory as the input file with the name specified.
-/// In essence, it will be saved at the path `{input_path}/{name}.snap`.
+/// In essence, it will be saved at the path `{input_path}/{name}.snap` (and
+/// `{input_path}/{name}@{suffix}.snap` if `suffix` is specified).
 ///
 /// For ease of use and reviewing, `insta_assert` should be used at most once per test. When it
 /// fails, it will stop the test. So if there are multiple snapshots in a given test, it would
@@ -114,6 +115,15 @@ impl InstaOptions<(), String> {
 /// - `info`: Additional information to include in the header of the snapshot file. This can be
 ///           useful for debugging tests. The value can be any type that implements
 ///           `serde::Serialize`.
+/// - `suffix`: A suffix to append to the snapshot file name. This changes the snapshot path to
+///            `{input_path}/{name}@{suffix}.snap`.
+///
+/// # Updating snapshots
+///
+/// After running the test, the `.snap` files can be updated in two ways:
+/// 1. By using `cargo insta review`, which will open an interactive UI to review the changes.
+/// 2. Running the tests with the environment variable `INSTA_UPDATE=alawys`
+/// See https://docs.rs/insta/latest/insta/#updating-snapshots for more information.
 macro_rules! insta_assert {
     {
         name: $name:expr,
