@@ -288,13 +288,13 @@ export class Runtime extends EventEmitter {
             throw Error(`Cannot find package name in manifest file: ${manifest_path}`);
         }
 
-        const opendFileExt = path.extname(openedFilePath);
-        if (opendFileExt !== MOVE_FILE_EXT
-            && opendFileExt !== BCODE_FILE_EXT
-            && opendFileExt !== JSON_FILE_EXT) {
-            throw new Error(`File extension: ${opendFileExt} is not supported by trace debugger`);
+        const openedFileExt = path.extname(openedFilePath);
+        if (openedFileExt !== MOVE_FILE_EXT
+            && openedFileExt !== BCODE_FILE_EXT
+            && openedFileExt !== JSON_FILE_EXT) {
+            throw new Error(`File extension: ${openedFileExt} is not supported by trace debugger`);
         }
-        const showDisassembly = opendFileExt === BCODE_FILE_EXT;
+        const showDisassembly = openedFileExt === BCODE_FILE_EXT;
 
         // create file maps for all files in the `sources` directory, including both package source
         // files and source files for dependencies

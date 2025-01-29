@@ -23,6 +23,10 @@ const LOG_LEVEL = 'log';
  */
 const DEBUGGER_TYPE = 'move-debug';
 
+const MOVE_FILE_EXT = ".move";
+const BCODE_FILE_EXT = ".mvb";
+
+
 /**
  * Provider of on-hover information during debug session.
  */
@@ -84,10 +88,6 @@ export function activate(context: vscode.ExtensionContext) {
                     const stackFrame: StackFrame = stackTraceResponse.stackFrames[0];
                     if (stackFrame && stackFrame.source && stackFrame.source.path !== previousSourcePath) {
                         previousSourcePath = stackFrame.source.path;
-                        const source = stackFrame.source;
-                        const line = stackFrame.line;
-                        console.log(`Frame details: ${source?.name} at line ${line}`);
-
                         const editor = vscode.window.activeTextEditor;
                         if (editor) {
                             const optimized_lines = stackTraceResponse.optimizedLines;
@@ -227,13 +227,13 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
     }
 
     let tracedFunctions: string[] = [];
-    if (path.extname(editor.document.uri.fsPath) === '.move') {
+    if (path.extname(editor.document.uri.fsPath) === MOVE_FILE_EXT) {
         const pkgModules = findSrcModules(editor.document.getText());
         if (pkgModules.length === 0) {
             throw new Error(`Cannot find any modules in file '${editor.document.uri.fsPath}'`);
         }
         tracedFunctions = findTracedFunctionsFromPath(pkgRoot, pkgModules);
-    } else if (path.extname(editor.document.uri.fsPath) === '.mvb') {
+    } else if (path.extname(editor.document.uri.fsPath) === BCODE_FILE_EXT) {
         const modulePattern = /\bmodule\s+\d+\.\w+\b/g;
         const moduleSequences = editor.document.getText().match(modulePattern);
         if (!moduleSequences || moduleSequences.length === 0) {
