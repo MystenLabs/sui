@@ -25,9 +25,7 @@ use mysten_metrics::spawn_monitored_task;
 use rand::Rng;
 use std::fmt::Debug;
 use std::time::{Duration, Instant, SystemTime};
-use sui_types::traffic_control::{
-    FreqThresholdConfig, PolicyConfig, PolicyType, RemoteFirewallConfig, Weight,
-};
+use sui_types::traffic_control::{PolicyConfig, PolicyType, RemoteFirewallConfig, Weight};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
@@ -122,29 +120,35 @@ impl TrafficController {
     ) -> SuiResult<()> {
         let mut config = self.config.lock();
         if let Some(error_threshold) = error_threshold {
-            if let PolicyType::FreqThreshold(threshold_config) = &mut config.error_policy_type {
-                threshold_config.client_threshold = error_threshold;
-            } else {
-                let error_policy_type = PolicyType::FreqThreshold(FreqThresholdConfig {
-                    client_threshold: error_threshold,
-                    window_size_secs: 5,
-                    update_interval_secs: 1,
-                    ..Default::default()
-                });
-                config.error_policy_type = error_policy_type;
+            match &mut config.error_policy_type {
+                PolicyType::FreqThreshold(threshold_config) => {
+                    threshold_config.client_threshold = error_threshold;
+                }
+                PolicyType::TestNConnIP(n) => {
+                    *n = error_threshold;
+                }
+                _ => {
+                    return Err(SuiError::InvalidAdminRequest(
+                        "Unsupported prior error policy type during traffic control reconfiguration"
+                            .to_string(),
+                    ));
+                }
             }
         }
         if let Some(spam_threshold) = spam_threshold {
-            if let PolicyType::FreqThreshold(threshold_config) = &mut config.spam_policy_type {
-                threshold_config.client_threshold = spam_threshold;
-            } else {
-                let spam_policy_type = PolicyType::FreqThreshold(FreqThresholdConfig {
-                    client_threshold: spam_threshold,
-                    window_size_secs: 5,
-                    update_interval_secs: 1,
-                    ..Default::default()
-                });
-                config.spam_policy_type = spam_policy_type;
+            match &mut config.spam_policy_type {
+                PolicyType::FreqThreshold(threshold_config) => {
+                    threshold_config.client_threshold = spam_threshold;
+                }
+                PolicyType::TestNConnIP(n) => {
+                    *n = spam_threshold;
+                }
+                _ => {
+                    return Err(SuiError::InvalidAdminRequest(
+                        "Unsupported prior spam policy type during traffic control reconfiguration"
+                            .to_string(),
+                    ));
+                }
             }
         }
         if let Some(dry_run) = dry_run {
