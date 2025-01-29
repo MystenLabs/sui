@@ -100,6 +100,9 @@ impl InstaOptions<(), String> {
 /// For ease of use and reviewing, `insta_assert` should be used at most once per test. When it
 /// fails, it will stop the test. So if there are multiple snapshots in a given test, it would
 /// require multiple test runs to review all the failures.
+/// If you do need multiple snapshots in a test, you may want to disable assertions for your test
+/// run by setting `INSTA_FORCE_PASS=1` see
+/// https://insta.rs/docs/advanced/#disabling-assertion-failure for more information.
 ///
 /// # Arguments
 /// The macro has three required arguments:
