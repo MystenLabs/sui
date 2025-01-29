@@ -7,16 +7,12 @@ description: tests/shell_tests/with_network/dummy.sh
 # SPDX-License-Identifier: Apache-2.0
 
 # simple test just to make sure the test runner works with the network
-sui client --client.config $CONFIG envs
+sui client --client.config $CONFIG objects --json | jq 'length'
 
 ----- results -----
 success: true
 exit_code: 0
 ----- stdout -----
-╭──────────┬────────────────────────┬────────╮
-│ alias    │ url                    │ active │
-├──────────┼────────────────────────┼────────┤
-│ localnet │ http://127.0.0.1:53065 │ *      │
-╰──────────┴────────────────────────┴────────╯
+5
 
 ----- stderr -----
