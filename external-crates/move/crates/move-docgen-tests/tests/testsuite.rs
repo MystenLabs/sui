@@ -38,11 +38,7 @@ fn test_collapsed_sections(toml_path: &Path) -> datatest_stable::Result<()> {
     test_impl(toml_path, flags, "collapsed_sections")
 }
 
-fn test_impl(
-    toml_path: &Path,
-    flags: DocgenFlags,
-    test_prefix: &str,
-) -> datatest_stable::Result<()> {
+fn test_impl(toml_path: &Path, flags: DocgenFlags, test_case: &str) -> datatest_stable::Result<()> {
     let test_dir = toml_path.parent().unwrap();
     let output_dir = TempDir::new()?;
     let config = BuildConfig {
@@ -71,10 +67,11 @@ fn test_impl(
         .try_into()
         .expect("Test infra supports only one output file currently");
     insta_assert! {
-        name: format!("{test_prefix}/{path}"),
+        name: path,
         input_path: toml_path,
         contents: contents,
         info: &options.flags,
+        suffix: test_case,
     };
     Ok(())
 }

@@ -65,21 +65,28 @@ pub fn format_diff(expected: impl AsRef<str>, actual: impl AsRef<str>) -> String
 }
 
 /// See `insta_assert!` for documentation.
-pub struct InstaOptions<Info: serde::Serialize> {
+pub struct InstaOptions<Info: serde::Serialize, Suffix: Into<String>> {
     pub info: Option<Info>,
+    pub suffix: Option<Suffix>,
 }
 
-impl<Info: serde::Serialize> InstaOptions<Info> {
+impl<Info: serde::Serialize, Suffix: Into<String>> InstaOptions<Info, Suffix> {
     /// See `insta_assert!` for documentation.
     pub fn new() -> Self {
-        Self { info: None }
+        Self {
+            info: None,
+            suffix: None,
+        }
     }
 }
 
-impl InstaOptions<()> {
+impl InstaOptions<(), String> {
     /// See `insta_assert!` for documentation.
     pub fn none() -> Self {
-        Self { info: None }
+        Self {
+            info: None,
+            suffix: None,
+        }
     }
 }
 
@@ -115,16 +122,19 @@ macro_rules! insta_assert {
         options: $options:expr
         $(,)?
     } => {{
-        let name = $name;
+        let name: String = $name.into();
         let i: &std::path::Path = $input.as_ref();
         let i = i.canonicalize().unwrap();
         let c = $contents;
-        let $crate::testing::InstaOptions { info } = $options;
+        let $crate::testing::InstaOptions { info, suffix } = $options;
         let mut settings = insta::Settings::clone_current();
         settings.set_input_file(&i);
         settings.set_snapshot_path(i.parent().unwrap());
         if let Some(info) = info {
             settings.set_info(info);
+        }
+        if let Some(suffix) = suffix {
+            settings.set_snapshot_suffix(suffix);
         }
         settings.set_prepend_module_to_snapshot(false);
         settings.set_omit_expression(true);
