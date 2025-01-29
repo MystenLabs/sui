@@ -1,6 +1,21 @@
 ---
 source: crates/move-docgen-tests/tests/testsuite.rs
-expression: contents
+info:
+  output_directory: output
+  doc_path:
+    - doc
+  root_doc_templates:
+    - tests/move/root_template/root_template.md
+  references_file: ~
+  compile_relative_to_output_dir: true
+  flags:
+    section_level_start: 1
+    exclude_private_fun: false
+    exclude_impl: false
+    toc_depth: 3
+    no_collapsed_sections: false
+    include_dep_diagrams: false
+    include_call_diagrams: false
 ---
 <a name="@A_Root_Documentation_Template_0"></a>
 
@@ -50,13 +65,16 @@ This is a script
 
 
 
-##### Implementation
+<details>
+<summary>Implementation</summary>
 
 
 <pre><code><b>entry</b> <b>fun</b> <a href="root.md#a_a_script1">script1</a>() {}
 </code></pre>
 
 
+
+</details>
 
 <a name="a_a_script2"></a>
 
@@ -70,13 +88,16 @@ This is another script
 
 
 
-##### Implementation
+<details>
+<summary>Implementation</summary>
 
 
 <pre><code><b>entry</b> <b>fun</b> <a href="root.md#a_a_script2">script2</a>() {}
 </code></pre>
 
 
+
+</details>
 
 
 This is another module full of funs too:
@@ -104,13 +125,16 @@ This is a script
 
 
 
-##### Implementation
+<details>
+<summary>Implementation</summary>
 
 
 <pre><code><b>entry</b> <b>fun</b> <a href="root.md#a_b_script3">script3</a>() {}
 </code></pre>
 
 
+
+</details>
 
 <a name="a_b_script4"></a>
 
@@ -124,13 +148,16 @@ This is another script
 
 
 
-##### Implementation
+<details>
+<summary>Implementation</summary>
 
 
 <pre><code><b>entry</b> <b>fun</b> <a href="root.md#a_b_script4">script4</a>() {}
 </code></pre>
 
 
+
+</details>
 
 
 

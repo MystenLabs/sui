@@ -74,7 +74,12 @@ fn test_move_one(
             continue;
         }
         let out_path = out_dir.join(&path).to_string_lossy().to_string();
-        insta_assert(toml_path, out_path, doc_options, contents);
+        insta_assert! {
+            input_path: toml_path,
+            output_name: out_path,
+            contents: contents,
+            info: doc_options,
+        };
     }
     Ok(())
 }

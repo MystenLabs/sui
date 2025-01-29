@@ -1,6 +1,20 @@
 ---
 source: crates/move-docgen-tests/tests/testsuite.rs
-expression: contents
+info:
+  output_directory: output
+  doc_path:
+    - doc
+  root_doc_templates: []
+  references_file: ~
+  compile_relative_to_output_dir: true
+  flags:
+    section_level_start: 1
+    exclude_private_fun: false
+    exclude_impl: false
+    toc_depth: 3
+    no_collapsed_sections: true
+    include_dep_diagrams: false
+    include_call_diagrams: false
 ---
 <a name="a_m"></a>
 
@@ -36,13 +50,8 @@ then <code>inline code</code>
 
 
 
-<details>
-<summary>Implementation</summary>
+##### Implementation
 
 
 <pre><code><b>entry</b> <b>fun</b> <a href="../a/m.md#a_m_main">main</a>() { }
 </code></pre>
-
-
-
-</details>

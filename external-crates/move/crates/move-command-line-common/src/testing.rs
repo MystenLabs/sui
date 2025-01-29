@@ -64,21 +64,75 @@ pub fn format_diff(expected: impl AsRef<str>, actual: impl AsRef<str>) -> String
     ret
 }
 
-pub fn insta_assert<Info: serde::Serialize>(
-    input_path: impl AsRef<std::path::Path>,
-    output_path: impl AsRef<str>,
-    info: &Info,
-    contents: impl AsRef<str>,
-) {
-    let input_path = input_path.as_ref();
-    let output_path = output_path.as_ref();
-    let contents = contents.as_ref();
-    let mut settings = insta::Settings::clone_current();
-    settings.set_input_file(input_path);
-    settings.set_info(info);
-    settings.set_prepend_module_to_snapshot(false);
-    settings.set_omit_expression(true);
-    settings.bind(|| {
-        insta::assert_snapshot!(output_path, contents);
-    });
+pub struct InstaOptions<Info: serde::Serialize> {
+    pub info: Option<Info>,
 }
+
+impl<Info: serde::Serialize> InstaOptions<Info> {
+    pub fn new() -> Self {
+        Self { info: None }
+    }
+}
+
+impl InstaOptions<()> {
+    pub fn none() -> Self {
+        Self { info: None }
+    }
+}
+
+#[macro_export]
+macro_rules! insta_assert {
+    {
+        input_path: $input:expr,
+        output_name: $output:expr,
+        contents: $contents:expr,
+        options: $options:expr
+        $(,)?
+    } => {{
+        let i = $input;
+        let o = $output;
+        let c = $contents;
+        let $crate::testing::InstaOptions { info } = $options;
+        let mut settings = insta::Settings::clone_current();
+        settings.set_input_file(i);
+        if let Some(info) = info {
+            settings.set_info(info);
+        }
+        settings.set_prepend_module_to_snapshot(false);
+        settings.set_omit_expression(true);
+        settings.bind(|| {
+            insta::assert_snapshot!(o, c);
+        });
+    }};
+    {
+        input_path: $input:expr,
+        output_name: $output:expr,
+        contents: $contents:expr
+        $(,)?
+    } => {{
+        insta_assert! {
+            input_path: $input,
+            output_name: $output,
+            contents: $contents,
+            options: $crate::testing::InstaOptions::none(),
+        }
+    }};
+    {
+        input_path: $input:expr,
+        output_name: $output:expr,
+        contents: $contents:expr,
+        $($k:ident: $v:expr),+$(,)?
+    } => {{
+        let mut opts = $crate::testing::InstaOptions::new();
+        $(
+            opts.$k = Some($v);
+        )+
+        insta_assert! {
+            input_path: $input,
+            output_name: $output,
+            contents: $contents,
+            options: opts
+        }
+    }};
+}
+pub use insta_assert;
