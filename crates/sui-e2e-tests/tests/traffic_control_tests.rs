@@ -255,6 +255,70 @@ async fn test_validator_traffic_control_error_blocked() -> Result<(), anyhow::Er
 }
 
 #[tokio::test]
+async fn test_validator_traffic_control_error_blocked_with_policy_reconfig(
+) -> Result<(), anyhow::Error> {
+    let n = 5;
+    let policy_config = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        // Test that any N requests will cause an IP to be added to the blocklist.
+        error_policy_type: PolicyType::TestNConnIP(n - 1),
+        dry_run: true,
+        ..Default::default()
+    };
+    let network_config = ConfigBuilder::new_with_temp_dir()
+        .committee_size(NonZeroUsize::new(4).unwrap())
+        .with_policy_config(Some(policy_config))
+        .build();
+    let committee = network_config.committee_with_network();
+    let test_cluster = TestClusterBuilder::new()
+        .set_network_config(network_config)
+        .build()
+        .await;
+    let local_clients = make_network_authority_clients_with_network_config(
+        &committee,
+        &default_mysten_network_config(),
+    );
+    let (_, auth_client) = local_clients.first_key_value().unwrap();
+
+    let mut txns = batch_make_transfer_transactions(&test_cluster.wallet, n as usize).await;
+    let mut tx = txns.swap_remove(0);
+    let signatures = tx.tx_signatures_mut_for_testing();
+    signatures.pop();
+    signatures.push(GenericSignature::Signature(
+        sui_types::crypto::Signature::Ed25519SuiSignature(Ed25519SuiSignature::default()),
+    ));
+
+    // Before reconfiguring the policy, we should not block any requests due to dry run mode,
+    // even after far exceeding the threshold. However the blocklist should be updated.
+    for _ in 0..(2 * n) {
+        let response = auth_client.handle_transaction(tx.clone(), None).await;
+        if let Err(err) = response {
+            assert!(
+                !err.to_string().contains("Too many requests"),
+                "Expected no blocked requests due to dry run mode"
+            );
+        }
+    }
+    // Reconfigure traffic control to disable dry run mode
+    for node in test_cluster.all_validator_handles() {
+        node.with(|node| {
+            node.state()
+                .reconfigure_traffic_control(None, None, Some(false))
+                .unwrap();
+        });
+    }
+    // If Node and TrafficController has not crashed, blocklist and policy freq state should still
+    // be intact. A single additional erroneous request from the client should trigger enforcement.
+    let response = auth_client.handle_transaction(tx.clone(), None).await;
+    if let Err(err) = response {
+        if err.to_string().contains("Too many requests") {
+            return Ok(());
+        }
+    }
+    panic!("Expected error policy to trigger on next requests after reconfiguration");
+}
+
+#[tokio::test]
 async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Error> {
     let txn_count = 15;
     let policy_config = PolicyConfig {
