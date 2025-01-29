@@ -59,7 +59,7 @@ const protocolInject = async function (source) {
 
         for (const field of message.fields) {
           content.push(
-            `<tr>\n<td class="${cellStyle}">${field.name}</td><td class="${cellStyle}">[${field.type}](#${createId(field.fullType)})</td><td class="${cellStyle} whitespace-nowrap truncate">${field.label}</td><td class="${cellStyle}">${field.description
+            `<tr>\n<td class="${cellStyle} whitespace-nowrap overflow-auto">${field.name}</td><td class="${cellStyle} whitespace-nowrap overflow-auto">[${field.type}](#${createId(field.fullType)})</td><td class="${cellStyle} whitespace-nowrap truncate">${field.label}</td><td class="${cellStyle}">${field.description
               .replace(/{/g, "&#123;")
               .replace(/\n\/?/g, "")
               .replace(/<(http.*)>/g, "$1")}</td>\n</tr>`,
