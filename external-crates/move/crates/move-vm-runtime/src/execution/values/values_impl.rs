@@ -204,7 +204,7 @@ pub struct Variant {
 pub struct VariantRef(VMPointer<Container>);
 
 /// Constant representation of a Move value.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConstantValue {
     U8(u8),
     U16(u16),
@@ -220,7 +220,7 @@ pub enum ConstantValue {
 
 /// A container is a collection of constant values. It is used to represent data structures like a
 /// Move vector or struct.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConstantContainer {
     Vec(Vec<ConstantValue>),
     Struct(Vec<ConstantValue>),
@@ -2312,6 +2312,48 @@ impl Display for Reference {
             Reference::Container(ptr) => write!(f, "Container({:?})", ptr.to_ref()),
             Reference::Global(global_ref) => write!(f, "Global({:?})", global_ref),
         }
+    }
+}
+
+impl Display for ConstantValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::U8(x) => write!(f, "U8({})", x),
+            Self::U16(x) => write!(f, "U16({})", x),
+            Self::U32(x) => write!(f, "U32({})", x),
+            Self::U64(x) => write!(f, "U64({})", x),
+            Self::U128(x) => write!(f, "U128({})", x),
+            Self::U256(x) => write!(f, "U256({})", x),
+            Self::Bool(x) => write!(f, "{}", x),
+            Self::Address(addr) => write!(f, "Address({})", addr.short_str_lossless()),
+
+            Self::Container(r) => write!(f, "Container({})", r),
+        }
+    }
+}
+
+impl Display for ConstantContainer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "(container: ")?;
+
+        match self {
+            Self::Vec(r) => display_list_of_items(r.iter(), f),
+            Self::Struct(r) => display_list_of_items(r.iter(), f),
+            Self::Variant(tag, values) => {
+                write!(f, "|tag: {}|", tag)?;
+                display_list_of_items(values.iter(), f)
+            }
+            Self::VecU8(r) => display_list_of_items(r.iter(), f),
+            Self::VecU16(r) => display_list_of_items(r.iter(), f),
+            Self::VecU32(r) => display_list_of_items(r.iter(), f),
+            Self::VecU64(r) => display_list_of_items(r.iter(), f),
+            Self::VecU128(r) => display_list_of_items(r.iter(), f),
+            Self::VecU256(r) => display_list_of_items(r.iter(), f),
+            Self::VecBool(r) => display_list_of_items(r.iter(), f),
+            Self::VecAddress(r) => display_list_of_items(r.iter(), f),
+        }?;
+
+        write!(f, ")")
     }
 }
 

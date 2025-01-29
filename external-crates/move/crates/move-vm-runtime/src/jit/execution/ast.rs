@@ -108,13 +108,14 @@ pub struct Module {
     pub instantiation_signatures: SignatureCache,
 
     /// constant references carry an index into a global vector of values.
-    pub constants: Vec<Constant>,
+    pub constants: ConstantCache,
 }
 
 pub type SignatureCache = BTreeMap<SignatureIndex, VMPointer<Vec<Type>>>;
+pub type ConstantCache = BTreeMap<ConstantPoolIndex, VMPointer<Constant>>;
 
 // A runtime constant
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Constant {
     pub value: ConstantValue,
     pub type_: Type,
@@ -373,7 +374,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```... -> ..., value```
-    LdConst(ConstantPoolIndex),
+    LdConst(VMPointer<Constant>),
     /// Push `true` onto the stack.
     ///
     /// Stack transition:
@@ -879,7 +880,7 @@ impl Module {
     }
 
     pub fn constant_at(&self, idx: ConstantPoolIndex) -> &Constant {
-        &self.constants[idx.0 as usize]
+        self.constants.get(&idx).unwrap().to_ref()
     }
 }
 
@@ -1249,6 +1250,17 @@ impl From<&Bytecode> for Opcodes {
 }
 
 // -------------------------------------------------------------------------------------------------
+// Display
+// -------------------------------------------------------------------------------------------------
+
+impl std::fmt::Display for Constant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Constant { value, .. } = self;
+        write!(f, "{}", value)
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
 // Debug
 // -------------------------------------------------------------------------------------------------
 
@@ -1278,7 +1290,7 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CastU64 => write!(f, "CastU64"),
             Bytecode::CastU128 => write!(f, "CastU128"),
             Bytecode::CastU256 => write!(f, "CastU256"),
-            Bytecode::LdConst(a) => write!(f, "LdConst({})", a),
+            Bytecode::LdConst(a) => write!(f, "LdConst({})", a.to_ref()),
             Bytecode::LdTrue => write!(f, "LdTrue"),
             Bytecode::LdFalse => write!(f, "LdFalse"),
             Bytecode::CopyLoc(a) => write!(f, "CopyLoc({})", a),

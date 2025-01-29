@@ -23,9 +23,9 @@ use crate::{
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        CompiledModule, EnumDefinitionIndex, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandleIndex, SignatureIndex, SignatureToken, StructDefinitionIndex,
-        StructFieldInformation, TableIndex,
+        CompiledModule, ConstantPoolIndex, EnumDefinitionIndex, FunctionDefinition,
+        FunctionDefinitionIndex, FunctionHandleIndex, SignatureIndex, SignatureToken,
+        StructDefinitionIndex, StructFieldInformation, TableIndex,
     },
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
@@ -53,6 +53,7 @@ struct PackageContext<'natives> {
 struct FunctionContext<'pkg_ctxt, 'natives> {
     package_context: &'pkg_ctxt PackageContext<'natives>,
     module: &'pkg_ctxt CompiledModule,
+    constant_map: ConstantCache,
     single_signature_token_map: BTreeMap<SignatureIndex, VMPointer<Type>>,
 }
 
@@ -89,6 +90,37 @@ impl PackageContext<'_> {
             .functions
             .get(&vtable_entry.inner_pkg_key)
             .map(|f| VMPointer::new(f.to_ref()))
+    }
+}
+
+impl FunctionContext<'_, '_> {
+    fn resolve_constant(
+        &mut self,
+        constant_index: &ConstantPoolIndex,
+    ) -> PartialVMResult<VMPointer<Constant>> {
+        if let Some(constant) = self.constant_map.get(constant_index) {
+            Ok(constant.ptr_clone())
+        } else {
+            let constant = self.module.constant_at(*constant_index);
+            let value = Value::deserialize_constant(constant)
+                .ok_or_else(|| {
+                    PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
+                        "Verifier failed to verify the deserialization of constants".to_owned(),
+                    )
+                })?
+                .to_constant_value()?;
+            let type_ = make_type(self.module, &constant.type_)?;
+            let size = constant.data.len() as u64;
+            let const_ = Constant { value, type_, size };
+            let const_ptr = VMPointer::new(
+                self.package_context.package_arena.alloc_item(const_)? as *const Constant
+            );
+            assert!(self
+                .constant_map
+                .insert(*constant_index, const_ptr.ptr_clone())
+                .is_none());
+            Ok(const_ptr)
+        }
     }
 }
 
@@ -235,7 +267,8 @@ fn module(
 
     // Process functions and function instantiations
     // Function loading is effectful; they all go into the arena.
-    let single_signature_token_map = functions(package_context, &mut signature_cache, module)?;
+    let (constants, single_signature_token_map) =
+        functions(package_context, &mut signature_cache, module)?;
     let function_instantiations = function_instantiations(
         package_context,
         &mut signature_cache,
@@ -245,8 +278,6 @@ fn module(
     // Process field handles and instantiations
     let field_handles = field_handles(&module.compiled_module, &structs);
     let field_instantiations = field_instantiations(&module.compiled_module, &field_handles);
-
-    let constants = constants(&module.compiled_module)?;
 
     // Build and return the module
     Ok(Module {
@@ -403,25 +434,13 @@ fn enum_instantiations(
         .collect()
 }
 
-fn constants(module: &CompiledModule) -> PartialVMResult<Vec<Constant>> {
-    module
-        .constant_pool()
-        .iter()
-        .map(|constant| {
-            let value = Value::deserialize_constant(constant)
-                .ok_or_else(|| {
-                    PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                        "Verifier failed to verify the deserialization of constants".to_owned(),
-                    )
-                })?
-                .to_constant_value()?;
-            let type_ = make_type(module, &constant.type_)?;
-            let size = constant.data.len() as u64;
-            let const_ = Constant { value, type_, size };
-            Ok(const_)
-        })
-        .collect()
-}
+// fn constants(module: &CompiledModule) -> PartialVMResult<Vec<Constant>> {
+//     module
+//         .constant_pool()
+//         .iter()
+//         .map(|constant| )
+//         .collect()
+// }
 
 fn field_handles(module: &CompiledModule, structs: &[StructDef]) -> Vec<FieldHandle> {
     module
@@ -493,7 +512,10 @@ fn functions(
     package_context: &mut PackageContext,
     signature_cache: &mut SignatureCache,
     module: &mut input::Module,
-) -> PartialVMResult<BTreeMap<SignatureIndex, VMPointer<Type>>> {
+) -> PartialVMResult<(
+    BTreeMap<ConstantPoolIndex, VMPointer<Constant>>,
+    BTreeMap<SignatureIndex, VMPointer<Type>>,
+)> {
     let input::Module {
         compiled_module: module,
         functions: optimized_fns,
@@ -530,6 +552,7 @@ fn functions(
     let mut module_context = FunctionContext {
         package_context,
         module,
+        constant_map: BTreeMap::new(),
         single_signature_token_map: BTreeMap::new(),
     };
 
@@ -554,11 +577,12 @@ fn functions(
     }
 
     let FunctionContext {
+        constant_map,
         single_signature_token_map,
         ..
     } = module_context;
 
-    Ok(single_signature_token_map)
+    Ok((constant_map, single_signature_token_map))
 }
 
 fn function_instantiations(
@@ -724,7 +748,7 @@ fn bytecode(
         input::Bytecode::LdU64(n) => Bytecode::LdU64(*n),
         input::Bytecode::LdU8(n) => Bytecode::LdU8(*n),
 
-        input::Bytecode::LdConst(ndx) => Bytecode::LdConst(*ndx),
+        input::Bytecode::LdConst(ndx) => Bytecode::LdConst(context.resolve_constant(ndx)?),
         input::Bytecode::LdTrue => Bytecode::LdTrue,
         input::Bytecode::LdFalse => Bytecode::LdFalse,
 

@@ -538,15 +538,6 @@ impl ModuleDefinitionResolver {
     }
 
     //
-    // Constant resolution
-    //
-
-    pub(crate) fn constant_at(&self, idx: ConstantPoolIndex) -> &Constant {
-        // TODO: Carry these into `laoded` to avoid this.
-        self.module.constant_at(idx)
-    }
-
-    //
     // Function resolution
     //
 

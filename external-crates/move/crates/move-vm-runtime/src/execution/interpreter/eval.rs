@@ -442,9 +442,10 @@ fn op_step_impl(
             gas_meter.charge_simple_instr(S::LdU256)?;
             state.push_operand(Value::u256(**int_const))?;
         }
-        Bytecode::LdConst(idx) => {
-            let constant = state.call_stack.current_frame.resolver.constant_at(*idx);
+        Bytecode::LdConst(const_) => {
+            let constant = const_.to_ref();
             gas_meter.charge_ld_const(NumBytes::new(constant.size))?;
+            // NB: the clone here is _critical_.
             let val = constant.value.clone().to_value();
             gas_meter.charge_ld_const_after_deserialization(&val)?;
             state.push_operand(val)?

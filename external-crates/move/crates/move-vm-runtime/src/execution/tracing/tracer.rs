@@ -909,9 +909,9 @@ impl<'a> VMTracer<'a> {
                     B::LdU256(_) => AnnotatedTypeLayout::U256,
                     B::LdTrue => AnnotatedTypeLayout::Bool,
                     B::LdFalse => AnnotatedTypeLayout::Bool,
-                    B::LdConst(const_idx) => {
-                        get_constant_type_layout(vtables, machine, *const_idx)?
-                    }
+                    B::LdConst(const_) => vtables
+                        .type_to_fully_annotated_layout(&const_.to_ref().type_)
+                        .ok()?,
                     _ => unreachable!(),
                 };
                 let a_layout = StackType {
@@ -1689,18 +1689,4 @@ fn into_annotated_move_value(
     type_: &AnnotatedTypeLayout,
 ) -> Option<AnnotatedValue> {
     value.as_annotated_move_value(type_)
-}
-
-/// Get the type layout of a constant.
-fn get_constant_type_layout(
-    vtables: &VMDispatchTables,
-    machine: &MachineState,
-    const_ndx: ConstantPoolIndex,
-) -> Option<AnnotatedTypeLayout> {
-    let constant = machine
-        .call_stack
-        .current_frame
-        .resolver
-        .constant_at(const_ndx);
-    vtables.type_to_fully_annotated_layout(&constant.type_).ok()
 }
