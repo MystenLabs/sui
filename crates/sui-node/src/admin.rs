@@ -20,6 +20,7 @@ use sui_types::{
     base_types::AuthorityName,
     crypto::{RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
     error::SuiError,
+    traffic_control::TrafficControlReconfigParams,
 };
 use telemetry_subscribers::TracingHandle;
 use tokio::sync::oneshot;
@@ -450,28 +451,13 @@ async fn randomness_inject_full_sig(
     }
 }
 
-#[derive(Deserialize)]
-struct TrafficControlConfig {
-    error_threshold: Option<u64>,
-    spam_threshold: Option<u64>,
-    dry_run: Option<bool>,
-}
-
 async fn traffic_control(
     State(state): State<Arc<AppState>>,
-    args: Query<TrafficControlConfig>,
+    args: Query<TrafficControlReconfigParams>,
 ) -> (StatusCode, String) {
-    let Query(TrafficControlConfig {
-        error_threshold,
-        spam_threshold,
-        dry_run,
-    }) = args;
-    match state
-        .node
-        .state()
-        .reconfigure_traffic_control(error_threshold, spam_threshold, dry_run)
-    {
+    let Query(params) = args;
+    match state.node.state().reconfigure_traffic_control(params).await {
         Ok(()) => (StatusCode::OK, "traffic control configured\n".to_string()),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
 }

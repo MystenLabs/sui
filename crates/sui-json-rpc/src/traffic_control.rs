@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use arc_swap::ArcSwapAny;
 use axum::extract::ConnectInfo;
 use futures::FutureExt;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
@@ -20,11 +21,14 @@ const TOO_MANY_REQUESTS_MSG: &str = "Too many requests";
 #[derive(Clone)]
 pub struct TrafficControllerService<S> {
     inner: S,
-    traffic_controller: Option<Arc<TrafficController>>,
+    traffic_controller: Option<Arc<ArcSwapAny<Arc<TrafficController>>>>,
 }
 
 impl<S> TrafficControllerService<S> {
-    pub fn new(service: S, traffic_controller: Option<Arc<TrafficController>>) -> Self {
+    pub fn new(
+        service: S,
+        traffic_controller: Option<Arc<ArcSwapAny<Arc<TrafficController>>>>,
+    ) -> Self {
         Self {
             inner: service,
             traffic_controller,
@@ -62,10 +66,10 @@ where
 }
 
 async fn handle_traffic_req(
-    traffic_controller: &TrafficController,
+    traffic_controller: &Arc<ArcSwapAny<Arc<TrafficController>>>,
     client: &Option<IpAddr>,
 ) -> Result<(), MethodResponse> {
-    if !traffic_controller.check(client, &None).await {
+    if !traffic_controller.load().check(client, &None).await {
         // Entity in blocklist
         let err_obj =
             ErrorObject::borrowed(ErrorCode::ServerIsBusy.code(), TOO_MANY_REQUESTS_MSG, None);
@@ -76,12 +80,12 @@ async fn handle_traffic_req(
 }
 
 fn handle_traffic_resp(
-    traffic_controller: &TrafficController,
+    traffic_controller: &Arc<ArcSwapAny<Arc<TrafficController>>>,
     client: Option<IpAddr>,
     response: &MethodResponse,
 ) {
     let error = response.as_error_code().map(ErrorCode::from);
-    traffic_controller.tally(TrafficTally {
+    traffic_controller.load().tally(TrafficTally {
         direct: client,
         through_fullnode: None,
         error_info: error.map(|e| {
