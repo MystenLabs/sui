@@ -250,7 +250,9 @@ fn test_config(path: &Path) -> (Option<&'static str>, TestInfo, PackageConfig, F
         lint,
     };
     // flags
-    let flags = if path_extension == IDE_EXT {
+    let flags = if path_extension == MOVE_EXTENSION {
+        Flags::empty()
+    } else if path_extension == IDE_EXT {
         Flags::testing().set_ide_test_mode(true).set_ide_mode(true)
     } else {
         Flags::testing()
