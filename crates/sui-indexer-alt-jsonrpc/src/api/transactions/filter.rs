@@ -3,17 +3,19 @@
 
 use anyhow::{anyhow, Context as _};
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl};
-use sui_indexer_alt_schema::schema::{tx_affected_objects, tx_calls, tx_digests};
+use sui_indexer_alt_schema::schema::{
+    tx_affected_addresses, tx_affected_objects, tx_calls, tx_digests,
+};
 use sui_json_rpc_types::{Page as PageResponse, TransactionFilter};
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
     messages_checkpoint::{CheckpointContents, CheckpointSummary},
 };
 
 use crate::{
     data::checkpoints::CheckpointKey,
-    error::{invalid_params, rpc_bail, RpcError},
+    error::{invalid_params, RpcError},
     paginate::{Cursor, Page},
 };
 
@@ -55,6 +57,14 @@ pub(super) async fn transactions(
 
         Some(F::AffectedObject(object)) => tx_affected_objects(ctx, &page, *object).await?,
 
+        Some(F::FromAddress(from)) => tx_affected_addresses(ctx, &page, Some(*from), *from).await?,
+
+        Some(F::FromAndToAddress { from, to }) => {
+            tx_affected_addresses(ctx, &page, Some(*from), *to).await?
+        }
+
+        Some(F::FromOrToAddress { addr }) => tx_affected_addresses(ctx, &page, None, *addr).await?,
+
         Some(F::TransactionKind(_) | F::TransactionKindIn(_)) => {
             return unsupported("TransactionKind filter is not supported")
         }
@@ -76,8 +86,6 @@ pub(super) async fn transactions(
                 "ToAddress filter is not supported, please use FromOrToAddress instead.",
             )
         }
-
-        _ => rpc_bail!("Not implemented yet"),
     };
 
     let has_next_page = refs.len() > page.limit as usize;
@@ -292,6 +300,63 @@ async fn tx_affected_objects(
         .into_boxed();
 
     query = query.filter(o::affected.eq(object.as_slice()));
+
+    if let Some(Cursor(tx)) = page.cursor {
+        if page.descending {
+            query = query.filter(d::tx_sequence_number.lt(tx as i64));
+        } else {
+            query = query.filter(d::tx_sequence_number.gt(tx as i64));
+        }
+    }
+
+    if page.descending {
+        query = query.order(d::tx_sequence_number.desc());
+    } else {
+        query = query.order(d::tx_sequence_number.asc());
+    }
+
+    let mut conn = ctx
+        .reader()
+        .connect()
+        .await
+        .context("Failed to connect to database")?;
+
+    let refs: Vec<(i64, Vec<u8>)> = conn
+        .results(query)
+        .await
+        .context("Failed to fetch matching transaction digests")?;
+
+    Ok(refs)
+}
+
+/// Fetch a page of transaction digests that touched the provided addresses (`from` and `to`).
+///
+/// - If both are supplied, then returns transactions that were sent by `from` and affected `to`.
+/// - If `from == to` this is equivalent to filtering down to the transactions that were sent by `from`.
+/// - If `from` is not supplied, this finds the transactions that `to` was affected by in some way
+///   (either it is the sender, or it is the recipient of one of the output objects).
+///
+/// Fetches one more result than was requested to detect a next page.
+async fn tx_affected_addresses(
+    ctx: &Context,
+    page: &Page<u64>,
+    from: Option<SuiAddress>,
+    to: SuiAddress,
+) -> Result<Keys, RpcError<Error>> {
+    use tx_affected_addresses::dsl as a;
+    use tx_digests::dsl as d;
+
+    let mut query = d::tx_digests
+        .inner_join(a::tx_affected_addresses.on(d::tx_sequence_number.eq(a::tx_sequence_number)))
+        .select((d::tx_sequence_number, d::tx_digest))
+        .limit(page.limit + 1)
+        .into_boxed();
+
+    if let Some(from) = from {
+        query = query.filter(a::sender.eq(from.to_inner()));
+    }
+
+    query = query.filter(a::affected.eq(to.to_inner()));
 
     if let Some(Cursor(tx)) = page.cursor {
         if page.descending {
