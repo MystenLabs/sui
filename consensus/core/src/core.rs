@@ -305,8 +305,8 @@ impl Core {
         Ok(missing_block_refs)
     }
 
-    // Adds the commits and blocks that have been synced via the commit syncer. We are using the commit info in order to skip running the decision rule and immediately commit
-    // the corresponding leaders and sub dags.
+    // Adds the commits and blocks that have been synced and certified via the commit syncer. We are using the commit info in order to skip running the decision
+    // rule and immediately commit the corresponding leaders and sub dags.
     #[tracing::instrument(skip_all)]
     pub(crate) fn add_commits(
         &mut self,
@@ -663,11 +663,11 @@ impl Core {
         })
     }
 
-    /// Runs commit rule to attempt to commit additional blocks from the DAG. If any `synced_commits` are provided, then
+    /// Runs commit rule to attempt to commit additional blocks from the DAG. If any `certified_commits` are provided, then
     /// it will attempt to commit those first before trying to commit any further leaders.
     fn try_commit(
         &mut self,
-        mut synced_commits: Vec<TrustedCommit>,
+        mut certified_commits: Vec<TrustedCommit>,
     ) -> ConsensusResult<Vec<CommittedSubDag>> {
         let _s = self
             .context
@@ -677,15 +677,15 @@ impl Core {
             .with_label_values(&["Core::try_commit"])
             .start_timer();
 
-        let mut synced_commits_map = BTreeMap::new();
-        for commit in &synced_commits {
-            synced_commits_map.insert(commit.index(), commit.reference());
+        let mut certified_commits_map = BTreeMap::new();
+        for commit in &certified_commits {
+            certified_commits_map.insert(commit.index(), commit.reference());
         }
 
-        if !synced_commits.is_empty() {
+        if !certified_commits.is_empty() {
             info!(
                 "Will try to commit synced commits first : {:?}",
-                synced_commits
+                certified_commits
                     .iter()
                     .map(|c| (c.index(), c.leader()))
                     .collect::<Vec<_>>()
@@ -740,9 +740,9 @@ impl Core {
             // Always try to process the synced commits first
             let mut decided_leaders = self
                 .committer
-                .try_decide_synced(&mut synced_commits, commits_until_update);
+                .try_decide_certified(&mut certified_commits, commits_until_update);
 
-            // If the synced `decided_leaders` is empty then try to run the decision rule.
+            // If the certified `decided_leaders` is empty then try to run the decision rule.
             if decided_leaders.is_empty() {
                 // TODO: limit commits by commits_until_update, which may be needed when leader schedule length is reduced.
                 decided_leaders = self.committer.try_decide(self.last_decided_leader);
@@ -810,12 +810,12 @@ impl Core {
             committed_sub_dags.extend(subdags);
         }
 
-        // Sanity check: for commits that have been linearized using the synced commits, ensure that the same sub dag has been committed.
+        // Sanity check: for commits that have been linearized using the certified commits, ensure that the same sub dag has been committed.
         for sub_dag in &committed_sub_dags {
-            if let Some(commit_ref) = synced_commits_map.remove(&sub_dag.commit_ref.index) {
+            if let Some(commit_ref) = certified_commits_map.remove(&sub_dag.commit_ref.index) {
                 assert_eq!(
                     commit_ref, sub_dag.commit_ref,
-                    "Synced commit has different reference than the committed sub dag"
+                    "Certified commit has different reference than the committed sub dag"
                 );
             }
         }
@@ -3135,9 +3135,9 @@ mod test {
     }
 
     // This will test the following scenarios:
-    // * We do have synced commits
+    // * We do have certified commits
     #[tokio::test]
-    async fn try_commit_with_synced_commits() {
+    async fn try_commit_with_certified_commits() {
         telemetry_subscribers::init_for_testing();
 
         let (context, mut key_pairs) = Context::new_for_test(4);
@@ -3209,49 +3209,49 @@ mod test {
         // Get all the committed sub dags up to round 10
         let sub_dags_and_commits = dag_builder.get_sub_dag_and_commits(1..=10);
 
-        // Now try to commit up to the latest leader (round = 4). Do not provide any synced commits.
+        // Now try to commit up to the latest leader (round = 4). Do not provide any certified commits.
         let committed_sub_dags = core.try_commit(vec![]).unwrap();
 
         // We should have committed up to round 4
         assert_eq!(committed_sub_dags.len(), 4);
 
-        // Now try to commit providing the synced commits. We'll try 3 different scenarios
+        // Now try to commit providing the certified commits. We'll try 3 different scenarios
         // 1. Provide sync commits that are all before the last committed round
         // 2. Provide sync commits that are before and after the last committed round
         // 3. Provide sync commits that are all after the last committed round and also there are additional blocks so can run the direct decide rule as well
 
-        println!("Case 1. Provide sync commits that are all before the last committed round.");
+        println!("Case 1. Provide certified commits that are all before the last committed round.");
 
-        // Highest synced commit should be for leader of round 4.
-        let synced_commits = sub_dags_and_commits
+        // Highest certified commit should be for leader of round 4.
+        let certified_commits = sub_dags_and_commits
             .iter()
             .take(4)
             .map(|(_, c)| c.clone())
             .collect::<Vec<_>>();
         assert!(
-            synced_commits.last().unwrap().index()
+            certified_commits.last().unwrap().index()
                 <= committed_sub_dags.last().unwrap().commit_ref.index,
-            "Highest synced commit should older than the highest committed index."
+            "Highest certified commit should older than the highest committed index."
         );
 
-        // Try commit using the synced commits
-        let committed_sub_dags = core.try_commit(synced_commits).expect("Should not fail");
+        // Try commit using the certified commits
+        let committed_sub_dags = core.try_commit(certified_commits).expect("Should not fail");
 
         // Nothing should be committed
         assert!(committed_sub_dags.is_empty());
 
-        println!("Case 2. Provide sync commits that are all after the last committed round");
+        println!("Case 2. Provide certified commits that are all after the last committed round");
 
-        // Highest synced commit should be for leader of round 4.
-        let synced_commits = sub_dags_and_commits
+        // Highest certified commit should be for leader of round 4.
+        let certified_commits = sub_dags_and_commits
             .iter()
             .take(5)
             .map(|(_, c)| c.clone())
             .collect::<Vec<_>>();
 
-        // Try commit using the synced commits
+        // Try commit using the certified commits
         let committed_sub_dags = core
-            .try_commit(synced_commits.clone())
+            .try_commit(certified_commits.clone())
             .expect("Should not fail");
 
         // The sub dag of index 5 should be committed.
@@ -3259,9 +3259,9 @@ mod test {
         let committed_sub_dag = committed_sub_dags.first().unwrap();
         assert_eq!(committed_sub_dag.commit_ref.index, 5);
 
-        println!("Case 3. Provide sync commits that are all after the last committed round and also there are additional blocks so can run the direct decide rule as well");
+        println!("Case 3. Provide certified commits that are all after the last committed round and also there are additional blocks so can run the direct decide rule as well");
 
-        let synced_commits = sub_dags_and_commits
+        let certified_commits = sub_dags_and_commits
             .iter()
             .skip(5)
             .take(1)
@@ -3274,9 +3274,9 @@ mod test {
             dag_state.write().accept_block(block);
         }
 
-        // Try commit using the synced commits
+        // Try commit using the certified commits
         let committed_sub_dags = core
-            .try_commit(synced_commits.clone())
+            .try_commit(certified_commits.clone())
             .expect("Should not fail");
 
         // We expect all the sub dags up to leader round 10 to be committed.

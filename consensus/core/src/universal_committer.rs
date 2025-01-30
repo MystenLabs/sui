@@ -111,13 +111,13 @@ impl UniversalCommitter {
         decided_leaders
     }
 
-    // Try to decide which of the synced commits will have to be committed next respecting the `commits_until_update` limit. If provided `commits_until_update` is zero, it will panic.
-    // The function returns the list of decided leaders and updates in place the remaining synced commits. If empty vector is returned, it means that
-    // there are no synced commits to be committed as `synced_commits` is either empty or all of the synced commits are already committed.
+    // Try to decide which of the certified commits will have to be committed next respecting the `commits_until_update` limit. If provided `commits_until_update` is zero, it will panic.
+    // The function returns the list of decided leaders and updates in place the remaining certified commits. If empty vector is returned, it means that
+    // there are no certified commits to be committed as `certified_commits` is either empty or all of the certified commits are already committed.
     #[tracing::instrument(skip_all)]
-    pub(crate) fn try_decide_synced(
+    pub(crate) fn try_decide_certified(
         &mut self,
-        synced_commits: &mut Vec<TrustedCommit>,
+        certified_commits: &mut Vec<TrustedCommit>,
         commits_until_update: usize,
     ) -> Vec<DecidedLeader> {
         // If GC is disabled then should not run any of this logic.
@@ -132,22 +132,22 @@ impl UniversalCommitter {
 
         let last_commit_index = self.dag_state.read().last_commit_index();
 
-        // If there are synced committed leaders, check that the first synced committed leader which is higher than the last decided one has not gaps.
-        while !synced_commits.is_empty() {
-            let synced_commit = synced_commits
+        // If there are certified committed leaders, check that the first certified committed leader which is higher than the last decided one has not gaps.
+        while !certified_commits.is_empty() {
+            let certified_commit = certified_commits
                 .first()
                 .expect("Synced commits should not be empty");
-            if synced_commit.index() <= last_commit_index {
+            if certified_commit.index() <= last_commit_index {
                 tracing::debug!(
                     "Skip commit for index {} as it is already committed with last commit index {}",
-                    synced_commit.index(),
+                    certified_commit.index(),
                     last_commit_index
                 );
-                synced_commits.remove(0);
+                certified_commits.remove(0);
             } else {
                 // Make sure that the first we do find is the next one in line and there is no gap.
-                if synced_commit.index() != last_commit_index + 1 {
-                    panic!("Gap found between the synced commits and the last committed index. Expected next commit index to be {}, but found {}", last_commit_index + 1, synced_commit.index());
+                if certified_commit.index() != last_commit_index + 1 {
+                    panic!("Gap found between the certified commits and the last committed index. Expected next commit index to be {}, but found {}", last_commit_index + 1, certified_commit.index());
                 }
 
                 // now break as we want to process the rest of the committed leaders
@@ -155,19 +155,19 @@ impl UniversalCommitter {
             }
         }
 
-        if synced_commits.is_empty() {
+        if certified_commits.is_empty() {
             return Vec::new();
         }
 
         // We keep only the number of leaders that can be committed before the next leader schedule change.
-        let to_commit = if synced_commits.len() >= commits_until_update {
+        let to_commit = if certified_commits.len() >= commits_until_update {
             // Now keep only the leaders that can be committed before the next leader schedule change, and just leave the rest so we can process them in the next iteration.
-            synced_commits
+            certified_commits
                 .drain(..commits_until_update)
                 .collect::<Vec<_>>()
         } else {
             // Otherwise just take all of them and leave the `synced_commits` empty.
-            mem::take(synced_commits)
+            mem::take(certified_commits)
         };
 
         let dag_state = self.dag_state.read();
@@ -181,7 +181,7 @@ impl UniversalCommitter {
             .collect::<Vec<_>>();
 
         tracing::info!(
-            "Decided {} synced leaders: {}",
+            "Decided {} certified leaders: {}",
             sequenced_leaders.len(),
             to_commit.iter().map(|c| c.leader().to_string()).join(",")
         );
