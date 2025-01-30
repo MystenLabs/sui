@@ -5,14 +5,14 @@
 use std::{
     collections::BTreeMap,
     fs,
-    path::{self, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use move_command_line_common::{
     env::read_bool_env_var,
     files::MOVE_EXTENSION,
     insta_assert,
-    testing::{read_env_update_baseline, InstaOptions, EXP_EXT, OUT_EXT},
+    testing::{read_env_update_baseline, InstaOptions, OUT_EXT},
 };
 use move_compiler::{
     command_line::compiler::move_check_for_errors,
@@ -273,7 +273,14 @@ fn out_path(path: &Path, test_name: &str, test_kind: Option<&str>) -> PathBuf {
 // Runs all tests under the test/testsuite directory.
 pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let (test_kind, test_info, package_config, flags) = test_config(path);
-    let test_name: &str = path.file_name().unwrap().to_string_lossy().as_ref();
+    let migration_mode = package_config.edition == Edition::E2024_MIGRATION;
+    let p;
+    let test_name = {
+        p = path.with_extension("");
+        assert!(p.extension().is_none());
+        p.file_name().unwrap().to_string_lossy()
+    };
+    let test_name: &str = test_name.as_ref();
     let move_path = path.with_extension(MOVE_EXTENSION);
     let out_path = out_path(path, test_name, test_kind);
     let flavor = package_config.flavor;
@@ -284,7 +291,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
         paths: move_stdlib::move_stdlib_files(),
         named_address_map: named_address_map.clone(),
     }];
-    let target_name = if package_config.edition == Edition::E2024_MIGRATION {
+    let target_name = if migration_mode {
         Some(("test".into(), package_config.clone()))
     } else {
         None
@@ -319,7 +326,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
 
     let has_diags = !diags.is_empty();
     let diag_buffer = if has_diags {
-        if package_config.edition == Edition::E2024_MIGRATION {
+        if migration_mode {
             report_migration_to_buffer(&files, diags)
         } else {
             report_diagnostics_to_buffer(&files, diags, /* ansi_color */ false)
@@ -329,7 +336,6 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     };
 
     let save_diags = read_bool_env_var(KEEP_TMP);
-    let update_baseline = read_env_update_baseline();
 
     let rendered_diags = std::str::from_utf8(&diag_buffer)?;
     if save_diags {
