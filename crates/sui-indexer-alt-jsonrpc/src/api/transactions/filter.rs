@@ -1,13 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context as _;
+use anyhow::{anyhow, Context as _};
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl};
 use sui_indexer_alt_schema::schema::{tx_calls, tx_digests};
 use sui_json_rpc_types::{Page as PageResponse, TransactionFilter};
-use sui_types::{base_types::ObjectID, digests::TransactionDigest};
+use sui_types::{
+    base_types::ObjectID,
+    digests::TransactionDigest,
+    messages_checkpoint::{CheckpointContents, CheckpointSummary},
+};
 
 use crate::{
+    data::checkpoints::CheckpointKey,
     error::{invalid_params, rpc_bail, RpcError},
     paginate::{Cursor, Page},
 };
@@ -36,6 +41,8 @@ pub(super) async fn transactions(
     use TransactionFilter as F;
     let mut refs = match filter {
         None => all_transactions(ctx, &page).await?,
+
+        Some(F::Checkpoint(seq)) => by_checkpoint(ctx, &page, *seq).await?,
 
         Some(F::MoveFunction {
             package,
@@ -131,6 +138,74 @@ async fn all_transactions(
         .context("Failed to fetch matching transaction digests")?;
 
     Ok(refs)
+}
+
+/// Fetch a page of transaction digests from the given `checkpoint` (by sequence number). Fetches
+/// one more result than was requested to detect a next page.
+async fn by_checkpoint(
+    ctx: &Context,
+    page: &Page<u64>,
+    checkpoint: u64,
+) -> Result<Vec<(i64, Vec<u8>)>, RpcError<Error>> {
+    let Some(checkpoint) = ctx
+        .loader()
+        .load_one(CheckpointKey(checkpoint))
+        .await
+        .context("Failed to load checkpoint")?
+    else {
+        return Ok(vec![]);
+    };
+
+    let summary: CheckpointSummary = bcs::from_bytes(&checkpoint.checkpoint_summary)
+        .context("Failed to deserialize checkpoint summary")?;
+
+    let contents: CheckpointContents = bcs::from_bytes(&checkpoint.checkpoint_contents)
+        .context("Failed to deserialize checkpoint contents")?;
+
+    // Transaction sequence number bounds from the checkpoint
+    let cp_hi = summary.network_total_transactions;
+    let cp_lo = summary.network_total_transactions - contents.inner().len() as u64;
+
+    let Page {
+        cursor,
+        limit,
+        descending,
+    } = page;
+
+    // Transaction sequence number bounds from the page
+    let pg_lo: u64;
+    let pg_hi: u64;
+    if *descending {
+        pg_hi = cursor.as_ref().map(|c| c.0).map_or(cp_hi, |c| c.min(cp_hi));
+        pg_lo = pg_hi.saturating_sub(1 + *limit as u64).max(cp_lo);
+    } else {
+        pg_lo = cursor
+            .as_ref()
+            .map(|c| c.0.saturating_add(1))
+            .map_or(cp_lo, |c| c.max(cp_lo));
+
+        pg_hi = pg_lo.saturating_add(1 + *limit as u64).min(cp_hi);
+    }
+
+    let digests = contents.inner();
+    let mut results = Vec::with_capacity(pg_hi.saturating_sub(pg_lo) as usize);
+    for tx in pg_lo..pg_hi {
+        let ix = (tx - cp_lo) as usize;
+        let digest = digests
+            .get(ix)
+            .ok_or_else(|| anyhow!("Transaction out of bounds in checkpoint"))?
+            .transaction
+            .inner()
+            .to_vec();
+
+        results.push((tx as i64, digest));
+    }
+
+    if *descending {
+        results.reverse();
+    }
+
+    Ok(results)
 }
 
 /// Fetch a page of transaction digests that called the described function(s). Functions can be
