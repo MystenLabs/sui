@@ -54,7 +54,10 @@ use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::test_infra::cluster::{RetentionConfig, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
-use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
+use sui_json_rpc_types::{
+    DevInspectResults, DryRunTransactionBlockResponse, SuiExecutionStatus,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
+};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
@@ -832,10 +835,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 gas_price,
                 gas_payment,
                 dev_inspect,
+                dry_run,
                 inputs,
             }) => {
                 if dev_inspect && self.is_simulator() {
                     bail!("Dev inspect is not supported on simulator mode");
+                }
+
+                if dry_run && dev_inspect {
+                    bail!("Cannot set both dev-inspect and dry-run");
                 }
 
                 let inputs = self.compiled_state().resolve_args(inputs)?;
@@ -873,7 +881,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                         )
                     })
                     .collect::<anyhow::Result<Vec<Command>>>()?;
-                let summary = if !dev_inspect {
+
+                let summary = if !dev_inspect && !dry_run {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
                     let transaction = self.sign_sponsor_txn(
@@ -892,6 +901,22 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                         },
                     );
                     self.execute_txn(transaction).await?
+                } else if dry_run {
+                    let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                    let gas_price = gas_price.unwrap_or(self.gas_price);
+                    let sender = self.get_sender(sender);
+                    let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
+
+                    let payment = self.get_payment(sponsor, gas_payment);
+
+                    let transaction = TransactionData::new_programmable(
+                        sender.address,
+                        vec![payment],
+                        ProgrammableTransaction { inputs, commands },
+                        gas_budget,
+                        gas_price,
+                    );
+                    self.dry_run(transaction).await?
                 } else {
                     assert!(
                         gas_budget.is_none(),
@@ -1380,6 +1405,7 @@ impl<'a> SuiTestAdapter {
         gas_budget: Option<u64>,
         policy: u8,
         gas_price: u64,
+        // dry_run: bool,
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
@@ -1473,6 +1499,19 @@ impl<'a> SuiTestAdapter {
         })
     }
 
+    fn get_payment(&self, sponsor: &TestAccount, payment: Option<FakeID>) -> ObjectRef {
+        let payment = if let Some(payment) = payment {
+            self.fake_to_real_object_id(payment)
+                .expect("Could not find specified payment object")
+        } else {
+            sponsor.gas
+        };
+
+        self.get_object(&payment, None)
+            .unwrap()
+            .compute_object_reference()
+    }
+
     fn sign_sponsor_txn(
         &self,
         sender: Option<String>,
@@ -1487,17 +1526,7 @@ impl<'a> SuiTestAdapter {
         let sender = self.get_sender(sender);
         let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
 
-        let payment = if let Some(payment) = payment {
-            self.fake_to_real_object_id(payment)
-                .expect("Could not find specified payment object")
-        } else {
-            sponsor.gas
-        };
-
-        let payment_ref = self
-            .get_object(&payment, None)
-            .unwrap()
-            .compute_object_reference();
+        let payment_ref = self.get_payment(sponsor, payment);
 
         let data = txn_data(sender.address, sponsor.address, payment_ref);
         if sender.address == sponsor.address {
@@ -1663,6 +1692,19 @@ impl<'a> SuiTestAdapter {
         }
     }
 
+    async fn dry_run(&mut self, transaction: TransactionData) -> anyhow::Result<TxnSummary> {
+        let digest = transaction.digest();
+        let results = self
+            .executor
+            .dry_run_transaction_block(transaction, digest)
+            .await?;
+        let DryRunTransactionBlockResponse {
+            effects, events, ..
+        } = results;
+
+        self.tx_summary_from_effects(effects, events)
+    }
+
     async fn dev_inspect(
         &mut self,
         sender: SuiAddress,
@@ -1676,6 +1718,21 @@ impl<'a> SuiTestAdapter {
         let DevInspectResults {
             effects, events, ..
         } = results;
+
+        self.tx_summary_from_effects(effects, events)
+    }
+
+    fn tx_summary_from_effects(
+        &mut self,
+        effects: SuiTransactionBlockEffects,
+        events: SuiTransactionBlockEvents,
+    ) -> anyhow::Result<TxnSummary> {
+        if let SuiExecutionStatus::Failure { error } = effects.status() {
+            return Err(anyhow::anyhow!(self.stabilize_str(format!(
+                "Transaction Effects Status: {error}\nExecution Error: {error}",
+            ))));
+        }
+
         let mut created_ids: Vec<_> = effects.created().iter().map(|o| o.object_id()).collect();
         let mut mutated_ids: Vec<_> = effects.mutated().iter().map(|o| o.object_id()).collect();
         let mut unwrapped_ids: Vec<_> = effects.unwrapped().iter().map(|o| o.object_id()).collect();
@@ -1712,30 +1769,24 @@ impl<'a> SuiTestAdapter {
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
 
-        match effects.status() {
-            SuiExecutionStatus::Success { .. } => {
-                let events = events
-                    .data
-                    .into_iter()
-                    .map(|sui_event| sui_event.into())
-                    .collect();
-                Ok(TxnSummary {
-                    events,
-                    gas_summary: gas_summary.clone(),
-                    created: created_ids,
-                    mutated: mutated_ids,
-                    unwrapped: unwrapped_ids,
-                    deleted: deleted_ids,
-                    unwrapped_then_deleted: unwrapped_then_deleted_ids,
-                    wrapped: wrapped_ids,
-                    // TODO: Properly propagate unchanged shared objects in dev_inspect.
-                    unchanged_shared: vec![],
-                })
-            }
-            SuiExecutionStatus::Failure { error } => Err(anyhow::anyhow!(self.stabilize_str(
-                format!("Transaction Effects Status: {error}\nExecution Error: {error}",)
-            ))),
-        }
+        let events = events
+            .data
+            .into_iter()
+            .map(|sui_event| sui_event.into())
+            .collect();
+
+        Ok(TxnSummary {
+            events,
+            gas_summary: gas_summary.clone(),
+            created: created_ids,
+            mutated: mutated_ids,
+            unwrapped: unwrapped_ids,
+            deleted: deleted_ids,
+            unwrapped_then_deleted: unwrapped_then_deleted_ids,
+            wrapped: wrapped_ids,
+            // TODO: Properly propagate unchanged shared objects in dev_inspect.
+            unchanged_shared: vec![],
+        })
     }
 
     fn get_object(&self, id: &ObjectID, version: Option<SequenceNumber>) -> anyhow::Result<Object> {
