@@ -12,7 +12,7 @@ use move_command_line_common::{
     env::read_bool_env_var,
     files::MOVE_EXTENSION,
     insta_assert,
-    testing::{read_env_update_baseline, InstaOptions, OUT_EXT},
+    testing::{InstaOptions, OUT_EXT},
 };
 use move_compiler::{
     command_line::compiler::move_check_for_errors,
@@ -45,6 +45,32 @@ struct TestInfo {
     lint: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TestKind {
+    // Normal test
+    Normal,
+    // Tests unit test functionality
+    Test,
+    // Does not silence warnings for unused items
+    Unused,
+    // Tests edition migration
+    Migration,
+    // Tests additional generation for the IDE
+    IDE,
+}
+
+impl TestKind {
+    fn snap_suffix(&self) -> Option<&'static str> {
+        match self {
+            TestKind::Normal => None,
+            TestKind::Test => Some(TEST_EXT),
+            TestKind::Unused => Some(UNUSED_EXT),
+            TestKind::Migration => Some(MIGRATION_EXT),
+            TestKind::IDE => Some(IDE_EXT),
+        }
+    }
+}
+
 fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddress> {
     let mut mapping = vec![
         ("std", "0x1"),
@@ -66,133 +92,7 @@ fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddres
         .collect()
 }
 
-// fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
-//     let path_contains = |s| path.components().any(|c| c.as_os_str() == s);
-//     let lint = path_contains(LINTER_DIR);
-//     let flavor = if path_contains(SUI_MODE_DIR) {
-//         Flavor::Sui
-//     } else {
-//         Flavor::default()
-//     };
-//     let edition = if path_contains(MOVE_2024_DIR) {
-//         Edition::E2024_ALPHA
-//     } else if path_contains(DEV_DIR) {
-//         Edition::DEVELOPMENT
-//     } else {
-//         Edition::LEGACY
-//     };
-//     let config = PackageConfig {
-//         flavor,
-//         edition,
-//         is_dependency: false,
-//         warning_filter: WarningFiltersBuilder::new_for_source(),
-//     };
-//     testsuite(path, config, lint)
-// }
-
-// fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_stable::Result<()> {
-//     // A test is marked that it should also be compiled in test mode by having a `path.unit_test`
-//     // file.
-//     if path.with_extension(TEST_EXT).exists() {
-//         let test_exp_path = format!(
-//             "{}.{TEST_EXT}.{EXP_EXT}",
-//             path.with_extension("").to_string_lossy(),
-//         );
-//         let test_out_path = format!(
-//             "{}.{TEST_EXT}.{OUT_EXT}",
-//             path.with_extension("").to_string_lossy(),
-//         );
-//         let mut config = config.clone();
-//         config
-//             .warning_filter
-//             .union(&WarningFiltersBuilder::unused_warnings_filter_for_test());
-//         run_test(
-//             path,
-//             Path::new(&test_exp_path),
-//             Path::new(&test_out_path),
-//             Flags::testing(),
-//             config,
-//             lint,
-//         )?;
-//     }
-
-//     // A test is marked that it should also be compiled in migration mode by having a
-//     // `path.migration` file.
-//     if path.with_extension(MIGRATION_EXT).exists() {
-//         let migration_exp_path = format!(
-//             "{}.{MIGRATION_EXT}.{EXP_EXT}",
-//             path.with_extension("").to_string_lossy(),
-//         );
-//         let migration_out_path = format!(
-//             "{}.{MIGRATION_EXT}.{OUT_EXT}",
-//             path.with_extension("").to_string_lossy(),
-//         );
-//         let mut config = config.clone();
-//         config
-//             .warning_filter
-//             .union(&WarningFiltersBuilder::unused_warnings_filter_for_test());
-//         run_test_inner(
-//             path,
-//             Path::new(&migration_exp_path),
-//             Path::new(&migration_out_path),
-//             Flags::testing(),
-//             config,
-//             lint,
-//             true,
-//         )?;
-//     }
-
-//     // A cross-module unused case that should run without unused warnings suppression
-//     if path.with_extension(UNUSED_EXT).exists() {
-//         let unused_exp_path = format!(
-//             "{}.{UNUSED_EXT}.{EXP_EXT}",
-//             path.with_extension("").to_string_lossy(),
-//         );
-//         let unused_out_path = format!(
-//             "{}.{UNUSED_EXT}.{OUT_EXT}",
-//             path.with_extension("").to_string_lossy(),
-//         );
-//         run_test(
-//             path,
-//             Path::new(&unused_exp_path),
-//             Path::new(&unused_out_path),
-//             Flags::testing(),
-//             config.clone(),
-//             lint,
-//         )?;
-//     }
-
-//     // A cross-module unused case that should run without unused warnings suppression
-//     if path.with_extension(IDE_EXT).exists() {
-//         let ide_exp_path = format!(
-//             "{}.{IDE_EXT}.{EXP_EXT}",
-//             path.with_extension("").to_string_lossy(),
-//         );
-//         let ide_out_path = format!(
-//             "{}.{IDE_EXT}.{OUT_EXT}",
-//             path.with_extension("").to_string_lossy(),
-//         );
-//         run_test(
-//             path,
-//             Path::new(&ide_exp_path),
-//             Path::new(&ide_out_path),
-//             Flags::testing().set_ide_test_mode(true).set_ide_mode(true),
-//             config.clone(),
-//             lint,
-//         )?;
-//     }
-
-//     let exp_path = path.with_extension(EXP_EXT);
-//     let out_path = path.with_extension(OUT_EXT);
-
-//     config
-//         .warning_filter
-//         .union(&WarningFiltersBuilder::unused_warnings_filter_for_test());
-//     run_test(path, &exp_path, &out_path, Flags::empty(), config, lint)?;
-//     Ok(())
-// }
-
-fn test_config(path: &Path) -> (Option<&'static str>, TestInfo, PackageConfig, Flags) {
+fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
     let path_extension = path.extension().unwrap();
     let path_contains = |s| path.components().any(|c| c.as_os_str() == s);
     let lint = path_contains(LINTER_DIR);
@@ -224,11 +124,11 @@ fn test_config(path: &Path) -> (Option<&'static str>, TestInfo, PackageConfig, F
     };
     // test kind
     let test_kind = match () {
-        _ if path_extension == MOVE_EXTENSION => None,
-        _ if path_extension == TEST_EXT => Some(TEST_EXT),
-        _ if path_extension == UNUSED_EXT => Some(UNUSED_EXT),
-        _ if path_extension == MIGRATION_EXT => Some(MIGRATION_EXT),
-        _ if path_extension == IDE_EXT => Some(IDE_EXT),
+        _ if path_extension == MOVE_EXTENSION => TestKind::Normal,
+        _ if path_extension == TEST_EXT => TestKind::Test,
+        _ if path_extension == UNUSED_EXT => TestKind::Unused,
+        _ if path_extension == MIGRATION_EXT => TestKind::Migration,
+        _ if path_extension == IDE_EXT => TestKind::IDE,
         _ => panic!("Unknown extension: {}", path_extension.to_string_lossy()),
     };
     // config
@@ -238,7 +138,8 @@ fn test_config(path: &Path) -> (Option<&'static str>, TestInfo, PackageConfig, F
         is_dependency: false,
         warning_filter: WarningFiltersBuilder::new_for_source(),
     };
-    if path_extension != UNUSED_EXT && path_extension != IDE_EXT {
+    // Unused and IDE do not have additional warning filters
+    if !matches!(test_kind, TestKind::Unused | TestKind::IDE) {
         config
             .warning_filter
             .union(&WarningFiltersBuilder::unused_warnings_filter_for_test());
@@ -250,12 +151,13 @@ fn test_config(path: &Path) -> (Option<&'static str>, TestInfo, PackageConfig, F
         lint,
     };
     // flags
-    let flags = if path_extension == MOVE_EXTENSION {
-        Flags::empty()
-    } else if path_extension == IDE_EXT {
-        Flags::testing().set_ide_test_mode(true).set_ide_mode(true)
-    } else {
-        Flags::testing()
+    let flags = match test_kind {
+        // no flags for normal tests
+        TestKind::Normal => Flags::empty(),
+        // we want to be able to see test/test_only elements in these modes
+        TestKind::Test | TestKind::Unused | TestKind::Migration => Flags::testing(),
+        // additional flags for IDE
+        TestKind::IDE => Flags::testing().set_ide_test_mode(true).set_ide_mode(true),
     };
     (test_kind, test_info, config, flags)
 }
@@ -275,6 +177,7 @@ fn out_path(path: &Path, test_name: &str, test_kind: Option<&str>) -> PathBuf {
 // Runs all tests under the test/testsuite directory.
 pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let (test_kind, test_info, package_config, flags) = test_config(path);
+    let suffix = test_kind.snap_suffix();
     let migration_mode = package_config.edition == Edition::E2024_MIGRATION;
     let p;
     let test_name = {
@@ -284,7 +187,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     };
     let test_name: &str = test_name.as_ref();
     let move_path = path.with_extension(MOVE_EXTENSION);
-    let out_path = out_path(path, test_name, test_kind);
+    let out_path = out_path(path, test_name, suffix);
     let flavor = package_config.flavor;
     let targets: Vec<String> = vec![move_path.to_str().unwrap().to_owned()];
     let named_address_map = default_testing_addresses(flavor);
@@ -346,7 +249,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
 
     let mut options = InstaOptions::new();
     options.info = Some(test_info);
-    options.suffix = test_kind;
+    options.suffix = suffix;
     insta_assert! {
         name: test_name,
         input_path: move_path,
