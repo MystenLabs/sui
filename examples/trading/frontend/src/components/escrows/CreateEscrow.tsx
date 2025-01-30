@@ -80,7 +80,7 @@ export function CreateEscrow({ locked }: { locked: ApiLockedObject }) {
                     <Select.Item
                       key={object.data?.objectId!}
                       value={object.data?.objectId!}
-                      className="h-auto w-full data-[state=checked]:bg-blue-50 whitespace-pre-wrap overlfow-hidden break-words hover:bg-blue-50 bg-white text-black cursor-pointer"
+                      className="h-auto w-full data-[state=checked]:bg-blue-50 whitespace-pre-wrap overflow-hidden break-words hover:bg-blue-50 bg-white text-black cursor-pointer"
                     >
                       <div className="flex items-center break-words">
                         <Avatar

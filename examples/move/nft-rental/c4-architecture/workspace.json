@@ -202,7 +202,7 @@
           } ],
           "tags" : "Element,Component"
         }, {
-          "description" : "Allows a renter to delist an item they are currenlty listing but not actively renting.",
+          "description" : "Allows a renter to delist an item they are currently listing but not actively renting.",
           "documentation" : { },
           "id" : "14",
           "name" : "Delist",
