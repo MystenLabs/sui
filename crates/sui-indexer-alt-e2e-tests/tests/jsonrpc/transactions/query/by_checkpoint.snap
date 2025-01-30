@@ -1,0 +1,460 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 31 tasks
+
+init:
+A: object(0,0)
+
+task 1, line 20:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, lines 22-24:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 26:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 4, lines 28-30:
+//# programmable --sender A --inputs 43 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 32-34:
+//# programmable --sender A --inputs 44 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 36-38:
+//# programmable --sender A --inputs 45 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 40-42:
+//# programmable --sender A --inputs 46 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 44:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 9, lines 46-50:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "epoch": "0",
+    "sequenceNumber": "0",
+    "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
+    "networkTotalTransactions": "1",
+    "epochRollingGasCostSummary": {
+      "computationCost": "0",
+      "storageCost": "0",
+      "storageRebate": "0",
+      "nonRefundableStorageFee": "0"
+    },
+    "timestampMs": "0",
+    "transactions": [
+      "3FJ4fSrf7toVCANccxAbeJ5A1iSzwKLghCYcaz9atbCD"
+    ],
+    "checkpointCommitments": [],
+    "validatorSignature": "sqTHHfkSR11Z+F1hT87Kq6omvXa6VgddqwTlq7kkS20vBM0XEMQsqq+YjSLf31fZ"
+  }
+}
+
+task 10, lines 52-56:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "epoch": "0",
+    "sequenceNumber": "1",
+    "digest": "6aWovQEKHwgzpsvJ1YxbamhB1fakCFiUYzvLor4kjbvX",
+    "networkTotalTransactions": "1",
+    "previousDigest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
+    "epochRollingGasCostSummary": {
+      "computationCost": "0",
+      "storageCost": "0",
+      "storageRebate": "0",
+      "nonRefundableStorageFee": "0"
+    },
+    "timestampMs": "0",
+    "transactions": [],
+    "checkpointCommitments": [],
+    "validatorSignature": "tPLOYsvCtvGTc88SHy8jNbKrwpMVgH8hF/+UeA6r9lcUagr+kkAFNqcKWSDDZUFL"
+  }
+}
+
+task 11, lines 58-62:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "epoch": "0",
+    "sequenceNumber": "2",
+    "digest": "FfreGpYDd5ep5o9r46SqjNuVTV5jjS3wEmfRtx26kwij",
+    "networkTotalTransactions": "2",
+    "previousDigest": "6aWovQEKHwgzpsvJ1YxbamhB1fakCFiUYzvLor4kjbvX",
+    "epochRollingGasCostSummary": {
+      "computationCost": "1000000",
+      "storageCost": "1976000",
+      "storageRebate": "0",
+      "nonRefundableStorageFee": "0"
+    },
+    "timestampMs": "0",
+    "transactions": [
+      "ARwAbZ2EETkMxUDTEwx2BoL95cbqnLVmiRDVH53h6UHa"
+    ],
+    "checkpointCommitments": [],
+    "validatorSignature": "gNKVscJg3dc2QOstRKLNMRY1UIlOCg0s3Lg8XoGkA0CvQBaf5LX1kMil/6SUCCk8"
+  }
+}
+
+task 12, lines 64-68:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "epoch": "0",
+    "sequenceNumber": "3",
+    "digest": "85aWv9yRg9dXc7bbSFcymQALE6H9BdQghNNnJP8Xa4o4",
+    "networkTotalTransactions": "6",
+    "previousDigest": "FfreGpYDd5ep5o9r46SqjNuVTV5jjS3wEmfRtx26kwij",
+    "epochRollingGasCostSummary": {
+      "computationCost": "5000000",
+      "storageCost": "9880000",
+      "storageRebate": "3912480",
+      "nonRefundableStorageFee": "39520"
+    },
+    "timestampMs": "0",
+    "transactions": [
+      "63rb3kkmYLsb5THn4GV3VHp5sDZ5GffaY3TWo3jaFC78",
+      "4JBFZsv4ZykFeBPHbJsfdEmHjNTnsgNJL555ZiTGSbZA",
+      "FWb7SBiW1434mcyZwiMgP49uKPXDqrFJ78e62KeVdG7x",
+      "AtFjxXNoMNmELt3bspkiXsE2SR7GA7wHHFJSLyiumUYQ"
+    ],
+    "checkpointCommitments": [],
+    "validatorSignature": "lHjBQsxvGAvjcs7EqDnr1PYkxU6ChRQLXw/nrs1iJnupnrdI3TDiCrfYFad+ZWcf"
+  }
+}
+
+task 13, lines 70-76:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "data": [],
+    "nextCursor": null,
+    "hasNextPage": false
+  }
+}
+
+task 14, lines 78-84:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 5,
+  "result": {
+    "data": [
+      {
+        "digest": "ARwAbZ2EETkMxUDTEwx2BoL95cbqnLVmiRDVH53h6UHa"
+      }
+    ],
+    "nextCursor": "MQ==",
+    "hasNextPage": false
+  }
+}
+
+task 15, lines 86-92:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 6,
+  "result": {
+    "data": [
+      {
+        "digest": "63rb3kkmYLsb5THn4GV3VHp5sDZ5GffaY3TWo3jaFC78"
+      },
+      {
+        "digest": "4JBFZsv4ZykFeBPHbJsfdEmHjNTnsgNJL555ZiTGSbZA"
+      },
+      {
+        "digest": "FWb7SBiW1434mcyZwiMgP49uKPXDqrFJ78e62KeVdG7x"
+      },
+      {
+        "digest": "AtFjxXNoMNmELt3bspkiXsE2SR7GA7wHHFJSLyiumUYQ"
+      }
+    ],
+    "nextCursor": "NQ==",
+    "hasNextPage": false
+  }
+}
+
+task 16, lines 94-101:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "data": [],
+    "nextCursor": null,
+    "hasNextPage": false
+  }
+}
+
+task 17, lines 103-110:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 8,
+  "result": {
+    "data": [
+      {
+        "digest": "ARwAbZ2EETkMxUDTEwx2BoL95cbqnLVmiRDVH53h6UHa"
+      }
+    ],
+    "nextCursor": "MQ==",
+    "hasNextPage": false
+  }
+}
+
+task 18, lines 112-119:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 9,
+  "result": {
+    "data": [
+      {
+        "digest": "AtFjxXNoMNmELt3bspkiXsE2SR7GA7wHHFJSLyiumUYQ"
+      },
+      {
+        "digest": "FWb7SBiW1434mcyZwiMgP49uKPXDqrFJ78e62KeVdG7x"
+      },
+      {
+        "digest": "4JBFZsv4ZykFeBPHbJsfdEmHjNTnsgNJL555ZiTGSbZA"
+      },
+      {
+        "digest": "63rb3kkmYLsb5THn4GV3VHp5sDZ5GffaY3TWo3jaFC78"
+      }
+    ],
+    "nextCursor": "Mg==",
+    "hasNextPage": false
+  }
+}
+
+task 19, lines 121-128:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 10,
+  "result": {
+    "data": [],
+    "nextCursor": null,
+    "hasNextPage": false
+  }
+}
+
+task 20, lines 130-137:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 11,
+  "result": {
+    "data": [
+      {
+        "digest": "ARwAbZ2EETkMxUDTEwx2BoL95cbqnLVmiRDVH53h6UHa"
+      }
+    ],
+    "nextCursor": "MQ==",
+    "hasNextPage": false
+  }
+}
+
+task 21, lines 139-146:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 12,
+  "result": {
+    "data": [
+      {
+        "digest": "63rb3kkmYLsb5THn4GV3VHp5sDZ5GffaY3TWo3jaFC78"
+      },
+      {
+        "digest": "4JBFZsv4ZykFeBPHbJsfdEmHjNTnsgNJL555ZiTGSbZA"
+      }
+    ],
+    "nextCursor": "Mw==",
+    "hasNextPage": true
+  }
+}
+
+task 22, lines 148-155:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 13,
+  "result": {
+    "data": [],
+    "nextCursor": null,
+    "hasNextPage": false
+  }
+}
+
+task 23, lines 157-164:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 14,
+  "result": {
+    "data": [
+      {
+        "digest": "ARwAbZ2EETkMxUDTEwx2BoL95cbqnLVmiRDVH53h6UHa"
+      }
+    ],
+    "nextCursor": "MQ==",
+    "hasNextPage": false
+  }
+}
+
+task 24, lines 166-173:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 15,
+  "result": {
+    "data": [
+      {
+        "digest": "AtFjxXNoMNmELt3bspkiXsE2SR7GA7wHHFJSLyiumUYQ"
+      },
+      {
+        "digest": "FWb7SBiW1434mcyZwiMgP49uKPXDqrFJ78e62KeVdG7x"
+      }
+    ],
+    "nextCursor": "NA==",
+    "hasNextPage": true
+  }
+}
+
+task 25, lines 175-182:
+//# run-jsonrpc --cursors 3
+Response: {
+  "jsonrpc": "2.0",
+  "id": 16,
+  "result": {
+    "data": [
+      {
+        "digest": "FWb7SBiW1434mcyZwiMgP49uKPXDqrFJ78e62KeVdG7x"
+      },
+      {
+        "digest": "AtFjxXNoMNmELt3bspkiXsE2SR7GA7wHHFJSLyiumUYQ"
+      }
+    ],
+    "nextCursor": "NQ==",
+    "hasNextPage": false
+  }
+}
+
+task 26, lines 184-191:
+//# run-jsonrpc --cursors 3
+Response: {
+  "jsonrpc": "2.0",
+  "id": 17,
+  "result": {
+    "data": [
+      {
+        "digest": "63rb3kkmYLsb5THn4GV3VHp5sDZ5GffaY3TWo3jaFC78"
+      }
+    ],
+    "nextCursor": "Mg==",
+    "hasNextPage": false
+  }
+}
+
+task 27, lines 193-200:
+//# run-jsonrpc --cursors 0
+Response: {
+  "jsonrpc": "2.0",
+  "id": 18,
+  "result": {
+    "data": [
+      {
+        "digest": "63rb3kkmYLsb5THn4GV3VHp5sDZ5GffaY3TWo3jaFC78"
+      },
+      {
+        "digest": "4JBFZsv4ZykFeBPHbJsfdEmHjNTnsgNJL555ZiTGSbZA"
+      }
+    ],
+    "nextCursor": "Mw==",
+    "hasNextPage": true
+  }
+}
+
+task 28, lines 202-209:
+//# run-jsonrpc --cursors 6
+Response: {
+  "jsonrpc": "2.0",
+  "id": 19,
+  "result": {
+    "data": [],
+    "nextCursor": null,
+    "hasNextPage": false
+  }
+}
+
+task 29, lines 211-218:
+//# run-jsonrpc --cursors 0
+Response: {
+  "jsonrpc": "2.0",
+  "id": 20,
+  "result": {
+    "data": [],
+    "nextCursor": null,
+    "hasNextPage": false
+  }
+}
+
+task 30, lines 220-227:
+//# run-jsonrpc --cursors 6
+Response: {
+  "jsonrpc": "2.0",
+  "id": 21,
+  "result": {
+    "data": [
+      {
+        "digest": "AtFjxXNoMNmELt3bspkiXsE2SR7GA7wHHFJSLyiumUYQ"
+      },
+      {
+        "digest": "FWb7SBiW1434mcyZwiMgP49uKPXDqrFJ78e62KeVdG7x"
+      }
+    ],
+    "nextCursor": "NA==",
+    "hasNextPage": true
+  }
+}
