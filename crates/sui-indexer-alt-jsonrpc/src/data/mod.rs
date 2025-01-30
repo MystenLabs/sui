@@ -10,3 +10,4 @@ pub(crate) mod reader;
 pub mod system_package_task;
 pub(crate) mod transactions;
 pub(crate) mod tx_balance_changes;
+pub(crate) mod tx_digests;

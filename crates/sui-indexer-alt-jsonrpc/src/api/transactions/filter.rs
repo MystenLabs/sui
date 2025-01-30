@@ -3,10 +3,14 @@
 
 use anyhow::{anyhow, Context as _};
 use diesel::{
+    expression::{
+        is_aggregate::{Never, No},
+        MixedAggregates, ValidGrouping,
+    },
     pg::Pg,
     query_builder::{BoxedSelectStatement, FromClause, QueryFragment},
-    sql_types::{BigInt, Binary},
-    AppearsOnTable, ExpressionMethods, JoinOnDsl, QueryDsl, QuerySource,
+    sql_types::BigInt,
+    AppearsOnTable, Column, Expression, ExpressionMethods, QueryDsl, QuerySource,
 };
 use sui_indexer_alt_schema::schema::{
     tx_affected_addresses, tx_affected_objects, tx_calls, tx_digests,
@@ -19,15 +23,14 @@ use sui_types::{
 };
 
 use crate::{
-    data::checkpoints::CheckpointKey,
+    data::{checkpoints::CheckpointKey, tx_digests::TxDigestKey},
     error::{invalid_params, RpcError},
     paginate::{Cursor, Page},
 };
 
 use super::{error::Error, Context, TransactionsConfig};
 
-/// A list of transaction sequence numbers and their digests, as they appear in the database.
-type Keys = Vec<(i64, Vec<u8>)>;
+type Digests = PageResponse<TransactionDigest, String>;
 
 /// Fetch the digests for a page of transactions that satisfy the given `filter` and pagination
 /// parameters. Returns the digests and a cursor pointing to the last result (if there are any
@@ -39,7 +42,7 @@ pub(super) async fn transactions(
     cursor: Option<String>,
     limit: Option<usize>,
     descending_order: Option<bool>,
-) -> Result<PageResponse<TransactionDigest, String>, RpcError<Error>> {
+) -> Result<Digests, RpcError<Error>> {
     let page: Page<u64> = Page::from_params(
         config.default_page_size,
         config.max_page_size,
@@ -49,96 +52,78 @@ pub(super) async fn transactions(
     )?;
 
     use TransactionFilter as F;
-    let mut refs = match filter {
-        None => all_transactions(ctx, &page).await?,
+    match filter {
+        None => all_transactions(ctx, &page).await,
 
-        Some(F::Checkpoint(seq)) => by_checkpoint(ctx, &page, *seq).await?,
+        Some(F::Checkpoint(seq)) => by_checkpoint(ctx, &page, *seq).await,
 
         Some(F::MoveFunction {
             package,
             module,
             function,
-        }) => tx_calls(ctx, &page, package, module.as_ref(), function.as_ref()).await?,
+        }) => tx_calls(ctx, &page, package, module.as_ref(), function.as_ref()).await,
 
-        Some(F::AffectedObject(object)) => tx_affected_objects(ctx, &page, *object).await?,
+        Some(F::AffectedObject(object)) => tx_affected_objects(ctx, &page, *object).await,
 
-        Some(F::FromAddress(from)) => tx_affected_addresses(ctx, &page, Some(*from), *from).await?,
+        Some(F::FromAddress(from)) => tx_affected_addresses(ctx, &page, Some(*from), *from).await,
 
         Some(F::FromAndToAddress { from, to }) => {
-            tx_affected_addresses(ctx, &page, Some(*from), *to).await?
+            tx_affected_addresses(ctx, &page, Some(*from), *to).await
         }
 
-        Some(F::FromOrToAddress { addr }) => tx_affected_addresses(ctx, &page, None, *addr).await?,
+        Some(F::FromOrToAddress { addr }) => tx_affected_addresses(ctx, &page, None, *addr).await,
 
         Some(F::TransactionKind(_) | F::TransactionKindIn(_)) => {
-            return unsupported("TransactionKind filter is not supported")
+            unsupported("TransactionKind filter is not supported")
         }
 
         Some(F::InputObject(_)) => {
-            return unsupported(
-                "InputObject filter is not supported, please use AffectedObject instead.",
-            )
+            unsupported("InputObject filter is not supported, please use AffectedObject instead.")
         }
 
         Some(F::ChangedObject(_)) => {
-            return unsupported(
-                "ChangedObject filter is not supported, please use AffectedObject instead.",
-            )
+            unsupported("ChangedObject filter is not supported, please use AffectedObject instead.")
         }
 
         Some(F::ToAddress(_)) => {
-            return unsupported(
-                "ToAddress filter is not supported, please use FromOrToAddress instead.",
-            )
+            unsupported("ToAddress filter is not supported, please use FromOrToAddress instead.")
         }
-    };
-
-    let has_next_page = refs.len() > page.limit as usize;
-    if has_next_page {
-        refs.truncate(page.limit as usize);
     }
-
-    let digests = refs
-        .iter()
-        .map(|(_, digest)| TransactionDigest::try_from(digest.as_slice()))
-        .collect::<Result<Vec<TransactionDigest>, _>>()
-        .context("Failed to deserialize transaction digests")?;
-
-    let cursor = refs
-        .last()
-        .map(|(last, _)| Cursor(*last).encode())
-        .transpose()
-        .context("Failed to encode next cursor")?;
-
-    Ok(PageResponse {
-        data: digests,
-        next_cursor: cursor,
-        has_next_page,
-    })
 }
 
-/// Fetch a page of transaction digests without filtering them. Fetches one more result than was
-/// requested to detect a next page.
-async fn all_transactions(ctx: &Context, page: &Page<u64>) -> Result<Keys, RpcError<Error>> {
+/// Fetch a page of transaction digests without filtering them.
+async fn all_transactions(ctx: &Context, page: &Page<u64>) -> Result<Digests, RpcError<Error>> {
     use tx_digests::dsl as d;
-    let query = d::tx_digests.select((d::tx_sequence_number, d::tx_digest));
-    paginate(ctx, page, query.into_boxed()).await
+
+    let query = d::tx_digests
+        .select((d::tx_sequence_number, d::tx_digest))
+        .into_boxed();
+
+    let results: Vec<(i64, Vec<u8>)> = ctx
+        .reader()
+        .connect()
+        .await
+        .context("Failed to connect to the database")?
+        .results(paginate(page, d::tx_sequence_number, query))
+        .await
+        .context("Failed to fetch transaction sequence numbers")?;
+
+    from_digests(page.limit, results)
 }
 
-/// Fetch a page of transaction digests from the given `checkpoint` (by sequence number). Fetches
-/// one more result than was requested to detect a next page.
+/// Fetch a page of transaction digests from the given `checkpoint` (by sequence number).
 async fn by_checkpoint(
     ctx: &Context,
     page: &Page<u64>,
     checkpoint: u64,
-) -> Result<Keys, RpcError<Error>> {
+) -> Result<Digests, RpcError<Error>> {
     let Some(checkpoint) = ctx
         .loader()
         .load_one(CheckpointKey(checkpoint))
         .await
         .context("Failed to load checkpoint")?
     else {
-        return Ok(vec![]);
+        return Ok(PageResponse::empty());
     };
 
     let summary: CheckpointSummary = bcs::from_bytes(&checkpoint.checkpoint_summary)
@@ -190,23 +175,20 @@ async fn by_checkpoint(
         results.reverse();
     }
 
-    Ok(results)
+    from_digests(*limit, results)
 }
 
 /// Fetch a page of transaction digests that called the described function(s). Functions can be
 /// selected by just their package, their module, or their fully-qualified name. It is an error to
 /// supply a package and function, but no module.
-///
-/// Fetches one more result than was requested to detect a next page.
 async fn tx_calls(
     ctx: &Context,
     page: &Page<u64>,
     package: &ObjectID,
     module: Option<&String>,
     function: Option<&String>,
-) -> Result<Keys, RpcError<Error>> {
+) -> Result<Digests, RpcError<Error>> {
     use tx_calls::dsl as c;
-    use tx_digests::dsl as d;
 
     if let (None, Some(function)) = (module, function) {
         return Err(invalid_params(Error::MissingModule {
@@ -214,9 +196,8 @@ async fn tx_calls(
         }));
     }
 
-    let mut query = d::tx_digests
-        .inner_join(c::tx_calls.on(d::tx_sequence_number.eq(c::tx_sequence_number)))
-        .select((d::tx_sequence_number, d::tx_digest))
+    let mut query = c::tx_calls
+        .select(c::tx_sequence_number)
         .filter(c::package.eq(package.as_slice()))
         .into_boxed();
 
@@ -228,26 +209,42 @@ async fn tx_calls(
         query = query.filter(c::function.eq(function.as_str()));
     }
 
-    paginate(ctx, page, query).await
+    let results: Vec<i64> = ctx
+        .reader()
+        .connect()
+        .await
+        .context("Failed to connect to the database")?
+        .results(paginate(page, c::tx_sequence_number, query))
+        .await
+        .context("Failed to fetch transaction sequence numbers")?;
+
+    from_sequence_numbers(ctx, page.limit, results).await
 }
 
 /// Fetch a page of transaction digests that touched `object` (created it, modified it, deleted it
-/// or wrapped it). Fetches one more result than was requested to detect a next page.
+/// or wrapped it).
 async fn tx_affected_objects(
     ctx: &Context,
     page: &Page<u64>,
     object: ObjectID,
-) -> Result<Keys, RpcError<Error>> {
+) -> Result<Digests, RpcError<Error>> {
     use tx_affected_objects::dsl as o;
-    use tx_digests::dsl as d;
 
-    let query = d::tx_digests
-        .inner_join(o::tx_affected_objects.on(d::tx_sequence_number.eq(o::tx_sequence_number)))
-        .select((d::tx_sequence_number, d::tx_digest))
+    let query = o::tx_affected_objects
+        .select(o::tx_sequence_number)
         .filter(o::affected.eq(object.as_slice()))
         .into_boxed();
 
-    paginate(ctx, page, query).await
+    let results: Vec<i64> = ctx
+        .reader()
+        .connect()
+        .await
+        .context("Failed to connect to the database")?
+        .results(paginate(page, o::tx_sequence_number, query))
+        .await
+        .context("Failed to fetch transaction sequence numbers")?;
+
+    from_sequence_numbers(ctx, page.limit, results).await
 }
 
 /// Fetch a page of transaction digests that touched the provided addresses (`from` and `to`).
@@ -256,20 +253,16 @@ async fn tx_affected_objects(
 /// - If `from == to` this is equivalent to filtering down to the transactions that were sent by `from`.
 /// - If `from` is not supplied, this finds the transactions that `to` was affected by in some way
 ///   (either it is the sender, or it is the recipient of one of the output objects).
-///
-/// Fetches one more result than was requested to detect a next page.
 async fn tx_affected_addresses(
     ctx: &Context,
     page: &Page<u64>,
     from: Option<SuiAddress>,
     to: SuiAddress,
-) -> Result<Keys, RpcError<Error>> {
+) -> Result<Digests, RpcError<Error>> {
     use tx_affected_addresses::dsl as a;
-    use tx_digests::dsl as d;
 
-    let mut query = d::tx_digests
-        .inner_join(a::tx_affected_addresses.on(d::tx_sequence_number.eq(a::tx_sequence_number)))
-        .select((d::tx_sequence_number, d::tx_digest))
+    let mut query = a::tx_affected_addresses
+        .select(a::tx_sequence_number)
         .filter(a::affected.eq(to.to_inner()))
         .into_boxed();
 
@@ -277,50 +270,121 @@ async fn tx_affected_addresses(
         query = query.filter(a::sender.eq(from.to_inner()));
     }
 
-    paginate(ctx, page, query).await
+    let results: Vec<i64> = ctx
+        .reader()
+        .connect()
+        .await
+        .context("Failed to connect to the database")?
+        .results(paginate(page, a::tx_sequence_number, query))
+        .await
+        .context("Failed to fetch transaction sequence numbers")?;
+
+    from_sequence_numbers(ctx, page.limit, results).await
 }
 
-/// Apply the pagination parameters to `query`, connect to the DB, and load it.
-///
-/// Assumes that the supplied query returns a number and some bytes (a transaction sequence number
-/// and a transaction digest), and additionally requires that the `tx_digest::tx_sequence_number`
-/// column appears in the query source, so that we can apply filters on it, and order by it.
-async fn paginate<'q, QS>(
-    ctx: &Context,
+/// Modify `query` to be paginated according to `page`, using `tx_sequence_number` as the column
+/// containing the sequence number. The query fetches one more element than the limit, to determine
+/// if there is a next page.
+fn paginate<'q, TX, ST, QS>(
     page: &Page<u64>,
-    mut query: BoxedSelectStatement<'q, (BigInt, Binary), FromClause<QS>, Pg>,
-) -> Result<Keys, RpcError<Error>>
+    tx_sequence_number: TX,
+    mut query: BoxedSelectStatement<'q, ST, FromClause<QS>, Pg>,
+) -> BoxedSelectStatement<'q, ST, FromClause<QS>, Pg>
 where
-    QS: QuerySource + Sized + Send + Sync + 'static,
-    QS::FromClause: QueryFragment<Pg> + Send + Sync,
-    tx_digests::tx_sequence_number: AppearsOnTable<QS>,
+    QS: QuerySource,
+    TX: Copy + Send + Sync + 'q,
+    TX: ValidGrouping<()> + QueryFragment<Pg>,
+    TX: Column<Table = QS> + AppearsOnTable<QS>,
+    TX: ExpressionMethods + Expression<SqlType = BigInt>,
+    TX::IsAggregate: MixedAggregates<Never, Output = No>,
 {
-    use tx_digests::dsl as d;
-
-    query = query.limit(page.limit + 1);
-
     if let Some(Cursor(tx)) = page.cursor {
         if page.descending {
-            query = query.filter(d::tx_sequence_number.lt(tx as i64));
+            query = query.filter(tx_sequence_number.lt(tx as i64));
         } else {
-            query = query.filter(d::tx_sequence_number.gt(tx as i64));
+            query = query.filter(tx_sequence_number.gt(tx as i64));
         }
     }
 
     if page.descending {
-        query = query.order(d::tx_sequence_number.desc());
+        query = query.order(tx_sequence_number.desc());
     } else {
-        query = query.order(d::tx_sequence_number.asc());
+        query = query.order(tx_sequence_number.asc());
     }
 
-    Ok(ctx
-        .reader()
-        .connect()
+    query.limit(page.limit + 1)
+}
+
+/// Convert a list of raw transaction sequence numbers from the database into a page of parsed
+/// transaction digests, ready to be loaded. This requires loading digests from the data loader.
+async fn from_sequence_numbers(
+    ctx: &Context,
+    limit: i64,
+    mut rows: Vec<i64>,
+) -> Result<Digests, RpcError<Error>> {
+    let has_next_page = rows.len() > limit as usize;
+    if has_next_page {
+        rows.truncate(limit as usize);
+    }
+
+    let next_cursor = rows
+        .last()
+        .map(|last| Cursor(*last).encode())
+        .transpose()
+        .context("Failed to encode next cursor")?;
+
+    let digests = ctx
+        .loader()
+        .load_many(rows.iter().map(|&seq| TxDigestKey(seq as u64)))
         .await
-        .context("Failed to connect to database")?
-        .results(query)
-        .await
-        .context("Failed to fetch matching transaction digests")?)
+        .context("Failed to load transaction digests")?;
+
+    let mut data = Vec::with_capacity(rows.len());
+    for seq in rows {
+        let bytes = digests
+            .get(&TxDigestKey(seq as u64))
+            .ok_or_else(|| anyhow!("Missing transaction digest for transaction {seq}"))?
+            .tx_digest
+            .as_slice();
+
+        let digest = TransactionDigest::try_from(bytes)
+            .context("Failed to deserialize transaction digests")?;
+
+        data.push(digest);
+    }
+
+    Ok(PageResponse {
+        data,
+        next_cursor,
+        has_next_page,
+    })
+}
+
+/// Convert a list of raw transaction sequence numbers and digests from the database into a page of
+/// parsed transaction digests, ready to be loaded.
+fn from_digests(limit: i64, mut rows: Vec<(i64, Vec<u8>)>) -> Result<Digests, RpcError<Error>> {
+    let has_next_page = rows.len() > limit as usize;
+    if has_next_page {
+        rows.truncate(limit as usize);
+    }
+
+    let data = rows
+        .iter()
+        .map(|(_, digest)| TransactionDigest::try_from(digest.as_slice()))
+        .collect::<Result<Vec<TransactionDigest>, _>>()
+        .context("Failed to deserialize transaction digests")?;
+
+    let next_cursor = rows
+        .last()
+        .map(|(last, _)| Cursor(*last).encode())
+        .transpose()
+        .context("Failed to encode next cursor")?;
+
+    Ok(PageResponse {
+        data,
+        next_cursor,
+        has_next_page,
+    })
 }
 
 fn unsupported<T>(msg: &'static str) -> Result<T, RpcError<Error>> {
