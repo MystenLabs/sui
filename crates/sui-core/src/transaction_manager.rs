@@ -570,6 +570,10 @@ impl TransactionManager {
         }
 
         for mut pending_cert in pending {
+            tracing::debug!(
+                "enqueuing certificate {:?}",
+                pending_cert.certificate.digest()
+            );
             // Tx lock is not held here, which makes it possible to send duplicated transactions to
             // the execution driver after crash-recovery, when the same transaction is recovered
             // from recovery log and pending certificates table. The transaction will still only

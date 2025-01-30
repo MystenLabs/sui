@@ -1203,7 +1203,7 @@ impl CheckpointBuilder {
             debug!(
                 checkpoint_commit_height = height,
                 checkpoint_seq = summary.sequence_number,
-                contents_digest = ?contents.digest(),
+                contents = ?contents.iter().map(|c| c.transaction).collect::<Vec<_>>(),
                 "writing checkpoint",
             );
 
