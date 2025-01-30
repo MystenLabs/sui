@@ -1526,7 +1526,7 @@ impl<'a> SuiTestAdapter {
         let sender = self.get_sender(sender);
         let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
 
-        let payment_ref = self.get_payment(sender, payment);
+        let payment_ref = self.get_payment(sponsor, payment);
 
         let data = txn_data(sender.address, sponsor.address, payment_ref);
         if sender.address == sponsor.address {
