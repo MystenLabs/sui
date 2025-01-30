@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Context as _};
-use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl};
+use diesel::{
+    pg::Pg,
+    query_builder::{BoxedSelectStatement, FromClause, QueryFragment},
+    sql_types::{BigInt, Binary},
+    AppearsOnTable, ExpressionMethods, JoinOnDsl, QueryDsl, QuerySource,
+};
 use sui_indexer_alt_schema::schema::{
     tx_affected_addresses, tx_affected_objects, tx_calls, tx_digests,
 };
@@ -116,38 +121,8 @@ pub(super) async fn transactions(
 /// requested to detect a next page.
 async fn all_transactions(ctx: &Context, page: &Page<u64>) -> Result<Keys, RpcError<Error>> {
     use tx_digests::dsl as d;
-
-    let mut query = d::tx_digests
-        .select((d::tx_sequence_number, d::tx_digest))
-        .limit(page.limit + 1)
-        .into_boxed();
-
-    if let Some(Cursor(tx)) = page.cursor {
-        if page.descending {
-            query = query.filter(d::tx_sequence_number.lt(tx as i64));
-        } else {
-            query = query.filter(d::tx_sequence_number.gt(tx as i64));
-        }
-    }
-
-    if page.descending {
-        query = query.order(d::tx_sequence_number.desc());
-    } else {
-        query = query.order(d::tx_sequence_number.asc());
-    }
-
-    let mut conn = ctx
-        .reader()
-        .connect()
-        .await
-        .context("Failed to connect to database")?;
-
-    let refs: Vec<(i64, Vec<u8>)> = conn
-        .results(query)
-        .await
-        .context("Failed to fetch matching transaction digests")?;
-
-    Ok(refs)
+    let query = d::tx_digests.select((d::tx_sequence_number, d::tx_digest));
+    paginate(ctx, page, query.into_boxed()).await
 }
 
 /// Fetch a page of transaction digests from the given `checkpoint` (by sequence number). Fetches
@@ -242,10 +217,8 @@ async fn tx_calls(
     let mut query = d::tx_digests
         .inner_join(c::tx_calls.on(d::tx_sequence_number.eq(c::tx_sequence_number)))
         .select((d::tx_sequence_number, d::tx_digest))
-        .limit(page.limit + 1)
+        .filter(c::package.eq(package.as_slice()))
         .into_boxed();
-
-    query = query.filter(c::package.eq(package.as_slice()));
 
     if let Some(module) = module {
         query = query.filter(c::module.eq(module.as_str()));
@@ -255,32 +228,7 @@ async fn tx_calls(
         query = query.filter(c::function.eq(function.as_str()));
     }
 
-    if let Some(Cursor(tx)) = page.cursor {
-        if page.descending {
-            query = query.filter(d::tx_sequence_number.lt(tx as i64));
-        } else {
-            query = query.filter(d::tx_sequence_number.gt(tx as i64));
-        }
-    }
-
-    if page.descending {
-        query = query.order(d::tx_sequence_number.desc());
-    } else {
-        query = query.order(d::tx_sequence_number.asc());
-    }
-
-    let mut conn = ctx
-        .reader()
-        .connect()
-        .await
-        .context("Failed to connect to database")?;
-
-    let refs: Vec<(i64, Vec<u8>)> = conn
-        .results(query)
-        .await
-        .context("Failed to fetch matching transaction digests")?;
-
-    Ok(refs)
+    paginate(ctx, page, query).await
 }
 
 /// Fetch a page of transaction digests that touched `object` (created it, modified it, deleted it
@@ -293,40 +241,13 @@ async fn tx_affected_objects(
     use tx_affected_objects::dsl as o;
     use tx_digests::dsl as d;
 
-    let mut query = d::tx_digests
+    let query = d::tx_digests
         .inner_join(o::tx_affected_objects.on(d::tx_sequence_number.eq(o::tx_sequence_number)))
         .select((d::tx_sequence_number, d::tx_digest))
-        .limit(page.limit + 1)
+        .filter(o::affected.eq(object.as_slice()))
         .into_boxed();
 
-    query = query.filter(o::affected.eq(object.as_slice()));
-
-    if let Some(Cursor(tx)) = page.cursor {
-        if page.descending {
-            query = query.filter(d::tx_sequence_number.lt(tx as i64));
-        } else {
-            query = query.filter(d::tx_sequence_number.gt(tx as i64));
-        }
-    }
-
-    if page.descending {
-        query = query.order(d::tx_sequence_number.desc());
-    } else {
-        query = query.order(d::tx_sequence_number.asc());
-    }
-
-    let mut conn = ctx
-        .reader()
-        .connect()
-        .await
-        .context("Failed to connect to database")?;
-
-    let refs: Vec<(i64, Vec<u8>)> = conn
-        .results(query)
-        .await
-        .context("Failed to fetch matching transaction digests")?;
-
-    Ok(refs)
+    paginate(ctx, page, query).await
 }
 
 /// Fetch a page of transaction digests that touched the provided addresses (`from` and `to`).
@@ -349,14 +270,34 @@ async fn tx_affected_addresses(
     let mut query = d::tx_digests
         .inner_join(a::tx_affected_addresses.on(d::tx_sequence_number.eq(a::tx_sequence_number)))
         .select((d::tx_sequence_number, d::tx_digest))
-        .limit(page.limit + 1)
+        .filter(a::affected.eq(to.to_inner()))
         .into_boxed();
 
     if let Some(from) = from {
         query = query.filter(a::sender.eq(from.to_inner()));
     }
 
-    query = query.filter(a::affected.eq(to.to_inner()));
+    paginate(ctx, page, query).await
+}
+
+/// Apply the pagination parameters to `query`, connect to the DB, and load it.
+///
+/// Assumes that the supplied query returns a number and some bytes (a transaction sequence number
+/// and a transaction digest), and additionally requires that the `tx_digest::tx_sequence_number`
+/// column appears in the query source, so that we can apply filters on it, and order by it.
+async fn paginate<'q, QS>(
+    ctx: &Context,
+    page: &Page<u64>,
+    mut query: BoxedSelectStatement<'q, (BigInt, Binary), FromClause<QS>, Pg>,
+) -> Result<Keys, RpcError<Error>>
+where
+    QS: QuerySource + Sized + Send + Sync + 'static,
+    QS::FromClause: QueryFragment<Pg> + Send + Sync,
+    tx_digests::tx_sequence_number: AppearsOnTable<QS>,
+{
+    use tx_digests::dsl as d;
+
+    query = query.limit(page.limit + 1);
 
     if let Some(Cursor(tx)) = page.cursor {
         if page.descending {
@@ -372,18 +313,14 @@ async fn tx_affected_addresses(
         query = query.order(d::tx_sequence_number.asc());
     }
 
-    let mut conn = ctx
+    Ok(ctx
         .reader()
         .connect()
         .await
-        .context("Failed to connect to database")?;
-
-    let refs: Vec<(i64, Vec<u8>)> = conn
+        .context("Failed to connect to database")?
         .results(query)
         .await
-        .context("Failed to fetch matching transaction digests")?;
-
-    Ok(refs)
+        .context("Failed to fetch matching transaction digests")?)
 }
 
 fn unsupported<T>(msg: &'static str) -> Result<T, RpcError<Error>> {
