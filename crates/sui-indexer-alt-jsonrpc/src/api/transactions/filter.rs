@@ -3,7 +3,7 @@
 
 use anyhow::{anyhow, Context as _};
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl};
-use sui_indexer_alt_schema::schema::{tx_calls, tx_digests};
+use sui_indexer_alt_schema::schema::{tx_affected_objects, tx_calls, tx_digests};
 use sui_json_rpc_types::{Page as PageResponse, TransactionFilter};
 use sui_types::{
     base_types::ObjectID,
@@ -18,6 +18,9 @@ use crate::{
 };
 
 use super::{error::Error, Context, TransactionsConfig};
+
+/// A list of transaction sequence numbers and their digests, as they appear in the database.
+type Keys = Vec<(i64, Vec<u8>)>;
 
 /// Fetch the digests for a page of transactions that satisfy the given `filter` and pagination
 /// parameters. Returns the digests and a cursor pointing to the last result (if there are any
@@ -49,6 +52,8 @@ pub(super) async fn transactions(
             module,
             function,
         }) => tx_calls(ctx, &page, package, module.as_ref(), function.as_ref()).await?,
+
+        Some(F::AffectedObject(object)) => tx_affected_objects(ctx, &page, *object).await?,
 
         Some(F::TransactionKind(_) | F::TransactionKindIn(_)) => {
             return unsupported("TransactionKind filter is not supported")
@@ -101,10 +106,7 @@ pub(super) async fn transactions(
 
 /// Fetch a page of transaction digests without filtering them. Fetches one more result than was
 /// requested to detect a next page.
-async fn all_transactions(
-    ctx: &Context,
-    page: &Page<u64>,
-) -> Result<Vec<(i64, Vec<u8>)>, RpcError<Error>> {
+async fn all_transactions(ctx: &Context, page: &Page<u64>) -> Result<Keys, RpcError<Error>> {
     use tx_digests::dsl as d;
 
     let mut query = d::tx_digests
@@ -146,7 +148,7 @@ async fn by_checkpoint(
     ctx: &Context,
     page: &Page<u64>,
     checkpoint: u64,
-) -> Result<Vec<(i64, Vec<u8>)>, RpcError<Error>> {
+) -> Result<Keys, RpcError<Error>> {
     let Some(checkpoint) = ctx
         .loader()
         .load_one(CheckpointKey(checkpoint))
@@ -219,7 +221,7 @@ async fn tx_calls(
     package: &ObjectID,
     module: Option<&String>,
     function: Option<&String>,
-) -> Result<Vec<(i64, Vec<u8>)>, RpcError<Error>> {
+) -> Result<Keys, RpcError<Error>> {
     use tx_calls::dsl as c;
     use tx_digests::dsl as d;
 
@@ -244,6 +246,52 @@ async fn tx_calls(
     if let Some(function) = function {
         query = query.filter(c::function.eq(function.as_str()));
     }
+
+    if let Some(Cursor(tx)) = page.cursor {
+        if page.descending {
+            query = query.filter(d::tx_sequence_number.lt(tx as i64));
+        } else {
+            query = query.filter(d::tx_sequence_number.gt(tx as i64));
+        }
+    }
+
+    if page.descending {
+        query = query.order(d::tx_sequence_number.desc());
+    } else {
+        query = query.order(d::tx_sequence_number.asc());
+    }
+
+    let mut conn = ctx
+        .reader()
+        .connect()
+        .await
+        .context("Failed to connect to database")?;
+
+    let refs: Vec<(i64, Vec<u8>)> = conn
+        .results(query)
+        .await
+        .context("Failed to fetch matching transaction digests")?;
+
+    Ok(refs)
+}
+
+/// Fetch a page of transaction digests that touched `object` (created it, modified it, deleted it
+/// or wrapped it). Fetches one more result than was requested to detect a next page.
+async fn tx_affected_objects(
+    ctx: &Context,
+    page: &Page<u64>,
+    object: ObjectID,
+) -> Result<Keys, RpcError<Error>> {
+    use tx_affected_objects::dsl as o;
+    use tx_digests::dsl as d;
+
+    let mut query = d::tx_digests
+        .inner_join(o::tx_affected_objects.on(d::tx_sequence_number.eq(o::tx_sequence_number)))
+        .select((d::tx_sequence_number, d::tx_digest))
+        .limit(page.limit + 1)
+        .into_boxed();
+
+    query = query.filter(o::affected.eq(object.as_slice()));
 
     if let Some(Cursor(tx)) = page.cursor {
         if page.descending {
