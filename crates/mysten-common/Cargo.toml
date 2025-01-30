@@ -19,3 +19,5 @@ sui-types.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 anyhow.workspace = true
+bcs.workspace = true
+serde.workspace = true
