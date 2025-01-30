@@ -1262,8 +1262,8 @@ impl AuthorityState {
             .await
             .tap_err(|e| info!("process_certificate failed: {e}"))
             .tap_ok(
-            |(fx, _, _)| debug!(?tx_digest, fx_digest=?fx.digest(), "process_certificate succeeded"),
-        )?;
+                |(fx, _, _)| debug!(?tx_digest, fx_digest=?fx.digest(), "process_certificate succeeded"),
+            )?;
 
         epoch_store.record_local_execution_time(
             certificate.data().transaction_data(),
