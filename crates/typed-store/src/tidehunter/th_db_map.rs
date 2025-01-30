@@ -407,6 +407,7 @@ fn thdb_config() -> Config {
     config.snapshot_written_bytes = 64 * 1024 * 1024 * 1024;
     // force unloading dirty index entries if behind 128 Gb of wal
     config.snapshot_unload_threshold = 128 * 1024 * 1024 * 1024;
+    config.unload_jitter_pct = 30;
     config.max_dirty_keys = 1024;
     config.max_maps = 32; // 32Gb of mapped space
     config
