@@ -814,7 +814,7 @@ Token Transfer Message Format:
     <a href="../bridge/message.md#bridge_message_payload">payload</a>.push_back((vector::length(&target_address) <b>as</b> u8));
     <a href="../bridge/message.md#bridge_message_payload">payload</a>.append(target_address);
     <a href="../bridge/message.md#bridge_message_payload">payload</a>.push_back(<a href="../bridge/message.md#bridge_message_token_type">token_type</a>);
-    // bcs serialzies u64 <b>as</b> 8 bytes
+    // bcs serializes u64 <b>as</b> 8 bytes
     <a href="../bridge/message.md#bridge_message_payload">payload</a>.append(<a href="../bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bcs::to_bytes(&amount)));
     <b>assert</b>!(vector::length(&<a href="../bridge/message.md#bridge_message_payload">payload</a>) == 64, <a href="../bridge/message.md#bridge_message_EInvalidPayloadLength">EInvalidPayloadLength</a>);
     <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
