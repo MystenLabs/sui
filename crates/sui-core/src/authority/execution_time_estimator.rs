@@ -102,15 +102,16 @@ impl ExecutionTimeObserver {
         timings: &[ExecutionTiming],
         total_duration: Duration,
     ) {
-        assert_eq!(tx.commands.len(), timings.len());
+        assert!(tx.commands.len() >= timings.len());
 
         let total_command_duration: Duration = timings.iter().map(|t| t.duration()).sum();
         let extra_overhead = total_duration - total_command_duration;
 
         let mut to_share = Vec::with_capacity(tx.commands.len());
-        for (i, command) in tx.commands.iter().enumerate() {
+        for (i, timing) in timings.iter().enumerate() {
+            let command = &tx.commands[i];
             // TODO: Consider using failure/success information in computing estimates.
-            let mut command_duration = timings[i].duration();
+            let mut command_duration = timing.duration();
 
             // Distribute overhead proportionally to each command's measured duration.
             command_duration = command_duration
