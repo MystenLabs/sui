@@ -5,7 +5,8 @@ use anyhow::{bail, Context};
 use sui_framework_snapshot::{SingleSnapshot, FRAMEWORK_MANIFEST};
 use sui_protocol_config::ProtocolVersion;
 
-pub fn latest_framework_snapshot() -> &'static SingleSnapshot {
+/// Return the framework snapshot for the latest known protocol version
+pub fn latest_framework() -> &'static SingleSnapshot {
     FRAMEWORK_MANIFEST.last_key_value().expect("").1
 }
 
