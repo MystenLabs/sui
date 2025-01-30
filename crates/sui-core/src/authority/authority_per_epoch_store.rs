@@ -3049,11 +3049,19 @@ impl AuthorityPerEpochStore {
 
             if let Some(randomness_round) = randomness_round {
                 let key = TransactionKey::RandomnessRound(self.epoch(), randomness_round);
+                debug!(
+                    "Checking for randomness update transaction {:?} in checkpoint",
+                    key
+                );
 
                 // During crash recovery, the randomness update transaction may already have been
                 // created and executed before the crash. If it is available locally, we need to
                 // ensure it is executed.
                 if let Some(digest) = self.tables()?.transaction_key_to_digest.get(&key)? {
+                    debug!(
+                        "Randomness transaction with key {:?} has digest {:?}",
+                        key, digest
+                    );
                     if let Some(tx) = tx_reader.get_transaction_block(&digest) {
                         info!("Randomness update transaction {:?} already exists, scheduling for execution", digest);
                         let tx =
