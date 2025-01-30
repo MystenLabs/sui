@@ -1726,7 +1726,7 @@ impl ProtocolConfig {
     pub fn gc_depth(&self) -> u32 {
         if cfg!(msim) {
             // exercise a very low gc_depth
-            5
+            0
         } else {
             self.consensus_gc_depth.unwrap_or(0)
         }
@@ -3174,12 +3174,6 @@ impl ProtocolConfig {
                 73 => {
                     // Enable new marker table version.
                     cfg.use_object_per_epoch_marker_table_v2 = Some(true);
-
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        // Assuming a round rate of max 15/sec, then using a gc depth of 60 allow blocks within a window of ~4 seconds
-                        // to be included before be considered garbage collected.
-                        cfg.consensus_gc_depth = Some(60);
-                    }
 
                     if chain != Chain::Mainnet {
                         // Enable zstd compression for consensus in testnet
