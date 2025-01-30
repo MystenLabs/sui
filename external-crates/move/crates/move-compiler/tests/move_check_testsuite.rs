@@ -238,7 +238,7 @@ fn test_config(path: &Path) -> (Option<&'static str>, TestInfo, PackageConfig, F
         is_dependency: false,
         warning_filter: WarningFiltersBuilder::new_for_source(),
     };
-    if path_extension != UNUSED_EXT {
+    if path_extension != UNUSED_EXT && path_extension != IDE_EXT {
         config
             .warning_filter
             .union(&WarningFiltersBuilder::unused_warnings_filter_for_test());

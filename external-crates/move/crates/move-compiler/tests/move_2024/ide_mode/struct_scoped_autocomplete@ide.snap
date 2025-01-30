@@ -1,5 +1,10 @@
 ---
-
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+input_file: crates/move-compiler/tests/move_2024/ide_mode/struct_scoped_autocomplete.move
 ---
 warning[W09009]: unused struct field
   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:4:21
