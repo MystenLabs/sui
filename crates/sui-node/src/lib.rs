@@ -12,12 +12,14 @@ use anyhow::Result;
 use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
+use futures::future::BoxFuture;
 use futures::TryFutureExt;
 use mysten_common::debug_fatal;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
+use std::future::Future;
 use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
@@ -151,7 +153,7 @@ mod handle;
 pub mod metrics;
 
 pub struct ValidatorComponents {
-    validator_server_handle: JoinHandle<Result<()>>,
+    validator_server_handle: SpawnOnce,
     validator_overload_monitor_handle: Option<JoinHandle<()>>,
     consensus_manager: ConsensusManager,
     consensus_store_pruner: ConsensusStorePruner,
@@ -836,25 +838,29 @@ impl SuiNode {
         let sui_node_metrics = Arc::new(SuiNodeMetrics::new(&registry_service.default_registry()));
 
         let validator_components = if state.is_validator(&epoch_store) {
-            Self::reexecute_pending_consensus_certs(&epoch_store, &state).await;
+            let (components, _) = futures::join!(
+                Self::construct_validator_components(
+                    config.clone(),
+                    state.clone(),
+                    committee,
+                    epoch_store.clone(),
+                    checkpoint_store.clone(),
+                    state_sync_handle.clone(),
+                    randomness_handle.clone(),
+                    Arc::downgrade(&accumulator),
+                    backpressure_manager.clone(),
+                    connection_monitor_status.clone(),
+                    &registry_service,
+                    sui_node_metrics.clone(),
+                ),
+                Self::reexecute_pending_consensus_certs(&epoch_store, &state,)
+            );
+            let mut components = components?;
 
-            let components = Self::construct_validator_components(
-                config.clone(),
-                state.clone(),
-                committee,
-                epoch_store.clone(),
-                checkpoint_store.clone(),
-                state_sync_handle.clone(),
-                randomness_handle.clone(),
-                Arc::downgrade(&accumulator),
-                backpressure_manager.clone(),
-                connection_monitor_status.clone(),
-                &registry_service,
-                sui_node_metrics.clone(),
-            )
-            .await?;
-            // This is only needed during cold start.
             components.consensus_adapter.submit_recovered(&epoch_store);
+
+            // Start the gRPC server
+            components.validator_server_handle = components.validator_server_handle.start();
 
             Some(components)
         } else {
@@ -1325,7 +1331,7 @@ impl SuiNode {
         consensus_store_pruner: ConsensusStorePruner,
         accumulator: Weak<StateAccumulator>,
         backpressure_manager: Arc<BackpressureManager>,
-        validator_server_handle: JoinHandle<Result<()>>,
+        validator_server_handle: SpawnOnce,
         validator_overload_monitor_handle: Option<JoinHandle<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
@@ -1505,7 +1511,7 @@ impl SuiNode {
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
         prometheus_registry: &Registry,
-    ) -> Result<tokio::task::JoinHandle<Result<()>>> {
+    ) -> Result<SpawnOnce> {
         let validator_service = ValidatorService::new(
             state.clone(),
             consensus_adapter,
@@ -1533,9 +1539,8 @@ impl SuiNode {
             .map_err(|err| anyhow!(err.to_string()))?;
         let local_addr = server.local_addr();
         info!("Listening to traffic on {local_addr}");
-        let grpc_server = spawn_monitored_task!(server.serve().map_err(Into::into));
 
-        Ok(grpc_server)
+        Ok(SpawnOnce::new(server.serve().map_err(Into::into)))
     }
 
     async fn reexecute_pending_consensus_certs(
@@ -1898,23 +1903,25 @@ impl SuiNode {
                 if self.state.is_validator(&new_epoch_store) {
                     info!("Promoting the node from fullnode to validator, starting grpc server");
 
-                    Some(
-                        Self::construct_validator_components(
-                            self.config.clone(),
-                            self.state.clone(),
-                            Arc::new(next_epoch_committee.clone()),
-                            new_epoch_store.clone(),
-                            self.checkpoint_store.clone(),
-                            self.state_sync_handle.clone(),
-                            self.randomness_handle.clone(),
-                            weak_accumulator,
-                            self.backpressure_manager.clone(),
-                            self.connection_monitor_status.clone(),
-                            &self.registry_service,
-                            self.metrics.clone(),
-                        )
-                        .await?,
+                    let mut components = Self::construct_validator_components(
+                        self.config.clone(),
+                        self.state.clone(),
+                        Arc::new(next_epoch_committee.clone()),
+                        new_epoch_store.clone(),
+                        self.checkpoint_store.clone(),
+                        self.state_sync_handle.clone(),
+                        self.randomness_handle.clone(),
+                        weak_accumulator,
+                        self.backpressure_manager.clone(),
+                        self.connection_monitor_status.clone(),
+                        &self.registry_service,
+                        self.metrics.clone(),
                     )
+                    .await?;
+
+                    components.validator_server_handle = components.validator_server_handle.start();
+
+                    Some(components)
                 } else {
                     None
                 }
@@ -2039,6 +2046,30 @@ impl SuiNode {
         provider: &OIDCProvider,
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         get_jwk_injector()(authority, provider)
+    }
+}
+
+enum SpawnOnce {
+    // Mutex is only needed to make SpawnOnce Send
+    Unstarted(Mutex<BoxFuture<'static, Result<()>>>),
+    #[allow(unused)]
+    Started(JoinHandle<Result<()>>),
+}
+
+impl SpawnOnce {
+    pub fn new(future: impl Future<Output = Result<()>> + Send + 'static) -> Self {
+        Self::Unstarted(Mutex::new(Box::pin(future)))
+    }
+
+    pub fn start(self) -> Self {
+        match self {
+            Self::Unstarted(future) => {
+                let future = future.into_inner();
+                let handle = tokio::spawn(future);
+                Self::Started(handle)
+            }
+            Self::Started(_) => self,
+        }
     }
 }
 
