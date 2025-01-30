@@ -598,7 +598,7 @@ impl ModuleDefinitionResolver {
         let loaded_module = &*self.module;
         let struct_inst = loaded_module.struct_instantiation_at(idx.0);
         let instantiation = &struct_inst.instantiation_signature.to_ref();
-        self.instantiate_type_common(&struct_inst.def, instantiation, ty_args)
+        self.instantiate_type_common(&struct_inst.def_vtable_key, instantiation, ty_args)
     }
 
     pub(crate) fn instantiate_enum_type(
@@ -610,7 +610,7 @@ impl ModuleDefinitionResolver {
         let handle = loaded_module.variant_instantiation_handle_at(vidx);
         let enum_inst = loaded_module.enum_instantiation_at(handle.enum_def);
         let instantiation = &enum_inst.instantiation_signature.to_ref();
-        self.instantiate_type_common(&enum_inst.def, instantiation, ty_args)
+        self.instantiate_type_common(&enum_inst.def_vtable_key, instantiation, ty_args)
     }
 
     fn instantiate_type_common(

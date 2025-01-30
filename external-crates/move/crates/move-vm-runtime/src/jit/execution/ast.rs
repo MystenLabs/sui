@@ -67,13 +67,19 @@ pub struct Module {
     #[allow(dead_code)]
     pub type_refs: Vec<IntraPackageKey>,
 
+    /// function references
+    /// [ALLOC] These values are allocated in the package arena.
+    pub functions: Vec<VMPointer<Function>>,
+
     /// struct references carry the index into the global vector of types.
     /// That is effectively an indirection over the ref table:
     /// the instruction carries an index into this table which contains the index into the
     /// glabal table of types. No instantiation of generic types is saved into the global table.
-    pub structs: Vec<StructDef>,
+    /// [ALLOC] These values are allocated in the package arena.
+    pub structs: Vec<VMPointer<StructDef>>,
     /// materialized instantiations, whether partial or not
-    pub struct_instantiations: Vec<StructInstantiation>,
+    /// [ALLOC] These values are allocated in the package arena.
+    pub struct_instantiations: Vec<VMPointer<StructInstantiation>>,
 
     /// enum references carry the index into the global vector of types.
     /// That is effectively an indirection over the ref table:
@@ -81,20 +87,27 @@ pub struct Module {
     /// glabal table of types. No instantiation of generic types is saved into the global table.
     /// Note that variants are not carried in the global table as these should stay in sync with the
     /// enum type.
-    pub enums: Vec<EnumDef>,
+    /// [ALLOC] These values are allocated in the package arena.
+    pub enums: Vec<VMPointer<EnumDef>>,
     /// materialized instantiations
-    pub enum_instantiations: Vec<EnumInstantiation>,
+    /// [ALLOC] These values are allocated in the package arena.
+    pub enum_instantiations: Vec<VMPointer<EnumInstantiation>>,
 
-    pub variant_handles: Vec<VariantHandle>,
-    pub variant_instantiation_handles: Vec<VariantInstantiationHandle>,
+    /// [ALLOC] These values are allocated in the package arena.
+    pub variant_handles: Vec<VMPointer<VariantDef>>,
+    /// [ALLOC] These values are allocated in the package arena.
+    pub variant_instantiations: Vec<VMPointer<VariantInstantiation>>,
 
     /// materialized instantiations, whether partial or not
-    pub function_instantiations: Vec<FunctionInstantiation>,
+    /// [ALLOC] These values are allocated in the package arena.
+    pub function_instantiations: Vec<VMPointer<FunctionInstantiation>>,
 
     /// fields as a pair of index, first to the type, second to the field position in that type
-    pub field_handles: Vec<FieldHandle>,
+    /// [ALLOC] These values are allocated in the package arena.
+    pub field_handles: Vec<VMPointer<FieldHandle>>,
     /// materialized instantiations, whether partial or not
-    pub field_instantiations: Vec<FieldInstantiation>,
+    /// [ALLOC] These values are allocated in the package arena.
+    pub field_instantiations: Vec<VMPointer<FieldInstantiation>>,
 
     /// a map of single-token signature indices to type.
     /// Single-token signatures are usually indexed by the `SignatureIndex` in bytecode. For example,
@@ -108,11 +121,12 @@ pub struct Module {
     pub instantiation_signatures: SignatureCache,
 
     /// constant references carry an index into a global vector of values.
+    /// [ALLOC] These values are allocated in the package arena.
     pub constants: ConstantCache,
 }
 
-pub type SignatureCache = BTreeMap<SignatureIndex, VMPointer<Vec<Type>>>;
-pub type ConstantCache = BTreeMap<ConstantPoolIndex, VMPointer<Constant>>;
+pub type SignatureCache = Vec<VMPointer<Vec<Type>>>;
+pub type ConstantCache = Vec<VMPointer<Constant>>;
 
 // A runtime constant
 #[derive(PartialEq, Eq, Debug)]
@@ -170,7 +184,7 @@ pub enum CallType {
 // A function instantiation.
 #[derive(Debug)]
 pub struct FunctionInstantiation {
-    // index to `ModuleCache::functions` global table if a in-package call otherwise a virtual call
+    // index to `ModuleCache::functions` if in-package call otherwise a virtual call
     pub handle: CallType,
     // [ALLOC] This is allocated in the package arena.
     pub instantiation_signature: VMPointer<Vec<Type>>,
@@ -180,14 +194,14 @@ pub struct FunctionInstantiation {
 pub struct StructDef {
     // struct field count
     pub field_count: u16,
-    pub idx: VirtualTableKey,
+    pub def_vtable_key: VirtualTableKey,
 }
 
 #[derive(Debug)]
 pub struct StructInstantiation {
     // struct field count
     pub field_count: u16,
-    pub def: VirtualTableKey,
+    pub def_vtable_key: VirtualTableKey,
     // [ALLOC] This is allocated in the package arena.
     pub instantiation_signature: VMPointer<Vec<Type>>,
 }
@@ -207,32 +221,38 @@ pub struct FieldInstantiation {
     pub owner: VirtualTableKey,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct EnumDef {
     // enum variant count
     #[allow(unused)]
     pub variant_count: u16,
     pub variants: Vec<VariantDef>,
-    // `ModuelCache::types` global table index
-    pub idx: VirtualTableKey,
+    pub dev_vtable_key: VirtualTableKey,
 }
 
 #[derive(Debug)]
 pub struct EnumInstantiation {
     // enum variant count
     pub variant_count_map: Vec<u16>,
-    pub def: VirtualTableKey,
+    pub def_vtable_key: VirtualTableKey,
     // [ALLOC] This is allocated in the package arena.
     pub instantiation_signature: VMPointer<Vec<Type>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VariantDef {
     #[allow(unused)]
     pub tag: u16,
     pub field_count: u16,
     #[allow(unused)]
     pub field_types: Vec<Type>,
+}
+
+// A variant instantiation.
+#[derive(Debug)]
+pub struct VariantInstantiation {
+    pub enum_def: VMPointer<EnumInstantiation>,
+    pub variant: u16,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -267,7 +287,7 @@ pub enum Datatype {
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct EnumType {
     pub variants: Vec<VariantType>,
-    pub enum_def: EnumDefinitionIndex,
+    pub enum_def: VMPointer<EnumDef>,
 }
 
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -429,7 +449,7 @@ pub enum Bytecode {
     /// The VTableKey must be resolved in the current package context to resolve it to a function
     /// that can be executed.
     VirtualCall(VirtualTableKey),
-    CallGeneric(FunctionInstantiationIndex),
+    CallGeneric(VMPointer<FunctionInstantiation>),
     /// Create an instance of the type specified via `DatatypeHandleIndex` and push it on the stack.
     /// The values of the fields of the struct, in the order they appear in the struct declaration,
     /// must be pushed on the stack. All fields must be provided.
@@ -440,7 +460,7 @@ pub enum Bytecode {
     ///
     /// ```..., field(1)_value, field(2)_value, ..., field(n)_value -> ..., instance_value```
     Pack(StructDefinitionIndex),
-    PackGeneric(StructDefInstantiationIndex),
+    PackGeneric(VMPointer<StructInstantiation>),
     /// Destroy an instance of a type and push the values bound to each field on the
     /// stack.
     ///
@@ -454,7 +474,7 @@ pub enum Bytecode {
     ///
     /// ```..., instance_value -> ..., field(1)_value, field(2)_value, ..., field(n)_value```
     Unpack(StructDefinitionIndex),
-    UnpackGeneric(StructDefInstantiationIndex),
+    UnpackGeneric(VMPointer<StructInstantiation>),
     /// Read a reference. The reference is on the stack, it is consumed and the value read is
     /// pushed on the stack.
     ///
@@ -504,7 +524,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., reference -> ..., field_reference```
-    MutBorrowField(FieldHandleIndex),
+    MutBorrowField(VMPointer<FieldHandle>),
     /// Load a mutable reference to a field identified by `FieldInstantiationIndex`.
     /// The top of the stack must be a mutable reference to a type that contains the field
     /// definition.
@@ -512,21 +532,21 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., reference -> ..., field_reference```
-    MutBorrowFieldGeneric(FieldInstantiationIndex),
+    MutBorrowFieldGeneric(VMPointer<FieldInstantiation>),
     /// Load an immutable reference to a field identified by `FieldHandleIndex`.
     /// The top of the stack must be a reference to a type that contains the field definition.
     ///
     /// Stack transition:
     ///
     /// ```..., reference -> ..., field_reference```
-    ImmBorrowField(FieldHandleIndex),
+    ImmBorrowField(VMPointer<FieldHandle>),
     /// Load an immutable reference to a field identified by `FieldInstantiationIndex`.
     /// The top of the stack must be a reference to a type that contains the field definition.
     ///
     /// Stack transition:
     ///
     /// ```..., reference -> ..., field_reference```
-    ImmBorrowFieldGeneric(FieldInstantiationIndex),
+    ImmBorrowFieldGeneric(VMPointer<FieldInstantiation>),
     /// Add the 2 u64 at the top of the stack and pushes the result on the stack.
     /// The operation aborts the transaction in case of overflow.
     ///
@@ -770,8 +790,8 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., field(1)_value, field(2)_value, ..., field(n)_value -> ..., variant_value```
-    PackVariant(VariantHandleIndex),
-    PackVariantGeneric(VariantInstantiationHandleIndex),
+    PackVariant(VMPointer<VariantDef>),
+    PackVariantGeneric(VMPointer<VariantInstantiation>),
     /// Destroy a variant value specified by the `VariantHandleIndex` and push the values bound to
     /// each variant field on the stack.
     ///
@@ -785,19 +805,19 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., instance_value -> ..., field(1)_value, field(2)_value, ..., field(n)_value```
-    UnpackVariant(VariantHandleIndex),
-    UnpackVariantImmRef(VariantHandleIndex),
-    UnpackVariantMutRef(VariantHandleIndex),
-    UnpackVariantGeneric(VariantInstantiationHandleIndex),
-    UnpackVariantGenericImmRef(VariantInstantiationHandleIndex),
-    UnpackVariantGenericMutRef(VariantInstantiationHandleIndex),
+    UnpackVariant(VMPointer<VariantDef>),
+    UnpackVariantImmRef(VMPointer<VariantDef>),
+    UnpackVariantMutRef(VMPointer<VariantDef>),
+    UnpackVariantGeneric(VMPointer<VariantInstantiation>),
+    UnpackVariantGenericImmRef(VMPointer<VariantInstantiation>),
+    UnpackVariantGenericMutRef(VMPointer<VariantInstantiation>),
     /// Branch on the tag value of the enum value reference that is on the top of the value stack,
     /// and jumps to the matching code offset for that tag within the `CodeUnit`. Code offsets are
     /// relative to the start of the instruction stream.
     ///
     /// Stack transition:
     /// ```..., enum_value_ref -> ...```
-    VariantSwitch(VariantJumpTableIndex),
+    VariantSwitch(VMPointer<VariantJumpTable>),
 }
 
 // -------------------------------------------------------------------------------------------------
