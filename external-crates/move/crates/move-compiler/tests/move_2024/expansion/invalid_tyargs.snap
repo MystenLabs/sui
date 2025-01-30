@@ -1,5 +1,10 @@
 ---
-
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+input_file: crates/move-compiler/tests/move_2024/expansion/invalid_tyargs.move
 ---
 error[E03018]: invalid type parameter
    ┌─ tests/move_2024/expansion/invalid_tyargs.move:10:27

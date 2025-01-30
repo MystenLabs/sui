@@ -1,5 +1,10 @@
 ---
-
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+input_file: crates/move-compiler/tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move
 ---
 error[E03003]: unbound module member
   ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:9:9

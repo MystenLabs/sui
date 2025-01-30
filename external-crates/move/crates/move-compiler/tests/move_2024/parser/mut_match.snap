@@ -1,5 +1,10 @@
 ---
-
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+input_file: crates/move-compiler/tests/move_2024/parser/mut_match.move
 ---
 warning[W09012]: unused 'mut' modifiers
    ┌─ tests/move_2024/parser/mut_match.move:11:30

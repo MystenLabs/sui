@@ -1,5 +1,10 @@
 ---
-
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+input_file: crates/move-compiler/tests/move_2024/ide_mode/colon_colon_incomplete.move
 ---
 note[I15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:1:1
@@ -97,4 +102,4 @@ note[I15006]: IDE path autocomplete
    = members: 'Option -> std::option::Option' or 'foo -> a::m2::foo'
    = modules: 'Self -> a::m2', 'option -> std::option', or 'vector -> std::vector'
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-   = type params: 
+   = type params:

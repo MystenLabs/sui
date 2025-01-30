@@ -1,5 +1,10 @@
 ---
-
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+input_file: crates/move-compiler/tests/move_check/naming/unresolved_type_no_args.move
 ---
 error[E03004]: unbound type
   ┌─ tests/move_check/naming/unresolved_type_no_args.move:2:22
