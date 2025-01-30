@@ -84,8 +84,6 @@ impl BlockManager {
     /// Tries to accept the provided blocks assuming that all their causal history exists. The method
     /// returns all the blocks that have been successfully processed in round ascending order, that includes also previously
     /// suspended blocks that have now been able to get accepted. Method also returns a set with the missing ancestor blocks.
-    /// When the `commit_sync_gc_round_override` is > 0 then the method will skip any missing ancestors that are <= `commit_sync_gc_round_override` round. This
-    /// is a special handling case when we are processing blocks via the committed sub dags.
     pub(crate) fn try_accept_blocks(
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
@@ -93,6 +91,10 @@ impl BlockManager {
         let _s = monitored_scope("BlockManager::try_accept_blocks");
 
         blocks.sort_by_key(|b| b.round());
+        debug!(
+            "Trying to accept blocks: {}",
+            blocks.iter().map(|b| b.reference().to_string()).join(",")
+        );
 
         let mut accepted_blocks = vec![];
         let mut missing_blocks = BTreeSet::new();

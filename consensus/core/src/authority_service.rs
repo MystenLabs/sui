@@ -727,7 +727,6 @@ mod tests {
     }
 
     #[async_trait]
-    #[async_trait]
     impl CoreThreadDispatcher for FakeCoreThreadDispatcher {
         async fn add_blocks(
             &self,

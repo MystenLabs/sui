@@ -6,7 +6,6 @@ use std::{collections::VecDeque, mem, sync::Arc};
 use consensus_config::AuthorityIndex;
 use itertools::Itertools;
 use parking_lot::RwLock;
-use tracing::info;
 
 use crate::{
     base_committer::BaseCommitter,
@@ -139,7 +138,7 @@ impl UniversalCommitter {
                 .first()
                 .expect("Synced commits should not be empty");
             if synced_commit.index() <= last_commit_index {
-                info!(
+                tracing::debug!(
                     "Skip commit for index {} as it is already committed with last commit index {}",
                     synced_commit.index(),
                     last_commit_index
