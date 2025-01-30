@@ -306,7 +306,7 @@ For the sake of example, we'll consider you are defining a test-only helper func
 3. (optional) Use `cfg_attr` to make test-only trait derivations conditional:
     ```rust
     #[cfg_attr(any(test, feature = "testing"), derive(FooTrait))]
-    #[derive(Debug, Display, ...)] // inconditional derivations
+    #[derive(Debug, Display, ...)] // unconditional derivations
     struct Foo { ... }
     ```
 4. (optional) Set up feature transitivity for crates that call crates that have test-only members. Let's say it's the case of `bar_crate`, which, through its test helpers, calls into `foo_crate` to use your test-only `foo`. Here's how you would set up `bar_crate/Cargo.toml`:
