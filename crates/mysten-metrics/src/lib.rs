@@ -11,7 +11,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use once_cell::sync::OnceCell;
 use prometheus::{
@@ -320,6 +320,12 @@ pub struct MonitoredScopeGuard {
     metrics: &'static Metrics,
     name: &'static str,
     timer: Instant,
+}
+
+impl MonitoredScopeGuard {
+    pub fn elapsed(&self) -> Duration {
+        self.timer.elapsed()
+    }
 }
 
 impl Drop for MonitoredScopeGuard {

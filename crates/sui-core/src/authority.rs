@@ -21,6 +21,7 @@ use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::CompiledModule;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
+use mysten_metrics::MonitoredScopeGuard;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
@@ -1249,6 +1250,7 @@ impl AuthorityState {
         }
 
         self.process_certificate(
+            _scope,
             tx_guard,
             certificate,
             input_objects,
@@ -1354,6 +1356,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn process_certificate(
         &self,
+        scope: Option<MonitoredScopeGuard>,
         tx_guard: CertTxGuard,
         certificate: &VerifiedExecutableTransaction,
         input_objects: InputObjects,
@@ -1398,12 +1401,9 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (inner_temporary_store, effects, execution_error_opt) = match self.prepare_certificate(
-            &execution_guard,
-            certificate,
-            input_objects,
-            epoch_store,
-        ) {
+        let (inner_temporary_store, effects, timings, execution_error_opt) = match self
+            .prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
+        {
             Err(e) => {
                 info!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
                 tx_guard.release();
@@ -1460,6 +1460,21 @@ impl AuthorityState {
             epoch_store,
         )
         .await?;
+
+        let total_time = scope.unwrap().elapsed();
+        let timing_record = ExecutionTimingLogRecord {
+            transaction: certificate.data().transaction_data().clone(),
+            effects: effects.clone(),
+            total_time,
+            timings,
+        };
+        epoch_store
+            .timing_log
+            .lock()
+            .as_mut()
+            .unwrap()
+            .write(&timing_record)
+            .unwrap();
 
         if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
             certificate.data().transaction_data().kind()
@@ -1634,6 +1649,7 @@ impl AuthorityState {
     ) -> SuiResult<(
         InnerTemporaryStore,
         TransactionEffects,
+        Vec<ExecutionTiming>,
         Option<ExecutionError>,
     )> {
         let _scope = monitored_scope("Execution::prepare_certificate");
@@ -1660,7 +1676,7 @@ impl AuthorityState {
         let (kind, signer, gas) = transaction_data.execution_parts();
 
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, _timings, execution_error_opt) =
+        let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 self.get_backing_store().as_ref(),
                 protocol_config,
@@ -1696,7 +1712,12 @@ impl AuthorityState {
                 .observe(effects.gas_cost_summary().computation_cost as f64 / elapsed);
         }
 
-        Ok((inner_temp_store, effects, execution_error_opt.err()))
+        Ok((
+            inner_temp_store,
+            effects,
+            timings,
+            execution_error_opt.err(),
+        ))
     }
 
     pub fn prepare_certificate_for_benchmark(
@@ -1712,7 +1733,10 @@ impl AuthorityState {
         let lock: RwLock<EpochId> = RwLock::new(epoch_store.epoch());
         let execution_guard = lock.try_read().unwrap();
 
-        self.prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
+        let (inner_temp_store, effects, _timings, execution_error_opt) =
+            self.prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)?;
+
+        Ok((inner_temp_store, effects, execution_error_opt))
     }
 
     #[instrument(skip_all)]
@@ -2907,6 +2931,10 @@ impl AuthorityState {
         let input_loader =
             TransactionInputLoader::new(execution_cache_trait_pointers.object_cache_reader.clone());
         let epoch = epoch_store.epoch();
+
+        let log_path = config.log_path();
+        epoch_store.open_timing_log(log_path);
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3206,6 +3234,9 @@ impl AuthorityState {
         assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.transaction_manager.reconfigure(new_epoch);
         *execution_lock = new_epoch;
+
+        new_epoch_store.open_timing_log(self.config.log_path());
+
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
@@ -5085,7 +5116,7 @@ impl AuthorityState {
         let input_objects =
             self.read_objects_for_execution(&tx_lock, &executable_tx, epoch_store)?;
 
-        let (temporary_store, effects, _execution_error_opt) =
+        let (temporary_store, effects, _timings, _execution_error_opt) =
             self.prepare_certificate(&execution_guard, &executable_tx, input_objects, epoch_store)?;
         let system_obj = get_sui_system_state(&temporary_store.written)
             .expect("change epoch tx must write to system object");
