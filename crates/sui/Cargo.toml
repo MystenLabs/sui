@@ -26,7 +26,6 @@ futures.workspace = true
 http.workspace = true
 im.workspace = true
 inquire.workspace = true
-insta.workspace = true
 json_to_table.workspace = true
 miette.workspace = true
 num-bigint.workspace = true
@@ -110,6 +109,8 @@ fs_extra.workspace = true
 expect-test.workspace = true
 assert_cmd.workspace = true
 toml.workspace = true
+insta.workspace = true
+insta-cmd.workspace = true
 
 test-cluster.workspace = true
 sui-macros.workspace = true
@@ -130,6 +131,10 @@ test = false
 
 [[test]]
 name = "ptb_files_tests"
+harness = false
+
+[[test]]
+name = "shell_tests"
 harness = false
 
 [features]

@@ -109,13 +109,7 @@ async fn main() -> Result<()> {
             benchmark_args,
             config,
         } => {
-            let config_contents = fs::read_to_string(config)
-                .await
-                .context("failed to read configuration TOML file")?;
-
-            let indexer_config: IndexerConfig = toml::from_str(&config_contents)
-                .context("Failed to parse configuration TOML file.")?;
-
+            let indexer_config = read_config(&config).await?;
             sui_indexer_alt::benchmark::run_benchmark(args.db_args, benchmark_args, indexer_config)
                 .await?;
         }

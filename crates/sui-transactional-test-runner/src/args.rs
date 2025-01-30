@@ -124,6 +124,8 @@ pub struct ProgrammableTransactionCommand {
     pub gas_payment: Option<FakeID>,
     #[clap(long = "dev-inspect")]
     pub dev_inspect: bool,
+    #[clap(long = "dry-run")]
+    pub dry_run: bool,
     #[clap(
         long = "inputs",
         value_parser = ParsedValue::<SuiExtraValueArgs>::parse,
@@ -192,6 +194,8 @@ pub struct RunGraphqlCommand {
 pub struct RunJsonRpcCommand {
     #[clap(long = "show-headers")]
     pub show_headers: bool,
+    #[clap(long, num_args(1..))]
+    pub cursors: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]

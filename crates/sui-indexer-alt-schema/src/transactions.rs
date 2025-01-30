@@ -64,7 +64,7 @@ pub struct StoredTxAffectedObject {
     pub sender: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
+#[derive(Insertable, Selectable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = tx_balance_changes)]
 pub struct StoredTxBalanceChange {
     pub tx_sequence_number: i64,

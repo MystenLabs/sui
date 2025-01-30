@@ -63,3 +63,132 @@ pub fn format_diff(expected: impl AsRef<str>, actual: impl AsRef<str>) -> String
     }
     ret
 }
+
+/// See `insta_assert!` for documentation.
+pub struct InstaOptions<Info: serde::Serialize, Suffix: Into<String>> {
+    pub info: Option<Info>,
+    pub suffix: Option<Suffix>,
+}
+
+impl<Info: serde::Serialize, Suffix: Into<String>> InstaOptions<Info, Suffix> {
+    /// See `insta_assert!` for documentation.
+    pub fn new() -> Self {
+        Self {
+            info: None,
+            suffix: None,
+        }
+    }
+}
+
+impl InstaOptions<(), String> {
+    /// See `insta_assert!` for documentation.
+    pub fn none() -> Self {
+        Self {
+            info: None,
+            suffix: None,
+        }
+    }
+}
+
+#[macro_export]
+/// A wrapper around `insta::assert_snapshort` to promote uniformity in the Move codebase, intended
+/// to be used with datatest-stable and as a replacement for the hand-rolled baseline tests.
+/// The snapshot file will be saved in the same directory as the input file with the name specified.
+/// In essence, it will be saved at the path `{input_path}/{name}.snap` (and
+/// `{input_path}/{name}@{suffix}.snap` if `suffix` is specified).
+///
+/// For ease of use and reviewing, `insta_assert` should be used at most once per test. When it
+/// fails, it will stop the test. So if there are multiple snapshots in a given test, it would
+/// require multiple test runs to review all the failures.
+/// If you do need multiple snapshots in a test, you may want to disable assertions for your test
+/// run by setting `INSTA_FORCE_PASS=1` see
+/// https://insta.rs/docs/advanced/#disabling-assertion-failure for more information.
+///
+/// # Arguments
+/// The macro has three required arguments:
+///
+/// - `name`: The name of the test. This will be used to name the snapshot file. For datatest this
+///           should likely be the file name.
+/// - `input_path`: The path to the input file. This is used to determine the snapshot path.
+/// - `contents`: The contents to snapshot.
+///
+///
+/// The macro also accepts an optional arguments to that are used with `InstaOptions` to customize
+/// the snapshot. If needed the `InstaOptions` struct can be used directly by specifying the
+/// `options` argument. Options include:
+///
+///  - `info`: Additional information to include in the header of the snapshot file. This can be
+///           useful for debugging tests. The value can be any type that implements
+///           `serde::Serialize`.
+/// - `suffix`: A suffix to append to the snapshot file name. This changes the snapshot path to
+///            `{input_path}/{name}@{suffix}.snap`.
+///
+/// # Updating snapshots
+///
+/// After running the test, the `.snap` files can be updated in two ways:
+///
+/// 1. By using `cargo insta review`, which will open an interactive UI to review the changes.
+/// 2. Running the tests with the environment variable `INSTA_UPDATE=alawys`
+///
+/// See https://docs.rs/insta/latest/insta/#updating-snapshots for more information.
+macro_rules! insta_assert {
+    {
+        name: $name:expr,
+        input_path: $input:expr,
+        contents: $contents:expr,
+        options: $options:expr
+        $(,)?
+    } => {{
+        let name: String = $name.into();
+        let i: &std::path::Path = $input.as_ref();
+        let i = i.canonicalize().unwrap();
+        let c = $contents;
+        let $crate::testing::InstaOptions { info, suffix } = $options;
+        let mut settings = insta::Settings::clone_current();
+        settings.set_input_file(&i);
+        settings.set_snapshot_path(i.parent().unwrap());
+        if let Some(info) = info {
+            settings.set_info(info);
+        }
+        if let Some(suffix) = suffix {
+            settings.set_snapshot_suffix(suffix);
+        }
+        settings.set_prepend_module_to_snapshot(false);
+        settings.set_omit_expression(true);
+        settings.bind(|| {
+            insta::assert_snapshot!(name, c);
+        });
+    }};
+    {
+        name: $name:expr,
+        input_path: $input:expr,
+        contents: $contents:expr
+        $(,)?
+    } => {{
+        insta_assert! {
+            name: $name,
+            input_path: $input,
+            output_path: $output,
+            contents: $contents,
+            options: $crate::testing::InstaOptions::none(),
+        }
+    }};
+    {
+        name: $name:expr,
+        input_path: $input:expr,
+        contents: $contents:expr,
+        $($k:ident: $v:expr),+$(,)?
+    } => {{
+        let mut opts = $crate::testing::InstaOptions::new();
+        $(
+            opts.$k = Some($v);
+        )+
+        insta_assert! {
+            name: $name,
+            input_path: $input,
+            contents: $contents,
+            options: opts
+        }
+    }};
+}
+pub use insta_assert;

@@ -4,13 +4,13 @@
 use std::sync::Arc;
 
 use async_graphql::dataloader::DataLoader;
-use diesel::dsl::Limit;
+use diesel::deserialize::FromSqlRow;
+use diesel::expression::QueryMetadata;
 use diesel::pg::Pg;
-use diesel::query_builder::QueryFragment;
+use diesel::query_builder::{Query, QueryFragment, QueryId};
 use diesel::query_dsl::methods::LimitDsl;
+use diesel::query_dsl::CompatibleType;
 use diesel::result::Error as DieselError;
-use diesel::sql_query;
-use diesel_async::methods::LoadQuery;
 use diesel_async::RunQueryDsl;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
@@ -76,12 +76,14 @@ impl Reader {
 }
 
 impl<'p> Connection<'p> {
-    pub(crate) async fn first<Q, U>(&mut self, query: Q) -> Result<U, ReadError>
+    pub(crate) async fn first<'q, Q, ST, U>(&mut self, query: Q) -> Result<U, ReadError>
     where
-        U: Send,
-        Q: RunQueryDsl<db::ManagedConnection> + 'static,
         Q: LimitDsl,
-        Limit<Q>: LoadQuery<'static, db::ManagedConnection, U> + QueryFragment<Pg> + Send,
+        Q::Output: Query + QueryFragment<Pg> + QueryId + Send + 'q,
+        <Q::Output as Query>::SqlType: CompatibleType<U, Pg, SqlType = ST>,
+        U: Send + FromSqlRow<ST, Pg> + 'static,
+        Pg: QueryMetadata<<Q::Output as Query>::SqlType>,
+        ST: 'static,
     {
         let query = query.limit(1);
         debug!("{}", diesel::debug_query(&query));
@@ -98,36 +100,18 @@ impl<'p> Connection<'p> {
         Ok(res?)
     }
 
-    pub(crate) async fn results<Q, U>(&mut self, query: Q) -> Result<Vec<U>, ReadError>
+    pub(crate) async fn results<'q, Q, ST, U>(&mut self, query: Q) -> Result<Vec<U>, ReadError>
     where
-        U: Send,
-        Q: RunQueryDsl<db::ManagedConnection> + 'static,
-        Q: LoadQuery<'static, db::ManagedConnection, U> + QueryFragment<Pg> + Send,
+        Q: Query + QueryFragment<Pg> + QueryId + Send + 'q,
+        Q::SqlType: CompatibleType<U, Pg, SqlType = ST>,
+        U: Send + FromSqlRow<ST, Pg> + 'static,
+        Pg: QueryMetadata<Q::SqlType>,
+        ST: 'static,
     {
         debug!("{}", diesel::debug_query(&query));
 
         let _guard = self.metrics.db_latency.start_timer();
         let res = query.get_results(&mut self.conn).await;
-
-        if res.is_ok() {
-            self.metrics.db_requests_succeeded.inc();
-        } else {
-            self.metrics.db_requests_failed.inc();
-        }
-
-        Ok(res?)
-    }
-
-    // TODO: Use the `RawSqlQuery` from GraphQL implementation.
-    pub(crate) async fn raw_query<U>(&mut self, query: &str) -> Result<Vec<U>, ReadError>
-    where
-        U: diesel::QueryableByName<diesel::pg::Pg> + Send + 'static,
-    {
-        debug!("Raw query: {}", query);
-
-        let _guard = self.metrics.db_latency.start_timer();
-
-        let res = sql_query(query).load::<U>(&mut self.conn).await;
 
         if res.is_ok() {
             self.metrics.db_requests_succeeded.inc();
