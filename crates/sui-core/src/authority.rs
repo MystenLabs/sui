@@ -50,6 +50,8 @@ use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
+use sui_types::execution::ExecutionTiming;
+use sui_types::execution::ExecutionTimingLogRecord;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::layout_resolver::into_struct_layout;

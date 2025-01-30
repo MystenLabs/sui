@@ -11,6 +11,7 @@ use crate::{
 };
 use anyhow::Result;
 use futures::{future::join_all, StreamExt};
+use mysten_common::logging::StructuredLogReader;
 use std::path::PathBuf;
 use std::{collections::BTreeMap, env, sync::Arc};
 use sui_config::genesis::Genesis;
@@ -21,7 +22,8 @@ use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClien
 use telemetry_subscribers::TracingHandle;
 
 use sui_types::{
-    base_types::*, crypto::AuthorityPublicKeyBytes, messages_grpc::TransactionInfoRequest,
+    base_types::*, crypto::AuthorityPublicKeyBytes, execution::ExecutionTimingLogRecord,
+    messages_grpc::TransactionInfoRequest,
 };
 
 use clap::*;
@@ -415,6 +417,12 @@ pub enum ToolCommand {
             help = "The Base64-encoding of the bcs bytes of SenderSignedData"
         )]
         sender_signed_data: String,
+    },
+
+    #[command(name = "logreader")]
+    LogReader {
+        #[arg(short, long)]
+        log_path: String,
     },
 }
 
@@ -1090,6 +1098,20 @@ impl ToolCommand {
                     AuthorityAggregatorBuilder::from_genesis(&genesis).build_network_clients();
                 let result = agg.process_transaction(transaction, None).await;
                 println!("{:?}", result);
+            }
+            ToolCommand::LogReader { log_path } => {
+                let file = tokio::fs::File::open(log_path).await.unwrap();
+                let reader = tokio::io::BufReader::new(file);
+                let mut log: StructuredLogReader<ExecutionTimingLogRecord, _> =
+                    StructuredLogReader::new(reader);
+
+                while let Some(record) = log.next().await {
+                    if let Ok(record) = record {
+                        println!("{:?}", record);
+                    } else {
+                        println!("Error reading record");
+                    }
+                }
             }
         };
         Ok(())
