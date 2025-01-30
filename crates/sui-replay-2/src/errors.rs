@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::Node;
+use std::num::ParseIntError;
 use thiserror::Error;
 
 #[derive(Debug, Error, Clone)]
@@ -99,4 +100,9 @@ pub enum ReplayError {
     TransactionConversionError { id: String, err: String },
     #[error("Cannot convert transaction effects {}: {}", id, err)]
     TransactionEffectsConversionError { id: String, err: String },
+
+    #[error("Cannot convert DateTime millis (i64) to u64")]
+    DateTimeConversionError,
+    #[error("Failed to parse integer: {0}")]
+    ParseIntConversionError(#[from] ParseIntError),
 }

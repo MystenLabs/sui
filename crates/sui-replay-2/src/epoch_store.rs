@@ -5,6 +5,7 @@
 // Epoch store and API
 //
 
+use crate::gql_queries::EpochData;
 use crate::{data_store::DataStore, errors::ReplayError};
 use std::{cmp::Ordering, collections::BTreeMap};
 use sui_types::{
@@ -18,6 +19,7 @@ use tracing::debug;
 pub enum EpochStore {
     None,
     EpochInfoEager(EpochStoreEager),
+    EpochInfoEagerNew(EpochStoreEagerNew),
 }
 
 impl EpochStore {
@@ -27,7 +29,9 @@ impl EpochStore {
 
     pub async fn new(data_store: &DataStore) -> Result<Self, ReplayError> {
         debug!("Start load_epochs");
-        let epoch_store = data_store.epoch_store().await?;
+        // let epoch_store = data_store.epoch_store().await?;
+        let epoch_store = data_store.epoch_store_1().await?;
+        println!("Epoch store: {:?}", epoch_store);
         debug!("End load_epochs");
         Ok(epoch_store)
     }
@@ -36,6 +40,7 @@ impl EpochStore {
         match self {
             EpochStore::None => todo!("None EpochStore"),
             EpochStore::EpochInfoEager(eager) => eager.protocol_config(epoch, chain),
+            EpochStore::EpochInfoEagerNew(data) => data.protocol_config(epoch, chain),
         }
     }
 
@@ -43,6 +48,7 @@ impl EpochStore {
         match self {
             EpochStore::None => todo!("None EpochStore"),
             EpochStore::EpochInfoEager(eager) => eager.rgp(epoch),
+            EpochStore::EpochInfoEagerNew(eager) => eager.rgp(epoch),
         }
     }
 
@@ -50,6 +56,7 @@ impl EpochStore {
         match self {
             EpochStore::None => todo!("None EpochStore"),
             EpochStore::EpochInfoEager(eager) => eager.epoch_timestamp(epoch),
+            EpochStore::EpochInfoEagerNew(eager) => eager.epoch_timestamp(epoch),
         }
     }
 
@@ -57,7 +64,52 @@ impl EpochStore {
         match self {
             EpochStore::None => todo!("None EpochStore"),
             EpochStore::EpochInfoEager(eager) => eager.epoch_digest(epoch),
+            EpochStore::EpochInfoEagerNew(eager) => eager.epoch_digest(epoch),
         }
+    }
+}
+
+type EpochId = u64;
+
+#[derive(Debug)]
+pub struct EpochStoreEagerNew {
+    pub data: BTreeMap<EpochId, EpochData>,
+}
+
+impl EpochStoreEagerNew {
+    pub fn protocol_config(&self, epoch: u64, chain: Chain) -> Result<ProtocolConfig, ReplayError> {
+        let epoch = self
+            .data
+            .get(&epoch)
+            .ok_or(ReplayError::MissingProtocolConfigForEpoch { epoch })?;
+        Ok(ProtocolConfig::get_for_version(
+            ProtocolVersion::new(epoch.protocol_version),
+            chain,
+        ))
+    }
+
+    pub fn rgp(&self, epoch: u64) -> Result<u64, ReplayError> {
+        let epoch = self
+            .data
+            .get(&epoch)
+            .ok_or(ReplayError::MissingRGPForEpoch { epoch })?;
+        Ok(epoch.rgp)
+    }
+
+    pub fn epoch_timestamp(&self, epoch: u64) -> Result<u64, ReplayError> {
+        let epoch = self
+            .data
+            .get(&epoch)
+            .ok_or(ReplayError::MissingTimestampForEpoch { epoch })?;
+        Ok(epoch.start_timestamp)
+    }
+
+    pub fn epoch_digest(&self, epoch: u64) -> Result<TransactionDigest, ReplayError> {
+        let epoch = self
+            .data
+            .get(&epoch)
+            .ok_or(ReplayError::MissingDigestForEpoch { epoch })?;
+        Ok(epoch.last_tx_digest.into())
     }
 }
 
@@ -126,3 +178,4 @@ impl EpochStoreEager {
             .ok_or(ReplayError::MissingDigestForEpoch { epoch })
     }
 }
+
