@@ -1,3 +1,6 @@
+---
+
+---
 error[E04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:11:9
    │
@@ -159,4 +162,3 @@ error[E04016]: too few arguments
    │         │  │
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::baz'. The call expected 2 argument(s) but got 1
-

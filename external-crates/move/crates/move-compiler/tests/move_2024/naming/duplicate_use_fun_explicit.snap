@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_2024/naming/duplicate_use_fun_explicit.move:10:5
    │
@@ -24,4 +27,3 @@ error[E02001]: duplicate declaration, item, or annotation
    ·
 40 │     use fun foobaz as X.f;
    │     ^^^^^^^^^^^^^^^^^^^^^^ Duplicate 'use fun' for 'a::m3::X.f'
-

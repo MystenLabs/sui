@@ -1,3 +1,6 @@
+---
+
+---
 error[E04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:4:24
   │
@@ -52,4 +55,3 @@ error[E04024]: invalid usage of immutable variable
    │             │
    │             Invalid assignment of immutable variable 'x'
    │             The variable is assigned multiple times here in a loop
-

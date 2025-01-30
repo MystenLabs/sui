@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/recovery_parse_module_attributes.move:7:1
   │
@@ -50,4 +53,3 @@ error[E03002]: unbound module
    │
 27 │         0x42::M4::foo()
    │         ^^^^^^^^ Unbound module '0x42::M4'
-

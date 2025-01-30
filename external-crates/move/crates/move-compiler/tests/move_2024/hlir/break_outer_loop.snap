@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09005]: dead or unreachable code
    ┌─ tests/move_2024/hlir/break_outer_loop.move:14:13
    │
@@ -7,4 +10,3 @@ warning[W09005]: dead or unreachable code
    │             -------- Unreachable code. This statement (and any following statements) will not be executed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

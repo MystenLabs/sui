@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/sui_mode/id_leak/through_reference.move:11:10
    │
@@ -9,4 +12,3 @@ error[E05001]: ability constraint not satisfied
    ·
 17 │     struct UID has store {
    │            --- To satisfy the constraint, the 'drop' ability would need to be added here
-

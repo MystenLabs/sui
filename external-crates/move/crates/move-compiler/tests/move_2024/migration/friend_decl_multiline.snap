@@ -1,3 +1,6 @@
+---
+
+---
 error[E13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/migration/friend_decl_multiline.move:6:5
   │
@@ -9,4 +12,3 @@ error[E13002]: feature is deprecated in specified edition
    │
 14 │     friend a::c;
    │     ^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
-

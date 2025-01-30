@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/struct_type_missing_angle.move:3:37
   │
@@ -5,4 +8,3 @@ error[E01002]: unexpected token
   │             -                       ^ Expected '>'
   │             │                        
   │             To match this '<'
-

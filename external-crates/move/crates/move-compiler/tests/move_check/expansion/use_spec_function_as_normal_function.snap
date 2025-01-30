@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/expansion/use_spec_function_as_normal_function.move:3:5
   │  
@@ -36,4 +39,3 @@ error[E03005]: unbound unscoped name
    │
 13 │         baz();
    │         ^^^ Unbound function 'baz' in current scope
-

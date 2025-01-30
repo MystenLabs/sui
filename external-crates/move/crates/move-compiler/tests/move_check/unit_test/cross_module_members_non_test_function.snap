@@ -1,3 +1,6 @@
+---
+
+---
 error[E03004]: unbound type
    ┌─ tests/move_check/unit_test/cross_module_members_non_test_function.move:23:23
    │
@@ -9,4 +12,3 @@ error[E03002]: unbound module
    │
 24 │         A::build_foo()
    │         ^ Unbound module alias 'A'
-

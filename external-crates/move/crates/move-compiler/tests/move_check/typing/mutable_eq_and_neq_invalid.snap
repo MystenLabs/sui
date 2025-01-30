@@ -1,3 +1,6 @@
+---
+
+---
 error[E07002]: mutable ownership violated
   ┌─ tests/move_check/typing/mutable_eq_and_neq_invalid.move:7:21
   │
@@ -13,4 +16,3 @@ error[E07002]: mutable ownership violated
    │                 ----------- Field 'f' is still being mutably borrowed by this reference
 13 │         let comp = (&mut p.b1) != (&mut p.b2);
    │                     ^^^^^^^^^ Invalid freeze.
-

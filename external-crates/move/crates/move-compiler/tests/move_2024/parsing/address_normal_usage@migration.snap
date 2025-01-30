@@ -1,3 +1,6 @@
+---
+
+---
 --- tests/move_2024/parsing/address_normal_usage.move
 +++ tests/move_2024/parsing/address_normal_usage.move
 @@ -1,2 +1,2 @@

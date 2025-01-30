@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/verification/double_annotation.move:3:7
   │
@@ -21,4 +24,3 @@ warning[W00001]: DEPRECATED. will be removed
    │
 17 │     #[verify_only]
    │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
-

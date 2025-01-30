@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/module_call_visibility_friend_invalid.move:18:49
    │
@@ -24,4 +27,3 @@ error[E04001]: restricted visibility
    ·
 23 │     public(friend) fun f_friend_call_private_2() { Y::f_private() }
    │                                                    ^^^^^^^^^^^^^^ Invalid call to internal function '0x2::Y::f_private'
-

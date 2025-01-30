@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09003]: unused assignment
   ┌─ tests/move_2024/migration/let_mut_migrate.move:7:9
   │
@@ -66,4 +69,3 @@ error[E04024]: invalid usage of immutable variable
 16 │         x = x + 1;
 17 │         y = x + 1;
    │         ^ Invalid assignment of immutable variable 'y'
-

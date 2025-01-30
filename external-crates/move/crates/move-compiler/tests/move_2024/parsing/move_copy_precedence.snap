@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09003]: unused assignment
    ┌─ tests/move_2024/parsing/move_copy_precedence.move:11:13
    │
@@ -25,4 +28,3 @@ error[E04027]: invalid 'move' usage
    │
 16 │         &move s2.f;
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E02015]: invalid attribute
   ┌─ tests/move_check/unit_test/expected_failure_on_non_function.move:3:7
   │
@@ -24,4 +27,3 @@ error[E02015]: invalid attribute
   │       │
   │       Known attribute 'expected_failure' is not expected with a constant
   │       Expected to be used with one of the following: function
-

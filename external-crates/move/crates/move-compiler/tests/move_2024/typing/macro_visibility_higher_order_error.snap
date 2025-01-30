@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
    ┌─ tests/move_2024/typing/macro_visibility_higher_order_error.move:12:21
    │
@@ -27,4 +30,3 @@ error[E04001]: restricted visibility
    │
    = This visibility error occurs in a macro body while expanding the macros 'a::m::test' and 'a::l::test'
    = Visibility inside of expanded macros is resolved in the scope of the caller.
-

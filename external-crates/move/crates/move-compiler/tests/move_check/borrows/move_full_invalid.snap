@@ -1,3 +1,6 @@
+---
+
+---
 error[E07003]: invalid operation, could create dangling a reference
    ┌─ tests/move_check/borrows/move_full_invalid.move:13:9
    │
@@ -29,4 +32,3 @@ error[E07003]: invalid operation, could create dangling a reference
    │                 -------------- It is still being mutably borrowed by this reference
 28 │         move x;
    │         ^^^^^^ Invalid move of variable 'x'
-

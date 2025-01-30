@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/use_fun_unit.move:2:20
   │
@@ -6,4 +9,3 @@ error[E01002]: unexpected token
   │                    │
   │                    Unexpected '('
   │                    Expected a type name with no type arguments
-

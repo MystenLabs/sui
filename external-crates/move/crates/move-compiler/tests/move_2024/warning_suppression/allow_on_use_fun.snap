@@ -1,3 +1,6 @@
+---
+
+---
 error[E02015]: invalid attribute
   ┌─ tests/move_2024/warning_suppression/allow_on_use_fun.move:2:7
   │
@@ -15,4 +18,3 @@ error[E02017]: invalid 'use fun' declaration
 4 │     public struct X {}
 5 │     fun foo() {}
   │         --- But 'a::m::foo' takes no arguments
-

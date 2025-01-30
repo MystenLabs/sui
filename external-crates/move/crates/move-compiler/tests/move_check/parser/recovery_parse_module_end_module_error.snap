@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/recovery_parse_module_end_module_error.move:5:1
   │
@@ -17,4 +20,3 @@ error[E04007]: incompatible types
 9 │ │ │     }
   │ ╰─│─────^ Invalid return expression
   │   ╰─────' Given: '()'
-

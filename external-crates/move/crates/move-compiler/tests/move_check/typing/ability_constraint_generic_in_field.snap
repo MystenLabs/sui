@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/ability_constraint_generic_in_field.move:3:22
   │
@@ -23,4 +26,3 @@ error[E05001]: ability constraint not satisfied
    │                      │ │
    │                      │ The type 'T' does not have the ability 'copy'
    │                      'copy' constraint not satisifed
-

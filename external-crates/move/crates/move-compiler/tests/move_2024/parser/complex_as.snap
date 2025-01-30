@@ -1,3 +1,6 @@
+---
+
+---
 error[E04003]: built-in operation not supported
   ┌─ tests/move_2024/parser/complex_as.move:6:18
   │
@@ -5,4 +8,3 @@ error[E04003]: built-in operation not supported
   │                  ^    ------- Found: '0x42::m::Cup<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
   │                  │     
   │                  Invalid argument to 'as'
-

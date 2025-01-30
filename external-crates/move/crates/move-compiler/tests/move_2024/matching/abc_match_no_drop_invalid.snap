@@ -1,3 +1,6 @@
+---
+
+---
 error[E06001]: unused value without 'drop'
    ┌─ tests/move_2024/matching/abc_match_no_drop_invalid.move:10:27
    │    
@@ -26,4 +29,3 @@ error[E05001]: ability constraint not satisfied
    ·
 13 │             _ => 1,
    │             ^ Cannot ignore values without the 'drop' ability. '_' patterns discard their values
-

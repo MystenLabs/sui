@@ -1,3 +1,6 @@
+---
+
+---
 note[I15006]: IDE path autocomplete
   ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:1:1
   │  
@@ -89,4 +92,3 @@ note[I15001]: IDE dot autocomplete
   │
 6 │     &mut action.inner.bar
   │                 ^^^^^ Possible dot names: '0x42::m::make_action_ref' or 'inner'
-

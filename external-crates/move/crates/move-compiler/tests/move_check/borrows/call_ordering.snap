@@ -1,3 +1,6 @@
+---
+
+---
 error[E07002]: mutable ownership violated
   ┌─ tests/move_check/borrows/call_ordering.move:7:13
   │
@@ -13,4 +16,3 @@ error[E07003]: invalid operation, could create dangling a reference
    │             --------    ^^^^^^^ Invalid mutation of reference.
    │             │            
    │             It is still being mutably borrowed by this reference
-

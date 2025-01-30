@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/struct_field_missing_type.move:2:18
   │
@@ -6,4 +9,3 @@ error[E01002]: unexpected token
   │                  │
   │                  Unexpected '}'
   │                  Expected ':'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:7:9
   │
@@ -133,4 +136,3 @@ error[E05001]: ability constraint not satisfied
    │                │      │
    │                │      The type '0x8675309::M::Coin' does not have the ability 'drop'
    │                'drop' constraint not satisifed
-

@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_check/typing/unused_local.move:5:13
   │
@@ -77,4 +80,3 @@ warning[W09002]: unused variable
    │                                           ^ Unused parameter 'y'. Consider removing or prefixing with an underscore: '_y'
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

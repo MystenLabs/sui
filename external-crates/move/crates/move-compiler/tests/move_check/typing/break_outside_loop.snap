@@ -1,3 +1,6 @@
+---
+
+---
 error[E04014]: invalid loop control
   ┌─ tests/move_check/typing/break_outside_loop.move:6:9
   │
@@ -15,4 +18,3 @@ error[E04014]: invalid loop control
    │
 14 │         if (x >= 5) break;
    │                     ^^^^^ Invalid usage of 'break'. 'break' can only be used inside a loop body or lambda
-

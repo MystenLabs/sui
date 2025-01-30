@@ -1,3 +1,6 @@
+---
+
+---
 error[E04023]: invalid method call
    ┌─ tests/move_2024/typing/dot_call_fails_to_resolve_help.move:31:9
    │
@@ -15,4 +18,3 @@ error[E04023]: invalid method call
    ·
 32 │         p.len();
    │         ^^^^^^^ Invalid method call. No known method 'len' on type 'a::space::Point'
-

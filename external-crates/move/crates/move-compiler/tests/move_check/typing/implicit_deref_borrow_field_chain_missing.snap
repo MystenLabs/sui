@@ -1,3 +1,6 @@
+---
+
+---
 error[E03010]: unbound field
   ┌─ tests/move_check/typing/implicit_deref_borrow_field_chain_missing.move:7:9
   │
@@ -51,4 +54,3 @@ error[E04009]: expected specific type
    ·
 14 │         x1_mut.x2.x3.f.g;
    │         ^^^^^^^^^^^^^^^^ Unbound field 'g'
-

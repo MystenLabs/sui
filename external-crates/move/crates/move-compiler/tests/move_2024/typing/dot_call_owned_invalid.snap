@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_2024/typing/dot_call_owned_invalid.move:9:5
   │
@@ -30,4 +33,3 @@ error[E05001]: ability constraint not satisfied
    ·
 11 │     y2.x.f();
    │     ^^^^^^^^ Invalid implicit copy of field 'x' without the 'copy' ability
-

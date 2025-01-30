@@ -1,3 +1,6 @@
+---
+
+---
 error[E03005]: unbound unscoped name
   ┌─ tests/move_check/naming/unbound_constant.move:4:17
   │
@@ -21,4 +24,3 @@ error[E03003]: unbound module member
   │
 6 │         0 + CONSTANT + Self::CONSTANT;
   │                        ^^^^^^^^^^^^^^ Unbound module member 'CONSTANT' in current scope
-

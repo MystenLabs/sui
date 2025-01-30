@@ -1,3 +1,6 @@
+---
+
+---
 error[E03015]: unbound label
   ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:4:15
   │
@@ -57,4 +60,3 @@ error[E01002]: unexpected token
    │                  │
    │                  Unexpected ':'
    │                  Expected ';'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_check/parser/struct_public.move:3:5
   │
@@ -45,4 +48,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │                           --- Alias previously defined here
 5 │     public(package) struct Foo {}
   │                            ^^^ Duplicate module member or alias 'Foo'. Top level names in a namespace must be unique
-

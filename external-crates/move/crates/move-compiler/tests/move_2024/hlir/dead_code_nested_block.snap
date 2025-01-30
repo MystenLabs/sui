@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_2024/hlir/dead_code_nested_block.move:3:11
   │
@@ -26,4 +29,3 @@ warning[W09005]: dead or unreachable code
    │         - Unreachable code. This statement (and any following statements) will not be executed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

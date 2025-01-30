@@ -1,3 +1,6 @@
+---
+
+---
 warning[Lint W01012]: comparison operations condition can be simplified
   ┌─ tests/linter/true_positive_combinable_comparisons.move:4:9
   │
@@ -1133,4 +1136,3 @@ warning[Lint W01012]: comparison operations condition can be simplified
     │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '<='
     │
     = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

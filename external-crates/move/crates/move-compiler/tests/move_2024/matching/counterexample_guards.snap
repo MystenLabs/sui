@@ -1,3 +1,6 @@
+---
+
+---
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/counterexample_guards.move:9:16
   │
@@ -5,4 +8,3 @@ error[E04036]: non-exhaustive pattern
   │                ^^^^^^^^^^^^^^^ Pattern 'Option::Some(_)' not covered
   │
   = Match arms with guards are not considered for coverage.
-

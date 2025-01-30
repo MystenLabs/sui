@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_2024/matching/invalid_match_lhs.move:8:10
   │
@@ -14,4 +17,3 @@ error[E01002]: unexpected token
   │         │
   │         Unexpected '{'
   │         Expected a variable or struct name
-

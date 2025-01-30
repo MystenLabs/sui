@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
    ┌─ tests/move_2024/matching/invalid_or_binding_4.move:11:19
    │
@@ -25,4 +28,3 @@ error[E03019]: invalid pattern
    │         left or-pattern does not
    │
    = Both sides of an or-pattern must bind the same variables.
-

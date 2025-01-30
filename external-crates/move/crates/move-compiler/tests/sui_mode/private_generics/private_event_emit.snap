@@ -1,3 +1,6 @@
+---
+
+---
 error[Sui E02008]: invalid event
   ┌─ tests/sui_mode/private_generics/private_event_emit.move:8:9
   │
@@ -29,4 +32,3 @@ error[Sui E02008]: invalid event
    │                       --------- The type 'vector<a::m::X>' is not declared in the current module
 20 │         event::emit(move x)
    │         ^^^^^^^^^^^^^^^^^^^ Invalid event. The function 'sui::event::emit' must be called with a type defined in the current module
-

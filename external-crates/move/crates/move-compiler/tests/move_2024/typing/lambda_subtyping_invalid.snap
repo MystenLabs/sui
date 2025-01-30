@@ -1,3 +1,6 @@
+---
+
+---
 error[E04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_subtyping_invalid.move:12:9
    │
@@ -21,4 +24,3 @@ error[E04006]: invalid subtype
    │         │              │
    │         │              Given: '&u64'
    │         Invalid call of 'a::m::mut_ret'. Invalid argument for parameter '$f'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E07003]: invalid operation, could create dangling a reference
    ┌─ tests/move_check/borrows/assign_local_combo_invalid.move:14:9
    │
@@ -37,4 +40,3 @@ error[E07003]: invalid operation, could create dangling a reference
    │                 ---- It is still being borrowed by this reference
 49 │         if (cond) s = S { f: 0, g: 0 };
    │                   ^ Invalid assignment of variable 's'
-

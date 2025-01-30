@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
    ┌─ tests/move_2024/expansion/meaningless_copy_move.move:11:14
    │
@@ -133,4 +136,3 @@ error[E01013]: invalid 'move' or 'copy'
    │         ^^^^ - Expected a name or path access, e.g. 'x' or 'e.f'
    │         │     
    │         Invalid 'move' of expression
-

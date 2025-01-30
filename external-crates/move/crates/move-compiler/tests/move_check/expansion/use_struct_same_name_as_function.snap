@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/expansion/use_struct_same_name_as_function.move:10:9
    │
@@ -49,4 +52,3 @@ error[E02001]: duplicate declaration, item, or annotation
 14 │ 
 15 │     use 0x2::X::{R, R as R2};
    │                          ^^ Duplicate module member or alias 'R2'. Top level names in a namespace must be unique
-

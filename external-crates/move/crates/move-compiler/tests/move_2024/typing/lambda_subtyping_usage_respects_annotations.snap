@@ -1,3 +1,6 @@
+---
+
+---
 error[E04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_subtyping_usage_respects_annotations.move:15:10
    │
@@ -31,4 +34,3 @@ error[E04006]: invalid subtype
    │                       │      Invalid mutation. Expected a mutable reference
    │                       │      Expected: '&mut _'
    │                       Given: '&u64'
-

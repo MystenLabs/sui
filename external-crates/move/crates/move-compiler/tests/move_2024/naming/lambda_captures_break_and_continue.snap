@@ -1,3 +1,6 @@
+---
+
+---
 error[E04014]: invalid loop control
   ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:7:24
   │  
@@ -131,4 +134,3 @@ error[E04014]: invalid loop control
    │ ╰─│─────────────' Inside this lambda
 41 │   │         }
    │   ╰─────────' To 'continue' to this loop, specify the label, e.g. `continue 'b`
-

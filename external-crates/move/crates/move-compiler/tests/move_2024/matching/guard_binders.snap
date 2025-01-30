@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
    ┌─ tests/move_2024/matching/guard_binders.move:19:32
    │
@@ -15,4 +18,3 @@ error[E01002]: unexpected token
    │                                │
    │                                Unexpected 'n'
    │                                Expected '('
-

@@ -1,3 +1,6 @@
+---
+
+---
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_macros.move:10:37
    │
@@ -117,4 +120,3 @@ warning[W04037]: deprecated usage
    │                             ^ The struct '0x42::m::X' is deprecated
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

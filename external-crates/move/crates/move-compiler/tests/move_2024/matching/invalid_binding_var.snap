@@ -1,3 +1,6 @@
+---
+
+---
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/invalid_binding_var.move:8:16
   │
@@ -11,4 +14,3 @@ error[E02010]: invalid name
   │                          ^^^^^ Invalid pattern variable name 'Hello'. Pattern variable names must start with 'a'..'z' or '_'
   │
   = The compiler may have failed to resolve this constant's name
-

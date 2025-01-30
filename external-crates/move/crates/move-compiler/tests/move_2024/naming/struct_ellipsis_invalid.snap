@@ -1,3 +1,6 @@
+---
+
+---
 error[E03013]: positional call mismatch
   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:6:13
   │
@@ -79,4 +82,3 @@ error[E03013]: positional call mismatch
    ·
 26 │         let X{} = x;
    │             ^^^ Invalid struct deconstruction. Positional struct declarations require positional deconstructions
-

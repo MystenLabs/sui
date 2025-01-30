@@ -1,3 +1,6 @@
+---
+
+---
 error[E10003]: invalid attribute value
   ┌─ tests/move_check/unit_test/expected_failure_bad_value.move:7:24
   │
@@ -42,4 +45,3 @@ error[E10003]: invalid attribute value
    │                        │          │
    │                        │          Unsupported value in this assignment
    │                        Invalid value in attribute assignment
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04016]: too few arguments
   ┌─ tests/move_2024/parser/invalid_macro_bang_no_args.move:3:17
   │
@@ -14,4 +17,3 @@ error[E01002]: unexpected token
   │                     │
   │                     Unexpected ';'
   │                     Expected '('
-

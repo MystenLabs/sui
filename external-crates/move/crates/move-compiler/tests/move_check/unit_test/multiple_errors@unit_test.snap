@@ -1,3 +1,6 @@
+---
+
+---
 error[E10005]: unable to generate test
    ┌─ tests/move_check/unit_test/multiple_errors.move:19:7
    │
@@ -85,4 +88,3 @@ error[E02001]: duplicate declaration, item, or annotation
    │       ---------------- Attribute previously given here
 42 │     #[expected_failure]
    │       ^^^^^^^^^^^^^^^^ Duplicate attribute 'expected_failure' attached to the same item
-

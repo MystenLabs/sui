@@ -1,3 +1,6 @@
+---
+
+---
 error[E04034]: 'syntax' method types differ
   ┌─ tests/move_2024/typing/index_call_incompatible_constraints.move:6:15
   │
@@ -36,4 +39,3 @@ error[E04034]: 'syntax' method types differ
    │                    - This mutable index function type parameter does not
    │
    = Index operations on use the same abilities for their type parameters
-

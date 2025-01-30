@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/while_body_invalid.move:3:22
   │
@@ -47,4 +50,3 @@ error[E04007]: incompatible types
   │                      │                  Given: integer
   │                      Invalid loop body
   │                      Expected: '()'
-

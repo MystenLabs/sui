@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09006]: unused struct type parameter
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:2:14
   │
@@ -93,4 +96,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │               -                ^ Duplicate type parameter declared with name 'T'
   │               │                 
   │               Type parameter previously defined here
-

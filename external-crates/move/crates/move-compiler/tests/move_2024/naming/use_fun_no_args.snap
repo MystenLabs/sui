@@ -1,3 +1,6 @@
+---
+
+---
 error[E02017]: invalid 'use fun' declaration
   ┌─ tests/move_2024/naming/use_fun_no_args.move:6:5
   │
@@ -6,4 +9,3 @@ error[E02017]: invalid 'use fun' declaration
 5 │ 
 6 │     use fun no as Y.no;
   │     ^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::Y.no'. Expected a 'a::m::Y' type as the first argument (either by reference '&' '&mut' or by value)
-

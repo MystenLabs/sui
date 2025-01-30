@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/borrow_field_non_ref_non_local_root.move:9:22
    │
@@ -9,4 +12,3 @@ error[E05001]: ability constraint not satisfied
    ·
 12 │     fun foo(): &S {
    │                 - The type '0x8675309::M::S' does not have the ability 'copy'
-

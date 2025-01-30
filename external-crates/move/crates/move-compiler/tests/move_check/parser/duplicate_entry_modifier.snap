@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/parser/duplicate_entry_modifier.move:2:11
   │
@@ -5,4 +8,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │     ----- ^^^^^ Duplicate 'entry' modifier
   │     │      
   │     'entry' modifier previously given here
-

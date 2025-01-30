@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/seq_cannot_ignore_resource.move:5:9
   │
@@ -54,4 +57,3 @@ error[E06001]: unused value without 'drop'
    │             The local variable 'r' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
 19 │         if (true) (0, false, R{}) else (0, false, r);
    │                                                     ^ Invalid return
-

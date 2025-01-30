@@ -1,3 +1,6 @@
+---
+
+---
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/ide_mode/missing_match_enum.move:10:16
    │
@@ -58,4 +61,3 @@ note[I15004]: IDE missing match arms
 30 │ │             E::Two(n) => *n
 31 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::One'
-

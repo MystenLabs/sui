@@ -1,3 +1,6 @@
+---
+
+---
 error[E01016]: invalid name
   ┌─ tests/move_check/parser/invalid_tyarg_locs.move:6:10
   │
@@ -57,4 +60,3 @@ error[E01002]: unexpected token
    │                  │
    │                  Unexpected '::'
    │                  Expected an expression term
-

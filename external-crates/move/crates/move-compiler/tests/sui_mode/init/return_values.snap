@@ -1,3 +1,6 @@
+---
+
+---
 error[Sui E02003]: invalid 'init' function
   ┌─ tests/sui_mode/init/return_values.move:4:9
   │
@@ -5,4 +8,3 @@ error[Sui E02003]: invalid 'init' function
   │         ^^^^                                 --- 'init' functions must have a return type of '()'
   │         │                                     
   │         Invalid 'init' function declaration
-

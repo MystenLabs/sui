@@ -1,3 +1,6 @@
+---
+
+---
 warning[Lint W02008]: assignment preserves the same value
   ┌─ tests/linter/true_positive_self_assignment.move:5:9
   │
@@ -315,4 +318,3 @@ warning[Lint W01009]: redundant reference/dereference
    │                   ^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

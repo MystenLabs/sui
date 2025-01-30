@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09001]: unused alias
   ┌─ tests/move_2024/parser/use_fun_type_args.move:3:5
   │
@@ -21,4 +24,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │         ^^^       ---- Function declarations create an implicit 'use fun' when their first argument is a type defined in the same module
   │         │          
   │         Duplicate 'use fun' for 'a::m::X.foo'
-

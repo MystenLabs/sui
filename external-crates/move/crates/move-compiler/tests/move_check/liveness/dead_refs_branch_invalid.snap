@@ -1,3 +1,6 @@
+---
+
+---
 error[E07002]: mutable ownership violated
   ┌─ tests/move_check/liveness/dead_refs_branch_invalid.move:8:13
   │
@@ -33,4 +36,3 @@ error[E07003]: invalid operation, could create dangling a reference
    ·
 21 │         _ = move x;
    │             ^^^^^^ Invalid move of variable 'x'
-

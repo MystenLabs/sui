@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/expansion/duplicate_abilities.move:4:26
   │
@@ -21,4 +24,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │                -----   ^^^^^ Duplicate 'store' ability constraint
   │                │        
   │                Ability previously given here
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/function_params_missing.move:3:12
   │
@@ -6,4 +9,3 @@ error[E01002]: unexpected token
   │            │
   │            Unexpected '{'
   │            Expected '('
-

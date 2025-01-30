@@ -1,3 +1,6 @@
+---
+
+---
 error[E03004]: unbound type
   ┌─ tests/move_2024/parser/positional_struct_fields_non_type_field.move:3:23
   │
@@ -12,4 +15,3 @@ error[E01002]: unexpected token
   │                           │
   │                           Unexpected 'a'
   │                           Expected ',' or ')'
-

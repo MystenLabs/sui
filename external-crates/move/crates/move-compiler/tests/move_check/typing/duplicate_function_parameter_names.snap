@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_check/typing/duplicate_function_parameter_names.move:2:13
   │
@@ -21,4 +24,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │             -       ^ Duplicate parameter with name 'x'
   │             │        
   │             Previously declared here
-

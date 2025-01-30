@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09009]: unused struct field
   ┌─ tests/move_2024/ide_mode/method_and_field_autocomplete.move:6:23
   │
@@ -113,4 +116,3 @@ note[I15001]: IDE dot autocomplete
    │
 24 │         let _ = &in.0.0.0.d ;
    │                           ^ Possible dot names: 'a::m::for_c_0', 'a::m::for_c_1', 'c', or 'd'
-

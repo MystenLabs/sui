@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
    ┌─ tests/move_2024/matching/enum_visibility.move:15:13
    │
@@ -6,4 +9,3 @@ error[E04001]: restricted visibility
    ·
 15 │             m::E::A(t) => t,
    │             ^^^^^^^^^^ Enum variant '0x42::m::E::A' can only be matched within its defining module '0x42::m'
-

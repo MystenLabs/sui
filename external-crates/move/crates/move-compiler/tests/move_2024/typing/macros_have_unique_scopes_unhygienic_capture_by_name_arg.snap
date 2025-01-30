@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture_by_name_arg.move:4:23
    │
@@ -45,4 +48,3 @@ error[E04007]: incompatible types
    ·
 19 │         let x = vector<u64>[];
    │                 ------------- Given: 'vector<u64>'
-

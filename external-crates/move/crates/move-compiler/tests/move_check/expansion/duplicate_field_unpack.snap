@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/expansion/duplicate_field_unpack.move:4:13
   │
@@ -7,4 +10,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │             │   │  Duplicate binding given for field 'f'
   │             │   Field previously defined here
   │             Invalid deconstruction binding
-

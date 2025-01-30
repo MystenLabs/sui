@@ -1,3 +1,6 @@
+---
+
+---
 error[E03011]: invalid use of reserved name
   ┌─ tests/move_check/expansion/restricted_function_names.move:2:9
   │
@@ -51,4 +54,3 @@ error[E03011]: invalid use of reserved name
    │
 10 │     fun Self() { abort 0}
    │         ^^^^ Invalid function name 'Self'. 'Self' is restricted and cannot be used to name a function
-

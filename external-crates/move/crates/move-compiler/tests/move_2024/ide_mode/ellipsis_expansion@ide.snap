@@ -1,3 +1,6 @@
+---
+
+---
 note[I15005]: IDE ellipsis expansion
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:17:15
    │
@@ -75,4 +78,3 @@ note[I15005]: IDE ellipsis expansion
    │
 33 │             C::Y { .. } => ()
    │                    ^^ Ellipsis expansion: y: _, z: _
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:2:73
    │
@@ -113,4 +116,3 @@ error[E04007]: incompatible types
 27 │ │             || (b"hello", b"world"),
 28 │ │         );
    │ ╰─────────^ Invalid call of 'a::m::foo'. Invalid argument for parameter '$g'
-

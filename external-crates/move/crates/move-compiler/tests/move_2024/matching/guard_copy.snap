@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
    ┌─ tests/move_2024/matching/guard_copy.move:17:32
    │
@@ -6,4 +9,3 @@ error[E01002]: unexpected token
    │                                │
    │                                Unexpected 'check_s'
    │                                Expected '('
-

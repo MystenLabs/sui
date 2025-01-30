@@ -1,3 +1,6 @@
+---
+
+---
 --- tests/move_2024/parsing/address_weird_formatting.move
 +++ tests/move_2024/parsing/address_weird_formatting.move
 @@ -1 +1 @@

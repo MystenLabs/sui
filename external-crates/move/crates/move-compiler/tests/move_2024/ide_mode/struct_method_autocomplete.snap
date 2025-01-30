@@ -1,3 +1,6 @@
+---
+
+---
 warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:1:9
   │
@@ -21,4 +24,3 @@ error[E01002]: unexpected token
    │                        │
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
-

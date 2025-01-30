@@ -1,3 +1,6 @@
+---
+
+---
 error[E02015]: invalid attribute
   ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:5:7
   │
@@ -29,4 +32,3 @@ error[E02001]: duplicate declaration, item, or annotation
    │              -----  ^^^^^ Duplicate attribute 'index' attached to the same item
    │              │       
    │              Attribute previously given here
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/less_than_space.move:5:16
   │
@@ -20,4 +23,3 @@ error[E01002]: unexpected token
   │                            │
   │                            Unexpected ';'
   │                            Expected ')'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E03011]: invalid use of reserved name
   ┌─ tests/move_check/expansion/restricted_address_names.move:1:8
   │
@@ -9,4 +12,3 @@ error[E03011]: invalid use of reserved name
   │
 2 │ module vector::A {}
   │        ^^^^^^ Invalid address name 'vector'. 'vector' is restricted and cannot be used to name an address
-

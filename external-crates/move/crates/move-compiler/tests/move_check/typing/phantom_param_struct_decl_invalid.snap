@@ -1,3 +1,6 @@
+---
+
+---
 error[E02013]: invalid phantom type parameter usage
   ┌─ tests/move_check/typing/phantom_param_struct_decl_invalid.move:4:12
   │
@@ -53,4 +56,3 @@ error[E05001]: ability constraint not satisfied
    │            │  │
    │            │  The type 'T' does not have the ability 'copy'
    │            'copy' constraint not satisifed
-

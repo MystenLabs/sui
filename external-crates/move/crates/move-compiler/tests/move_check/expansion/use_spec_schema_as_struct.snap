@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/expansion/use_spec_schema_as_struct.move:3:5
   │  
@@ -20,4 +23,3 @@ error[E03004]: unbound type
    │
 10 │     fun t(): Foo<u64> {
    │              ^^^ Unbound type 'Foo' in current scope
-

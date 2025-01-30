@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/constraints_not_satisfied_function_return_type.move:5:17
   │
@@ -11,4 +14,3 @@ error[E05001]: ability constraint not satisfied
   │                 │    │
   │                 │    The type '0x8675309::M::R' does not have the ability 'copy'
   │                 'copy' constraint not satisifed
-

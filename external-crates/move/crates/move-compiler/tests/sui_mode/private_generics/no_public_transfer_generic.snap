@@ -1,3 +1,6 @@
+---
+
+---
 error[Sui E02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer_generic.move:10:9
    │
@@ -29,4 +32,3 @@ error[Sui E02009]: invalid private transfer call
    │                                                     - The type 'T' is not declared in the current module
 22 │         transfer::receive(p, s)
    │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::receive' is restricted to being called in the object's module
-

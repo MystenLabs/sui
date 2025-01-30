@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09005]: dead or unreachable code
    ┌─ tests/move_2024/typing/unused_macro_arg.move:12:17
    │
@@ -29,4 +32,3 @@ warning[W09005]: dead or unreachable code
    │                                        ^^^^^ Unused macro argument. Its expression will not be type checked and it will not evaluated
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

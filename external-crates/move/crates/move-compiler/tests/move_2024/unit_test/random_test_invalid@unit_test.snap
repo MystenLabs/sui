@@ -1,3 +1,6 @@
+---
+
+---
 error[E10005]: unable to generate test
   ┌─ tests/move_2024/unit_test/random_test_invalid.move:4:7
   │
@@ -63,4 +66,3 @@ error[E10005]: unable to generate test
    │         Error found in this test
    │
    = Supported builti-in types are: bool, u8, u16, u32, u64, u128, u256, address, and vector<T> where T is a built-in type
-

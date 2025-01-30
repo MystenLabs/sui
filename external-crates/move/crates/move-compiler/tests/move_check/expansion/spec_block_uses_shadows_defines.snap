@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/expansion/spec_block_uses_shadows_defines.move:10:5
    │  
@@ -9,4 +12,3 @@ warning[W00001]: DEPRECATED. will be removed
 16 │ │         ensures exists<S<u64>>(0x1) == exists<R>(0x1);
 17 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
-

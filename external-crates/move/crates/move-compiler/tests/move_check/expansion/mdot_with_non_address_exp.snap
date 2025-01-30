@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:9:13
   │
@@ -41,4 +44,3 @@ error[E01002]: unexpected token
    │                      │
    │                      Unexpected '::'
    │                      Expected ';'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
   ┌─ tests/move_check/typing/pack_unpack_private.move:8:9
   │
@@ -15,4 +18,3 @@ error[E04001]: restricted visibility
    ·
 11 │         let C::T {} = c;
    │             ^^^^^^^ Struct '0x43::C::T' can only be used in deconstruction binding within its defining module '0x43::C'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E06001]: unused value without 'drop'
    ┌─ tests/move_check/typing/bind_unpack_references.move:16:14
    │
@@ -27,4 +30,3 @@ error[E06001]: unused value without 'drop'
    ·
 23 │         f; s2;
    │              ^ Invalid return
-

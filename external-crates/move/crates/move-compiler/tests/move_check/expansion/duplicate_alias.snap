@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09001]: unused alias
   ┌─ tests/move_check/expansion/duplicate_alias.move:8:19
   │
@@ -13,4 +16,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │                   - Alias previously defined here
 8 │     use 0x2::Y as Z;
   │                   ^ Duplicate module alias 'Z'. Module aliases must be unique within a given namespace
-

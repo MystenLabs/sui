@@ -1,3 +1,6 @@
+---
+
+---
 error[E01006]: invalid number literal
   ┌─ tests/move_check/expansion/number_literal_too_long.move:3:9
   │
@@ -9,4 +12,3 @@ error[E01006]: invalid number literal
   │
 4 │         340282366920938463463374607431768211456340282366920938463463374607431768211456340282366920938463463374607431768211456;
   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. The given literal is too large to fit into the largest possible integer type, 'u256'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/index_call_constraints_unsatisfied.move:18:18
    │
@@ -239,4 +242,3 @@ error[E05001]: ability constraint not satisfied
 44 │     let _b_val = &b[];
 45 │     let _mb_val = &mut mb[];
    │                        ^^^^ 'drop' constraint not satisifed
-

@@ -1,3 +1,6 @@
+---
+
+---
 note[I15006]: IDE path autocomplete
   ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:1:1
   │  
@@ -138,4 +141,3 @@ error[E01002]: unexpected token
    ·
 14 │ 
    │ ^ Expected ')'
-

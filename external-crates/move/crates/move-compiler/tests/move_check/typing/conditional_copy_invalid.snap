@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_copy_invalid.move:15:16
    │
@@ -107,4 +110,3 @@ error[E05001]: ability constraint not satisfied
    │                  The type '0x42::M::Pair<0x42::M::R, 0x42::M::S>' does not have the ability 'copy'
 35 │         ignore(*x);
    │                ^^ Invalid dereference. Dereference requires the 'copy' ability
-

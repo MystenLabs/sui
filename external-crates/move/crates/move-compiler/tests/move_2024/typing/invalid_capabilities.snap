@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_2024/typing/invalid_capabilities.move:8:37
   │
@@ -141,4 +144,3 @@ error[E05001]: ability constraint not satisfied
    │            │
    │            Invalid field type. The enum was declared with the ability 'store' so all fields require the ability 'store'
    │            The type '0x42::m::Nothing' does not have the ability 'store'
-

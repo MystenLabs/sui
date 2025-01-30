@@ -1,3 +1,6 @@
+---
+
+---
 error[E03002]: unbound module
   ┌─ tests/move_2024/expansion/unbound_named_address.move:3:9
   │
@@ -53,4 +56,3 @@ error[E03001]: address with no value
    │
 16 │         let a = @I; a; // suggests declaration
    │                  ^ address 'I' is not assigned a value. Try assigning it a value when calling the compiler
-

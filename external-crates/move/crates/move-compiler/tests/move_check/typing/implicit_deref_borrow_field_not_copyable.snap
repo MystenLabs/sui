@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/implicit_deref_borrow_field_not_copyable.move:8:15
   │
@@ -21,4 +24,3 @@ error[E05001]: ability constraint not satisfied
    ·
 11 │         R{} = bref.r;
    │               ^^^^^^ Invalid implicit copy of field 'r' without the 'copy' ability
-

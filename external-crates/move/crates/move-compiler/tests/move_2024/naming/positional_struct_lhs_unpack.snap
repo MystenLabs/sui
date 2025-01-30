@@ -1,3 +1,6 @@
+---
+
+---
 error[E03009]: unbound variable
   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:6:13
   │
@@ -231,4 +234,3 @@ error[E03010]: unbound field
    │
 28 │         let Bar(_, _) = x;
    │             ^^^^^^^^^ Unbound field '1' in '0x42::M::Bar'
-

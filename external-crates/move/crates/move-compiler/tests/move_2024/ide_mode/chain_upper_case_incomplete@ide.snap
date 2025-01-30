@@ -1,3 +1,6 @@
+---
+
+---
 note[I15006]: IDE path autocomplete
   ┌─ tests/move_2024/ide_mode/chain_upper_case_incomplete.move:1:1
   │  
@@ -31,4 +34,3 @@ error[E03006]: unexpected name in this position
   │
 5 │         B
   │         ^ Expected a type, function, or constant in this position, not an address
-

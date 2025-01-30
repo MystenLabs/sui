@@ -1,3 +1,6 @@
+---
+
+---
 error[E03011]: invalid use of reserved name
   ┌─ tests/move_2024/expansion/restricted_module_alias_names.move:3:20
   │
@@ -12,4 +15,3 @@ warning[W09001]: unused alias
   │
   = This alias does not shadow the built-in type 'vector' in type annotations.
   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

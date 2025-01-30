@@ -1,3 +1,6 @@
+---
+
+---
 error[E07003]: invalid operation, could create dangling a reference
    ┌─ tests/move_2024/matching/bad_guard_3.move:16:20
    │
@@ -6,4 +9,3 @@ error[E07003]: invalid operation, could create dangling a reference
 15 │             Option::None => 0,
 16 │             _ if ({*o = Option::None; false}) => 1,
    │                    ^^^^^^^^^^^^^^^^^ Invalid mutation of reference.
-

@@ -1,3 +1,6 @@
+---
+
+---
 --- tests/move_2024/migration/let_mut_migrate.move
 +++ tests/move_2024/migration/let_mut_migrate.move
 @@ -3,3 +3,3 @@

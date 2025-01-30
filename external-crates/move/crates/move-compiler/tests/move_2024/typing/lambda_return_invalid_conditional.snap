@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:7:18
   │
@@ -69,4 +72,3 @@ error[E04010]: cannot infer type
    │
 12 │         call!(|| { if (cond) (vector[], 0, false) else return (vector[0], true) });
    │                               ^^^^^^^^ Could not infer this type. Try adding an annotation
-

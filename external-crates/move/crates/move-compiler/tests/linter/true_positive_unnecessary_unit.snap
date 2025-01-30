@@ -1,3 +1,6 @@
+---
+
+---
 warning[Lint W04010]: unit `()` expression can be removed or simplified
   ┌─ tests/linter/true_positive_unnecessary_unit.move:6:16
   │
@@ -148,4 +151,3 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │           ^^ Unnecessary unit in sequence '();'. Consider removing
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

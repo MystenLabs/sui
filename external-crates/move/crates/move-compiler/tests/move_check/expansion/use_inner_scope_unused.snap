@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09001]: unused alias
    ┌─ tests/move_check/expansion/use_inner_scope_unused.move:13:23
    │
@@ -21,4 +24,3 @@ warning[W09001]: unused alias
    │                                        ^^ Unused 'use' of alias 'S8'. Consider removing it
    │
    = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

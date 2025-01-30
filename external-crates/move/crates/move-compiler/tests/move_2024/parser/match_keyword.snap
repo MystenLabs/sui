@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/match_keyword.move:2:9
   │
@@ -6,4 +9,3 @@ error[E01002]: unexpected token
   │         │
   │         Unexpected 'match'
   │         Expected an identifier
-

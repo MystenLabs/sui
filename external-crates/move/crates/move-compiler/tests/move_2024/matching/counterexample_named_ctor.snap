@@ -1,3 +1,6 @@
+---
+
+---
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/counterexample_named_ctor.move:9:16
   │
@@ -31,4 +34,3 @@ error[E04036]: non-exhaustive pattern
    │                ^^^^ Pattern 'Pair::P { one: _, two: _0 }' not covered
    │
    = When '_0' is not 0
-

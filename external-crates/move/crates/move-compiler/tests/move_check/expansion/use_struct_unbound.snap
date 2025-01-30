@@ -1,3 +1,6 @@
+---
+
+---
 error[E03003]: unbound module member
   ┌─ tests/move_check/expansion/use_struct_unbound.move:6:17
   │
@@ -12,4 +15,3 @@ error[E03004]: unbound type
   │
 8 │     struct X { f: S }
   │                   ^ Unbound type 'S' in current scope
-

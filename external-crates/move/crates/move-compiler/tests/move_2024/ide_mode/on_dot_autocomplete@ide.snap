@@ -1,3 +1,6 @@
+---
+
+---
 note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:21:10
    │
@@ -102,4 +105,3 @@ note[I15001]: IDE dot autocomplete
    │
 23 │         c.b.a.b();        // unresolved method name
    │               ^ Possible dot names: 'a::m::bar' or 'x'
-

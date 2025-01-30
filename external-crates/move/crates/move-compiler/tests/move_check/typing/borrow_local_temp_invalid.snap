@@ -1,3 +1,6 @@
+---
+
+---
 error[E04004]: expected a single non-reference type
   ┌─ tests/move_check/typing/borrow_local_temp_invalid.move:3:9
   │
@@ -60,4 +63,3 @@ error[E04004]: expected a single non-reference type
    │         │    │
    │         │    Expected a single non-reference type, but found: '&mut u64'
    │         Invalid borrow
-

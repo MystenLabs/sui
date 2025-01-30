@@ -1,3 +1,6 @@
+---
+
+---
 error[E03004]: unbound type
   ┌─ tests/move_check/parser/type_mut_space.move:5:26
   │
@@ -12,4 +15,3 @@ error[E01002]: unexpected token
   │                              │
   │                              Unexpected 'S'
   │                              Expected ',' or ')'
-

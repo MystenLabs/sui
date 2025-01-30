@@ -1,3 +1,6 @@
+---
+
+---
 error[E04005]: expected a single type
    ┌─ tests/move_2024/parser/labeled_control_exp_associativity_else_after_if_block.move:13:9
    │
@@ -34,4 +37,3 @@ error[E01002]: unexpected token
    │                                │
    │                                Unexpected 'else'
    │                                Expected ';'
-

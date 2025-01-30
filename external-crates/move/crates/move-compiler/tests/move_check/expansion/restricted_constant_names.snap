@@ -1,3 +1,6 @@
+---
+
+---
 error[E02010]: invalid name
   ┌─ tests/move_check/expansion/restricted_constant_names.move:5:11
   │
@@ -51,4 +54,3 @@ error[E03011]: invalid use of reserved name
    │
 14 │     const Self: u64 = 0;
    │           ^^^^ Invalid constant name 'Self'. 'Self' is restricted and cannot be used to name a constant
-

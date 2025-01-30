@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
    ┌─ tests/move_2024/matching/invalid_or_types_4.move:11:30
    │
@@ -8,4 +11,3 @@ error[E04007]: incompatible types
    ·
 11 │         E::X { x: y } | E::Y(y) | E::Z { z: y } => *y
    │                              ^ Invalid pattern field type
-

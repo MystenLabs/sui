@@ -1,3 +1,6 @@
+---
+
+---
 error[Sui E02007]: invalid object declaration
   ┌─ tests/sui_mode/struct_with_key/key_struct_second_field_id.move:6:9
   │
@@ -13,4 +16,3 @@ error[Sui E02007]: invalid object declaration
    │                  --- The 'key' ability is used to declare objects in Sui
 11 │         flag: bool,
    │         ^^^^ Invalid object 'R'. Structs with the 'key' ability must have 'id: sui::object::UID' as their first field
-

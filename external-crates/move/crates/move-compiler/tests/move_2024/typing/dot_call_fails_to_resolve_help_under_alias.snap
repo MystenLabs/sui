@@ -1,3 +1,6 @@
+---
+
+---
 error[E04023]: invalid method call
    ┌─ tests/move_2024/typing/dot_call_fails_to_resolve_help_under_alias.move:34:9
    │
@@ -15,4 +18,3 @@ error[E04023]: invalid method call
    │         │ │
    │         │ No local 'use fun' alias was found for 'a::space::Point.l', and no function 'l' was found in the defining module 'a::space'
    │         Invalid method call. No known method 'l' on type 'a::space::Point'
-

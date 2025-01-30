@@ -1,3 +1,6 @@
+---
+
+---
 error[E04003]: built-in operation not supported
   ┌─ tests/move_check/typing/cast_invalid.move:6:10
   │
@@ -271,4 +274,3 @@ error[E04003]: built-in operation not supported
    │         │
    │         Invalid argument to 'as'
    │         Found: 'vector<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-

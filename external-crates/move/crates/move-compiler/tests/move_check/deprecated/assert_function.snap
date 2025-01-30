@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/deprecated/assert_function.move:3:9
   │
@@ -5,4 +8,3 @@ warning[W00001]: DEPRECATED. will be removed
   │         ^^^^^^^^^^^^^^^^ 'assert' function syntax has been deprecated and will be removed
   │
   = Replace with 'assert!'. 'assert' has been replaced with a 'assert!' built-in macro so that arguments are no longer eagerly evaluated
-

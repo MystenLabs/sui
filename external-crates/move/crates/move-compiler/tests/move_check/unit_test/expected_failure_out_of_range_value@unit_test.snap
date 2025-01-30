@@ -1,3 +1,6 @@
+---
+
+---
 warning[W10007]: issue with attribute value
   ┌─ tests/move_check/unit_test/expected_failure_out_of_range_value.move:6:24
   │
@@ -22,4 +25,3 @@ error[E10003]: invalid attribute value
    │                        │          │
    │                        │          Unsupported value in this assignment
    │                        Invalid value in attribute assignment
-

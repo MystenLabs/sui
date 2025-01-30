@@ -1,3 +1,6 @@
+---
+
+---
 warning[Lint W99002]: potentially unenforceable custom transfer/share/freeze policy
    ┌─ tests/sui_mode/linter/custom_state_change.move:15:16
    │
@@ -36,4 +39,3 @@ warning[Lint W99002]: potentially unenforceable custom transfer/share/freeze pol
    │
    = A custom freeze policy for a given type is implemented through calling the private 'freeze_object' function variant in the module defining this type
    = This warning can be suppressed with '#[allow(lint(custom_state_change))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

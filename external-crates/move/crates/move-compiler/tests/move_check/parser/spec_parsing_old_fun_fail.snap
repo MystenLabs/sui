@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/spec_parsing_old_fun_fail.move:5:10
   │
@@ -15,4 +18,3 @@ warning[W00001]: DEPRECATED. will be removed
 6 │ │       aborts_if x == 0;
 7 │ │     }
   │ ╰─────^ Specification blocks are deprecated and are no longer used
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04019]: cyclic type instantiation
    ┌─ tests/move_check/translated_ir_tests/move/generics/instantiation_loops/mutually_recursive_three_args_type_con_shifting.move:9:9
    │
@@ -23,4 +26,3 @@ error[E04019]: cyclic type instantiation
    │         'h<_, _, h::T3>' calls 'f<_, _, h::T3>'
    │         'h<h::T3, _, _>' calls 'f<h::T3, _, _>'
    │         'h<_, h::T3, _>' calls 'f<_, h::T3, _>'
-

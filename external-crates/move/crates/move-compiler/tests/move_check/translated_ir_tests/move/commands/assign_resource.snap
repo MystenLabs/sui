@@ -1,3 +1,6 @@
+---
+
+---
 error[E06001]: unused value without 'drop'
   ┌─ tests/move_check/translated_ir_tests/move/commands/assign_resource.move:6:9
   │
@@ -23,4 +26,3 @@ error[E06001]: unused value without 'drop'
   │         -           ^ Invalid return
   │         │            
   │         The local variable 't' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
-

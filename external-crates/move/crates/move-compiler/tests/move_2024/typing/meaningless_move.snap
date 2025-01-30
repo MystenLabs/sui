@@ -1,3 +1,6 @@
+---
+
+---
 error[E04012]: invalid type for constant
   ┌─ tests/move_2024/typing/meaningless_move.move:2:16
   │
@@ -58,4 +61,3 @@ error[E01013]: invalid 'move' or 'copy'
    │         ^^^^ ------ Expected a name or path access, e.g. 'x' or 'e.f'
    │         │     
    │         Invalid 'move' of expression
-

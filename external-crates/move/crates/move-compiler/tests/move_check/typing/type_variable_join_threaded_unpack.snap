@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/type_variable_join_threaded_unpack.move:39:42
    │
@@ -9,4 +12,3 @@ error[E05001]: ability constraint not satisfied
    ·
 39 │         Container::put(&mut v, Box { f1: *&f1, f2 });
    │                                          ^^^^ Invalid dereference. Dereference requires the 'copy' ability
-

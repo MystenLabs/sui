@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
    ┌─ tests/move_2024/typing/index_fun_invalid_visibility.move:44:19
    │
@@ -33,4 +36,3 @@ error[E04001]: restricted visibility
    ·
 53 │         let _c0 = &mut c[];
    │                   ^^^^^^^^ Invalid call to internal function '0x42::m::index_c_mut'
-

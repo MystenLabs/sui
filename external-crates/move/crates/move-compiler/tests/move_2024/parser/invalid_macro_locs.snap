@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
    ┌─ tests/move_2024/parser/invalid_macro_locs.move:6:9
    │
@@ -210,4 +213,3 @@ error[E04007]: incompatible types
    │             │
    │             Invalid return expression
    │             Given: '()'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04018]: cyclic data
   ┌─ tests/move_check/typing/recursive_structs.move:4:21
   │
@@ -42,4 +45,3 @@ error[E04018]: cyclic data
    │                          │
    │                          Invalid field containing 'D' in struct 'C'.
    │                          Using this struct creates a cycle: 'D' contains 'A' contains 'B' contains 'C' contains 'D'
-

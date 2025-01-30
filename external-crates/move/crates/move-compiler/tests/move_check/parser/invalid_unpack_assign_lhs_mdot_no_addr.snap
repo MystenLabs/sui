@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/invalid_unpack_assign_lhs_mdot_no_addr.move:4:14
   │
@@ -42,4 +45,3 @@ error[E01002]: unexpected token
    │                 │
    │                 Unexpected '{'
    │                 Expected ';'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/parser/invalid_macro_bang.move:3:17
   │
@@ -12,4 +15,3 @@ error[E01002]: unexpected token
   │                         │
   │                         Unexpected '!'
   │                         Expected ';'
-

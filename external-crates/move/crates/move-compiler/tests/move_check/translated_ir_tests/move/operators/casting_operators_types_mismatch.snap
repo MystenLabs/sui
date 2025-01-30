@@ -1,3 +1,6 @@
+---
+
+---
 error[E04003]: built-in operation not supported
   ┌─ tests/move_check/translated_ir_tests/move/operators/casting_operators_types_mismatch.move:4:10
   │
@@ -69,4 +72,3 @@ error[E04003]: built-in operation not supported
    │          │
    │          Invalid argument to 'as'
    │          Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-

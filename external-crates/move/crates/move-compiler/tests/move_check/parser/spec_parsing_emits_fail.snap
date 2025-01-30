@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/parser/spec_parsing_emits_fail.move:2:5
   │  
@@ -5,4 +8,3 @@ warning[W00001]: DEPRECATED. will be removed
 3 │ │         emits _msg;
 4 │ │     }
   │ ╰─────^ Specification blocks are deprecated and are no longer used
-

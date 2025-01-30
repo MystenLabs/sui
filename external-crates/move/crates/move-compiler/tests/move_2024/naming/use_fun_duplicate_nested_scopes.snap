@@ -1,3 +1,6 @@
+---
+
+---
 warning[W02021]: duplicate alias
    ┌─ tests/move_2024/naming/use_fun_duplicate_nested_scopes.move:10:5
    │
@@ -30,4 +33,3 @@ warning[W02021]: duplicate alias
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate method alias 'a::m::S.bar' for 'a::m::foo'
    │
    = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

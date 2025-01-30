@@ -1,3 +1,6 @@
+---
+
+---
 error[E07004]: invalid return of locally borrowed state
    ┌─ tests/move_check/borrows/return_borrowed_local_invalid.move:19:9
    │  
@@ -103,4 +106,3 @@ error[E07004]: invalid return of locally borrowed state
 25 │ │         id_mut(&mut s3.f),
 26 │ │         id(&s4.f))
    │ ╰──────────────────^ Invalid return. Local variable 'v4' is still being borrowed.
-

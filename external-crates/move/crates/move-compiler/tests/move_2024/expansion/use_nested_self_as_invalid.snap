@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:2:5
   │
@@ -38,4 +41,3 @@ error[E03006]: unexpected name in this position
 10 │     fun bar() {
 11 │         X::foo();
    │         ^ Invalid construction. Expected an enum
-

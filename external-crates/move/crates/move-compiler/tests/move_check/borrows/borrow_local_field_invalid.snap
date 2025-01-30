@@ -1,3 +1,6 @@
+---
+
+---
 error[E07003]: invalid operation, could create dangling a reference
    ┌─ tests/move_check/borrows/borrow_local_field_invalid.move:14:9
    │
@@ -14,4 +17,3 @@ error[E07001]: referential transparency violated
    │                 -------- It is still being mutably borrowed by this reference
 19 │         let s = &v;
    │                 ^^ Invalid borrow of variable 'v'
-

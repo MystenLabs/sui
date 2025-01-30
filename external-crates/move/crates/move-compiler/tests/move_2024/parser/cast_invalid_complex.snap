@@ -1,3 +1,6 @@
+---
+
+---
 error[E01015]: ambiguous 'as'
   ┌─ tests/move_2024/parser/cast_invalid_complex.move:6:9
   │
@@ -77,4 +80,3 @@ error[E04003]: built-in operation not supported
    │           │           │
    │           │           Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
    │           Invalid argument to 'as'
-

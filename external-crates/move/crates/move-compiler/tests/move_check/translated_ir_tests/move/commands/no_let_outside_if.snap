@@ -1,3 +1,6 @@
+---
+
+---
 error[E03009]: unbound variable
   ┌─ tests/move_check/translated_ir_tests/move/commands/no_let_outside_if.move:4:9
   │
@@ -15,4 +18,3 @@ error[E03009]: unbound variable
   │
 8 │     assert!(y == 5, 42);
   │             ^ Unbound variable 'y'
-

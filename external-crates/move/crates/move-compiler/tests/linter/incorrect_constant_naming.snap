@@ -1,3 +1,6 @@
+---
+
+---
 warning[Lint W04001]: constant should follow naming convention
   ┌─ tests/linter/incorrect_constant_naming.move:3:5
   │
@@ -13,4 +16,3 @@ warning[Lint W04001]: constant should follow naming convention
   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'JSON_Max_Size' should be ALL_CAPS. Or for error constants, use PascalCase
   │
   = This warning can be suppressed with '#[allow(lint(constant_naming))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

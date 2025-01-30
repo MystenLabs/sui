@@ -1,3 +1,6 @@
+---
+
+---
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/ability_modifier_postfix_missing_semi_multiple_structs.move:5:19
   │
@@ -14,4 +17,3 @@ error[E01002]: unexpected token
   │     │
   │     Unexpected 'struct'
   │     Expected one of: ',' or ';'
-

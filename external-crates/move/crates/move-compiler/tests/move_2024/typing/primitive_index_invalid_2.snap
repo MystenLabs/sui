@@ -1,3 +1,6 @@
+---
+
+---
 error[E04034]: 'syntax' method types differ
   ┌─ tests/move_2024/typing/primitive_index_invalid_2.move:5:64
   │
@@ -11,4 +14,3 @@ error[E04034]: 'syntax' method types differ
   │                                                                        It has type 'u32'
   │
   = Index operation non-subject parameter types must match exactly
-

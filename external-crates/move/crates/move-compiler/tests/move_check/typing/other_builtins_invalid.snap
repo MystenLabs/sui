@@ -1,3 +1,6 @@
+---
+
+---
 error[E04006]: invalid subtype
   ┌─ tests/move_check/typing/other_builtins_invalid.move:4:10
   │
@@ -86,4 +89,3 @@ error[E04035]: invalid constant usage in error context
   │                                If you want to use a non-u64 as an abort code, you must use a '#[error]' attribute on a constant
   │
   = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
-

@@ -1,3 +1,6 @@
+---
+
+---
 warning[W02018]: unknown attribute
   ┌─ tests/move_check/parser/attribute_no_closing_bracket.move:3:7
   │
@@ -11,4 +14,3 @@ error[E01002]: unexpected token
   │      - To match this '['
 4 │     fun foo() {}
   │     ^ Expected ']'
-

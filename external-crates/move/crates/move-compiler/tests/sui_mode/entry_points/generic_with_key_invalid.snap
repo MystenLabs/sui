@@ -1,3 +1,6 @@
+---
+
+---
 error[Sui E02002]: invalid 'entry' function signature
   ┌─ tests/sui_mode/entry_points/generic_with_key_invalid.move:6:31
   │
@@ -15,4 +18,3 @@ error[Sui E02002]: invalid 'entry' function signature
    │            │                   │   
    │            │                   Invalid 'entry' parameter type for parameter '_'
    │            't2' was declared 'entry' here
-

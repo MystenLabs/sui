@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
    ┌─ tests/move_2024/naming/unused_lambda_arg.move:12:13
    │
@@ -29,4 +32,3 @@ warning[W09002]: unused variable
    │                        ^ Unused local variable 'y'. Consider removing or prefixing with an underscore: '_y'
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

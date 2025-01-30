@@ -1,3 +1,6 @@
+---
+
+---
 error[E04012]: invalid type for constant
   ┌─ tests/move_check/typing/constant_non_base_type.move:3:15
   │
@@ -54,4 +57,3 @@ error[E04012]: invalid type for constant
   │               │
   │               Unpermitted constant type
   │               Found: '(_, _)'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
-

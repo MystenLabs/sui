@@ -1,3 +1,6 @@
+---
+
+---
 error[E03008]: too few type arguments
   ┌─ tests/move_check/typing/bad_type_argument_arity_struct_pack.move:7:9
   │
@@ -9,4 +12,3 @@ error[E03007]: too many type arguments
   │
 8 │         S<u64, u64> { f: 0 };
   │         ^^^^^^^^^^^^^^^^^^^^ Invalid instantiation of '0x42::M::S'. Expected 1 type argument(s) but got 2
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/naming/duplicate_type_parameter_function.move:2:16
   │
@@ -21,4 +24,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │              -                ^ Duplicate type parameter declared with name 'T'
   │              │                 
   │              Type parameter previously defined here
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/parser/type_kewyord.move:2:5
   │
@@ -14,4 +17,3 @@ error[E01002]: unexpected token
   │            │
   │            Unexpected 'type'
   │            Expected an identifier
-

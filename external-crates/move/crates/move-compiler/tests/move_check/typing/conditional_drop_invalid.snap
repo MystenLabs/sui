@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:10:9
    │
@@ -157,4 +160,3 @@ error[E05001]: ability constraint not satisfied
    │                                            │    The type '0x42::M::Pair<0x42::M::R, 0x42::M::S>' can have the ability 'drop' but the type argument '0x42::M::R' does not have the required ability 'drop'
    │                                            '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │                                            The type '0x42::M::Pair<0x42::M::R, 0x42::M::S>' does not have the ability 'drop'
-

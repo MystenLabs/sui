@@ -1,3 +1,6 @@
+---
+
+---
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/expansion/friend_decl_aliased_function.move:10:12
    │
@@ -9,4 +12,3 @@ error[E03006]: unexpected name in this position
    │
 11 │     friend foo;
    │            ^^^ Expected an address or module in this position, not a module member
-

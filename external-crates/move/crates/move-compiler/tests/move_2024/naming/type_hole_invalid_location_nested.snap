@@ -1,3 +1,6 @@
+---
+
+---
 error[E03021]: invalid type annotation
   ┌─ tests/move_2024/naming/type_hole_invalid_location_nested.move:3:31
   │
@@ -57,4 +60,3 @@ error[E03021]: invalid type annotation
   │                        ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
   │
   = Only 'macro' functions can use '_' in their signatures
-

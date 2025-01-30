@@ -1,3 +1,6 @@
+---
+
+---
 error[E03004]: unbound type
   ┌─ tests/move_check/naming/unbound_struct_in_current.move:2:16
   │
@@ -45,4 +48,3 @@ error[E03003]: unbound module member
    │
 18 │         let Self::S {} = bar();
    │             ^^^^^^^ Unbound struct 'S' in current scope
-

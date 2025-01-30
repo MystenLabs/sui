@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/naming/index_syntax_methods_mismatched_args.move:3:5
   │
@@ -16,4 +19,3 @@ error[E04034]: 'syntax' method types differ
   │                ----------- This mutable index function expects 2 parameters 
   │
   = Index operations on the same type must take the name number of parameters
-

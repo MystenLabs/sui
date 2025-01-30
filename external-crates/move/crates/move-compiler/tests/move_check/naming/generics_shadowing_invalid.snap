@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_check/naming/generics_shadowing_invalid.move:7:14
   │
@@ -38,4 +41,3 @@ error[E03006]: unexpected name in this position
    ·
 10 │         S {}
    │         ^ Invalid construction. Expected a struct name
-

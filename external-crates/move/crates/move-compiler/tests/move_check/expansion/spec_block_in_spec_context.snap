@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/expansion/spec_block_in_spec_context.move:3:5
   │  
@@ -13,4 +16,3 @@ warning[W00001]: DEPRECATED. will be removed
    │
 10 │         spec {};
    │         ^^^^^^^ Specification blocks are deprecated and are no longer used
-

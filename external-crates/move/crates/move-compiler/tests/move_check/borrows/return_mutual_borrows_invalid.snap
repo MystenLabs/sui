@@ -1,3 +1,6 @@
+---
+
+---
 error[E07005]: invalid transfer of references
    ┌─ tests/move_check/borrows/return_mutual_borrows_invalid.move:15:9
    │
@@ -81,4 +84,3 @@ error[E07005]: invalid transfer of references
    │         ││
    │         │Field 'f' is still being mutably borrowed by this reference
    │         Invalid return of reference. Cannot transfer a mutable reference that is being borrowed
-

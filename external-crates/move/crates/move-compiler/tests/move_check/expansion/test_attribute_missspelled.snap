@@ -1,3 +1,6 @@
+---
+
+---
 warning[W02018]: unknown attribute
   ┌─ tests/move_check/expansion/test_attribute_missspelled.move:2:7
   │
@@ -9,4 +12,3 @@ warning[W02018]: unknown attribute
   │
 4 │     #[testonly]
   │       ^^^^^^^^ Unknown attribute 'testonly'. Custom attributes must be wrapped in 'ext', e.g. #[ext(testonly)]
-

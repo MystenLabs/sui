@@ -1,3 +1,6 @@
+---
+
+---
 --- tests/move_2024/migration/public_struct_migrate.move
 +++ tests/move_2024/migration/public_struct_migrate.move
 @@ -2 +2 @@

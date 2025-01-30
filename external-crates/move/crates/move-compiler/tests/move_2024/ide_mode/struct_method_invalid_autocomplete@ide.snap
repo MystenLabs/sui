@@ -1,3 +1,6 @@
+---
+
+---
 error[E04023]: invalid method call
    ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:20:21
    │
@@ -39,4 +42,3 @@ note[I15001]: IDE dot autocomplete
    │
 21 │         let _tmp2 = _b.t8();
    │                        ^^ Possible dot names: 'a::m::t3', 'a::m::t4', or 'a::m::t5'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04005]: expected a single type
   ┌─ tests/move_2024/matching/invalid_match_tuple.move:6:16
   │
@@ -50,4 +53,3 @@ error[E04005]: expected a single type
    ·
 12 │         match (x()) {
    │                ^^^ Invalid 'match' subject
-

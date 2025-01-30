@@ -1,3 +1,6 @@
+---
+
+---
 warning[W01004]: invalid documentation comment
    ┌─ tests/move_check/parser/block_comments_inline.move:11:61
    │
@@ -15,4 +18,3 @@ warning[W01004]: invalid documentation comment
    │
 12 │         let S { /****/w, /**/x, /*comment*/y, /** doc */z } = /*comment*/s;
    │                                               ^^^^^^^^ Documentation comment cannot be matched to a language item
-

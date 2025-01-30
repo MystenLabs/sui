@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/binary_or_invalid.move:8:9
   │
@@ -184,4 +187,3 @@ error[E04007]: incompatible types
    │                      │  Invalid argument to '||'
    │                      │  Given: '(bool, bool)'
    │                      Expected: 'bool'
-

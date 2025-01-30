@@ -1,3 +1,6 @@
+---
+
+---
 error[E03013]: positional call mismatch
   ┌─ tests/move_check/parser/positional_struct_unpack.move:7:9
   │
@@ -26,4 +29,3 @@ error[E04016]: too few arguments
   │
 7 │         Foo(_) = x;
   │         ^^^^^^ Missing assignment for field 'f' in '0x42::M::Foo'
-

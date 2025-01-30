@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:2:5
   │
@@ -123,4 +126,3 @@ error[E03009]: unbound variable
    │
 38 │         Y = 0;
    │         ^ Invalid assignment. Unbound variable 'Y'
-

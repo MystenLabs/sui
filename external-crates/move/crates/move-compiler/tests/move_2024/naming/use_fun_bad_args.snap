@@ -1,3 +1,6 @@
+---
+
+---
 error[E02017]: invalid 'use fun' declaration
    ┌─ tests/move_2024/naming/use_fun_bad_args.move:18:5
    │
@@ -78,4 +81,3 @@ error[E02017]: invalid 'use fun' declaration
    ·
 28 │     use fun mut_gen as Y.mut_gen;
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::Y.mut_gen'. Expected a 'a::m::Y' type as the first argument (either by reference '&' '&mut' or by value)
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E03008]: too few type arguments
   ┌─ tests/move_check/typing/bad_type_argument_arity_struct.move:7:13
   │
@@ -69,4 +72,3 @@ error[E03008]: too few type arguments
    │
 27 │     fun s<T>(f: T): S {
    │                     ^ Invalid instantiation of '0x42::M::S'. Expected 1 type argument(s) but got 0
-

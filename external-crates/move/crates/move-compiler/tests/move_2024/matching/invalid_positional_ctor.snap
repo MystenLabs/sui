@@ -1,3 +1,6 @@
+---
+
+---
 error[E03013]: positional call mismatch
   ┌─ tests/move_2024/matching/invalid_positional_ctor.move:8:18
   │
@@ -37,4 +40,3 @@ error[E04016]: too few arguments
   │
 9 │         let _x = Entry::E { x: 32 };
   │                  ^^^^^^^^^^^^^^^^^^ Missing argument for field '0' in '0x42::m::Entry::E'
-

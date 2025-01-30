@@ -1,3 +1,6 @@
+---
+
+---
 warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:1:9
   │
@@ -23,4 +26,3 @@ error[E04036]: non-exhaustive pattern
    │
 10 │         match (0) {
    │                ^ Pattern '_' not covered
-

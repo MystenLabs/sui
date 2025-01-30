@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:2:5
   │
@@ -35,4 +38,3 @@ error[E03004]: unbound type
   │
 4 │         let _: R = (0: P);
   │                        ^ Unbound type 'P' in current scope
-

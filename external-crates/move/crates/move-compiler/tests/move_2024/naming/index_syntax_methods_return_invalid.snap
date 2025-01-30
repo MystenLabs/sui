@@ -1,3 +1,6 @@
+---
+
+---
 error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:22:14
    │
@@ -107,4 +110,3 @@ error[E02019]: invalid 'syntax' method type
     │                                 ----------            - This is not a mutable reference
     │                                 │                      
     │                                 Mutable subject type defined here
-

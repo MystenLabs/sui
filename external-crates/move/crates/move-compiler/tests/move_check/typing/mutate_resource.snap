@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/mutate_resource.move:5:10
   │
@@ -28,4 +31,3 @@ error[E05001]: ability constraint not satisfied
    │            To satisfy the constraint, the 'drop' ability would need to be added here
 13 │         *r = x;
    │          ^ Invalid mutation. Mutation requires the 'drop' ability as the old value is destroyed
-

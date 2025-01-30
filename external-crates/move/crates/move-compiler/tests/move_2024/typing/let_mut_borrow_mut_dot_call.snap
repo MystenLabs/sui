@@ -1,3 +1,6 @@
+---
+
+---
 error[E04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_borrow_mut_dot_call.move:8:9
   │
@@ -24,4 +27,3 @@ error[E04024]: invalid usage of immutable variable
    ·
 10 │         s.foo();
    │         ^ Invalid mutable borrow of immutable variable 's'
-

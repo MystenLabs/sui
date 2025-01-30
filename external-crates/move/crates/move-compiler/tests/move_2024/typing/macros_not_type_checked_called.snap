@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_2024/typing/macros_not_type_checked_called.move:4:11
   │
@@ -6,4 +9,3 @@ error[E04007]: incompatible types
   │         │ │  
   │         │ Incompatible arguments to '+'
   │         Found: integer. It is not compatible with the other type.
-

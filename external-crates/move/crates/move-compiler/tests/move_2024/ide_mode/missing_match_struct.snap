@@ -1,3 +1,6 @@
+---
+
+---
 warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:1:9
   │
@@ -27,4 +30,3 @@ error[E04016]: too few arguments
    │
 13 │             S { } => 0
    │             ^^^^^ Missing pattern for field 'y' in '0x42::m::S'
-

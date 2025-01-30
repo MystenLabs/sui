@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/typing/type_variable_join_single_pack.move:2:19
   │
@@ -50,4 +53,3 @@ error[E05001]: ability constraint not satisfied
   │         │    │
   │         │    The type '0x42::M::Box<0x42::M::Box<u64>>' does not have the ability 'drop'
   │         Cannot ignore values without the 'drop' ability. The value must be used
-

@@ -1,3 +1,6 @@
+---
+
+---
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/incorrect_redundant_ref_deref.move:10:21
    │
@@ -169,4 +172,3 @@ warning[Lint W01009]: redundant reference/dereference
     │                     ^^^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
     │
     = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

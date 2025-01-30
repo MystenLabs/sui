@@ -1,3 +1,6 @@
+---
+
+---
 --- tests/move_2024/migration/public_friend.move
 +++ tests/move_2024/migration/public_friend.move
 @@ -3 +3 @@

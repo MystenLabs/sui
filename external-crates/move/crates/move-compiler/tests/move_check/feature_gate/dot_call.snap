@@ -1,3 +1,6 @@
+---
+
+---
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/feature_gate/dot_call.move:4:5
   │
@@ -53,4 +56,3 @@ error[E13001]: feature is not supported in specified edition
    │         ^^^^^^^ Method syntax is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/sui_mode/entry_points/receiving_non_object_type.move:6:28
    │
@@ -9,4 +12,3 @@ error[E05001]: ability constraint not satisfied
    ·
 10 │     struct Receiving<phantom T: key> has drop {
    │                                 --- 'key' constraint declared here
-

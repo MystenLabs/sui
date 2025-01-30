@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/constraints_not_satisfied_all_cases.move:7:30
   │
@@ -78,4 +81,3 @@ error[E05001]: ability constraint not satisfied
    │                            │    │
    │                            │    The type '0x8675309::M::C' does not have the ability 'key'
    │                            'key' constraint not satisifed
-

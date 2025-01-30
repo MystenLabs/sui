@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/expansion/spec_block_uses.move:10:5
    │  
@@ -6,4 +9,3 @@ warning[W00001]: DEPRECATED. will be removed
 12 │ │         ensures exists<S<u64>>(0x1) == exists<R>(0x1);
 13 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
-

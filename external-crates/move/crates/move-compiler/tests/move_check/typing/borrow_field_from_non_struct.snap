@@ -1,3 +1,6 @@
+---
+
+---
 error[E04009]: expected specific type
   ┌─ tests/move_check/typing/borrow_field_from_non_struct.move:6:10
   │
@@ -87,4 +90,3 @@ error[E04009]: expected specific type
    │          │
    │          Unbound field 'f'
    │          Expected a struct type in the current module but got: '(&0x8675309::M::S, &0x8675309::M::S)'
-

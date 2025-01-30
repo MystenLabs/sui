@@ -1,3 +1,6 @@
+---
+
+---
 error[E04021]: invalid number after type inference
   ┌─ tests/move_check/typing/number_literal_too_large.move:3:9
   │
@@ -89,4 +92,3 @@ error[E04021]: invalid number after type inference
    │         Invalid numerical literal
    │         Annotating the literal might help inference: '340282366920938463463374607431768211455607431768211455u256'
    │         Expected a literal of type 'u64', but the value is too large.
-

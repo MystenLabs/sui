@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
    ┌─ tests/move_check/ide_mode/dot_incomplete.move:13:23
    │
@@ -33,4 +36,3 @@ error[E01002]: unexpected token
    │     │
    │     Unexpected '}'
    │     Expected an identifier or a decimal number
-

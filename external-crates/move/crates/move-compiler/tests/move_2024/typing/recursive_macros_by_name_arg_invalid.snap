@@ -1,3 +1,6 @@
+---
+
+---
 error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_by_name_arg_invalid.move:8:9
    │
@@ -39,4 +42,3 @@ error[E04032]: unable to expand macro function
    ·
 31 │         arg_apply!({ let x = 0; x });
    │         ---------------------------- 'a::m::arg_apply' previously expanded here
-

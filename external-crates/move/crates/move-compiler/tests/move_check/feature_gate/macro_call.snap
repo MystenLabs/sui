@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_check/feature_gate/macro_call.move:4:9
   │
@@ -26,4 +29,3 @@ error[E04029]: invalid function call
 3 │     fun bar() {
 4 │         foo!(|| ())
   │            ^ 'foo' is not a macro function and cannot be called with a `!`. Try replacing with 'foo'
-

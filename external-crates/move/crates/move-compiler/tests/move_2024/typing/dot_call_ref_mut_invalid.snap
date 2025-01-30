@@ -1,3 +1,6 @@
+---
+
+---
 error[E04006]: invalid subtype
   ┌─ tests/move_2024/typing/dot_call_ref_mut_invalid.move:9:5
   │
@@ -16,4 +19,3 @@ error[E07001]: referential transparency violated
    │                   -- Immutable because of this position
 13 │     y.x.f();
    │     ^^^^^^^ Invalid mutable borrow from an immutable reference
-

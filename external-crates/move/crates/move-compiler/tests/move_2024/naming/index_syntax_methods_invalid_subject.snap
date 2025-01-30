@@ -1,3 +1,6 @@
+---
+
+---
 error[E02015]: invalid attribute
   ┌─ tests/move_2024/naming/index_syntax_methods_invalid_subject.move:5:14
   │
@@ -53,4 +56,3 @@ error[E02015]: invalid attribute
    │
 17 │     #[syntax(index)]
    │       ^^^^^^^^^^^^^ Invalid attribute. syntax is only valid if the function takes at least one parameter
-

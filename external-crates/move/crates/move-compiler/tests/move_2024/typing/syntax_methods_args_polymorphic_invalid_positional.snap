@@ -1,3 +1,6 @@
+---
+
+---
 error[E04034]: 'syntax' method types differ
   ┌─ tests/move_2024/typing/syntax_methods_args_polymorphic_invalid_positional.move:6:45
   │
@@ -51,4 +54,3 @@ error[E04034]: 'syntax' method types differ
    │
    = Type parameters must be used the same by position, not name
    = These functions must take the same subject type, differing only by mutability
-

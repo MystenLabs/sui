@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09012]: unused 'mut' modifiers
   ┌─ tests/move_2024/typing/let_mut_macro_return.move:3:17
   │
@@ -18,4 +21,3 @@ warning[W09005]: dead or unreachable code
    │                                   ^^^^^^^^^ Any code after this expression will not be reached
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

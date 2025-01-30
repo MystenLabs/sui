@@ -1,3 +1,6 @@
+---
+
+---
 error[E04004]: expected a single non-reference type
   ┌─ tests/move_check/typing/recursive_structs_malformed.move:4:21
   │
@@ -51,4 +54,3 @@ error[E04018]: cyclic data
   │                                        │
   │                                        Invalid field containing 'Baz' in struct 'Baz'.
   │                                        Using this struct creates a cycle: 'Baz' contains 'Baz'
-

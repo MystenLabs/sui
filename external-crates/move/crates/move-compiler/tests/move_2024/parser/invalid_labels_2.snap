@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/invalid_labels_2.move:3:14
   │
@@ -5,4 +8,3 @@ error[E01002]: unexpected token
   │              ^^^^^^^ Single-quote (') may only prefix control flow labels
   │
   = Character literals are not supported, and string literals use double-quote (").
-

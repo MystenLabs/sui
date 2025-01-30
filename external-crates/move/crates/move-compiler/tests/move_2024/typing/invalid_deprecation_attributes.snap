@@ -1,3 +1,6 @@
+---
+
+---
 error[E10004]: invalid usage of known attribute
   ┌─ tests/move_2024/typing/invalid_deprecation_attributes.move:2:7
   │
@@ -57,4 +60,3 @@ error[E10004]: invalid usage of known attribute
    │       ^^^^^^^^^^ Invalid 'deprecated' attribute
    │
    = Deprecation attributes must be written as `#[deprecated]` or `#[deprecated(note = b"message")]`
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04031]: invalid usage of lambda
   ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:3:12
   │
@@ -77,4 +80,3 @@ error[E04007]: incompatible types
    │                 │             │
    │                 │             Given: '|_| -> _'
    │                 Invalid call of 'a::m::apply'. Invalid argument for parameter '$x'
-

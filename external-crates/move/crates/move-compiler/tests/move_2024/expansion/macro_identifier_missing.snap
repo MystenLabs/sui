@@ -1,3 +1,6 @@
+---
+
+---
 error[E02010]: invalid name
   ┌─ tests/move_2024/expansion/macro_identifier_missing.move:2:19
   │
@@ -35,4 +38,3 @@ error[E04029]: invalid function call
   │         ^ Unexpected invocation of parameter or local 'f'. Non-syntax variables cannot be invoked as functions
   │
   = Only macro syntax variables, e.g. '$f', may be invoked as functions.
-

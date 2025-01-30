@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/constants_standalone_let.move:4:21
   │
@@ -6,4 +9,3 @@ error[E01002]: unexpected token
   │                     │
   │                     Unexpected 'let'
   │                     Expected an expression term
-

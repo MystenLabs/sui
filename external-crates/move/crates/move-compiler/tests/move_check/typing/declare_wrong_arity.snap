@@ -1,3 +1,6 @@
+---
+
+---
 error[E04005]: expected a single type
   ┌─ tests/move_check/typing/declare_wrong_arity.move:5:13
   │
@@ -32,4 +35,3 @@ error[E04007]: incompatible types
   │             │              
   │             Invalid value for binding
   │             Expected expression list of length 3: '(_, _, _)'
-

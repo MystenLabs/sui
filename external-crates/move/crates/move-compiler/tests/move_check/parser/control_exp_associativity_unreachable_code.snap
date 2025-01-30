@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:9:11
   │
@@ -13,4 +16,3 @@ warning[W09005]: dead or unreachable code
    │             ^^^^^^^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

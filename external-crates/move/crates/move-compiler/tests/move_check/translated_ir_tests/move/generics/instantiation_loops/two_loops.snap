@@ -1,3 +1,6 @@
+---
+
+---
 error[E04019]: cyclic type instantiation
   ┌─ tests/move_check/translated_ir_tests/move/generics/instantiation_loops/two_loops.move:8:9
   │
@@ -15,4 +18,3 @@ error[E04019]: cyclic type instantiation
    │         │ │
    │         │ The type parameter 'g::T' was instantiated with the type '0x8675309::M::S<T>', which contains the type parameter 'g::T'. This recursive call causes the instantiation to recurse infinitely
    │         Invalid call to '0x8675309::M::g'
-

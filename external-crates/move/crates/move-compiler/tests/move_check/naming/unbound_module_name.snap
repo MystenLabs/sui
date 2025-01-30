@@ -1,3 +1,6 @@
+---
+
+---
 error[E03003]: unbound module member
   ┌─ tests/move_check/naming/unbound_module_name.move:7:17
   │
@@ -21,4 +24,3 @@ error[E03003]: unbound module member
   │
 9 │         0 + N::c + Self::c;
   │                    ^^^^^^^ Unbound module member 'c' in current scope
-

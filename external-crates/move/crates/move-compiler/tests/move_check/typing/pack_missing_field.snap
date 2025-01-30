@@ -1,3 +1,6 @@
+---
+
+---
 error[E04016]: too few arguments
   ┌─ tests/move_check/typing/pack_missing_field.move:7:10
   │
@@ -21,4 +24,3 @@ error[E04016]: too few arguments
    │
 16 │         (Nat { f: Nat { f: Nat { }}}: Nat<Nat<Nat<S>>>);
    │                            ^^^^^^^ Missing argument for field 'f' in '0x8675309::M::Nat'
-

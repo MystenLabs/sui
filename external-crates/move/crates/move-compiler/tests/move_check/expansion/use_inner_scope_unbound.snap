@@ -1,3 +1,6 @@
+---
+
+---
 error[E03002]: unbound module
    ┌─ tests/move_check/expansion/use_inner_scope_unbound.move:13:13
    │
@@ -12,4 +15,3 @@ error[E03003]: unbound module member
    ·
 14 │         use 0x2::M::foo;
    │                     ^^^ Invalid 'use'. Unbound member 'foo' in module '0x2::M'
-

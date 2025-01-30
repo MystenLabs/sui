@@ -1,3 +1,6 @@
+---
+
+---
 error[E02010]: invalid name
   ┌─ tests/move_2024/matching/invalid_const_mut.move:9:26
   │
@@ -51,4 +54,3 @@ error[E02010]: invalid name
    │                          ^^^ ---- Expected a valid 'enum' variant, 'struct', or 'const', not a variable
    │                          │    
    │                          'mut' can only be used with variable bindings in patterns
-

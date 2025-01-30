@@ -1,3 +1,6 @@
+---
+
+---
 error[E03010]: unbound field
   ┌─ tests/move_2024/parser/positional_field_access_no_annotations.move:5:9
   │
@@ -11,4 +14,3 @@ error[E01002]: unexpected token
   │           ^^^^ Invalid field access. Expected a number less than or equal to 255
   │
   = Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`
-

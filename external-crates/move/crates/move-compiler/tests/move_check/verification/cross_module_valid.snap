@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/verification/cross_module_valid.move:5:7
   │
@@ -27,4 +30,3 @@ warning[W00001]: DEPRECATED. will be removed
    │
 19 │     #[verify_only]
    │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
-

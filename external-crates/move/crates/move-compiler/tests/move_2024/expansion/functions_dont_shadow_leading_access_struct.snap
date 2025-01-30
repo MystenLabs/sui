@@ -1,3 +1,6 @@
+---
+
+---
 error[E02010]: invalid name
   ┌─ tests/move_2024/expansion/functions_dont_shadow_leading_access_struct.move:3:19
   │
@@ -15,4 +18,3 @@ error[E03006]: unexpected name in this position
    │
 15 │             f::foo(); // resolves to struct
    │             ^ Expected an address or module in this position, not a module member
-

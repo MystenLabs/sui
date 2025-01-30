@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/mut_keyword.move:5:23
   │
@@ -15,4 +18,3 @@ error[E01002]: unexpected token
   │         │
   │         Unexpected 'mut'
   │         Expected an expression term
-

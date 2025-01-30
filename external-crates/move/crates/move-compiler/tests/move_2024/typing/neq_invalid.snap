@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_2024/typing/neq_invalid.move:9:17
   │
@@ -157,4 +160,3 @@ error[E04007]: incompatible types
    │         │      │   
    │         │      Incompatible arguments to '!='
    │         Found expression list of length 2: '({integer}, {integer})'. It is not compatible with the other type of length 3.
-

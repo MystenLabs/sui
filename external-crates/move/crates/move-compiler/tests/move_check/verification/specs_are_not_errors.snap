@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/verification/specs_are_not_errors.move:4:5
   │
@@ -15,4 +18,3 @@ warning[W00001]: DEPRECATED. will be removed
    │
 12 │ spec a::m {
    │         ^ Specification blocks are deprecated and are no longer used
-

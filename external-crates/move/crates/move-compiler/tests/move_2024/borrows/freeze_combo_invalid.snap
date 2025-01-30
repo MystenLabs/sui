@@ -1,3 +1,6 @@
+---
+
+---
 error[E07002]: mutable ownership violated
    ┌─ tests/move_2024/borrows/freeze_combo_invalid.move:13:9
    │
@@ -23,4 +26,3 @@ error[E07002]: mutable ownership violated
    │                       - It is still being mutably borrowed by this reference
 27 │         freeze(s);
    │         ^^^^^^^^^ Invalid freeze.
-

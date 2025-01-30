@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/assign_wrong_type.move:8:9
   │
@@ -104,4 +107,3 @@ error[E04007]: incompatible types
    │                      ^                        ------- Given: '0x8675309::M::R'
    │                      │                         
    │                      Invalid assignment to variable 'r'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E10004]: invalid usage of known attribute
   ┌─ tests/move_2024/typing/unknown_defines_primitive.move:1:21
   │
@@ -9,4 +12,3 @@ error[E10004]: invalid usage of known attribute
   │
 6 │ #[defines_primitive(Y)]
   │                     ^ Invalid parameterization of 'defines_primitive'. Unknown primitive type 'Y'
-

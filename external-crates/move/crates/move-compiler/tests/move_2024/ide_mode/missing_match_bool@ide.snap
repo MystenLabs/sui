@@ -1,3 +1,6 @@
+---
+
+---
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:4:16
   │
@@ -26,4 +29,3 @@ note[I15004]: IDE missing match arms
    │ ╭──────────────────────^
 11 │ │         }
    │ ╰─────────^ Missing arms: 'false' and 'true'
-

@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09006]: unused struct type parameter
   ┌─ tests/move_2024/expansion/type_hole_as_type_param.move:2:21
   │
@@ -23,4 +26,3 @@ error[E03011]: invalid use of reserved name
   │
 4 │     macro fun bar<_>() {}
   │                   ^ Invalid type parameter name '_'. '_' is restricted and cannot be used to name a type parameter
-

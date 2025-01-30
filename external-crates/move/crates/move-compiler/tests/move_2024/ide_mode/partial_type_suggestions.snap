@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09001]: unused alias
   ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:7:16
   │
@@ -63,4 +66,3 @@ error[E01002]: unexpected token
    ·
 14 │ 
    │ ^ Expected ')'
-

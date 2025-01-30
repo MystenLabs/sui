@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_check/parser/vector_literal_unclosed_args.move:4:13
   │
@@ -29,4 +32,3 @@ error[E01002]: unexpected token
   ·
 7 │ 
   │ ^ Expected ']'
-

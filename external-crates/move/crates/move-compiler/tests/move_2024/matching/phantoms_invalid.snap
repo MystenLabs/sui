@@ -1,3 +1,6 @@
+---
+
+---
 error[E02013]: invalid phantom type parameter usage
   ┌─ tests/move_2024/matching/phantoms_invalid.move:9:11
   │
@@ -101,4 +104,3 @@ error[E02013]: invalid phantom type parameter usage
 44 │         A(X, V<X>),
 45 │         B { v: V<X> , x: X},
    │                          ^ Phantom type parameter cannot be used as a field type
-

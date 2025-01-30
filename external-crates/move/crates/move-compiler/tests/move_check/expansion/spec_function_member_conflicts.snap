@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:4:5
   │  
@@ -53,4 +56,3 @@ warning[W00001]: DEPRECATED. will be removed
 38 │ │         fun foo(): bool { true }
 39 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
-

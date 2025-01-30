@@ -1,3 +1,6 @@
+---
+
+---
 error[E03018]: invalid type parameter
    ┌─ tests/move_2024/expansion/invalid_tyargs.move:10:27
    │
@@ -21,4 +24,3 @@ error[E03018]: invalid type parameter
    │                        ^^^^^ Cannot use type parameters on an enum variant
    │
    = Type arguments are used with the enum, as '0x42::a::Maybe<u64>::Just'
-

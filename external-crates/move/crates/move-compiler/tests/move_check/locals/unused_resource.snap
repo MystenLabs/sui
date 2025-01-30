@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_check/locals/unused_resource.move:5:13
   │
@@ -147,4 +150,3 @@ error[E06001]: unused value without 'drop'
    │ ╭──────────────────────^
 37 │ │     }
    │ ╰─────^ Invalid return
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04006]: invalid subtype
   ┌─ tests/move_check/typing/subtype_bind_invalid.move:5:17
   │
@@ -33,4 +36,3 @@ error[E04006]: invalid subtype
    │                       │      │                 
    │                       │      Expected: '&mut u64'
    │                       Invalid type annotation
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/counterexample_lits.move:8:16
   │
@@ -41,4 +44,3 @@ error[E04036]: non-exhaustive pattern
    │                ^^^^^^^^^^^^^^^^^^ Pattern 'Tuple2::Ctor(_0, _)' not covered
    │
    = When '_0' is not 0, 3, 4, or 7
-

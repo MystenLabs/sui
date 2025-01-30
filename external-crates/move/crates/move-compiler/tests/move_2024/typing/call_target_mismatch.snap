@@ -1,3 +1,6 @@
+---
+
+---
 error[E04029]: invalid function call
   ┌─ tests/move_2024/typing/call_target_mismatch.move:9:20
   │
@@ -33,4 +36,3 @@ error[E04029]: invalid function call
    ·
 12 │         X().a_macro();
    │         ^^^^^^^^^^^^^ 'a_macro' is a macro function and must be called with a `!`. Try replacing with 'a_macro!'
-

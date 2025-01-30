@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_return_checked_invalid.move:6:8
    │
@@ -72,4 +75,3 @@ error[E04007]: incompatible types
    │                ││                    
    │                │Expected: 'u64'
    │                Invalid type annotation
-

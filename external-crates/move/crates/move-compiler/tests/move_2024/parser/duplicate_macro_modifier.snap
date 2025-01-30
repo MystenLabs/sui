@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/parser/duplicate_macro_modifier.move:2:11
   │
@@ -5,4 +8,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │     ----- ^^^^^ Duplicate 'macro' modifier
   │     │      
   │     'macro' modifier previously given here
-

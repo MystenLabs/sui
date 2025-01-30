@@ -1,3 +1,6 @@
+---
+
+---
 error[E03003]: unbound module member
   ┌─ tests/move_check/expansion/use_function_unbound.move:6:17
   │
@@ -12,4 +15,3 @@ error[E03005]: unbound unscoped name
   │
 9 │         u()
   │         ^ Unbound function 'u' in current scope
-

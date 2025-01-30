@@ -1,3 +1,6 @@
+---
+
+---
 warning[W02021]: duplicate alias
   ┌─ tests/move_2024/expansion/unnecessary_alias_default.move:2:14
   │
@@ -46,4 +49,3 @@ warning[W09001]: unused alias
   │                             ^^^^^^ Unused 'use' of alias 'Option'. Consider removing it
   │
   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

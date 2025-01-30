@@ -1,3 +1,6 @@
+---
+
+---
 error[E07003]: invalid operation, could create dangling a reference
   ┌─ tests/move_check/translated_ir_tests/move/borrow_tests/mutable_borrow_invalid.move:9:9
   │
@@ -15,4 +18,3 @@ error[E07005]: invalid transfer of references
    ·
 17 │         foo(x, &mut root.f);
    │         ^^^^^^^^^^^^^^^^^^^ Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
-

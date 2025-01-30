@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/struct_native_missing_semicolon.move:3:1
   │
@@ -12,4 +15,3 @@ error[E01002]: unexpected token
   │ 
   │ Unexpected end-of-file
   │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-

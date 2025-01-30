@@ -1,3 +1,6 @@
+---
+
+---
 error[Sui E02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer_store_generic.move:11:9
    │
@@ -37,4 +40,3 @@ error[Sui E02009]: invalid private transfer call
    │                            The object has 'store' so 'sui::transfer::public_receive' can be called instead
 23 │         transfer::receive(p, s)
    │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::receive' is restricted to being called in the object's module
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E02011]: invalid 'friend' declaration
   ┌─ tests/move_check/naming/friend_decl_out_of_account_addr.move:7:5
   │
@@ -6,4 +9,3 @@ error[E02011]: invalid 'friend' declaration
   │     │      │
   │     │      Cannot declare modules out of the current address as a friend
   │     Invalid friend declaration
-

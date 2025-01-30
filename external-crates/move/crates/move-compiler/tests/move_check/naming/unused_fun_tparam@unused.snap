@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09010]: unused function type parameter
   ┌─ tests/move_check/naming/unused_fun_tparam.move:3:23
   │
@@ -29,4 +32,3 @@ warning[W09010]: unused function type parameter
    │                               ^^ Unused type parameter 'T2'.
    │
    = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

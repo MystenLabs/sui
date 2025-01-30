@@ -1,3 +1,6 @@
+---
+
+---
 warning[Lint W01007]: 'if' expression can be removed
   ┌─ tests/linter/true_positive_unnecessary_conitional.move:4:9
   │
@@ -49,4 +52,3 @@ warning[Lint W01007]: 'if' expression can be removed
    │         Detected a redundant conditional expression 'if (..) v else v', where each branch results in the same value 'v'. Consider using the value directly
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

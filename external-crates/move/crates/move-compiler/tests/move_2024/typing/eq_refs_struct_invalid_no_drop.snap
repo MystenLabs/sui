@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:6:9
   │
@@ -620,4 +623,3 @@ error[E06001]: unused value without 'drop'
    │                                              The parameter 'c' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
 98 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
-

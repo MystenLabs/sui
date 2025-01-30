@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/linter/move_2024/ref_deref_conditional.move:3:1
   │
@@ -110,4 +113,3 @@ warning[Lint W01009]: redundant reference/dereference
    │                 ^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/matching/duplicate_defns.move:9:17
   │
@@ -15,4 +18,3 @@ error[E02001]: duplicate declaration, item, or annotation
    ·
 14 │     public struct X(u64, u64, u64)
    │                   ^ Duplicate module member or alias 'X'. Top level names in a namespace must be unique
-

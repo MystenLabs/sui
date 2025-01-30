@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/macro_identifier_invalid_no_following_characters.move:2:19
   │
@@ -12,4 +15,3 @@ error[E01002]: unexpected token
   │ 
   │ Unexpected end-of-file
   │ Expected '{'
-

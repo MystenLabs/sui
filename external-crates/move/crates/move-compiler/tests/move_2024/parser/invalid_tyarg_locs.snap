@@ -1,3 +1,6 @@
+---
+
+---
 error[E03008]: too few type arguments
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:12:19
    │
@@ -419,4 +422,3 @@ error[E01016]: invalid name
    │                     Previous type arguments appeared here
    │
    = Type arguments should only appear on module members
-

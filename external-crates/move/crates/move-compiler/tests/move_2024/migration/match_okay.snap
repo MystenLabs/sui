@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_2024/migration/match_okay.move:3:12
   │
@@ -43,4 +46,3 @@ error[E01002]: unexpected token
   │                       │
   │                       Unexpected ')'
   │                       Expected '('
-

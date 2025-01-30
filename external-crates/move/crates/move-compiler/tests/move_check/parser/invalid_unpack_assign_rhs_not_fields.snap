@@ -1,3 +1,6 @@
+---
+
+---
 error[E03003]: unbound module member
   ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:9:9
   │
@@ -38,4 +41,3 @@ error[E01002]: unexpected token
    │
 13 │         X::S { 0 } = 0;
    │                ^ Unexpected '<Number>'. Expected a field expression
-

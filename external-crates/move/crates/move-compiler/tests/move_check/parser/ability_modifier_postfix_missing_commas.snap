@@ -1,3 +1,6 @@
+---
+
+---
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/ability_modifier_postfix_missing_commas.move:5:19
   │
@@ -23,4 +26,3 @@ error[E01002]: unexpected token
   │ 
   │ Unexpected end-of-file
   │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-

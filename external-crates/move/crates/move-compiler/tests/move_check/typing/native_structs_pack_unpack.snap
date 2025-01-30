@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
   ┌─ tests/move_check/typing/native_structs_pack_unpack.move:9:9
   │
@@ -48,4 +51,3 @@ error[E03010]: unbound field
    ·
 15 │         let _f = c.f;
    │                  ^^^ Unbound field 'f' for native struct '0x42::C::T'
-

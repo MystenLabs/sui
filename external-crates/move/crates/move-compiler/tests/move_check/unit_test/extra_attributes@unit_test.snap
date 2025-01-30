@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09007]: unused attribute
   ┌─ tests/move_check/unit_test/extra_attributes.move:8:60
   │
@@ -37,4 +40,3 @@ warning[W09007]: unused attribute
    │                                           ^^^^^^^^^^ Unused attribute for expected_failure
    │
    = This warning can be suppressed with '#[allow(unused_attribute)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

@@ -1,3 +1,6 @@
+---
+
+---
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:23:12
    │
@@ -109,4 +112,3 @@ warning[W04037]: deprecated usage
    │                                       ^^^^^^ The '0x7::l::make_x' member of the module '0x7::l' is deprecated. It is deprecated since its whole module is marked deprecated: Use the k module instead.
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

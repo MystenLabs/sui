@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/parser/enum_invalid.move:2:5
   │
@@ -28,4 +31,3 @@ error[E01002]: unexpected token
    │                  │
    │                  Unexpected '}'
    │                  Expected ':'
-

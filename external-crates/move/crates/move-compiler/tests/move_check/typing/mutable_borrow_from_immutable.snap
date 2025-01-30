@@ -1,3 +1,6 @@
+---
+
+---
 error[E07001]: referential transparency violated
   ┌─ tests/move_check/typing/mutable_borrow_from_immutable.move:6:9
   │
@@ -56,4 +59,3 @@ error[E07001]: referential transparency violated
 15 │         x.f = x.f + 1;
 16 │         s.x.f = s.x.f + 1
    │         ^^^^^ Invalid mutable borrow from an immutable reference
-

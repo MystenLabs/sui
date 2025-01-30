@@ -1,3 +1,6 @@
+---
+
+---
 warning[Lint W04005]: 'abort' or 'assert' without named constant
   ┌─ tests/linter/true_positive_abort_constant.move:6:15
   │
@@ -123,4 +126,3 @@ warning[Lint W04005]: 'abort' or 'assert' without named constant
    │
    = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
    = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

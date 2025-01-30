@@ -1,3 +1,6 @@
+---
+
+---
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_use_in_constants.move:15:9
    │
@@ -29,4 +32,3 @@ warning[W04037]: deprecated usage
    │                             ^ The constant '0x42::m::B' is deprecated: use D instead
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

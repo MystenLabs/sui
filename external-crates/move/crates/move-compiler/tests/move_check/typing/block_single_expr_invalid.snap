@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/block_single_expr_invalid.move:4:18
   │
@@ -49,4 +52,3 @@ error[E04007]: incompatible types
   │            │                     Invalid type annotation
   │            │                     Expected expression list of length 2: '(u64, bool)'
   │            Given expression list of length 3: '({integer}, bool, bool)'
-

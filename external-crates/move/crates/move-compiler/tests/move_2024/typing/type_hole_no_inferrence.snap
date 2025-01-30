@@ -1,3 +1,6 @@
+---
+
+---
 error[E04010]: cannot infer type
   ┌─ tests/move_2024/typing/type_hole_no_inferrence.move:3:23
   │
@@ -15,4 +18,3 @@ error[E04010]: cannot infer type
   │
 4 │         any<_>();
   │             ^ Could not infer this type. Try adding an annotation
-

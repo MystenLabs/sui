@@ -1,3 +1,6 @@
+---
+
+---
 error[Sui E02003]: invalid 'init' function
   ┌─ tests/sui_mode/init/not_generic.move:4:9
   │
@@ -5,4 +8,3 @@ error[Sui E02003]: invalid 'init' function
   │         ^^^^ - 'init' functions cannot have type parameters
   │         │     
   │         Invalid 'init' function declaration
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:7:39
    │
@@ -145,4 +148,3 @@ error[E04034]: 'syntax' method types differ
     │                                                        It has type '&T'
     │
     = Index operation non-subject parameter types must match exactly
-

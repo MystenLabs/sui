@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/verification/cross_module_invalid.move:10:7
    │
@@ -27,4 +30,3 @@ error[E03002]: unbound module
    │
 23 │         A::build_foo()
    │         ^ Unbound module alias 'A'
-

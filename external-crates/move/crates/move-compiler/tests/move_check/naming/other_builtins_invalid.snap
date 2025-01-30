@@ -1,3 +1,6 @@
+---
+
+---
 error[E03007]: too many type arguments
   ┌─ tests/move_check/naming/other_builtins_invalid.move:3:9
   │
@@ -40,4 +43,3 @@ error[E13001]: feature is not supported in specified edition
   │         ^^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-

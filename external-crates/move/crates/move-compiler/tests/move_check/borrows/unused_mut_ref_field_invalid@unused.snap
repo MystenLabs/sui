@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09013]: unused mutable reference '&mut'
   ┌─ tests/move_check/borrows/unused_mut_ref_field_invalid.move:9:23
   │
@@ -21,4 +24,3 @@ warning[W09013]: unused mutable reference '&mut'
    │         ^^^^^^^^^^^^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
    │
    = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

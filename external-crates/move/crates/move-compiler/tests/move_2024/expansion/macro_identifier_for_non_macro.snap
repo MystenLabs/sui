@@ -1,3 +1,6 @@
+---
+
+---
 error[E02010]: invalid name
   ┌─ tests/move_2024/expansion/macro_identifier_for_non_macro.move:2:29
   │
@@ -27,4 +30,3 @@ error[E04030]: invalid usage of lambda type
   │
 3 │     fun foo<T>($x: u64, $f: |u64|) {
   │                             ^^^^^ Unexpected lambda type. Lambdas can only be used with 'macro' functions, as parameters or direct arguments
-

@@ -1,3 +1,6 @@
+---
+
+---
 warning[W02018]: unknown attribute
   ┌─ tests/move_check/parser/attribute_variants.move:2:3
   │
@@ -57,4 +60,3 @@ warning[W02018]: unknown attribute
   │
 4 │ #[bttr0=false, bttr1=0u8, bttr2=0u64, bttr3=0u128]
   │                                       ^^^^^ Unknown attribute 'bttr3'. Custom attributes must be wrapped in 'ext', e.g. #[ext(bttr3)]
-

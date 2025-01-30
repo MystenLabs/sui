@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/module_missing_lbrace.move:2:5
   │
@@ -6,4 +9,3 @@ error[E01002]: unexpected token
   │     │
   │     Unexpected 'fun'
   │     Expected '{' or ':' after the module name
-

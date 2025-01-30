@@ -1,3 +1,6 @@
+---
+
+---
 error[E06002]: use of unassigned variable
   ┌─ tests/move_check/translated_ir_tests/move/commands/if_moves_else_doesnt.move:6:13
   │
@@ -9,4 +12,3 @@ error[E06002]: use of unassigned variable
 5 │     y;
 6 │     assert!(x == 0, 42);
   │             ^ Invalid usage of previously moved variable 'x'.
-

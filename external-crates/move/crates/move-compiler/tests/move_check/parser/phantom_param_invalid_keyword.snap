@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09006]: unused struct type parameter
   ┌─ tests/move_check/parser/phantom_param_invalid_keyword.move:2:18
   │
@@ -14,4 +17,3 @@ error[E01002]: unexpected token
   │                         │
   │                         Unexpected 'T2'
   │                         Expected ',' or '>'
-

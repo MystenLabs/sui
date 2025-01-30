@@ -1,3 +1,6 @@
+---
+
+---
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/invalid_bool_const_exhasutive.move:7:16
   │
@@ -5,4 +8,3 @@ error[E04036]: non-exhaustive pattern
   │                ^ Pattern '_' not covered
   │
   = Match arms with guards are not considered for coverage.
-

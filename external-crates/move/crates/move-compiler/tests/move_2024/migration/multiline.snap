@@ -1,3 +1,6 @@
+---
+
+---
 error[E13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/migration/multiline.move:3:5
   │  
@@ -12,4 +15,3 @@ error[E13002]: feature is deprecated in specified edition
 6 │ │         friend
 7 │ │     ) fun t() {}
   │ ╰─────^ 'public(friend)' is deprecated. Replace with 'public(package)'
-

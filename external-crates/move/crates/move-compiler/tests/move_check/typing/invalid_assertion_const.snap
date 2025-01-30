@@ -1,3 +1,6 @@
+---
+
+---
 error[E04035]: invalid constant usage in error context
   ┌─ tests/move_check/typing/invalid_assertion_const.move:5:15
   │
@@ -19,4 +22,3 @@ error[E04035]: invalid constant usage in error context
   │                        ^ Invalid error code for assertion, expected a u64 or constant declared with '#[error]' annotation
   │
   = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
-

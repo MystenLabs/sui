@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/parser/ability_modifies_infix_no_abilities_postfix.move:3:5
   │
@@ -28,4 +31,3 @@ error[E01002]: unexpected token
   │ 
   │ Unexpected end-of-file
   │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', 'struct', or 'enum'
-

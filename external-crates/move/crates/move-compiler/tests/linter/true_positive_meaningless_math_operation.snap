@@ -1,3 +1,6 @@
+---
+
+---
 warning[Lint W01003]: math operator can be simplified
   ┌─ tests/linter/true_positive_meaningless_math_operation.move:3:9
   │
@@ -337,4 +340,3 @@ warning[Lint W01003]: math operator can be simplified
    │         Because of this operand
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

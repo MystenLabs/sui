@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
    ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:10:52
    │
@@ -24,4 +27,3 @@ error[E04001]: restricted visibility
    ·
 12 │     fun f_private_call_package() { mod_0::f_pkg_public() }
    │                                    ^^^^^^^^^^^^^^^^^^^^^ Invalid call to 'public(package)' visible function '0x42::mod_0::f_pkg_public'
-

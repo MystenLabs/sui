@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09001]: unused alias
   ┌─ tests/move_check/expansion/use_nested_self_as_invalid.move:8:26
   │
@@ -17,4 +20,3 @@ error[E03002]: unbound module
    │
 12 │         X::foo();
    │         ^ Unbound module alias 'X'
-

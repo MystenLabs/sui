@@ -1,3 +1,6 @@
+---
+
+---
 error[E06001]: unused value without 'drop'
    ┌─ tests/move_check/liveness/vector_loop.move:23:60
    │
@@ -40,4 +43,3 @@ error[E06001]: unused value without 'drop'
 29 │ │ 
 30 │ │     }
    │ ╰─────^ Invalid return
-

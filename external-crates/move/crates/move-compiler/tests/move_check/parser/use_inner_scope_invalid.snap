@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_check/parser/use_inner_scope_invalid.move:4:13
   │
@@ -29,4 +32,3 @@ error[E01002]: unexpected token
   │         │
   │         Unexpected 'foo'
   │         Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-

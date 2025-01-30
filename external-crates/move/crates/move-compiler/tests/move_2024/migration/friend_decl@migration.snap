@@ -1,3 +1,6 @@
+---
+
+---
 --- tests/move_2024/migration/friend_decl.move
 +++ tests/move_2024/migration/friend_decl.move
 @@ -3,4 +3,4 @@

@@ -1,3 +1,6 @@
+---
+
+---
 error[E02015]: invalid attribute
   ┌─ tests/move_check/warning_suppression/bad_attr.move:3:16
   │
@@ -15,4 +18,3 @@ warning[W10007]: issue with attribute value
   │
 3 │ #[allow(all(), unused = true, unused_(assignment, variable))]
   │                                                   ^^^^^^^^ Unknown warning filter 'unused_(variable)'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/constant_internal.move:10:9
    │
@@ -15,4 +18,3 @@ error[E04001]: restricted visibility
    ·
 11 │         C;
    │         ^ Invalid access of '0x2::X::C'
-

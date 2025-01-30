@@ -1,3 +1,6 @@
+---
+
+---
 error[E06002]: use of unassigned variable
   ┌─ tests/move_check/locals/use_before_assign_simple.move:6:17
   │
@@ -45,4 +48,3 @@ error[E06002]: use of unassigned variable
    │             - The variable 's' does not have a value. The variable must be assigned a value before being used.
 25 │         let _s2 = &s;
    │                   ^^ Invalid usage of unassigned variable 's'
-

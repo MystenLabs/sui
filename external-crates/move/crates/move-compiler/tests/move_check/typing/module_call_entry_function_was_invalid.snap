@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/module_call_entry_function_was_invalid.move:26:48
    │
@@ -6,4 +9,3 @@ error[E04001]: restricted visibility
    ·
 26 │     public entry fun f_script_call_private() { X::f_private() }
    │                                                ^^^^^^^^^^^^^^ Invalid call to internal function '0x2::X::f_private'
-

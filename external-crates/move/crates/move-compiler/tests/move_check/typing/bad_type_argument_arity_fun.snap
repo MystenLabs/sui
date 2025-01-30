@@ -1,3 +1,6 @@
+---
+
+---
 error[E03008]: too few type arguments
    ┌─ tests/move_check/typing/bad_type_argument_arity_fun.move:11:17
    │
@@ -24,4 +27,3 @@ error[E04004]: expected a single non-reference type
    │                 │   │
    │                 │   Expected a single non-reference type, but found: '&mut u64'
    │                 Invalid type argument
-

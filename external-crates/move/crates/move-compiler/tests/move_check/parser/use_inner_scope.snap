@@ -1,3 +1,6 @@
+---
+
+---
 error[E03002]: unbound module
   ┌─ tests/move_check/parser/use_inner_scope.move:5:13
   │
@@ -93,4 +96,3 @@ error[E03002]: unbound module
    │
 46 │             use 0x3::Salsa::{Self, foo as bar, foo};
    │                 ^^^^^^^^^^ Invalid 'use'. Unbound module: '0x3::Salsa'
-

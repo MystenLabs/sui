@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:7:9
   │
@@ -72,4 +75,3 @@ error[E01002]: unexpected token
    │         │
    │         Unexpected 'param'
    │         Expected ';'
-

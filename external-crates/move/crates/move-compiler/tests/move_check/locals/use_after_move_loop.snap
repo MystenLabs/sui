@@ -1,3 +1,6 @@
+---
+
+---
 error[E06002]: use of unassigned variable
   ┌─ tests/move_check/locals/use_after_move_loop.move:4:20
   │
@@ -77,4 +80,3 @@ error[E06002]: use of unassigned variable
    │                                            Invalid usage of previously moved variable 'x'.
    │                                            Suggestion: use 'copy x' to avoid the move.
    │                                            In a loop, this typically means it was moved in the first iteration, and is not available by the second iteration.
-

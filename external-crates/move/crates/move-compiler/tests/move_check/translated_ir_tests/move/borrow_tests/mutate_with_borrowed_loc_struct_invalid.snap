@@ -1,3 +1,6 @@
+---
+
+---
 error[E06001]: unused value without 'drop'
   ┌─ tests/move_check/translated_ir_tests/move/borrow_tests/mutate_with_borrowed_loc_struct_invalid.move:7:9
   │
@@ -27,4 +30,3 @@ error[E07003]: invalid operation, could create dangling a reference
    │                 ---- It is still being borrowed by this reference
 16 │         s = S { z: 7 };
    │         ^ Invalid assignment of variable 's'
-

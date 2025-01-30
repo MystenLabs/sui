@@ -1,3 +1,6 @@
+---
+
+---
 error[E04006]: invalid subtype
   ┌─ tests/move_check/typing/subtype_annotation_invalid.move:5:14
   │
@@ -37,4 +40,3 @@ error[E04006]: invalid subtype
    │               │    │      Expected: '&mut u64'
    │               │    Invalid type annotation
    │               Given: '&{integer}'
-

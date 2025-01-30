@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:21:9
    │
@@ -598,4 +601,3 @@ error[E05001]: ability constraint not satisfied
    │                       │    │         The type '0x42::M::Pair<u64, TnoC>' can have the ability 'copy' but the type argument 'TnoC' does not have the required ability 'copy'
    │                       │    The type '0x42::M::Pair<u64, TnoC>' does not have the ability 'copy'
    │                       'copy' constraint not satisifed
-

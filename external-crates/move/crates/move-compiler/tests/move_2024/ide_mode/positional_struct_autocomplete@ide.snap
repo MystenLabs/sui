@@ -1,3 +1,6 @@
+---
+
+---
 note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:10:23
    │
@@ -39,4 +42,3 @@ error[E01002]: unexpected token
    │                          │
    │                          Unexpected ';'
    │                          Expected an identifier or a decimal number
-

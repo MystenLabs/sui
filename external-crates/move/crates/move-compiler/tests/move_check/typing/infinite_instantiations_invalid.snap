@@ -1,3 +1,6 @@
+---
+
+---
 error[E04019]: cyclic type instantiation
   ┌─ tests/move_check/typing/infinite_instantiations_invalid.move:7:9
   │
@@ -79,4 +82,3 @@ error[E04019]: cyclic type instantiation
    ·
 69 │         tl<BL>()
    │         -------- 'bl<bl::BL>' calls 'tl<bl::BL>'
-

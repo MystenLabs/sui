@@ -1,3 +1,6 @@
+---
+
+---
 error[E13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/parser/top_level_module_address_invalid.move:1:1
   │
@@ -11,4 +14,3 @@ error[E02004]: invalid 'module' declaration
   │
 2 │     module m;
   │            ^ Cannot define 'module' label in address block
-

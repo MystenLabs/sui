@@ -1,3 +1,6 @@
+---
+
+---
 error[E04023]: invalid method call
    ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:18:13
    │
@@ -93,4 +96,3 @@ error[E04023]: invalid method call
    │         │
    │         Invalid method call
    │         Unable to infer type for method call. Try annotating this type
-

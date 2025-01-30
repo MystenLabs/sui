@@ -1,3 +1,6 @@
+---
+
+---
 error[E03014]: invalid use of label
   ┌─ tests/move_2024/naming/named_blocks_invalid.move:4:31
   │
@@ -125,4 +128,3 @@ error[E03015]: unbound label
    │
 87 │                 break 'l2
    │                       ^^^ Invalid break. Unbound label 'l2
-

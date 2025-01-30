@@ -1,3 +1,6 @@
+---
+
+---
 error[E03004]: unbound type
    ┌─ tests/move_2024/unit_test/cross_module_members_non_test_function.move:22:23
    │
@@ -9,4 +12,3 @@ error[E03006]: unexpected name in this position
    │
 23 │         P::build_foo()
    │         ^ Could not resolve the name 'P'
-

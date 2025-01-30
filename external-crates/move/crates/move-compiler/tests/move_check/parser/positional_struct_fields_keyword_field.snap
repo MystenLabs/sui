@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_check/parser/positional_struct_fields_keyword_field.move:4:5
   │
@@ -36,4 +39,3 @@ error[E01002]: unexpected token
   │                          │
   │                          Unexpected ')'
   │                          Expected an identifier
-

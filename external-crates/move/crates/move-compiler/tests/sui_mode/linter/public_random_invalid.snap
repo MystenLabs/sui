@@ -1,3 +1,6 @@
+---
+
+---
 warning[Lint W99006]: Risky use of 'sui::random'
   ┌─ tests/sui_mode/linter/public_random_invalid.move:7:42
   │
@@ -47,4 +50,3 @@ warning[Lint W99006]: Risky use of 'sui::random'
    = Functions that accept 'sui::random::Random' as a parameter might be abused by attackers by inspecting the results of randomness
    = Non-public functions are preferred
    = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

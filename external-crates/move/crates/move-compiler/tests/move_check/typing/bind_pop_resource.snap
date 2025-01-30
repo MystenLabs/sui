@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/bind_pop_resource.move:5:13
   │
@@ -43,4 +46,3 @@ error[E06001]: unused value without 'drop'
   │             The local variable '_r' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
 9 │         let (_, _):(R, R) = (R{}, R{});
   │                                       ^ Invalid return
-

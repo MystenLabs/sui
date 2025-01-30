@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_2024/naming/lambda_shadows_function.move:4:22
   │
@@ -15,4 +18,3 @@ error[E02010]: invalid name
   │     Declared 'macro' here
   │
   = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
-

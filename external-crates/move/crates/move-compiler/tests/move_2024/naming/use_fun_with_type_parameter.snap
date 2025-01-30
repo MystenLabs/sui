@@ -1,3 +1,6 @@
+---
+
+---
 error[E02017]: invalid 'use fun' declaration
   ┌─ tests/move_2024/naming/use_fun_with_type_parameter.move:3:9
   │
@@ -14,4 +17,3 @@ error[E04023]: invalid method call
 3 │         use fun foo as T.foo;
 4 │         x.foo();
   │         ^^^^^^^ Invalid method call
-

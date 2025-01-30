@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/if_mismatched_branches.move:3:9
   │
@@ -87,4 +90,3 @@ error[E04007]: incompatible types
    │         │         │               Found expression list of length 3: '({integer}, bool, {integer})'. It is not compatible with the other type of length 2.
    │         │         Found expression list of length 2: '({integer}, bool)'. It is not compatible with the other type of length 3.
    │         Incompatible branches
-

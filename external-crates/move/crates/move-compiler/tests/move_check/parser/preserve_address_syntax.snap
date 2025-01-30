@@ -1,3 +1,6 @@
+---
+
+---
 error[E03002]: unbound module
   ┌─ tests/move_check/parser/preserve_address_syntax.move:5:9
   │
@@ -9,4 +12,3 @@ error[E03002]: unbound module
   │
 6 │         000112::N::bar();
   │         ^^^^^^^^^ Unbound module '112::N'
-

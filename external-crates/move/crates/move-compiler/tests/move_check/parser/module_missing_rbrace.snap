@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/module_missing_rbrace.move:4:1
   │
@@ -6,4 +9,3 @@ error[E01002]: unexpected token
   │ 
   │ Unexpected end-of-file
   │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-

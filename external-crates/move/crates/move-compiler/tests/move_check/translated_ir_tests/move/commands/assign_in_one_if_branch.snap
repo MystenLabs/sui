@@ -1,3 +1,6 @@
+---
+
+---
 error[E06002]: use of unassigned variable
   ┌─ tests/move_check/translated_ir_tests/move/commands/assign_in_one_if_branch.move:7:5
   │
@@ -15,4 +18,3 @@ error[E06002]: use of unassigned variable
   ·
 7 │     x == y;
   │          ^ Invalid usage of unassigned variable 'y'
-

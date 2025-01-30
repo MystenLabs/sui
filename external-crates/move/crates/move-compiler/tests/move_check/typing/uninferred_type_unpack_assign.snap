@@ -1,3 +1,6 @@
+---
+
+---
 error[E04010]: cannot infer type
   ┌─ tests/move_check/typing/uninferred_type_unpack_assign.move:5:9
   │
@@ -9,4 +12,3 @@ error[E04010]: cannot infer type
   │
 5 │         S{} = S{};
   │               ^^^ Could not infer this type. Try adding an annotation
-

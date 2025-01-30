@@ -1,3 +1,6 @@
+---
+
+---
 error[E03002]: unbound module
   ┌─ tests/move_2024/unit_test/cross_module_test_only_module.move:9:9
   │
@@ -9,4 +12,3 @@ error[E03006]: unexpected name in this position
    │
 12 │         M::foo()
    │         ^^^^^^ Unexpected module identifier. A module identifier is not a valid expression
-

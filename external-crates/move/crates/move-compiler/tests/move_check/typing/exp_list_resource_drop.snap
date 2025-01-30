@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/exp_list_resource_drop.move:7:9
   │
@@ -33,4 +36,3 @@ error[E04010]: cannot infer type
   │
 9 │         (0, S{ }, Box { f: abort 0 });
   │                   ^^^^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
-

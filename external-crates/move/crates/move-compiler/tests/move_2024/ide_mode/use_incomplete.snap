@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_2024/ide_mode/use_incomplete.move:5:9
   │
@@ -74,4 +77,3 @@ error[E01002]: unexpected token
    │                - To match this '{'
 32 │         let _tmp = 42; // reset parser to see if the next lines compile
    │                      ^ Expected '}'
-

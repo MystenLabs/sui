@@ -1,3 +1,6 @@
+---
+
+---
 error[E03013]: positional call mismatch
   ┌─ tests/move_2024/matching/invalid_empty_match_2.move:9:13
   │
@@ -8,4 +11,3 @@ error[E03013]: positional call mismatch
   │             ^^^^^^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
   │
   = Remove '()' arguments from this pattern
-

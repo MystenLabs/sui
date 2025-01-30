@@ -1,3 +1,6 @@
+---
+
+---
 error[E02017]: invalid 'use fun' declaration
    ┌─ tests/move_2024/naming/public_use_fun_invalid_type.move:21:5
    │
@@ -30,4 +33,3 @@ error[E02017]: invalid 'use fun' declaration
    │     │
    │     Invalid 'use fun'. Cannot publicly associate a function with a type defined in another module
    │     Declared 'public' here. Consider removing to make a local 'use fun' instead
-

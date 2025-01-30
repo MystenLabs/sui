@@ -1,3 +1,6 @@
+---
+
+---
 error[E04016]: too few arguments
   ┌─ tests/move_check/expansion/unpack_assign_block_single_expr.move:4:9
   │
@@ -9,4 +12,3 @@ error[E01002]: unexpected token
   │
 4 │         S { 0 } = S { f: 0 };
   │             ^ Unexpected '<Number>'. Expected a field expression
-

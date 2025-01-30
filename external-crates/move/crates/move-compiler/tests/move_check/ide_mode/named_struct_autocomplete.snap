@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:13:24
    │
@@ -15,4 +18,3 @@ error[E01002]: unexpected token
    │                          │
    │                          Unexpected ';'
    │                          Expected an identifier or a decimal number
-

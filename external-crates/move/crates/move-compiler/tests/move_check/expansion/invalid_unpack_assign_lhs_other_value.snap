@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/invalid_unpack_assign_lhs_other_value.move:3:11
   │
@@ -26,4 +29,3 @@ error[E01009]: invalid assignment
   │
 7 │         foo().bar() = 0;
   │         ^^^^^^^^^^^ Invalid assignment syntax. Expected: a local, a field write, or a deconstructing assignment
-

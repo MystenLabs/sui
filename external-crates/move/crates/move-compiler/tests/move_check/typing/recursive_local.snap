@@ -1,3 +1,6 @@
+---
+
+---
 error[E04010]: cannot infer type
   ┌─ tests/move_check/typing/recursive_local.move:4:13
   │
@@ -25,4 +28,3 @@ error[E04010]: cannot infer type
   │
 5 │         x = (x, 0);
   │              ^ Could not infer this type. Try adding an annotation
-

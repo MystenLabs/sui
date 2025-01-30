@@ -1,3 +1,6 @@
+---
+
+---
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/invalid_or_pattern.move:9:12
   │
@@ -14,4 +17,3 @@ error[E03013]: positional call mismatch
    │                      ^^^^^^^^^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
    │
    = Remove '{ }' arguments from this pattern
-

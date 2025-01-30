@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09012]: unused 'mut' modifiers
   ┌─ tests/move_2024/typing/mut_ref_match.move:9:22
   │
@@ -7,4 +10,3 @@ warning[W09012]: unused 'mut' modifiers
   │                  Consider removing the 'mut' declaration here
   │
   = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

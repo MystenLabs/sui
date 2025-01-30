@@ -1,3 +1,6 @@
+---
+
+---
 error[E04003]: built-in operation not supported
   ┌─ tests/move_2024/naming/type_hole_valid_location_invalid_usage.move:6:9
   │
@@ -11,4 +14,3 @@ error[E04010]: cannot infer type
   │
 6 │         0 as S<_>;
   │                ^ Could not infer this type. Try adding an annotation
-

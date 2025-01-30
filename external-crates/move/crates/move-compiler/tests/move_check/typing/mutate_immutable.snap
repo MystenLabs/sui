@@ -1,3 +1,6 @@
+---
+
+---
 error[E04006]: invalid subtype
   ┌─ tests/move_check/typing/mutate_immutable.move:5:10
   │
@@ -28,4 +31,3 @@ error[E04006]: invalid subtype
    │          │
    │          Invalid mutation. Expected a mutable reference
    │          Expected: '&mut _'
-

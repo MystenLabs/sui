@@ -1,3 +1,6 @@
+---
+
+---
 error[E03022]: invalid usage position
    ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:16:17
    │
@@ -37,4 +40,3 @@ error[E04003]: built-in operation not supported
    │                 --------  ^ Invalid argument to '>'
    │                 │          
    │                 Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-

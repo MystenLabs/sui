@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09001]: unused alias
   ┌─ tests/move_check/parser/friend_decl_more_than_one_module.move:6:15
   │
@@ -14,4 +17,3 @@ error[E01002]: unexpected token
   │              │
   │              Unexpected '0x42'
   │              Expected ';'
-

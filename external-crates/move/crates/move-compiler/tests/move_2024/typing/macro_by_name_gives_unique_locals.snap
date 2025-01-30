@@ -1,3 +1,6 @@
+---
+
+---
 error[E07005]: invalid transfer of references
    ┌─ tests/move_2024/typing/macro_by_name_gives_unique_locals.move:13:9
    │
@@ -6,4 +9,3 @@ error[E07005]: invalid transfer of references
    ·
 25 │         foo!(&mut s);
    │              ------ It is still being mutably borrowed by this reference
-

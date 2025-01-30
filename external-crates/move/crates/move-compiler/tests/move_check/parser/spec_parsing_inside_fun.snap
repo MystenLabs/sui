@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:2:22
   │
@@ -123,4 +126,3 @@ warning[W00001]: DEPRECATED. will be removed
    │
 34 │         &mut spec {};
    │              ^^^^^^^ Specification blocks are deprecated and are no longer used
-

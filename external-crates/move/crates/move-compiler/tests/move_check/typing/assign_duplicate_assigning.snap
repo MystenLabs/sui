@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09003]: unused assignment
   ┌─ tests/move_check/typing/assign_duplicate_assigning.move:6:10
   │
@@ -61,4 +64,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │          -        ^ Duplicate usage of local 'f' in a given assignment
   │          │         
   │          Previously assigned here
-

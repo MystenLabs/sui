@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
    ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:9:9
    │
@@ -81,4 +84,3 @@ error[E04001]: restricted visibility
    ·
 30 │         a::m::t1!();
    │         ^^^^^^^^^^^ Invalid call to 'public(package)' visible function 'a::m::t1'
-

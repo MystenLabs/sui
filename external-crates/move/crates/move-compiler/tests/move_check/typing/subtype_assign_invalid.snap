@@ -1,3 +1,6 @@
+---
+
+---
 error[E04006]: invalid subtype
   ┌─ tests/move_check/typing/subtype_assign_invalid.move:5:17
   │
@@ -46,4 +49,3 @@ error[E04006]: invalid subtype
    │             ^        -- Given: '&{integer}'
    │             │         
    │             Invalid assignment to variable 'y'
-

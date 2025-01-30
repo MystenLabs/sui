@@ -1,3 +1,6 @@
+---
+
+---
 note[I15006]: IDE path autocomplete
   ┌─ tests/move_2024/ide_mode/chain_lower_case_incomplete.move:1:1
   │  
@@ -31,4 +34,3 @@ error[E03009]: unbound variable
   │
 5 │         b
   │         ^ Unbound variable 'b'
-

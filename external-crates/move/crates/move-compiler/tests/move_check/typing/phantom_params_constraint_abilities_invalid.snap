@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:11:12
    │
@@ -241,4 +244,3 @@ error[E05001]: ability constraint not satisfied
 33 │ │             HasKey<NoAbilities, NoAbilities>
 34 │ │           >();
    │ ╰─────────────^ 'store' constraint not satisifed
-

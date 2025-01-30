@@ -1,3 +1,6 @@
+---
+
+---
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/matching/invalid_raw_variant_name.move:10:12
    │
@@ -30,4 +33,3 @@ error[E01002]: unexpected token
    │
 11 │         E::X { x: y } | E::Y(y) | Z { z: y } => *y
    │                                   ^ Unexpected name access. Expected a valid 'enum' variant, 'struct', or 'const'.
-

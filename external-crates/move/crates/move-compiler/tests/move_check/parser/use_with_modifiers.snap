@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_check/parser/use_with_modifiers.move:3:5
   │
@@ -39,4 +42,3 @@ error[E01003]: invalid modifier
   │
 7 │     public native entry use a::m as m5;
   │                   ^^^^^ Invalid use declaration. 'entry' is used only on functions
-

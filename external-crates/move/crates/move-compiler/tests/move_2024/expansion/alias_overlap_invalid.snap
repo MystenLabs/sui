@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/expansion/alias_overlap_invalid.move:9:15
   │
@@ -13,4 +16,3 @@ error[E02001]: duplicate declaration, item, or annotation
    │            - Alias previously defined here
 14 │     public struct S() has copy, drop; // ERROR
    │                   ^ Duplicate module member or alias 'S'. Top level names in a namespace must be unique
-

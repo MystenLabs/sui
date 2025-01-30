@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/translated_ir_tests/move/signer/copy_loc.move:3:9
   │
@@ -5,4 +8,3 @@ error[E05001]: ability constraint not satisfied
   │              ------ The type 'signer' does not have the ability 'copy'
 3 │         copy s
   │         ^^^^^^ Invalid 'copy' of owned value without the 'copy' ability
-

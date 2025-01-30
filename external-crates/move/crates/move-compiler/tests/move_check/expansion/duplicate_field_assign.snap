@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/expansion/duplicate_field_assign.move:5:9
   │
@@ -15,4 +18,3 @@ warning[W09003]: unused assignment
   │             ^ Unused assignment for variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

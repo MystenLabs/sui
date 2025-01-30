@@ -1,3 +1,6 @@
+---
+
+---
 error[E02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/nesting_with_phantoms_invalid.move:20:51
    │
@@ -14,4 +17,3 @@ error[E02013]: invalid phantom type parameter usage
 23 │         One { s: S, x: X },
 24 │         Two(S, X, T),
    │                   ^ Phantom type parameter cannot be used as a field type
-

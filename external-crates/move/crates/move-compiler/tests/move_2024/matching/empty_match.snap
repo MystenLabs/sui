@@ -1,3 +1,6 @@
+---
+
+---
 error[E13003]: feature is under active development
   ┌─ tests/move_2024/matching/empty_match.move:3:17
   │
@@ -5,4 +8,3 @@ error[E13003]: feature is under active development
   │                 ^^^^^ Enums are not supported in bytecode.
   │
   = This feature is currently in development.
-

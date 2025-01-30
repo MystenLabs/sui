@@ -1,3 +1,6 @@
+---
+
+---
 error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/call_on_non_lambda_arg.move:4:9
    │
@@ -24,4 +27,3 @@ error[E04032]: unable to expand macro function
   │
 9 │         foo!(0, |x| x);
   │              ^ Unable to bind lambda to parameter '$f'. The lambda must be passed directly
-

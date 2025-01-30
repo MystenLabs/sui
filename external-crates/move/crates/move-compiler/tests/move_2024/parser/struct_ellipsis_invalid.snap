@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_2024/parser/struct_ellipsis_invalid.move:8:11
   │
@@ -20,4 +23,3 @@ error[E03009]: unbound variable
    │
 10 │         x
    │         ^ Unbound variable 'x'
-

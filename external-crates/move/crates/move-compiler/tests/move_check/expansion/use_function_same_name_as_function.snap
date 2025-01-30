@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/expansion/use_function_same_name_as_function.move:10:9
    │
@@ -22,4 +25,3 @@ error[E02001]: duplicate declaration, item, or annotation
 16 │     }
 17 │     use 0x2::X::u as bar;
    │                      ^^^ Duplicate module member or alias 'bar'. Top level names in a namespace must be unique
-

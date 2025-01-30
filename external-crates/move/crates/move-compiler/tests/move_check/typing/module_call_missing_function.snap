@@ -1,3 +1,6 @@
+---
+
+---
 error[E03003]: unbound module member
    ┌─ tests/move_check/typing/module_call_missing_function.move:13:9
    │
@@ -15,4 +18,3 @@ error[E03003]: unbound module member
    │
 15 │         X::foooooo();
    │         ^^^^^^^^^^ Invalid module access. Unbound function 'foooooo' in module '0x2::X'
-

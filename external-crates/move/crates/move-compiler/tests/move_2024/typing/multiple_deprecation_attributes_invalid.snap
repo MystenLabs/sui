@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/typing/multiple_deprecation_attributes_invalid.move:3:7
   │
@@ -29,4 +32,3 @@ error[E02001]: duplicate declaration, item, or annotation
    │       ----------  ^^^^^^^^^^ Duplicate attribute 'deprecated' attached to the same item
    │       │            
    │       Attribute previously given here
-

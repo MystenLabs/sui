@@ -1,3 +1,6 @@
+---
+
+---
 error[Sui E02007]: invalid object declaration
   ┌─ tests/sui_mode/struct_with_key/key_struct_id_field_incorrect_type.move:4:9
   │
@@ -7,4 +10,3 @@ error[Sui E02007]: invalid object declaration
   │         ^^  ---- But found type: 'bool'
   │         │    
   │         Invalid object 'S'. Structs with the 'key' ability must have 'id: sui::object::UID' as their first field
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E02004]: invalid 'module' declaration
     ┌─ tests/move_check/dependencies/use_cycle_3.move:95:16
     │
@@ -9,4 +12,3 @@ error[E02004]: invalid 'module' declaration
     ·
 106 │     fun foo(): 0x4::B::S {
     │                --------- '0x4::B' uses '0x4::A'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E07003]: invalid operation, could create dangling a reference
    ┌─ tests/move_check/borrows/call_transfer_borrows_invalid.move:16:9
    │
@@ -22,4 +25,3 @@ error[E07003]: invalid operation, could create dangling a reference
 26 │         move x;
 27 │         move y;
    │         ^^^^^^ Invalid move of variable 'y'
-

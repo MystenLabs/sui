@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_check/typing/bind_duplicate_binding.move:5:14
   │
@@ -45,4 +48,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │              -        ^ Duplicate declaration for local 'f' in a given 'let'
   │              │         
   │              Previously declared here
-

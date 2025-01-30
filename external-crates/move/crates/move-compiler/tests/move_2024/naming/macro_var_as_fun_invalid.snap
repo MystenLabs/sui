@@ -1,3 +1,6 @@
+---
+
+---
 error[E03004]: unbound type
   ┌─ tests/move_2024/naming/macro_var_as_fun_invalid.move:3:13
   │
@@ -18,4 +21,3 @@ error[E03005]: unbound unscoped name
   │
 4 │         $var();
   │         ^^^^ Unbound function '$var' in current scope
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_shadow.move:9:9
   │
@@ -6,4 +9,3 @@ error[E04024]: invalid usage of immutable variable
   ·
 9 │         x = x + 1;
   │         ^ Invalid assignment of immutable variable 'x'
-

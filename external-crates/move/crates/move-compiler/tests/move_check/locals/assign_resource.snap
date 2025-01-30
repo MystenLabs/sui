@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09003]: unused assignment
   ┌─ tests/move_check/locals/assign_resource.move:5:13
   │
@@ -89,4 +92,3 @@ error[E06001]: unused value without 'drop'
    │            To satisfy the constraint, the 'drop' ability would need to be added here
 34 │         x = y;
    │         ^ Invalid assignment to variable 'x'
-

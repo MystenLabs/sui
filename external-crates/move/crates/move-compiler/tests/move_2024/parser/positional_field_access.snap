@@ -1,3 +1,6 @@
+---
+
+---
 error[E03010]: unbound field
    ┌─ tests/move_2024/parser/positional_field_access.move:25:9
    │
@@ -37,4 +40,3 @@ error[E03010]: unbound field
    │
 29 │         y.1_0 + y.1_0_0
    │                 ^^^^^^^ Unbound field '100' in '0x42::M::Foo'
-

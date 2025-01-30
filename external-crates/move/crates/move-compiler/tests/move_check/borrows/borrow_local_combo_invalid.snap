@@ -1,3 +1,6 @@
+---
+
+---
 error[E07001]: referential transparency violated
    ┌─ tests/move_check/borrows/borrow_local_combo_invalid.move:13:17
    │
@@ -39,4 +42,3 @@ error[E07002]: mutable ownership violated
 47 │         let y = &mut s;
 48 │         *y;
    │         ^^ Invalid dereference.
-

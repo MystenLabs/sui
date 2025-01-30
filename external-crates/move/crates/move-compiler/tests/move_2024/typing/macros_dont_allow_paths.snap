@@ -1,3 +1,6 @@
+---
+
+---
 error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:6:18
   │
@@ -47,4 +50,3 @@ error[E03006]: unexpected name in this position
    = To use a macro parameter as a value in a path expression, first bind it to a local variable, e.g. 'let n = $n;'
    = Macro parameters are always treated as value expressions, and are not modified by path operations.
      Path operations include 'move', 'copy', '&', '&mut', and field references
-

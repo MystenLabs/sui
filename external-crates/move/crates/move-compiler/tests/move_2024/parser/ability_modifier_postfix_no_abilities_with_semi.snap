@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/ability_modifier_postfix_no_abilities_with_semi.move:3:29
   │
@@ -12,4 +15,3 @@ error[E01002]: unexpected token
   │ 
   │ Unexpected end-of-file
   │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', 'struct', or 'enum'
-

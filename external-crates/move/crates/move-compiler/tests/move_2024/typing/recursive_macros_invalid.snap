@@ -1,3 +1,6 @@
+---
+
+---
 error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_invalid.move:4:13
    │
@@ -45,4 +48,3 @@ error[E04032]: unable to expand macro function
    ·
 42 │         cycle_by_name!(1);
    │         ----------------- 'a::m::cycle_by_name' previously expanded here
-

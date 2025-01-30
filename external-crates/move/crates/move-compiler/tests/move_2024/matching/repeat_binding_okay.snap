@@ -1,3 +1,6 @@
+---
+
+---
 error[E13002]: feature is under active development
   ┌─ tests/move_2024/matching/repeat_binding_okay.move:3:17
   │
@@ -5,4 +8,3 @@ error[E13002]: feature is under active development
   │                 ^^^ Enums are not supported in bytecode.
   │
   = This feature is currently in development.
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/migration/public_friend.move:3:5
   │
@@ -48,4 +51,3 @@ error[E13002]: feature is deprecated in specified edition
    │
 25 │     /*stays*/public(/*deleted*/friend/*deleted*/)/*stays*/fun t6() {}
    │              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'public(friend)' is deprecated. Replace with 'public(package)'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_check/parser/constants_simple.move:5:21
   │
@@ -27,4 +30,3 @@ error[E04013]: invalid statement or expression in constant
   │
 9 │     const C5: vector<vector<bool>> = abort 0;
   │                                      ^^^^^^^ 'abort' expressions are not supported in constants
-

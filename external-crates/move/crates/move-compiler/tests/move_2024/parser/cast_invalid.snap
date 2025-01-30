@@ -1,3 +1,6 @@
+---
+
+---
 error[E01015]: ambiguous 'as'
   ┌─ tests/move_2024/parser/cast_invalid.move:4:9
   │
@@ -60,4 +63,3 @@ error[E01015]: ambiguous 'as'
    │
 14 │         0 as u32 as u32;
    │         ^^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
-

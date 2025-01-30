@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
    ┌─ tests/linter/move_2024/unneeded_return_okay.move:14:9
    │
@@ -51,4 +54,3 @@ error[E03005]: unbound unscoped name
    │
 29 │ fun t7() { return unnamed_fun() }
    │                   ^^^^^^^^^^^ Unbound function 'unnamed_fun' in current scope
-

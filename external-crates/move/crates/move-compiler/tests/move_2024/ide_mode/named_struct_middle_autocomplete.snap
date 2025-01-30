@@ -1,3 +1,6 @@
+---
+
+---
 warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:1:9
   │
@@ -9,4 +12,3 @@ error[E03010]: unbound field
    │
 14 │         let _tmp2 = _s.b.x;
    │                     ^^^^ Unbound field 'b' in 'a::m::B'
-

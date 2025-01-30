@@ -1,3 +1,6 @@
+---
+
+---
 error[E02010]: invalid name
    ┌─ tests/move_2024/matching/invalid_mut.move:10:13
    │
@@ -27,4 +30,3 @@ error[E01002]: unexpected token
    │
 12 │             mut Maybe<u64>::Just(_) => (),
    │             ^^^ Invalid 'mut' keyword on non-variable pattern
-

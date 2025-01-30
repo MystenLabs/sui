@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09006]: unused struct type parameter
   ┌─ tests/move_check/typing/unused_non_phantom_param.move:2:18
   │
@@ -5,4 +8,3 @@ warning[W09006]: unused struct type parameter
   │                  ^^ Unused type parameter 'T2'. Consider declaring it as phantom
   │
   = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

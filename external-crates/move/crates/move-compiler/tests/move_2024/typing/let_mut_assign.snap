@@ -1,3 +1,6 @@
+---
+
+---
 error[E04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_assign.move:7:9
   │
@@ -24,4 +27,3 @@ error[E04024]: invalid usage of immutable variable
   ·
 9 │         y = x + f;
   │         ^ Invalid assignment of immutable variable 'y'
-

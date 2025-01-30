@@ -1,3 +1,6 @@
+---
+
+---
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/matching/multi_or_not_exhaustive.move:12:16
    │
@@ -6,4 +9,3 @@ error[E04036]: non-exhaustive pattern
    │
    = When '_1' is not 5
    = When '_0' is not 5
-

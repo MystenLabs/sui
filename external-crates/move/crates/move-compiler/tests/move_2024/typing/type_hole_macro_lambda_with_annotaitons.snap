@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/type_hole_macro_lambda_with_annotaitons.move:6:37
    │
@@ -43,4 +46,3 @@ error[E04007]: incompatible types
    │         │       │         Expected: 'vector<_>'
    │         │       Given: 'u64'
    │         Invalid type annotation
-

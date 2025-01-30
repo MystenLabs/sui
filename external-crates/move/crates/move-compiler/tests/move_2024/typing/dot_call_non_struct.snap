@@ -1,3 +1,6 @@
+---
+
+---
 error[E04010]: cannot infer type
   ┌─ tests/move_2024/typing/dot_call_non_struct.move:6:9
   │
@@ -117,4 +120,3 @@ error[E04023]: invalid method call
    ·
 18 │     t.f();
    │     ^^^^^ Invalid method call
-

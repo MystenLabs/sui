@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:7:26
    │
@@ -51,4 +54,3 @@ error[E04007]: incompatible types
    │         -- Expected: '()'
 18 │         baz!<None>()
    │         ^^^^^^^^^^^^ Invalid return expression
-

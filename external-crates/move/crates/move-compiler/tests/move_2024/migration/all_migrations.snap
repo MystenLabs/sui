@@ -1,3 +1,6 @@
+---
+
+---
 error[E13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/migration/all_migrations.move:6:5
   │
@@ -93,4 +96,3 @@ error[E13002]: feature is deprecated in specified edition
 48 │ │         friend
 49 │ │     ) fun t4() {}
    │ ╰─────^ 'public(friend)' is deprecated. Replace with 'public(package)'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/struct_invalid_visibility_progress_inside.move:2:5
   │
@@ -11,4 +14,3 @@ error[E03004]: unbound type
   │
 3 │         x: Bar<foo>,
   │            ^^^ Unbound type 'Bar' in current scope
-

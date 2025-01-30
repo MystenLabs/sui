@@ -1,3 +1,6 @@
+---
+
+---
 error[E04003]: built-in operation not supported
   ┌─ tests/move_check/typing/binary_gt_invalid.move:8:9
   │
@@ -241,4 +244,3 @@ error[E04003]: built-in operation not supported
    │         ------   ^^^^^^ Invalid argument to '>'
    │         │         
    │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E04024]: invalid usage of immutable variable
    ┌─ tests/move_2024/typing/mut_patterns.move:27:17
    │
@@ -15,4 +18,3 @@ error[E04024]: invalid usage of immutable variable
    │                  To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
 27 │                 x = x + 1;
    │                 ^ Invalid assignment of immutable variable 'x'
-

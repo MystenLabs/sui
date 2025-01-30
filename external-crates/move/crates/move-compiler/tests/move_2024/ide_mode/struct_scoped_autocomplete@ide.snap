@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09009]: unused struct field
   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:4:21
   │
@@ -43,4 +46,3 @@ error[E01002]: unexpected token
    │                        │
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
-

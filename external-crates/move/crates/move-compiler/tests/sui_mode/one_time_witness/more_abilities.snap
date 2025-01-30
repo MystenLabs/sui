@@ -1,3 +1,6 @@
+---
+
+---
 error[Sui E02004]: invalid one-time witness declaration
   ┌─ tests/sui_mode/one_time_witness/more_abilities.move:6:12
   │
@@ -27,4 +30,3 @@ error[Sui E02004]: invalid one-time witness declaration
    │            Invalid one-time witness declaration
    │
    = One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.
-

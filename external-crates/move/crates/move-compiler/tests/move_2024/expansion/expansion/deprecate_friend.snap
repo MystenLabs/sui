@@ -1,3 +1,6 @@
+---
+
+---
 error[E13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/expansion/expansion/deprecate_friend.move:2:5
   │
@@ -15,4 +18,3 @@ error[E03002]: unbound module
   │
 3 │     friend a::x;
   │            ^^^^ Unbound module 'a::x'
-

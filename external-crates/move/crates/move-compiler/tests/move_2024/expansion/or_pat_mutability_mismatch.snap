@@ -1,3 +1,6 @@
+---
+
+---
 error[E03019]: invalid pattern
   ┌─ tests/move_2024/expansion/or_pat_mutability_mismatch.move:9:18
   │
@@ -17,4 +20,3 @@ error[E03019]: invalid pattern
    │                  left or-pattern binds it immutably
    │
    = Both sides of an or-pattern must bind the same variables with the same mutability.
-

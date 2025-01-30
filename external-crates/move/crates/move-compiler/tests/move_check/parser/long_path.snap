@@ -1,3 +1,6 @@
+---
+
+---
 error[E01016]: invalid name
   ┌─ tests/move_check/parser/long_path.move:7:19
   │
@@ -29,4 +32,3 @@ error[E01016]: invalid name
    │         ^^^^^^^^^^^^^^^^^^ Too many name segments
    │
    = Names may only have 0, 1, or 2 segments separated by '::'
-

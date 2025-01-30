@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/index_invalid_crash.move:13:5
    │
@@ -8,4 +11,3 @@ error[E04007]: incompatible types
    │     │     │
    │     │     Given: '&{integer}'
    │     Invalid call of 'a::m::borrow'. Invalid argument for parameter '_k'
-

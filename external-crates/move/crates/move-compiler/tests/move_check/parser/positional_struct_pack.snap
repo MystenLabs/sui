@@ -1,3 +1,6 @@
+---
+
+---
 error[E03013]: positional call mismatch
   ┌─ tests/move_check/parser/positional_struct_pack.move:7:17
   │
@@ -26,4 +29,3 @@ error[E04016]: too few arguments
   │
 7 │         let _ = Foo(0);
   │                 ^^^^^^ Missing argument for field 'x' in '0x42::M::Foo'
-

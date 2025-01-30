@@ -1,3 +1,6 @@
+---
+
+---
 error[E01009]: invalid assignment
   ┌─ tests/move_check/expansion/weird_apply_assign.move:5:9
   │
@@ -20,4 +23,3 @@ error[E01002]: unexpected token
   │           │
   │           Unexpected 'f'
   │           Expected ';'
-

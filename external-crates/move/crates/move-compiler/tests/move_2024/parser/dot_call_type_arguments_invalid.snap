@@ -1,3 +1,6 @@
+---
+
+---
 error[E03010]: unbound field
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:9
    │
@@ -35,4 +38,3 @@ error[E04003]: built-in operation not supported
    │         ------------  ^^ Invalid argument to '>'
    │         │              
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-

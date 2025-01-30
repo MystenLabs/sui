@@ -1,3 +1,6 @@
+---
+
+---
 error[E07002]: mutable ownership violated
   ┌─ tests/move_check/liveness/dead_refs_nested_invalid.move:9:17
   │
@@ -24,4 +27,3 @@ error[E07002]: mutable ownership violated
 28 │         loop {
 29 │             if (cond) { _ = x_ref; break } else { while (!cond) { _ = x } }
    │                                                                       ^ Invalid copy of variable 'x'
-

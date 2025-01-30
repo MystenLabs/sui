@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_check/translated_ir_tests/move/commands/unpack_wrong_type.move:6:9
   │
@@ -8,4 +11,3 @@ error[E04007]: incompatible types
   │         │
   │         Invalid deconstruction assignment
   │         Given: '0x8675309::Test::X'
-

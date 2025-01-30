@@ -1,3 +1,6 @@
+---
+
+---
 error[E03019]: invalid pattern
   ┌─ tests/move_2024/matching/invalid_repeat_binding_2.move:9:24
   │
@@ -7,4 +10,3 @@ error[E03019]: invalid pattern
   │                        binder 'x' is defined here
   │
   = A pattern variable must be unique, and must appear once in each or-pattern alternative.
-

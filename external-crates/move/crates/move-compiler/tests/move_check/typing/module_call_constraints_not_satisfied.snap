@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:28:9
    │
@@ -309,4 +312,3 @@ error[E05001]: ability constraint not satisfied
    │         │            │
    │         │            The type '0x8675309::M::Box3<U, U, U>' can have the ability 'copy' but the type argument 'U' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
-

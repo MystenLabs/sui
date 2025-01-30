@@ -1,3 +1,6 @@
+---
+
+---
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/counterexample_lits_long.move:4:16
   │
@@ -5,4 +8,3 @@ error[E04036]: non-exhaustive pattern
   │                ^ Pattern '_0' not covered
   │
   = When '_0' is not 0, 5, 10, or 2 other values
-

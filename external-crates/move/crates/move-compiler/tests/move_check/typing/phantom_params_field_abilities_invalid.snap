@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/phantom_params_field_abilities_invalid.move:9:29
   │
@@ -37,4 +40,3 @@ error[E05001]: ability constraint not satisfied
    │                            │        The type '0x42::M::HasStore<0x42::M::NoAbilities, 0x42::M::NoAbilities>' can have the ability 'store' but the type argument '0x42::M::NoAbilities' does not have the required ability 'store'
    │                            Invalid field type. The struct was declared with the ability 'key' so all fields require the ability 'store'
    │                            The type '0x42::M::HasStore<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'store'
-

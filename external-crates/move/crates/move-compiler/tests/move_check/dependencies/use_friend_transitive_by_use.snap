@@ -1,3 +1,6 @@
+---
+
+---
 error[E02004]: invalid 'module' declaration
    ┌─ tests/move_check/dependencies/use_friend_transitive_by_use.move:16:9
    │
@@ -9,4 +12,3 @@ error[E02004]: invalid 'module' declaration
    ·
 16 │         C::c()
    │         ^^^^^^ '0x2::C' uses '0x2::B'. This 'use' relationship creates a dependency cycle.
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/declare_pop_resource.move:5:13
   │
@@ -30,4 +33,3 @@ error[E05001]: ability constraint not satisfied
   │                 ^      - The type '0x8675309::M::R' does not have the ability 'drop'
   │                 │       
   │                 Cannot ignore values without the 'drop' ability. The value must be used
-

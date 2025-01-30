@@ -1,3 +1,6 @@
+---
+
+---
 error[E03021]: invalid type annotation
   ┌─ tests/move_check/naming/type_hole_gated_invalid_usage.move:2:22
   │
@@ -27,4 +30,3 @@ error[E13001]: feature is not supported in specified edition
   │                ^ '_' placeholders for type inference are not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-

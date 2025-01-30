@@ -1,3 +1,6 @@
+---
+
+---
 error[E03004]: unbound type
   ┌─ tests/move_check/naming/unresolved_type_with_args.move:2:28
   │
@@ -33,4 +36,3 @@ error[E03004]: unbound type
   │
 4 │         let _: B<U> = (0: P<U, T>);
   │                           ^ Unbound type 'P' in current scope
-

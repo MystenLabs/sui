@@ -1,3 +1,6 @@
+---
+
+---
 note[I15006]: IDE path autocomplete
   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:2:1
   │  
@@ -100,4 +103,3 @@ error[E01002]: unexpected token
    │                                  │
    │                                  Unexpected ';'
    │                                  Expected an identifier or a decimal number
-

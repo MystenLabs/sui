@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/typing/spec_block_fail.move:3:10
   │
@@ -45,4 +48,3 @@ error[E04007]: incompatible types
   │          │        Invalid type annotation
   │          │        Expected: '(u64, u64)'
   │          Given: '()'
-

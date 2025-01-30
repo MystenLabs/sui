@@ -1,3 +1,6 @@
+---
+
+---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/expansion/use_spec_function.move:3:5
   │  
@@ -33,4 +36,3 @@ warning[W00001]: DEPRECATED. will be removed
 16 │ │         ensures baz();
 17 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
-

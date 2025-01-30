@@ -1,3 +1,6 @@
+---
+
+---
 error[E01008]: invalid hex string
   ┌─ tests/move_check/expansion/hexstring_bad_value.move:3:11
   │
@@ -9,4 +12,3 @@ error[E01008]: invalid hex string
   │
 6 │         x"123"
   │         ^^^^^^ Odd number of characters in hex string. Expected 2 hexadecimal digits for each byte
-

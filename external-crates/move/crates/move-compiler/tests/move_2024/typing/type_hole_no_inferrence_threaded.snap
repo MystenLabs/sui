@@ -1,3 +1,6 @@
+---
+
+---
 error[E04023]: invalid method call
   ┌─ tests/move_2024/typing/type_hole_no_inferrence_threaded.move:8:13
   │
@@ -6,4 +9,3 @@ error[E04023]: invalid method call
 7 │         loop {
 8 │             c.0.x();
   │             ^^^^^^^ Invalid method call
-

@@ -1,3 +1,6 @@
+---
+
+---
 warning[W09002]: unused variable
   ┌─ tests/move_check/parser/missing_angle_brace_close.move:3:13
   │
@@ -19,4 +22,3 @@ error[E01002]: unexpected token
   │                  -   ^ Expected '>'
   │                  │    
   │                  To match this '<'
-

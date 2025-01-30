@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/bind_wrong_type.move:6:13
   │
@@ -121,4 +124,3 @@ error[E04007]: incompatible types
    │                           │              
    │                           Invalid type annotation
    │                           Expected expression list of length 2: '(u64, bool)'
-

@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/parser/nested_module_use_invalid.move:18:59
    │
@@ -47,4 +50,3 @@ error[E03005]: unbound unscoped name
    │
 34 │         let _y = bar(x);
    │                  ^^^ Unbound function 'bar' in current scope
-

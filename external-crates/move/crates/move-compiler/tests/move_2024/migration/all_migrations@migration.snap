@@ -1,3 +1,6 @@
+---
+
+---
 --- tests/move_2024/migration/all_migrations.move
 +++ tests/move_2024/migration/all_migrations.move
 @@ -3,2 +3,2 @@

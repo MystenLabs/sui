@@ -1,3 +1,6 @@
+---
+
+---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:10:31
    │
@@ -203,4 +206,3 @@ error[E05001]: ability constraint not satisfied
    │                  ----  ^^^ 'copy' constraint not satisifed
    │                  │      
    │                  The type 'a::m::None' does not have the ability 'copy'
-

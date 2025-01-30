@@ -1,3 +1,6 @@
+---
+
+---
 error[E04001]: restricted visibility
    ┌─ tests/move_2024/typing/macro_visibility_enum_error.move:8:17
    │
@@ -27,4 +30,3 @@ error[E04001]: restricted visibility
    │
    = This visibility error occurs in a macro body while expanding the macro 'a::m::test'
    = Visibility inside of expanded macros is resolved in the scope of the caller.
-

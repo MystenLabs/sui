@@ -1,3 +1,6 @@
+---
+
+---
 error[E04007]: incompatible types
   ┌─ tests/move_2024/typing/lambda_return_mismatched.move:9:23
   │
@@ -54,4 +57,3 @@ error[E04007]: incompatible types
    │                       │      │
    │                       │      Given expression list of length 3: '(&{integer}, vector<{integer}>, {integer})'
    │                       Invalid return
-

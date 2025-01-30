@@ -1,3 +1,6 @@
+---
+
+---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/global_access_value.move:3:13
   │
@@ -6,4 +9,3 @@ error[E01002]: unexpected token
   │             │
   │             Unexpected '::'
   │             Expected an expression term
-

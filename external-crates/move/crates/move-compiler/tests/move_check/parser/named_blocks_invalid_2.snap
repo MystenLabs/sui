@@ -1,3 +1,6 @@
+---
+
+---
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/named_blocks_invalid_2.move:4:9
   │
@@ -11,4 +14,3 @@ error[E01001]: invalid character
   │
 5 │             if (cond) { return 'name 10 };
   │                                ^^^^^ Unexpected character (')
-

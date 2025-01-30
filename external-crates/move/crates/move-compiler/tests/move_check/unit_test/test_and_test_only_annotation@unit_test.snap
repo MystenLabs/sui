@@ -1,3 +1,6 @@
+---
+
+---
 error[E10004]: invalid usage of known attribute
   ┌─ tests/move_check/unit_test/test_and_test_only_annotation.move:5:7
   │
@@ -7,4 +10,3 @@ error[E10004]: invalid usage of known attribute
   │       ^^^^^^^^^ Function annotated as both #[test] and #[test_only]. You need to declare it as either one or the other
 6 │     public fun boo(_a: signer, _b: signer) { }
   │                --- Error found in this test
-

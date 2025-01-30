@@ -1,3 +1,6 @@
+---
+
+---
 error[E04034]: 'syntax' method types differ
   ┌─ tests/move_2024/typing/syntax_methods_args_polymorphic_invalid.move:6:43
   │
@@ -47,4 +50,3 @@ error[E04034]: 'syntax' method types differ
    │
    = Type parameters must be used the same by position, not name
    = Index operation non-subject parameter types must match exactly
-

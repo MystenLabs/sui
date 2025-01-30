@@ -1,3 +1,6 @@
+---
+
+---
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/naming/use_fun_duplicate_same_scope.move:5:9
   │
@@ -17,4 +20,3 @@ error[E02001]: duplicate declaration, item, or annotation
    │         ^^^     - Function declarations create an implicit 'use fun' when their first argument is a type defined in the same module
    │         │        
    │         Duplicate 'use fun' for 'a::t2::S.bar'
-

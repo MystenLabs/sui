@@ -1,3 +1,6 @@
+---
+
+---
 error[E08001]: cannot compute constant value
   ┌─ tests/move_check/folding/unfoldable_constants.move:3:22
   │
@@ -231,4 +234,3 @@ error[E08001]: cannot compute constant value
    │
 49 │     const CAST3: u32 = ((4294967296: u128) as u32);
    │                         ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
-

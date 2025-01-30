@@ -1,3 +1,6 @@
+---
+
+---
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:6:9
   │
@@ -23,4 +26,3 @@ error[E01002]: unexpected token
   │                 │
   │                 Unexpected ';'
   │                 Expected '('
-

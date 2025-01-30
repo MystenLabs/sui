@@ -1,3 +1,6 @@
+---
+
+---
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/parser/ability_modifier_invalid_infix_with_valid_postfix.move:3:5
   │
@@ -11,4 +14,3 @@ error[E01002]: unexpected token
   │
 3 │     struct Foo has {} has copy;
   │                    ^ Unexpected '{'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'
-

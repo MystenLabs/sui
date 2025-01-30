@@ -1,3 +1,6 @@
+---
+
+---
 warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:1:9
   │
@@ -39,4 +42,3 @@ error[E03009]: unbound variable
    │
 10 │             E::Two(n) => n
    │                          ^ Unbound variable 'n'
-
