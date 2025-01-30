@@ -206,8 +206,13 @@ impl JsonRpcServerBuilder {
         let rpc_middleware = jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new()
             .layer_fn(move |s| MetricsLayer::new(s, metrics.clone()))
             .layer_fn(move |s| TrafficControllerService::new(s, traffic_controller.clone()));
-        let service_builder =
-            jsonrpsee::server::ServerBuilder::new().set_rpc_middleware(rpc_middleware);
+        let service_builder = jsonrpsee::server::ServerBuilder::new()
+            // Since we're not using jsonrpsee's server to actually handle connections this value
+            // is instead limiting the number of concurrent requests and has no impact on the
+            // number of connections. As such, for now we can just set this to a very high value to
+            // disable it artificially limiting us to ~100 conncurrent requests.
+            .max_connections(u32::MAX)
+            .set_rpc_middleware(rpc_middleware);
 
         let mut router = axum::Router::new();
         match server_type {
