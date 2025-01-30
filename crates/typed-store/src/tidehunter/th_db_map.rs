@@ -396,8 +396,7 @@ pub fn open_thdb(
     let config = Arc::new(config);
     let db = Db::open(path, key_shape, config, metrics).unwrap();
     let db = Arc::new(db);
-    db.start_snapshot_stat_report();
-    // db.start_periodic_snapshot();
+    db.start_periodic_snapshot();
     db
 }
 
@@ -406,6 +405,8 @@ fn thdb_config() -> Config {
     modify_frag_size(&mut config);
     // run snapshot every 64 Gb written to wal
     config.snapshot_written_bytes = 64 * 1024 * 1024 * 1024;
+    // force unloading dirty index entries if behind 128 Gb of wal
+    config.snapshot_unload_threshold = 128 * 1024 * 1024 * 1024;
     config.max_dirty_keys = 1024;
     config.max_maps = 32; // 32Gb of mapped space
     config
