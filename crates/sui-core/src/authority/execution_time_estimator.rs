@@ -137,6 +137,7 @@ impl ExecutionTimeObserver {
             // Send a new observation through consensus if our current moving average
             // differs too much from the last one we shared.
             // TODO: Consider only sharing observations for entrypoints with congestion.
+            // TODO: Consider only sharing observations that disagree with consensus estimate.
             let new_average = local_observation.moving_average.get_average();
             if local_observation.last_shared.map_or(true, |last_shared| {
                 let diff = last_shared.abs_diff(new_average);
@@ -156,6 +157,7 @@ impl ExecutionTimeObserver {
                     ExecutionTimeObservation::new(epoch_store.name, to_share),
                 );
                 // TODO: Add metrics for shared observations.
+                // TODO: Add a rate limit on consensus submissions.
                 if let Err(e) = self
                     .consensus_adapter
                     .submit_to_consensus(&[transaction], &epoch_store)

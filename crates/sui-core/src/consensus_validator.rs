@@ -100,6 +100,7 @@ impl SuiTxValidator {
                 }
 
                 ConsensusTransactionKind::ExecutionTimeObservation(obs) => {
+                    // TODO: Use a separate limit for this that may truncate shared observations.
                     if obs.estimates.len()
                         > epoch_store
                             .protocol_config()
