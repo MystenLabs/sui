@@ -51,21 +51,50 @@ const protocolInject = async function (source) {
           .replace(/</g, "&#lt;")
           .replace(/^(#{1,2})\s(?!#)/gm, "### ")}`,
       );
-      const cellStyle = "p-4 border border-solid align-center";
-      if (message.fields.length > 0) {
-        content.push(
-          `\n<table class="w-full table table-fixed">\n<thead>\n<tr>\n<th class="${cellStyle} w-[21%]">Field</th><th class="${cellStyle} w-[23%]">Type</th><th class="${cellStyle} w-[9%] whitespace-nowrap truncate">Label</th><th class="${cellStyle} w-[47%]">Description</th>\n</tr>\n</thead>\n<tbody>`,
-        );
 
+      if (message.fields.length > 0) {
+        const valStyle =
+          "border-l-2 pl-4 border-solid border-transparent border-l-sui-gray-65 col-span-10";
+        const fieldAttr = "pr-4 mr-[2px] col-span-2";
+        content.push(`<p class="ml-4 text-xl">Fields</p>\n<div class="ml-4">`);
+        content.push(
+          `<div class="border border-solid border-y-transparent border-r-transparent border-l-sui-gray-65">`,
+        );
         for (const field of message.fields) {
+          const hasType = field.type && field.type !== "";
+          const hasLabel = field.label && field.label !== "";
+          const hasDesc = field.description && field.description !== "";
+          content.push(`<p class="relative inline-flex items-center ml-4 mb-0 before:content-[''] before:absolute before:left-[-1rem] 
+            before:border-t-transparent before:border-b-transparent before:border-solid
+            before:border-y-5 before:border-r-0 before:border-l-8 before:border-l-sui-gray-65"><span class="text-xl">${field.name}</span></p>`);
           content.push(
-            `<tr>\n<td class="${cellStyle} whitespace-nowrap overflow-auto">${field.name}</td><td class="${cellStyle} whitespace-nowrap overflow-auto">[${field.type}](#${createId(field.fullType)})</td><td class="${cellStyle} whitespace-nowrap truncate">${field.label}</td><td class="${cellStyle}">${field.description
-              .replace(/{/g, "&#123;")
-              .replace(/\n\/?/g, "")
-              .replace(/<(http.*)>/g, "$1")}</td>\n</tr>`,
+            `<div class="grid grid-cols-12 items-center gap-2 my-2 p-4 bg-sui-ghost-white dark:bg-sui-ghost-dark border border-solid dark:border-sui-gray-95 border-sui-gray-50">`,
           );
+
+          if (hasType) {
+            content.push(`<div class="${fieldAttr} text-right">Type</div>`);
+            content.push(
+              `<div class="${valStyle}">[${field.type}](#${createId(field.fullType)})</div>`,
+            );
+          }
+          if (hasLabel) {
+            content.push(`<div class="${fieldAttr} text-right">Label</div>`);
+            content.push(`<div class="${valStyle}">${field.label}</div>`);
+          }
+          if (hasDesc) {
+            content.push(
+              `<div class="${fieldAttr} text-right">Description</div>`,
+            );
+            content.push(
+              `<div class="${valStyle}">${field.description
+                .replace(/{/g, "&#123;")
+                .replace(/\n\/?/g, "")
+                .replace(/<(http.*)>/g, "$1")}</div>`,
+            );
+          }
+          content.push(`</div>`);
         }
-        content.push(`</tbody>\n</table>\n`);
+        content.push("</div>\n</div>");
       }
     }
   }

@@ -54,7 +54,10 @@ export default function Protocol(props) {
           }
         `}
       </style>
-      <select className="p-2 ml-4 w-[200px]" onChange={handleProtoChange}>
+      <label className="mx-2 text-xs" htmlFor="proto">
+        Proto files
+      </label>
+      <select id="proto" className="p-2 w-[200px]" onChange={handleProtoChange}>
         {toc.map((item, i) => {
           return (
             <option key={i} value={i}>
@@ -63,7 +66,14 @@ export default function Protocol(props) {
           );
         })}
       </select>
-      <select className="p-2 ml-4 w-[200px]" onChange={handleMessageChange}>
+      <label className="mx-2 text-xs" htmlFor="messages">
+        Messages
+      </label>
+      <select
+        id="messages"
+        className="p-2 w-[200px]"
+        onChange={handleMessageChange}
+      >
         {messages.map((message) => {
           return (
             <option key={message.name} value={message.name}>
