@@ -74,6 +74,7 @@ fn test_malformed_module() {
         // Write out the corrupted module
         adapter.storage.publish_or_overwrite_module(
             *m.self_id().address(),
+            *m.self_id().address(),
             m.self_id().name().to_owned(),
             blob,
         );
@@ -270,6 +271,7 @@ fn test_malformed_module_dependency() {
         let linkage = LinkageContext::new([(TEST_ADDR, TEST_ADDR)].into_iter().collect());
         adapter.storage.publish_or_overwrite_module(
             *n.self_id().address(),
+            *n.self_id().address(),
             n.self_id().name().to_owned(),
             blob_n,
         );
@@ -342,7 +344,8 @@ fn test_unverifiable_module_dependency() {
         let linkage = LinkageContext::new([(TEST_ADDR, TEST_ADDR)].into_iter().collect());
         adapter.storage.publish_or_overwrite_module(
             *n.self_id().address(),
-            n.self_id().name().to_owned(),
+            *n.self_id().address(),
+            m.self_id().name().to_owned(),
             blob_m,
         );
         let Err(err) = adapter.make_vm(linkage) else {
