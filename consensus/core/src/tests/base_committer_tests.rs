@@ -20,7 +20,7 @@ use crate::{
 #[tokio::test]
 async fn try_direct_commit() {
     telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
+    // Committee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
@@ -76,7 +76,7 @@ async fn try_direct_commit() {
 #[tokio::test]
 async fn idempotence() {
     telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
+    // Committee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
@@ -120,7 +120,7 @@ async fn idempotence() {
 #[tokio::test]
 async fn multiple_direct_commit() {
     telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
+    // Committee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
@@ -161,7 +161,7 @@ async fn multiple_direct_commit() {
 #[tokio::test]
 async fn direct_skip() {
     telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
+    // Committee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
@@ -213,7 +213,7 @@ async fn direct_skip() {
 #[tokio::test]
 async fn indirect_commit() {
     telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
+    // Committee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
@@ -355,7 +355,7 @@ async fn indirect_commit() {
 #[tokio::test]
 async fn indirect_skip() {
     telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
+    // Committee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
@@ -485,7 +485,7 @@ async fn indirect_skip() {
 #[tokio::test]
 async fn undecided() {
     telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
+    // Committee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
@@ -573,7 +573,7 @@ async fn undecided() {
 #[tokio::test]
 async fn test_byzantine_direct_commit() {
     telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
+    // Committee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
