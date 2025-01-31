@@ -4,7 +4,9 @@
 use futures::future;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use serde::{Deserialize, Serialize};
-use sui_json_rpc_types::{SuiGetPastObjectRequest, SuiObjectDataOptions, SuiPastObjectResponse};
+use sui_json_rpc_types::{
+    SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+};
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -24,6 +26,16 @@ mod response;
 #[open_rpc(namespace = "sui", tag = "Objects API")]
 #[rpc(server, namespace = "sui")]
 trait ObjectsApi {
+    /// Return the object information for the latest version of an object.
+    #[method(name = "getObject")]
+    async fn get_object(
+        &self,
+        /// The ID of the queried obect
+        object_id: ObjectID,
+        /// Options for specifying the content to be returned
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse>;
+
     /// Return the object information for a specified version.
     ///
     /// Note that past versions of an object may be pruned from the system, even if they once
@@ -65,6 +77,20 @@ pub struct ObjectsConfig {
 
 #[async_trait::async_trait]
 impl ObjectsApiServer for Objects {
+    async fn get_object(
+        &self,
+        object_id: ObjectID,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse> {
+        let Self(ctx, _) = self;
+        let options = options.unwrap_or_default();
+        Ok(response::live_object(ctx, object_id, &options)
+            .await
+            .with_internal_context(|| {
+                format!("Failed to get object {object_id} at latest version")
+            })?)
+    }
+
     async fn try_get_past_object(
         &self,
         object_id: ObjectID,
@@ -73,7 +99,14 @@ impl ObjectsApiServer for Objects {
     ) -> RpcResult<SuiPastObjectResponse> {
         let Self(ctx, _) = self;
         let options = options.unwrap_or_default();
-        Ok(response::past_object(ctx, object_id, version, &options).await?)
+        Ok(response::past_object(ctx, object_id, version, &options)
+            .await
+            .with_internal_context(|| {
+                format!(
+                    "Failed to get object {object_id} at version {}",
+                    version.value()
+                )
+            })?)
     }
 
     async fn try_multi_get_past_objects(
