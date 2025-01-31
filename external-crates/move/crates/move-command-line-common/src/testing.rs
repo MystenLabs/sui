@@ -91,8 +91,8 @@ impl InstaOptions<(), String> {
 }
 
 // This `pub use` allows for `insta` to be used easily in the macro
-
 pub use insta;
+
 #[macro_export]
 /// A wrapper around `insta::assert_snapshort` to promote uniformity in the Move codebase, intended
 /// to be used with datatest-stable and as a replacement for the hand-rolled baseline tests.
