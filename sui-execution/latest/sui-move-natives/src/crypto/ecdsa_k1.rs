@@ -14,13 +14,15 @@ use fastcrypto::{
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::{
+    execution::{
+        values::{self, Value, VectorRef},
+        Type,
+    },
+    natives::functions::NativeResult,
     pop_arg,
-    values::{self, Value, VectorRef},
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use smallvec::smallvec;

@@ -3,10 +3,8 @@
 
 use crate::legacy_test_cost;
 use move_binary_format::errors::PartialVMResult;
-use move_vm_runtime::native_functions::NativeContext;
-use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
-};
+use move_vm_runtime::execution::{values::Value, Type};
+use move_vm_runtime::natives::functions::{NativeContext, NativeResult};
 use rand::Rng;
 use smallvec::smallvec;
 use std::collections::VecDeque;

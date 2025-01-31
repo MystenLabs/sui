@@ -13,16 +13,18 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
     vm_status::StatusCode,
 };
-use move_vm_runtime::native_charge_gas_early_exit;
-use move_vm_runtime::native_functions::NativeContext;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::natives::functions::NativeContext;
+use move_vm_runtime::{
+    execution::{
+        values::{StructRef, Value},
+        Type,
+    },
+    natives::functions::NativeResult,
     pop_arg,
-    values::{StructRef, Value},
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::extensions::NativeContextMut};
 use smallvec::smallvec;
-use std::collections::VecDeque;
+use std::{cell::RefMut, collections::VecDeque};
 use sui_types::{base_types::MoveObjectType, dynamic_field::derive_dynamic_field_id};
 use tracing::instrument;
 
@@ -31,7 +33,9 @@ const E_FIELD_TYPE_MISMATCH: u64 = 2;
 const E_BCS_SERIALIZATION_FAILURE: u64 = 3;
 
 macro_rules! get_or_fetch_object {
-    ($context:ident, $ty_args:ident, $parent:ident, $child_id:ident, $ty_cost_per_byte:expr) => {{
+    ($context:ident, 
+     $object_runtime:ident,
+     $ty_args:ident, $parent:ident, $child_id:ident, $ty_cost_per_byte:expr) => {{
         let child_ty = $ty_args.pop().unwrap();
         native_charge_gas_early_exit!(
             $context,
@@ -50,11 +54,9 @@ macro_rules! get_or_fetch_object {
             }
         };
 
-        let object_runtime: &mut ObjectRuntime = $context.extensions_mut().get_mut();
-        object_runtime.get_or_fetch_child_object(
+        $object_runtime.get_or_fetch_child_object(
             $parent,
             $child_id,
-            &child_ty,
             &layout,
             &annotated_layout,
             MoveObjectType::from(tag),
@@ -194,7 +196,7 @@ pub fn add_child_object(
     );
 
     // TODO remove this copy_value, which will require VM changes
-    let child_id = get_object_id(child.copy_value().unwrap())
+    let child_id = get_object_id(child.copy_value())
         .unwrap()
         .value_as::<AccountAddress>()
         .unwrap()
@@ -228,14 +230,13 @@ pub fn add_child_object(
             * struct_tag_size.into()
     );
 
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    object_runtime.add_child_object(
-        parent,
-        child_id,
-        &child_ty,
-        MoveObjectType::from(tag),
-        child,
-    )?;
+    {
+        let mut object_runtime: RefMut<ObjectRuntime> = context
+            .extensions_mut()
+            .get::<NativeContextMut<ObjectRuntime>>()
+            .get_mut();
+        object_runtime.add_child_object(parent, child_id, MoveObjectType::from(tag), child)?;
+    };
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
@@ -285,8 +286,14 @@ pub fn borrow_child_object(
         .into();
 
     assert!(args.is_empty());
+    // NB: We need to borrow the runtime and grab the mutable reference and then pass this into
+    // `get_or_fetch_object` so that the lifetime of the returned object is tied to the lifetime of
+    // the runtime reference we are creating here and the borrow checker will be happy with us.
+    let object_runtime: &NativeContextMut<'_, ObjectRuntime<'_>> = context.extensions().get();
+    let mut object_runtime_mut: RefMut<ObjectRuntime> = object_runtime.get_mut();
     let global_value_result = get_or_fetch_object!(
         context,
+        object_runtime_mut,
         ty_args,
         parent,
         child_id,
@@ -353,8 +360,14 @@ pub fn remove_child_object(
     let child_id = pop_arg!(args, AccountAddress).into();
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
+    // NB: We need to borrow the runtime and grab the mutable reference and then pass this into
+    // `get_or_fetch_object` so that the lifetime of the returned object is tied to the lifetime of
+    // the runtime reference we are creating here and the borrow checker will be happy with us.
+    let object_runtime: &NativeContextMut<'_, ObjectRuntime<'_>> = context.extensions().get();
+    let mut object_runtime_mut: RefMut<ObjectRuntime> = object_runtime.get_mut();
     let global_value_result = get_or_fetch_object!(
         context,
+        object_runtime_mut,
         ty_args,
         parent,
         child_id,
@@ -415,8 +428,11 @@ pub fn has_child_object(
 
     let child_id = pop_arg!(args, AccountAddress).into();
     let parent = pop_arg!(args, AccountAddress).into();
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    let has_child = object_runtime.child_object_exists(parent, child_id)?;
+    let has_child = {
+        let mut object_runtime: RefMut<ObjectRuntime> = context.extensions().get::<NativeContextMut<ObjectRuntime>>().get_mut();
+        object_runtime.child_object_exists(parent, child_id)?
+    };
+
     Ok(NativeResult::ok(
         context.gas_used(),
         smallvec![Value::bool(has_child)],
@@ -485,12 +501,11 @@ pub fn has_child_object_with_ty(
             * u64::from(tag.abstract_size_for_gas_metering()).into()
     );
 
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    let has_child = object_runtime.child_object_exists_and_has_type(
-        parent,
-        child_id,
-        &MoveObjectType::from(tag),
-    )?;
+    let has_child = {
+        let mut object_runtime: RefMut<ObjectRuntime> = context.extensions().get::<NativeContextMut<ObjectRuntime>>().get_mut();
+        object_runtime.child_object_exists_and_has_type(parent, child_id, &MoveObjectType::from(tag))?
+    };
+
     Ok(NativeResult::ok(
         context.gas_used(),
         smallvec![Value::bool(has_child)],

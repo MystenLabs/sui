@@ -7,10 +7,10 @@ use move_core_types::{
     language_storage::TypeTag,
     runtime_value::{MoveStructLayout, MoveTypeLayout},
 };
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
+use move_vm_runtime::{
+    execution::values::Value, execution::Type, natives::functions::NativeResult,
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
