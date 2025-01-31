@@ -23,7 +23,7 @@ use move_binary_format::{
         AbilitySet, CodeOffset, ConstantPoolIndex, EnumDefInstantiationIndex, EnumDefinitionIndex,
         FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex, JumpTableInner,
         LocalIndex, SignatureIndex, SignatureToken, StructDefinitionIndex, VariantHandleIndex,
-        VariantInstantiationHandleIndex, VariantJumpTable, VariantTag,
+        VariantInstantiationHandleIndex, VariantJumpTable, VariantTag, Visibility,
     },
     file_format_common::Opcodes,
     internals::ModuleIndex,
@@ -143,6 +143,7 @@ pub struct Function {
     #[allow(unused)]
     pub file_format_version: u32,
     pub is_entry: bool,
+    pub visibility: Visibility,
     pub index: FunctionDefinitionIndex,
     // [ALLOC] These are allocated in the package arena.
     pub code: *const [Bytecode],
