@@ -3,12 +3,16 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use async_graphql::dataloader::Loader;
+use anyhow::{anyhow, Context as _};
+use async_graphql::dataloader::{DataLoader, Loader};
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
 use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
 use sui_types::base_types::ObjectID;
 
-use super::reader::{ReadError, Reader};
+use super::{
+    object_versions::LatestObjectVersionKey,
+    reader::{ReadError, Reader},
+};
 
 /// Key for fetching the contents a particular version of an object.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -61,4 +65,28 @@ impl Loader<VersionedObjectKey> for Reader {
             })
             .collect())
     }
+}
+
+/// Load the contents of the latest version of an object, if it exists. This function does not
+/// respect deletion and wrapping. If an object is deleted or wrapped, it will return the contents
+/// of the object before the deletion or wrapping.
+pub(crate) async fn load_latest(
+    loader: &DataLoader<Reader>,
+    object_id: ObjectID,
+) -> Result<Option<StoredObject>, anyhow::Error> {
+    let latest_version = loader
+        .load_one(LatestObjectVersionKey(object_id))
+        .await
+        .context("Failed to load latest version")?
+        .ok_or_else(|| anyhow!("No latest version found"))?;
+
+    let stored = loader
+        .load_one(VersionedObjectKey(
+            object_id,
+            latest_version.object_version as u64,
+        ))
+        .await
+        .context("Failed to load latest object")?;
+
+    Ok(stored)
 }
