@@ -906,9 +906,10 @@ fn handle_expected_output(test_path: &Path, output: impl AsRef<str>) -> Result<(
 
 fn insta_snapshot(test_path: &Path, output: impl AsRef<str>) {
     let test_name = test_path.file_stem().unwrap().to_string_lossy();
+    let contents = output.as_ref();
     insta_assert! {
         name: test_name,
         input_path: test_path,
-        contents: output
+        contents: contents,
     }
 }
