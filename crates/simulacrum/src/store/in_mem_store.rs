@@ -3,6 +3,8 @@
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::resolver::SerializedPackage;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::{BTreeMap, HashMap};
 use sui_config::genesis;
@@ -302,6 +304,30 @@ impl ModuleResolver for InMemoryStore {
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         get_module(self, module_id)
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        let mut packages = [const { None }; N];
+        for (i, id) in ids.iter().enumerate() {
+            packages[i] = load_package_object_from_object_store(self, &ObjectID::from(*id))?
+                .map(|pkg| pkg.move_package().into_serialized_move_package())
+        }
+        Ok(packages)
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        ids.iter()
+            .map(|id| {
+                load_package_object_from_object_store(self, &ObjectID::from(*id))
+                    .map(|pkg| pkg.map(|pkg| pkg.move_package().into_serialized_move_package()))
+            })
+            .collect()
     }
 }
 
