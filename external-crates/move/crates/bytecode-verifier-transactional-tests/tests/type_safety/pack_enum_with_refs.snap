@@ -1,3 +1,7 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/pack_enum_with_refs.mvir
+---
 processed 9 tasks
 
 task 0, lines 1-11:

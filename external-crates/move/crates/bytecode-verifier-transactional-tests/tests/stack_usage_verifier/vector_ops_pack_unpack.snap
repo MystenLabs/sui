@@ -1,3 +1,7 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/stack_usage_verifier/vector_ops_pack_unpack.mvir
+---
 processed 4 tasks
 
 task 0, lines 1-11:

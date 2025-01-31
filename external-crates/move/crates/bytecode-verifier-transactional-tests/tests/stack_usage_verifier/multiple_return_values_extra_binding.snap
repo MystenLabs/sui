@@ -1,3 +1,7 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/stack_usage_verifier/multiple_return_values_extra_binding.mvir
+---
 processed 2 tasks
 
 task 1, lines 23-45:

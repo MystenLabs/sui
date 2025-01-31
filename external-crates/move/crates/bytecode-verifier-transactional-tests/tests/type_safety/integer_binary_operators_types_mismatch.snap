@@ -1,3 +1,7 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/integer_binary_operators_types_mismatch.mvir
+---
 processed 191 tasks
 
 task 0, lines 1-13:
