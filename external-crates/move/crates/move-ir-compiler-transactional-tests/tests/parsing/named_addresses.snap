@@ -1,3 +1,7 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-ir-compiler-transactional-tests/tests/parsing/named_addresses.mvir
+---
 processed 3 tasks
 
 task 2, lines 16-36:
@@ -34,4 +38,3 @@ Constants [
 	0 => address: 0x0000000000000000000000000000000000000000000000000000000000000001
 ]
 }
-

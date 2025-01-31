@@ -1,3 +1,7 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-ir-compiler-transactional-tests/tests/bytecode-generation/statements/enums.mvir
+---
 processed 1 task
 
 task 0, lines 1-71:
@@ -108,4 +112,3 @@ Jump tables:
 }
 
 }
-
