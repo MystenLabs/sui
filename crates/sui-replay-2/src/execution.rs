@@ -117,12 +117,12 @@ impl BackingPackageStore for ReplayStore<'_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         info!("Getting package object for {:?}", package_id);
         if is_framework_package(package_id) {
-            let (pkg, txn_digest) = self
+            let pkg = self
                 .env
                 .get_system_package_at_epoch(package_id, self.epoch)
+                .map(|(pkg, _digest)| PackageObject::new(pkg.clone()))
                 .unwrap();
-            let package = PackageObject::new(Object::new_from_package(pkg, txn_digest));
-            Ok(Some(package))
+            Ok(Some(pkg))
         } else {
             Ok(self
                 .env

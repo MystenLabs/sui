@@ -11,9 +11,7 @@ use std::{
     fmt::Debug,
     ops::Bound,
 };
-use sui_types::{
-    base_types::ObjectID, digests::TransactionDigest, move_package::MovePackage, object::Object,
-};
+use sui_types::{base_types::ObjectID, digests::TransactionDigest, object::Object};
 use tracing::debug;
 
 // True if the package is a system package
@@ -31,10 +29,8 @@ pub struct ReplayEnvironment {
     // caches
     //
 
-    // system packages as pkg_id -> epoch -> MovePackage
-    system_packages: BTreeMap<ObjectID, BTreeMap<u64, MovePackage>>,
-    // all packages as pkg_id -> MovePackage
-    packages: BTreeMap<ObjectID, MovePackage>,
+    // system packages as pkg_id -> epoch -> MovePackage (as Object)
+    system_packages: BTreeMap<ObjectID, BTreeMap<u64, Object>>,
     // all package objects as pkg_id -> Object
     pub(crate) package_objects: BTreeMap<ObjectID, Object>,
     // objects as object_id -> version -> Object
@@ -56,7 +52,6 @@ impl ReplayEnvironment {
             data_store,
             epoch_info,
             system_packages,
-            packages: BTreeMap::new(),
             package_objects: BTreeMap::new(),
             objects: BTreeMap::new(),
         })
@@ -85,42 +80,37 @@ impl ReplayEnvironment {
         &mut self,
         packages: &BTreeSet<ObjectID>,
     ) -> Result<(), ReplayError> {
-        debug!("Start load_packages");
-        let loaded_packages = self
-            .fetch_packages(packages)
-            .await?
-            .into_iter()
-            .map(|pkg| (pkg.id(), pkg))
-            .collect::<BTreeMap<_, _>>();
-
-        let deps = get_packages_deps(&loaded_packages);
-        let all_packages = self
-            .fetch_packages(&deps)
-            .await?
-            .into_iter()
-            .map(|pkg| (pkg.id(), pkg))
-            .chain(loaded_packages)
-            .collect::<BTreeMap<_, _>>();
-
-        self.packages.extend(all_packages);
-        debug!("End load_packages");
-
         debug!("Start load_package_objects");
-        let pkg_ids = self
-            .packages
-            .keys()
-            .map(|pkg| InputObject {
-                object_id: *pkg,
+        let pkg_ids = packages
+            .iter()
+            .map(|id| InputObject {
+                object_id: *id,
                 version: None,
             })
             .collect::<BTreeSet<_>>();
-        self.data_store
+        let package_objects = self
+            .data_store
             .load_objects(&pkg_ids)
             .await?
             .into_iter()
-            .for_each(|(id, _version, obj)| {
-                self.package_objects.insert(id, obj);
-            });
+            .map(|(id, _version, obj)| (id, obj))
+            .collect::<BTreeMap<_, _>>();
+        let deps = get_packages_deps(&package_objects)
+            .into_iter()
+            .map(|object_id| InputObject {
+                object_id,
+                version: None,
+            })
+            .collect();
+        self.package_objects.extend(package_objects);
+        let package_objects = self
+            .data_store
+            .load_objects(&deps)
+            .await?
+            .into_iter()
+            .map(|(id, _version, obj)| (id, obj))
+            .collect::<BTreeMap<_, _>>();
+        self.package_objects.extend(package_objects);
         debug!("End load_package_objects");
 
         Ok(())
@@ -130,7 +120,7 @@ impl ReplayEnvironment {
         &self,
         pkg_id: &ObjectID,
         epoch: u64,
-    ) -> Result<(MovePackage, TransactionDigest), ReplayError> {
+    ) -> Result<(Object, TransactionDigest), ReplayError> {
         let pkgs = self.system_packages.get(pkg_id);
         let (pkg, digest) = match pkgs {
             Some(versions) => {
@@ -152,28 +142,17 @@ impl ReplayEnvironment {
         }?;
         Ok((pkg, digest))
     }
-
-    async fn fetch_packages(
-        &self,
-        pkg_ids: &BTreeSet<ObjectID>,
-    ) -> Result<Vec<MovePackage>, ReplayError> {
-        let mut packages = Vec::new();
-        for pkg_id in pkg_ids {
-            if is_framework_package(pkg_id) {
-                continue;
-            }
-            let package = self.data_store.get_package(*pkg_id).await?;
-            packages.push(package);
-        }
-        Ok(packages)
-    }
 }
 
-fn get_packages_deps(packages: &BTreeMap<ObjectID, MovePackage>) -> BTreeSet<ObjectID> {
+fn get_packages_deps(packages: &BTreeMap<ObjectID, Object>) -> BTreeSet<ObjectID> {
     let mut deps = BTreeSet::new();
     for package in packages.values() {
-        for upgrade_info in package.linkage_table().values() {
-            deps.insert(upgrade_info.upgraded_id);
+        if let Some(package) = package.data.try_as_package() {
+            for upgrade_info in package.linkage_table().values() {
+                deps.insert(upgrade_info.upgraded_id);
+            }
+        } else {
+            assert!(false, "Not a package in package tables");
         }
     }
     packages.values().any(|pkg| deps.remove(&pkg.id()));
@@ -190,14 +169,13 @@ impl Debug for ReplayEnvironment {
             data_store: _,
             epoch_info,
             system_packages,
-            packages,
-            package_objects: _,
+            package_objects,
             objects,
         } = self;
         writeln!(f, "ReplayEnvironment({:?})", self.data_store.node())?;
         writeln!(f, ">>>> Epoch Info: {:?}", epoch_info)?;
         print_system_packages(f, system_packages)?;
-        print_packages(f, packages)?;
+        print_packages(f, package_objects)?;
         print_objects(f, objects)
     }
 }
@@ -205,7 +183,7 @@ impl Debug for ReplayEnvironment {
 #[allow(dead_code)]
 fn print_system_packages(
     f: &mut std::fmt::Formatter<'_>,
-    system_packages: &BTreeMap<ObjectID, BTreeMap<u64, MovePackage>>,
+    system_packages: &BTreeMap<ObjectID, BTreeMap<u64, Object>>,
 ) -> std::fmt::Result {
     writeln!(f, ">>>> System packages:")?;
     for (pkg_id, versions) in system_packages {
@@ -219,11 +197,15 @@ fn print_system_packages(
 #[allow(dead_code)]
 fn print_packages(
     f: &mut std::fmt::Formatter<'_>,
-    packages: &BTreeMap<ObjectID, MovePackage>,
+    packages: &BTreeMap<ObjectID, Object>,
 ) -> std::fmt::Result {
     writeln!(f, ">>>> Packages:")?;
     for (pkg_id, pkg) in packages {
-        writeln!(f, "{}[{}]", pkg_id, pkg.version())?;
+        if let Some(package) = pkg.data.try_as_package() {
+            writeln!(f, "{}[{}]", pkg_id, package.version())?
+        } else {
+            writeln!(f, "NOT A PACKAGE {}", pkg_id)?
+        }
     }
     Ok(())
 }

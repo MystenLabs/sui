@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_sdk_types::{
-    Address, EpochId, MovePackage as MovePackageSdk, TransactionDigest as SdkTransactionDigest,
-    TransactionEffects, Version,
+    Address, EpochId, Object, TransactionDigest as SdkTransactionDigest, TransactionEffects,
+    Version,
 };
 
 use crate::errors::ReplayError;
@@ -65,7 +65,7 @@ pub struct MovePackageVersionFilter {
 #[cynic(schema = "rpc", graphql_type = "MovePackage")]
 pub struct MovePackage {
     pub version: u64,
-    pub package_bcs: Option<Base64>,
+    pub bcs: Option<Base64>,
     pub previous_transaction_block: Option<TransactionBlock>,
 }
 
@@ -84,7 +84,7 @@ pub async fn package_versions_for_replay(
     pagination_filter: PaginationFilter,
     after_version: Option<u64>,
     before_version: Option<u64>,
-) -> Result<Page<(Option<MovePackageSdk>, Version, Option<EpochId>)>, Error> {
+) -> Result<Page<(Option<Object>, Version, Option<EpochId>)>, Error> {
     let (after, before, first, last) = client.pagination_filter(pagination_filter).await;
     let operation = PackageVersionsWithEpochDataQuery::build(PackageVersionsArgs {
         address,
@@ -110,7 +110,7 @@ pub async fn package_versions_for_replay(
         let data = pc
             .nodes
             .into_iter()
-            .map(|p| (p.package_bcs, p.version, p.previous_transaction_block))
+            .map(|p| (p.bcs, p.version, p.previous_transaction_block))
             .collect::<Vec<_>>();
 
         let mut output = vec![];
@@ -120,9 +120,7 @@ pub async fn package_versions_for_replay(
                 .as_ref()
                 .map(|b| base64ct::Base64::decode_vec(b.0.as_str()))
                 .transpose()?;
-            let package = bcs
-                .map(|b| bcs::from_bytes::<MovePackageSdk>(&b))
-                .transpose()?;
+            let package = bcs.map(|b| bcs::from_bytes::<Object>(&b)).transpose()?;
 
             let effects = previous_transaction_block.and_then(|x| x.effects);
             let effects = effects.and_then(|x| x.bcs);
@@ -286,4 +284,3 @@ impl TryFrom<Epoch> for EpochData {
         })
     }
 }
-
