@@ -27,7 +27,7 @@ use sui_types::{
 
 use crate::{
     context::Context,
-    data::{object_versions::LatestObjectVersionKey, objects::VersionedObjectKey},
+    data::objects::load_latest,
     error::{internal_error, rpc_bail, InternalContext, RpcError},
 };
 
@@ -123,30 +123,12 @@ async fn latest_sui_system_state_response(
 
 /// Fetch the latest version of the object at ID `object_id`, and deserialize its contents as a
 /// Rust type `T`, assuming that it is a Move object (not a package).
-///
-/// This function extracts the common parts of object loading for the latest system state object
-/// API, but it does not generalize beyond that, because it assumes that the objects being loaded
-/// are never deleted or wrapped and have always existed (because it loads using `LatestObjectKey`
-/// directly without checking the live object set).
 async fn fetch_latest_for_system_state<T: DeserializeOwned>(
     ctx: &Context,
     object_id: ObjectID,
 ) -> Result<T, RpcError> {
-    let loader = ctx.loader();
-
-    let latest_version = loader
-        .load_one(LatestObjectVersionKey(object_id))
-        .await
-        .context("Failed to load latest version")?
-        .ok_or_else(|| internal_error!("No latest version found"))?;
-
-    let stored = loader
-        .load_one(VersionedObjectKey(
-            object_id,
-            latest_version.object_version as u64,
-        ))
-        .await
-        .context("Failed to load latest object")?
+    let stored = load_latest(ctx.loader(), object_id)
+        .await?
         .ok_or_else(|| internal_error!("No data found"))?
         .serialized_object
         .ok_or_else(|| internal_error!("No content found"))?;
