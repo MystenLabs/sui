@@ -1,0 +1,5 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-compiler-transactional-tests/tests/functions/dot_call_owned.move
+---
+processed 3 tasks

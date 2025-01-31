@@ -1,0 +1,25 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-compiler-transactional-tests/tests/macros/method_is_by_value_even_when_ignored.move
+---
+processed 4 tasks
+
+task 2, line 29:
+//# run 42::m::aborts0
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(0),
+    location: 0x2a::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 3, line 31:
+//# run 42::m::aborts1
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(1),
+    location: 0x2a::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(1), 1)],
+}

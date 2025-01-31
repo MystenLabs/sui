@@ -16,6 +16,7 @@ use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
 use move_command_line_common::{
     env::read_bool_env_var,
     files::{MOVE_EXTENSION, MOVE_IR_EXTENSION},
+    insta_assert,
     testing::{add_update_baseline_fix, format_diff, read_env_update_baseline, EXP_EXT},
 };
 use move_compiler::{
@@ -774,6 +775,7 @@ pub async fn run_tasks_with_adapter<'a, Adapter>(
     path: &Path,
     mut adapter: Adapter,
     mut output: String,
+    use_insta_snapshot: bool,
 ) -> Result<()>
 where
     Adapter: MoveTestAdapter<'a>,
@@ -806,7 +808,11 @@ where
         handle_known_task(&mut output, &mut adapter, task).await;
     }
 
-    handle_expected_output(path, output)?;
+    if use_insta_snapshot {
+        insta_snapshot(path, output)
+    } else {
+        handle_expected_output(path, output)?;
+    }
     Ok(())
 }
 
@@ -815,6 +821,7 @@ where
 pub async fn run_test_impl<'a, Adapter>(
     path: &Path,
     fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
+    use_insta_snapshot: bool,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,
@@ -825,7 +832,7 @@ where
     Adapter::Subcommand: Debug,
 {
     let (output, adapter) = create_adapter::<Adapter>(path, fully_compiled_program_opt).await?;
-    run_tasks_with_adapter(path, adapter, output).await?;
+    run_tasks_with_adapter(path, adapter, output, use_insta_snapshot).await?;
     Ok(())
 }
 
@@ -894,5 +901,15 @@ fn handle_expected_output(test_path: &Path, output: impl AsRef<str>) -> Result<(
         anyhow::bail!(add_update_baseline_fix(msg))
     } else {
         Ok(())
+    }
+}
+
+fn insta_snapshot(test_path: &Path, output: impl AsRef<str>) {
+    let test_name = test_path.file_stem().unwrap().to_string_lossy();
+    let contents = output.as_ref();
+    insta_assert! {
+        name: test_name,
+        input_path: test_path,
+        contents: contents,
     }
 }

@@ -90,6 +90,9 @@ impl InstaOptions<(), String> {
     }
 }
 
+// This `pub use` allows for `insta` to be used easily in the macro
+pub use insta;
+
 #[macro_export]
 /// A wrapper around `insta::assert_snapshort` to promote uniformity in the Move codebase, intended
 /// to be used with datatest-stable and as a replacement for the hand-rolled baseline tests.
@@ -144,7 +147,7 @@ macro_rules! insta_assert {
         let i = i.canonicalize().unwrap();
         let c = $contents;
         let $crate::testing::InstaOptions { info, suffix } = $options;
-        let mut settings = insta::Settings::clone_current();
+        let mut settings = $crate::testing::insta::Settings::clone_current();
         settings.set_input_file(&i);
         settings.set_snapshot_path(i.parent().unwrap());
         if let Some(info) = info {
@@ -156,7 +159,7 @@ macro_rules! insta_assert {
         settings.set_prepend_module_to_snapshot(false);
         settings.set_omit_expression(true);
         settings.bind(|| {
-            insta::assert_snapshot!(name, c);
+            $crate::testing::insta::assert_snapshot!(name, c);
         });
     }};
     {
@@ -168,7 +171,6 @@ macro_rules! insta_assert {
         insta_assert! {
             name: $name,
             input_path: $input,
-            output_path: $output,
             contents: $contents,
             options: $crate::testing::InstaOptions::none(),
         }

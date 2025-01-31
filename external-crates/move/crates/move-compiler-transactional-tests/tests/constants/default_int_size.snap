@@ -1,0 +1,15 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-compiler-transactional-tests/tests/constants/default_int_size.move
+---
+processed 4 tasks
+
+task 0, lines 1-14:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x1::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}

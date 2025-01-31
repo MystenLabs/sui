@@ -1,0 +1,5 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-compiler-transactional-tests/tests/control_flow/branch_assigns_then_moves_then_assigns.move
+---
+processed 1 task
