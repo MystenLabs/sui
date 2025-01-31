@@ -77,7 +77,7 @@ impl<T, E: std::error::Error> InternalContext<T, E> for Result<T, RpcError<E>> {
     }
 
     /// Wrap an internal error with additional context that is lazily evaluated only once an
-    /// internal error has occured.
+    /// internal error has occurred.
     fn with_internal_context<C, F>(self, f: F) -> Result<T, RpcError<E>>
     where
         C: Display + Send + Sync + 'static,
