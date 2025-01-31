@@ -93,7 +93,7 @@ impl InMemoryTestAdapter {
             };
 
             // Process each module and add its dependencies to the to_process list
-            for module in &pkg.modules {
+            for (_, module) in &pkg.modules {
                 let module = CompiledModule::deserialize_with_defaults(module).unwrap();
                 let deps = module
                     .immediate_dependencies()

@@ -13,12 +13,12 @@ use crate::{
     shared::{linkage_context::LinkageContext, types::PackageStorageId},
 };
 use move_binary_format::errors::VMResult;
-use move_core_types::{account_address::AccountAddress, resolver::MoveResolver};
+use move_core_types::{account_address::AccountAddress, resolver::ModuleResolver};
 use move_vm_config::runtime::VMConfig;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-fn load_linkage_packages_into_runtime<DataSource: MoveResolver + Send + Sync>(
+fn load_linkage_packages_into_runtime<DataSource: ModuleResolver + Send + Sync>(
     adapter: &mut impl VMTestAdapter<DataSource>,
     linkage: &LinkageContext,
 ) -> VMResult<BTreeMap<PackageStorageId, Arc<Package>>> {

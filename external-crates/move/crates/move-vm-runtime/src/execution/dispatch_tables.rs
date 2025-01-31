@@ -880,7 +880,6 @@ impl VMDispatchTables {
     // Public APIs for type layout retrieval.
     // -------------------------------------------
 
-    #[allow(dead_code)]
     pub(crate) fn get_type_layout(
         &self,
         type_tag: &TypeTag,
@@ -890,7 +889,6 @@ impl VMDispatchTables {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
-    #[allow(dead_code)]
     pub(crate) fn get_fully_annotated_type_layout(
         &self,
         type_tag: &TypeTag,

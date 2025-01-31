@@ -2,25 +2,29 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::{data_store::DataStore, types::PackageStorageId};
+use crate::shared::{
+    data_store::DataStore,
+    types::{PackageStorageId, RuntimePackageId},
+};
 use move_binary_format::errors::*;
 use move_core_types::{
     account_address::AccountAddress,
     effects::{AccountChangeSet, ChangeSet, Op},
     identifier::Identifier,
-    language_storage::ModuleId,
-    resolver::{MoveResolver, SerializedPackage},
+    resolver::{ModuleResolver, SerializedPackage},
     vm_status::StatusCode,
 };
 use std::collections::{btree_map::BTreeMap, BTreeSet};
 
 pub struct AccountDataCache {
+    runtime_id: RuntimePackageId,
     module_map: BTreeMap<Identifier, Vec<u8>>,
 }
 
 impl AccountDataCache {
-    fn new() -> Self {
+    fn new(runtime_id: RuntimePackageId) -> Self {
         Self {
+            runtime_id,
             module_map: BTreeMap::new(),
         }
     }
@@ -37,7 +41,7 @@ pub struct TransactionDataCache<S> {
     module_map: BTreeMap<AccountAddress, AccountDataCache>,
 }
 
-impl<S: MoveResolver> TransactionDataCache<S> {
+impl<S: ModuleResolver> TransactionDataCache<S> {
     /// Create a `TransactionDataCache` with a `RemoteCache` that provides access to data
     /// not updated in the transaction.
     pub fn new(remote: S) -> Self {
@@ -61,7 +65,10 @@ impl<S: MoveResolver> TransactionDataCache<S> {
 
             if !modules.is_empty() {
                 change_set
-                    .add_account_changeset(addr, AccountChangeSet::from_modules(modules))
+                    .add_account_changeset(
+                        addr,
+                        AccountChangeSet::from_modules(account_data_cache.runtime_id, modules),
+                    )
                     .expect("accounts should be unique");
             }
         }
@@ -79,13 +86,14 @@ impl<S: MoveResolver> TransactionDataCache<S> {
 
     pub fn publish_package(
         &mut self,
-        package: PackageStorageId,
+        runtime_id: RuntimePackageId,
+        storage_id: PackageStorageId,
         modules: impl IntoIterator<Item = (Identifier, Vec<u8>)>,
     ) {
         let account_cache = self
             .module_map
-            .entry(package)
-            .or_insert_with(AccountDataCache::new);
+            .entry(storage_id)
+            .or_insert_with(|| AccountDataCache::new(runtime_id));
 
         for (module_name, blob) in modules.into_iter() {
             account_cache.module_map.insert(module_name, blob);
@@ -102,29 +110,7 @@ impl<S: MoveResolver> TransactionDataCache<S> {
 }
 
 // `DataStore` implementation for the `TransactionDataCache`
-impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
-    fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>> {
-        if let Some(account_cache) = self.module_map.get(module_id.address()) {
-            if let Some(blob) = account_cache.module_map.get(module_id.name()) {
-                return Ok(blob.clone());
-            }
-        }
-        match self.remote.get_module(module_id) {
-            Ok(Some(bytes)) => Ok(bytes),
-            Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Cannot find module {:?} in data cache", module_id))
-                .finish(Location::Undefined)),
-            Err(err) => {
-                let msg = format!("Unexpected storage error: {:?}", err);
-                Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(msg)
-                        .finish(Location::Undefined),
-                )
-            }
-        }
-    }
-
+impl<S: ModuleResolver> DataStore for TransactionDataCache<S> {
     fn load_packages_static<const N: usize>(
         &self,
         ids: [AccountAddress; N],
@@ -133,7 +119,7 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
         // we can use that here.
         // TODO: We can optimize this to take advantage of bulk-get a bit more if we desire.
         // However it's unlikely to be a bottleneck.
-        let mut packages = ids.map(SerializedPackage::empty);
+        let mut packages = ids.map(|id| SerializedPackage::empty(id, id));
         for package in packages.iter_mut() {
             let Some(account_cache) = self.module_map.get(&package.storage_id) else {
                 return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
@@ -143,9 +129,9 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
                     ))
                     .finish(Location::Undefined));
             };
-            let modules = account_cache.module_map.values().cloned().collect();
             // TODO(vm-rewrite): Update this to include linkage info and type origins
-            package.modules = modules;
+            package.modules = account_cache.module_map.clone();
+            package.runtime_id = account_cache.runtime_id;
         }
         Ok(packages)
     }
@@ -158,9 +144,12 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
             .enumerate()
             .filter_map(|(idx, package_id)| {
                 self.module_map.get(package_id).map(|account_cache| {
-                    let modules = account_cache.module_map.values().cloned().collect();
                     cached.insert(idx);
-                    SerializedPackage::raw_package(modules, *package_id)
+                    SerializedPackage::raw_package(
+                        account_cache.module_map.clone(),
+                        account_cache.runtime_id,
+                        *package_id,
+                    )
                 })
             })
             .collect::<Vec<_>>()
@@ -216,18 +205,5 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
         }
 
         Ok(result)
-    }
-
-    fn publish_module(&mut self, module_id: &ModuleId, blob: Vec<u8>) -> VMResult<()> {
-        let account_cache = self
-            .module_map
-            .entry(*module_id.address())
-            .or_insert_with(AccountDataCache::new);
-
-        account_cache
-            .module_map
-            .insert(module_id.name().to_owned(), blob);
-
-        Ok(())
     }
 }

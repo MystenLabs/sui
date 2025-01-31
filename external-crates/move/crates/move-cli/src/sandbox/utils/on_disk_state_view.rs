@@ -41,6 +41,7 @@ pub struct OnDiskStateView {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PackageInfo {
     storage_id: PackageStorageId,
+    runtime_id: RuntimePackageId,
     linkage_table: BTreeMap<RuntimePackageId, PackageStorageId>,
     type_origin_table: BTreeMap<Identifier, BTreeMap<Identifier, AccountAddress>>,
 }
@@ -141,12 +142,13 @@ impl OnDiskStateView {
         if !path.exists() {
             return Ok(None);
         }
-        let mut modules = vec![];
+        let mut modules = BTreeMap::new();
         for entry in fs::read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_file() && path.extension().unwrap() == MOVE_COMPILED_EXTENSION {
-                modules.push(Self::get_bytes(&path)?.unwrap());
+                let mid = self.get_module_id(&path).unwrap();
+                modules.insert(mid.name().to_owned(), Self::get_bytes(&path)?.unwrap());
             }
         }
         let package_id = self.storage_id_of_path(path).unwrap();
@@ -165,6 +167,7 @@ impl OnDiskStateView {
         }
         let pkg = SerializedPackage {
             modules,
+            runtime_id: info.runtime_id,
             storage_id: info.storage_id,
             linkage_table: info.linkage_table,
             type_origin_table,
@@ -259,9 +262,10 @@ impl OnDiskStateView {
             fs::create_dir_all(&pkg_path)?;
         }
 
-        for m_bytes in package.modules {
+        for (nm, m_bytes) in package.modules {
             let module = CompiledModule::deserialize_with_defaults(&m_bytes)?;
             let module_id = module.self_id();
+            debug_assert_eq!(module_id.name(), nm.as_ident_str());
             let m_path = self.get_module_path(&pkg_id, module_id.name());
             if !m_path.exists() {
                 fs::create_dir_all(m_path.parent().unwrap())?
@@ -282,6 +286,7 @@ impl OnDiskStateView {
         }
         let info = PackageInfo {
             storage_id: pkg_id,
+            runtime_id: package.runtime_id,
             linkage_table: package.linkage_table,
             type_origin_table,
         };
@@ -329,9 +334,9 @@ impl OnDiskStateView {
         };
         package_bytes
             .modules
-            .into_iter()
+            .values()
             .map(|module| {
-                CompiledModule::deserialize_with_defaults(&module)
+                CompiledModule::deserialize_with_defaults(module)
                     .map_err(|e| anyhow!("Failed to deserialized module: {:?}", e))
             })
             .collect::<Result<Vec<CompiledModule>>>()
@@ -363,7 +368,7 @@ impl OnDiskStateView {
             };
 
             // Process each module and add its dependencies to the to_process list
-            for module in &pkg.modules {
+            for (_, module) in &pkg.modules {
                 let module = CompiledModule::deserialize_with_defaults(module).unwrap();
                 let deps = module
                     .immediate_dependencies()
@@ -423,19 +428,6 @@ impl OnDiskStateView {
 
 impl ModuleResolver for OnDiskStateView {
     type Error = anyhow::Error;
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        let package = self.get_package(module_id.address())?;
-        Ok(package.and_then(|pkg| {
-            pkg.modules
-                .iter()
-                .find(|bytes| {
-                    let module = CompiledModule::deserialize_with_defaults(&bytes).unwrap();
-                    module.self_id() == *module_id
-                })
-                .cloned()
-        }))
-    }
-
     fn get_packages_static<const N: usize>(
         &self,
         ids: [AccountAddress; N],

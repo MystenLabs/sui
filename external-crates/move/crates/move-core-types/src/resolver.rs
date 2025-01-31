@@ -26,11 +26,17 @@ pub struct TypeOrigin {
 /// storage IDs.
 #[derive(Debug, Clone)]
 pub struct SerializedPackage {
-    pub modules: Vec<Vec<u8>>,
+    pub modules: BTreeMap<Identifier, Vec<u8>>,
     /// The storage ID of this package. This is a unique identifier for this particular package.
     pub storage_id: AccountAddress,
+    /// The runtime ID of the package. This is the ID that is used to refer to the package in the
+    /// VM, and is constant across all versions of the package.
+    pub runtime_id: AccountAddress,
     /// For each dependency (including transitive dependencies), maps runtime package ID to the
     /// storage ID of the package that is to be used for the linkage rooted at this package.
+    ///
+    /// NB: The linkage table for a `SerializedPackage` must include the "self" linkage mapping the
+    /// current package's runtime ID to its storage ID.
     pub linkage_table: BTreeMap<AccountAddress, AccountAddress>,
     /// The type origin table for the package. Every type in the package must have an entry in this
     /// table.
@@ -40,22 +46,32 @@ pub struct SerializedPackage {
 impl SerializedPackage {
     /// TODO(vm-rewrite): This is a shim to use as we move over to storing metadata and then
     /// reading that back in when loading a package. Remove this when no longer needed.
-    pub fn raw_package(modules: Vec<Vec<u8>>, storage_id: AccountAddress) -> Self {
+    pub fn raw_package(
+        modules: BTreeMap<Identifier, Vec<u8>>,
+        runtime_id: AccountAddress,
+        storage_id: AccountAddress,
+    ) -> Self {
         Self {
             modules,
+            runtime_id,
             storage_id,
             linkage_table: BTreeMap::new(),
             type_origin_table: vec![],
         }
     }
 
-    pub fn empty(stroage_id: AccountAddress) -> Self {
+    pub fn empty(runtime_id: AccountAddress, storage_id: AccountAddress) -> Self {
         Self {
-            modules: vec![],
-            storage_id: stroage_id,
+            modules: BTreeMap::new(),
+            storage_id,
+            runtime_id,
             linkage_table: BTreeMap::new(),
             type_origin_table: vec![],
         }
+    }
+
+    pub fn get_module_by_name(&self, name: &Identifier) -> Option<&Vec<u8>> {
+        self.modules.get(name)
     }
 }
 
@@ -73,8 +89,6 @@ impl SerializedPackage {
 pub trait ModuleResolver {
     type Error: Debug;
 
-    fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error>;
-
     /// Given a list of storage IDs where the number is statically known, return the `SerializedPackage` for
     /// each ID. A result is returned for every ID requested. `None` if the package did not exist.
     fn get_packages_static<const N: usize>(
@@ -89,24 +103,15 @@ pub trait ModuleResolver {
         &self,
         ids: &[AccountAddress],
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error>;
-}
 
-/// A persistent storage implementation that can resolve both resources and modules
-/// TODO(vm-rewrite): Remove this in favor of using the `ModuleResolver` trait directly.
-pub trait MoveResolver: ModuleResolver<Error = Self::Err> {
-    type Err: Debug;
-}
-
-impl<E: Debug, T: ModuleResolver<Error = E> + ?Sized> MoveResolver for T {
-    type Err = E;
+    fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        let [package] = self.get_packages_static([*id.address()])?;
+        Ok(package.and_then(|p| p.get_module_by_name(&id.name().to_owned()).cloned()))
+    }
 }
 
 impl<T: ModuleResolver + ?Sized> ModuleResolver for &T {
     type Error = T::Error;
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        (**self).get_module(module_id)
-    }
-
     fn get_packages_static<const N: usize>(
         &self,
         ids: [AccountAddress; N],
@@ -119,14 +124,15 @@ impl<T: ModuleResolver + ?Sized> ModuleResolver for &T {
         ids: &[AccountAddress],
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         (**self).get_packages(ids)
+    }
+
+    fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        (**self).get_module(id)
     }
 }
 
 impl<T: ModuleResolver + ?Sized> ModuleResolver for Arc<T> {
     type Error = T::Error;
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        (**self).get_module(module_id)
-    }
 
     fn get_packages_static<const N: usize>(
         &self,
@@ -140,5 +146,9 @@ impl<T: ModuleResolver + ?Sized> ModuleResolver for Arc<T> {
         ids: &[AccountAddress],
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         (**self).get_packages(ids)
+    }
+
+    fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        (**self).get_module(id)
     }
 }
