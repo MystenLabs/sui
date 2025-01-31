@@ -37,6 +37,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use std::{
@@ -50,6 +51,7 @@ use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
+use sui_types::execution::ExecutionTiming;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::layout_resolver::into_struct_layout;
@@ -214,6 +216,7 @@ pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
 pub mod epoch_start_configuration;
+pub mod execution_time_estimator;
 pub mod shared_object_congestion_tracker;
 pub mod shared_object_version_manager;
 pub mod test_authority_builder;
@@ -1235,6 +1238,8 @@ impl AuthorityState {
             return Ok((effects, None));
         }
 
+        let execution_start_time = Instant::now();
+
         let input_objects =
             self.read_objects_for_execution(tx_guard.as_lock_guard(), certificate, epoch_store)?;
 
@@ -1246,18 +1251,27 @@ impl AuthorityState {
             expected_effects_digest = epoch_store.get_signed_effects_digest(tx_digest)?;
         }
 
-        self.process_certificate(
-            tx_guard,
-            certificate,
-            input_objects,
-            expected_effects_digest,
-            epoch_store,
-        )
-        .await
-        .tap_err(|e| info!("process_certificate failed: {e}"))
-        .tap_ok(
-            |(fx, _)| debug!(?tx_digest, fx_digest=?fx.digest(), "process_certificate succeeded"),
-        )
+        let (effects, timings, execution_error_opt) = self
+            .process_certificate(
+                tx_guard,
+                certificate,
+                input_objects,
+                expected_effects_digest,
+                epoch_store,
+            )
+            .await
+            .tap_err(|e| info!("process_certificate failed: {e}"))
+            .tap_ok(
+            |(fx, _, _)| debug!(?tx_digest, fx_digest=?fx.digest(), "process_certificate succeeded"),
+        )?;
+
+        epoch_store.record_local_execution_time(
+            certificate.data().transaction_data(),
+            timings,
+            execution_start_time.elapsed(),
+        );
+
+        Ok((effects, execution_error_opt))
     }
 
     pub fn read_objects_for_execution(
@@ -1357,7 +1371,11 @@ impl AuthorityState {
         input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
+    ) -> SuiResult<(
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Option<ExecutionError>,
+    )> {
         let process_certificate_start_time = tokio::time::Instant::now();
         let digest = *certificate.digest();
 
@@ -1396,12 +1414,9 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (inner_temporary_store, effects, execution_error_opt) = match self.prepare_certificate(
-            &execution_guard,
-            certificate,
-            input_objects,
-            epoch_store,
-        ) {
+        let (inner_temporary_store, effects, timings, execution_error_opt) = match self
+            .prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
+        {
             Err(e) => {
                 info!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
                 tx_guard.release();
@@ -1496,7 +1511,7 @@ impl AuthorityState {
                 .execution_gas_latency_ratio
                 .observe(effects.gas_cost_summary().computation_cost as f64 / elapsed);
         };
-        Ok((effects, execution_error_opt))
+        Ok((effects, timings, execution_error_opt))
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -1632,6 +1647,7 @@ impl AuthorityState {
     ) -> SuiResult<(
         InnerTemporaryStore,
         TransactionEffects,
+        Vec<ExecutionTiming>,
         Option<ExecutionError>,
     )> {
         let _scope = monitored_scope("Execution::prepare_certificate");
@@ -1658,7 +1674,7 @@ impl AuthorityState {
         let (kind, signer, gas) = transaction_data.execution_parts();
 
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, _timings, execution_error_opt) =
+        let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 self.get_backing_store().as_ref(),
                 protocol_config,
@@ -1694,7 +1710,12 @@ impl AuthorityState {
                 .observe(effects.gas_cost_summary().computation_cost as f64 / elapsed);
         }
 
-        Ok((inner_temp_store, effects, execution_error_opt.err()))
+        Ok((
+            inner_temp_store,
+            effects,
+            timings,
+            execution_error_opt.err(),
+        ))
     }
 
     pub fn prepare_certificate_for_benchmark(
@@ -1710,7 +1731,9 @@ impl AuthorityState {
         let lock: RwLock<EpochId> = RwLock::new(epoch_store.epoch());
         let execution_guard = lock.try_read().unwrap();
 
-        self.prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
+        let (inner_temp_store, effects, _timings, execution_error_opt) =
+            self.prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)?;
+        Ok((inner_temp_store, effects, execution_error_opt))
     }
 
     #[instrument(skip_all)]
@@ -5083,7 +5106,7 @@ impl AuthorityState {
         let input_objects =
             self.read_objects_for_execution(&tx_lock, &executable_tx, epoch_store)?;
 
-        let (temporary_store, effects, _execution_error_opt) =
+        let (temporary_store, effects, _timings, _execution_error_opt) =
             self.prepare_certificate(&execution_guard, &executable_tx, input_objects, epoch_store)?;
         let system_obj = get_sui_system_state(&temporary_store.written)
             .expect("change epoch tx must write to system object");

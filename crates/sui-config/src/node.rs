@@ -204,6 +204,12 @@ pub struct NodeConfig {
     /// By default, write stall is enabled on validators but not on fullnodes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_db_write_stall: Option<bool>,
+
+    /// Size of the channel used for buffering local execution time observations.
+    ///
+    /// If unspecified, this will default to `128`.
+    #[serde(default = "default_local_execution_time_channel_capacity")]
+    pub local_execution_time_channel_capacity: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -541,6 +547,10 @@ pub fn default_concurrency_limit() -> Option<usize> {
 }
 
 pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
+    128
+}
+
+pub fn default_local_execution_time_channel_capacity() -> usize {
     128
 }
 

@@ -5712,6 +5712,7 @@ async fn test_consensus_handler_per_object_congestion_control(
 
     let non_congested_tx_count = match mode {
         PerObjectCongestionControlMode::None => unreachable!(),
+        PerObjectCongestionControlMode::ExecutionTimeEstimate => unreachable!(),
         PerObjectCongestionControlMode::TotalGasBudget => 5,
         PerObjectCongestionControlMode::TotalTxCount => 2,
         PerObjectCongestionControlMode::TotalGasBudgetWithCap => 5,
@@ -5726,6 +5727,7 @@ async fn test_consensus_handler_per_object_congestion_control(
 
     match mode {
         PerObjectCongestionControlMode::None => unreachable!(),
+        PerObjectCongestionControlMode::ExecutionTimeEstimate => unreachable!(),
         PerObjectCongestionControlMode::TotalGasBudget => {
             protocol_config
                 .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(200_000_000);
@@ -5807,7 +5809,7 @@ async fn test_consensus_handler_per_object_congestion_control(
     certificates.shuffle(&mut rand::thread_rng());
 
     // Sends the first batch of transactions. We should expect that 2 transactions operate on the expensive object
-    // should go through, and all transactions oeprate on the cheaper object should go through.
+    // should go through, and all transactions operate on the cheaper object should go through.
     // We also check that the scheduled transactions on the expensive object have the highest gas price.
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, true).await;
     assert_eq!(scheduled_txns.len(), 2 + non_congested_tx_count as usize);

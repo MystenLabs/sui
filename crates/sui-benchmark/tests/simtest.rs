@@ -543,6 +543,8 @@ mod test {
                     config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit/cap_factor_denominator);
                     config.set_gas_budget_based_txn_cost_absolute_cap_commit_count_for_testing(absolute_cap_factor);
                 },
+                // TODO: Enable once ExecutionTimeEstimate mode is functional across epochs.
+                PerObjectCongestionControlMode::ExecutionTimeEstimate => unimplemented!(),
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
             config.set_max_txn_cost_overage_per_object_in_commit_for_testing(

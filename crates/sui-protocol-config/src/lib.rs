@@ -648,6 +648,7 @@ pub enum PerObjectCongestionControlMode {
     TotalGasBudget,        // Use txn gas budget as execution cost.
     TotalTxCount,          // Use total txn count as execution cost.
     TotalGasBudgetWithCap, // Use txn gas budget as execution cost with a cap.
+    ExecutionTimeEstimate, // Use execution time estimate as execution cost.
 }
 
 impl PerObjectCongestionControlMode {
