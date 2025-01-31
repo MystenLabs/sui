@@ -17,8 +17,8 @@ fastcrypto-zkp.workspace = true
 fastcrypto.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
-move-vm-types.workspace = true
 
+move-vm-types = { path = "../../../external-crates/move/move-execution/shared/crates/move-vm-types" }
 move-stdlib-natives = { path = "../../../external-crates/move/move-execution/v1/crates/move-stdlib-natives", package = "move-stdlib-natives-v1" }
 move-vm-runtime = { path = "../../../external-crates/move/move-execution/v1/crates/move-vm-runtime", package = "move-vm-runtime-v1" }
 
