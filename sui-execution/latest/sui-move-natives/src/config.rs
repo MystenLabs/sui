@@ -8,14 +8,18 @@ use move_core_types::{
     runtime_value as R, vm_status::StatusCode,
 };
 use move_vm_runtime::native_charge_gas_early_exit;
-use move_vm_runtime::native_functions::NativeContext;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::natives::extensions::NativeContextMut;
+use move_vm_runtime::natives::functions::NativeContext;
+use move_vm_runtime::{
+    execution::{
+        values::{Struct, Value, Vector},
+        Type,
+    },
+    natives::functions::NativeResult,
     pop_arg,
-    values::{Struct, Value, Vector},
 };
 use smallvec::smallvec;
+use std::cell::RefMut;
 use std::collections::VecDeque;
 use sui_types::{base_types::MoveObjectType, TypeTag};
 use tracing::{error, instrument};
@@ -83,11 +87,14 @@ pub fn read_setting_impl(
             E_BCS_SERIALIZATION_FAILURE,
         ));
     };
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    // let object_runtime: &NativeContextMut<ObjectRuntime>
+    let object_runtime: std::cell::RefMut<'_, ObjectRuntime<'_>> = context
+        .extensions_mut()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .get_mut();
 
     let read_value_opt = consistent_value_before_current_epoch(
         object_runtime,
-        &field_setting_ty,
         field_setting_tag,
         &field_setting_layout,
         &setting_value_ty,
@@ -110,8 +117,7 @@ pub fn read_setting_impl(
 }
 
 fn consistent_value_before_current_epoch(
-    object_runtime: &mut ObjectRuntime,
-    field_setting_ty: &Type,
+    mut object_runtime: RefMut<'_, ObjectRuntime<'_>>,
     field_setting_tag: StructTag,
     field_setting_layout: &R::MoveTypeLayout,
     _setting_value_ty: &Type,
@@ -125,7 +131,6 @@ fn consistent_value_before_current_epoch(
     let Some(field) = object_runtime.config_setting_unsequenced_read(
         config_addr.into(),
         name_df_addr.into(),
-        field_setting_ty,
         field_setting_layout,
         &field_setting_obj_ty,
     ) else {
@@ -150,8 +155,8 @@ fn consistent_value_before_current_epoch(
     let [newer_value_epoch, newer_value, older_value_opt]: [Value; 3] = unpack_struct(data)?;
     let newer_value_epoch: u64 = newer_value_epoch.value_as()?;
     debug_assert!(
-        unpack_option(newer_value.copy_value()?, value_ty)?.is_some()
-            || unpack_option(older_value_opt.copy_value()?, value_ty)?.is_some()
+        unpack_option(newer_value.copy_value(), value_ty)?.is_some()
+            || unpack_option(older_value_opt.copy_value(), value_ty)?.is_some()
     );
     Ok(if current_epoch > newer_value_epoch {
         newer_value

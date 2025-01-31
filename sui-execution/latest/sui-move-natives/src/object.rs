@@ -4,15 +4,17 @@
 use crate::{object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::{
+    execution::{
+        values::{StructRef, Value},
+        Type,
+    },
+    natives::{extensions::NativeContextMut, functions::NativeResult},
     pop_arg,
-    values::{StructRef, Value},
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
-use std::collections::VecDeque;
+use std::{cell::RefMut, collections::VecDeque};
 
 #[derive(Clone)]
 pub struct BorrowUidCostParams {
@@ -78,7 +80,10 @@ pub fn delete_impl(
     // unwrap safe because the interface of native function guarantees it.
     let uid_bytes = pop_arg!(args, AccountAddress);
 
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let mut obj_runtime: RefMut<ObjectRuntime> = context
+        .extensions()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .get_mut();
     obj_runtime.delete_id(uid_bytes.into())?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
@@ -115,7 +120,10 @@ pub fn record_new_uid(
     // unwrap safe because the interface of native function guarantees it.
     let uid_bytes = pop_arg!(args, AccountAddress);
 
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let mut obj_runtime: RefMut<ObjectRuntime> = context
+        .extensions()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .get_mut();
     obj_runtime.new_id(uid_bytes.into())?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }

@@ -11,11 +11,13 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
 };
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+use move_vm_runtime::natives::extensions::NativeContextMut;
+use move_vm_runtime::{
+    execution::values::Value, execution::Type, natives::functions::NativeResult, pop_arg,
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
+use std::cell::RefMut;
 use std::collections::VecDeque;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
@@ -60,7 +62,7 @@ pub fn receive_object_internal(
     let child_receiver_object_id = args.pop_back().unwrap();
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
-    let child_id: ObjectID = get_receiver_object_id(child_receiver_object_id.copy_value().unwrap())
+    let child_id: ObjectID = get_receiver_object_id(child_receiver_object_id.copy_value())
         .unwrap()
         .value_as::<AccountAddress>()
         .unwrap()
@@ -74,12 +76,14 @@ pub fn receive_object_internal(
         ));
     };
 
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let mut object_runtime: RefMut<ObjectRuntime> = context
+        .extensions()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .get_mut();
     let child = match object_runtime.receive_object(
         parent,
         child_id,
         child_receiver_sequence_number,
-        &child_ty,
         &layout,
         &annotated_layout,
         MoveObjectType::from(tag),
@@ -233,13 +237,20 @@ fn object_runtime_transfer(
     ty: Type,
     obj: Value,
 ) -> PartialVMResult<TransferResult> {
-    if !matches!(context.type_to_type_tag(&ty)?, TypeTag::Struct(_)) {
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Sui verifier guarantees this is a struct".to_string()),
-        );
-    }
+    let type_tag = context.type_to_type_tag(&ty)?;
+    let object_type = match type_tag {
+        TypeTag::Struct(s) => MoveObjectType::from(*s),
+        _ => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Sui verifier guarantees this is a struct".to_string()),
+            );
+        }
+    };
 
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    obj_runtime.transfer(owner, ty, obj)
+    let mut obj_runtime: RefMut<ObjectRuntime> = context
+        .extensions()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .get_mut();
+    obj_runtime.transfer(owner, object_type, obj)
 }

@@ -3,12 +3,14 @@
 
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+use move_vm_runtime::{
+    execution::{values::Value, Type},
+    natives::{extensions::NativeContextMut, functions::NativeResult},
+    pop_arg,
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
-use std::{collections::VecDeque, convert::TryFrom};
+use std::{cell::RefMut, collections::VecDeque, convert::TryFrom};
 use sui_types::base_types::{ObjectID, TransactionDigest};
 
 use crate::{object_runtime::ObjectRuntime, NativesCostTable};
@@ -46,7 +48,10 @@ pub fn derive_id(
     // unwrap safe because all digests in Move are serialized from the Rust `TransactionDigest`
     let digest = TransactionDigest::try_from(tx_hash.as_slice()).unwrap();
     let address = AccountAddress::from(ObjectID::derive_id(digest, ids_created));
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let mut obj_runtime: RefMut<ObjectRuntime> = context
+        .extensions()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .get_mut();
     obj_runtime.new_id(address.into())?;
 
     Ok(NativeResult::ok(
