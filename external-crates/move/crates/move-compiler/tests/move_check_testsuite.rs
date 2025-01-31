@@ -60,6 +60,17 @@ enum TestKind {
 }
 
 impl TestKind {
+    fn from_extension(path_extension: &std::ffi::OsStr) -> Self {
+        match () {
+            _ if path_extension == MOVE_EXTENSION => TestKind::Normal,
+            _ if path_extension == TEST_EXT => TestKind::Test,
+            _ if path_extension == UNUSED_EXT => TestKind::Unused,
+            _ if path_extension == MIGRATION_EXT => TestKind::Migration,
+            _ if path_extension == IDE_EXT => TestKind::IDE,
+            _ => panic!("Unknown extension: {}", path_extension.to_string_lossy()),
+        }
+    }
+
     fn snap_suffix(&self) -> Option<&'static str> {
         match self {
             TestKind::Normal => None,
@@ -93,7 +104,7 @@ fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddres
 }
 
 fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
-    let path_extension = path.extension().unwrap();
+    let test_kind = TestKind::from_extension(path.extension().unwrap());
     let path_contains = |s| path.components().any(|c| c.as_os_str() == s);
     let lint = path_contains(LINTER_DIR);
     let flavor = if path_contains(SUI_MODE_DIR) {
@@ -101,18 +112,17 @@ fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
     } else {
         Flavor::default()
     };
-    let migration_mode = path_extension == MIGRATION_EXT;
     let move_2024_mode = path_contains(MOVE_2024_DIR);
     let dev_mode = path_contains(DEV_DIR);
     assert!(
-        [move_2024_mode, dev_mode,]
+        [move_2024_mode, dev_mode]
             .into_iter()
             .filter(|x| *x)
             .count()
             <= 1,
         "A test can have at most directory based edition"
     );
-    let edition = if migration_mode {
+    let edition = if test_kind == TestKind::Migration {
         // migration mode overrides the edition
         Edition::E2024_MIGRATION
     } else if move_2024_mode {
@@ -121,15 +131,6 @@ fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
         Edition::DEVELOPMENT
     } else {
         Edition::LEGACY
-    };
-    // test kind
-    let test_kind = match () {
-        _ if path_extension == MOVE_EXTENSION => TestKind::Normal,
-        _ if path_extension == TEST_EXT => TestKind::Test,
-        _ if path_extension == UNUSED_EXT => TestKind::Unused,
-        _ if path_extension == MIGRATION_EXT => TestKind::Migration,
-        _ if path_extension == IDE_EXT => TestKind::IDE,
-        _ => panic!("Unknown extension: {}", path_extension.to_string_lossy()),
     };
     // config
     let mut config = PackageConfig {
@@ -179,12 +180,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let (test_kind, test_info, package_config, flags) = test_config(path);
     let suffix = test_kind.snap_suffix();
     let migration_mode = package_config.edition == Edition::E2024_MIGRATION;
-    let p;
-    let test_name = {
-        p = path.with_extension("");
-        assert!(p.extension().is_none());
-        p.file_name().unwrap().to_string_lossy()
-    };
+    let test_name = path.file_stem().unwrap().to_string_lossy();
     let test_name: &str = test_name.as_ref();
     let move_path = path.with_extension(MOVE_EXTENSION);
     let out_path = out_path(path, test_name, suffix);
