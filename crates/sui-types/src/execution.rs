@@ -194,7 +194,29 @@ pub enum ExecutionTimeObservationKey {
     Upgrade,
 }
 
+impl std::fmt::Display for ExecutionTimeObservationKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExecutionTimeObservationKey::MoveEntryPoint {
+                module, function, ..
+            } => {
+                write!(f, "{}:{}", module, function)
+            }
+            ExecutionTimeObservationKey::TransferObjects => write!(f, "TransferObjects"),
+            ExecutionTimeObservationKey::SplitCoins => write!(f, "SplitCoins"),
+            ExecutionTimeObservationKey::MergeCoins => write!(f, "MergeCoins"),
+            ExecutionTimeObservationKey::Publish => write!(f, "Publish"),
+            ExecutionTimeObservationKey::MakeMoveVec => write!(f, "MakeMoveVec"),
+            ExecutionTimeObservationKey::Upgrade => write!(f, "Upgrade"),
+        }
+    }
+}
+
 impl ExecutionTimeObservationKey {
+    pub fn is_move_call(&self) -> bool {
+        matches!(self, ExecutionTimeObservationKey::MoveEntryPoint { .. })
+    }
+
     pub fn from_command(command: &Command) -> Self {
         match command {
             Command::MoveCall(call) => ExecutionTimeObservationKey::MoveEntryPoint {

@@ -12,7 +12,7 @@ use crate::{
 use anyhow::Result;
 use futures::{future::join_all, StreamExt};
 use mysten_common::logging::StructuredLogReader;
-use std::{collections::BTreeMap, env, sync::Arc};
+use std::{collections::BTreeMap, env, sync::Arc, time::Duration};
 use std::{collections::HashMap, path::PathBuf};
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
@@ -1103,14 +1103,14 @@ impl ToolCommand {
                 println!("{:?}", result);
             }
             ToolCommand::LogReader { log_path } => {
-                let file = tokio::fs::File::open(log_path).await.unwrap();
+                let file = std::fs::File::open(log_path).unwrap();
                 let mut log: StructuredLogReader<ExecutionTimingLogRecord, _> =
                     StructuredLogReader::new(file);
 
                 let mut keys = HashMap::new();
                 let mut record_count = 0;
 
-                while let Some(record) = log.next().await {
+                while let Some(record) = log.next() {
                     let record = match record {
                         Ok(record) => record,
                         Err(e) => {
@@ -1129,7 +1129,10 @@ impl ToolCommand {
                     if let TransactionKind::ProgrammableTransaction(tx) = transaction.into_kind() {
                         for (command, timing) in tx.commands.into_iter().zip(timings) {
                             let key = ExecutionTimeObservationKey::from_command(&command);
-                            *keys.entry(key).or_insert(0) += 1;
+                            if key.is_move_call() {
+                                let entry = keys.entry(key).or_insert((0, Duration::ZERO));
+                                *entry = (entry.0 + 1, entry.1 + timing.duration());
+                            }
                             //println!("Command: {:?}, Timing: {:?}", command, timing);
                         }
                     }
@@ -1137,6 +1140,16 @@ impl ToolCommand {
 
                 println!("Total records: {}", record_count);
                 println!("Unique keys: {}", keys.len());
+                let mut sorted_keys: Vec<_> = keys.into_iter().collect();
+                sorted_keys.sort_by(|(_, (a_count, a_duration)), (_, (b_count, b_duration))| {
+                    let a_avg = a_duration.div_f64(*a_count as f64);
+                    let b_avg = b_duration.div_f64(*b_count as f64);
+                    b_avg.cmp(&a_avg)
+                });
+                for (key, (count, total_duration)) in sorted_keys {
+                    let avg_ms = total_duration.as_millis() as f64 / count as f64;
+                    println!("{}: {:.1}ms avg ({} samples)", key, avg_ms, count);
+                }
             }
         };
         Ok(())

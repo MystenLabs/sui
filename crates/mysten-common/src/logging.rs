@@ -61,7 +61,12 @@ impl<T: std::marker::Sized + serde::Serialize, W: 'static + Write + Send> Struct
     }
 
     pub fn into_writer(self) -> W {
-        let Self { writer_handle, .. } = self;
+        let Self {
+            writer_handle,
+            sender,
+            ..
+        } = self;
+        drop(sender);
         writer_handle.join().unwrap()
     }
 
@@ -82,7 +87,7 @@ pub struct StructuredLogReader<T, R> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: std::marker::Sized, R: AsyncRead> StructuredLogReader<T, R> {
+impl<T: std::marker::Sized, R: std::io::Read> StructuredLogReader<T, R> {
     pub fn new(reader: R) -> Self {
         Self {
             reader,
@@ -91,46 +96,32 @@ impl<T: std::marker::Sized, R: AsyncRead> StructuredLogReader<T, R> {
     }
 }
 
-impl<
-        T: serde::de::DeserializeOwned + std::marker::Sized + std::marker::Unpin,
-        R: AsyncRead + std::marker::Unpin,
-    > Stream for StructuredLogReader<T, R>
-{
+impl<T: serde::de::DeserializeOwned, R: std::io::Read> Iterator for StructuredLogReader<T, R> {
     type Item = std::io::Result<T>;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.get_mut();
-
+    fn next(&mut self) -> Option<Self::Item> {
         // Read length prefix
         let mut len_buf = [0u8; 4];
-        let read_len = this.reader.read_exact(&mut len_buf);
-        pin_mut!(read_len);
-
-        match read_len.poll_unpin(cx) {
-            Poll::Ready(Ok(_)) => {
-                let len = u32::from_le_bytes(len_buf) as usize;
-                let mut data = vec![0u8; len];
-
-                // Read actual data
-                let read_data = this.reader.read_exact(&mut data);
-                pin_mut!(read_data);
-
-                match read_data.poll_unpin(cx) {
-                    Poll::Ready(Ok(_)) => {
-                        let parsed = bcs::from_bytes::<T>(&data)
-                            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e));
-                        Poll::Ready(Some(parsed))
-                    }
-                    Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
-                    Poll::Pending => Poll::Pending,
-                }
-            }
-            Poll::Ready(Err(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                Poll::Ready(None)
-            }
-            Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
-            Poll::Pending => Poll::Pending,
+        match self.reader.read_exact(&mut len_buf) {
+            Ok(()) => (),
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return None,
+            Err(e) => return Some(Err(e)),
         }
+
+        let len = u32::from_le_bytes(len_buf) as usize;
+        let mut data = vec![0u8; len];
+
+        // Read the actual data
+        match self.reader.read_exact(&mut data) {
+            Ok(()) => (),
+            Err(e) => return Some(Err(e)),
+        }
+
+        // Parse the data
+        let parsed = bcs::from_bytes::<T>(&data)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e));
+
+        Some(parsed)
     }
 }
 
@@ -171,8 +162,8 @@ mod tests {
         field2: i32,
     }
 
-    #[tokio::test]
-    async fn test_structured_log_writer_reader() {
+    #[test]
+    fn test_structured_log_writer_reader() {
         let mut writer = StructuredLog::new(Vec::new());
 
         // Test writing multiple records
@@ -193,26 +184,22 @@ mod tests {
 
         // Create reader from written data
         let cursor = Cursor::new(writer.into_writer());
-        let mut reader = StructuredLogReader::<TestStruct, _>::new(cursor);
+        let reader = StructuredLogReader::<TestStruct, _>::new(cursor);
 
         // Test reading records
-        let mut read_data = Vec::new();
-        while let Some(result) = reader.next().await {
-            read_data.push(result.unwrap());
-        }
-
+        let read_data: Vec<_> = reader.map(Result::unwrap).collect();
         assert_eq!(test_data, read_data);
     }
 
-    #[tokio::test]
-    async fn test_structured_log_empty() {
+    #[test]
+    fn test_structured_log_empty() {
         let writer = StructuredLog::<TestStruct, Vec<u8>>::new(Vec::new());
 
         // Create reader from empty buffer
         let cursor = Cursor::new(writer.into_writer());
-        let mut reader = StructuredLogReader::<TestStruct, _>::new(cursor);
+        let reader = StructuredLogReader::<TestStruct, _>::new(cursor);
 
-        // Should return None for empty buffer
-        assert!(reader.next().await.is_none());
+        // Should return no items for empty buffer
+        assert_eq!(reader.count(), 0);
     }
 }
