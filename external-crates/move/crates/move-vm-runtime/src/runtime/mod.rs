@@ -12,7 +12,7 @@ use crate::{
 };
 
 use move_binary_format::errors::VMResult;
-use move_core_types::resolver::{MoveResolver, SerializedPackage};
+use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
 
 use std::{collections::BTreeMap, sync::Arc};
@@ -81,7 +81,7 @@ impl MoveRuntime {
     ///
     ///
     /// TODO: Have this hand back a tokio Notify
-    pub fn make_vm<'extensions, DataCache: MoveResolver>(
+    pub fn make_vm<'extensions, DataCache: ModuleResolver>(
         &self,
         data_cache: DataCache,
         link_context: LinkageContext,
@@ -93,7 +93,7 @@ impl MoveRuntime {
         )
     }
 
-    pub fn make_vm_with_native_extensions<'extensions, DataCache: MoveResolver>(
+    pub fn make_vm_with_native_extensions<'extensions, DataCache: ModuleResolver>(
         &self,
         data_cache: DataCache,
         link_context: LinkageContext,
@@ -150,8 +150,8 @@ impl MoveRuntime {
     ///
     /// In case an invariant violation occurs, the provided data cache should be considered
     /// corrupted and discarded; a change set will not be returned.
-    pub fn validate_package<'extensions, DataCache: MoveResolver>(
-        &mut self,
+    pub fn validate_package<'extensions, DataCache: ModuleResolver>(
+        &self,
         data_cache: DataCache,
         pkg_runtime_id: RuntimePackageId,
         pkg: SerializedPackage,
@@ -162,7 +162,7 @@ impl MoveRuntime {
         dbg_println!("\n\nPublishing module at {storage_id} (=> {pkg_runtime_id})\n\n");
 
         let data_cache = TransactionDataCache::new(data_cache);
-        let link_context = LinkageContext::new(BTreeMap::from_iter(pkg.linkage_table.clone()));
+        let link_context = LinkageContext::new(pkg.linkage_table.clone());
 
         // Verify a provided serialized package. This will validate the provided serialized
         // package, including attempting to jit-compile the package and verify linkage with its
