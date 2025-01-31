@@ -33,7 +33,7 @@ use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
     data_store::DataStore,
     loaded_data::runtime_types::{
-        CachedDatatype, Datatype, DepthFormula, StructType, Type, VTableKey,
+        CachedDatatype, CachedTypeIndex, Datatype, DepthFormula, StructType, Type,
     },
 };
 use parking_lot::RwLock;
@@ -160,7 +160,7 @@ impl ModuleCache {
     }
 
     // Retrieve a struct by index
-    fn struct_at(&self, idx: VTableKey) -> Arc<CachedDatatype> {
+    fn struct_at(&self, idx: CachedTypeIndex) -> Arc<CachedDatatype> {
         Arc::clone(&self.structs.binaries[idx.0])
     }
 
@@ -423,7 +423,7 @@ impl ModuleCache {
     fn calculate_depth_of_struct(
         &self,
         struct_type: &CachedDatatype,
-        depth_cache: &mut BTreeMap<VTableKey, DepthFormula>,
+        depth_cache: &mut BTreeMap<CachedTypeIndex, DepthFormula>,
     ) -> PartialVMResult<DepthFormula> {
         let def_idx = self
             .resolve_struct_by_name(&struct_type.name, &struct_type.runtime_id)?
@@ -461,7 +461,7 @@ impl ModuleCache {
     fn calculate_depth_of_type(
         &self,
         ty: &Type,
-        depth_cache: &mut BTreeMap<VTableKey, DepthFormula>,
+        depth_cache: &mut BTreeMap<CachedTypeIndex, DepthFormula>,
     ) -> PartialVMResult<DepthFormula> {
         Ok(match ty {
             Type::Bool
@@ -510,12 +510,12 @@ impl ModuleCache {
         &self,
         struct_name: &IdentStr,
         runtime_id: &ModuleId,
-    ) -> PartialVMResult<(VTableKey, Arc<CachedDatatype>)> {
+    ) -> PartialVMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
         match self
             .structs
             .get_with_idx(&(runtime_id.clone(), struct_name.to_owned()))
         {
-            Some((idx, struct_)) => Ok((VTableKey(idx), Arc::clone(struct_))),
+            Some((idx, struct_)) => Ok((CachedTypeIndex(idx), Arc::clone(struct_))),
             None => Err(PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE)
                 .with_message(format!("Cannot find {runtime_id}::{struct_name} in cache",))),
         }
@@ -823,7 +823,7 @@ impl Loader {
         name: &IdentStr,
         runtime_id: &ModuleId,
         data_store: &impl DataStore,
-    ) -> VMResult<(VTableKey, Arc<CachedDatatype>)> {
+    ) -> VMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
         self.load_module(runtime_id, data_store)?;
         self.module_cache
             .read()
@@ -1200,7 +1200,7 @@ impl Loader {
         (compiled, loaded)
     }
 
-    pub(crate) fn get_struct_type(&self, idx: VTableKey) -> Option<Arc<CachedDatatype>> {
+    pub(crate) fn get_struct_type(&self, idx: CachedTypeIndex) -> Option<Arc<CachedDatatype>> {
         self.module_cache
             .read()
             .structs
@@ -1476,7 +1476,7 @@ pub(crate) struct LoadedModule {
     // the instruction carries an index into this table which contains the index into the
     // glabal table of types. No instantiation of generic types is saved into the global table.
     #[allow(dead_code)]
-    struct_refs: Vec<VTableKey>,
+    struct_refs: Vec<CachedTypeIndex>,
     structs: Vec<StructDef>,
     // materialized instantiations, whether partial or not
     struct_instantiations: Vec<StructInstantiation>,
@@ -1670,7 +1670,7 @@ impl LoadedModule {
         })
     }
 
-    fn struct_at(&self, idx: StructDefinitionIndex) -> VTableKey {
+    fn struct_at(&self, idx: StructDefinitionIndex) -> CachedTypeIndex {
         self.structs[idx.0 as usize].idx
     }
 
@@ -1901,7 +1901,7 @@ struct StructDef {
     // struct field count
     field_count: u16,
     // `ModuelCache::structs` global table index
-    idx: VTableKey,
+    idx: CachedTypeIndex,
 }
 
 #[derive(Debug)]
@@ -1909,7 +1909,7 @@ struct StructInstantiation {
     // struct field count
     field_count: u16,
     // `ModuelCache::structs` global table index. It is the generic type.
-    def: VTableKey,
+    def: CachedTypeIndex,
     instantiation: Vec<Type>,
 }
 
@@ -1918,7 +1918,7 @@ struct StructInstantiation {
 struct FieldHandle {
     offset: usize,
     // `ModuelCache::structs` global table index. It is the generic type.
-    owner: VTableKey,
+    owner: CachedTypeIndex,
 }
 
 // A field instantiation. The offset is the only used information when operating on a field
@@ -1927,7 +1927,7 @@ struct FieldInstantiation {
     offset: usize,
     // `ModuelCache::structs` global table index. It is the generic type.
     #[allow(unused)]
-    owner: VTableKey,
+    owner: CachedTypeIndex,
 }
 
 //
@@ -1963,7 +1963,7 @@ impl StructInfo {
 }
 
 pub(crate) struct TypeCache {
-    structs: HashMap<VTableKey, HashMap<Vec<Type>, StructInfo>>,
+    structs: HashMap<CachedTypeIndex, HashMap<Vec<Type>, StructInfo>>,
 }
 
 impl TypeCache {
@@ -1988,7 +1988,7 @@ const MAX_TYPE_INSTANTIATION_NODES: u64 = 128;
 impl Loader {
     fn read_cached_struct_tag(
         &self,
-        gidx: VTableKey,
+        gidx: CachedTypeIndex,
         ty_args: &[Type],
         tag_type: StructTagType,
     ) -> Option<StructTag> {
@@ -2004,7 +2004,7 @@ impl Loader {
 
     fn struct_gidx_to_type_tag(
         &self,
-        gidx: VTableKey,
+        gidx: CachedTypeIndex,
         ty_args: &[Type],
         tag_type: StructTagType,
     ) -> PartialVMResult<StructTag> {
@@ -2115,7 +2115,7 @@ impl Loader {
 
     fn struct_gidx_to_type_layout(
         &self,
-        gidx: VTableKey,
+        gidx: CachedTypeIndex,
         ty_args: &[Type],
         count: &mut u64,
         depth: u64,
@@ -2206,7 +2206,7 @@ impl Loader {
 
     fn struct_gidx_to_fully_annotated_layout(
         &self,
-        gidx: VTableKey,
+        gidx: CachedTypeIndex,
         ty_args: &[Type],
         count: &mut u64,
         depth: u64,

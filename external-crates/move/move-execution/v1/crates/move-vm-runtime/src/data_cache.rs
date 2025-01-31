@@ -8,11 +8,10 @@ use move_core_types::{
     effects::{AccountChangeSet, ChangeSet, Op},
     identifier::{IdentStr, Identifier},
     language_storage::ModuleId,
-    resolver::MoveResolver,
     vm_status::StatusCode,
 };
-use move_vm_types::data_store::DataStore;
-use std::collections::{btree_map::BTreeMap, BTreeSet};
+use move_vm_types::data_store::{DataStore, MoveResolver};
+use std::collections::btree_map::BTreeMap;
 
 pub struct AccountDataCache {
     module_map: BTreeMap<Identifier, Vec<u8>>,
@@ -60,7 +59,7 @@ impl<S: MoveResolver> TransactionDataCache<S> {
             }
             if !modules.is_empty() {
                 change_set
-                    .add_account_changeset(addr, AccountChangeSet::from_modules(modules))
+                    .add_account_changeset(addr, AccountChangeSet::from_modules(addr, modules))
                     .expect("accounts should be unique");
             }
         }
@@ -126,10 +125,6 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
         }
     }
 
-    fn load_package(&self, _package_id: &AccountAddress) -> VMResult<Vec<Vec<u8>>> {
-        unreachable!("TransactionDataCache::load_package should never be called in v1")
-    }
-
     fn publish_module(&mut self, module_id: &ModuleId, blob: Vec<u8>) -> VMResult<()> {
         let account_cache = self
             .module_map
@@ -141,9 +136,5 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
             .insert(module_id.name().to_owned(), blob);
 
         Ok(())
-    }
-
-    fn all_package_dependencies(&self) -> VMResult<BTreeSet<AccountAddress>> {
-        unreachable!("TransactionDataCache::load_package should never be called in v1")
     }
 }
