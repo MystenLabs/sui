@@ -3,6 +3,7 @@
 
 use anyhow::{anyhow, Context as _};
 use diesel::{
+    dsl::sql,
     expression::{
         is_aggregate::{Never, No},
         MixedAggregates, ValidGrouping,
@@ -104,7 +105,7 @@ async fn all_transactions(ctx: &Context, page: &Page<u64>) -> Result<Digests, Rp
         .connect()
         .await
         .context("Failed to connect to the database")?
-        .results(paginate(page, d::tx_sequence_number, query))
+        .results(paginate(page, "tx_digests", d::tx_sequence_number, query))
         .await
         .context("Failed to fetch transaction sequence numbers")?;
 
@@ -214,7 +215,7 @@ async fn tx_calls(
         .connect()
         .await
         .context("Failed to connect to the database")?
-        .results(paginate(page, c::tx_sequence_number, query))
+        .results(paginate(page, "tx_calls", c::tx_sequence_number, query))
         .await
         .context("Failed to fetch transaction sequence numbers")?;
 
@@ -240,7 +241,12 @@ async fn tx_affected_objects(
         .connect()
         .await
         .context("Failed to connect to the database")?
-        .results(paginate(page, o::tx_sequence_number, query))
+        .results(paginate(
+            page,
+            "tx_affected_objects",
+            o::tx_sequence_number,
+            query,
+        ))
         .await
         .context("Failed to fetch transaction sequence numbers")?;
 
@@ -275,7 +281,12 @@ async fn tx_affected_addresses(
         .connect()
         .await
         .context("Failed to connect to the database")?
-        .results(paginate(page, a::tx_sequence_number, query))
+        .results(paginate(
+            page,
+            "tx_affected_addresses",
+            a::tx_sequence_number,
+            query,
+        ))
         .await
         .context("Failed to fetch transaction sequence numbers")?;
 
@@ -283,10 +294,15 @@ async fn tx_affected_addresses(
 }
 
 /// Modify `query` to be paginated according to `page`, using `tx_sequence_number` as the column
-/// containing the sequence number. The query fetches one more element than the limit, to determine
-/// if there is a next page.
+/// containing the sequence number. The query is also modified to limit results returned by the
+/// reader low-watermark from the `watermarks` table (using the `cp_sequence_numbers` table to
+/// translate a checkpoint bound into a transaction sequence number bound). This helps the database
+/// avoid scanning dead tuples due to pruning.
+///
+/// The query fetches one more element than the limit, to determine if there is a next page.
 fn paginate<'q, TX, ST, QS>(
     page: &Page<u64>,
+    pipeline: &'static str,
     tx_sequence_number: TX,
     mut query: BoxedSelectStatement<'q, ST, FromClause<QS>, Pg>,
 ) -> BoxedSelectStatement<'q, ST, FromClause<QS>, Pg>
@@ -298,6 +314,24 @@ where
     TX: ExpressionMethods + Expression<SqlType = BigInt>,
     TX::IsAggregate: MixedAggregates<Never, Output = No>,
 {
+    query = query.filter(tx_sequence_number.ge(sql::<BigInt>(&format!(
+        r#"COALESCE(
+            (
+                SELECT
+                    tx_lo
+                FROM
+                    watermarks w
+                INNER JOIN
+                    cp_sequence_numbers c
+                ON
+                    w.reader_lo = c.cp_sequence_number
+                WHERE
+                    w.pipeline = '{pipeline}'
+            ),
+            0
+        )"#
+    ))));
+
     if let Some(Cursor(tx)) = page.cursor {
         if page.descending {
             query = query.filter(tx_sequence_number.lt(tx as i64));
