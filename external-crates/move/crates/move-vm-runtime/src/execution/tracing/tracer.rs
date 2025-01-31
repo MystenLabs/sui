@@ -4,15 +4,15 @@
 use crate::{
     execution::{
         dispatch_tables::{subst, VMDispatchTables},
-        interpreter::state::MachineState,
+        interpreter::{
+            helpers::{instantiate_enum_type, instantiate_single_type, instantiate_struct_type},
+            state::MachineState,
+        },
         values::Value as RuntimeValue,
     },
     jit::execution::ast::{Function, Type},
 };
-use move_binary_format::{
-    errors::{PartialVMError, VMError, VMResult},
-    file_format::ConstantPoolIndex,
-};
+use move_binary_format::errors::{PartialVMError, VMError, VMResult};
 use move_core_types::{
     annotated_value::{MoveTypeLayout as AnnotatedTypeLayout, MoveValue as AnnotatedValue},
     language_storage::TypeTag,
@@ -813,33 +813,20 @@ impl<'a> VMTracer<'a> {
             }
             // Handled by open frame
             B::DirectCall(_) | B::VirtualCall(_) | B::CallGeneric(_) => {}
-            B::Pack(sidx) => {
-                let field_count =
-                    machine.call_stack.current_frame.resolver.field_count(*sidx) as usize;
+            B::Pack(struct_def_ptr) => {
+                let field_count = struct_def_ptr.to_ref().field_count as usize;
                 self.register_pre_effects(popn(field_count)?);
             }
-            B::PackGeneric(sidx) => {
-                let field_count = machine
-                    .call_stack
-                    .current_frame
-                    .resolver
-                    .field_instantiation_count(*sidx) as usize;
+            B::PackGeneric(struct_inst_ptr) => {
+                let field_count = struct_inst_ptr.to_ref().field_count as usize;
                 self.register_pre_effects(popn(field_count)?);
             }
-            B::PackVariant(vidx) => {
-                let (field_count, _variant_tag) = machine
-                    .call_stack
-                    .current_frame
-                    .resolver
-                    .variant_field_count_and_tag(*vidx);
+            B::PackVariant(variant_inst_ptr) => {
+                let field_count = variant_inst_ptr.to_ref().field_count;
                 self.register_pre_effects(popn(field_count as usize)?);
             }
-            B::PackVariantGeneric(vidx) => {
-                let (field_count, _variant_tag) = machine
-                    .call_stack
-                    .current_frame
-                    .resolver
-                    .variant_instantiantiation_field_count_and_tag(*vidx);
+            B::PackVariantGeneric(variant_inst_ptr) => {
+                let field_count = variant_inst_ptr.to_ref().field_count();
                 self.register_pre_effects(popn(field_count as usize)?);
             }
             B::ReadRef => {
@@ -1017,10 +1004,10 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], vec![], *remaining_gas, pc);
             }
-            B::Pack(sidx) => {
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let field_count = resolver.field_count(*sidx) as usize;
-                let struct_type = resolver.get_struct_type(*sidx);
+            B::Pack(struct_def_ptr) => {
+                let struct_def = struct_def_ptr.to_ref();
+                let field_count = struct_def.field_count as usize;
+                let struct_type = struct_def.struct_datatype();
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count);
                 let ty = vtables.type_to_fully_annotated_layout(&struct_type).ok()?;
@@ -1035,12 +1022,12 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            B::PackGeneric(sidx) => {
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let field_count = resolver.field_instantiation_count(*sidx) as usize;
-                let struct_type = resolver
-                    .instantiate_struct_type(*sidx, &machine.call_stack.current_frame.ty_args)
-                    .ok()?;
+            B::PackGeneric(struct_inst_ptr) => {
+                let struct_inst = struct_inst_ptr.to_ref();
+                let field_count = struct_inst.field_count as usize;
+                let struct_type =
+                    instantiate_struct_type(struct_inst, &machine.call_stack.current_frame.ty_args)
+                        .ok()?;
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count);
                 let ty = vtables.type_to_fully_annotated_layout(&struct_type).ok()?;
@@ -1186,14 +1173,13 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            i @ (B::MutBorrowField(fhidx) | B::ImmBorrowField(fhidx)) => {
+            i @ (B::MutBorrowField(field_handle_ptr) | B::ImmBorrowField(field_handle_ptr)) => {
                 let value_ty = self.type_stack.pop()?;
 
                 let AnnotatedTypeLayout::Struct(slayout) = &value_ty.layout else {
                     panic!("Expected struct, got {:?}", value_ty.layout)
                 };
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let field_offset = resolver.field_offset(*fhidx);
+                let field_offset = field_handle_ptr.to_ref().offset;
                 let field_layout = slayout.fields.get(field_offset)?.layout.clone();
 
                 let location = value_ty.ref_type.as_ref()?.1.clone();
@@ -1215,14 +1201,14 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            i @ (B::MutBorrowFieldGeneric(fhidx) | B::ImmBorrowFieldGeneric(fhidx)) => {
+            i @ (B::MutBorrowFieldGeneric(field_inst_ptr)
+            | B::ImmBorrowFieldGeneric(field_inst_ptr)) => {
                 let value_ty = self.type_stack.pop()?;
 
                 let AnnotatedTypeLayout::Struct(slayout) = &value_ty.layout else {
                     panic!("Expected struct, got {:?}", value_ty.layout)
                 };
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let field_offset = resolver.field_instantiation_offset(*fhidx);
+                let field_offset = field_inst_ptr.to_ref().offset;
                 let field_layout = slayout.fields.get(field_offset)?.layout.clone();
                 let location = value_ty.ref_type.as_ref()?.1.clone();
                 let field_location =
@@ -1246,10 +1232,11 @@ impl<'a> VMTracer<'a> {
             }
 
             B::VecPack(ty_ptr, n) => {
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let ty = resolver
-                    .instantiate_single_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
-                    .ok()?;
+                let ty = instantiate_single_type(
+                    ty_ptr.to_ref(),
+                    &machine.call_stack.current_frame.ty_args,
+                )
+                .ok()?;
                 let ty = vtables.type_to_fully_annotated_layout(&ty).ok()?;
                 let ty = AnnotatedTypeLayout::Vector(Box::new(ty));
                 let stack_len = self.type_stack.len();
@@ -1370,14 +1357,13 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            B::PackVariant(vidx) => {
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let (field_count, _variant_tag) = resolver.variant_field_count_and_tag(*vidx);
+            B::PackVariant(variant_def_ptr) => {
+                let variant_def = variant_def_ptr.to_ref();
+                let field_count = variant_def.field_count;
+                let enum_type = variant_def.enum_def.to_ref().enum_datatype();
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count as usize);
-                let ty = vtables
-                    .type_to_fully_annotated_layout(&resolver.get_enum_type(*vidx))
-                    .ok()?;
+                let ty = vtables.type_to_fully_annotated_layout(&enum_type).ok()?;
                 let a_layout = StackType {
                     layout: ty,
                     ref_type: None,
@@ -1388,17 +1374,18 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            B::PackVariantGeneric(vidx) => {
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let (field_count, _variant_tag) =
-                    resolver.variant_instantiantiation_field_count_and_tag(*vidx);
+            B::PackVariantGeneric(variant_inst_ptr) => {
+                let variant_inst = variant_inst_ptr.to_ref();
+                let field_count = variant_inst.field_count();
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count as usize);
                 let ty = vtables
                     .type_to_fully_annotated_layout(
-                        &resolver
-                            .instantiate_enum_type(*vidx, &machine.call_stack.current_frame.ty_args)
-                            .ok()?,
+                        &instantiate_enum_type(
+                            variant_inst,
+                            &machine.call_stack.current_frame.ty_args,
+                        )
+                        .ok()?,
                     )
                     .ok()?;
                 let a_layout = StackType {
@@ -1411,81 +1398,81 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            i @ (B::UnpackVariant(_) | B::UnpackVariantGeneric(_)) => {
-                let ty = self.type_stack.pop()?;
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let (field_count, tag) = match i {
-                    B::UnpackVariant(vidx) => resolver.variant_field_count_and_tag(*vidx),
-                    B::UnpackVariantGeneric(vidx) => {
-                        resolver.variant_instantiantiation_field_count_and_tag(*vidx)
-                    }
-                    _ => unreachable!(),
-                };
-                let AnnotatedTypeLayout::Enum(e) = ty.layout else {
-                    panic!("Expected enum, got {:#?}", ty.layout);
-                };
-                let variant_layout = e.variants.iter().find(|v| v.0 .1 == tag)?;
-                let mut effects = vec![];
-                for f_layout in variant_layout.1.iter() {
-                    let a_layout = StackType {
-                        layout: f_layout.layout.clone(),
-                        ref_type: None,
-                    };
-                    self.type_stack.push(a_layout);
-                }
-                for i in 0..field_count {
-                    let value = self.resolve_stack_value(vtables, machine, i as usize)?;
-                    effects.push(EF::Push(value));
-                }
-                let effects = self.register_post_effects(effects);
-                self.trace
-                    .instruction(instruction, vec![], effects, *remaining_gas, pc);
+            B::UnpackVariant(variant_def_ptr) => {
+                let variant_def = variant_def_ptr.to_ref();
+                self.end_variant_unpack(
+                    variant_def.variant_tag,
+                    variant_def.field_count,
+                    vtables,
+                    machine,
+                    instruction,
+                    remaining_gas,
+                    pc,
+                )?;
             }
-            i @ (B::UnpackVariantImmRef(_)
-            | B::UnpackVariantMutRef(_)
-            | B::UnpackVariantGenericImmRef(_)
-            | B::UnpackVariantGenericMutRef(_)) => {
-                let ty = self.type_stack.pop()?;
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let ((field_count, tag), ref_type) = match i {
-                    B::UnpackVariantImmRef(vidx) => {
-                        (resolver.variant_field_count_and_tag(*vidx), Mutability::Imm)
-                    }
-                    B::UnpackVariantMutRef(vidx) => {
-                        (resolver.variant_field_count_and_tag(*vidx), Mutability::Mut)
-                    }
-                    B::UnpackVariantGenericImmRef(vidx) => (
-                        resolver.variant_instantiantiation_field_count_and_tag(*vidx),
-                        Mutability::Imm,
-                    ),
-                    B::UnpackVariantGenericMutRef(vidx) => (
-                        resolver.variant_instantiantiation_field_count_and_tag(*vidx),
-                        Mutability::Mut,
-                    ),
-                    _ => unreachable!(),
-                };
-                let AnnotatedTypeLayout::Enum(e) = ty.layout else {
-                    panic!("Expected enum, got {:#?}", ty.layout);
-                };
-                let variant_layout = e.variants.iter().find(|v| v.0 .1 == tag)?;
-                let location = ty.ref_type.as_ref()?.1.clone();
-
-                let mut effects = vec![];
-                for (i, f_layout) in variant_layout.1.iter().enumerate() {
-                    let location = RuntimeLocation::Indexed(Box::new(location.clone()), i);
-                    let a_layout = StackType {
-                        layout: f_layout.layout.clone(),
-                        ref_type: Some((ref_type.clone(), location)),
-                    };
-                    self.type_stack.push(a_layout);
-                }
-                for i in 0..field_count {
-                    let value = self.resolve_stack_value(vtables, machine, i as usize)?;
-                    effects.push(EF::Push(value));
-                }
-                let effects = self.register_post_effects(effects);
-                self.trace
-                    .instruction(instruction, vec![], effects, *remaining_gas, pc);
+            B::UnpackVariantGeneric(variant_inst_ptr) => {
+                let variant_inst = variant_inst_ptr.to_ref();
+                self.end_variant_unpack(
+                    variant_inst.variant_tag,
+                    variant_inst.field_count(),
+                    vtables,
+                    machine,
+                    instruction,
+                    remaining_gas,
+                    pc,
+                )?;
+            }
+            B::UnpackVariantImmRef(variant_def_ptr) => {
+                let variant_def = variant_def_ptr.to_ref();
+                self.end_variant_ref_unpack(
+                    variant_def.variant_tag,
+                    variant_def.field_count,
+                    Mutability::Imm,
+                    vtables,
+                    machine,
+                    instruction,
+                    remaining_gas,
+                    pc,
+                )?;
+            }
+            B::UnpackVariantMutRef(variant_def_ptr) => {
+                let variant_def = variant_def_ptr.to_ref();
+                self.end_variant_ref_unpack(
+                    variant_def.variant_tag,
+                    variant_def.field_count,
+                    Mutability::Mut,
+                    vtables,
+                    machine,
+                    instruction,
+                    remaining_gas,
+                    pc,
+                )?;
+            }
+            B::UnpackVariantGenericImmRef(variant_inst_ptr) => {
+                let variant_inst = variant_inst_ptr.to_ref();
+                self.end_variant_ref_unpack(
+                    variant_inst.variant_tag,
+                    variant_inst.field_count(),
+                    Mutability::Imm,
+                    vtables,
+                    machine,
+                    instruction,
+                    remaining_gas,
+                    pc,
+                )?;
+            }
+            B::UnpackVariantGenericMutRef(variant_inst_ptr) => {
+                let variant_inst = variant_inst_ptr.to_ref();
+                self.end_variant_ref_unpack(
+                    variant_inst.variant_tag,
+                    variant_inst.field_count(),
+                    Mutability::Imm,
+                    vtables,
+                    machine,
+                    instruction,
+                    remaining_gas,
+                    pc,
+                )?;
             }
             B::VariantSwitch(_) => {
                 self.type_stack.pop()?;
@@ -1497,6 +1484,76 @@ impl<'a> VMTracer<'a> {
 
         // At this point the type stack and the operand stack should be in sync.
         assert_eq!(self.type_stack.len(), machine.operand_stack.len());
+        Some(())
+    }
+
+    fn end_variant_unpack(
+        &mut self,
+        tag: u16,
+        field_count: u16,
+        vtables: &VMDispatchTables,
+        machine: &MachineState,
+        instruction: &crate::jit::execution::ast::Bytecode,
+        remaining_gas: &u64,
+        pc: u16,
+    ) -> Option<()> {
+        let ty = self.type_stack.pop()?;
+        let AnnotatedTypeLayout::Enum(e) = ty.layout else {
+            panic!("Expected enum, got {:#?}", ty.layout);
+        };
+        let variant_layout = e.variants.iter().find(|v| v.0 .1 == tag)?;
+        let mut effects = vec![];
+        for f_layout in variant_layout.1.iter() {
+            let a_layout = StackType {
+                layout: f_layout.layout.clone(),
+                ref_type: None,
+            };
+            self.type_stack.push(a_layout);
+        }
+        for i in 0..field_count {
+            let value = self.resolve_stack_value(vtables, machine, i as usize)?;
+            effects.push(EF::Push(value));
+        }
+        let effects = self.register_post_effects(effects);
+        self.trace
+            .instruction(instruction, vec![], effects, *remaining_gas, pc);
+        Some(())
+    }
+
+    fn end_variant_ref_unpack(
+        &mut self,
+        tag: u16,
+        field_count: u16,
+        ref_type: Mutability,
+        vtables: &VMDispatchTables,
+        machine: &MachineState,
+        instruction: &crate::jit::execution::ast::Bytecode,
+        remaining_gas: &u64,
+        pc: u16,
+    ) -> Option<()> {
+        let ty = self.type_stack.pop()?;
+        let AnnotatedTypeLayout::Enum(e) = ty.layout else {
+            panic!("Expected enum, got {:#?}", ty.layout);
+        };
+        let variant_layout = e.variants.iter().find(|v| v.0 .1 == tag)?;
+        let location = ty.ref_type.as_ref()?.1.clone();
+
+        let mut effects = vec![];
+        for (i, f_layout) in variant_layout.1.iter().enumerate() {
+            let location = RuntimeLocation::Indexed(Box::new(location.clone()), i);
+            let a_layout = StackType {
+                layout: f_layout.layout.clone(),
+                ref_type: Some((ref_type.clone(), location)),
+            };
+            self.type_stack.push(a_layout);
+        }
+        for i in 0..field_count {
+            let value = self.resolve_stack_value(vtables, machine, i as usize)?;
+            effects.push(EF::Push(value));
+        }
+        let effects = self.register_post_effects(effects);
+        self.trace
+            .instruction(instruction, vec![], effects, *remaining_gas, pc);
         Some(())
     }
 }

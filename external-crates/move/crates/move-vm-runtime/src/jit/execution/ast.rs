@@ -21,13 +21,12 @@ use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         AbilitySet, CodeOffset, ConstantPoolIndex, EnumDefInstantiationIndex, EnumDefinitionIndex,
-        FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
-        FunctionInstantiationIndex, LocalIndex, SignatureIndex, SignatureToken,
-        StructDefInstantiationIndex, StructDefinitionIndex, VariantHandle, VariantHandleIndex,
-        VariantInstantiationHandle, VariantInstantiationHandleIndex, VariantJumpTable,
-        VariantJumpTableIndex, VariantTag,
+        FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex, JumpTableInner,
+        LocalIndex, SignatureIndex, SignatureToken, StructDefinitionIndex, VariantHandleIndex,
+        VariantInstantiationHandleIndex, VariantJumpTable, VariantTag,
     },
     file_format_common::Opcodes,
+    internals::ModuleIndex,
 };
 use move_core_types::{
     gas_algebra::AbstractMemorySize, identifier::Identifier, language_storage::ModuleId,
@@ -159,7 +158,7 @@ pub struct Function {
     pub module: ModuleId,
     pub name: Identifier,
     pub locals_len: usize,
-    pub jump_tables: Vec<VariantJumpTable>,
+    pub jump_tables: Vec<VMPointer<VariantJumpTable>>,
 }
 
 //
@@ -185,7 +184,7 @@ pub enum CallType {
 #[derive(Debug)]
 pub struct FunctionInstantiation {
     // index to `ModuleCache::functions` if in-package call otherwise a virtual call
-    pub handle: CallType,
+    pub fn_call: CallType,
     // [ALLOC] This is allocated in the package arena.
     pub instantiation_signature: VMPointer<Vec<Type>>,
 }
@@ -203,7 +202,7 @@ pub struct StructInstantiation {
     pub field_count: u16,
     pub def_vtable_key: VirtualTableKey,
     // [ALLOC] This is allocated in the package arena.
-    pub instantiation_signature: VMPointer<Vec<Type>>,
+    pub type_params: VMPointer<Vec<Type>>,
 }
 
 // A field handle. The offset is the only used information when operating on a field
@@ -227,7 +226,7 @@ pub struct EnumDef {
     #[allow(unused)]
     pub variant_count: u16,
     pub variants: Vec<VariantDef>,
-    pub dev_vtable_key: VirtualTableKey,
+    pub def_vtable_key: VirtualTableKey,
 }
 
 #[derive(Debug)]
@@ -236,13 +235,14 @@ pub struct EnumInstantiation {
     pub variant_count_map: Vec<u16>,
     pub def_vtable_key: VirtualTableKey,
     // [ALLOC] This is allocated in the package arena.
-    pub instantiation_signature: VMPointer<Vec<Type>>,
+    pub type_params: VMPointer<Vec<Type>>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VariantDef {
+    pub enum_def: VMPointer<EnumDef>,
     #[allow(unused)]
-    pub tag: u16,
+    pub variant_tag: u16,
     pub field_count: u16,
     #[allow(unused)]
     pub field_types: Vec<Type>,
@@ -251,8 +251,8 @@ pub struct VariantDef {
 // A variant instantiation.
 #[derive(Debug)]
 pub struct VariantInstantiation {
-    pub enum_def: VMPointer<EnumInstantiation>,
-    pub variant: u16,
+    pub enum_inst: VMPointer<EnumInstantiation>,
+    pub variant_tag: u16,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -287,7 +287,7 @@ pub enum Datatype {
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct EnumType {
     pub variants: Vec<VariantType>,
-    pub enum_def: VMPointer<EnumDef>,
+    pub enum_def: EnumDefinitionIndex,
 }
 
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -315,7 +315,7 @@ pub struct StructType {
 ///
 /// Bytecodes operate on a stack machine and each bytecode has side effect on the stack and the
 /// instruction stream.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub enum Bytecode {
     /// Pop and discard the value at the top of the stack.
     /// The value on the stack must be an copyable type.
@@ -459,7 +459,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., field(1)_value, field(2)_value, ..., field(n)_value -> ..., instance_value```
-    Pack(StructDefinitionIndex),
+    Pack(VMPointer<StructDef>),
     PackGeneric(VMPointer<StructInstantiation>),
     /// Destroy an instance of a type and push the values bound to each field on the
     /// stack.
@@ -473,7 +473,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., instance_value -> ..., field(1)_value, field(2)_value, ..., field(n)_value```
-    Unpack(StructDefinitionIndex),
+    Unpack(VMPointer<StructDef>),
     UnpackGeneric(VMPointer<StructInstantiation>),
     /// Read a reference. The reference is on the stack, it is consumed and the value read is
     /// pushed on the stack.
@@ -781,7 +781,7 @@ pub enum Bytecode {
     ///
     /// ```..., integer_value -> ..., u256_value```
     CastU256,
-    /// Create a variant of the enum type specified via `VariantHandleIndex` and push it on the stack.
+    /// Create a variant of the enum type specified via `VariantDef` and push it on the stack.
     /// The values of the fields of the variant, in the order they appear in the variant declaration,
     /// must be pushed on the stack. All fields for the variant must be provided.
     ///
@@ -792,7 +792,7 @@ pub enum Bytecode {
     /// ```..., field(1)_value, field(2)_value, ..., field(n)_value -> ..., variant_value```
     PackVariant(VMPointer<VariantDef>),
     PackVariantGeneric(VMPointer<VariantInstantiation>),
-    /// Destroy a variant value specified by the `VariantHandleIndex` and push the values bound to
+    /// Destroy a variant value specified by the `VariantDef` and push the values bound to
     /// each variant field on the stack.
     ///
     /// The values of the fields of the instance appear on the stack in the order defined
@@ -826,31 +826,36 @@ pub enum Bytecode {
 
 impl Module {
     pub fn struct_at(&self, idx: StructDefinitionIndex) -> VirtualTableKey {
-        self.structs[idx.0 as usize].idx.clone()
+        self.structs[idx.into_index()]
+            .to_ref()
+            .def_vtable_key
+            .clone()
     }
 
     pub fn struct_instantiation_at(&self, idx: u16) -> &StructInstantiation {
-        &self.struct_instantiations[idx as usize]
+        self.struct_instantiations[idx as usize].to_ref()
     }
 
     pub fn function_instantiation_at(&self, idx: u16) -> &FunctionInstantiation {
-        &self.function_instantiations[idx as usize]
+        self.function_instantiations[idx as usize].to_ref()
     }
 
     pub fn field_count(&self, idx: u16) -> u16 {
-        self.structs[idx as usize].field_count
+        self.structs[idx as usize].to_ref().field_count
     }
 
     pub fn field_instantiation_count(&self, idx: u16) -> u16 {
-        self.struct_instantiations[idx as usize].field_count
+        self.struct_instantiations[idx as usize]
+            .to_ref()
+            .field_count
     }
 
     pub fn field_offset(&self, idx: FieldHandleIndex) -> usize {
-        self.field_handles[idx.0 as usize].offset
+        self.field_handles[idx.into_index()].to_ref().offset
     }
 
     pub fn field_instantiation_offset(&self, idx: FieldInstantiationIndex) -> usize {
-        self.field_instantiations[idx.0 as usize].offset
+        self.field_instantiations[idx.into_index()].to_ref().offset
     }
 
     pub fn single_type_at(&self, idx: SignatureIndex) -> &Type {
@@ -858,33 +863,27 @@ impl Module {
     }
 
     pub fn enum_at(&self, idx: EnumDefinitionIndex) -> VirtualTableKey {
-        self.enums[idx.0 as usize].idx.clone()
+        self.enums[idx.into_index()].to_ref().def_vtable_key.clone()
     }
 
     pub fn enum_instantiation_at(&self, idx: EnumDefInstantiationIndex) -> &EnumInstantiation {
-        &self.enum_instantiations[idx.0 as usize]
+        self.enum_instantiations[idx.into_index()].to_ref()
     }
 
     pub fn variant_at(&self, vidx: VariantHandleIndex) -> &VariantDef {
-        let variant_handle = &self.variant_handles[vidx.0 as usize];
-        let enum_def = &self.enums[variant_handle.enum_def.0 as usize];
-        &enum_def.variants[variant_handle.variant as usize]
-    }
-
-    pub fn variant_handle_at(&self, vidx: VariantHandleIndex) -> &VariantHandle {
-        &self.variant_handles[vidx.0 as usize]
+        self.variant_handles[vidx.into_index()].to_ref()
     }
 
     pub fn variant_field_count(&self, vidx: VariantHandleIndex) -> (u16, VariantTag) {
         let variant = self.variant_at(vidx);
-        (variant.field_count, variant.tag)
+        (variant.field_count, variant.variant_tag)
     }
 
     pub fn variant_instantiation_handle_at(
         &self,
         vidx: VariantInstantiationHandleIndex,
-    ) -> &VariantInstantiationHandle {
-        &self.variant_instantiation_handles[vidx.0 as usize]
+    ) -> &VariantInstantiation {
+        self.variant_instantiations[vidx.into_index()].to_ref()
     }
 
     pub fn variant_instantiantiation_field_count_and_tag(
@@ -892,15 +891,15 @@ impl Module {
         vidx: VariantInstantiationHandleIndex,
     ) -> (u16, VariantTag) {
         let handle = self.variant_instantiation_handle_at(vidx);
-        let enum_inst = &self.enum_instantiations[handle.enum_def.0 as usize];
+        let enum_inst = handle.enum_inst.to_ref();
         (
-            enum_inst.variant_count_map[handle.variant as usize],
-            handle.variant,
+            enum_inst.variant_count_map[handle.variant_tag as usize],
+            handle.variant_tag,
         )
     }
 
-    pub fn constant_at(&self, idx: ConstantPoolIndex) -> &Constant {
-        self.constants.get(&idx).unwrap().to_ref()
+    pub fn constant_at(&self, ndx: ConstantPoolIndex) -> &Constant {
+        self.constants[ndx.into_index()].to_ref()
     }
 }
 
@@ -938,7 +937,7 @@ impl Function {
         vm_pointer::ref_slice(self.code)
     }
 
-    pub fn jump_tables(&self) -> &[VariantJumpTable] {
+    pub fn jump_tables(&self) -> &[VMPointer<VariantJumpTable>] {
         &self.jump_tables
     }
 
@@ -1157,6 +1156,24 @@ impl Type {
     }
 }
 
+impl StructDef {
+    pub fn struct_datatype(&self) -> Type {
+        Type::Datatype(self.def_vtable_key.clone())
+    }
+}
+
+impl EnumDef {
+    pub fn enum_datatype(&self) -> Type {
+        Type::Datatype(self.def_vtable_key.clone())
+    }
+}
+
+impl VariantInstantiation {
+    pub fn field_count(&self) -> u16 {
+        self.enum_inst.to_ref().variant_count_map[self.variant_tag as usize]
+    }
+}
+
 // -------------------------------------------------------------------------------------------------
 // Equality
 // -------------------------------------------------------------------------------------------------
@@ -1280,6 +1297,21 @@ impl std::fmt::Display for Constant {
     }
 }
 
+impl std::fmt::Display for CallType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CallType::Direct(fun) => write!(f, "{}", fun.to_ref().name),
+            CallType::Virtual(key) => write!(f, "~{}", key),
+        }
+    }
+}
+
+impl std::fmt::Display for StructInstantiation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.def_vtable_key)
+    }
+}
+
 // -------------------------------------------------------------------------------------------------
 // Debug
 // -------------------------------------------------------------------------------------------------
@@ -1317,34 +1349,41 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::MoveLoc(a) => write!(f, "MoveLoc({})", a),
             Bytecode::StLoc(a) => write!(f, "StLoc({})", a),
             Bytecode::DirectCall(fun) => write!(f, "Call({})", fun.to_ref().name),
-            Bytecode::VirtualCall(vtable_key) => {
-                let string_interner = string_interner();
-                let module_name = string_interner
-                    .resolve_string(&vtable_key.inner_pkg_key.module_name, "module name")
-                    .expect("Failed to find interned string");
-                let member_name = string_interner
-                    .resolve_string(&vtable_key.inner_pkg_key.member_name, "member name")
-                    .expect("Failed to find interned string");
-                write!(
-                    f,
-                    "Call(~{}::{}::{})",
-                    vtable_key.package_key, module_name, member_name
-                )
-            }
-            Bytecode::CallGeneric(ndx) => write!(f, "CallGeneric({})", ndx),
-            Bytecode::Pack(a) => write!(f, "Pack({})", a),
-            Bytecode::PackGeneric(a) => write!(f, "PackGeneric({})", a),
-            Bytecode::Unpack(a) => write!(f, "Unpack({})", a),
-            Bytecode::UnpackGeneric(a) => write!(f, "UnpackGeneric({})", a),
+            Bytecode::VirtualCall(vtable_key) => write!(f, "Call(~{})", vtable_key),
+            Bytecode::CallGeneric(ref_) => write!(f, "CallGeneric({})", ref_.to_ref().fn_call),
+            Bytecode::Pack(a) => write!(f, "Pack({:?})", a.to_ref().def_vtable_key),
+            Bytecode::PackGeneric(a) => write!(f, "PackGeneric({:?})", a.to_ref().def_vtable_key),
+            Bytecode::Unpack(a) => write!(f, "Unpack({})", a.to_ref().def_vtable_key),
+            Bytecode::UnpackGeneric(a) => write!(f, "UnpackGeneric({})", a.to_ref().def_vtable_key),
             Bytecode::ReadRef => write!(f, "ReadRef"),
             Bytecode::WriteRef => write!(f, "WriteRef"),
             Bytecode::FreezeRef => write!(f, "FreezeRef"),
             Bytecode::MutBorrowLoc(a) => write!(f, "MutBorrowLoc({})", a),
             Bytecode::ImmBorrowLoc(a) => write!(f, "ImmBorrowLoc({})", a),
-            Bytecode::MutBorrowField(a) => write!(f, "MutBorrowField({:?})", a),
-            Bytecode::MutBorrowFieldGeneric(a) => write!(f, "MutBorrowFieldGeneric({:?})", a),
-            Bytecode::ImmBorrowField(a) => write!(f, "ImmBorrowField({:?})", a),
-            Bytecode::ImmBorrowFieldGeneric(a) => write!(f, "ImmBorrowFieldGeneric({:?})", a),
+            Bytecode::MutBorrowField(a) => write!(
+                f,
+                "MutBorrowField({}.{})",
+                a.to_ref().owner,
+                a.to_ref().offset
+            ),
+            Bytecode::MutBorrowFieldGeneric(a) => write!(
+                f,
+                "MutBorrowFieldGeneric({}.{})",
+                a.to_ref().owner,
+                a.to_ref().offset
+            ),
+            Bytecode::ImmBorrowField(a) => write!(
+                f,
+                "ImmBorrowField({}.{})",
+                a.to_ref().owner,
+                a.to_ref().offset
+            ),
+            Bytecode::ImmBorrowFieldGeneric(a) => write!(
+                f,
+                "ImmBorrowFieldGeneric({}.{})",
+                a.to_ref().owner,
+                a.to_ref().offset
+            ),
             Bytecode::Add => write!(f, "Add"),
             Bytecode::Sub => write!(f, "Sub"),
             Bytecode::Mul => write!(f, "Mul"),
@@ -1375,26 +1414,64 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::VecUnpack(a, n) => write!(f, "VecUnpack({:?}, {})", a.to_ref(), n),
             Bytecode::VecSwap(a) => write!(f, "VecSwap({:?})", a.to_ref()),
             Bytecode::PackVariant(handle) => {
-                write!(f, "PackVariant({:?})", handle)
+                write!(
+                    f,
+                    "PackVariant({}::_{})",
+                    handle.to_ref().enum_def.to_ref().def_vtable_key,
+                    handle.to_ref().variant_tag
+                )
             }
             Bytecode::PackVariantGeneric(handle) => write!(f, "PackVariantGeneric({:?})", handle),
-            Bytecode::UnpackVariant(handle) => write!(f, "UnpackVariant({:?})", handle),
+            Bytecode::UnpackVariant(handle) => write!(
+                f,
+                "UnpackVariant({}::_{})",
+                handle.to_ref().enum_def.to_ref().def_vtable_key,
+                handle.to_ref().variant_tag
+            ),
             Bytecode::UnpackVariantGeneric(handle) => {
-                write!(f, "UnpackVariantGeneric({:?})", handle)
+                write!(
+                    f,
+                    "UnpackVariantGeneric({}::_{})",
+                    handle.to_ref().enum_inst.to_ref().def_vtable_key,
+                    handle.to_ref().variant_tag
+                )
             }
             Bytecode::UnpackVariantImmRef(handle) => {
-                write!(f, "UnpackVariantImmRef({:?})", handle)
+                write!(
+                    f,
+                    "UnpackVariantImmRef({}::_{})",
+                    handle.to_ref().enum_def.to_ref().def_vtable_key,
+                    handle.to_ref().variant_tag
+                )
             }
             Bytecode::UnpackVariantGenericImmRef(handle) => {
-                write!(f, "UnpackVariantGenericImmRef({:?})", handle)
+                write!(
+                    f,
+                    "UnpackVariantGenericImmRef({}::_{})",
+                    handle.to_ref().enum_inst.to_ref().def_vtable_key,
+                    handle.to_ref().variant_tag
+                )
             }
             Bytecode::UnpackVariantMutRef(handle) => {
-                write!(f, "UnpackVariantMutRef({:?})", handle)
+                write!(
+                    f,
+                    "UnpackVariantMutRef({}::_{})",
+                    handle.to_ref().enum_def.to_ref().def_vtable_key,
+                    handle.to_ref().variant_tag
+                )
             }
             Bytecode::UnpackVariantGenericMutRef(handle) => {
-                write!(f, "UnpackVariantGenericMutRef({:?})", handle)
+                write!(
+                    f,
+                    "UnpackVariantGenericMutRef({}::_{})",
+                    handle.to_ref().enum_inst.to_ref().def_vtable_key,
+                    handle.to_ref().variant_tag
+                )
             }
-            Bytecode::VariantSwitch(jt) => write!(f, "VariantSwitch({:?})", jt),
+            Bytecode::VariantSwitch(jt) => {
+                let JumpTableInner::Full(jumps) = &jt.to_ref().jump_table;
+                write!(f, "VariantSwitch({:?})", jumps)
+            }
         }
     }
 }

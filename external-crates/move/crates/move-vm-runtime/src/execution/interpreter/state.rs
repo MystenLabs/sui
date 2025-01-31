@@ -3,33 +3,24 @@
 
 use crate::{
     execution::{
-        dispatch_tables::{count_type_nodes, subst, VMDispatchTables, VirtualTableKey},
+        dispatch_tables::VMDispatchTables,
         interpreter::{locals::MachineHeap, set_err_info},
         values::values_impl::{self as values, VMValueCast, Value},
     },
-    jit::execution::ast::{CallType, Constant, Function, Module, Type},
+    jit::execution::ast::{Function, Type},
     shared::{
-        constants::{
-            CALL_STACK_SIZE_LIMIT, MAX_TYPE_INSTANTIATION_NODES, OPERAND_STACK_SIZE_LIMIT,
-        },
+        constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
         views::TypeView,
         vm_pointer::VMPointer,
     },
 };
-use move_binary_format::{
-    errors::*,
-    file_format::{
-        ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex, FunctionInstantiationIndex,
-        SignatureIndex, StructDefInstantiationIndex, StructDefinitionIndex, VariantHandleIndex,
-        VariantInstantiationHandleIndex, VariantTag,
-    },
-};
+use move_binary_format::errors::*;
 use move_core_types::{
-    language_storage::{ModuleId, TypeTag},
+    language_storage::TypeTag,
     vm_status::{StatusCode, StatusType},
 };
 
-use std::{cmp::min, fmt::Write, sync::Arc};
+use std::{cmp::min, fmt::Write};
 use tracing::error;
 
 use super::locals::StackFrame;
@@ -82,21 +73,12 @@ pub(crate) struct CallStack {
     pub(crate) frames: Vec<CallFrame>,
 }
 
-// A Resolver is a simple and small structure allocated on the stack and used by the
-// interpreter. It's the only API known to the interpreter and it's tailored to the interpreter
-// needs.
-#[derive(Debug)]
-pub(crate) struct ModuleDefinitionResolver {
-    module: Arc<Module>,
-}
-
 /// A `Frame` is the execution context for a function. It holds the locals of the function and
 /// the function itself.
 #[derive(Debug)]
 pub(crate) struct CallFrame {
     pub(crate) pc: u16,
     pub(crate) function: VMPointer<Function>,
-    pub(crate) resolver: ModuleDefinitionResolver,
     pub(crate) stack_frame: StackFrame,
     pub(crate) ty_args: Vec<Type>,
 }
@@ -161,12 +143,11 @@ impl MachineState {
     #[inline]
     pub fn push_call(
         &mut self,
-        resolver: ModuleDefinitionResolver,
         function: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
     ) -> VMResult<()> {
-        self.call_stack.push_call(resolver, function, ty_args, args)
+        self.call_stack.push_call(function, ty_args, args)
     }
 
     /// Returns true if there is a frame to pop.
@@ -437,7 +418,6 @@ impl ValueStack {
 impl CallStack {
     /// Create a new empty call stack.
     pub fn new(
-        resolver: ModuleDefinitionResolver,
         function: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
@@ -449,7 +429,6 @@ impl CallStack {
         let current_frame = CallFrame {
             pc: 0,
             stack_frame,
-            resolver,
             function,
             ty_args,
         };
@@ -466,7 +445,6 @@ impl CallStack {
     #[inline]
     pub fn push_call(
         &mut self,
-        resolver: ModuleDefinitionResolver,
         function: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
@@ -479,7 +457,6 @@ impl CallStack {
         let new_frame = CallFrame {
             pc: 0,
             stack_frame,
-            resolver,
             function,
             ty_args,
         };
@@ -524,173 +501,6 @@ impl CallFrame {
 
     pub(super) fn location(&self) -> Location {
         Location::Module(self.function().module_id().clone())
-    }
-}
-
-impl ModuleDefinitionResolver {
-    //
-    // Creation: From a set of Runtime VTables and a ModuleId.
-    //
-
-    pub fn new(vtables: &VMDispatchTables, module_id: &ModuleId) -> PartialVMResult<Self> {
-        let module = vtables.resolve_loaded_module(module_id)?;
-        Ok(Self { module })
-    }
-
-    //
-    // Function resolution
-    //
-
-    pub(crate) fn function_from_instantiation(&self, idx: FunctionInstantiationIndex) -> &CallType {
-        &self.module.function_instantiation_at(idx.0).handle
-    }
-
-    //
-    // Type lookup and instantiation
-    //
-
-    pub(crate) fn instantiate_generic_function(
-        &self,
-        idx: FunctionInstantiationIndex,
-        type_params: &[Type],
-    ) -> PartialVMResult<Vec<Type>> {
-        let loaded_module = &*self.module;
-        let func_inst = loaded_module.function_instantiation_at(idx.0);
-        let instantiation: Vec<_> = func_inst
-            .instantiation_signature
-            .to_ref()
-            .iter()
-            .map(|ty| subst(ty, type_params))
-            .collect::<PartialVMResult<_>>()?;
-
-        // Check if the function instantiation over all generics is larger
-        // than MAX_TYPE_INSTANTIATION_NODES.
-        let mut sum_nodes = 1u64;
-        for ty in type_params.iter().chain(instantiation.iter()) {
-            sum_nodes = sum_nodes.saturating_add(count_type_nodes(ty));
-            if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-                return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
-            }
-        }
-        Ok(instantiation)
-    }
-
-    //
-    // Type resolution
-    //
-
-    pub(crate) fn get_struct_type(&self, idx: StructDefinitionIndex) -> Type {
-        let struct_def = self.module.struct_at(idx);
-        Type::Datatype(struct_def)
-    }
-
-    pub(crate) fn get_enum_type(&self, vidx: VariantHandleIndex) -> Type {
-        let variant_handle = self.module.variant_handle_at(vidx);
-        let enum_def = self.module.enum_at(variant_handle.enum_def);
-        Type::Datatype(enum_def)
-    }
-
-    pub(crate) fn instantiate_struct_type(
-        &self,
-        idx: StructDefInstantiationIndex,
-        ty_args: &[Type],
-    ) -> PartialVMResult<Type> {
-        let loaded_module = &*self.module;
-        let struct_inst = loaded_module.struct_instantiation_at(idx.0);
-        let instantiation = &struct_inst.instantiation_signature.to_ref();
-        self.instantiate_type_common(&struct_inst.def_vtable_key, instantiation, ty_args)
-    }
-
-    pub(crate) fn instantiate_enum_type(
-        &self,
-        vidx: VariantInstantiationHandleIndex,
-        ty_args: &[Type],
-    ) -> PartialVMResult<Type> {
-        let loaded_module = &*self.module;
-        let handle = loaded_module.variant_instantiation_handle_at(vidx);
-        let enum_inst = loaded_module.enum_instantiation_at(handle.enum_def);
-        let instantiation = &enum_inst.instantiation_signature.to_ref();
-        self.instantiate_type_common(&enum_inst.def_vtable_key, instantiation, ty_args)
-    }
-
-    fn instantiate_type_common(
-        &self,
-        gt_idx: &VirtualTableKey,
-        type_params: &[Type],
-        ty_args: &[Type],
-    ) -> PartialVMResult<Type> {
-        // Before instantiating the type, count the # of nodes of all type arguments plus
-        // existing type instantiation.
-        // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
-        // This prevents constructing larger and larger types via datatype instantiation.
-        let mut sum_nodes = 1u64;
-        for ty in ty_args.iter().chain(type_params.iter()) {
-            sum_nodes = sum_nodes.saturating_add(count_type_nodes(ty));
-            if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-                return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
-            }
-        }
-
-        Ok(Type::DatatypeInstantiation(Box::new((
-            gt_idx.clone(),
-            type_params
-                .iter()
-                .map(|ty| subst(ty, ty_args))
-                .collect::<PartialVMResult<_>>()?,
-        ))))
-    }
-
-    #[allow(dead_code)]
-    fn single_type_at(&self, idx: SignatureIndex) -> &Type {
-        self.module.single_type_at(idx)
-    }
-
-    pub(crate) fn instantiate_single_type(
-        &self,
-        ty_ptr: &VMPointer<Type>,
-        ty_args: &[Type],
-    ) -> PartialVMResult<Type> {
-        let ty = ty_ptr.to_ref();
-        if !ty_args.is_empty() {
-            subst(ty, ty_args)
-        } else {
-            Ok(ty.clone())
-        }
-    }
-
-    //
-    // Fields resolution
-    //
-
-    pub(crate) fn field_offset(&self, idx: FieldHandleIndex) -> usize {
-        self.module.field_offset(idx)
-    }
-
-    pub(crate) fn field_instantiation_offset(&self, idx: FieldInstantiationIndex) -> usize {
-        self.module.field_instantiation_offset(idx)
-    }
-
-    pub(crate) fn field_count(&self, idx: StructDefinitionIndex) -> u16 {
-        self.module.field_count(idx.0)
-    }
-
-    pub(crate) fn variant_field_count_and_tag(
-        &self,
-        vidx: VariantHandleIndex,
-    ) -> (u16, VariantTag) {
-        self.module.variant_field_count(vidx)
-    }
-
-    pub(crate) fn field_instantiation_count(&self, idx: StructDefInstantiationIndex) -> u16 {
-        self.module.field_instantiation_count(idx.0)
-    }
-
-    pub(crate) fn variant_instantiantiation_field_count_and_tag(
-        &self,
-        vidx: VariantInstantiationHandleIndex,
-    ) -> (u16, VariantTag) {
-        self.module
-            .variant_instantiantiation_field_count_and_tag(vidx)
     }
 }
 

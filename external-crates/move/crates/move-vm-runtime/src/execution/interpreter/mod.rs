@@ -4,7 +4,7 @@
 use crate::{
     execution::{
         dispatch_tables::VMDispatchTables,
-        interpreter::state::{CallStack, MachineState, ModuleDefinitionResolver},
+        interpreter::state::{CallStack, MachineState},
         tracing::trace,
         values::Value,
     },
@@ -18,6 +18,7 @@ use move_vm_profiler::{profile_close_frame, profile_open_frame};
 use std::sync::Arc;
 
 mod eval;
+pub(crate) mod helpers;
 pub mod locals;
 pub(crate) mod state;
 
@@ -66,10 +67,7 @@ pub(crate) fn run(
         profile_close_frame!(gas_meter, fun_ref.pretty_string());
         return_result.map(|values| values.into_iter().collect())
     } else {
-        let module_id = function.to_ref().module_id();
-        let resolver = ModuleDefinitionResolver::new(vtables, module_id)
-            .map_err(|err| err.finish(Location::Module(fun_ref.module_id().clone())))?;
-        let call_stack = CallStack::new(resolver, function, ty_args, args).map_err(|e| {
+        let call_stack = CallStack::new(function, ty_args, args).map_err(|e| {
             e.at_code_offset(fun_ref.index(), 0)
                 .finish(Location::Module(fun_ref.module_id().clone()))
         })?;

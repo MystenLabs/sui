@@ -238,8 +238,7 @@ fn module(
     let structs = structs(package_context, &type_refs, comp_module)?;
     let enums = enums(package_context, &type_refs, comp_module)?;
 
-    let instantiation_signatures =
-        instantiation_signatures(package_context, comp_module)?;
+    let instantiation_signatures = instantiation_signatures(package_context, comp_module)?;
 
     let struct_instantiations = struct_instantiations(
         package_context,
@@ -260,18 +259,14 @@ fn module(
 
     // Process field handles and instantiations
     let field_handles = field_handles(package_context, &structs, comp_module)?;
-    let field_instantiations =
-        field_instantiations(package_context, &field_handles, comp_module)?;
+    let field_instantiations = field_instantiations(package_context, &field_handles, comp_module)?;
 
     let constants = constants(package_context, comp_module)?;
 
     // Process functions and function instantiations
     // Function loading is effectful; they all go into the arena.
-    let function_instantiations = function_instantiations(
-        package_context,
-        &instantiation_signatures,
-        comp_module,
-    )?;
+    let function_instantiations =
+        function_instantiations(package_context, &instantiation_signatures, comp_module)?;
 
     let index_map = IndexMaps {
         structs,
@@ -358,9 +353,8 @@ fn instantiation_signatures(
                 .collect::<PartialVMResult<Vec<_>>>()?;
 
             // Allocate the vector in the package arena and create a VMPointer
-            let instantiation_ptr = VMPointer::new(
-                package_context.package_arena.alloc_item(instantiation)? as *const Vec<Type>,
-            );
+            let instantiation_ptr =
+                VMPointer::new(package_context.package_arena.alloc_item(instantiation)?);
             Ok(instantiation_ptr)
         })
         .collect::<PartialVMResult<Vec<_>>>()
@@ -413,7 +407,7 @@ fn struct_instantiations(
             let instantiation = StructInstantiation {
                 field_count,
                 def_vtable_key: struct_def.def_vtable_key.clone(),
-                instantiation_signature,
+                type_params: instantiation_signature,
             };
             let inst_ptr = VMPointer::new(package_context.package_arena.alloc_item(instantiation)?);
             Ok(inst_ptr)
@@ -434,26 +428,37 @@ fn enums(
             let type_ = package_context.vtable.types.type_at(&key);
             let enum_type = type_.get_enum()?;
             let variant_count = enum_type.variants.len() as u16;
-            let variants = enum_type
-                .variants
-                .iter()
-                .enumerate()
-                .map(|(tag, variant_type)| VariantDef {
-                    tag: tag as u16,
-                    field_count: variant_type.fields.len() as u16,
-                    field_types: variant_type.fields.clone(),
-                })
-                .collect();
 
+            // NB: Note the knot-tying we do here, so variants point back to the definition that
+            // holds them
+
+            // Allocate the enum definition in the arena
             let def = EnumDef {
                 variant_count,
-                variants,
-                dev_vtable_key: VirtualTableKey {
+                variants: vec![],
+                def_vtable_key: VirtualTableKey {
                     package_key: package_context.runtime_id,
                     inner_pkg_key: key,
                 },
             };
             let def_ptr = VMPointer::new(package_context.package_arena.alloc_item(def)?);
+
+            // Generate the variant entries, pointing back to that allocation
+            let variants = enum_type
+                .variants
+                .iter()
+                .enumerate()
+                .map(|(variant_tag, variant_type)| VariantDef {
+                    enum_def: def_ptr.ptr_clone(),
+                    variant_tag: variant_tag as u16,
+                    field_count: variant_type.fields.len() as u16,
+                    field_types: variant_type.fields.clone(),
+                })
+                .collect();
+
+            // Tie the knot
+            assert!(std::mem::replace(&mut def_ptr.to_mut_ref().variants, variants).is_empty());
+
             Ok(def_ptr)
         })
         .collect::<PartialVMResult<Vec<_>>>()
@@ -477,8 +482,8 @@ fn enum_instantiations(
 
             let instantiation = EnumInstantiation {
                 variant_count_map,
-                def_vtable_key: enum_def.dev_vtable_key.clone(),
-                instantiation_signature,
+                def_vtable_key: enum_def.def_vtable_key.clone(),
+                type_params: instantiation_signature,
             };
             let inst_ptr = VMPointer::new(package_context.package_arena.alloc_item(instantiation)?);
             Ok(inst_ptr)
@@ -522,10 +527,11 @@ fn variant_instantiations(
             let FF::VariantInstantiationHandle { enum_def, variant } = variant_inst;
             let variant = *variant;
             let enum_def = enum_instantiations[enum_def.into_index()];
-            let inst = VariantInstantiation { enum_def, variant };
-            let inst_ptr = VMPointer::new(
-                package_context.package_arena.alloc_item(inst)? as *const VariantInstantiation
-            );
+            let inst = VariantInstantiation {
+                enum_inst: enum_def,
+                variant_tag: variant,
+            };
+            let inst_ptr = VMPointer::new(package_context.package_arena.alloc_item(inst)?);
             Ok(inst_ptr)
         })
         .collect::<PartialVMResult<Vec<_>>>()
@@ -549,9 +555,7 @@ fn constants(
             let type_ = make_type(module, &constant.type_)?;
             let size = constant.data.len() as u64;
             let const_ = Constant { value, type_, size };
-            let const_ptr = VMPointer::new(
-                package_context.package_arena.alloc_item(const_)? as *const Constant
-            );
+            let const_ptr = VMPointer::new(package_context.package_arena.alloc_item(const_)?);
             Ok(const_ptr)
         })
         .collect::<PartialVMResult<ConstantCache>>()
@@ -607,7 +611,10 @@ fn functions(
     package_context: &mut PackageContext,
     indicies: &IndexMaps,
     module: &mut input::Module,
-) -> PartialVMResult<(Vec<VMPointer<Function>>, BTreeMap<SignatureIndex, VMPointer<Type>>)> {
+) -> PartialVMResult<(
+    Vec<VMPointer<Function>>,
+    BTreeMap<SignatureIndex, VMPointer<Type>>,
+)> {
     let input::Module {
         compiled_module: module,
         functions: optimized_fns,
@@ -622,7 +629,13 @@ fn functions(
         .enumerate()
         .map(|(ndx, fun)| {
             let findex = FunctionDefinitionIndex(ndx as TableIndex);
-            alloc_function(package_context, &indicies.instantiation_signatures, module, findex, fun)
+            alloc_function(
+                package_context,
+                &indicies.instantiation_signatures,
+                module,
+                findex,
+                fun,
+            )
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
     let loaded_functions = package_context
@@ -633,12 +646,7 @@ fn functions(
         self_id,
         vm_pointer::mut_to_ref_slice(loaded_functions)
             .iter()
-            .map(|function| {
-                (
-                    function.name.clone(),
-                    VMPointer::new(function as *const Function),
-                )
-            }),
+            .map(|function| (function.name.clone(), VMPointer::new(function))),
     )?;
 
     let mut module_context = FunctionContext {
@@ -664,7 +672,7 @@ fn functions(
             code: opt_code,
         } = opt_fun;
         if let Some(opt_code) = opt_code {
-            alloc.code = code(&mut module_context, opt_code.code)?;
+            alloc.code = code(&mut module_context, &alloc.jump_tables, opt_code.code)?;
         }
     }
 
@@ -691,9 +699,12 @@ fn function_instantiations(
             let instantiation_idx = func_inst.type_parameters;
             let instantiation_signature =
                 signature_cache[instantiation_idx.into_index()].ptr_clone();
-            let inst = FunctionInstantiation { handle, instantiation_signature };
+            let inst = FunctionInstantiation {
+                fn_call: handle,
+                instantiation_signature,
+            };
             let inst_ptr = package_context.package_arena.alloc_item(inst)?;
-            let inst_ptr = VMPointer::new(inst_ptr as *const FunctionInstantiation);
+            let inst_ptr = VMPointer::new(inst_ptr);
             Ok(inst_ptr)
         })
         .collect()
@@ -725,11 +736,18 @@ fn alloc_function(
     let parameters = signature_cache[handle.parameters.into_index()];
     // Native functions do not have a code unit
     let (locals_len, locals, jump_tables) = match &def.code {
-        Some(code) => (
-            parameters.to_ref().len() + module.signature_at(code.locals).0.len(),
-            Some(signature_cache[code.locals.into_index()]),
-            code.jump_tables.clone(),
-        ),
+        Some(code) => {
+            let len = parameters.to_ref().len() + module.signature_at(code.locals).0.len();
+            let locals = Some(signature_cache[code.locals.into_index()]);
+            let slice_tables = context
+                .package_arena
+                .alloc_slice(code.jump_tables.clone())?;
+            let jump_tables = vm_pointer::mut_to_ref_slice(slice_tables)
+                .iter()
+                .map(|table| VMPointer::new(table))
+                .collect::<Vec<_>>();
+            (len, locals, jump_tables)
+        }
         None => (0, None, vec![]),
     };
     let return_ = signature_cache[handle.return_.into_index()];
@@ -755,16 +773,17 @@ fn alloc_function(
 
 fn code(
     context: &mut FunctionContext,
+    jump_tables: &[VMPointer<FF::VariantJumpTable>],
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
 ) -> PartialVMResult<*const [Bytecode]> {
     let function_bytecode = flatten_and_renumber_blocks(blocks);
     let result: *mut [Bytecode] = context.package_context.package_arena.alloc_slice(
         function_bytecode
             .iter()
-            .map(|bc| bytecode(context, bc))
+            .map(|bc| bytecode(context, jump_tables, bc))
             .collect::<PartialVMResult<Vec<Bytecode>>>()?,
     )?;
-    Ok(result as *const [Bytecode])
+    Ok(result)
 }
 
 fn flatten_and_renumber_blocks(
@@ -803,6 +822,7 @@ fn flatten_and_renumber_blocks(
 
 fn bytecode(
     context: &mut FunctionContext,
+    jump_tables: &[VMPointer<FF::VariantJumpTable>],
     bytecode: &input::Bytecode,
 ) -> PartialVMResult<Bytecode> {
     let bytecode = match bytecode {
@@ -816,7 +836,9 @@ fn bytecode(
         }
 
         // For now, generic calls retain an index so we can look up their signature as well.
-        input::Bytecode::CallGeneric(ndx) => Bytecode::CallGeneric(context.indicies.function_instantiations[ndx.into_index()]),
+        input::Bytecode::CallGeneric(ndx) => {
+            Bytecode::CallGeneric(context.indicies.function_instantiations[ndx.into_index()])
+        }
 
         // Standard Codes
         input::Bytecode::Pop => Bytecode::Pop,
@@ -832,7 +854,9 @@ fn bytecode(
         input::Bytecode::LdU64(n) => Bytecode::LdU64(*n),
         input::Bytecode::LdU8(n) => Bytecode::LdU8(*n),
 
-        input::Bytecode::LdConst(ndx) => Bytecode::LdConst(context.indicies.constants[ndx.into_index()]),
+        input::Bytecode::LdConst(ndx) => {
+            Bytecode::LdConst(context.indicies.constants[ndx.into_index()])
+        }
         input::Bytecode::LdTrue => Bytecode::LdTrue,
         input::Bytecode::LdFalse => Bytecode::LdFalse,
 
@@ -846,14 +870,28 @@ fn bytecode(
         input::Bytecode::ImmBorrowLoc(ndx) => Bytecode::ImmBorrowLoc(*ndx),
 
         // Structs and Fields
-        input::Bytecode::Pack(ndx) => Bytecode::Pack(*ndx),
-        input::Bytecode::PackGeneric(ndx) => Bytecode::PackGeneric(context.indicies.struct_instantiations[ndx.into_index()]),
-        input::Bytecode::Unpack(ndx) => Bytecode::Unpack(*ndx),
-        input::Bytecode::UnpackGeneric(ndx) => Bytecode::UnpackGeneric(context.indicies.struct_instantiations[ndx.into_index()]),
-        input::Bytecode::MutBorrowField(ndx) => Bytecode::MutBorrowField(context.indicies.field_handles[ndx.into_index()]),
-        input::Bytecode::MutBorrowFieldGeneric(ndx) => Bytecode::MutBorrowFieldGeneric(context.indicies.field_instantiations[ndx.into_index()]),
-        input::Bytecode::ImmBorrowField(ndx) => Bytecode::ImmBorrowField(context.indicies.field_handles[ndx.into_index()]),
-        input::Bytecode::ImmBorrowFieldGeneric(ndx) => Bytecode::ImmBorrowFieldGeneric(context.indicies.field_instantiations[ndx.into_index()]),
+        input::Bytecode::Pack(ndx) => Bytecode::Pack(context.indicies.structs[ndx.into_index()]),
+        input::Bytecode::PackGeneric(ndx) => {
+            Bytecode::PackGeneric(context.indicies.struct_instantiations[ndx.into_index()])
+        }
+        input::Bytecode::Unpack(ndx) => {
+            Bytecode::Unpack(context.indicies.structs[ndx.into_index()])
+        }
+        input::Bytecode::UnpackGeneric(ndx) => {
+            Bytecode::UnpackGeneric(context.indicies.struct_instantiations[ndx.into_index()])
+        }
+        input::Bytecode::MutBorrowField(ndx) => {
+            Bytecode::MutBorrowField(context.indicies.field_handles[ndx.into_index()])
+        }
+        input::Bytecode::MutBorrowFieldGeneric(ndx) => {
+            Bytecode::MutBorrowFieldGeneric(context.indicies.field_instantiations[ndx.into_index()])
+        }
+        input::Bytecode::ImmBorrowField(ndx) => {
+            Bytecode::ImmBorrowField(context.indicies.field_handles[ndx.into_index()])
+        }
+        input::Bytecode::ImmBorrowFieldGeneric(ndx) => {
+            Bytecode::ImmBorrowFieldGeneric(context.indicies.field_instantiations[ndx.into_index()])
+        }
 
         // Math Operations
         input::Bytecode::Add => Bytecode::Add,
@@ -920,19 +958,33 @@ fn bytecode(
         }
 
         // Enums and Variants
-        input::Bytecode::PackVariant(ndx) => Bytecode::PackVariant(context.indicies.variants[ndx.into_index()]),
-        input::Bytecode::PackVariantGeneric(ndx) => Bytecode::PackVariantGeneric(context.indicies.variant_instantiations[ndx.into_index()]),
-        input::Bytecode::UnpackVariant(ndx) => Bytecode::UnpackVariant(context.indicies.variants[ndx.into_index()]),
-        input::Bytecode::UnpackVariantImmRef(ndx) => Bytecode::UnpackVariantImmRef(context.indicies.variants[ndx.into_index()]),
-        input::Bytecode::UnpackVariantMutRef(ndx) => Bytecode::UnpackVariantMutRef(context.indicies.variants[ndx.into_index()]),
-        input::Bytecode::UnpackVariantGeneric(ndx) => Bytecode::UnpackVariantGeneric(context.indicies.variant_instantiations[ndx.into_index()]),
-        input::Bytecode::UnpackVariantGenericImmRef(ndx) => {
-            Bytecode::UnpackVariantGenericImmRef(context.indicies.variant_instantiations[ndx.into_index()])
+        input::Bytecode::PackVariant(ndx) => {
+            Bytecode::PackVariant(context.indicies.variants[ndx.into_index()])
         }
-        input::Bytecode::UnpackVariantGenericMutRef(ndx) => {
-            Bytecode::UnpackVariantGenericMutRef(context.indicies.variant_instantiations[ndx.into_index()])
+        input::Bytecode::PackVariantGeneric(ndx) => {
+            Bytecode::PackVariantGeneric(context.indicies.variant_instantiations[ndx.into_index()])
         }
-        input::Bytecode::VariantSwitch(ndx) => Bytecode::VariantSwitch(*ndx),
+        input::Bytecode::UnpackVariant(ndx) => {
+            Bytecode::UnpackVariant(context.indicies.variants[ndx.into_index()])
+        }
+        input::Bytecode::UnpackVariantImmRef(ndx) => {
+            Bytecode::UnpackVariantImmRef(context.indicies.variants[ndx.into_index()])
+        }
+        input::Bytecode::UnpackVariantMutRef(ndx) => {
+            Bytecode::UnpackVariantMutRef(context.indicies.variants[ndx.into_index()])
+        }
+        input::Bytecode::UnpackVariantGeneric(ndx) => Bytecode::UnpackVariantGeneric(
+            context.indicies.variant_instantiations[ndx.into_index()],
+        ),
+        input::Bytecode::UnpackVariantGenericImmRef(ndx) => Bytecode::UnpackVariantGenericImmRef(
+            context.indicies.variant_instantiations[ndx.into_index()],
+        ),
+        input::Bytecode::UnpackVariantGenericMutRef(ndx) => Bytecode::UnpackVariantGenericMutRef(
+            context.indicies.variant_instantiations[ndx.into_index()],
+        ),
+        input::Bytecode::VariantSwitch(ndx) => {
+            Bytecode::VariantSwitch(jump_tables[ndx.into_index()])
+        }
     };
     Ok(bytecode)
 }

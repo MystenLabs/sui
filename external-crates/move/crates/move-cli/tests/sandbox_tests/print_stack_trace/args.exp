@@ -23,10 +23,10 @@ Call Stack:
             [10] LdU64(1)
             [11] VecImmBorrow(Bool)
             [12] StLoc(0)
-          > [13] CallGeneric(0)
+          > [13] CallGeneric(foo)
             [14] StLoc(2)
             [15] ImmBorrowLoc(2)
-            [16] CallGeneric(1)
+            [16] CallGeneric(~0000000000000000000000000000000000000000000000000000000000000001::debug::print)
 
         Locals:
             [0] (&) false
@@ -125,10 +125,10 @@ Call Stack:
     [1] 0000000000000000000000000000000000000000000000000000000000000007::print_stack_trace::print_stack_trace
 
         Code:
-            [16] CallGeneric(1)
+            [16] CallGeneric(~0000000000000000000000000000000000000000000000000000000000000001::debug::print)
             [17] MoveLoc(0)
             [18] Pop
-          > [19] CallGeneric(2)
+          > [19] CallGeneric(foo)
             [20] Pop
             [21] Ret
 

@@ -1195,3 +1195,27 @@ pub fn count_type_nodes(ty: &Type) -> u64 {
     }
     result
 }
+
+// -------------------------------------------------------------------------------------------------
+// Display Impls
+// -------------------------------------------------------------------------------------------------
+
+impl std::fmt::Display for IntraPackageKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string_interner = string_interner();
+        let module_name = string_interner
+            .resolve_string(&self.module_name, "module name")
+            .expect("name not found in string interner");
+        let member_name = string_interner
+            .resolve_string(&self.member_name, "member name")
+            .expect("name not found in string interner");
+        write!(f, "{}::", module_name)?;
+        write!(f, "{}", member_name)
+    }
+}
+impl std::fmt::Display for VirtualTableKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}::", self.package_key)?;
+        write!(f, "{}", self.inner_pkg_key)
+    }
+}
