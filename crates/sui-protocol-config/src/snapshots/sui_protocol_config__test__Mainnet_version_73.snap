@@ -65,6 +65,8 @@ feature_flags:
   validate_identifier_inputs: true
   relocate_event_module: true
   disallow_new_modules_in_deps_only_packages: true
+  consensus_smart_ancestor_selection: true
+  consensus_round_prober_probe_accepted_rounds: true
   native_charging_v2: true
   convert_type_argument_error: true
   variant_nodes: true

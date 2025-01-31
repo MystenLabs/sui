@@ -211,6 +211,8 @@ const MAX_PROTOCOL_VERSION: u64 = 73;
 // Version 73: Enable new marker table version.
 //             Enable consensus garbage collection and new commit rule for devnet.
 //             Enable zstd compression for consensus tonic network in testnet.
+//             Enable smart ancestor selection in mainnet.
+//             Enable probing for accepted rounds in round prober in mainnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3185,6 +3187,12 @@ impl ProtocolConfig {
                         // Enable zstd compression for consensus in testnet
                         cfg.feature_flags.consensus_zstd_compression = true;
                     }
+
+                    // Enable smart ancestor selection for mainnet
+                    cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                    // Enable probing for accepted rounds in round prober for mainnet
+                    cfg.feature_flags
+                        .consensus_round_prober_probe_accepted_rounds = true;
                 }
                 // Use this template when making changes:
                 //
