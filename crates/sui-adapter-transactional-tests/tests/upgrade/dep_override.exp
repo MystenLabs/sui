@@ -149,8 +149,8 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 19, lines 122-128:
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 --sender A
-Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Failed to link command 1: VMError with status MISSING_DEPENDENCY at location UNDEFINED"), command: Some(1) } }
 
 task 20, lines 130-134:
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 Test_DepDepV1 --sender A
