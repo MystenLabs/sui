@@ -23,10 +23,8 @@ use move_core_types::{
     VARIANT_COUNT_MAX,
 };
 use std::{
-    cell::RefCell,
     fmt::{self, Debug, Display},
     ops::{Add, Index, IndexMut},
-    rc::Rc,
 };
 
 macro_rules! debug_write {
@@ -98,27 +96,14 @@ pub enum Reference {
     Bool(VMPointer<bool>),
     Address(VMPointer<AccountAddress>),
     Container(VMPointer<Container>),
-    Global(GlobalRef),
-}
-
-#[derive(Debug)]
-pub struct GlobalRef {
-    // TODO: Status should really be an allocation property
-    status: Rc<RefCell<GlobalDataStatus>>,
-    value: VMPointer<Container>,
-}
-
-/// Status for global (on-chain) data:
-/// Clean - the data was only read.
-/// Dirty - the data was possibly modified.
-#[derive(Debug, Clone, Copy)]
-enum GlobalDataStatus {
-    Clean,
-    Dirty,
 }
 
 #[derive(Debug)]
 pub struct FixedSizeVec(Box<[Value]>);
+
+// XXX/TODO(vm-rewrite): Remove this and replace with proper value dirtying.
+#[derive(Debug)]
+pub struct GlobalFingerprint(String);
 
 // -------------------------------------------------------------------------------------------------
 // Alias Types
@@ -181,11 +166,11 @@ enum GlobalValueImpl {
     /// A resource resides in this slot and also in storage. The status flag indicates whether
     /// it has potentially been altered.
     Cached {
+        fingerprint: GlobalFingerprint,
         container: Box<Container>,
-        status: Rc<RefCell<GlobalDataStatus>>,
     },
     /// A resource used to exist in storage but has been deleted by the current transaction.
-    Deleted,
+    Deleted { fingerprint: GlobalFingerprint },
 }
 
 /// A wrapper around `GlobalValueImpl`, representing a "slot" in global storage that can
@@ -316,6 +301,17 @@ impl IndexMut<usize> for FixedSizeVec {
     }
 }
 
+impl GlobalFingerprint {
+    pub fn fingerprint(container: &Container) -> Self {
+        // XXX/TODO(vm-rewrite): Implement proper fingerprinting.
+        Self(format!("{:?}", container))
+    }
+
+    pub fn same_value(&self, other: &Container) -> bool {
+        self.0 == Self::fingerprint(other).0
+    }
+}
+
 macro_rules! match_reference_impls {
     (
         $self_:ident; $other:ident;
@@ -325,7 +321,6 @@ macro_rules! match_reference_impls {
     ) => {
         match ($self_, $other) {
             (Reference::Container($ref_1), Reference::Container($ref_2)) => $container_expr,
-            (Reference::Global($g_ref_1), $g_ref_2) => $global_expr,
             (Reference::U8($prim_ref_1), Reference::U8($prim_ref_2)) => $prim_expr,
             (Reference::U16($prim_ref_1), Reference::U16($prim_ref_2)) => $prim_expr,
             (Reference::U32($prim_ref_1), Reference::U32($prim_ref_2)) => $prim_expr,
@@ -423,13 +418,6 @@ impl Reference {
             Reference::Bool(ref_) => Reference::Bool(ref_.ptr_clone()),
             Reference::Address(ref_) => Reference::Address(ref_.ptr_clone()),
             Reference::Container(ref_) => Reference::Container(ref_.ptr_clone()),
-            Reference::Global(global_ref) => {
-                let global_ref = GlobalRef {
-                    status: Rc::clone(&global_ref.status),
-                    value: global_ref.value.ptr_clone(), // Shallow copy of the VMPointer
-                };
-                Reference::Global(global_ref)
-            }
         }
     }
 }
@@ -630,9 +618,6 @@ impl Container {
 
 impl Reference {
     pub fn equals(&self, other: &Reference) -> PartialVMResult<bool> {
-        if let Reference::Global(other) = other {
-            return self.equals(&Reference::Container(other.value));
-        }
         // TODO: auto-gen this?
         match_reference_impls!(self; other;
             container ref_1, ref_2 => {
@@ -684,7 +669,6 @@ impl Reference {
             Reference::Bool(ref_) => Value::Bool(*ref_.to_ref()),
             Reference::Address(ref_) => Value::Address(Box::new(*ref_.to_ref())),
             Reference::Container(ref_) => Value::Container(Box::new(ref_.to_ref().copy_value())),
-            Reference::Global(ref_) => Value::Container(Box::new(ref_.value.to_ref().copy_value())),
         };
         Ok(value)
     }
@@ -731,10 +715,6 @@ impl Reference {
             }
             (Reference::Container(ref_), Value::Container(new_value)) => {
                 let _ = std::mem::replace(ref_.to_mut_ref(), *new_value);
-            }
-            (Reference::Global(global_ref), Value::Container(new_container)) => {
-                let _ = std::mem::replace(global_ref.value.to_mut_ref(), *new_container);
-                *global_ref.status.borrow_mut() = GlobalDataStatus::Dirty; // Set status to Dirty
             }
             _ => {
                 return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
@@ -1348,6 +1328,15 @@ impl IntegerValue {
     }
 }
 
+impl Value {
+    pub fn value_as<T>(self) -> PartialVMResult<T>
+    where
+        Self: VMValueCast<T>,
+    {
+        VMValueCast::cast(self)
+    }
+}
+
 // -------------------------------------------------------------------------------------------------
 // Integer Operations
 // -------------------------------------------------------------------------------------------------
@@ -1924,8 +1913,8 @@ impl Container {
 }
 
 impl Value {
-    #[allow(dead_code)]
-    pub(crate) fn legacy_size(&self) -> AbstractMemorySize {
+    #[deprecated(note = "Update this to not use the legacy size")]
+    pub fn legacy_size(&self) -> AbstractMemorySize {
         use Value::*;
 
         match self {
@@ -2051,11 +2040,18 @@ impl Variant {
 
 #[allow(clippy::unnecessary_wraps)]
 impl GlobalValueImpl {
-    fn cached(val: Value, status: GlobalDataStatus) -> Result<Self, (PartialVMError, Value)> {
+    fn cached(
+        val: Value,
+        existing_fingerprint: Option<GlobalFingerprint>,
+    ) -> Result<Self, (PartialVMError, Value)> {
         match val {
             Value::Container(container) if matches!(*container, Container::Struct(_)) => {
-                let status = Rc::new(RefCell::new(status));
-                Ok(Self::Cached { container, status })
+                let fingerprint = existing_fingerprint
+                    .unwrap_or_else(|| GlobalFingerprint::fingerprint(&container));
+                Ok(Self::Cached {
+                    container,
+                    fingerprint,
+                })
             }
             val => Err((
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2081,19 +2077,23 @@ impl GlobalValueImpl {
     fn move_from(&mut self) -> PartialVMResult<Value> {
         let value = std::mem::replace(self, Self::None);
         let container = match value {
-            Self::None | Self::Deleted => {
+            Self::None | Self::Deleted { .. } => {
                 return Err(PartialVMError::new(StatusCode::MISSING_DATA))
             }
-            Self::Fresh { .. } => match std::mem::replace(self, Self::None) {
-                Self::Fresh { container } => container,
-                _ => unreachable!(),
-            },
-            Self::Cached { .. } => match std::mem::replace(self, Self::Deleted) {
-                Self::Cached { container, .. } => container,
-                _ => unreachable!(),
-            },
+            Self::Fresh { container } => {
+                let previous = std::mem::replace(self, Self::None);
+                assert!(matches!(previous, Self::None));
+                container
+            }
+            Self::Cached {
+                fingerprint,
+                container,
+            } => {
+                let previous = std::mem::replace(self, Self::Deleted { fingerprint });
+                assert!(matches!(previous, Self::None));
+                container
+            }
         };
-        // Replace
         Ok(Value::Container(container))
     }
 
@@ -2106,7 +2106,12 @@ impl GlobalValueImpl {
                 ))
             }
             Self::None => *self = Self::fresh(val)?,
-            Self::Deleted => *self = Self::cached(val, GlobalDataStatus::Dirty)?,
+            Self::Deleted { .. } => {
+                let Self::Deleted { fingerprint } = std::mem::replace(self, Self::None) else {
+                    unreachable!()
+                };
+                *self = Self::cached(val, Some(fingerprint))?
+            }
         }
         Ok(())
     }
@@ -2114,60 +2119,60 @@ impl GlobalValueImpl {
     fn exists(&self) -> PartialVMResult<bool> {
         match self {
             Self::Fresh { .. } | Self::Cached { .. } => Ok(true),
-            Self::None | Self::Deleted => Ok(false),
+            Self::None | Self::Deleted { .. } => Ok(false),
         }
     }
 
     fn borrow_global(&self) -> PartialVMResult<Value> {
         match self {
-            Self::None | Self::Deleted => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
+            Self::None | Self::Deleted { .. } => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
             GlobalValueImpl::Fresh { container } => {
                 let container_ref = VMPointer::from_ref(container.as_ref());
                 Ok(Value::Reference(Box::new(Reference::Container(
                     container_ref,
                 ))))
             }
-            GlobalValueImpl::Cached { container, status } => {
-                let global_ref = GlobalRef {
-                    status: Rc::clone(status),
-                    value: VMPointer::from_ref(container.as_ref()),
-                };
-                Ok(Value::Reference(Box::new(Reference::Global(global_ref))))
-            }
+            GlobalValueImpl::Cached { container, .. } => Ok(Value::Reference(Box::new(
+                Reference::Container(VMPointer::from_ref(container.as_ref())),
+            ))),
         }
     }
 
     fn into_effect(self) -> Option<Op<Value>> {
         match self {
             Self::None => None,
-            Self::Deleted => Some(Op::Delete),
+            Self::Deleted { .. } => Some(Op::Delete),
             Self::Fresh { container } => {
                 let struct_ @ Container::Struct(_) = *container else {
                     unreachable!()
                 };
                 Some(Op::New(Value::Container(Box::new(struct_))))
             }
-            Self::Cached { container, status } => match &*status.borrow() {
-                GlobalDataStatus::Dirty => {
+            Self::Cached {
+                container,
+                fingerprint,
+            } => {
+                if fingerprint.same_value(&container) {
+                    None
+                } else {
                     let struct_ @ Container::Struct(_) = *container else {
                         unreachable!()
                     };
                     Some(Op::New(Value::Container(Box::new(struct_))))
                 }
-                GlobalDataStatus::Clean => None,
-            },
+            }
         }
     }
 
     fn is_mutated(&self) -> bool {
         match self {
             Self::None => false,
-            Self::Deleted => true,
+            Self::Deleted { .. } => true,
             Self::Fresh { .. } => true,
-            Self::Cached { status, .. } => match &*status.borrow() {
-                GlobalDataStatus::Dirty => true,
-                GlobalDataStatus::Clean => false,
-            },
+            Self::Cached {
+                fingerprint,
+                container,
+            } => !fingerprint.same_value(&container),
         }
     }
 }
@@ -2179,7 +2184,7 @@ impl GlobalValue {
 
     pub fn cached(val: Value) -> PartialVMResult<Self> {
         Ok(Self(
-            GlobalValueImpl::cached(val, GlobalDataStatus::Clean).map_err(|(err, _val)| err)?,
+            GlobalValueImpl::cached(val, None).map_err(|(err, _val)| err)?,
         ))
     }
 
@@ -2310,7 +2315,6 @@ impl Display for Reference {
             Reference::Bool(ptr) => write!(f, "Bool({})", ptr.to_ref()),
             Reference::Address(ptr) => write!(f, "Address({})", ptr.to_ref()),
             Reference::Container(ptr) => write!(f, "Container({:?})", ptr.to_ref()),
-            Reference::Global(global_ref) => write!(f, "Global({:?})", global_ref),
         }
     }
 }
@@ -2449,10 +2453,6 @@ pub mod debug {
             Reference::Address(x) => print_address(buf, x.to_ref()),
 
             Reference::Container(c) => print_container(buf, c.to_ref()),
-            Reference::Global(global) => {
-                debug_write!(buf, "global ")?;
-                print_container(buf, global.value.to_ref())
-            }
         }
     }
 
@@ -3001,7 +3001,6 @@ impl Reference {
                 Reference::Address(val) => visitor.visit_address(depth + 1, *val.to_ref()),
 
                 Reference::Container(c) => c.to_ref().visit_impl(visitor, depth + 1),
-                Reference::Global(entry) => entry.value.to_ref().visit_impl(visitor, depth + 1),
             }
         }
     }
@@ -3145,7 +3144,6 @@ impl Reference {
                     Reference::Address(val) => visitor.visit_address(0, *val.to_ref()),
 
                     Reference::Container(c) => c.to_ref().visit_impl(visitor, 0),
-                    Reference::Global(entry) => entry.value.to_ref().visit_impl(visitor, 0),
                 }
             }
         }
@@ -3176,7 +3174,7 @@ impl GlobalValue {
         }
 
         match &self.0 {
-            G::None | G::Deleted => None,
+            G::None | G::Deleted { .. } => None,
             G::Cached { container, .. } | G::Fresh { container } => Some(Wrapper(container)),
         }
     }
@@ -3544,9 +3542,6 @@ impl Reference {
             (L::Bool, Reference::Bool(value)) => Some(AnnValue::Bool(*value.to_ref())),
             (layout, Reference::Container(container)) => {
                 container.to_ref().as_annotated_move_value(layout)
-            }
-            (layout, Reference::Global(global_ref)) => {
-                global_ref.value.to_ref().as_annotated_move_value(layout)
             }
             (_, _) => None,
         }
