@@ -11,9 +11,10 @@ use crate::execution_value::SuiResolver;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
-    language_storage::{ModuleId, StructTag},
-    resolver::{LinkageResolver, ModuleResolver},
+    language_storage::ModuleId,
+    resolver::ModuleResolver,
 };
+use move_vm_types::data_store::LinkageResolver;
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
     base_types::ObjectID,
@@ -297,6 +298,20 @@ impl<'state> ModuleResolver for LinkageView<'state> {
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         get_module(self, id)
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        _ids: [AccountAddress; N],
+    ) -> Result<[Option<move_core_types::resolver::SerializedPackage>; N], Self::Error> {
+        unreachable!("v2 get_packages_static should not be called on LinkageView")
+    }
+
+    fn get_packages(
+        &self,
+        _ids: &[AccountAddress],
+    ) -> Result<Vec<Option<move_core_types::resolver::SerializedPackage>>, Self::Error> {
+        unreachable!("v2 get_packages should not be called on LinkageView")
     }
 }
 

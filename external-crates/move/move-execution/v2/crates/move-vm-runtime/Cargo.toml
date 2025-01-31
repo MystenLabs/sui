@@ -20,9 +20,9 @@ tracing.workspace = true
 smallvec.workspace = true
 
 move-bytecode-verifier = { path = "../move-bytecode-verifier", package = "move-bytecode-verifier-v2" }
+move-vm-types = { path = "../../../shared/crates/move-vm-types" }
 move-core-types.workspace = true
 move-vm-config.workspace = true
-move-vm-types.workspace = true
 move-binary-format.workspace = true
 move-vm-profiler.workspace = true
 

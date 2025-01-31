@@ -3,7 +3,6 @@
 
 use crate::programmable_transactions::context::load_type_from_struct;
 use crate::programmable_transactions::linkage_view::LinkageView;
-use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::language_storage::StructTag;
 use move_vm_runtime::move_vm::MoveVM;

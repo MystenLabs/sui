@@ -11,9 +11,9 @@ publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-move-vm-types.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
+move-vm-types = { path = "../../../shared/crates/move-vm-types" }
 move-vm-runtime = { path = "../move-vm-runtime", package = "move-vm-runtime-v2" }
 smallvec.workspace = true
 sha2.workspace = true
