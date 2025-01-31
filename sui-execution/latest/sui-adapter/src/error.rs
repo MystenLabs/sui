@@ -4,20 +4,28 @@
 use move_binary_format::{
     errors::{Location, VMError},
     file_format::FunctionDefinitionIndex,
+    CompiledModule,
 };
 use move_core_types::{
-    resolver::MoveResolver,
+    language_storage::ModuleId,
+    resolver::ModuleResolver,
     vm_status::{StatusCode, StatusType},
 };
-use move_vm_runtime::move_vm::MoveVM;
-use sui_types::error::{ExecutionError, SuiError};
-use sui_types::execution_status::{ExecutionFailureStatus, MoveLocation, MoveLocationOpt};
+use move_vm_runtime::shared::types::PackageStorageId;
+use sui_protocol_config::ProtocolConfig;
+use sui_types::{base_types::ObjectID, error::ExecutionError, Identifier};
+use sui_types::{
+    execution_config_utils::to_binary_config,
+    execution_status::{ExecutionFailureStatus, MoveLocation, MoveLocationOpt},
+};
 
-pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
+use crate::linkage_resolution::ResolvedLinkage;
+
+pub(crate) fn convert_vm_error(
     error: VMError,
-    vm: &MoveVM,
-    state_view: &S,
-    resolve_abort_location_to_package_id: bool,
+    linkage: &ResolvedLinkage,
+    state_view: &impl ModuleResolver,
+    protocol_config: &ProtocolConfig,
 ) -> ExecutionError {
     let kind = match (error.major_status(), error.sub_status(), error.location()) {
         (StatusCode::EXECUTED, _, _) => {
@@ -31,22 +39,30 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
             ExecutionFailureStatus::VMInvariantViolation
         }
         (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
-            let abort_location_id = if resolve_abort_location_to_package_id {
-                state_view.relocate(id).unwrap_or_else(|_| id.clone())
+            let storage_id = linkage.get(&ObjectID::from(*id.address())).map(|a| **a);
+
+            let abort_location_id = if protocol_config.resolve_abort_locations_to_package_id() {
+                storage_id.unwrap_or_else(|| *id.address())
             } else {
-                id.clone()
+                *id.address()
             };
+
+            let module_id = ModuleId::new(abort_location_id, id.name().to_owned());
             let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
             debug_assert!(offset.is_some(), "Move should set the location on aborts");
             let (function, instruction) = offset.unwrap_or((0, 0));
-            let function_name = vm.load_module(id, state_view).ok().map(|module| {
-                let fdef = module.function_def_at(FunctionDefinitionIndex(function));
-                let fhandle = module.function_handle_at(fdef.function);
-                module.identifier_at(fhandle.name).to_string()
+            let function_name = storage_id.and_then(|storage_id| {
+                load_module_function_name(
+                    storage_id,
+                    id.name().to_owned(),
+                    FunctionDefinitionIndex(function),
+                    state_view,
+                    protocol_config,
+                )
             });
             ExecutionFailureStatus::MoveAbort(
                 MoveLocation {
-                    module: abort_location_id,
+                    module: module_id,
                     function,
                     instruction,
                     function_name,
@@ -66,10 +82,16 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
                             "Move should set the location on all execution errors. Error {error}"
                         );
                         let (function, instruction) = offset.unwrap_or((0, 0));
-                        let function_name = vm.load_module(id, state_view).ok().map(|module| {
-                            let fdef = module.function_def_at(FunctionDefinitionIndex(function));
-                            let fhandle = module.function_handle_at(fdef.function);
-                            module.identifier_at(fhandle.name).to_string()
+                        let storage_id = linkage.get(&ObjectID::from(*id.address())).map(|a| **a);
+
+                        let function_name = storage_id.and_then(|storage_id| {
+                            load_module_function_name(
+                                storage_id,
+                                id.name().to_owned(),
+                                FunctionDefinitionIndex(function),
+                                state_view,
+                                protocol_config,
+                            )
                         });
                         Some(MoveLocation {
                             module: id.clone(),
@@ -90,4 +112,25 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
         },
     };
     ExecutionError::new_with_source(kind, error)
+}
+
+fn load_module_function_name(
+    package_storage_id: PackageStorageId,
+    module_name: Identifier,
+    function_index: FunctionDefinitionIndex,
+    state_view: &impl ModuleResolver,
+    protocol_config: &ProtocolConfig,
+) -> Option<String> {
+    state_view
+        .get_module(&ModuleId::new(package_storage_id, module_name))
+        .ok()
+        .flatten()
+        .and_then(|m| {
+            CompiledModule::deserialize_with_config(&m, &to_binary_config(protocol_config)).ok()
+        })
+        .map(|module| {
+            let fdef = module.function_def_at(function_index);
+            let fhandle = module.function_handle_at(fdef.function);
+            module.identifier_at(fhandle.name).to_string()
+        })
 }
