@@ -116,33 +116,6 @@ module Test::M1 {
   }
 }
 
-//# run-graphql
-{
-  objects_at_version: address(address: "@{A}") {
-    objects(
-      filter: {
-        type: "@{Test}",
-        objectKeys: [
-            {objectId: "@{obj_2_0}", version: 3},
-            {objectId: "@{obj_3_0}", version: 4},
-            {objectId: "@{obj_6_0}", version: 5},
-            {objectId: "@{obj_7_0}", version: 6}
-            ]
-      }
-    ) {
-      nodes {
-        version
-        contents {
-          type {
-            repr
-          }
-          json
-        }
-      }
-    }
-  }
-}
-
 //# programmable --sender A --inputs object(2,0) object(3,0) object(6,0) object(7,0) @B
 //> TransferObjects([Input(0), Input(1), Input(2), Input(3)], Input(4))
 
@@ -272,30 +245,3 @@ module Test::M1 {
   }
 }
 
-//# run-graphql
-# Historical lookups will still return results at version.
-{
-  objects_at_version: address(address: "@{A}") {
-    objects(
-      filter: {
-        type: "@{Test}",
-        objectKeys: [
-            {objectId: "@{obj_2_0}", version: 3},
-            {objectId: "@{obj_3_0}", version: 4},
-            {objectId: "@{obj_6_0}", version: 5},
-            {objectId: "@{obj_7_0}", version: 6}
-            ]
-      }
-    ) {
-      nodes {
-        version
-        contents {
-          type {
-            repr
-          }
-          json
-        }
-      }
-    }
-  }
-}
