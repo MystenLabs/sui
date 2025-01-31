@@ -599,6 +599,11 @@ impl NodeConfig {
         self.db_path.join("snapshot")
     }
 
+    pub fn log_path(&self) -> PathBuf {
+        // go one level up from the db_path
+        self.db_path.parent().unwrap().join("timing_log")
+    }
+
     pub fn network_address(&self) -> &Multiaddr {
         &self.network_address
     }

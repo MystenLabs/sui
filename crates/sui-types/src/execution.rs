@@ -4,11 +4,12 @@
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
+    effects::TransactionEffects,
     event::Event,
     is_system_package,
     object::{Data, Object, Owner},
     storage::{BackingPackageStore, ObjectChange},
-    transaction::Argument,
+    transaction::{Argument, TransactionData},
 };
 use move_core_types::language_storage::TypeTag;
 use once_cell::sync::Lazy;
@@ -171,11 +172,21 @@ impl ExecutionResultsV2 {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ExecutionTiming {
     Success(Duration),
     Abort(Duration),
 }
+
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExecutionTimingLogRecord {
+    pub transaction: TransactionData,
+    pub effects: TransactionEffects,
+    pub total_time: Duration,
+    pub timings: Vec<ExecutionTiming>,
+}
 
 /// If a transaction digest shows up in this list, when executing such transaction,
 /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do

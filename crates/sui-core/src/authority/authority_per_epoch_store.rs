@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::fs::{File, OpenOptions};
 use std::future::Future;
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -18,6 +20,7 @@ use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use itertools::{izip, Itertools};
 use move_bytecode_utils::module_cache::SyncModuleCache;
+use mysten_common::logging::StructuredLog;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::monitored_scope;
@@ -50,6 +53,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
 };
+use sui_types::execution::ExecutionTimingLogRecord;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
@@ -389,6 +393,8 @@ pub struct AuthorityPerEpochStore {
     /// State machine managing randomness DKG and generation.
     randomness_manager: OnceCell<tokio::sync::Mutex<RandomnessManager>>,
     randomness_reporter: OnceCell<RandomnessReporter>,
+
+    pub(crate) timing_log: Mutex<Option<StructuredLog<ExecutionTimingLogRecord, BufWriter<File>>>>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -990,10 +996,34 @@ impl AuthorityPerEpochStore {
             jwk_aggregator,
             randomness_manager: OnceCell::new(),
             randomness_reporter: OnceCell::new(),
+            timing_log: Mutex::new(None),
         });
 
         s.update_buffer_stake_metric();
         s
+    }
+
+    pub fn open_timing_log(&self, log_path: impl AsRef<Path>) {
+        let mut log_path = log_path.as_ref().to_path_buf();
+        log_path.set_file_name(format!(
+            "{}_{}_{}",
+            log_path.file_name().unwrap().to_string_lossy(),
+            self.epoch(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        ));
+
+        let mut log = self.timing_log.lock();
+        assert!(log.is_none());
+        *log = Some(StructuredLog::new(BufWriter::new(
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log_path)
+                .unwrap(),
+        )));
     }
 
     pub fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
