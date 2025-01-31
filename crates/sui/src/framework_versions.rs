@@ -59,10 +59,14 @@ fn test_nonempty_version_table() {
 #[test]
 /// the hash for a specific version that we have one for is corretly returned
 fn test_hash_exact() {
+    let framework = framework_for_protocol(4.into()).unwrap();
     assert_eq!(
-        framework_for_protocol(4.into()).unwrap().git_revision(),
+        framework.git_revision(),
         "f5d26f1b3ae89f68cb66f3a007e90065e5286905"
     );
+    assert!(framework
+        .framework_package_names
+        .contains(&"Sui".to_string()));
 }
 
 #[test]
