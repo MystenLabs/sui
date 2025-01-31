@@ -58,9 +58,9 @@ impl Default for VMConfig {
             rethrow_serialization_type_layout_errors: false,
             max_type_to_layout_nodes: Some(512),
             // FIXME FIXME FIXME
-            // DO NOT LAND LIKE THIS IN MAIN
+            // ENABLE AFTER TESTING
             // FIXME FIXME FIXME
-            optimize_bytecode: true,
+            optimize_bytecode: false,
         }
     }
 }
