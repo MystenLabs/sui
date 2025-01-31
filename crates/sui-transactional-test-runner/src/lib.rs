@@ -60,7 +60,7 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     run_test_impl::<SuiTestAdapter>(
         path,
         Some(std::sync::Arc::new(PRE_COMPILED.clone())),
-        /* insta */ false,
+        /* insta */ true,
     )
     .await?;
     Ok(())
