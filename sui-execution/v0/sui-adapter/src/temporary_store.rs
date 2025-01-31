@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gas_charger::GasCharger;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::StructTag;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashSet};
 use sui_protocol_config::ProtocolConfig;
@@ -21,9 +19,8 @@ use sui_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
         VersionDigest,
     },
-    error::{ExecutionError, SuiError, SuiResult},
+    error::{ExecutionError, SuiResult},
     event::Event,
-    fp_bail,
     gas::GasCostSummary,
     object::Owner,
     object::{Data, Object},

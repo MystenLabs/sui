@@ -8,19 +8,18 @@ use serde::Deserialize;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
-    error::{ExecutionError, ExecutionErrorKind, SuiError},
+    error::{ExecutionError, ExecutionErrorKind},
     execution_status::CommandArgumentError,
     object::Owner,
     storage::{BackingPackageStore, ChildObjectResolver, StorageView},
     transfer::Receiving,
 };
 
-pub trait SuiResolver BackingPackageStore {
+pub trait SuiResolver: BackingPackageStore {
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore;
 }
 
-impl<T: BackingPackageStore> SuiResolver for T
-{
+impl<T: BackingPackageStore> SuiResolver for T {
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore {
         self
     }

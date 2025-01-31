@@ -5,11 +5,9 @@ use move_binary_format::{
     errors::{Location, VMError},
     file_format::FunctionDefinitionIndex,
 };
-use move_core_types::{
-    resolver::MoveResolver,
-    vm_status::{StatusCode, StatusType},
-};
+use move_core_types::vm_status::{StatusCode, StatusType};
 use move_vm_runtime::move_vm::MoveVM;
+use move_vm_types::data_store::MoveResolver;
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::execution_status::{ExecutionFailureStatus, MoveLocation, MoveLocationOpt};
 
