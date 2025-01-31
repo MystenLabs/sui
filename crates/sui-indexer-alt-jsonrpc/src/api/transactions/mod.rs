@@ -12,7 +12,12 @@ use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::digests::TransactionDigest;
 
-use crate::{context::Context, error::InternalContext};
+use self::error::Error;
+
+use crate::{
+    context::Context,
+    error::{rpc_bail, InternalContext, RpcError},
+};
 
 use super::rpc_module::RpcModule;
 
@@ -118,7 +123,13 @@ impl QueryTransactionsApiServer for QueryTransactions {
             .await
             .into_iter()
             .zip(digests)
-            .map(|(r, d)| r.with_internal_context(|| format!("Failed to get transaction {d}")))
+            .map(|(r, d)| {
+                if let Err(RpcError::InvalidParams(e @ Error::NotFound(_))) = r {
+                    rpc_bail!(e)
+                } else {
+                    r.with_internal_context(|| format!("Failed to get transaction {d}"))
+                }
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Page {
