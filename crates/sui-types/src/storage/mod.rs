@@ -21,6 +21,7 @@ use crate::{
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
+use move_core_types::resolver::SerializedPackage;
 pub use object_store_trait::ObjectStore;
 pub use read_store::AccountOwnedObjectInfo;
 pub use read_store::CoinInfo;
@@ -330,6 +331,15 @@ pub fn get_module(
                 .get(module_id.name().as_str())
                 .cloned()
         }))
+}
+
+pub fn get_package(
+    store: impl BackingPackageStore,
+    id: &ObjectID,
+) -> SuiResult<Option<SerializedPackage>> {
+    Ok(store
+        .get_package_object(id)?
+        .map(|package| package.move_package().into_serialized_move_package()))
 }
 
 pub fn get_module_by_id<S: BackingPackageStore>(

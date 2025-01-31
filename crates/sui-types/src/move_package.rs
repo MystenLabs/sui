@@ -16,6 +16,7 @@ use move_binary_format::file_format::CompiledModule;
 use move_binary_format::file_format_common::VERSION_6;
 use move_binary_format::normalized;
 use move_core_types::language_storage::ModuleId;
+use move_core_types::resolver::SerializedPackage;
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
@@ -24,6 +25,7 @@ use move_core_types::{
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
+use move_vm_runtime::shared::linkage_context::LinkageContext;
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -495,6 +497,15 @@ impl MovePackage {
         &self.linkage_table
     }
 
+    pub fn move_linkage_context(&self) -> LinkageContext {
+        LinkageContext::new(
+            self.linkage_table
+                .iter()
+                .map(|(k, v)| ((*k).into(), (*v).upgraded_id.into()))
+                .collect(),
+        )
+    }
+
     /// The ObjectID that this package's modules believe they are from, at runtime (can differ from
     /// `MovePackage::id()` in the case of package upgrades).
     pub fn original_package_id(&self) -> ObjectID {
@@ -513,13 +524,21 @@ impl MovePackage {
         module: &Identifier,
         binary_config: &BinaryConfig,
     ) -> SuiResult<CompiledModule> {
+        self.deserialize_module_by_str(module.as_str(), binary_config)
+    }
+
+    pub fn deserialize_module_by_str(
+        &self,
+        module: &str,
+        binary_config: &BinaryConfig,
+    ) -> SuiResult<CompiledModule> {
         // TODO use the session's cache
-        let bytes = self
-            .serialized_module_map()
-            .get(module.as_str())
-            .ok_or_else(|| SuiError::ModuleNotFound {
-                module_name: module.to_string(),
-            })?;
+        let bytes =
+            self.serialized_module_map()
+                .get(module)
+                .ok_or_else(|| SuiError::ModuleNotFound {
+                    module_name: module.to_string(),
+                })?;
         CompiledModule::deserialize_with_config(bytes, binary_config).map_err(|error| {
             SuiError::ModuleDeserializationFailure {
                 error: error.to_string(),
@@ -536,6 +555,44 @@ impl MovePackage {
         binary_config: &BinaryConfig,
     ) -> SuiResult<BTreeMap<String, normalized::Module>> {
         normalize_modules(self.module_map.values(), binary_config)
+    }
+
+    pub fn into_serialized_move_package(&self) -> SerializedPackage {
+        SerializedPackage {
+            modules: self
+                .serialized_module_map()
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        Identifier::new(k.clone())
+                            .expect("Published modules must always have valid identifiers"),
+                        v.clone(),
+                    )
+                })
+                .collect(),
+            storage_id: self.id.into(),
+            runtime_id: self.original_package_id().into(),
+            linkage_table: self
+                .linkage_table()
+                .iter()
+                .map(|(k, v)| ((*k).into(), v.upgraded_id.into()))
+                .chain(std::iter::once((
+                    self.original_package_id().into(),
+                    self.id.into(),
+                )))
+                .collect(),
+            type_origin_table: self
+                .type_origin_table()
+                .iter()
+                .map(|ty_origin| move_core_types::resolver::TypeOrigin {
+                    module_name: Identifier::new(ty_origin.module_name.clone())
+                        .expect("Published modules must always have valid identifiers"),
+                    type_name: Identifier::new(ty_origin.datatype_name.clone())
+                        .expect("Published modules must always have valid identifiers"),
+                    origin_id: ty_origin.package.into(),
+                })
+                .collect(),
+        }
     }
 }
 
