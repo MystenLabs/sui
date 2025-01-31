@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 26 tasks
+processed 24 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -165,78 +165,17 @@ Response: {
   }
 }
 
-task 11, lines 119-144:
-//# run-graphql
-Response: {
-  "data": {
-    "objects_at_version": {
-      "objects": {
-        "nodes": [
-          {
-            "version": 4,
-            "contents": {
-              "type": {
-                "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
-              },
-              "json": {
-                "id": "0x0f2ff2731e04cef60e75403b02f31721406c99cb05eb3029f697de89a3d70a71",
-                "value": "1"
-              }
-            }
-          },
-          {
-            "version": 6,
-            "contents": {
-              "type": {
-                "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
-              },
-              "json": {
-                "id": "0x44864f8c6cad831f338516aa3ebeacf00c60a13fb4a5a4200b35f376af227cf3",
-                "value": "3"
-              }
-            }
-          },
-          {
-            "version": 3,
-            "contents": {
-              "type": {
-                "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
-              },
-              "json": {
-                "id": "0xc4e6c824c72af97ed831b666173a96111e573e0162b205b51c23ae242757e8d2",
-                "value": "0"
-              }
-            }
-          },
-          {
-            "version": 5,
-            "contents": {
-              "type": {
-                "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
-              },
-              "json": {
-                "id": "0xd0a70e7cf1fa823e6bf035f878cc33ee3d221d7f956da78e572bb52574482471",
-                "value": "2"
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 12, lines 146-147:
+task 11, lines 119-120:
 //# programmable --sender A --inputs object(2,0) object(3,0) object(6,0) object(7,0) @B
 //> TransferObjects([Input(0), Input(1), Input(2), Input(3)], Input(4))
 mutated: object(0,0), object(2,0), object(3,0), object(6,0), object(7,0)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 5206608, non_refundable_storage_fee: 52592
 
-task 13, line 149:
+task 12, line 122:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 14, lines 151-213:
+task 13, lines 124-186:
 //# run-graphql --cursors bcs(@{obj_6_0},2)
 Response: {
   "data": {
@@ -504,23 +443,23 @@ Response: {
   }
 }
 
-task 16, line 217:
+task 15, line 190:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 18, line 221:
+task 17, line 194:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 20, line 225:
+task 19, line 198:
 //# create-checkpoint
 Checkpoint created: 6
 
-task 22, line 229:
+task 21, line 202:
 //# create-checkpoint
 Checkpoint created: 7
 
-task 23, lines 231-255:
+task 22, lines 204-228:
 //# run-graphql --cursors bcs(@{obj_6_0},2)
 Response: {
   "data": null,
@@ -543,7 +482,7 @@ Response: {
   ]
 }
 
-task 24, lines 257-273:
+task 23, lines 230-246:
 //# run-graphql
 Response: {
   "data": {
@@ -588,67 +527,6 @@ Response: {
           },
           {
             "version": 7,
-            "contents": {
-              "type": {
-                "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
-              },
-              "json": {
-                "id": "0xd0a70e7cf1fa823e6bf035f878cc33ee3d221d7f956da78e572bb52574482471",
-                "value": "2"
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 25, lines 275-301:
-//# run-graphql
-Response: {
-  "data": {
-    "objects_at_version": {
-      "objects": {
-        "nodes": [
-          {
-            "version": 4,
-            "contents": {
-              "type": {
-                "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
-              },
-              "json": {
-                "id": "0x0f2ff2731e04cef60e75403b02f31721406c99cb05eb3029f697de89a3d70a71",
-                "value": "1"
-              }
-            }
-          },
-          {
-            "version": 6,
-            "contents": {
-              "type": {
-                "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
-              },
-              "json": {
-                "id": "0x44864f8c6cad831f338516aa3ebeacf00c60a13fb4a5a4200b35f376af227cf3",
-                "value": "3"
-              }
-            }
-          },
-          {
-            "version": 3,
-            "contents": {
-              "type": {
-                "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
-              },
-              "json": {
-                "id": "0xc4e6c824c72af97ed831b666173a96111e573e0162b205b51c23ae242757e8d2",
-                "value": "0"
-              }
-            }
-          },
-          {
-            "version": 5,
             "contents": {
               "type": {
                 "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
