@@ -23,7 +23,7 @@ use telemetry_subscribers::TracingHandle;
 
 use sui_types::{
     base_types::*, crypto::AuthorityPublicKeyBytes, execution::ExecutionTimingLogRecord,
-    messages_grpc::TransactionInfoRequest,
+    messages_grpc::TransactionInfoRequest, transaction::TransactionKind,
 };
 
 use clap::*;
@@ -1106,6 +1106,19 @@ impl ToolCommand {
                     StructuredLogReader::new(reader);
 
                 while let Some(record) = log.next().await {
+                    let ExecutionTimingLogRecord {
+                        transaction,
+                        effects,
+                        total_time,
+                        timings,
+                    } = record.unwrap();
+
+                    if let TransactionKind::ProgrammableTransaction(tx) = transaction.into_kind() {
+                        for (command, timing) in tx.commands.into_iter().zip(timings) {
+                            println!("Command: {:?}, Timing: {:?}", command, timing);
+                        }
+                    }
+
                     if let Ok(record) = record {
                         println!("{:?}", record);
                     } else {
