@@ -211,6 +211,8 @@ const MAX_PROTOCOL_VERSION: u64 = 73;
 // Version 73: Enable new marker table version.
 //             Enable consensus garbage collection and new commit rule for devnet.
 //             Enable zstd compression for consensus tonic network in testnet.
+//             Enable smart ancestor selection in mainnet.
+//             Enable probing for accepted rounds in round prober in mainnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -646,6 +648,7 @@ pub enum PerObjectCongestionControlMode {
     TotalGasBudget,        // Use txn gas budget as execution cost.
     TotalTxCount,          // Use total txn count as execution cost.
     TotalGasBudgetWithCap, // Use txn gas budget as execution cost with a cap.
+    ExecutionTimeEstimate, // Use execution time estimate as execution cost.
 }
 
 impl PerObjectCongestionControlMode {
@@ -3179,13 +3182,18 @@ impl ProtocolConfig {
                         // Assuming a round rate of max 15/sec, then using a gc depth of 60 allow blocks within a window of ~4 seconds
                         // to be included before be considered garbage collected.
                         cfg.consensus_gc_depth = Some(60);
-                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                     }
 
                     if chain != Chain::Mainnet {
                         // Enable zstd compression for consensus in testnet
                         cfg.feature_flags.consensus_zstd_compression = true;
                     }
+
+                    // Enable smart ancestor selection for mainnet
+                    cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                    // Enable probing for accepted rounds in round prober for mainnet
+                    cfg.feature_flags
+                        .consensus_round_prober_probe_accepted_rounds = true;
                 }
                 // Use this template when making changes:
                 //

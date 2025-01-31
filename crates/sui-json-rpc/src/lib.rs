@@ -212,6 +212,10 @@ impl JsonRpcServerBuilder {
             // number of connections. As such, for now we can just set this to a very high value to
             // disable it artificially limiting us to ~100 conncurrent requests.
             .max_connections(u32::MAX)
+            // Before we updated jsonrpsee, batches were disabled so lets keep them disabled.
+            .set_batch_request_config(jsonrpsee::server::BatchRequestConfig::Disabled)
+            // We don't limit response body sizes.
+            .max_response_body_size(u32::MAX)
             .set_rpc_middleware(rpc_middleware);
 
         let mut router = axum::Router::new();

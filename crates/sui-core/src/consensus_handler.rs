@@ -29,7 +29,7 @@ use sui_types::{
     executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
     messages_consensus::{
         AuthorityIndex, ConsensusDeterminedVersionAssignments, ConsensusTransaction,
-        ConsensusTransactionKey, ConsensusTransactionKind,
+        ConsensusTransactionKey, ConsensusTransactionKind, ExecutionTimeObservation,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
@@ -584,6 +584,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
                 "owned_user_transaction"
             }
         }
+        ConsensusTransactionKind::ExecutionTimeObservation(_) => "execution_time_observation",
     }
 }
 
@@ -718,6 +719,18 @@ impl SequencedConsensusTransaction {
             matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..))
         } else {
             false
+        }
+    }
+
+    pub fn try_take_execution_time_observation(&mut self) -> Option<ExecutionTimeObservation> {
+        if let SequencedConsensusTransactionKind::External(ConsensusTransaction {
+            kind: ConsensusTransactionKind::ExecutionTimeObservation(observation),
+            ..
+        }) = &mut self.transaction
+        {
+            Some(std::mem::take(observation))
+        } else {
+            None
         }
     }
 
