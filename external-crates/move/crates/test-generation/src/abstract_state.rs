@@ -418,7 +418,7 @@ pub struct AbstractState {
     /// in.
     pub instantiation: Vec<AbilitySet>,
 
-    /// A HashMap mapping local indicies to `AbstractValue`s and `BorrowState`s
+    /// A HashMap mapping local indices to `AbstractValue`s and `BorrowState`s
     locals: HashMap<usize, (AbstractValue, BorrowState)>,
 
     /// Temporary location for storing the results of instruction effects for

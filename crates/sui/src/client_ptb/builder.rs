@@ -749,7 +749,7 @@ impl<'a> PTBBuilder<'a> {
                     }
                 }
             }
-            // Unable to resolve an identifer to anything at this point -- error and see if we can
+            // Unable to resolve an identifier to anything at this point -- error and see if we can
             // find a similar identifier to suggest.
             PTBArg::Identifier(i) => match self.did_you_mean_identifier(&i) {
                 Some(similars) => {

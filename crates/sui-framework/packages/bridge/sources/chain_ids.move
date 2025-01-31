@@ -138,7 +138,7 @@ module bridge::chain_ids {
         while (size > 0) {
             size = size - 1;
             let route = valid_routes[size];
-            assert!(is_valid_route(route.source, route.destination)); // sould not assert
+            assert!(is_valid_route(route.source, route.destination)); // should not assert
         }
     }
 

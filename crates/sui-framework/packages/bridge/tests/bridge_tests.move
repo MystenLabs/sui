@@ -289,7 +289,7 @@ fun test_execute_send_token_zero_value() {
 
 #[test]
 #[expected_failure(abort_code = bridge::bridge::EInvalidEvmAddress)]
-fun test_execute_send_token_invalid_evem_address() {
+fun test_execute_send_token_invalid_evm_address() {
     let mut env = create_env(chain_ids::sui_testnet());
     env.create_bridge_default();
     let btc: Coin<BTC> = env.get_btc(1);

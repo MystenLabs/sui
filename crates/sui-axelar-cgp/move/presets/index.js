@@ -71,7 +71,7 @@ const message = bcs
                     source_chain: "ETH",
                     source_address: "0x0",
                     payload_hash: [0, 0, 0, 0],
-                    target_id: ZERO_ADDR, // using address here for simlicity...
+                    target_id: ZERO_ADDR, // using address here for simplicity...
                 })
                 .toBytes(),
             bcs
