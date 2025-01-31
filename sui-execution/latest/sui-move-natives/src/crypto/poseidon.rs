@@ -6,14 +6,15 @@ use fastcrypto_zkp::bn254::poseidon::poseidon_bytes;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::natives::function::PartialVMError;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::{
+    execution::{
+        values::{Value, VectorRef},
+        Type,
+    },
+    natives::functions::{NativeResult, PartialVMError},
     pop_arg,
-    values::{Value, VectorRef},
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use std::ops::Mul;

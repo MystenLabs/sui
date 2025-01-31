@@ -4,12 +4,13 @@
 use crate::{legacy_test_cost, object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
+use move_vm_runtime::{
+    execution::{values::Value, Type},
+    natives::{extensions::NativeContextMut, functions::NativeResult},
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
-use std::collections::VecDeque;
+use std::{cell::RefMut, collections::VecDeque};
 use sui_types::error::VMMemoryLimitExceededSubStatusCode;
 
 #[derive(Clone, Debug)]
@@ -74,7 +75,10 @@ pub fn emit(
             * u64::from(tag_size).into()
     );
 
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let mut obj_runtime: RefMut<ObjectRuntime> = context
+        .extensions()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .get_mut();
     let max_event_emit_size = obj_runtime.protocol_config.max_event_emit_size();
     let ev_size = u64::from(tag_size + event_value_size);
     // Check if the event size is within the limit
@@ -112,9 +116,7 @@ pub fn emit(
         event_emit_cost_params.event_emit_output_cost_per_byte * ev_size.into()
     );
 
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-
-    obj_runtime.emit_event(ty, *tag, event_value)?;
+    obj_runtime.emit_event(*tag, event_value)?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
@@ -144,13 +146,17 @@ pub fn get_events_by_type(
     let specified_ty = ty_args.pop().unwrap();
     assert!(args.is_empty());
     let object_runtime_ref: &ObjectRuntime = context.extensions().get();
+    let specified_type_tag = match context.type_to_type_tag(&specified_ty)? {
+        TypeTag::Struct(s) => *s,
+        _ => return Ok(NativeResult::ok(legacy_test_cost(), smallvec![])),
+    };
     let matched_events = object_runtime_ref
         .state
         .events()
         .iter()
-        .filter_map(|(ty, _, event)| {
-            if specified_ty == *ty {
-                Some(event.copy_value().unwrap())
+        .filter_map(|(ty, event)| {
+            if specified_type_tag == *ty {
+                Some(event.copy_value())
             } else {
                 None
             }
