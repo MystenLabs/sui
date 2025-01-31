@@ -6,6 +6,9 @@ pub use checked::*;
 mod checked {
     #[cfg(feature = "tracing")]
     use move_vm_config::runtime::VMProfilerConfig;
+    use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeContextMut};
+    use move_vm_runtime::natives::functions::{NativeFunctionTable, NativeFunctions};
+    use move_vm_runtime::runtime::MoveRuntime;
     use std::path::PathBuf;
     use std::{collections::BTreeMap, sync::Arc};
 
@@ -17,10 +20,6 @@ mod checked {
     use move_vm_config::{
         runtime::{VMConfig, VMRuntimeLimitsConfig},
         verifier::VerifierConfig,
-    };
-    use move_vm_runtime::{
-        move_vm::MoveVM, native_extensions::NativeContextExtensions,
-        native_functions::NativeFunctionTable,
     };
     use sui_move_natives::object_runtime;
     use sui_types::metrics::BytecodeVerifierMetrics;
@@ -39,11 +38,11 @@ mod checked {
     };
     use sui_verifier::verifier::sui_verify_module_metered_check_timeout_only;
 
-    pub fn new_move_vm(
+    pub fn new_move_runtime(
         natives: NativeFunctionTable,
         protocol_config: &ProtocolConfig,
         _enable_profiler: Option<PathBuf>,
-    ) -> Result<MoveVM, SuiError> {
+    ) -> Result<MoveRuntime, SuiError> {
         #[cfg(not(feature = "tracing"))]
         let vm_profiler_config = None;
         #[cfg(feature = "tracing")]
@@ -52,8 +51,10 @@ mod checked {
             track_bytecode_instructions: false,
             use_long_function_name: false,
         });
-        MoveVM::new_with_config(
-            natives,
+        let native_functions =
+            NativeFunctions::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)?;
+        Ok(MoveRuntime::new(
+            native_functions,
             VMConfig {
                 verifier: protocol_config.verifier_config(/* signing_limits */ None),
                 max_binary_format_version: protocol_config.move_binary_format_version(),
@@ -74,8 +75,7 @@ mod checked {
                     .rethrow_serialization_type_layout_errors(),
                 max_type_to_layout_nodes: protocol_config.max_type_to_layout_nodes_as_option(),
             },
-        )
-        .map_err(|_| SuiError::ExecutionInvariantViolation)
+        ))
     }
 
     pub fn new_native_extensions<'r>(
@@ -87,14 +87,14 @@ mod checked {
         current_epoch_id: EpochId,
     ) -> NativeContextExtensions<'r> {
         let mut extensions = NativeContextExtensions::default();
-        extensions.add(ObjectRuntime::new(
+        extensions.add(NativeContextMut::new(ObjectRuntime::new(
             child_resolver,
             input_objects,
             is_metered,
             protocol_config,
             metrics,
             current_epoch_id,
-        ));
+        )));
         extensions.add(NativesCostTable::from_protocol_config(protocol_config));
         extensions
     }
