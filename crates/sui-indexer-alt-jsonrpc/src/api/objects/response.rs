@@ -5,12 +5,13 @@ use anyhow::Context as _;
 use futures::future::OptionFuture;
 use move_core_types::annotated_value::MoveTypeLayout;
 use sui_json_rpc_types::{
-    SuiData, SuiObjectData, SuiObjectDataOptions, SuiObjectRef, SuiParsedData,
+    SuiData, SuiObjectData, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiParsedData,
     SuiPastObjectResponse, SuiRawData,
 };
 use sui_types::{
     base_types::{ObjectID, ObjectType, SequenceNumber},
     digests::ObjectDigest,
+    error::SuiObjectResponseError,
     object::{Data, Object},
     TypeTag,
 };
@@ -18,9 +19,60 @@ use tokio::join;
 
 use crate::{
     context::Context,
-    data::objects::VersionedObjectKey,
-    error::{rpc_bail, RpcError},
+    data::{
+        object_info::LatestObjectInfoKey,
+        objects::{load_latest, VersionedObjectKey},
+    },
+    error::{internal_error, rpc_bail, RpcError},
 };
+
+/// Fetch the necessary data from the stores in `ctx` and transform it to build a response for a
+/// the latest version of an object, identified by its ID, according to the response `options`.
+pub(super) async fn live_object(
+    ctx: &Context,
+    object_id: ObjectID,
+    options: &SuiObjectDataOptions,
+) -> Result<SuiObjectResponse, RpcError> {
+    let Some(info) = ctx
+        .loader()
+        .load_one(LatestObjectInfoKey(object_id))
+        .await
+        .context("Failed to load object ownership information from store")?
+    else {
+        return Ok(SuiObjectResponse::new_with_error(
+            SuiObjectResponseError::NotExists { object_id },
+        ));
+    };
+
+    // This means that the latest ownership record shows the object has been deleted, but our
+    // schema doesn't include the version the object was deleted at, and once the deletion moves
+    // out of the available range, this record will be deleted too, so we return a `NotExists`
+    // error instead of a `Deleted` error for consistency with the above error case.
+    if info.owner_kind.is_none() {
+        return Ok(SuiObjectResponse::new_with_error(
+            SuiObjectResponseError::NotExists { object_id },
+        ));
+    }
+
+    // The fact that we found an `obj_info` record above means that the latest version of the
+    // object does exist, so the following calls should find a valid latest version for the object,
+    // and that version is expected to have content, so if either of those things don't happen,
+    // it's an internal error.
+    let stored = load_latest(ctx.loader(), object_id)
+        .await
+        .context("Failed to load latest object")?
+        .ok_or_else(|| internal_error!("Could not find latest content for live object"))?;
+
+    let Some(bytes) = &stored.serialized_object else {
+        rpc_bail!("No content found for live object")
+    };
+
+    let version = SequenceNumber::from_u64(stored.object_version as u64);
+
+    Ok(SuiObjectResponse::new_with_data(
+        object(ctx, object_id, version, bytes, options).await?,
+    ))
+}
 
 /// Fetch the necessary data from the stores in `ctx` and transform it to build a response for a
 /// past object identified by its ID and version, according to the response `options`.
