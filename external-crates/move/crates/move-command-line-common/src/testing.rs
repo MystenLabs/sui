@@ -168,7 +168,6 @@ macro_rules! insta_assert {
         insta_assert! {
             name: $name,
             input_path: $input,
-            output_path: $output,
             contents: $contents,
             options: $crate::testing::InstaOptions::none(),
         }
