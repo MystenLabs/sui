@@ -5,8 +5,8 @@
 
 use crate::interface::{NopTracer, Tracer, Writer};
 use move_binary_format::{
-    file_format::{Bytecode, FunctionDefinitionIndex as BinaryFunctionDefinitionIndex},
-    file_format_common::{instruction_opcode, Opcodes},
+    file_format::FunctionDefinitionIndex as BinaryFunctionDefinitionIndex,
+    file_format_common::Opcodes,
 };
 use move_core_types::{
     annotated_value::MoveValue,

@@ -110,7 +110,7 @@ pub fn jit_package_for_publish(
 ) -> VMResult<Arc<move_cache::Package>> {
     let storage_id = verified_pkg.storage_id;
     if cache.cached_package_at(storage_id).is_some() {
-        panic!("Attempting to re-jit a package, which should be impossible -- we already checked.");
+        return Ok(cache.cached_package_at(storage_id).unwrap());
     }
 
     let runtime_pkg = jit::translate_package(
@@ -135,8 +135,11 @@ pub fn jit_and_cache_package(
     verified_pkg: verification::ast::Package,
 ) -> VMResult<Arc<move_cache::Package>> {
     let storage_id = verified_pkg.storage_id;
+    // If the package is already in the cache, return it.
+    // This is possible since the cache is shared and may be inserted into concurrently by other
+    // VMs working over the same cache.
     if cache.cached_package_at(storage_id).is_some() {
-        panic!("Attempting to re-jit a package, which should be impossible -- we already checked.");
+        return Ok(cache.cached_package_at(storage_id).unwrap());
     }
 
     let runtime_pkg = jit::translate_package(

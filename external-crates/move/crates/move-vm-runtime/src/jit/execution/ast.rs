@@ -20,7 +20,7 @@ use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         AbilitySet, CodeOffset, DatatypeTyParameter, FunctionDefinitionIndex, LocalIndex,
-        SignatureToken, VariantTag,
+        SignatureToken, VariantTag, Visibility,
     },
     file_format_common::Opcodes,
 };
@@ -130,6 +130,7 @@ pub struct Function {
     #[allow(unused)]
     pub file_format_version: u32,
     pub is_entry: bool,
+    pub visibility: Visibility,
     pub index: FunctionDefinitionIndex,
     pub code: ArenaVec<Bytecode>,
     pub parameters: ArenaVec<ArenaType>,
