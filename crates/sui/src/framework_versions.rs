@@ -34,7 +34,7 @@ pub fn latest_framework() -> &'static FrameworkVersion {
         .1
 }
 
-/// Return the best commit hash for the given protocol version. Gives an error if [version]
+/// Return the best commit hash for the given protocol version. Returns an error if [version]
 /// is newer than the maximum protocol version or older than the first known framework.
 pub fn framework_for_protocol(
     version: ProtocolVersion,
@@ -43,6 +43,10 @@ pub fn framework_for_protocol(
         bail!("Protocol version {version:?} is newer than this CLI.");
     }
 
+    // There are gaps in the manifest when multiple protocol versions use the same framework
+    // version. Therefore, we return the newest framework version that is not newer than the requested
+    // protocol version. Note that it's possible that there is no such version if the requested
+    // version is older than the oldest framework; we return an error in this case.
     Ok(VERSION_TABLE
         .range(..=version)
         .next_back()
@@ -79,6 +83,11 @@ fn test_hash_gap() {
     );
     assert_eq!(
         framework_for_protocol(57.into()).unwrap().git_revision(),
+        framework_for_protocol(55.into()).unwrap().git_revision(),
+    );
+    // version 58 is present though!
+    assert_ne!(
+        framework_for_protocol(58.into()).unwrap().git_revision(),
         framework_for_protocol(55.into()).unwrap().git_revision(),
     );
 }
