@@ -1,3 +1,7 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-compiler-transactional-tests/tests/operators/arithmetic_operators_u128.move
+---
 processed 17 tasks
 
 task 1, lines 17-23:

@@ -1,3 +1,7 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-compiler-transactional-tests/tests/operators/casting_operators.move
+---
 processed 35 tasks
 
 task 6, lines 182-188:
