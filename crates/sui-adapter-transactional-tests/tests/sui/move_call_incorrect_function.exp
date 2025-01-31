@@ -13,4 +13,4 @@ Error: Error checking transaction input objects: DependentPackageNotFound { pack
 task 3, line 19:
 //# run Test::M::foo
 Error: Transaction Effects Status: Function Not Found.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'foo' in module Test::M"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'foo' in module 'Test::M'"), command: Some(0) } }
