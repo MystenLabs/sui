@@ -22,8 +22,8 @@ use sui_types::{
 };
 
 use move_bytecode_verifier_meter::Meter;
-use move_vm_runtime_latest::move_vm::MoveVM;
-use sui_adapter_latest::adapter::{new_move_vm, run_metered_move_bytecode_verifier};
+use move_vm_runtime_latest::runtime::MoveRuntime;
+use sui_adapter_latest::adapter::{new_move_runtime, run_metered_move_bytecode_verifier};
 use sui_adapter_latest::execution_engine::{
     execute_genesis_state_update, execute_transaction_to_effects,
 };
@@ -36,7 +36,7 @@ use crate::executor;
 use crate::verifier;
 use sui_adapter_latest::execution_mode;
 
-pub(crate) struct Executor(Arc<MoveVM>);
+pub(crate) struct Executor(Arc<MoveRuntime>);
 
 pub(crate) struct Verifier<'m> {
     config: VerifierConfig,
@@ -49,7 +49,7 @@ impl Executor {
         silent: bool,
         enable_profiler: Option<PathBuf>,
     ) -> Result<Self, SuiError> {
-        Ok(Executor(Arc::new(new_move_vm(
+        Ok(Executor(Arc::new(new_move_runtime(
             all_natives(silent, protocol_config),
             protocol_config,
             enable_profiler,

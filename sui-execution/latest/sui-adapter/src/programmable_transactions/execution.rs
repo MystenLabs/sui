@@ -7,14 +7,15 @@ pub use checked::*;
 mod checked {
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{
-        CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
+        CommandKind, ExecutionState, ExecutionType, ObjectContents, ObjectValue, RawValueType,
+        Value,
     };
     use crate::gas_charger::GasCharger;
+    use crate::linkage_resolution::linkage_analysis_for_protocol_config;
     use move_binary_format::{
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
-        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
-        file_format_common::VERSION_6,
+        file_format::{AbilitySet, LocalIndex, Visibility},
         normalized, CompiledModule,
     };
     use move_core_types::{
@@ -23,11 +24,11 @@ mod checked {
         language_storage::{ModuleId, TypeTag},
         u256::U256,
     };
-    use move_vm_runtime::{
-        move_vm::MoveVM,
-        session::{LoadedFunctionInstantiation, SerializedReturnValues},
-    };
-    use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
+    use move_vm_runtime::execution::vm::LoadedFunctionInformation;
+    use move_vm_runtime::execution::Type;
+    use move_vm_runtime::natives::extensions::NativeContextMut;
+    use move_vm_runtime::runtime::MoveRuntime;
+    use move_vm_runtime::shared::serialization::SerializedReturnValues;
     use serde::{de::DeserializeSeed, Deserialize};
     use std::{
         collections::{BTreeMap, BTreeSet},
@@ -64,22 +65,24 @@ mod checked {
     use tracing::instrument;
 
     use crate::adapter::substitute_package_id;
-    use crate::programmable_transactions::context::*;
+    use crate::programmable_transactions::context::{ExecutionContext, LinkedContext};
 
     pub fn execute<Mode: ExecutionMode>(
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        vm: &MoveVM,
+        vm: &MoveRuntime,
         state_view: &mut dyn ExecutionState,
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         let ProgrammableTransaction { inputs, commands } = pt;
+        let mut linkage_resolver = linkage_analysis_for_protocol_config(protocol_config);
         let mut context = ExecutionContext::new(
             protocol_config,
             metrics,
             vm,
+            linkage_resolver.as_mut(),
             state_view,
             tx_context,
             gas_charger,
@@ -88,10 +91,35 @@ mod checked {
         // execute commands
         let mut mode_results = Mode::empty_results();
         for (idx, command) in commands.into_iter().enumerate() {
-            if let Err(err) = execute_command::<Mode>(&mut context, &mut mode_results, command) {
-                let object_runtime: &ObjectRuntime = context.object_runtime();
+            // Compute linkage to be used for the command.
+            let linkage = context
+                .linkage_analyzer
+                .add_command(
+                    &command,
+                    &context
+                        .state_view
+                        .as_sui_resolver()
+                        .as_backing_package_store(),
+                )
+                .map_err(|e| e.with_command_index(idx))?;
+            let mut linked_context = LinkedContext::new(&mut context, linkage).map_err(|e| {
+                ExecutionError::new_with_source(
+                    ExecutionErrorKind::InvalidLinkage,
+                    format!("Failed to link command {}: {}", idx, e),
+                )
+                .with_command_index(idx)
+            })?;
+
+            if let Err(err) =
+                execute_command::<Mode>(&mut linked_context, &mut mode_results, command)
+            {
+                drop(linked_context);
+                let object_runtime: &NativeContextMut<ObjectRuntime> =
+                    context
+                        .native_extensions
+                        .get::<NativeContextMut<ObjectRuntime>>();
                 // We still need to record the loaded child objects for replay
-                let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
+                let loaded_runtime_objects = object_runtime.get().loaded_runtime_objects();
                 // we do not save the wrapped objects since on error, they should not be modified
                 drop(context);
                 state_view.save_loaded_runtime_objects(loaded_runtime_objects);
@@ -100,14 +128,17 @@ mod checked {
         }
 
         // Save loaded objects table in case we fail in post execution
-        let object_runtime: &ObjectRuntime = context.object_runtime();
+        let object_runtime: &NativeContextMut<ObjectRuntime> = context
+            .native_extensions
+            .get::<NativeContextMut<ObjectRuntime>>(
+        );
         // We still need to record the loaded child objects for replay
         // Record the objects loaded at runtime (dynamic fields + received) for
         // storage rebate calculation.
-        let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
+        let loaded_runtime_objects = object_runtime.get().loaded_runtime_objects();
         // We record what objects were contained in at the start of the transaction
         // for expensive invariant checks
-        let wrapped_object_containers = object_runtime.wrapped_object_containers();
+        let wrapped_object_containers = object_runtime.get().wrapped_object_containers();
 
         // apply changes
         let finished = context.finish::<Mode>();
@@ -121,11 +152,12 @@ mod checked {
     /// Execute a single command
     #[instrument(level = "trace", skip_all)]
     fn execute_command<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        linked_context: &mut LinkedContext<'_, '_, '_, '_>,
         mode_results: &mut Mode::ExecutionResults,
         command: Command,
     ) -> Result<(), ExecutionError> {
         let mut argument_updates = Mode::empty_arguments();
+
         let results = match command {
             Command::MakeMoveVec(tag_opt, args) if args.is_empty() => {
                 let Some(tag) = tag_opt else {
@@ -133,24 +165,20 @@ mod checked {
                         "input checker ensures if args are empty, there is a type specified"
                     );
                 };
+                let tag = to_type_tag(linked_context, tag)?;
 
-                let tag = to_type_tag(context, tag)?;
-
-                let elem_ty = context
+                let elem_ty = linked_context
                     .load_type(&tag)
-                    .map_err(|e| context.convert_vm_error(e))?;
-                let ty = Type::Vector(Box::new(elem_ty));
-                let abilities = context
-                    .vm
-                    .get_runtime()
-                    .get_type_abilities(&ty)
-                    .map_err(|e| context.convert_vm_error(e))?;
+                    .map_err(|e| linked_context.convert_vm_error(e))?;
+                let ty = ExecutionType {
+                    type_: TypeTag::Vector(Box::new(elem_ty.type_)),
+                    abilities: vector_abilites(elem_ty.abilities),
+                };
                 // BCS layout for any empty vector should be the same
                 let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
                 vec![Value::Raw(
                     RawValueType::Loaded {
                         ty,
-                        abilities,
                         used_in_non_entry_move_call: false,
                     },
                     bytes,
@@ -162,10 +190,10 @@ mod checked {
                 let mut arg_iter = args.into_iter().enumerate();
                 let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
                     Some(tag) => {
-                        let tag = to_type_tag(context, tag)?;
-                        let elem_ty = context
+                        let tag = to_type_tag(linked_context, tag)?;
+                        let elem_ty = linked_context
                             .load_type(&tag)
-                            .map_err(|e| context.convert_vm_error(e))?;
+                            .map_err(|e| linked_context.convert_vm_error(e))?;
                         (false, elem_ty)
                     }
                     // If no tag specified, it _must_ be an object
@@ -173,28 +201,26 @@ mod checked {
                         // empty args covered above
                         let (idx, arg) = arg_iter.next().unwrap();
                         let obj: ObjectValue =
-                            context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                            linked_context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
                         obj.write_bcs_bytes(&mut res);
                         (obj.used_in_non_entry_move_call, obj.type_)
                     }
                 };
                 for (idx, arg) in arg_iter {
-                    let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
-                    check_param_type::<Mode>(context, idx, &value, &elem_ty)?;
+                    let value: Value =
+                        linked_context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                    check_param_type::<Mode>(linked_context, idx, &value, &elem_ty)?;
                     used_in_non_entry_move_call =
                         used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
                     value.write_bcs_bytes(&mut res);
                 }
-                let ty = Type::Vector(Box::new(elem_ty));
-                let abilities = context
-                    .vm
-                    .get_runtime()
-                    .get_type_abilities(&ty)
-                    .map_err(|e| context.convert_vm_error(e))?;
+                let ty = ExecutionType {
+                    type_: TypeTag::Vector(Box::new(elem_ty.type_)),
+                    abilities: vector_abilites(elem_ty.abilities),
+                };
                 vec![Value::Raw(
                     RawValueType::Loaded {
                         ty,
-                        abilities,
                         used_in_non_entry_move_call,
                     },
                     res,
@@ -204,18 +230,23 @@ mod checked {
                 let objs: Vec<ObjectValue> = objs
                     .into_iter()
                     .enumerate()
-                    .map(|(idx, arg)| context.by_value_arg(CommandKind::TransferObjects, idx, arg))
+                    .map(|(idx, arg)| {
+                        linked_context.by_value_arg(CommandKind::TransferObjects, idx, arg)
+                    })
                     .collect::<Result<_, _>>()?;
-                let addr: SuiAddress =
-                    context.by_value_arg(CommandKind::TransferObjects, objs.len(), addr_arg)?;
+                let addr: SuiAddress = linked_context.by_value_arg(
+                    CommandKind::TransferObjects,
+                    objs.len(),
+                    addr_arg,
+                )?;
                 for obj in objs {
                     obj.ensure_public_transfer_eligible()?;
-                    context.transfer_object(obj, addr)?;
+                    linked_context.transfer_object(obj, addr)?;
                 }
                 vec![]
             }
             Command::SplitCoins(coin_arg, amount_args) => {
-                let mut obj: ObjectValue = context.borrow_arg_mut(0, coin_arg)?;
+                let mut obj: ObjectValue = linked_context.borrow_arg_mut(0, coin_arg)?;
                 let ObjectContents::Coin(coin) = &mut obj.contents else {
                     let e = ExecutionErrorKind::command_argument_error(
                         CommandArgumentError::TypeMismatch,
@@ -228,8 +259,8 @@ mod checked {
                     .into_iter()
                     .map(|amount_arg| {
                         let amount: u64 =
-                            context.by_value_arg(CommandKind::SplitCoins, 1, amount_arg)?;
-                        let new_coin_id = context.fresh_id()?;
+                            linked_context.by_value_arg(CommandKind::SplitCoins, 1, amount_arg)?;
+                        let new_coin_id = linked_context.fresh_id()?;
                         let new_coin = coin.split(amount, UID::new(new_coin_id))?;
                         let coin_type = obj.type_.clone();
                         // safe because we are propagating the coin type, and relying on the internal
@@ -238,11 +269,15 @@ mod checked {
                         Ok(Value::Object(new_coin))
                     })
                     .collect::<Result<_, ExecutionError>>()?;
-                context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
+                linked_context.restore_arg::<Mode>(
+                    &mut argument_updates,
+                    coin_arg,
+                    Value::Object(obj),
+                )?;
                 split_coins
             }
             Command::MergeCoins(target_arg, coin_args) => {
-                let mut target: ObjectValue = context.borrow_arg_mut(0, target_arg)?;
+                let mut target: ObjectValue = linked_context.borrow_arg_mut(0, target_arg)?;
                 let ObjectContents::Coin(target_coin) = &mut target.contents else {
                     let e = ExecutionErrorKind::command_argument_error(
                         CommandArgumentError::TypeMismatch,
@@ -254,7 +289,9 @@ mod checked {
                 let coins: Vec<ObjectValue> = coin_args
                     .into_iter()
                     .enumerate()
-                    .map(|(idx, arg)| context.by_value_arg(CommandKind::MergeCoins, idx + 1, arg))
+                    .map(|(idx, arg)| {
+                        linked_context.by_value_arg(CommandKind::MergeCoins, idx + 1, arg)
+                    })
                     .collect::<Result<_, _>>()?;
                 for (idx, coin) in coins.into_iter().enumerate() {
                     if target.type_ != coin.type_ {
@@ -271,61 +308,30 @@ mod checked {
                             This should be a coin"
                         );
                     };
-                    context.delete_id(*id.object_id())?;
+                    linked_context.delete_id(*id.object_id())?;
                     target_coin.add(balance)?;
                 }
-                context.restore_arg::<Mode>(
+                linked_context.restore_arg::<Mode>(
                     &mut argument_updates,
                     target_arg,
                     Value::Object(target),
                 )?;
                 vec![]
             }
-            Command::MoveCall(move_call) => {
-                let ProgrammableMoveCall {
-                    package,
-                    module,
-                    function,
-                    type_arguments,
-                    arguments,
-                } = *move_call;
-
-                let module = to_identifier(context, module)?;
-                let function = to_identifier(context, function)?;
-
-                // Convert type arguments to `Type`s
-                let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
-                for (ix, type_arg) in type_arguments.into_iter().enumerate() {
-                    let type_arg = to_type_tag(context, type_arg)?;
-                    let ty = context
-                        .load_type(&type_arg)
-                        .map_err(|e| context.convert_type_argument_error(ix, e))?;
-                    loaded_type_arguments.push(ty);
-                }
-
-                let original_address = context.set_link_context(package)?;
-                let storage_id = ModuleId::new(*package, module.clone());
-                let runtime_id = ModuleId::new(original_address, module);
-                let return_values = execute_move_call::<Mode>(
-                    context,
-                    &mut argument_updates,
-                    &storage_id,
-                    &runtime_id,
-                    &function,
-                    loaded_type_arguments,
-                    arguments,
-                    /* is_init */ false,
-                );
-
-                context.linkage_view.reset_linkage();
-                return_values?
-            }
-            Command::Publish(modules, dep_ids) => {
-                execute_move_publish::<Mode>(context, &mut argument_updates, modules, dep_ids)?
-            }
+            Command::MoveCall(move_call) => execute_move_call_command::<Mode>(
+                linked_context,
+                &mut argument_updates,
+                *move_call,
+            )?,
+            Command::Publish(modules, dep_ids) => execute_move_publish::<Mode>(
+                linked_context,
+                &mut argument_updates,
+                modules,
+                dep_ids,
+            )?,
             Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
                 execute_move_upgrade::<Mode>(
-                    context,
+                    linked_context,
                     modules,
                     dep_ids,
                     current_package_id,
@@ -334,14 +340,64 @@ mod checked {
             }
         };
 
-        Mode::finish_command(context, mode_results, argument_updates, &results)?;
-        context.push_command_results(results)?;
+        Mode::finish_command(mode_results, argument_updates, &results)?;
+        linked_context.push_command_results(results)?;
         Ok(())
+    }
+
+    fn vector_abilites(abilities: AbilitySet) -> AbilitySet {
+        AbilitySet::polymorphic_abilities(AbilitySet::VECTOR, vec![false], vec![abilities])
+            .expect("vector abilities are well formed")
+    }
+
+    fn execute_move_call_command<Mode: ExecutionMode>(
+        context: &mut LinkedContext<'_, '_, '_, '_>,
+        argument_updates: &mut Mode::ArgumentUpdates,
+        move_call: ProgrammableMoveCall,
+    ) -> Result<Vec<Value>, ExecutionError> {
+        let ProgrammableMoveCall {
+            package,
+            module,
+            function,
+            type_arguments,
+            arguments,
+        } = move_call;
+
+        let Some(runtime_id) = context.runtime_id_for_storage_id(&package) else {
+            invariant_violation!("Package should be in the linkage table");
+        };
+
+        let module = to_identifier(context, module)?;
+        let function = to_identifier(context, function)?;
+
+        // Convert type arguments to `Type`s
+        let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
+        for (ix, type_arg) in type_arguments.into_iter().enumerate() {
+            let type_arg = to_type_tag(context, type_arg)?;
+            let ty = context
+                .vm_instance
+                .load_type(&type_arg)
+                .map_err(|e| context.convert_type_argument_error(ix, e))?;
+            loaded_type_arguments.push(ty);
+        }
+
+        let storage_id = ModuleId::new(*package, module.clone());
+        let runtime_id = ModuleId::new(*runtime_id, module);
+        execute_move_call::<Mode>(
+            context,
+            argument_updates,
+            &storage_id,
+            &runtime_id,
+            &function,
+            loaded_type_arguments,
+            arguments,
+            /* is_init */ false,
+        )
     }
 
     /// Execute a single Move call
     fn execute_move_call<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         storage_id: &ModuleId,
         runtime_id: &ModuleId,
@@ -353,10 +409,8 @@ mod checked {
         // check that the function is either an entry function or a valid public function
         let LoadedFunctionInfo {
             kind,
-            signature,
+            loaded_information,
             return_value_kinds,
-            index,
-            last_instr,
         } = check_visibility_and_signature::<Mode>(
             context,
             runtime_id,
@@ -365,8 +419,14 @@ mod checked {
             is_init,
         )?;
         // build the arguments, storing meta data about by-mut-ref args
-        let (tx_context_kind, by_mut_ref, serialized_arguments) =
-            build_move_args::<Mode>(context, runtime_id, function, kind, &signature, &arguments)?;
+        let (tx_context_kind, by_mut_ref, serialized_arguments) = build_move_args::<Mode>(
+            context,
+            runtime_id,
+            function,
+            kind,
+            &loaded_information,
+            &arguments,
+        )?;
         // invoke the VM
         let SerializedReturnValues {
             mutable_reference_outputs,
@@ -384,15 +444,21 @@ mod checked {
             "lost mutable input"
         );
 
-        if context.protocol_config.relocate_event_module() {
-            context.take_user_events(storage_id, index, last_instr)?;
+        // TODO(vm-rewrite): We can remove this protocol config check due to execution-versioning.
+        if context.ctx.protocol_config.relocate_event_module() {
+            context.take_user_events(
+                storage_id,
+                loaded_information.index,
+                loaded_information.instruction_count,
+            )?;
         } else {
-            context.take_user_events(runtime_id, index, last_instr)?;
+            context.take_user_events(
+                runtime_id,
+                loaded_information.index,
+                loaded_information.instruction_count,
+            )?;
         }
 
-        // save the link context because calls to `make_value` below can set new ones, and we don't want
-        // it to be clobbered.
-        let saved_linkage = context.linkage_view.steal_linkage();
         // write back mutable inputs. We also update if they were used in non entry Move calls
         // though we do not care for immutable usages of objects or other values
         let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
@@ -409,12 +475,11 @@ mod checked {
             return_value_kinds,
         );
 
-        context.linkage_view.restore_linkage(saved_linkage)?;
         res
     }
 
     fn write_back_results<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         arguments: &[Argument],
         non_entry_move_call: bool,
@@ -443,7 +508,7 @@ mod checked {
     }
 
     fn make_value(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         value_info: ValueKind,
         bytes: Vec<u8>,
         used_in_non_entry_move_call: bool,
@@ -460,8 +525,13 @@ mod checked {
             )?),
             ValueKind::Raw(ty, abilities) => Value::Raw(
                 RawValueType::Loaded {
-                    ty,
-                    abilities,
+                    ty: ExecutionType {
+                        type_: context
+                            .vm_instance
+                            .type_tag_for_type_defining_ids(&ty)
+                            .map_err(|e| context.convert_vm_error(e))?,
+                        abilities,
+                    },
                     used_in_non_entry_move_call,
                 },
                 bytes,
@@ -469,10 +539,11 @@ mod checked {
         })
     }
 
+    // TODO(vm-rewrite): Need to figure out a better VM instance story here and for upgrade.
     /// Publish Move modules and call the init functions.  Returns an `UpgradeCap` for the newly
     /// published package on success.
     fn execute_move_publish<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         module_bytes: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
@@ -482,6 +553,7 @@ mod checked {
             "empty package is checked in transaction input checker"
         );
         context
+            .ctx
             .gas_charger
             .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
 
@@ -494,7 +566,7 @@ mod checked {
             // do not calculate or substitute id for predefined packages
             (*modules[0].self_id().address()).into()
         } else {
-            let id = context.tx_context.fresh_id();
+            let id = context.ctx.tx_context.fresh_id();
             substitute_package_id(&mut modules, id)?;
             id
         };
@@ -508,17 +580,13 @@ mod checked {
         // Here we optimistacally push the package that is being published/upgraded
         // and if there is an error of any kind (verification or module init) we
         // remove it.
-        // The call to `pop_last_package` later is fine because we cannot re-enter and
-        // the last package we pushed is the one we are verifying and running the init from
-        context.linkage_view.set_linkage(&package)?;
-        context.write_package(package);
-        let res = publish_and_verify_modules(context, runtime_id, &modules)
-            .and_then(|_| init_modules::<Mode>(context, argument_updates, &modules));
-        context.linkage_view.reset_linkage();
-        if res.is_err() {
-            context.pop_package();
-        }
-        res?;
+        // context.write_package(package);
+        let (mut new_context, package) =
+            publish_and_verify_modules(context, runtime_id, package, &modules)?;
+        init_modules::<Mode>(&mut new_context, argument_updates, &modules)?;
+        // If we have successfully published and initialized the modules, we can write the package
+        // to the context.
+        new_context.write_package(package);
 
         let values = if Mode::packages_are_predefined() {
             // no upgrade cap for genesis modules
@@ -537,7 +605,7 @@ mod checked {
 
     /// Upgrade a Move package.  Returns an `UpgradeReceipt` for the upgraded package on success.
     fn execute_move_upgrade<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         module_bytes: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
         current_package_id: ObjectID,
@@ -548,6 +616,7 @@ mod checked {
             "empty package is checked in transaction input checker"
         );
         context
+            .ctx
             .gas_charger
             .charge_upgrade_package(module_bytes.iter().map(|v| v.len()).sum())?;
 
@@ -607,7 +676,7 @@ mod checked {
         substitute_package_id(&mut modules, runtime_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
-        let storage_id = context.tx_context.fresh_id();
+        let storage_id = context.ctx.tx_context.fresh_id();
 
         let dependencies = fetch_packages(context, &dep_ids)?;
         let package = context.upgrade_package(
@@ -617,23 +686,23 @@ mod checked {
             dependencies.iter().map(|p| p.move_package()),
         )?;
 
-        context.linkage_view.set_linkage(&package)?;
-        let res = publish_and_verify_modules(context, runtime_id, &modules);
-        context.linkage_view.reset_linkage();
-        res?;
+        let (mut new_context, package) =
+            publish_and_verify_modules(context, runtime_id, package, &modules)?;
 
         check_compatibility(
-            context,
+            &new_context,
             current_package.move_package(),
             &modules,
             upgrade_ticket.policy,
         )?;
 
-        context.write_package(package);
+        // We have successfully verified the modules, we can write the package to the context now.
+        new_context.write_package(package);
+
+        debug_assert_eq!(upgrade_receipt_type.abilities, AbilitySet::EMPTY);
         Ok(vec![Value::Raw(
             RawValueType::Loaded {
                 ty: upgrade_receipt_type,
-                abilities: AbilitySet::EMPTY,
                 used_in_non_entry_move_call: false,
             },
             bcs::to_bytes(&UpgradeReceipt::new(upgrade_ticket, storage_id)).unwrap(),
@@ -641,7 +710,7 @@ mod checked {
     }
 
     fn check_compatibility(
-        context: &ExecutionContext,
+        context: &LinkedContext,
         existing_package: &MovePackage,
         upgrading_modules: &[CompiledModule],
         policy: u8,
@@ -655,7 +724,7 @@ mod checked {
             ));
         };
 
-        let binary_config = to_binary_config(context.protocol_config);
+        let binary_config = to_binary_config(context.ctx.protocol_config);
         let Ok(current_normalized) = existing_package.normalize(&binary_config) else {
             invariant_violation!("Tried to normalize modules in existing package but failed")
         };
@@ -663,6 +732,7 @@ mod checked {
         let existing_modules_len = current_normalized.len();
         let upgrading_modules_len = upgrading_modules.len();
         let disallow_new_modules = context
+            .ctx
             .protocol_config
             .disallow_new_modules_in_deps_only_packages()
             && policy as u8 == UpgradePolicy::DEP_ONLY;
@@ -724,7 +794,7 @@ mod checked {
     }
 
     fn fetch_package(
-        context: &ExecutionContext<'_, '_, '_>,
+        context: &LinkedContext<'_, '_, '_, '_>,
         package_id: &ObjectID,
     ) -> Result<PackageObject, ExecutionError> {
         let mut fetched_packages = fetch_packages(context, vec![package_id])?;
@@ -741,11 +811,11 @@ mod checked {
     }
 
     fn fetch_packages<'ctx, 'vm, 'state, 'a>(
-        context: &'ctx ExecutionContext<'vm, 'state, 'a>,
+        context: &'ctx LinkedContext<'ctx, 'vm, 'state, 'a>,
         package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
     ) -> Result<Vec<PackageObject>, ExecutionError> {
         let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
-        match get_package_objects(&context.state_view, package_ids) {
+        match get_package_objects(&context.ctx.state_view, package_ids) {
             Err(e) => Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PublishUpgradeMissingDependency,
                 e,
@@ -773,7 +843,7 @@ mod checked {
      **************************************************************************************************/
 
     fn vm_move_call(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         module_id: &ModuleId,
         function: &IdentStr,
         type_arguments: Vec<Type>,
@@ -783,7 +853,7 @@ mod checked {
         match tx_context_kind {
             TxContextKind::None => (),
             TxContextKind::Mutable | TxContextKind::Immutable => {
-                serialized_arguments.push(context.tx_context.to_vec());
+                serialized_arguments.push(context.ctx.tx_context.to_vec());
             }
         }
         // script visibility checked manually for entry points
@@ -812,17 +882,17 @@ mod checked {
                     "Unable to deserialize TxContext bytes. {e}"
                 ))
             })?;
-            context.tx_context.update_state(updated_ctx)?;
+            context.ctx.tx_context.update_state(updated_ctx)?;
         }
         Ok(result)
     }
 
     #[allow(clippy::extra_unused_type_parameters)]
     fn deserialize_modules<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         module_bytes: &[Vec<u8>],
     ) -> Result<Vec<CompiledModule>, ExecutionError> {
-        let binary_config = to_binary_config(context.protocol_config);
+        let binary_config = to_binary_config(context.ctx.protocol_config);
         let modules = module_bytes
             .iter()
             .map(|b| {
@@ -840,30 +910,19 @@ mod checked {
         Ok(modules)
     }
 
-    fn publish_and_verify_modules(
-        context: &mut ExecutionContext<'_, '_, '_>,
-        package_id: ObjectID,
+    fn publish_and_verify_modules<'ctx, 'vm, 'state, 'a, 'outer_context>(
+        context: &'outer_context mut LinkedContext<'ctx, 'vm, 'state, 'a>,
+        runtime_id: ObjectID,
+        pkg: MovePackage,
         modules: &[CompiledModule],
-    ) -> Result<(), ExecutionError> {
-        // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
-        let binary_version = context.protocol_config.move_binary_format_version();
-        let new_module_bytes: Vec<_> = modules
-            .iter()
-            .map(|m| {
-                let mut bytes = Vec::new();
-                let version = if binary_version > VERSION_6 {
-                    m.version
-                } else {
-                    VERSION_6
-                };
-                m.serialize_with_version(version, &mut bytes).unwrap();
-                bytes
-            })
-            .collect();
-        context
-            .publish_module_bundle(new_module_bytes, AccountAddress::from(package_id))
-            .map_err(|e| context.convert_vm_error(e))?;
-
+    ) -> Result<(LinkedContext<'outer_context, 'vm, 'state, 'a>, MovePackage), ExecutionError> {
+        let signing_config = context
+            .ctx
+            .protocol_config
+            .verifier_config(/* signing_limits */ None)
+            .clone();
+        let (new_vm_instance, pkg) =
+            context.publish_module_bundle(AccountAddress::from(runtime_id), pkg)?;
         // run the Sui verifier
         for module in modules {
             // Run Sui bytecode verifier, which runs some additional checks that assume the Move
@@ -871,17 +930,14 @@ mod checked {
             sui_verifier::verifier::sui_verify_module_unmetered(
                 module,
                 &BTreeMap::new(),
-                &context
-                    .protocol_config
-                    .verifier_config(/* signing_limits */ None),
+                &signing_config,
             )?;
         }
-
-        Ok(())
+        Ok((new_vm_instance, pkg))
     }
 
     fn init_modules<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         modules: &[CompiledModule],
     ) -> Result<(), ExecutionError> {
@@ -946,71 +1002,41 @@ mod checked {
         /// The kind of the function, e.g. public or private or init
         kind: FunctionKind,
         /// The signature information of the function
-        signature: LoadedFunctionInstantiation,
+        loaded_information: LoadedFunctionInformation,
         /// Object or type information for the return values
         return_value_kinds: Vec<ValueKind>,
-        /// Definition index of the function
-        index: FunctionDefinitionIndex,
-        /// The length of the function used for setting error information, or 0 if native
-        last_instr: CodeOffset,
     }
 
+    // TODO(vm-rewrite): Update this to utilize the information that we already have in the VM.
     /// Checks that the function to be called is either
     /// - an entry function
     /// - a public function that does not return references
     /// - module init (only internal usage)
     fn check_visibility_and_signature<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
-        module_id: &ModuleId,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
+        runtime_module_id: &ModuleId,
         function: &IdentStr,
         type_arguments: &[Type],
         from_init: bool,
     ) -> Result<LoadedFunctionInfo, ExecutionError> {
+        let result = context.load_function(runtime_module_id, function, type_arguments);
         if from_init {
-            let result = context.load_function(module_id, function, type_arguments);
             assert_invariant!(
                 result.is_ok(),
-                "The modules init should be able to be loaded"
+                "The modules init should be able to be loaded",
             );
         }
-        let no_new_packages = vec![];
-        let data_store = SuiDataStore::new(&context.linkage_view, &no_new_packages);
-        let module = context
-            .vm
-            .get_runtime()
-            .load_module(module_id, &data_store)
-            .map_err(|e| context.convert_vm_error(e))?;
-        let Some((index, fdef)) = module
-            .function_defs
-            .iter()
-            .enumerate()
-            .find(|(_index, fdef)| {
-                module.identifier_at(module.function_handle_at(fdef.function).name) == function
-            })
-        else {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::FunctionNotFound,
-                format!(
-                    "Could not resolve function '{}' in module {}",
-                    function, &module_id,
-                ),
-            ));
-        };
+        let loaded_information = result.map_err(|e| context.convert_vm_error(e))?;
 
         // entry on init is now banned, so ban invoking it
-        if !from_init && function == INIT_FN_NAME && context.protocol_config.ban_entry_init() {
+        if !from_init && function == INIT_FN_NAME && context.ctx.protocol_config.ban_entry_init() {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::NonEntryFunctionInvoked,
                 "Cannot call 'init'",
             ));
         }
 
-        let last_instr: CodeOffset = fdef
-            .code
-            .as_ref()
-            .map(|code| code.code.len() - 1)
-            .unwrap_or(0) as CodeOffset;
-        let function_kind = match (fdef.visibility, fdef.is_entry) {
+        let function_kind = match (loaded_information.visibility, loaded_information.is_entry) {
             (Visibility::Private | Visibility::Friend, true) => FunctionKind::PrivateEntry,
             (Visibility::Public, true) => FunctionKind::PublicEntry,
             (Visibility::Public, false) => FunctionKind::NonEntry,
@@ -1033,41 +1059,46 @@ mod checked {
                 ));
             }
         };
-        let signature = context
-            .load_function(module_id, function, type_arguments)
+        let loaded_information = subst_signature(loaded_information, type_arguments)
             .map_err(|e| context.convert_vm_error(e))?;
-        let signature =
-            subst_signature(signature, type_arguments).map_err(|e| context.convert_vm_error(e))?;
         let return_value_kinds = match function_kind {
             FunctionKind::Init => {
                 assert_invariant!(
-                    signature.return_.is_empty(),
+                    loaded_information.return_.is_empty(),
                     "init functions must have no return values"
                 );
                 vec![]
             }
             FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::NonEntry => {
-                check_non_entry_signature::<Mode>(context, module_id, function, &signature)?
+                check_non_entry_signature::<Mode>(
+                    context,
+                    runtime_module_id,
+                    function,
+                    &loaded_information,
+                )?
             }
         };
-        check_private_generics(context, module_id, function, type_arguments)?;
+        check_private_generics(context, runtime_module_id, function, type_arguments)?;
         Ok(LoadedFunctionInfo {
             kind: function_kind,
-            signature,
+            loaded_information,
             return_value_kinds,
-            index: FunctionDefinitionIndex(index as u16),
-            last_instr,
         })
     }
 
     /// substitutes the type arguments into the parameter and return types
     fn subst_signature(
-        signature: LoadedFunctionInstantiation,
+        signature: LoadedFunctionInformation,
         type_arguments: &[Type],
-    ) -> VMResult<LoadedFunctionInstantiation> {
-        let LoadedFunctionInstantiation {
+    ) -> VMResult<LoadedFunctionInformation> {
+        let LoadedFunctionInformation {
             parameters,
             return_,
+            is_entry,
+            is_native,
+            visibility,
+            index,
+            instruction_count,
         } = signature;
         let parameters = parameters
             .into_iter()
@@ -1079,19 +1110,24 @@ mod checked {
             .map(|ty| ty.subst(type_arguments))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
-        Ok(LoadedFunctionInstantiation {
+        Ok(LoadedFunctionInformation {
             parameters,
             return_,
+            is_entry,
+            is_native,
+            visibility,
+            index,
+            instruction_count,
         })
     }
 
     /// Checks that the non-entry function does not return references. And marks the return values
     /// as object or non-object return values
     fn check_non_entry_signature<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         _module_id: &ModuleId,
         _function: &IdentStr,
-        signature: &LoadedFunctionInstantiation,
+        signature: &LoadedFunctionInformation,
     ) -> Result<Vec<ValueKind>, ExecutionError> {
         signature
             .return_
@@ -1113,9 +1149,8 @@ mod checked {
                     t => t,
                 };
                 let abilities = context
-                    .vm
-                    .get_runtime()
-                    .get_type_abilities(return_type)
+                    .vm_instance
+                    .type_abilities(return_type)
                     .map_err(|e| context.convert_vm_error(e))?;
                 Ok(match return_type {
                     Type::MutableReference(_) | Type::Reference(_) => unreachable!(),
@@ -1124,9 +1159,8 @@ mod checked {
                     }
                     Type::Datatype(_) | Type::DatatypeInstantiation(_) if abilities.has_key() => {
                         let type_tag = context
-                            .vm
-                            .get_runtime()
-                            .get_type_tag(return_type)
+                            .vm_instance
+                            .type_tag_for_type_defining_ids(return_type)
                             .map_err(|e| context.convert_vm_error(e))?;
                         let TypeTag::Struct(struct_tag) = type_tag else {
                             invariant_violation!("Struct type make a non struct type tag")
@@ -1154,7 +1188,7 @@ mod checked {
     }
 
     fn check_private_generics(
-        _context: &mut ExecutionContext,
+        _context: &mut LinkedContext,
         module_id: &ModuleId,
         function: &IdentStr,
         _type_arguments: &[Type],
@@ -1195,11 +1229,11 @@ mod checked {
     /// Serializes the arguments into BCS values for Move. Performs the necessary type checking for
     /// each value
     fn build_move_args<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         module_id: &ModuleId,
         function: &IdentStr,
         function_kind: FunctionKind,
-        signature: &LoadedFunctionInstantiation,
+        signature: &LoadedFunctionInformation,
         args: &[Argument],
     ) -> Result<ArgInfo, ExecutionError> {
         // check the arity
@@ -1245,7 +1279,7 @@ mod checked {
             serialized_args.push(bcs_true_value)
         }
         for ((idx, arg), param_ty) in args.iter().copied().enumerate().zip(parameters) {
-            let (value, non_ref_param_ty): (Value, &Type) = match param_ty {
+            let (value, non_ref_param_ty): (Value, ExecutionType) = match param_ty {
                 Type::MutableReference(inner) => {
                     let value = context.borrow_arg_mut(idx, arg)?;
                     let object_info = if let Value::Object(ObjectValue {
@@ -1254,34 +1288,39 @@ mod checked {
                         ..
                     }) = &value
                     {
-                        let type_tag = context
-                            .vm
-                            .get_runtime()
-                            .get_type_tag(type_)
-                            .map_err(|e| context.convert_vm_error(e))?;
-                        let TypeTag::Struct(struct_tag) = type_tag else {
+                        let TypeTag::Struct(struct_tag) = &type_.type_ else {
                             invariant_violation!("Struct type make a non struct type tag")
                         };
-                        let type_ = (*struct_tag).into();
+                        let type_ = MoveObjectType::from((**struct_tag).clone());
                         ValueKind::Object {
                             type_,
                             has_public_transfer: *has_public_transfer,
                         }
                     } else {
                         let abilities = context
-                            .vm
-                            .get_runtime()
-                            .get_type_abilities(inner)
+                            .vm_instance
+                            .type_abilities(inner)
                             .map_err(|e| context.convert_vm_error(e))?;
                         ValueKind::Raw((**inner).clone(), abilities)
                     };
                     by_mut_ref.push((idx as LocalIndex, object_info));
-                    (value, inner)
+                    let exec_ty = context
+                        .execution_type_for_runtime_type(inner)
+                        .map_err(|e| context.convert_vm_error(e))?;
+                    (value, exec_ty)
                 }
-                Type::Reference(inner) => (context.borrow_arg(idx, arg, param_ty)?, inner),
+                Type::Reference(inner) => (
+                    context.borrow_arg(idx, arg, param_ty)?,
+                    context
+                        .execution_type_for_runtime_type(inner)
+                        .map_err(|e| context.convert_vm_error(e))?,
+                ),
                 t => {
                     let value = context.by_value_arg(command_kind, idx, arg)?;
-                    (value, t)
+                    let exec_ty = context
+                        .execution_type_for_runtime_type(t)
+                        .map_err(|e| context.convert_vm_error(e))?;
+                    (value, exec_ty)
                 }
             };
             if matches!(
@@ -1294,7 +1333,7 @@ mod checked {
                     idx,
                 ));
             }
-            check_param_type::<Mode>(context, idx, &value, non_ref_param_ty)?;
+            check_param_type::<Mode>(context, idx, &value, &non_ref_param_ty)?;
             let bytes = {
                 let mut v = vec![];
                 value.write_bcs_bytes(&mut v);
@@ -1307,10 +1346,10 @@ mod checked {
 
     /// checks that the value is compatible with the specified type
     fn check_param_type<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         idx: usize,
         value: &Value,
-        param_ty: &Type,
+        param_ty: &ExecutionType,
     ) -> Result<(), ExecutionError> {
         match value {
             // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
@@ -1320,7 +1359,7 @@ mod checked {
             // generated from a Move function). Meaning we only allow "primitive" values
             // and might need to run validation in addition to the BCS layout
             Value::Raw(RawValueType::Any, bytes) => {
-                let Some(layout) = primitive_serialization_layout(context, param_ty)? else {
+                let Some(layout) = primitive_serialization_layout(context, &param_ty.type_)? else {
                     let msg = format!(
                         "Non-primitive argument at index {}. If it is an object, it must be \
                         populated by an object",
@@ -1337,9 +1376,9 @@ mod checked {
                 bcs_argument_validate(bytes, idx as u16, layout)?;
                 return Ok(());
             }
-            Value::Raw(RawValueType::Loaded { ty, abilities, .. }, _) => {
+            Value::Raw(RawValueType::Loaded { ty, .. }, _) => {
                 assert_invariant!(
-                    Mode::allow_arbitrary_values() || !abilities.has_key(),
+                    Mode::allow_arbitrary_values() || !ty.abilities.has_key(),
                     "Raw value should never be an object"
                 );
                 if ty != param_ty {
@@ -1370,19 +1409,18 @@ mod checked {
                 }
 
                 // Now make sure the param type is a struct instantiation of the receiving struct
-                let Type::DatatypeInstantiation(inst) = param_ty else {
+                let TypeTag::Struct(inner) = &param_ty.type_ else {
                     return Err(command_argument_error(
                         CommandArgumentError::TypeMismatch,
                         idx,
                     ));
                 };
-                let (sidx, targs) = &**inst;
-                let Some(s) = context.vm.get_runtime().get_type(*sidx) else {
-                    invariant_violation!("sui::transfer::Receiving struct not found in session")
-                };
-                let resolved_struct = get_datatype_ident(&s);
-
-                if resolved_struct != RESOLVED_RECEIVING_STRUCT || targs.len() != 1 {
+                let resolved_struct = (
+                    &inner.address,
+                    inner.module.as_ident_str(),
+                    inner.name.as_ident_str(),
+                );
+                if resolved_struct != RESOLVED_RECEIVING_STRUCT || inner.type_params.len() != 1 {
                     return Err(command_argument_error(
                         CommandArgumentError::TypeMismatch,
                         idx,
@@ -1394,10 +1432,10 @@ mod checked {
     }
 
     fn to_identifier(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         ident: String,
     ) -> Result<Identifier, ExecutionError> {
-        if context.protocol_config.validate_identifier_inputs() {
+        if context.ctx.protocol_config.validate_identifier_inputs() {
             Identifier::new(ident).map_err(|e| {
                 ExecutionError::new_with_source(
                     ExecutionErrorKind::VMInvariantViolation,
@@ -1411,10 +1449,10 @@ mod checked {
     }
 
     fn to_type_tag(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         type_input: TypeInput,
     ) -> Result<TypeTag, ExecutionError> {
-        if context.protocol_config.validate_identifier_inputs() {
+        if context.ctx.protocol_config.validate_identifier_inputs() {
             type_input.into_type_tag().map_err(|e| {
                 ExecutionError::new_with_source(
                     ExecutionErrorKind::VMInvariantViolation,
@@ -1428,21 +1466,11 @@ mod checked {
         }
     }
 
-    fn get_datatype_ident(s: &CachedDatatype) -> (&AccountAddress, &IdentStr, &IdentStr) {
-        let module_id = &s.defining_id;
-        let struct_name = &s.name;
-        (
-            module_id.address(),
-            module_id.name(),
-            struct_name.as_ident_str(),
-        )
-    }
-
     // Returns Some(kind) if the type is a reference to the TxnContext. kind being Mutable with
     // a MutableReference, and Immutable otherwise.
     // Returns None for all other types
     pub fn is_tx_context(
-        context: &mut ExecutionContext<'_, '_, '_>,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
         t: &Type,
     ) -> Result<TxContextKind, ExecutionError> {
         let (is_mut, inner) = match t {
@@ -1450,13 +1478,17 @@ mod checked {
             Type::Reference(inner) => (false, inner),
             _ => return Ok(TxContextKind::None),
         };
-        let Type::Datatype(idx) = &**inner else {
+        let ty_tag = context
+            .execution_type_for_runtime_type(inner)
+            .map_err(|e| context.convert_vm_error(e))?;
+        let TypeTag::Struct(struct_tag) = ty_tag.type_ else {
             return Ok(TxContextKind::None);
         };
-        let Some(s) = context.vm.get_runtime().get_type(*idx) else {
-            invariant_violation!("Loaded struct not found")
-        };
-        let (module_addr, module_name, struct_name) = get_datatype_ident(&s);
+        let (module_addr, module_name, struct_name) = (
+            &struct_tag.address,
+            struct_tag.module.as_ident_str(),
+            struct_tag.name.as_ident_str(),
+        );
         let is_tx_context_type = module_addr == &SUI_FRAMEWORK_ADDRESS
             && module_name == TX_CONTEXT_MODULE_NAME
             && struct_name == TX_CONTEXT_STRUCT_NAME;
@@ -1473,52 +1505,45 @@ mod checked {
 
     /// Returns Some(layout) iff it is a primitive, an ID, a String, or an option/vector of a valid type
     fn primitive_serialization_layout(
-        context: &mut ExecutionContext<'_, '_, '_>,
-        param_ty: &Type,
+        context: &mut LinkedContext<'_, '_, '_, '_>,
+        param_ty: &TypeTag,
     ) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
         Ok(match param_ty {
-            Type::Signer => return Ok(None),
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                invariant_violation!("references and type parameters should be checked elsewhere")
-            }
-            Type::Bool => Some(PrimitiveArgumentLayout::Bool),
-            Type::U8 => Some(PrimitiveArgumentLayout::U8),
-            Type::U16 => Some(PrimitiveArgumentLayout::U16),
-            Type::U32 => Some(PrimitiveArgumentLayout::U32),
-            Type::U64 => Some(PrimitiveArgumentLayout::U64),
-            Type::U128 => Some(PrimitiveArgumentLayout::U128),
-            Type::U256 => Some(PrimitiveArgumentLayout::U256),
-            Type::Address => Some(PrimitiveArgumentLayout::Address),
+            TypeTag::Signer => return Ok(None),
+            TypeTag::Bool => Some(PrimitiveArgumentLayout::Bool),
+            TypeTag::U8 => Some(PrimitiveArgumentLayout::U8),
+            TypeTag::U16 => Some(PrimitiveArgumentLayout::U16),
+            TypeTag::U32 => Some(PrimitiveArgumentLayout::U32),
+            TypeTag::U64 => Some(PrimitiveArgumentLayout::U64),
+            TypeTag::U128 => Some(PrimitiveArgumentLayout::U128),
+            TypeTag::U256 => Some(PrimitiveArgumentLayout::U256),
+            TypeTag::Address => Some(PrimitiveArgumentLayout::Address),
 
-            Type::Vector(inner) => {
+            TypeTag::Vector(inner) => {
                 let info_opt = primitive_serialization_layout(context, inner)?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
             }
-            Type::DatatypeInstantiation(inst) => {
-                let (idx, targs) = &**inst;
-                let Some(s) = context.vm.get_runtime().get_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                let resolved_struct = get_datatype_ident(&s);
+            TypeTag::Struct(struct_tag) => {
+                let resolved_struct = (
+                    &struct_tag.address,
+                    struct_tag.module.as_ident_str(),
+                    struct_tag.name.as_ident_str(),
+                );
+                let targs = &struct_tag.type_params;
                 // is option of a string
                 if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                     let info_opt = primitive_serialization_layout(context, &targs[0])?;
                     info_opt.map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
-                } else {
-                    None
-                }
-            }
-            Type::Datatype(idx) => {
-                let Some(s) = context.vm.get_runtime().get_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                let resolved_struct = get_datatype_ident(&s);
-                if resolved_struct == RESOLVED_SUI_ID {
-                    Some(PrimitiveArgumentLayout::Address)
-                } else if resolved_struct == RESOLVED_ASCII_STR {
-                    Some(PrimitiveArgumentLayout::Ascii)
-                } else if resolved_struct == RESOLVED_UTF8_STR {
-                    Some(PrimitiveArgumentLayout::UTF8)
+                } else if targs.is_empty() {
+                    if resolved_struct == RESOLVED_SUI_ID {
+                        Some(PrimitiveArgumentLayout::Address)
+                    } else if resolved_struct == RESOLVED_ASCII_STR {
+                        Some(PrimitiveArgumentLayout::Ascii)
+                    } else if resolved_struct == RESOLVED_UTF8_STR {
+                        Some(PrimitiveArgumentLayout::UTF8)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
