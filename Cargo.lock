@@ -13766,8 +13766,6 @@ dependencies = [
  "anyhow",
  "bcs",
  "bin-version",
- "hex",
- "move-core-types",
  "serde",
  "serde_json",
  "sui-framework",
