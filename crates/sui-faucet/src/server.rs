@@ -54,7 +54,8 @@ static CLOUDFLARE_TURNSTILE_URL: Lazy<Option<String>> =
 static TURNSTILE_SECRET_KEY: Lazy<Option<String>> =
     Lazy::new(|| std::env::var("TURNSTILE_SECRET_KEY").ok());
 
-static DISCORD_BOT_PWD: Lazy<Option<String>> = Lazy::new(|| std::env::var("DISCORD_BOT_PWD").ok());
+static DISCORD_BOT_PWD: Lazy<String> =
+    Lazy::new(|| std::env::var("DISCORD_BOT_PWD").unwrap_or_else(|_| "".to_string()));
 
 /// Keep track of every IP address' requests.
 #[derive(Debug)]
@@ -217,11 +218,6 @@ pub async fn start_faucet(
         ("".to_string(), "".to_string())
     };
 
-    if app_state.config.authenticated {
-        ensure!(DISCORD_BOT_PWD.is_some(),
-                "DISCORD_BOT_PWD env var must be set for testnet deployment (--authenticated flag was set)");
-    }
-
     // TODO: restrict access if needed
     let cors = CorsLayer::new()
         .allow_methods(vec![Method::GET, Method::POST])
@@ -360,7 +356,7 @@ async fn batch_faucet_discord(
             );
         };
 
-        if agent_value != DISCORD_BOT_PWD.as_ref().unwrap() {
+        if agent_value != *DISCORD_BOT_PWD {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(BatchFaucetResponse::from(FaucetError::InvalidUserAgent(
