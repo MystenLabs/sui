@@ -97,7 +97,7 @@ impl DataStore {
     pub async fn get_system_package(
         &self,
         pkg_id: ObjectID,
-    ) -> Result<Vec<(MovePackage, u64)>, ReplayError> {
+    ) -> Result<Vec<(Object, u64)>, ReplayError> {
         debug!("get_packages: {}", pkg_id);
         let pkg_address = Address::new(pkg_id.into_bytes());
         let mut packages = vec![];
@@ -116,12 +116,22 @@ impl DataStore {
                     })?;
             let (page_info, data) = pkg_versions.into_parts();
             for (pkg, pkg_version, epoch) in data {
-                let package = pkg.ok_or_else(|| ReplayError::PackageNotFound {
+                let package_obj = pkg.ok_or_else(|| ReplayError::PackageNotFound {
                     pkg: pkg_address.to_string(),
                 })?;
+                let package_obj = Object::try_from(package_obj).map_err(|e| {
+                    ReplayError::ObjectConversionError {
+                        id: pkg_address.to_string(),
+                        err: format!("{:?}", e),
+                    }
+                })?;
+
                 info!(
                     "Collecting system package: {}[{} - {}], {:?}",
-                    package.id, package.version, pkg_version, epoch,
+                    package_obj.id(),
+                    package_obj.version(),
+                    pkg_version,
+                    epoch,
                 );
                 let epoch = epoch.unwrap_or(0);
                 // epoch.ok_or_else(|| ReplayError::MissingPackageEpoch {
@@ -129,10 +139,12 @@ impl DataStore {
                 // })? as u64;
                 debug!(
                     "{}[{}/{}] - {}",
-                    package.id, package.version, pkg_version, epoch,
+                    package_obj.id(),
+                    package_obj.version(),
+                    pkg_version,
+                    epoch,
                 );
-                let package = from_package!(package, pkg_address)?;
-                packages.push((package, epoch));
+                packages.push((package_obj, epoch));
             }
             if page_info.has_next_page {
                 pagination = PaginationFilter {
@@ -150,7 +162,7 @@ impl DataStore {
     /// Load all versions of all system packages
     pub async fn get_system_packages(
         &self,
-    ) -> Result<BTreeMap<ObjectID, BTreeMap<u64, MovePackage>>, ReplayError> {
+    ) -> Result<BTreeMap<ObjectID, BTreeMap<u64, Object>>, ReplayError> {
         let mut system_packages = BTreeMap::new();
         for pkg_id in sui_framework::BuiltInFramework::all_package_ids() {
             let packages = self.get_system_package(pkg_id).await?;
@@ -158,7 +170,7 @@ impl DataStore {
                 .into_iter()
                 .map(|(pkg, epoch)| {
                     debug!("{}[{}] - {}", pkg.id(), pkg.version(), epoch);
-                    (epoch, MovePackage::from(pkg))
+                    (epoch, pkg)
                 })
                 .collect();
             system_packages.insert(pkg_id, all_versions);

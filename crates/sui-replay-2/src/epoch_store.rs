@@ -178,4 +178,3 @@ impl EpochStoreEager {
             .ok_or(ReplayError::MissingDigestForEpoch { epoch })
     }
 }
-
