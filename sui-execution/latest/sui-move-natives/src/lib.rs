@@ -51,12 +51,16 @@ use move_core_types::{
     runtime_value as R,
     vm_status::StatusCode,
 };
-use move_stdlib_natives::{self as MSN, GasParameters};
-use move_vm_runtime::native_functions::{NativeContext, NativeFunction, NativeFunctionTable};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
-    values::{Struct, Value},
+use move_vm_runtime::natives::{
+    functions::{NativeContext, NativeFunction, NativeFunctionTable},
+    move_stdlib::{self as MSN, GasParameters},
+};
+use move_vm_runtime::{
+    execution::{
+        values::{Struct, Value},
+        Type,
+    },
+    natives::functions::NativeResult,
 };
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
@@ -1093,11 +1097,13 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             )
         })
         .chain(sui_framework_natives_iter)
-        .chain(move_stdlib_natives::all_natives(
-            MOVE_STDLIB_ADDRESS,
-            make_stdlib_gas_params_for_protocol_config(protocol_config),
-            silent,
-        ))
+        .chain(
+            move_vm_runtime::natives::move_stdlib::stdlib_native_function_table(
+                MOVE_STDLIB_ADDRESS,
+                make_stdlib_gas_params_for_protocol_config(protocol_config),
+                silent,
+            ),
+        )
         .collect()
 }
 

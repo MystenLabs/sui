@@ -12,12 +12,14 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_charge_gas_early_exit;
-use move_vm_runtime::native_functions::NativeContext;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::natives::functions::NativeContext;
+use move_vm_runtime::{
+    execution::{
+        values::{Value, VectorRef},
+        Type,
+    },
+    natives::functions::NativeResult,
     pop_arg,
-    values::{Value, VectorRef},
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
