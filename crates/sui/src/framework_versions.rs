@@ -1,24 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{collections::BTreeMap, sync::LazyLock};
+
 use anyhow::{bail, Context};
-use sui_framework_snapshot::{SingleSnapshot, FRAMEWORK_MANIFEST};
 use sui_protocol_config::ProtocolVersion;
 
+pub struct FrameworkVersion {
+    git_revision: String,
+    framework_package_names: Vec<String>,
+}
+
+impl FrameworkVersion {
+    pub fn git_revision(&self) -> &String {
+        &self.git_revision
+    }
+
+    pub fn framework_package_names(&self) -> &Vec<String> {
+        &self.framework_package_names
+    }
+}
+
+static VERSION_TABLE: LazyLock<BTreeMap<ProtocolVersion, FrameworkVersion>> =
+    LazyLock::new(|| todo!());
+
 /// Return the framework snapshot for the latest known protocol version
-pub fn latest_framework() -> &'static SingleSnapshot {
-    FRAMEWORK_MANIFEST.last_key_value().expect("").1
+pub fn latest_framework() -> &'static FrameworkVersion {
+    VERSION_TABLE.last_key_value().expect("").1
 }
 
 /// Return the best commit hash for the given protocol version. Gives an error if [version]
 /// is newer than the maximum protocol version or older than the first known framework.
-pub fn framework_for_protocol(version: ProtocolVersion) -> anyhow::Result<&'static SingleSnapshot> {
+pub fn framework_for_protocol(
+    version: ProtocolVersion,
+) -> anyhow::Result<&'static FrameworkVersion> {
     if version > ProtocolVersion::MAX {
         bail!("Protocol version {version:?} is newer than this CLI.");
     }
 
-    Ok(FRAMEWORK_MANIFEST
-        .range(..=version.as_u64())
+    Ok(VERSION_TABLE
+        .range(..=version)
         .next_back()
         .context(format!("Unrecognized protocol version {version:?}"))?
         .1)
@@ -54,7 +75,7 @@ fn test_hash_latest() {
         framework_for_protocol(ProtocolVersion::MAX)
             .unwrap()
             .git_revision(),
-        latest_framework_snapshot().git_revision()
+        latest_framework().git_revision()
     );
 }
 

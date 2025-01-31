@@ -56,7 +56,6 @@ sui-bridge.workspace = true
 sui-cluster-test.workspace = true
 sui-execution.workspace = true
 sui-faucet.workspace = true
-sui-framework-snapshot.workspace = true
 sui-swarm-config.workspace = true
 sui-graphql-rpc.workspace = true
 sui-indexer.workspace = true
@@ -117,6 +116,9 @@ sui-macros.workspace = true
 sui-simulator.workspace = true
 sui-test-transaction-builder.workspace = true
 serde_json.workspace = true
+
+[build-dependencies]
+sui-framework-snapshot.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true
