@@ -797,6 +797,7 @@ impl CheckpointExecutor {
 
 // Logs within the function are annotated with the checkpoint sequence number and epoch,
 // from schedule_checkpoint().
+#[allow(clippy::type_complexity)]
 #[instrument(level = "debug", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
 async fn execute_checkpoint(
     checkpoint: VerifiedCheckpoint,
