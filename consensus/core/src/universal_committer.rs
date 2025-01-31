@@ -111,24 +111,21 @@ impl UniversalCommitter {
         decided_leaders
     }
 
-    // Try to decide which of the certified commits will have to be committed next respecting the `commits_until_update` limit. If provided `commits_until_update` is zero, it will panic.
+    // Try to decide which of the certified commits will have to be committed next respecting the `limit`. If provided `limit` is zero, it will panic.
     // The function returns the list of decided leaders and updates in place the remaining certified commits. If empty vector is returned, it means that
     // there are no certified commits to be committed as `certified_commits` is either empty or all of the certified commits are already committed.
     #[tracing::instrument(skip_all)]
     pub(crate) fn try_decide_certified(
         &mut self,
         certified_commits: &mut Vec<TrustedCommit>,
-        commits_until_update: usize,
+        limit: usize,
     ) -> Vec<DecidedLeader> {
         // If GC is disabled then should not run any of this logic.
         if !self.dag_state.read().gc_enabled() {
             return Vec::new();
         }
 
-        assert!(
-            commits_until_update > 0,
-            "commits_until_update should be greater than 0"
-        );
+        assert!(limit > 0, "limit should be greater than 0");
 
         let last_commit_index = self.dag_state.read().last_commit_index();
 
@@ -159,12 +156,9 @@ impl UniversalCommitter {
             return Vec::new();
         }
 
-        // We keep only the number of leaders that can be committed before the next leader schedule change.
-        let to_commit = if certified_commits.len() >= commits_until_update {
-            // Now keep only the leaders that can be committed before the next leader schedule change, and just leave the rest so we can process them in the next iteration.
-            certified_commits
-                .drain(..commits_until_update)
-                .collect::<Vec<_>>()
+        let to_commit = if certified_commits.len() >= limit {
+            // We keep only the number of leaders as dictated by the `limit`
+            certified_commits.drain(..limit).collect::<Vec<_>>()
         } else {
             // Otherwise just take all of them and leave the `synced_commits` empty.
             mem::take(certified_commits)
@@ -179,6 +173,8 @@ impl UniversalCommitter {
                 leader
             })
             .collect::<Vec<_>>();
+
+        drop(dag_state);
 
         tracing::info!(
             "Decided {} certified leaders: {}",

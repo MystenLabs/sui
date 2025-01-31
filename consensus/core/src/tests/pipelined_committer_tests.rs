@@ -14,6 +14,7 @@ use crate::{
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
     storage::mem_store::MemStore,
     test_dag::{build_dag, build_dag_layer},
+    test_dag_builder::DagBuilder,
     universal_committer::universal_committer_builder::UniversalCommitterBuilder,
 };
 
@@ -763,6 +764,66 @@ async fn test_byzantine_validator() {
     } else {
         panic!("Expected a skipped leader")
     };
+}
+
+#[tokio::test]
+async fn try_decide_certified() {
+    // GIVEN
+    let (context, dag_state, mut committer) = basic_test_setup();
+
+    let mut dag_builder = DagBuilder::new(context.clone());
+    dag_builder.layers(1..=12).build();
+
+    let limit = 2;
+
+    let blocks = dag_builder.blocks(1..=12);
+
+    for block in blocks {
+        dag_state.write().accept_block(block);
+    }
+
+    // WHEN
+    let sub_dags_and_commits = dag_builder.get_sub_dag_and_commits(1..=4);
+    let mut certified_commits = sub_dags_and_commits
+        .into_iter()
+        .map(|(_, commit)| commit)
+        .collect::<Vec<_>>();
+
+    let leaders = committer.try_decide_certified(&mut certified_commits, limit);
+
+    // THEN
+    assert_eq!(leaders.len(), 2);
+    assert_eq!(certified_commits.len(), 2);
+}
+
+#[tokio::test]
+#[should_panic(
+    expected = "Gap found between the certified commits and the last committed index. Expected next commit index to be 1, but found 4"
+)]
+async fn try_decide_certified_gap_in_commits() {
+    // GIVEN
+    let (context, dag_state, mut committer) = basic_test_setup();
+
+    let mut dag_builder = DagBuilder::new(context.clone());
+    dag_builder.layers(1..=12).build();
+
+    let limit = 2;
+
+    let blocks = dag_builder.blocks(1..=12);
+
+    for block in blocks {
+        dag_state.write().accept_block(block);
+    }
+
+    // WHEN
+    let sub_dags_and_commits = dag_builder.get_sub_dag_and_commits(4..=5);
+    let mut certified_commits = sub_dags_and_commits
+        .into_iter()
+        .map(|(_, commit)| commit)
+        .collect::<Vec<_>>();
+
+    // This should panic as the last committed index is 1 and the first provided index is 4.
+    let _leaders = committer.try_decide_certified(&mut certified_commits, limit);
 }
 
 fn basic_test_setup() -> (
