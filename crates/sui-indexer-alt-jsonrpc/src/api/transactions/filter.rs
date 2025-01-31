@@ -318,7 +318,7 @@ where
         r#"COALESCE(
             (
                 SELECT
-                    tx_lo
+                    MAX(tx_lo)
                 FROM
                     watermarks w
                 INNER JOIN
@@ -326,7 +326,7 @@ where
                 ON
                     w.reader_lo = c.cp_sequence_number
                 WHERE
-                    w.pipeline = '{pipeline}'
+                    w.pipeline IN ('{pipeline}', 'tx_digests')
             ),
             0
         )"#
