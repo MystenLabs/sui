@@ -92,7 +92,7 @@ pub struct IntraPackageKey {
     pub member_name: IdentifierKey,
 }
 
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Debug)]
 pub struct CachedDatatype {
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
@@ -101,7 +101,9 @@ pub struct CachedDatatype {
     pub runtime_id: ModuleId,
     pub module_key: IdentifierKey,
     pub member_key: IdentifierKey,
-    pub depth: Option<DepthFormula>,
+    // Type depth is calculated lazily and cached here. Note that this is a read-write lock because
+    // this is calculated lazily and could be shared across multiple threads.
+    pub depth: RwLock<Option<DepthFormula>>,
     pub datatype_info: Datatype,
 }
 
@@ -234,32 +236,20 @@ impl VMDispatchTables {
                 })?
                 .vtable
                 .types;
-            match Arc::get_mut(&mut tys.type_at(&cache_idx.inner_pkg_key)) {
-                Some(datatype) => {
-                    // This can happen if we race for filling in the depth of the datatype which is
-                    // fine as only one will win. However, if we race for filling in the depth of
-                    // the then the two depths must be the same.
-                    if let Some(prev_depth) = datatype.depth.as_ref() {
-                        if prev_depth != &depth {
-                            return Err(PartialVMError::new(
-                                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                            )
-                            .with_message(format!(
-                                "Depth calculation mismatch for {cache_idx:?}"
-                            )));
-                        }
-                    }
-                    datatype.depth = Some(depth);
+            let datatype_depth = &tys.type_at(&cache_idx.inner_pkg_key).depth;
+            let mut depth_lock = datatype_depth.write();
+            if let Some(prev_depth) = depth_lock.as_ref() {
+                // This can happen if we race for filling in the depth of the datatype which is
+                // fine as only one will win. However, if we race for filling in the depth of
+                // the then the two depths must be the same.
+                if prev_depth != &depth {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!("Depth calculation mismatch for {cache_idx:?}")),
+                    );
                 }
-                None => {
-                    // we have pending references to the `Arc` which is impossible,
-                    // given the code that adds the `Arc` is above and no reference to
-                    // it should exist.
-                    // So in the spirit of not crashing we log the issue and move on leaving the
-                    // datatypes depth as `None` -- if we try to access it later we will treat this
-                    // as too deep.
-                    error!("Arc<Datatype> cannot have any live reference while publishing");
-                }
+            } else {
+                *depth_lock = Some(depth);
             }
         }
         Ok(depth_formula)
@@ -272,7 +262,7 @@ impl VMDispatchTables {
     ) -> PartialVMResult<DepthFormula> {
         let datatype = self.resolve_type(&def_idx.clone())?;
         // If we've already computed this datatypes depth, no more work remains to be done.
-        if let Some(form) = &datatype.depth {
+        if let Some(form) = datatype.depth.read().as_ref() {
             return Ok(form.clone());
         }
         if let Some(form) = depth_cache.get(def_idx) {

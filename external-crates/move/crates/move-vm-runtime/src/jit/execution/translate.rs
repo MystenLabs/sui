@@ -29,6 +29,7 @@ use move_binary_format::{
     },
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
+use parking_lot::RwLock;
 use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
 
 struct PackageContext<'natives> {
@@ -860,7 +861,7 @@ fn load_module_types(
                 name: name.to_owned(),
                 defining_id,
                 runtime_id: module_id.clone(),
-                depth: None,
+                depth: RwLock::new(None),
                 datatype_info: Datatype::Struct(StructType {
                     fields,
                     field_names,
@@ -936,7 +937,7 @@ fn load_module_types(
                 name: name.to_owned(),
                 defining_id,
                 runtime_id: module_id.clone(),
-                depth: None,
+                depth: RwLock::new(None),
                 datatype_info: Datatype::Enum(EnumType {
                     variants,
                     enum_def: EnumDefinitionIndex(idx as u16),
