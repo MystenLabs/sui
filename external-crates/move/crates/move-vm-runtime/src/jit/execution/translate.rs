@@ -85,6 +85,9 @@ impl PackageContext<'_> {
     }
 
     fn try_resolve_function(&self, vtable_entry: &VirtualTableKey) -> Option<VMPointer<Function>> {
+        if vtable_entry.package_key != self.runtime_id {
+            return None;
+        }
         self.vtable
             .functions
             .get(&vtable_entry.inner_pkg_key)
@@ -585,6 +588,7 @@ fn alloc_function(
         file_format_version: module.version(),
         index,
         is_entry,
+        visibility: def.visibility,
         code: vm_pointer::null_ptr(),
         parameters,
         locals,

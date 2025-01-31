@@ -18,13 +18,15 @@ use crate::{
     string_interner,
 };
 use move_binary_format::{
-    errors::{Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::LocalIndex,
+    errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
+    file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
 };
 use move_core_types::{
+    annotated_value,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    vm_status::StatusCode,
+    runtime_value,
+    vm_status::{StatusCode, StatusType},
 };
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::runtime::VMConfig;
@@ -59,10 +61,21 @@ pub struct MoveVM<'extensions> {
     pub(crate) base_heap: BaseHeap,
 }
 
-pub struct MoveVMFunction {
+pub(crate) struct MoveVMFunction {
     function: VMPointer<Function>,
+    pub(crate) parameters: Vec<Type>,
+    pub(crate) return_type: Vec<Type>,
+}
+
+/// Externally visibile information about a function that can be asked and the VM will answer.
+pub struct LoadedFunctionInformation {
+    pub is_entry: bool,
+    pub is_native: bool,
+    pub visibility: Visibility,
+    pub index: FunctionDefinitionIndex,
+    pub instruction_count: CodeOffset,
     pub parameters: Vec<Type>,
-    pub return_type: Vec<Type>,
+    pub return_: Vec<Type>,
 }
 
 impl<'extensions> MoveVM<'extensions> {
@@ -188,12 +201,93 @@ impl<'extensions> MoveVM<'extensions> {
         )
     }
 
+    // -------------------------------------------
+    // External Queries
+    // -------------------------------------------
+
+    pub fn function_information(
+        &self,
+        // NB: The module ID is using the _runtime_ ID.
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: &[Type],
+    ) -> VMResult<LoadedFunctionInformation> {
+        let MoveVMFunction {
+            function,
+            parameters,
+            return_type,
+        } = self.find_function(module_id, function_name, ty_args)?;
+
+        Ok(LoadedFunctionInformation {
+            is_entry: function.to_ref().is_entry,
+            is_native: function.to_ref().def_is_native,
+            visibility: function.to_ref().visibility,
+            index: function.to_ref().index,
+            instruction_count: function.to_ref().code.len() as CodeOffset,
+            parameters,
+            return_: return_type,
+        })
+    }
+
     pub fn vm_config(&self) -> &move_vm_config::runtime::VMConfig {
         &self.vm_config
     }
 
+    pub fn type_abilities(&self, ty: &Type) -> VMResult<AbilitySet> {
+        self.virtual_tables
+            .abilities(ty)
+            .map_err(|e| e.finish(Location::Undefined))
+    }
+
+    pub fn type_tag_for_type_defining_ids(&self, ty: &Type) -> VMResult<TypeTag> {
+        self.virtual_tables
+            .type_to_type_tag(ty)
+            .map_err(|e| e.finish(Location::Undefined))
+    }
+
+    /// Resolve a `TypeTag` to a `Type` using the VM's virtual tables.
+    /// NB: the `TypeTag` is coming from outside and therefore _may_ not represent a valid type
+    /// (e.g., an undefined type). Therefore any errors in resolution should be treated as runtime
+    /// errors and not anything else.
     pub fn load_type(&self, tag: &TypeTag) -> VMResult<Type> {
-        self.virtual_tables.load_type(tag)
+        self.virtual_tables
+            .load_type(tag)
+            .map_err(|e| Self::convert_to_external_type_tag_error(e, tag))
+    }
+
+    /// Resolve a `TypeTag` to a runtime type layout using the VM's virtual tables.
+    /// NB: the `TypeTag` is coming from outside and therefore _may_ not represent a valid type
+    /// (e.g., an undefined type). Therefore any errors in resolution should be treated as runtime
+    /// errors and not anything else.
+    pub fn runtime_type_layout(&self, ty: &TypeTag) -> VMResult<runtime_value::MoveTypeLayout> {
+        self.virtual_tables
+            .get_type_layout(ty)
+            .map_err(|e| Self::convert_to_external_type_tag_error(e, ty))
+    }
+
+    /// Resolve a `TypeTag` to an annotated type layout using the VM's virtual tables.
+    /// NB: the `TypeTag` is coming from outside and therefore _may_ not represent a valid type
+    /// (e.g., an undefined type). Therefore any errors in resolution should be treated as runtime
+    /// errors and not anything else.
+    pub fn annotated_type_layout(&self, ty: &TypeTag) -> VMResult<annotated_value::MoveTypeLayout> {
+        self.virtual_tables
+            .get_fully_annotated_type_layout(ty)
+            .map_err(|e| Self::convert_to_external_type_tag_error(e, ty))
+    }
+
+    fn convert_to_external_type_tag_error(err: VMError, tag: &TypeTag) -> VMError {
+        if err.major_status().status_type() == StatusType::InvariantViolation {
+            PartialVMError::new(StatusCode::EXTERNAL_RESOLUTION_REQUEST_ERROR)
+                .with_message(format!(
+                    "Failed to resolve external type tag{tag}{}",
+                    err.message()
+                        .map(|s| format!(": {}", s))
+                        .unwrap_or_else(|| "".to_string())
+                ))
+                .finish(Location::Undefined)
+        } else {
+            err
+        }
     }
 
     // -------------------------------------------
@@ -375,6 +469,10 @@ impl<'extensions> MoveVM<'extensions> {
 
     pub fn into_extensions(self) -> NativeContextExtensions<'extensions> {
         self.native_extensions
+    }
+
+    pub fn extensions(&self) -> &NativeContextExtensions<'extensions> {
+        &self.native_extensions
     }
 }
 

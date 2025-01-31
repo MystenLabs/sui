@@ -25,7 +25,7 @@ use move_binary_format::{
         FunctionInstantiationIndex, LocalIndex, SignatureIndex, SignatureToken,
         StructDefInstantiationIndex, StructDefinitionIndex, VariantHandle, VariantHandleIndex,
         VariantInstantiationHandle, VariantInstantiationHandleIndex, VariantJumpTable,
-        VariantJumpTableIndex, VariantTag,
+        VariantJumpTableIndex, VariantTag, Visibility,
     },
     file_format_common::Opcodes,
 };
@@ -125,6 +125,7 @@ pub struct Function {
     #[allow(unused)]
     pub file_format_version: u32,
     pub is_entry: bool,
+    pub visibility: Visibility,
     pub index: FunctionDefinitionIndex,
     pub code: *const [Bytecode],
     pub parameters: Vec<Type>,

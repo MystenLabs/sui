@@ -72,13 +72,16 @@ impl MoveCache {
         verified: verification::ast::Package,
         runtime: jit::execution::ast::Package,
     ) {
-        assert!(!self.package_cache.read().contains_key(&package_key));
+        // NB: We grab a write lock here to ensure that we don't double-insert a package.
+        let mut package_cache = self.package_cache.write();
+
+        if package_cache.contains_key(&package_key) {
+            return;
+        }
         let verified = Arc::new(verified);
         let runtime = Arc::new(runtime);
         let package = Package { verified, runtime };
-        self.package_cache()
-            .write()
-            .insert(package_key, Arc::new(package));
+        package_cache.insert(package_key, Arc::new(package));
     }
 
     pub fn cached_package_at(&self, package_key: PackageStorageId) -> Option<Arc<Package>> {
