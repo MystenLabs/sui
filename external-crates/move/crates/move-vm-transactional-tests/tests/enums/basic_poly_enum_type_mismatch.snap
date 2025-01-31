@@ -1,3 +1,7 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-vm-transactional-tests/tests/enums/basic_poly_enum_type_mismatch.mvir
+---
 processed 2 tasks
 
 task 0, lines 1-24:
