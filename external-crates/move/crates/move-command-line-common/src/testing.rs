@@ -148,7 +148,7 @@ macro_rules! insta_assert {
         settings.set_input_file(&i);
         settings.set_snapshot_path(i.parent().unwrap());
         if let Some(info) = info {
-            settings.set_info(info);
+            settings.set_info(&info);
         }
         if let Some(suffix) = suffix {
             settings.set_snapshot_suffix(suffix);

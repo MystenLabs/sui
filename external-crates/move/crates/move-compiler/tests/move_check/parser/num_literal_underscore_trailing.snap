@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+input_file: crates/move-compiler/tests/move_check/parser/num_literal_underscore_trailing.move
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/num_literal_underscore_trailing.move:4:20
+  │
+4 │         let _ = 0u8_;
+  │                    ^
+  │                    │
+  │                    Unexpected '_'
+  │                    Expected ';'

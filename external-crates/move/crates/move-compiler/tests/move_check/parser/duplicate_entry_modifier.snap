@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+input_file: crates/move-compiler/tests/move_check/parser/duplicate_entry_modifier.move
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/duplicate_entry_modifier.move:2:11
+  │
+2 │     entry entry fun foo() {}
+  │     ----- ^^^^^ Duplicate 'entry' modifier
+  │     │      
+  │     'entry' modifier previously given here

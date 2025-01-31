@@ -1,7 +1,0 @@
---- tests/move_2024/migration/friend_decl_test_only.move
-+++ tests/move_2024/migration/friend_decl_test_only.move
-@@ -3,2 +3,2 @@
--    #[test_only]
--    friend a::n1;
-+    /* #[test_only] */
-+    /* friend a::n1; */

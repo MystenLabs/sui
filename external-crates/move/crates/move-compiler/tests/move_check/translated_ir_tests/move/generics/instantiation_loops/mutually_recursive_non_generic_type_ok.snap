@@ -1,0 +1,9 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+input_file: crates/move-compiler/tests/move_check/translated_ir_tests/move/generics/instantiation_loops/mutually_recursive_non_generic_type_ok.move
+---
+

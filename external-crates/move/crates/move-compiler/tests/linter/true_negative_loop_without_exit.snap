@@ -1,0 +1,9 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: true
+input_file: crates/move-compiler/tests/linter/true_negative_loop_without_exit.move
+---
+

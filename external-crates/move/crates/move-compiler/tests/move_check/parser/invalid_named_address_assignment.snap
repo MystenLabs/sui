@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+input_file: crates/move-compiler/tests/move_check/parser/invalid_named_address_assignment.move
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/invalid_named_address_assignment.move:1:14
+  │
+1 │ address Addr = 0x1; // Named address assignments are not allowed
+  │              ^
+  │              │
+  │              Unexpected '='
+  │              Expected '{'
