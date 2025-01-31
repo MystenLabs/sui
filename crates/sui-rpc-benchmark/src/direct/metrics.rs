@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// This module defines data structures and functions for collecting
-/// and summarizing performance metrics from benchmark queries. It
-/// supports tracking overall and per-table query latencies, error counts, total queries,
+/// and summarizing performance metrics from benchmark queries.
+/// It tracks both overall and per-table counts, errors and average latencies.
 use dashmap::DashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,6 +37,12 @@ pub struct MetricsCollector {
 }
 
 impl MetricsCollector {
+    /// Records a query execution with its latency and error status
+    /// 
+    /// # Arguments
+    /// * `query_type` - The type/name of the query being recorded
+    /// * `latency` - The duration taken to execute the query
+    /// * `is_error` - Whether the query resulted in an error
     pub fn record_query(&self, query_type: &str, latency: Duration, is_error: bool) {
         let mut entry = self.metrics.entry(query_type.to_string()).or_default();
 

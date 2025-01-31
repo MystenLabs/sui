@@ -32,6 +32,9 @@ pub struct QueryExecutor {
 /// transparently when performing random queries from the database.
 /// This approach lets us build parameter lists matching each column's
 /// actual type at runtime, ensuring correct and safe query execution.
+///
+/// We store each value in an `Option` to handle `NULL` values that can
+/// appear in database columns.
 #[derive(Clone, Debug)]
 pub enum SqlValue {
     Text(Option<String>),
@@ -138,17 +141,15 @@ impl QueryExecutor {
         deadline: Instant,
     ) -> Result<()> {
         let client = pool.get().await?;
+        let mut query_rng = rand::thread_rng();
+        let mut row_rng = rand::thread_rng();
         while Instant::now() < deadline {
             let enriched = enriched_queries
-                .choose(&mut rand::thread_rng())
+                .choose(&mut query_rng)
                 .ok_or_else(|| anyhow::anyhow!("No queries available"))?;
-
-            let row = match enriched.rows.choose(&mut rand::thread_rng()) {
-                Some(row) => row,
-                None => {
-                    // skip when the table is empty and thus no values to sample.
-                    continue;
-                }
+            let Some(row) = enriched.rows.choose(&mut row_rng) else {
+                // skip when the table is empty and thus no values to sample.
+                continue;
             };
 
             let params: Vec<Box<dyn ToSql + Sync + Send>> = row
