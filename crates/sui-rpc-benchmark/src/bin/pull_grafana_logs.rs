@@ -38,14 +38,54 @@ struct GrafanaLog {
     message: String,
 }
 
-fn extract_body_from_message(message: &str) -> Option<String> {
+#[derive(Debug)]
+struct LogEntry {
+    timestamp: String,
+    host: String,
+    method: String,
+    body: String,
+}
+
+fn extract_from_message(message: &str) -> Option<LogEntry> {
+    let timestamp = message
+        .split_whitespace()
+        .next()?
+        .to_string();
+
+    let headers_start = message.find("headers=")?;
+    let headers_str = &message[headers_start..];
+    let headers_json_str = headers_str
+        .trim_start_matches("headers=")
+        .split_once(" body=")?
+        .0;
+    let headers: Value = serde_json::from_str(headers_json_str).ok()?;
+    let host = headers
+        .get("host")
+        .and_then(|h| h.as_str())
+        .unwrap_or("unknown_host")
+        .to_string();
+
     if let Some(body_start) = message.find("body=") {
         if let Some(peer_type_start) = message.find(" peer_type=") {
             let raw_body = &message[(body_start + 5)..peer_type_start].trim();
             if raw_body.starts_with('b') {
                 let trimmed = raw_body.trim_start_matches('b').trim_matches('"');
                 let unescaped = trimmed.replace("\\\"", "\"");
-                return Some(unescaped);
+                
+                if let Ok(parsed) = serde_json::from_str::<Value>(&unescaped) {
+                    let method = parsed
+                        .get("method")
+                        .and_then(|m| m.as_str())
+                        .unwrap_or("unknown_method")
+                        .to_string();
+
+                    return Some(LogEntry {
+                        timestamp,
+                        host,
+                        method,
+                        body: unescaped,
+                    });
+                }
             }
         }
     }
@@ -170,27 +210,23 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
     info!("Found {} logs.", all_logs.len());
 
-    let mut method_map: HashMap<String, Vec<String>> = HashMap::new();
+    let mut method_map: HashMap<String, Vec<LogEntry>> = HashMap::new();
     for log_entry in all_logs {
-        if let Some(body_content) = extract_body_from_message(&log_entry.message) {
-            if let Ok(parsed) = serde_json::from_str::<Value>(&body_content) {
-                let method = parsed
-                    .get("method")
-                    .and_then(|m| m.as_str())
-                    .unwrap_or("unknown_method")
-                    .to_string();
-                method_map.entry(method).or_default().push(body_content);
-            }
+        if let Some(entry) = extract_from_message(&log_entry.message) {
+            method_map.entry(entry.method.clone()).or_default().push(entry);
         }
     }
 
     let file = File::create("sampled_read_requests.jsonl")?;
     let mut writer = BufWriter::new(file);
 
-    for (method, bodies) in method_map {
-        info!("Writing {} logs for method: {}", bodies.len(), method);
-        for body in bodies {
-            let line = format!(r#"{{"method":"{}", "body":{}}}"#, method, body);
+    for (method, entries) in method_map {
+        info!("Writing {} logs for method: {}", entries.len(), method);
+        for entry in entries {
+            let line = format!(
+                r#"{{"timestamp":"{}", "host":"{}", "method":"{}", "body":{}}}"#,
+                entry.timestamp, entry.host, entry.method, entry.body
+            );
             writer.write_all(line.as_bytes())?;
             writer.write_all(b"\n")?;
         }
