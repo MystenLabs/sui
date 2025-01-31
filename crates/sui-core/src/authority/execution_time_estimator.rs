@@ -162,7 +162,6 @@ impl ExecutionTimeObserver {
                 if let Err(e) = self
                     .consensus_adapter
                     .submit_to_consensus(&[transaction], &epoch_store)
-                    .await
                 {
                     if !matches!(e, SuiError::EpochEnded(_)) {
                         warn!("failed to submit execution time observation: {e:?}");
