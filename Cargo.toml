@@ -42,7 +42,6 @@ exclude = [
     "external-crates/move/crates/move-prover-test-utils",
     "external-crates/move/crates/move-stackless-bytecode",
     "external-crates/move/crates/move-stdlib",
-    "external-crates/move/crates/move-stdlib-natives",
     "external-crates/move/crates/move-symbol-pool",
     "external-crates/move/crates/move-transactional-test-runner",
     "external-crates/move/crates/move-unit-test",
@@ -50,9 +49,7 @@ exclude = [
     "external-crates/move/crates/move-vm-integration-tests",
     "external-crates/move/crates/move-vm-profiler",
     "external-crates/move/crates/move-vm-runtime",
-    "external-crates/move/crates/move-vm-test-utils",
     "external-crates/move/crates/move-vm-transactional-tests",
-    "external-crates/move/crates/move-vm-types",
     "external-crates/move/crates/serializer-tests",
     "external-crates/move/crates/test-generation",
     "external-crates/move/move-execution/v0/crates/move-bytecode-verifier",
@@ -570,10 +567,10 @@ move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
 move-package = { path = "external-crates/move/crates/move-package" }
 move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
 move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
-move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
+## TODO(vm-rewrite): we need to have a better execution versioning story here as just relying on the vm-runtime directly is not kosher...
+move-vm-runtime = { path = "external-crates/move/crates/move-vm-runtime/", features = [
     "tiered-gas",
 ] }
-move-vm-types = { path = "external-crates/move/crates/move-vm-types" }
 move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
 move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
