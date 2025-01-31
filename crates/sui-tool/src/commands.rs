@@ -12,8 +12,8 @@ use crate::{
 use anyhow::Result;
 use futures::{future::join_all, StreamExt};
 use mysten_common::logging::StructuredLogReader;
-use std::path::PathBuf;
 use std::{collections::BTreeMap, env, sync::Arc};
+use std::{collections::HashMap, path::PathBuf};
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 use sui_protocol_config::Chain;
@@ -22,8 +22,11 @@ use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClien
 use telemetry_subscribers::TracingHandle;
 
 use sui_types::{
-    base_types::*, crypto::AuthorityPublicKeyBytes, execution::ExecutionTimingLogRecord,
-    messages_grpc::TransactionInfoRequest, transaction::TransactionKind,
+    base_types::*,
+    crypto::AuthorityPublicKeyBytes,
+    execution::{ExecutionTimeObservationKey, ExecutionTimingLogRecord},
+    messages_grpc::TransactionInfoRequest,
+    transaction::{TransactionDataAPI, TransactionKind},
 };
 
 use clap::*;
@@ -1101,30 +1104,39 @@ impl ToolCommand {
             }
             ToolCommand::LogReader { log_path } => {
                 let file = tokio::fs::File::open(log_path).await.unwrap();
-                let reader = tokio::io::BufReader::new(file);
                 let mut log: StructuredLogReader<ExecutionTimingLogRecord, _> =
-                    StructuredLogReader::new(reader);
+                    StructuredLogReader::new(file);
+
+                let mut keys = HashMap::new();
+                let mut record_count = 0;
 
                 while let Some(record) = log.next().await {
+                    let record = match record {
+                        Ok(record) => record,
+                        Err(e) => {
+                            println!("Error reading record: {}", e);
+                            continue;
+                        }
+                    };
                     let ExecutionTimingLogRecord {
                         transaction,
                         effects,
                         total_time,
                         timings,
-                    } = record.unwrap();
+                    } = record;
 
+                    record_count += 1;
                     if let TransactionKind::ProgrammableTransaction(tx) = transaction.into_kind() {
                         for (command, timing) in tx.commands.into_iter().zip(timings) {
-                            println!("Command: {:?}, Timing: {:?}", command, timing);
+                            let key = ExecutionTimeObservationKey::from_command(&command);
+                            *keys.entry(key).or_insert(0) += 1;
+                            //println!("Command: {:?}, Timing: {:?}", command, timing);
                         }
                     }
-
-                    if let Ok(record) = record {
-                        println!("{:?}", record);
-                    } else {
-                        println!("Error reading record");
-                    }
                 }
+
+                println!("Total records: {}", record_count);
+                println!("Unique keys: {}", keys.len());
             }
         };
         Ok(())
