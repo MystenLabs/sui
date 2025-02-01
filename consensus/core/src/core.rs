@@ -1883,6 +1883,149 @@ mod test {
         }
     }
 
+    // Tests that the threshold clock advances when blocks get unsuspended due to GC'ed blocks and newly created blocks are always higher
+    // than the last advanced gc round.
+    #[tokio::test]
+    async fn test_multiple_commits_advance_threshold_clock() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, mut key_pairs) = Context::new_for_test(4);
+        const GC_DEPTH: u32 = 2;
+
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+
+        // On round 1 we do produce the block for authority D but we do not link it until round 6. This is making round 6 unable to get processed
+        // until leader of round 3 is committed where round 1 gets garbage collected.
+        // Then we add more rounds so we can trigger a commit for leader of round 9 which will move the gc round to 7.
+        let dag_str = "DAG {
+            Round 0 : { 4 },
+            Round 1 : { * },
+            Round 2 : { 
+                B -> [-D1],
+                C -> [-D1],
+                D -> [-D1],
+            },
+            Round 3 : {
+                B -> [*],
+                C -> [*]
+                D -> [*],
+            },
+            Round 4 : { 
+                A -> [*],
+                B -> [*],
+                C -> [*]
+                D -> [*],
+            },
+            Round 5 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 6 : { 
+                B -> [A6, B6, C6, D1],
+                C -> [A6, B6, C6, D1],
+                D -> [A6, B6, C6, D1],
+            },
+            Round 7 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 8 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 9 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 10 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 11 : { 
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+        }";
+
+        let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag");
+        dag_builder.print();
+
+        // create dag state after all blocks have been written to store
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
+            context.clone(),
+            dag_state.clone(),
+        ));
+
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            commit_consumer,
+            dag_state.clone(),
+            store.clone(),
+            leader_schedule.clone(),
+        );
+
+        // Check no commits have been persisted to dag_state or store.
+        let last_commit = store.read_last_commit().unwrap();
+        assert!(last_commit.is_none());
+        assert_eq!(dag_state.read().last_commit_index(), 0);
+
+        // Now spin up core
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        // Need at least one subscriber to the block broadcast channel.
+        let _block_receiver = signal_receivers.block_broadcast_receiver();
+        let mut core = Core::new(
+            context.clone(),
+            leader_schedule,
+            transaction_consumer,
+            block_manager,
+            true,
+            commit_observer,
+            signals,
+            key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
+            true,
+        );
+        // We set the last known round to 4 so we avoid creating new blocks until then - otherwise it will crash as the already created DAG contains blocks for this
+        // authority.
+        core.set_last_known_proposed_round(4);
+
+        // We add all the blocks except D1. The only ones we can immediately accept are the ones up to round 5 as they don't have a dependency on D1. Rest of blocks do have causal dependency
+        // to D1 so they can't be processed until the leader of round 3 can get committed and gc round moves to 1. That will make all the blocks that depend to D1 get accepted.
+        // However, our threshold clock is now at round 6 as the last quorum that we managed to process was the round 5.
+        // As commits happen blocks of later rounds get accepted and more leaders get committed. Eventually the leader of round 9 gets committed and gc is moved to 9 - 2 = 7.
+        // If our node attempts to produce a block for the threshold clock 6, that will make the acceptance checks fail as now gc has moved far past this round.
+        core.add_blocks(
+            dag_builder
+                .blocks(1..=11)
+                .into_iter()
+                .filter(|b| !(b.round() == 1 && b.author() == AuthorityIndex::new_for_test(3)))
+                .collect(),
+        )
+        .expect("Should not fail");
+
+        assert_eq!(core.last_proposed_round(), 12);
+    }
+
     #[tokio::test]
     async fn test_core_set_min_propose_round() {
         telemetry_subscribers::init_for_testing();
@@ -2209,7 +2352,7 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
-        let _block_receiver = signal_receivers.block_broadcast_receiver();
+        let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
         let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
@@ -2269,12 +2412,12 @@ mod test {
         assert!(core.add_blocks(blocks).unwrap().is_empty());
 
         // We now have triggered a leader schedule change so we should have
-        // one EXCLUDE ancestor when we go to select ancestors for the next proposal
+        // one EXCLUDE authority (1) when we go to select ancestors for the next proposal
         let block = core.try_propose(true).expect("No error").unwrap();
         assert_eq!(block.round(), 15);
         assert_eq!(block.ancestors().len(), 6);
 
-        // Build blocks for a quorum of the network including the EXCLUDE ancestor
+        // Build blocks for a quorum of the network including the EXCLUDE authority (1)
         // which will trigger smart select and we will not propose a block
         builder
             .layer(15)
@@ -2286,6 +2429,11 @@ mod test {
             .skip_block()
             .build();
         let blocks = builder.blocks(15..=15);
+        let authority_1_excluded_block_reference = blocks
+            .iter()
+            .find(|block| block.author() == AuthorityIndex::new_for_test(1))
+            .unwrap()
+            .reference();
         // Wait for min round delay to allow blocks to be proposed.
         sleep(context.parameters.min_round_delay).await;
         // Smart select should be triggered and no block should be proposed.
@@ -2304,9 +2452,36 @@ mod test {
             .skip_block()
             .build();
         let blocks = builder.blocks(15..=15);
+        let included_block_references = iter::once(&core.last_proposed_block())
+            .chain(blocks.iter())
+            .filter(|block| block.author() != AuthorityIndex::new_for_test(1))
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+
         // Have enough ancestor blocks to propose now.
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         assert_eq!(core.last_proposed_block().round(), 16);
+
+        // Check that a new block has been proposed & signaled.
+        let extended_block = loop {
+            let extended_block =
+                tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+            if extended_block.block.round() == 16 {
+                break extended_block;
+            }
+        };
+        assert_eq!(extended_block.block.round(), 16);
+        assert_eq!(extended_block.block.author(), core.context.own_index);
+        assert_eq!(extended_block.block.ancestors().len(), 6);
+        assert_eq!(extended_block.block.ancestors(), included_block_references);
+        assert_eq!(extended_block.excluded_ancestors.len(), 1);
+        assert_eq!(
+            extended_block.excluded_ancestors[0],
+            authority_1_excluded_block_reference
+        );
 
         // Build blocks for a quorum of the network including the EXCLUDE ancestor
         // which will trigger smart select and we will not propose a block.
@@ -2333,6 +2508,158 @@ mod test {
         let block = core.try_propose(true).expect("No error").unwrap();
         assert_eq!(block.round(), 17);
         assert_eq!(block.ancestors().len(), 5);
+
+        // Check that a new block has been proposed & signaled.
+        let extended_block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(extended_block.block.round(), 17);
+        assert_eq!(extended_block.block.author(), core.context.own_index);
+        assert_eq!(extended_block.block.ancestors().len(), 5);
+        assert_eq!(extended_block.excluded_ancestors.len(), 0);
+
+        // Set quorum rounds for authority which will unlock the Excluded
+        // authority (1) and then we should be able to create a new layer of blocks
+        // which will then all be included as ancestors for the next proposal
+        core.set_propagation_delay_and_quorum_rounds(
+            0,
+            vec![
+                (16, 16),
+                (16, 16),
+                (16, 16),
+                (16, 16),
+                (16, 16),
+                (16, 16),
+                (16, 16),
+            ],
+            vec![
+                (16, 16),
+                (16, 16),
+                (16, 16),
+                (16, 16),
+                (16, 16),
+                (16, 16),
+                (16, 16),
+            ],
+        );
+
+        builder
+            .layer(17)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+        let blocks = builder.blocks(17..=17);
+        let included_block_references = iter::once(&core.last_proposed_block())
+            .chain(blocks.iter())
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+
+        // Have enough ancestor blocks to propose now.
+        sleep(context.parameters.min_round_delay).await;
+        assert!(core.add_blocks(blocks).unwrap().is_empty());
+        assert_eq!(core.last_proposed_block().round(), 18);
+
+        // Check that a new block has been proposed & signaled.
+        let extended_block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(extended_block.block.round(), 18);
+        assert_eq!(extended_block.block.author(), core.context.own_index);
+        assert_eq!(extended_block.block.ancestors().len(), 7);
+        assert_eq!(extended_block.block.ancestors(), included_block_references);
+        assert_eq!(extended_block.excluded_ancestors.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_excluded_ancestor_limit() {
+        telemetry_subscribers::init_for_testing();
+        let (context, mut key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        }));
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
+        let leader_schedule = Arc::new(
+            LeaderSchedule::from_store(context.clone(), dag_state.clone())
+                .with_num_commits_per_schedule(10),
+        );
+
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        // Need at least one subscriber to the block broadcast channel.
+        let mut block_receiver = signal_receivers.block_broadcast_receiver();
+
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            commit_consumer,
+            dag_state.clone(),
+            store.clone(),
+            leader_schedule.clone(),
+        );
+
+        let mut core = Core::new(
+            context.clone(),
+            leader_schedule,
+            transaction_consumer,
+            block_manager,
+            true,
+            commit_observer,
+            signals,
+            key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
+            true,
+        );
+
+        // No new block should have been produced
+        assert_eq!(
+            core.last_proposed_round(),
+            GENESIS_ROUND,
+            "No block should have been created other than genesis"
+        );
+
+        // Create blocks for the whole network
+        let mut builder = DagBuilder::new(context.clone());
+        builder.layers(1..=3).build();
+
+        // This will equivocate 9 blocks for authority 1 which will be excluded on
+        // the proposal but because of the limits set will be dropped and not included
+        // as part of the ExtendedBlock structure sent to the rest of the network
+        builder
+            .layer(4)
+            .authorities(vec![AuthorityIndex::new_for_test(1)])
+            .equivocate(9)
+            .build();
+        let blocks = builder.blocks(1..=4);
+
+        // Process all the blocks
+        assert!(core.add_blocks(blocks).unwrap().is_empty());
+        core.set_last_known_proposed_round(3);
+
+        let block = core.try_propose(true).expect("No error").unwrap();
+        assert_eq!(block.round(), 5);
+        assert_eq!(block.ancestors().len(), 4);
+
+        // Check that a new block has been proposed & signaled.
+        let extended_block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(extended_block.block.round(), 5);
+        assert_eq!(extended_block.block.author(), core.context.own_index);
+        assert_eq!(extended_block.block.ancestors().len(), 4);
+        assert_eq!(extended_block.excluded_ancestors.len(), 8);
     }
 
     #[tokio::test]

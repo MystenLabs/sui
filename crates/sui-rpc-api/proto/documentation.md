@@ -760,7 +760,13 @@ Defaults to `false` if not included |
 <p align="right"><a href="#top">Top</a></p>
 
 ## sui.types.proto
+Protobuf definitions of public Sui core types
 
+This file contains a complete set of protobuf definitions for all of the
+public sui core types. All sui types are intended to have a 1:1 mapping to a
+protobuf message defined in this file and be able to roundtrip to/from their
+rust and protobuf definitions assuming a sufficiently up-to-date version of
+both these definitions.
 
 
 <a name="sui-types-ActiveJwk"></a>

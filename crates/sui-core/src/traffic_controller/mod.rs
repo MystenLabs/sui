@@ -828,7 +828,7 @@ impl TrafficSim {
         // until ttl is expired.
         println!("Num blocked requests: {}", metrics.num_blocked);
         // This metric on the other hand reflects the number of times a client was added to the blocklist
-        // and thus can be compared an the expectation based on the policy block threshold and ttl
+        // and thus can be compared with the expectation based on the policy block threshold and ttl
         println!(
             "Num times added to blocklist: {}",
             metrics.num_blocklist_adds

@@ -11,8 +11,14 @@ import {
     IRuntimeLoc,
     IRuntimeRefValue
 } from './runtime';
-import { ISourceMap, IFileLoc, IFileInfo, ILoc, ISourceMapFunction } from './source_map_utils';
-import { logger } from '@vscode/debugadapter';
+import {
+    ISourceMap,
+    ILocalInfo,
+    IFileLoc,
+    IFileInfo,
+    ILoc,
+    ISourceMapFunction
+} from './source_map_utils';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -237,15 +243,23 @@ export type TraceEvent =
         type: TraceEventKind.OpenFrame,
         id: number,
         name: string,
-        fileHash: string
+        srcFileHash: string
+        bcodeFileHash: undefined | string,
         isNative: boolean,
         localsTypes: string[],
-        localsNames: string[],
+        localsNames: ILocalInfo[],
         paramValues: RuntimeValueType[]
-        optimizedLines: number[]
+        optimizedSrcLines: number[]
+        optimizedBcodeLines: undefined | number[]
     }
     | { type: TraceEventKind.CloseFrame, id: number }
-    | { type: TraceEventKind.Instruction, pc: number, loc: ILoc, kind: TraceInstructionKind }
+    | {
+        type: TraceEventKind.Instruction,
+        pc: number,
+        srcLoc: ILoc,
+        bcodeLoc: undefined | ILoc,
+        kind: TraceInstructionKind
+    }
     | { type: TraceEventKind.Effect, effect: EventEffect };
 
 /**
@@ -280,9 +294,15 @@ interface ITrace {
 
     /**
      * Maps file path to the lines of code present in the trace instructions
-     * in functions defined in the file.
+     * in functions defined in the source files.
      */
-    tracedLines: Map<string, Set<number>>;
+    tracedSrcLines: Map<string, Set<number>>;
+
+    /**
+     * Maps file path to the lines of code present in the trace instructions
+     * in functions defined in the disassembled bytecode files.
+     */
+    tracedBcodeLines: Map<string, Set<number>>;
 }
 
 /**
@@ -294,29 +314,41 @@ interface ITraceGenFrameInfo {
      */
     ID: number;
     /**
-     * PC locations traced in the frame
+     * Path to a source  file containing function represented by the frame.
      */
-    pcLocs: IFileLoc[];
+    srcFilePath: string;
     /**
-     * Path to a file containing function represented by the frame.
+     * Path to a disassembled bytecode file containing function represented by the frame.
      */
-    filePath: string;
+    bcodeFilePath: undefined | string;
     /**
-     * Hash of a file containing function represented by the frame.
+     * Hash of a source file containing function represented by the frame.
      */
-    fileHash: string;
+    srcFileHash: string;
     /**
-     * Code ines in a given file that have been optimized away.
+     * Hash of a disassembled bytecode file containing function represented by the frame.
      */
-    optimizedLines: number[];
+    bcodeFileHash: undefined | string;
+    /**
+     * Code lines in a given source file that have been optimized away.
+     */
+    optimizedSrcLines: number[];
+    /**
+     * Code lines in a given disassembled bytecode file that have been optimized away.
+     */
+    optimizedBcodeLines: undefined | number[];
     /**
      * Name of the function represented by the frame.
      */
     funName: string;
     /**
-     * Source map information for a given function.
-     */
-    funEntry: ISourceMapFunction;
+    * Information for a given function in a source file.
+    */
+    srcFunEntry: ISourceMapFunction;
+    /**
+    * Information for a given function in a disassembled byc file.
+    */
+    bcodeFunEntry: undefined | ISourceMapFunction;
 }
 
 /**
@@ -334,16 +366,21 @@ const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
  * Reads a Move VM execution trace from a JSON file.
  *
  * @param traceFilePath path to the trace JSON file.
- * @param sourceMapsModMap a map from stringified module info to a source map.
  * @param sourceMapsHashMap a map from file hash to a source map.
+ * @param sourceMapsModMap a map from stringified module info to a source map.
+ * @param bcodeMapModMap a map from stringified module info to a bytecode map.
+ * @param srcFilesMap a map from source file hash to file info.
+ * @param bcodeFilesMap a map from disassembled bytecode file hash to file info.
  * @returns execution trace.
  * @throws Error with a descriptive error message if reading trace has failed.
  */
 export function readTrace(
     traceFilePath: string,
-    sourceMapsModMap: Map<string, ISourceMap>,
     sourceMapsHashMap: Map<string, ISourceMap>,
-    filesMap: Map<string, IFileInfo>
+    sourceMapsModMap: Map<string, ISourceMap>,
+    bcodeMapModMap: Map<string, ISourceMap>,
+    srcFilesMap: Map<string, IFileInfo>,
+    bcodeFilesMap: Map<string, IFileInfo>
 ): ITrace {
     const traceJSON: JSONTraceRootObject = JSON.parse(fs.readFileSync(traceFilePath, 'utf8'));
     if (traceJSON.events.length === 0) {
@@ -370,7 +407,8 @@ export function readTrace(
     // the loop
     const localLifetimeEnds = new Map<number, number[]>();
     const localLifetimeEndsMax = new Map<number, number[]>();
-    const tracedLines = new Map<string, Set<number>>();
+    const tracedSrcLines = new Map<string, Set<number>>();
+    const tracedBcodeLines = new Map<string, Set<number>>();
     // stack of frame infos OpenFrame and popped on CloseFrame
     const frameInfoStack: ITraceGenFrameInfo[] = [];
     for (const event of traceJSON.events) {
@@ -408,36 +446,60 @@ export function readTrace(
                     + modInfo.addr
                     + ' not found');
             }
-            const funEntry = sourceMap.functions.get(frame.function_name);
-            if (!funEntry) {
+            const srcFunEntry = sourceMap.functions.get(frame.function_name);
+            if (!srcFunEntry) {
                 throw new Error('Cannot find function entry in source map for function '
                     + frame.function_name
                     + ' when processing OpenFrame event');
+            }
+
+            const srcFileHash = sourceMap.fileHash;
+            const optimizedSrcLines = sourceMap.optimizedLines;
+            // there may be no disassembly info
+            let bcodeFileHash = undefined;
+            let optimizedBcodeLines = undefined;
+            let bcodeFunEntry = undefined;
+            let bcodeFilePath = undefined;
+            const bcodeMap = bcodeMapModMap.get(JSON.stringify(modInfo));
+            if (bcodeMap) {
+                bcodeFileHash = bcodeMap.fileHash;
+                optimizedBcodeLines = bcodeMap.optimizedLines;
+                bcodeFunEntry = bcodeMap.functions.get(frame.function_name);
+                const currentBCodeFile = bcodeFilesMap.get(bcodeMap.fileHash);
+                if (currentBCodeFile) {
+                    bcodeFilePath = currentBCodeFile.path;
+                }
+
             }
             events.push({
                 type: TraceEventKind.OpenFrame,
                 id: frame.frame_id,
                 name: frame.function_name,
-                fileHash: sourceMap.fileHash,
+                srcFileHash,
+                bcodeFileHash,
                 isNative: frame.is_native,
                 localsTypes,
-                localsNames: funEntry.localsNames,
+                localsNames: srcFunEntry.localsInfo,
                 paramValues,
-                optimizedLines: sourceMap.optimizedLines
+                optimizedSrcLines,
+                optimizedBcodeLines
             });
-            const currentFile = filesMap.get(sourceMap.fileHash);
+            const currentSrcFile = srcFilesMap.get(sourceMap.fileHash);
 
-            if (!currentFile) {
+            if (!currentSrcFile) {
                 throw new Error(`Cannot find file with hash: ${sourceMap.fileHash}`);
             }
             frameInfoStack.push({
                 ID: frame.frame_id,
-                pcLocs: funEntry.pcLocs,
-                filePath: currentFile.path,
-                fileHash: sourceMap.fileHash,
-                optimizedLines: sourceMap.optimizedLines,
+                srcFilePath: currentSrcFile.path,
+                bcodeFilePath,
+                srcFileHash,
+                bcodeFileHash,
+                optimizedSrcLines,
+                optimizedBcodeLines: optimizedBcodeLines,
                 funName: frame.function_name,
-                funEntry
+                srcFunEntry,
+                bcodeFunEntry
             });
         } else if (event.CloseFrame) {
             events.push({
@@ -448,19 +510,18 @@ export function readTrace(
         } else if (event.Instruction) {
             const name = event.Instruction.instruction;
             let frameInfo = frameInfoStack[frameInfoStack.length - 1];
-            const fid = frameInfo.ID;
-            const pcLocs = frameInfo.pcLocs;
+            const srcPCLocs = frameInfo.srcFunEntry.pcLocs;
             // if map does not contain an entry for a PC that can be found in the trace file,
             // it means that the position of the last PC in the source map should be used
-            let instLoc = event.Instruction.pc >= pcLocs.length
-                ? pcLocs[pcLocs.length - 1]
-                : pcLocs[event.Instruction.pc];
-
-            if (!instLoc) {
-                throw new Error('Cannot find location for PC: '
-                    + event.Instruction.pc
-                    + ' in frame: '
-                    + fid);
+            const instSrcFileLoc = event.Instruction.pc >= srcPCLocs.length
+                ? srcPCLocs[srcPCLocs.length - 1]
+                : srcPCLocs[event.Instruction.pc];
+            let instBcodeFileLoc = undefined;
+            if (frameInfo.bcodeFunEntry?.pcLocs) {
+                const bcodePCLocs = frameInfo.bcodeFunEntry.pcLocs;
+                instBcodeFileLoc = event.Instruction.pc >= bcodePCLocs.length
+                    ? bcodePCLocs[bcodePCLocs.length - 1]
+                    : bcodePCLocs[event.Instruction.pc];
             }
 
             const differentFileVirtualFramePop = processInstructionIfMacro(
@@ -468,7 +529,7 @@ export function readTrace(
                 events,
                 frameInfoStack,
                 event.Instruction.pc,
-                instLoc
+                instSrcFileLoc
             );
 
             if (differentFileVirtualFramePop) {
@@ -480,24 +541,28 @@ export function readTrace(
                     events,
                     frameInfoStack,
                     event.Instruction.pc,
-                    instLoc
+                    instSrcFileLoc
                 );
             }
 
-
+            recordTracedLine(srcFilesMap, tracedSrcLines, instSrcFileLoc);
+            if (instBcodeFileLoc) {
+                recordTracedLine(bcodeFilesMap, tracedBcodeLines, instBcodeFileLoc);
+            }
             // re-read frame info as it may have changed as a result of processing
             // and inlined call
             frameInfo = frameInfoStack[frameInfoStack.length - 1];
-            const filePath = frameInfo.filePath;
-            const lines = tracedLines.get(filePath) || new Set<number>();
+            const filePath = frameInfo.srcFilePath;
+            const lines = tracedSrcLines.get(filePath) || new Set<number>();
             // floc is still good as the pc_locs used for its computation
             // do not change as a result of processing inlined frames
-            lines.add(instLoc.loc.line);
-            tracedLines.set(filePath, lines);
+            lines.add(instSrcFileLoc.loc.line);
+            tracedSrcLines.set(filePath, lines);
             events.push({
                 type: TraceEventKind.Instruction,
                 pc: event.Instruction.pc,
-                loc: instLoc.loc,
+                srcLoc: instSrcFileLoc.loc,
+                bcodeLoc: instBcodeFileLoc?.loc,
                 kind: name in TraceInstructionKind
                     ? TraceInstructionKind[name as keyof typeof TraceInstructionKind]
                     : TraceInstructionKind.UNKNOWN
@@ -573,7 +638,31 @@ export function readTrace(
             }
         }
     }
-    return { events, localLifetimeEnds, tracedLines };
+    return { events, localLifetimeEnds, tracedSrcLines, tracedBcodeLines };
+}
+
+/**
+ * Records a line of code traced in a given file.
+ *
+ * @param filesMap map from file hash to file info.
+ * @param tracedLines map from file path to a set of traced lines.
+ * @param loc traced file location
+ * @throws Error with a descriptive error message if line cannot be recorded.
+ */
+function recordTracedLine(
+    filesMap: Map<string, IFileInfo>,
+    tracedLines: Map<string, Set<number>>,
+    floc: IFileLoc
+) {
+    const file = filesMap.get(floc.fileHash);
+    if (!file) {
+        throw new Error('Cannot find file with hash: '
+            + floc.fileHash
+            + ' when recording traced line');
+    }
+    const lines = tracedLines.get(file.path) || new Set<number>();
+    lines.add(floc.loc.line);
+    tracedLines.set(file.path, lines);
 }
 
 /**
@@ -585,7 +674,7 @@ export function readTrace(
  * @param events trace events.
  * @param frameInfoStack stack of frame infos used during trace generation.
  * @param instPC PC of the instruction.
- * @param instLoc location of the instruction.
+ * @param instSrcFileLoc location of the instruction in the source file.
  * @returns `true` if this instruction caused a pop of a virtual frame for
  * an inlined macro defined in a different file, `false` otherwise.
  */
@@ -594,11 +683,11 @@ function processInstructionIfMacro(
     events: TraceEvent[],
     frameInfoStack: ITraceGenFrameInfo[],
     instPC: number,
-    instLoc: IFileLoc
+    instSrcFileLoc: IFileLoc
 ): boolean {
     let frameInfo = frameInfoStack[frameInfoStack.length - 1];
     const fid = frameInfo.ID;
-    if (instLoc.fileHash !== frameInfo.fileHash) {
+    if (instSrcFileLoc.fileHash !== frameInfo.srcFileHash) {
         // This indicates that we are going to an instruction in the same function
         // but in a different file, which can happen due to macro inlining.
         // One could think of "outlining" the inlined code to create separate
@@ -638,7 +727,7 @@ function processInstructionIfMacro(
         // a macro in a different file. In this case, we will have two inlined
         // frames on the stack.
         if (frameInfoStack.length > 1 &&
-            frameInfoStack[frameInfoStack.length - 2].fileHash === instLoc.fileHash
+            frameInfoStack[frameInfoStack.length - 2].srcFileHash === instSrcFileLoc.fileHash
         ) {
             frameInfoStack.pop();
             events.push({
@@ -647,10 +736,10 @@ function processInstructionIfMacro(
             });
             return true;
         } else {
-            const sourceMap = sourceMapsHashMap.get(instLoc.fileHash);
+            const sourceMap = sourceMapsHashMap.get(instSrcFileLoc.fileHash);
             if (!sourceMap) {
                 throw new Error('Cannot find source map for file with hash: '
-                    + instLoc.fileHash
+                    + instSrcFileLoc.fileHash
                     + ' when frame switching within frame '
                     + fid
                     + ' at PC '
@@ -659,7 +748,7 @@ function processInstructionIfMacro(
             if (frameInfo.ID === INLINED_FRAME_ID_DIFFERENT_FILE) {
                 events.push({
                     type: TraceEventKind.ReplaceInlinedFrame,
-                    fileHash: instLoc.fileHash,
+                    fileHash: instSrcFileLoc.fileHash,
                     optimizedLines: sourceMap.optimizedLines
                 });
                 // pop the current inlined frame so that it can
@@ -670,24 +759,31 @@ function processInstructionIfMacro(
                     type: TraceEventKind.OpenFrame,
                     id: INLINED_FRAME_ID_DIFFERENT_FILE,
                     name: '__inlined__',
-                    fileHash: instLoc.fileHash,
+                    srcFileHash: instSrcFileLoc.fileHash,
+                    // bytecode file hash stays the same for inlined frames
+                    bcodeFileHash: frameInfo.bcodeFileHash,
                     isNative: false,
                     localsTypes: [],
                     localsNames: [],
                     paramValues: [],
-                    optimizedLines: sourceMap.optimizedLines
+                    optimizedSrcLines: sourceMap.optimizedLines,
+                    // optimized bytecode lines stay the same for inlined frames
+                    optimizedBcodeLines: frameInfo.optimizedBcodeLines,
                 });
             }
             frameInfoStack.push({
                 ID: INLINED_FRAME_ID_DIFFERENT_FILE,
                 // same pcLocs as before since we are in the same function
-                pcLocs: frameInfo.pcLocs,
-                filePath: sourceMap.filePath,
-                fileHash: sourceMap.fileHash,
-                optimizedLines: sourceMap.optimizedLines,
+                srcFilePath: sourceMap.filePath,
+                bcodeFilePath: frameInfo.bcodeFilePath,
+                srcFileHash: sourceMap.fileHash,
+                bcodeFileHash: frameInfo.bcodeFileHash,
+                optimizedSrcLines: sourceMap.optimizedLines,
+                optimizedBcodeLines: frameInfo.optimizedBcodeLines,
                 // same function name and source map as before since we are in the same function
                 funName: frameInfo.funName,
-                funEntry: frameInfo.funEntry
+                srcFunEntry: frameInfo.srcFunEntry,
+                bcodeFunEntry: frameInfo.bcodeFunEntry
             });
         }
     } else if (frameInfo.ID !== INLINED_FRAME_ID_DIFFERENT_FILE) {
@@ -709,12 +805,12 @@ function processInstructionIfMacro(
         // - if the instruction is in the function:
         //   - if we are in an inlined frame, we need to pop it
         //   - if we are not in an inlined frame, we don't need to do anything
-        if (instLoc.loc.line < frameInfo.funEntry.startLoc.line ||
-            instLoc.loc.line > frameInfo.funEntry.endLoc.line ||
-            (instLoc.loc.line === frameInfo.funEntry.startLoc.line &&
-                instLoc.loc.column < frameInfo.funEntry.startLoc.column) ||
-            (instLoc.loc.line === frameInfo.funEntry.endLoc.line &&
-                instLoc.loc.column > frameInfo.funEntry.endLoc.column)) {
+        if (instSrcFileLoc.loc.line < frameInfo.srcFunEntry.startLoc.line ||
+            instSrcFileLoc.loc.line > frameInfo.srcFunEntry.endLoc.line ||
+            (instSrcFileLoc.loc.line === frameInfo.srcFunEntry.startLoc.line &&
+                instSrcFileLoc.loc.column < frameInfo.srcFunEntry.startLoc.column) ||
+            (instSrcFileLoc.loc.line === frameInfo.srcFunEntry.endLoc.line &&
+                instSrcFileLoc.loc.column > frameInfo.srcFunEntry.endLoc.column)) {
             // the instruction is outside of the function
             // (belongs to inlined macro)
             if (frameInfo.ID !== INLINED_FRAME_ID_SAME_FILE) {
@@ -723,23 +819,28 @@ function processInstructionIfMacro(
                     type: TraceEventKind.OpenFrame,
                     id: INLINED_FRAME_ID_SAME_FILE,
                     name: '__inlined__',
-                    fileHash: instLoc.fileHash,
+                    srcFileHash: instSrcFileLoc.fileHash,
+                    bcodeFileHash: frameInfo.bcodeFileHash,
                     isNative: false,
                     localsTypes: [],
                     localsNames: [],
                     paramValues: [],
-                    optimizedLines: frameInfo.optimizedLines
+                    optimizedSrcLines: frameInfo.optimizedSrcLines,
+                    optimizedBcodeLines: frameInfo.optimizedBcodeLines
                 });
                 // we get a lot of data for the new frame info from the current on
                 // since we are still in the same function
                 frameInfoStack.push({
                     ID: INLINED_FRAME_ID_SAME_FILE,
-                    pcLocs: frameInfo.pcLocs,
-                    filePath: frameInfo.filePath,
-                    fileHash: instLoc.fileHash,
-                    optimizedLines: frameInfo.optimizedLines,
+                    srcFilePath: frameInfo.srcFilePath,
+                    bcodeFilePath: frameInfo.bcodeFilePath,
+                    srcFileHash: instSrcFileLoc.fileHash,
+                    bcodeFileHash: frameInfo.bcodeFileHash,
+                    optimizedSrcLines: frameInfo.optimizedSrcLines,
+                    optimizedBcodeLines: frameInfo.optimizedBcodeLines,
                     funName: frameInfo.funName,
-                    funEntry: frameInfo.funEntry
+                    srcFunEntry: frameInfo.srcFunEntry,
+                    bcodeFunEntry: frameInfo.bcodeFunEntry
                 });
             } // else we are already in an inlined frame, so we don't need to do anything
         } else {
@@ -928,8 +1029,10 @@ function eventToString(event: TraceEvent): string {
                 + instructionKindToString(event.kind)
                 + ' at PC '
                 + event.pc
-                + ', line '
-                + event.loc.line;
+                + ', source line '
+                + event.srcLoc.line
+                + ', bytecode line'
+                + event.bcodeLoc;
         case TraceEventKind.Effect:
             return `Effect ${effectToString(event.effect)}`;
     }

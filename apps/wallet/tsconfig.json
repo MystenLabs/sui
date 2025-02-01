@@ -1,7 +1,0 @@
-{
-	"extends": "./configs/ts/tsconfig.dev",
-	"include": ["src", "configs", "tests"],
-	"compilerOptions": {
-		"noEmit": true
-	}
-}

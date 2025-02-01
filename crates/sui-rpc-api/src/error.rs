@@ -106,10 +106,7 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcServiceError
             QuorumDriverInternalError(err) => {
                 RpcServiceError::new(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
             }
-            ObjectsDoubleUsed {
-                conflicting_txes,
-                retried_tx_status,
-            } => {
+            ObjectsDoubleUsed { conflicting_txes } => {
                 let new_map = conflicting_txes
                     .into_iter()
                     .map(|(digest, (pairs, _))| {
@@ -121,10 +118,7 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcServiceError
                     .collect::<std::collections::BTreeMap<_, Vec<_>>>();
 
                 let message = format!(
-                        "Failed to sign transaction by a quorum of validators because of locked objects. Retried a conflicting transaction {:?}, success: {:?}. Conflicting Transactions:\n{:#?}",
-                        retried_tx_status.map(|(tx, _)| tx),
-                        retried_tx_status.map(|(_, success)| success),
-                        new_map,
+                        "Failed to sign transaction by a quorum of validators because of locked objects. Conflicting Transactions:\n{new_map:#?}",  
                     );
 
                 RpcServiceError::new(StatusCode::CONFLICT, message)

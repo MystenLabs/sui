@@ -1,0 +1,5 @@
+node_modules
+build
+*.log
+package-lock.json
+target

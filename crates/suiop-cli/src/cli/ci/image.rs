@@ -33,7 +33,7 @@ struct BuildInfo {
 #[derive(Parser, Debug)]
 pub struct ImageArgs {
     #[command(subcommand)]
-    action: ImageAction,
+    pub action: ImageAction,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -85,65 +85,71 @@ impl Display for RefType {
     }
 }
 
+#[derive(Parser, Debug)]
+pub struct ImageBuildArgs {
+    /// The name of the git repository within the mystenlabs org
+    #[arg(short, long)]
+    repo_name: String,
+    /// The path to the dockerfile within the source code repository given by `--repo_name`
+    #[arg(short, long)]
+    dockerfile: String,
+    /// Optional repo region, default to "us-central1"
+    #[arg(long)]
+    repo_region: Option<RepoRegion>,
+    /// Optional image tags, default to ""
+    #[arg(long)]
+    image_tag: Option<String>,
+    /// Optional image name, default to "app", only used if multiple images are built within one repo
+    #[arg(long)]
+    image_name: Option<String>,
+    /// Optioanl reference type, default to "branch"
+    #[arg(long)]
+    ref_type: Option<RefType>,
+    /// Optional reference value, default to "main"
+    #[arg(long)]
+    ref_val: Option<String>,
+    /// Optional mode of the build, default to "light"
+    #[arg(long)]
+    build_mode: Option<BuildMode>,
+    /// Optional cpu resource request, default to "2"
+    #[arg(long)]
+    cpu: Option<String>,
+    /// Optional memory resource request, default to "4Gi"
+    #[arg(long)]
+    memory: Option<String>,
+    /// Optional disk resource request, default to "10Gi"
+    #[arg(long)]
+    disk: Option<String>,
+    /// Optional build args to pass to the docker build command
+    #[arg(long)]
+    build_args: Vec<String>,
+    /// Optional flag to force build even if build pod already exists
+    #[arg(short = 'f', long)]
+    force: bool,
+    /// Optional flag to target the image, used for multi-stage builds
+    #[arg(short = 't', long)]
+    image_target: Option<String>,
+    /// Optional arg to speciy the org to build the image for, default to "mystenlabs"
+    #[arg(short = 'o', long)]
+    org: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+pub struct ImageQueryArgs {
+    #[arg(short, long)]
+    repo_name: String,
+    #[arg(short, long)]
+    watch: bool,
+    #[arg(short, long)]
+    limit: Option<u32>,
+}
+
 #[derive(clap::Subcommand, Debug)]
 pub enum ImageAction {
     #[command(name = "build")]
-    Build {
-        /// The name of the git repository within the mystenlabs org
-        #[arg(short, long)]
-        repo_name: String,
-        /// The path to the dockerfile within the source code repository given by `--repo_name`
-        #[arg(short, long)]
-        dockerfile: String,
-        /// Optional repo region, default to "us-central1"
-        #[arg(long)]
-        repo_region: Option<RepoRegion>,
-        /// Optional image tags, default to ""
-        #[arg(long)]
-        image_tag: Option<String>,
-        /// Optional image name, default to "app", only used if multiple images are built within one repo
-        #[arg(long)]
-        image_name: Option<String>,
-        /// Optioanl reference type, default to "branch"
-        #[arg(long)]
-        ref_type: Option<RefType>,
-        /// Optional reference value, default to "main"
-        #[arg(long)]
-        ref_val: Option<String>,
-        /// Optional mode of the build, default to "light"
-        #[arg(long)]
-        build_mode: Option<BuildMode>,
-        /// Optional cpu resource request, default to "2"
-        #[arg(long)]
-        cpu: Option<String>,
-        /// Optional memory resource request, default to "4Gi"
-        #[arg(long)]
-        memory: Option<String>,
-        /// Optional disk resource request, default to "10Gi"
-        #[arg(long)]
-        disk: Option<String>,
-        /// Optional build args to pass to the docker build command
-        #[arg(long)]
-        build_args: Vec<String>,
-        /// Optional flag to force build even if build pod already exists
-        #[arg(short = 'f', long)]
-        force: bool,
-        /// Optional flag to target the image, used for multi-stage builds
-        #[arg(short = 't', long)]
-        image_target: Option<String>,
-        /// Optional arg to speciy the org to build the image for, default to "mystenlabs"
-        #[arg(short = 'o', long)]
-        org: Option<String>,
-    },
+    Build(ImageBuildArgs),
     #[command(name = "query")]
-    Query {
-        #[arg(short, long)]
-        repo_name: String,
-        #[arg(short, long)]
-        watch: bool,
-        #[arg(short, long)]
-        limit: Option<u32>,
-    },
+    Query(ImageQueryArgs),
     #[command(name = "status")]
     Status {
         #[arg(short = 'r', long)]
@@ -319,7 +325,7 @@ async fn get_status_table(resp: reqwest::Response) -> Result<tabled::Table> {
     Ok(tabled.with(Style::rounded()).to_owned())
 }
 
-async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
+pub async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
     let req = generate_image_request(token, action);
 
     let resp = req.send().await?;
@@ -329,7 +335,7 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
 
     if status.is_success() {
         match action {
-            ImageAction::Build {
+            ImageAction::Build(ImageBuildArgs {
                 repo_name,
                 dockerfile,
                 image_name,
@@ -345,7 +351,7 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 force: _,
                 image_target,
                 org: _,
-            } => {
+            }) => {
                 let ref_type = ref_type.clone().unwrap_or(RefType::Branch);
                 let ref_val = ref_val.clone().unwrap_or("main".to_string());
                 let ref_name = format!("{}:{}", ref_type, ref_val);
@@ -373,11 +379,11 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                     utc_to_local_time(json_resp.start_time).green()
                 );
             }
-            ImageAction::Query {
+            ImageAction::Query(ImageQueryArgs {
                 repo_name,
                 watch,
                 limit: _,
-            } => {
+            }) => {
                 if !*watch {
                     println!("Requested query for repo: {}", repo_name.green());
                     let status_table = get_status_table(resp).await?.to_string();
@@ -515,7 +521,7 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
     let client = reqwest::Client::new();
     let api_server = get_api_server();
     let req = match action {
-        ImageAction::Build {
+        ImageAction::Build(ImageBuildArgs {
             repo_name,
             dockerfile,
             image_name,
@@ -531,7 +537,7 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
             force,
             image_target,
             org,
-        } => {
+        }) => {
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
             let req = client.post(full_url);
@@ -584,11 +590,11 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
             debug!("req body: {:?}", body);
             req.json(&body).headers(generate_headers_with_auth(token))
         }
-        ImageAction::Query {
+        ImageAction::Query(ImageQueryArgs {
             repo_name,
             limit,
             watch: _,
-        } => {
+        }) => {
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
             let req = client.get(full_url);

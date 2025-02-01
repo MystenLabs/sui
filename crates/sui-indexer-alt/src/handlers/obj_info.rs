@@ -192,7 +192,8 @@ mod tests {
 
     use super::*;
 
-    // A helper function to return all entries in the obj_info table sorted by object_id and cp_sequence_number.
+    // A helper function to return all entries in the obj_info table sorted by object_id and
+    // cp_sequence_number.
     async fn get_all_obj_info(conn: &mut db::Connection<'_>) -> Result<Vec<StoredObjInfo>> {
         let query = obj_info::table.load(conn).await?;
         Ok(query)

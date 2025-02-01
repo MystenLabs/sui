@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 72;
+const MAX_PROTOCOL_VERSION: u64 = 73;
 
 // Record history of protocol version allocations here:
 //
@@ -208,6 +208,11 @@ const MAX_PROTOCOL_VERSION: u64 = 72;
 //             Max gas budget moved to 50_000 SUI
 //             Max gas price moved to 50 SUI
 //             Variants as type nodes.
+// Version 73: Enable new marker table version.
+//             Enable consensus garbage collection and new commit rule for devnet.
+//             Enable zstd compression for consensus tonic network in testnet.
+//             Enable smart ancestor selection in mainnet.
+//             Enable probing for accepted rounds in round prober in mainnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -605,6 +610,10 @@ struct FeatureFlags {
     // Variants count as nodes
     #[serde(skip_serializing_if = "is_false")]
     variant_nodes: bool,
+
+    // If true, enable zstd compression for consensus tonic network.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_zstd_compression: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -639,6 +648,7 @@ pub enum PerObjectCongestionControlMode {
     TotalGasBudget,        // Use txn gas budget as execution cost.
     TotalTxCount,          // Use total txn count as execution cost.
     TotalGasBudgetWithCap, // Use txn gas budget as execution cost with a cap.
+    ExecutionTimeEstimate, // Use execution time estimate as execution cost.
 }
 
 impl PerObjectCongestionControlMode {
@@ -1358,6 +1368,9 @@ pub struct ProtocolConfig {
     /// SIP-45: K in the formula `amplification_factor = max(0, gas_price / reference_gas_price - K)`.
     /// This is the threshold for activating consensus amplification.
     sip_45_consensus_amplification_threshold: Option<u64>,
+
+    /// Enables use of v2 of the object per-epoch marker table with FullObjectID keys.
+    use_object_per_epoch_marker_table_v2: Option<bool>,
 }
 
 // feature flags
@@ -1714,7 +1727,12 @@ impl ProtocolConfig {
     }
 
     pub fn gc_depth(&self) -> u32 {
-        self.consensus_gc_depth.unwrap_or(0)
+        if cfg!(msim) {
+            // exercise a very low gc_depth
+            5
+        } else {
+            self.consensus_gc_depth.unwrap_or(0)
+        }
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {
@@ -1765,6 +1783,10 @@ impl ProtocolConfig {
 
     pub fn variant_nodes(&self) -> bool {
         self.feature_flags.variant_nodes
+    }
+
+    pub fn consensus_zstd_compression(&self) -> bool {
+        self.feature_flags.consensus_zstd_compression
     }
 }
 
@@ -2300,6 +2322,8 @@ impl ProtocolConfig {
             gas_budget_based_txn_cost_absolute_cap_commit_count: None,
 
             sip_45_consensus_amplification_threshold: None,
+
+            use_object_per_epoch_marker_table_v2: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3149,6 +3173,27 @@ impl ProtocolConfig {
                     cfg.max_gas_price = Some(50_000_000_000);
 
                     cfg.feature_flags.variant_nodes = true;
+                }
+                73 => {
+                    // Enable new marker table version.
+                    cfg.use_object_per_epoch_marker_table_v2 = Some(true);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Assuming a round rate of max 15/sec, then using a gc depth of 60 allow blocks within a window of ~4 seconds
+                        // to be included before be considered garbage collected.
+                        cfg.consensus_gc_depth = Some(60);
+                    }
+
+                    if chain != Chain::Mainnet {
+                        // Enable zstd compression for consensus in testnet
+                        cfg.feature_flags.consensus_zstd_compression = true;
+                    }
+
+                    // Enable smart ancestor selection for mainnet
+                    cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                    // Enable probing for accepted rounds in round prober for mainnet
+                    cfg.feature_flags
+                        .consensus_round_prober_probe_accepted_rounds = true;
                 }
                 // Use this template when making changes:
                 //

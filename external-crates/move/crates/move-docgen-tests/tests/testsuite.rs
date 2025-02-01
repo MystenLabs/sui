@@ -1,8 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_docgen::{Docgen, DocgenOptions};
-use move_model_2::source_model;
+use move_command_line_common::testing::insta_assert;
+use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_package::compilation::model_builder;
 use move_package::BuildConfig;
 use std::path::Path;
@@ -11,7 +11,7 @@ use tempfile::TempDir;
 
 const ROOT_DOC_TEMPLATE_NAME: &str = "root_template.md";
 
-fn options(root_doc_template: Option<&Path>) -> DocgenOptions {
+fn options(root_doc_template: Option<&Path>, flags: DocgenFlags) -> DocgenOptions {
     DocgenOptions {
         output_directory: "output".to_string(),
         root_doc_templates: root_doc_template
@@ -19,11 +19,26 @@ fn options(root_doc_template: Option<&Path>) -> DocgenOptions {
             .map(|p| p.to_string_lossy().to_string())
             .collect(),
         compile_relative_to_output_dir: true,
+        flags,
         ..DocgenOptions::default()
     }
 }
 
-fn test_move(toml_path: &Path) -> datatest_stable::Result<()> {
+fn test_default(toml_path: &Path) -> datatest_stable::Result<()> {
+    let flags = DocgenFlags::default();
+    assert!(!flags.exclude_impl);
+    assert!(!flags.no_collapsed_sections);
+    test_impl(toml_path, flags, "default")
+}
+
+fn test_collapsed_sections(toml_path: &Path) -> datatest_stable::Result<()> {
+    let mut flags = DocgenFlags::default();
+    assert!(!flags.exclude_impl);
+    flags.no_collapsed_sections = true;
+    test_impl(toml_path, flags, "collapsed_sections")
+}
+
+fn test_impl(toml_path: &Path, flags: DocgenFlags, test_case: &str) -> datatest_stable::Result<()> {
     let test_dir = toml_path.parent().unwrap();
     let output_dir = TempDir::new()?;
     let config = BuildConfig {
@@ -42,34 +57,30 @@ fn test_move(toml_path: &Path) -> datatest_stable::Result<()> {
     } else {
         None
     };
-    let mut options = options(root_doc_template);
-
-    assert!(!options.flags.exclude_impl);
-    assert!(!options.flags.exclude_impl);
-    test_move_one(&test_dir.join("default"), &model, &options)?;
-
-    assert!(!options.flags.no_collapsed_sections);
-    options.flags.no_collapsed_sections = true;
-    test_move_one(&test_dir.join("collapsed_sections"), &model, &options)?;
-
+    let options = options(root_doc_template, flags);
+    let docgen = Docgen::new(&model, &options);
+    let file_contents = docgen.gen(&model)?;
+    let [(path, contents)] = file_contents
+        .iter()
+        .filter(|(path, _contents)| !path.contains("dependencies"))
+        .collect::<Vec<_>>()
+        .try_into()
+        .expect("Test infra supports only one output file currently");
+    insta_assert! {
+        name: path,
+        input_path: toml_path,
+        contents: contents,
+        info: &options.flags,
+        suffix: test_case,
+    };
     Ok(())
 }
 
-fn test_move_one(
-    out_dir: &Path,
-    model: &source_model::Model,
-    doc_options: &DocgenOptions,
-) -> anyhow::Result<()> {
-    let docgen = Docgen::new(model, doc_options);
-    let file_contents = docgen.gen(model)?;
-    for (path, contents) in file_contents {
-        if path.contains("dependencies") {
-            continue;
-        }
-        let out_path = out_dir.join(&path).to_string_lossy().to_string();
-        insta::assert_snapshot!(out_path, contents);
-    }
-    Ok(())
-}
-
-datatest_stable::harness!(test_move, "tests/move/", r".*\.toml",);
+datatest_stable::harness!(
+    test_default,
+    "tests/move/",
+    r".*\.toml",
+    test_collapsed_sections,
+    "tests/move/",
+    r".*\.toml"
+);

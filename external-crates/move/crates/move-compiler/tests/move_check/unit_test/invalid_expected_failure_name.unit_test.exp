@@ -1,9 +1,0 @@
-error[E10003]: invalid attribute value
-  ┌─ tests/move_check/unit_test/invalid_expected_failure_name.move:4:24
-  │
-4 │     #[expected_failure=1]
-  │       -----------------^
-  │       │                │
-  │       │                Invalid expected failure code assignment
-  │       Expect an #[expected_failure(...)] attribute for error specification
-

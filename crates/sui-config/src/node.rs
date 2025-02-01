@@ -204,6 +204,12 @@ pub struct NodeConfig {
     /// By default, write stall is enabled on validators but not on fullnodes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_db_write_stall: Option<bool>,
+
+    /// Size of the channel used for buffering local execution time observations.
+    ///
+    /// If unspecified, this will default to `128`.
+    #[serde(default = "default_local_execution_time_channel_capacity")]
+    pub local_execution_time_channel_capacity: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -544,6 +550,10 @@ pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
     128
 }
 
+pub fn default_local_execution_time_channel_capacity() -> usize {
+    128
+}
+
 pub fn bool_true() -> bool {
     true
 }
@@ -871,6 +881,13 @@ pub struct AuthorityStorePruningConfig {
     pub killswitch_tombstone_pruning: bool,
     #[serde(default = "default_smoothing", skip_serializing_if = "is_true")]
     pub smooth: bool,
+    /// Enables the compaction filter for pruning the objects table.
+    /// If disabled, a range deletion approach is used instead.
+    /// While it is generally safe to switch between the two modes,
+    /// switching from the compaction filter approach back to range deletion
+    /// may result in some old versions that will never be pruned.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub enable_compaction_filter: bool,
 }
 
 fn default_num_latest_epoch_dbs_to_retain() -> usize {
@@ -910,6 +927,7 @@ impl Default for AuthorityStorePruningConfig {
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
             smooth: true,
+            enable_compaction_filter: cfg!(test) || cfg!(msim),
         }
     }
 }

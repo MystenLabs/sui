@@ -78,3 +78,129 @@ impl Handler for EvEmitMod {
         Ok(diesel::delete(filter).execute(conn).await?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diesel_async::RunQueryDsl;
+    use sui_indexer_alt_framework::handlers::cp_sequence_numbers::CpSequenceNumbers;
+    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_schema::MIGRATIONS;
+    use sui_types::event::Event;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
+
+    // A helper function to return all entries in the ev_emit_mod table sorted by package, module,
+    // tx_sequence_number, and sender.
+    async fn get_all_ev_emit_mod(conn: &mut db::Connection<'_>) -> Result<Vec<StoredEvEmitMod>> {
+        let query = ev_emit_mod::table
+            .order_by((
+                ev_emit_mod::tx_sequence_number,
+                ev_emit_mod::sender,
+                ev_emit_mod::package,
+                ev_emit_mod::module,
+            ))
+            .load(conn)
+            .await?;
+        Ok(query)
+    }
+
+    #[tokio::test]
+    async fn test_ev_emit_mod_pruning_complains_if_no_mapping() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.db().connect().await.unwrap();
+
+        let result = EvEmitMod.prune(0, 2, &mut conn).await;
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "No checkpoint mapping found for checkpoint 0"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ev_emit_mod_no_events() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.db().connect().await.unwrap();
+
+        let checkpoint = Arc::new(
+            TestCheckpointDataBuilder::new(0)
+                .start_transaction(0)
+                .finish_transaction()
+                .build_checkpoint(),
+        );
+
+        let values = EvEmitMod.process(&checkpoint).unwrap();
+        EvEmitMod::commit(&values, &mut conn).await.unwrap();
+
+        assert_eq!(values.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_ev_emit_mod_single_event() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.db().connect().await.unwrap();
+
+        let checkpoint = Arc::new(
+            TestCheckpointDataBuilder::new(0)
+                .start_transaction(0)
+                .with_events(vec![Event::random_for_testing()])
+                .finish_transaction()
+                .build_checkpoint(),
+        );
+
+        // Process checkpoint with one event
+        let values = EvEmitMod.process(&checkpoint).unwrap();
+        EvEmitMod::commit(&values, &mut conn).await.unwrap();
+
+        let events = get_all_ev_emit_mod(&mut conn).await.unwrap();
+        assert_eq!(events.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_ev_emit_mod_prune_events() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.db().connect().await.unwrap();
+
+        // 0th checkpoint has no events
+        let mut builder = TestCheckpointDataBuilder::new(0);
+        builder = builder.start_transaction(0).finish_transaction();
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = EvEmitMod.process(&checkpoint).unwrap();
+        EvEmitMod::commit(&values, &mut conn).await.unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+
+        // 1st checkpoint has 1 event
+        builder = builder
+            .start_transaction(0)
+            .with_events(vec![Event::random_for_testing()])
+            .finish_transaction();
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = EvEmitMod.process(&checkpoint).unwrap();
+        EvEmitMod::commit(&values, &mut conn).await.unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+
+        // 2nd checkpoint has 2 events
+        builder = builder
+            .start_transaction(0)
+            .with_events(vec![
+                Event::random_for_testing(),
+                Event::random_for_testing(),
+            ])
+            .finish_transaction();
+        let checkpoint = Arc::new(builder.build_checkpoint());
+        let values = EvEmitMod.process(&checkpoint).unwrap();
+        EvEmitMod::commit(&values, &mut conn).await.unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+
+        // Prune checkpoints from `[0, 2)`, expect 2 events remaining
+        let rows_pruned = EvEmitMod.prune(0, 2, &mut conn).await.unwrap();
+        assert_eq!(rows_pruned, 1);
+
+        let remaining_events = get_all_ev_emit_mod(&mut conn).await.unwrap();
+        assert_eq!(remaining_events.len(), 2);
+    }
+}

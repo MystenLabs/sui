@@ -123,51 +123,58 @@ impl RpcService {
             .get_checkpoint_contents_by_digest(&verified_summary.content_digest)
             .ok_or(CheckpointNotFoundError(checkpoint))?;
 
-        let sui_types::full_checkpoint_content::CheckpointData {
-            checkpoint_summary,
-            checkpoint_contents,
-            transactions,
-        } = self
+        let checkpoint = self
             .reader
             .inner()
             .get_checkpoint_data(verified_summary, checkpoint_contents)?;
 
-        let sequence_number = checkpoint_summary.sequence_number;
-        let digest = checkpoint_summary.digest().to_owned().into();
-        let (summary, signature) = checkpoint_summary.into_data_and_sig();
-
-        let summary_bcs = options
-            .include_summary_bcs()
-            .then(|| bcs::to_bytes(&summary))
-            .transpose()?;
-        let contents_bcs = options
-            .include_contents_bcs()
-            .then(|| bcs::to_bytes(&checkpoint_contents))
-            .transpose()?;
-
-        let transactions = transactions
-            .into_iter()
-            .map(|transaction| transaction_to_checkpoint_transaction(transaction, options))
-            .collect::<Result<_>>()?;
-
-        FullCheckpointResponse {
-            sequence_number,
-            digest,
-            summary: options
-                .include_summary()
-                .then(|| summary.try_into())
-                .transpose()?,
-            summary_bcs,
-            signature: options.include_signature().then(|| signature.into()),
-            contents: options
-                .include_contents()
-                .then(|| checkpoint_contents.try_into())
-                .transpose()?,
-            contents_bcs,
-            transactions,
-        }
-        .pipe(Ok)
+        checkpoint_data_to_full_checkpoint_response(checkpoint, options)
     }
+}
+
+pub(crate) fn checkpoint_data_to_full_checkpoint_response(
+    sui_types::full_checkpoint_content::CheckpointData {
+        checkpoint_summary,
+        checkpoint_contents,
+        transactions,
+    }: sui_types::full_checkpoint_content::CheckpointData,
+    options: &GetFullCheckpointOptions,
+) -> Result<FullCheckpointResponse> {
+    let sequence_number = checkpoint_summary.sequence_number;
+    let digest = checkpoint_summary.digest().to_owned().into();
+    let (summary, signature) = checkpoint_summary.into_data_and_sig();
+
+    let summary_bcs = options
+        .include_summary_bcs()
+        .then(|| bcs::to_bytes(&summary))
+        .transpose()?;
+    let contents_bcs = options
+        .include_contents_bcs()
+        .then(|| bcs::to_bytes(&checkpoint_contents))
+        .transpose()?;
+
+    let transactions = transactions
+        .into_iter()
+        .map(|transaction| transaction_to_checkpoint_transaction(transaction, options))
+        .collect::<Result<_>>()?;
+
+    FullCheckpointResponse {
+        sequence_number,
+        digest,
+        summary: options
+            .include_summary()
+            .then(|| summary.try_into())
+            .transpose()?,
+        summary_bcs,
+        signature: options.include_signature().then(|| signature.into()),
+        contents: options
+            .include_contents()
+            .then(|| checkpoint_contents.try_into())
+            .transpose()?,
+        contents_bcs,
+        transactions,
+    }
+    .pipe(Ok)
 }
 
 fn transaction_to_checkpoint_transaction(

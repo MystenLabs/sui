@@ -1,6 +1,0 @@
-warning[W00001]: DEPRECATED. will be removed
-  ┌─ tests/move_check/parser/spec_lambda_return_missing.move:2:10
-  │
-2 │     spec fun do(f: ||) { }
-  │          ^^^^^^^^^^^^^^^^^ Specification blocks are deprecated and are no longer used
-

@@ -210,6 +210,7 @@ async fn run_upgrade(
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        verify_compatibility: true,
     }
     .execute(context)
     .await?;

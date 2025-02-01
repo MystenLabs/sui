@@ -1,14 +1,14 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use super::types::proto_to_timestamp_ms;
 use super::types::timestamp_ms_to_proto;
 use super::TryFromProtoError;
 use tap::Pipe;
 
-#[rustfmt::skip]
-#[path = "generated/sui.node.v2.rs"]
-mod generated;
-pub use generated::*;
+pub mod v2 {
+    include!("generated/sui.node.v2.rs");
 
-mod file_descriptor_set {
     /// Byte encoded FILE_DESCRIPTOR_SET.
     pub const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!("generated/sui.node.v2.fds.bin");
 
@@ -23,7 +23,26 @@ mod file_descriptor_set {
         }
     }
 }
-pub use file_descriptor_set::FILE_DESCRIPTOR_SET;
+
+pub mod v2alpha {
+    include!("generated/sui.node.v2alpha.rs");
+
+    /// Byte encoded FILE_DESCRIPTOR_SET.
+    pub const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!("generated/sui.node.v2alpha.fds.bin");
+
+    #[cfg(test)]
+    mod tests {
+        use super::FILE_DESCRIPTOR_SET;
+        use prost::Message as _;
+
+        #[test]
+        fn file_descriptor_set_is_valid() {
+            prost_types::FileDescriptorSet::decode(FILE_DESCRIPTOR_SET).unwrap();
+        }
+    }
+}
+
+use v2::*;
 
 //
 // BalanceChange
@@ -1482,9 +1501,9 @@ impl TryFrom<&ExecuteTransactionResponse> for crate::types::ExecuteTransactionRe
 // EffectsFinality
 //
 
-impl From<crate::types::EffectsFinality> for crate::proto::node::EffectsFinality {
+impl From<crate::types::EffectsFinality> for crate::proto::node::v2::EffectsFinality {
     fn from(value: crate::types::EffectsFinality) -> Self {
-        use crate::proto::node::effects_finality::Finality;
+        use crate::proto::node::v2::effects_finality::Finality;
         use crate::types::EffectsFinality::*;
 
         let finality = match value {
@@ -1499,11 +1518,11 @@ impl From<crate::types::EffectsFinality> for crate::proto::node::EffectsFinality
     }
 }
 
-impl TryFrom<&crate::proto::node::EffectsFinality> for crate::types::EffectsFinality {
+impl TryFrom<&crate::proto::node::v2::EffectsFinality> for crate::types::EffectsFinality {
     type Error = crate::proto::TryFromProtoError;
 
-    fn try_from(value: &crate::proto::node::EffectsFinality) -> Result<Self, Self::Error> {
-        use crate::proto::node::effects_finality::Finality;
+    fn try_from(value: &crate::proto::node::v2::EffectsFinality) -> Result<Self, Self::Error> {
+        use crate::proto::node::v2::effects_finality::Finality;
 
         match value
             .finality
@@ -1519,400 +1538,5 @@ impl TryFrom<&crate::proto::node::EffectsFinality> for crate::types::EffectsFina
             Finality::QuorumExecuted(()) => Self::QuorumExecuted,
         }
         .pipe(Ok)
-    }
-}
-
-// NOTE: This is a temporary instantiation of the Node service using the old `Node` name to ensure
-// compatibility for clients for a single release since the service was renamed to `NodeService`.
-// To be removed in 1.41
-/// Generated server implementations.
-pub mod node_server {
-    #![allow(
-        unused_variables,
-        dead_code,
-        missing_docs,
-        clippy::wildcard_imports,
-        clippy::let_unit_value
-    )]
-    use super::node_service_server::NodeService as Node;
-    use tonic::codegen::*;
-    #[derive(Debug)]
-    pub struct NodeServer<T> {
-        inner: Arc<T>,
-        accept_compression_encodings: EnabledCompressionEncodings,
-        send_compression_encodings: EnabledCompressionEncodings,
-        max_decoding_message_size: Option<usize>,
-        max_encoding_message_size: Option<usize>,
-    }
-    impl<T> NodeServer<T> {
-        pub fn new(inner: T) -> Self {
-            Self::from_arc(Arc::new(inner))
-        }
-        pub fn from_arc(inner: Arc<T>) -> Self {
-            Self {
-                inner,
-                accept_compression_encodings: Default::default(),
-                send_compression_encodings: Default::default(),
-                max_decoding_message_size: None,
-                max_encoding_message_size: None,
-            }
-        }
-        pub fn with_interceptor<F>(inner: T, interceptor: F) -> InterceptedService<Self, F>
-        where
-            F: tonic::service::Interceptor,
-        {
-            InterceptedService::new(Self::new(inner), interceptor)
-        }
-        /// Enable decompressing requests with the given encoding.
-        #[must_use]
-        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
-            self.accept_compression_encodings.enable(encoding);
-            self
-        }
-        /// Compress responses with the given encoding, if the client supports it.
-        #[must_use]
-        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
-            self.send_compression_encodings.enable(encoding);
-            self
-        }
-        /// Limits the maximum size of a decoded message.
-        ///
-        /// Default: `4MB`
-        #[must_use]
-        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
-            self.max_decoding_message_size = Some(limit);
-            self
-        }
-        /// Limits the maximum size of an encoded message.
-        ///
-        /// Default: `usize::MAX`
-        #[must_use]
-        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
-            self.max_encoding_message_size = Some(limit);
-            self
-        }
-    }
-    impl<T, B> tonic::codegen::Service<http::Request<B>> for NodeServer<T>
-    where
-        T: Node,
-        B: Body + std::marker::Send + 'static,
-        B::Error: Into<StdError> + std::marker::Send + 'static,
-    {
-        type Response = http::Response<tonic::body::BoxBody>;
-        type Error = std::convert::Infallible;
-        type Future = BoxFuture<Self::Response, Self::Error>;
-        fn poll_ready(
-            &mut self,
-            _cx: &mut Context<'_>,
-        ) -> Poll<std::result::Result<(), Self::Error>> {
-            Poll::Ready(Ok(()))
-        }
-        fn call(&mut self, req: http::Request<B>) -> Self::Future {
-            match req.uri().path() {
-                "/sui.node.v2.Node/GetNodeInfo" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetNodeInfoSvc<T: Node>(pub Arc<T>);
-                    impl<T: Node> tonic::server::UnaryService<()> for GetNodeInfoSvc<T> {
-                        type Response = super::GetNodeInfoResponse;
-                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
-                        fn call(&mut self, request: tonic::Request<()>) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as Node>::get_node_info(
-                                    &inner,
-                                    request.map(|_| super::GetNodeInfoRequest {}),
-                                )
-                                .await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = GetNodeInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/sui.node.v2.Node/GetCommittee" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetCommitteeSvc<T: Node>(pub Arc<T>);
-                    impl<T: Node> tonic::server::UnaryService<super::GetCommitteeRequest> for GetCommitteeSvc<T> {
-                        type Response = super::GetCommitteeResponse;
-                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::GetCommitteeRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut =
-                                async move { <T as Node>::get_committee(&inner, request).await };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = GetCommitteeSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/sui.node.v2.Node/GetObject" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetObjectSvc<T: Node>(pub Arc<T>);
-                    impl<T: Node> tonic::server::UnaryService<super::GetObjectRequest> for GetObjectSvc<T> {
-                        type Response = super::GetObjectResponse;
-                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::GetObjectRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move { <T as Node>::get_object(&inner, request).await };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = GetObjectSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/sui.node.v2.Node/GetTransaction" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetTransactionSvc<T: Node>(pub Arc<T>);
-                    impl<T: Node> tonic::server::UnaryService<super::GetTransactionRequest> for GetTransactionSvc<T> {
-                        type Response = super::GetTransactionResponse;
-                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::GetTransactionRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut =
-                                async move { <T as Node>::get_transaction(&inner, request).await };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = GetTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/sui.node.v2.Node/GetCheckpoint" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetCheckpointSvc<T: Node>(pub Arc<T>);
-                    impl<T: Node> tonic::server::UnaryService<super::GetCheckpointRequest> for GetCheckpointSvc<T> {
-                        type Response = super::GetCheckpointResponse;
-                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::GetCheckpointRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut =
-                                async move { <T as Node>::get_checkpoint(&inner, request).await };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = GetCheckpointSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/sui.node.v2.Node/GetFullCheckpoint" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetFullCheckpointSvc<T: Node>(pub Arc<T>);
-                    impl<T: Node> tonic::server::UnaryService<super::GetFullCheckpointRequest>
-                        for GetFullCheckpointSvc<T>
-                    {
-                        type Response = super::GetFullCheckpointResponse;
-                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::GetFullCheckpointRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as Node>::get_full_checkpoint(&inner, request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = GetFullCheckpointSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/sui.node.v2.Node/ExecuteTransaction" => {
-                    #[allow(non_camel_case_types)]
-                    struct ExecuteTransactionSvc<T: Node>(pub Arc<T>);
-                    impl<T: Node> tonic::server::UnaryService<super::ExecuteTransactionRequest>
-                        for ExecuteTransactionSvc<T>
-                    {
-                        type Response = super::ExecuteTransactionResponse;
-                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::ExecuteTransactionRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as Node>::execute_transaction(&inner, request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = ExecuteTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                _ => Box::pin(async move {
-                    let mut response = http::Response::new(empty_body());
-                    let headers = response.headers_mut();
-                    headers.insert(
-                        tonic::Status::GRPC_STATUS,
-                        (tonic::Code::Unimplemented as i32).into(),
-                    );
-                    headers.insert(
-                        http::header::CONTENT_TYPE,
-                        tonic::metadata::GRPC_CONTENT_TYPE,
-                    );
-                    Ok(response)
-                }),
-            }
-        }
-    }
-    impl<T> Clone for NodeServer<T> {
-        fn clone(&self) -> Self {
-            let inner = self.inner.clone();
-            Self {
-                inner,
-                accept_compression_encodings: self.accept_compression_encodings,
-                send_compression_encodings: self.send_compression_encodings,
-                max_decoding_message_size: self.max_decoding_message_size,
-                max_encoding_message_size: self.max_encoding_message_size,
-            }
-        }
-    }
-    /// Generated gRPC service name
-    pub const SERVICE_NAME: &str = "sui.node.v2.Node";
-    impl<T> tonic::server::NamedService for NodeServer<T> {
-        const NAME: &'static str = SERVICE_NAME;
     }
 }

@@ -2259,7 +2259,7 @@ Set the voting power of this validator, called only from validator_set.
 
 
 
-<pre><code><b>fun</b> is_equal_some_and_valueT(a: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;, b: &T): bool
+<pre><code><b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_is_equal_some_and_value">is_equal_some_and_value</a>&lt;T&gt;(a: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;, b: &T): bool
 </code></pre>
 
 
@@ -2287,7 +2287,7 @@ Set the voting power of this validator, called only from validator_set.
 
 
 
-<pre><code><b>fun</b> is_equal_someT(a: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;, b: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;): bool
+<pre><code><b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_is_equal_some">is_equal_some</a>&lt;T&gt;(a: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;, b: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;T&gt;): bool
 </code></pre>
 
 

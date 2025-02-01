@@ -1,6 +1,0 @@
-warning[W00001]: DEPRECATED. will be removed
-  ┌─ tests/move_check/typing/spec_block_ok.move:3:10
-  │
-3 │         (spec {}: ())
-  │          ^^^^^^^ Specification blocks are deprecated and are no longer used
-

@@ -12,6 +12,7 @@ use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
 use consensus_core::{CommitConsumerMonitor, TransactionIndex, VerifiedBlock};
 use lru::LruCache;
+use mysten_common::debug_fatal;
 use mysten_metrics::{
     monitored_future,
     monitored_mpsc::{self, UnboundedReceiver},
@@ -29,7 +30,7 @@ use sui_types::{
     executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
     messages_consensus::{
         AuthorityIndex, ConsensusDeterminedVersionAssignments, ConsensusTransaction,
-        ConsensusTransactionKey, ConsensusTransactionKind,
+        ConsensusTransactionKey, ConsensusTransactionKind, ExecutionTimeObservation,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
@@ -353,7 +354,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         &parsed.transaction.kind
                     {
                         // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
-                        error!("BUG: saw deprecated RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}")
+                        debug_fatal!(
+                            "BUG: saw deprecated RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}"
+                        );
                     } else {
                         let transaction =
                             SequencedConsensusTransactionKind::External(parsed.transaction);
@@ -584,6 +587,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
                 "owned_user_transaction"
             }
         }
+        ConsensusTransactionKind::ExecutionTimeObservation(_) => "execution_time_observation",
     }
 }
 
@@ -718,6 +722,18 @@ impl SequencedConsensusTransaction {
             matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..))
         } else {
             false
+        }
+    }
+
+    pub fn try_take_execution_time_observation(&mut self) -> Option<ExecutionTimeObservation> {
+        if let SequencedConsensusTransactionKind::External(ConsensusTransaction {
+            kind: ConsensusTransactionKind::ExecutionTimeObservation(observation),
+            ..
+        }) = &mut self.transaction
+        {
+            Some(std::mem::take(observation))
+        } else {
+            None
         }
     }
 

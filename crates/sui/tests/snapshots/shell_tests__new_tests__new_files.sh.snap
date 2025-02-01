@@ -1,0 +1,32 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/new_tests/new_files.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# basic test that sui move new outputs correct files
+sui move new example
+echo ==== files in project ====
+ls -A example
+echo ==== files in sources ====
+ls -A example/sources
+echo ==== files in tests =====
+ls -A example/tests
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+==== files in project ====
+.gitignore
+Move.toml
+sources
+tests
+==== files in sources ====
+example.move
+==== files in tests =====
+example_tests.move
+
+----- stderr -----

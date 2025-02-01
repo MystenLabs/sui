@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 use sui_http::ServerHandle;
 use sui_tls::AllowPublicKeys;
 use tokio_stream::{iter, Iter};
-use tonic::{Request, Response, Streaming};
+use tonic::{codec::CompressionEncoding, Request, Response, Streaming};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
 use tracing::{debug, error, info, trace, warn};
 
@@ -79,9 +79,16 @@ impl TonicClient {
             .channel_pool
             .get_channel(self.network_keypair.clone(), peer, timeout)
             .await?;
-        Ok(ConsensusServiceClient::new(channel)
+        let mut client = ConsensusServiceClient::new(channel)
             .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit))
+            .max_decoding_message_size(config.message_size_limit);
+
+        if self.context.protocol_config.consensus_zstd_compression() {
+            client = client
+                .send_compressed(CompressionEncoding::Zstd)
+                .accept_compressed(CompressionEncoding::Zstd);
+        }
+        Ok(client)
     }
 }
 
@@ -731,13 +738,19 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             )
             .layer_fn(|service| mysten_network::grpc_timeout::GrpcTimeout::new(service, None));
 
-        let consensus_service = tonic::service::Routes::new(
-            ConsensusServiceServer::new(service)
-                .max_encoding_message_size(config.message_size_limit)
-                .max_decoding_message_size(config.message_size_limit),
-        )
-        .into_axum_router()
-        .route_layer(layers);
+        let mut consensus_service_server = ConsensusServiceServer::new(service)
+            .max_encoding_message_size(config.message_size_limit)
+            .max_decoding_message_size(config.message_size_limit);
+
+        if self.context.protocol_config.consensus_zstd_compression() {
+            consensus_service_server = consensus_service_server
+                .send_compressed(CompressionEncoding::Zstd)
+                .accept_compressed(CompressionEncoding::Zstd);
+        }
+
+        let consensus_service = tonic::service::Routes::new(consensus_service_server)
+            .into_axum_router()
+            .route_layer(layers);
 
         let tls_server_config = sui_tls::create_rustls_server_config_with_client_verifier(
             self.network_keypair.clone().private_key().into_inner(),

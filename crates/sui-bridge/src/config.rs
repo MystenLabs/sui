@@ -268,6 +268,7 @@ impl BridgeNodeConfig {
             config_address,
             _weth_address,
             _usdt_address,
+            _wbtc_address,
         ) = get_eth_contract_addresses(bridge_proxy_address, &provider).await?;
         let config = EthBridgeConfig::new(config_address, provider.clone());
 

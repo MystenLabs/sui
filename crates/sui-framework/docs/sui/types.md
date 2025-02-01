@@ -20,7 +20,7 @@ Tests if the argument type is a one-time witness, that is a type with only one i
 across the entire code base.
 
 
-<pre><code><b>public</b> <b>fun</b> is_one_time_witnessT(_: &T): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/types.md#sui_types_is_one_time_witness">is_one_time_witness</a>&lt;T: drop&gt;(_: &T): bool
 </code></pre>
 
 

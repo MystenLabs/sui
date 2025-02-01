@@ -1393,7 +1393,9 @@ mod tests {
             let error_object = response.unwrap_err();
             let expected = expect!["-32000"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["task 1 panicked"];
+            let expected = expect![[
+                r#"task 1 panicked with message "MockKeyValueStore::multi_get(?, ?): No matching expectation found""#
+            ]];
             expected.assert_eq(error_object.message());
         }
 

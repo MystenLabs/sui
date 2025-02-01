@@ -602,7 +602,7 @@ mod test {
         let (kind, signer, _) = transaction_data.execution_parts();
         let input_objects = CheckedInputObjects::new_for_genesis(vec![]);
 
-        let (_inner_temp_store, _, effects, _execution_error) = executor
+        let (_inner_temp_store, _, effects, _timings, _execution_error) = executor
             .execute_transaction_to_effects(
                 &InMemoryStorage::new(Vec::new()),
                 &protocol_config,

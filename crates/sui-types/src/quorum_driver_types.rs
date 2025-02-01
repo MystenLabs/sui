@@ -36,14 +36,10 @@ pub enum QuorumDriverError {
     #[error("Invalid user signature: {0}.")]
     InvalidUserSignature(SuiError),
     #[error(
-        "Failed to sign transaction by a quorum of validators because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
-        conflicting_txes,
-        .retried_tx_status.map(|(tx, success)| tx),
-        .retried_tx_status.map(|(tx, success)| success),
+        "Failed to sign transaction by a quorum of validators because of locked objects: {conflicting_txes:?}",
     )]
     ObjectsDoubleUsed {
         conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
-        retried_tx_status: Option<(TransactionDigest, bool)>,
     },
     #[error("Transaction timed out before reaching finality")]
     TimeoutBeforeFinality,

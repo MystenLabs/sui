@@ -1,0 +1,5 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-compiler-transactional-tests/tests/control_flow/if_branch_diverges_8.move
+---
+processed 1 task

@@ -114,7 +114,7 @@ pub(super) fn format_param(
             name,
             type_arguments,
             ..
-        } if type_arguments.len() > 0 => {
+        } if !type_arguments.is_empty() => {
             format!(
                 "{}::{}::{}<{}>",
                 address.to_hex_literal(),

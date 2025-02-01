@@ -103,6 +103,7 @@ pub struct PrunerLayer {
     pub delay_ms: Option<u64>,
     pub retention: Option<u64>,
     pub max_chunk_size: Option<u64>,
+    pub prune_concurrency: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -229,11 +230,13 @@ impl CommitterLayer {
 
 impl PrunerLayer {
     pub fn finish(self, base: PrunerConfig) -> PrunerConfig {
+        check_extra("pruner", self.extra);
         PrunerConfig {
             interval_ms: self.interval_ms.unwrap_or(base.interval_ms),
             delay_ms: self.delay_ms.unwrap_or(base.delay_ms),
             retention: self.retention.unwrap_or(base.retention),
             max_chunk_size: self.max_chunk_size.unwrap_or(base.max_chunk_size),
+            prune_concurrency: self.prune_concurrency.unwrap_or(base.prune_concurrency),
         }
     }
 }
@@ -354,6 +357,7 @@ impl Merge for PrunerLayer {
                 (None, None) => None,
             },
             max_chunk_size: other.max_chunk_size.or(self.max_chunk_size),
+            prune_concurrency: other.prune_concurrency.or(self.prune_concurrency),
             extra: Default::default(),
         }
     }
@@ -451,6 +455,7 @@ impl From<PrunerConfig> for PrunerLayer {
             delay_ms: Some(config.delay_ms),
             retention: Some(config.retention),
             max_chunk_size: Some(config.max_chunk_size),
+            prune_concurrency: Some(config.prune_concurrency),
             extra: Default::default(),
         }
     }
@@ -618,6 +623,7 @@ mod tests {
             delay_ms: Some(100),
             retention: Some(200),
             max_chunk_size: Some(300),
+            prune_concurrency: Some(1),
             extra: Default::default(),
         };
 
@@ -626,6 +632,7 @@ mod tests {
             delay_ms: None,
             retention: Some(500),
             max_chunk_size: Some(600),
+            prune_concurrency: Some(2),
             extra: Default::default(),
         };
 
@@ -639,6 +646,7 @@ mod tests {
                 delay_ms: Some(100),
                 retention: Some(500),
                 max_chunk_size: Some(600),
+                prune_concurrency: Some(2),
                 extra: _,
             },
         );
@@ -650,6 +658,7 @@ mod tests {
                 delay_ms: Some(100),
                 retention: Some(500),
                 max_chunk_size: Some(300),
+                prune_concurrency: Some(1),
                 extra: _,
             },
         );
@@ -737,6 +746,7 @@ mod tests {
                 delay_ms: 200,
                 retention: 300,
                 max_chunk_size: 400,
+                prune_concurrency: 1,
             }),
         };
 
@@ -753,6 +763,7 @@ mod tests {
                     delay_ms: 200,
                     retention: 300,
                     max_chunk_size: 400,
+                    prune_concurrency: 1,
                 }),
             },
         );

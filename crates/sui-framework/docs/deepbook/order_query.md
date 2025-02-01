@@ -113,7 +113,7 @@ title: Module `deepbook::order_query`
 
 
 
-<pre><code><b>public</b> <b>fun</b> iter_bidsT1, T2(pool: &<a href="../deepbook/clob_v2.md#deepbook_clob_v2_Pool">deepbook::clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, start_order_id: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, max_id: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, ascending: bool): <a href="../deepbook/order_query.md#deepbook_order_query_OrderPage">deepbook::order_query::OrderPage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/order_query.md#deepbook_order_query_iter_bids">iter_bids</a>&lt;T1, T2&gt;(pool: &<a href="../deepbook/clob_v2.md#deepbook_clob_v2_Pool">deepbook::clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, start_order_id: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, max_id: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, ascending: bool): <a href="../deepbook/order_query.md#deepbook_order_query_OrderPage">deepbook::order_query::OrderPage</a>
 </code></pre>
 
 
@@ -171,7 +171,7 @@ title: Module `deepbook::order_query`
 
 
 
-<pre><code><b>public</b> <b>fun</b> iter_asksT1, T2(pool: &<a href="../deepbook/clob_v2.md#deepbook_clob_v2_Pool">deepbook::clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, start_order_id: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, max_id: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, ascending: bool): <a href="../deepbook/order_query.md#deepbook_order_query_OrderPage">deepbook::order_query::OrderPage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/order_query.md#deepbook_order_query_iter_asks">iter_asks</a>&lt;T1, T2&gt;(pool: &<a href="../deepbook/clob_v2.md#deepbook_clob_v2_Pool">deepbook::clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, start_order_id: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, max_id: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, ascending: bool): <a href="../deepbook/order_query.md#deepbook_order_query_OrderPage">deepbook::order_query::OrderPage</a>
 </code></pre>
 
 

@@ -165,7 +165,7 @@ fn test_missing_module_toml() {
             false,
         ))
         .unwrap();
-        assert_snapshot!(malformed_pkg, output);
+        assert_snapshot!(malformed_pkg, normalize_path(output));
     }
 }
 
@@ -203,7 +203,7 @@ fn get_packages(name: &str) -> (Vec<CompiledModule>, CompiledPackage, PathBuf) {
 /// Snapshots will differ on each machine, normalize to prevent test failures
 fn normalize_path(err_string: String) -> String {
     //test
-    let re = regex::Regex::new(r"^(.*)┌─ .*(\/fixtures\/.*\.move:\d+:\d+)$").unwrap();
+    let re = regex::Regex::new(r"^(.*)┌─ .*(\/fixtures\/.*\.(move|toml):\d+:\d+)$").unwrap();
     err_string
         .lines()
         .map(|line| re.replace(line, "$1┌─ $2").into_owned())

@@ -1,0 +1,9 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+input_file: crates/move-compiler/tests/move_check/typing/seq_ignores_value.move
+---
+

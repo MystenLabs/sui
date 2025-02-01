@@ -586,7 +586,7 @@ This is the only way to create <code><a href="../sui/object.md#sui_object_UID">U
 
 ## Function `delete`
 
-Delete the object and it's <code><a href="../sui/object.md#sui_object_UID">UID</a></code>. This is the only way to eliminate a <code><a href="../sui/object.md#sui_object_UID">UID</a></code>.
+Delete the object and its <code><a href="../sui/object.md#sui_object_UID">UID</a></code>. This is the only way to eliminate a <code><a href="../sui/object.md#sui_object_UID">UID</a></code>.
 This exists to inform Sui of object deletions. When an object
 gets unpacked, the programmer will have to do something with its
 <code><a href="../sui/object.md#sui_object_UID">UID</a></code>. The implementation of this function emits a deleted
@@ -619,7 +619,7 @@ system event so Sui knows to process the object deletion
 Get the underlying <code><a href="../sui/object.md#sui_object_ID">ID</a></code> of <code>obj</code>
 
 
-<pre><code><b>public</b> <b>fun</b> idT(obj: &T): <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/object.md#sui_object_id">id</a>&lt;T: key&gt;(obj: &T): <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>
 </code></pre>
 
 
@@ -644,7 +644,7 @@ Get the underlying <code><a href="../sui/object.md#sui_object_ID">ID</a></code> 
 Borrow the underlying <code><a href="../sui/object.md#sui_object_ID">ID</a></code> of <code>obj</code>
 
 
-<pre><code><b>public</b> <b>fun</b> borrow_idT(obj: &T): &<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/object.md#sui_object_borrow_id">borrow_id</a>&lt;T: key&gt;(obj: &T): &<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>
 </code></pre>
 
 
@@ -669,7 +669,7 @@ Borrow the underlying <code><a href="../sui/object.md#sui_object_ID">ID</a></cod
 Get the raw bytes for the underlying <code><a href="../sui/object.md#sui_object_ID">ID</a></code> of <code>obj</code>
 
 
-<pre><code><b>public</b> <b>fun</b> id_bytesT(obj: &T): vector&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/object.md#sui_object_id_bytes">id_bytes</a>&lt;T: key&gt;(obj: &T): vector&lt;u8&gt;
 </code></pre>
 
 
@@ -694,7 +694,7 @@ Get the raw bytes for the underlying <code><a href="../sui/object.md#sui_object_
 Get the inner bytes for the underlying <code><a href="../sui/object.md#sui_object_ID">ID</a></code> of <code>obj</code>
 
 
-<pre><code><b>public</b> <b>fun</b> id_addressT(obj: &T): <b>address</b>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/object.md#sui_object_id_address">id_address</a>&lt;T: key&gt;(obj: &T): <b>address</b>
 </code></pre>
 
 
@@ -723,7 +723,7 @@ Cannot be made public as the access to <code><a href="../sui/object.md#sui_objec
 restrictable in the object's module.
 
 
-<pre><code><b>fun</b> borrow_uidT(obj: &T): &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>fun</b> <a href="../sui/object.md#sui_object_borrow_uid">borrow_uid</a>&lt;T: key&gt;(obj: &T): &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 

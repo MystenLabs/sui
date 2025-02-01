@@ -1,9 +1,0 @@
-error[E01002]: unexpected token
-  ┌─ tests/move_2024/parser/use_fun_unit.move:2:20
-  │
-2 │     use fun foo as ().foo;
-  │                    ^
-  │                    │
-  │                    Unexpected '('
-  │                    Expected a type name with no type arguments
-

@@ -122,7 +122,7 @@ Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldAlrea
 that key <code>k: K</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> addK, V(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K, v: V)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/object_bag.md#sui_object_bag_add">add</a>&lt;K: <b>copy</b>, drop, store, V: key, store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K, v: V)
 </code></pre>
 
 
@@ -152,7 +152,7 @@ Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeM
 the value does not have the specified type.
 
 
-<pre><code><b>public</b> <b>fun</b> borrowK, V(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): &V
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>&lt;K: <b>copy</b>, drop, store, V: key, store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): &V
 </code></pre>
 
 
@@ -181,7 +181,7 @@ Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeM
 the value does not have the specified type.
 
 
-<pre><code><b>public</b> <b>fun</b> borrow_mutK, V(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): &<b>mut</b> V
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/object_bag.md#sui_object_bag_borrow_mut">borrow_mut</a>&lt;K: <b>copy</b>, drop, store, V: key, store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): &<b>mut</b> V
 </code></pre>
 
 
@@ -210,7 +210,7 @@ Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeM
 the value does not have the specified type.
 
 
-<pre><code><b>public</b> <b>fun</b> removeK, V(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): V
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/object_bag.md#sui_object_bag_remove">remove</a>&lt;K: <b>copy</b>, drop, store, V: key, store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): V
 </code></pre>
 
 
@@ -237,7 +237,7 @@ the value does not have the specified type.
 Returns true iff there is an value associated with the key <code>k: K</code> in the bag <code><a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/object_bag.md#sui_object_bag_ObjectBag">ObjectBag</a></code>
 
 
-<pre><code><b>public</b> <b>fun</b> containsK(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/object_bag.md#sui_object_bag_contains">contains</a>&lt;K: <b>copy</b>, drop, store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): bool
 </code></pre>
 
 
@@ -263,7 +263,7 @@ Returns true iff there is an value associated with the key <code>k: K</code> in 
 with an assigned value of type <code>V</code>
 
 
-<pre><code><b>public</b> <b>fun</b> contains_with_typeK, V(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/object_bag.md#sui_object_bag_contains_with_type">contains_with_type</a>&lt;K: <b>copy</b>, drop, store, V: key, store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): bool
 </code></pre>
 
 
@@ -367,7 +367,7 @@ Returns the ID of the object associated with the key if the bag has an entry wit
 Returns none otherwise
 
 
-<pre><code><b>public</b> <b>fun</b> value_idK(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/object_bag.md#sui_object_bag_value_id">value_id</a>&lt;K: <b>copy</b>, drop, store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/object_bag.md#sui_object_bag_ObjectBag">sui::object_bag::ObjectBag</a>, k: K): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>&gt;
 </code></pre>
 
 

@@ -1207,7 +1207,7 @@ mod checked {
         Ok(InputValue::new_object(object_metadata, obj_value))
     }
 
-    /// Load an a CallArg, either an object or a raw set of BCS bytes
+    /// Load a CallArg, either an object or a raw set of BCS bytes
     fn load_call_arg(
         protocol_config: &ProtocolConfig,
         vm: &MoveVM,

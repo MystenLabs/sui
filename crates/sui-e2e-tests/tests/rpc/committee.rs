@@ -3,8 +3,8 @@
 
 use sui_macros::sim_test;
 use sui_rpc_api::client::sdk::Client;
-use sui_rpc_api::proto::node::node_service_client::NodeServiceClient;
-use sui_rpc_api::proto::node::GetCommitteeRequest;
+use sui_rpc_api::proto::node::v2::node_service_client::NodeServiceClient;
+use sui_rpc_api::proto::node::v2::GetCommitteeRequest;
 use test_cluster::TestClusterBuilder;
 
 #[sim_test]

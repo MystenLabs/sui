@@ -1,0 +1,113 @@
+---
+source: crates/move-docgen-tests/tests/testsuite.rs
+info:
+  section_level_start: 1
+  exclude_private_fun: false
+  exclude_impl: false
+  toc_depth: 3
+  no_collapsed_sections: true
+  include_dep_diagrams: false
+  include_call_diagrams: false
+input_file: crates/move-docgen-tests/tests/move/annotation/Move.toml
+---
+<a name="a_m"></a>
+
+# Module `a::m`
+
+This is a doc comment above an annotation.
+
+
+-  [Constants](#@Constants_0)
+-  [Function `test`](#a_m_test)
+-  [Function `test1`](#a_m_test1)
+
+
+<pre><code></code></pre>
+
+
+
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="a_m_Cool"></a>
+
+This is the top doc comment
+This is the middle doc comment
+
+
+<pre><code><b>const</b> <a href="../a/m.md#a_m_Cool">Cool</a>: u32 = 0;
+</code></pre>
+
+
+
+<a name="a_m_Error"></a>
+
+This is a doc comment on a constant with an annotation. Below the annotation.
+
+
+<pre><code><b>const</b> <a href="../a/m.md#a_m_Error">Error</a>: u32 = 0;
+</code></pre>
+
+
+
+<a name="a_m_OtherError"></a>
+
+This is a doc comment on a constant with an annotation. Above the annotation.
+
+
+<pre><code><b>const</b> <a href="../a/m.md#a_m_OtherError">OtherError</a>: u32 = 0;
+</code></pre>
+
+
+
+<a name="a_m_Woah"></a>
+
+This is the top doc comment
+This is the middle doc comment
+This is the bottom doc comment
+
+
+<pre><code><b>const</b> <a href="../a/m.md#a_m_Woah">Woah</a>: u32 = 0;
+</code></pre>
+
+
+
+<a name="a_m_test"></a>
+
+## Function `test`
+
+This is a doc comment above a function with an annotation. Above the annotation.
+
+
+<pre><code><b>fun</b> <a href="../a/m.md#a_m_test">test</a>()
+</code></pre>
+
+
+
+##### Implementation
+
+
+<pre><code><b>fun</b> <a href="../a/m.md#a_m_test">test</a>() { }
+</code></pre>
+
+
+
+<a name="a_m_test1"></a>
+
+## Function `test1`
+
+This is a doc comment above a function with an annotation. Below the annotation.
+
+
+<pre><code><b>fun</b> <a href="../a/m.md#a_m_test1">test1</a>()
+</code></pre>
+
+
+
+##### Implementation
+
+
+<pre><code><b>fun</b> <a href="../a/m.md#a_m_test1">test1</a>() { }
+</code></pre>
