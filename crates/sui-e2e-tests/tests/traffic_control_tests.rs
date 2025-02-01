@@ -22,6 +22,7 @@ use sui_macros::sim_test;
 use sui_network::default_mysten_network_config;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
+use sui_types::traffic_control::TrafficControlReconfigParams;
 use sui_types::{
     crypto::Ed25519SuiSignature,
     quorum_driver_types::ExecuteTransactionRequestType,
@@ -268,7 +269,6 @@ async fn test_validator_traffic_control_error_blocked_with_policy_reconfig(
     let n = 5;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 100,
-        // Test that any N requests will cause an IP to be added to the blocklist.
         error_policy_type: PolicyType::TestNConnIP(n - 1),
         dry_run: true,
         ..Default::default()
@@ -309,15 +309,14 @@ async fn test_validator_traffic_control_error_blocked_with_policy_reconfig(
     }
     // Reconfigure traffic control to disable dry run mode
     for node in test_cluster.all_validator_handles() {
-        node.with(|node| {
-            node.state()
-                .reconfigure_traffic_control(TrafficControlReconfigParams {
-                    policy_config: None,
-                    fw_config: None,
-                    dry_run: Some(false),
-                })
-                .unwrap();
-        });
+        node.state()
+            .reconfigure_traffic_control(TrafficControlReconfigParams {
+                error_threshold: None,
+                spam_threshold: None,
+                dry_run: Some(false),
+            })
+            .await
+            .unwrap();
     }
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     // If Node and TrafficController has not crashed, blocklist and policy freq state should still

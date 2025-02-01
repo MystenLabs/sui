@@ -28,7 +28,7 @@ use sui_types::traffic_control::{
     PolicyConfig, PolicyType, RemoteFirewallConfig, TrafficControlReconfigParams, Weight,
 };
 use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::{debug, error, info, trace, warn};
 
 pub const METRICS_INTERVAL_SECS: u64 = 2;
@@ -54,15 +54,13 @@ pub enum Acl {
 
 #[derive(Clone)]
 pub struct TrafficController {
-    tally_channel: Option<mpsc::Sender<TrafficTally>>,
+    tally_channel: Arc<Mutex<Option<mpsc::Sender<TrafficTally>>>>,
     acl: Acl,
     metrics: Arc<TrafficControllerMetrics>,
-    dry_run_mode: bool,
     spam_policy: Option<Arc<Mutex<TrafficControlPolicy>>>,
     error_policy: Option<Arc<Mutex<TrafficControlPolicy>>>,
-    policy_config: PolicyConfig,
+    policy_config: Arc<RwLock<PolicyConfig>>,
     fw_config: Option<RemoteFirewallConfig>,
-    shutdown_sender: Option<broadcast::Sender<()>>,
 }
 
 impl Debug for TrafficController {
@@ -103,102 +101,105 @@ impl TrafficController {
                     })
                     .collect();
                 Self {
-                    tally_channel: None,
+                    tally_channel: Arc::new(Mutex::new(None)),
                     acl: Acl::Allowlist(allowlist),
                     metrics,
-                    dry_run_mode: policy_config.dry_run,
-                    policy_config,
+                    policy_config: Arc::new(RwLock::new(policy_config)),
                     fw_config,
-                    shutdown_sender: None,
                     spam_policy: None,
                     error_policy: None,
                 }
             }
-            None => Self::spawn(policy_config, metrics, fw_config).await,
+            None => {
+                let spam_policy = Arc::new(Mutex::new(
+                    TrafficControlPolicy::from_spam_config(policy_config.clone()).await,
+                ));
+                let error_policy = Arc::new(Mutex::new(
+                    TrafficControlPolicy::from_error_config(policy_config.clone()).await,
+                ));
+                let this = Self {
+                    tally_channel: Arc::new(Mutex::new(None)),
+                    acl: Acl::Blocklists(Blocklists {
+                        clients: Arc::new(DashMap::new()),
+                        proxied_clients: Arc::new(DashMap::new()),
+                    }),
+                    metrics,
+                    policy_config: Arc::new(RwLock::new(policy_config)),
+                    fw_config,
+                    spam_policy: Some(spam_policy),
+                    error_policy: Some(error_policy),
+                };
+                this.spawn().await;
+                this
+            }
         }
     }
 
-    /// Create a TrafficController with an initial policy and ACL state.
-    pub async fn from_state(
-        acl: Acl,
+    pub async fn init_for_test(
         policy_config: PolicyConfig,
-        spam_policy: TrafficControlPolicy,
-        error_policy: TrafficControlPolicy,
-        metrics: Arc<TrafficControllerMetrics>,
         fw_config: Option<RemoteFirewallConfig>,
     ) -> Self {
-        match acl.clone() {
-            Acl::Allowlist(_) => {
-                warn!("Provided spam and error policies will be ignored due to allowlist ACL type");
-                Self {
-                    tally_channel: None,
-                    acl,
-                    metrics,
-                    dry_run_mode: policy_config.dry_run,
-                    policy_config,
-                    fw_config,
-                    shutdown_sender: None,
-                    spam_policy: None,
-                    error_policy: None,
-                }
-            }
-            Acl::Blocklists(blocklists) => {
-                Self::spawn_from_state(
-                    policy_config,
-                    spam_policy,
-                    error_policy,
-                    metrics,
-                    fw_config,
-                    blocklists,
-                )
-                .await
-            }
-        }
+        let metrics = Arc::new(TrafficControllerMetrics::new(&prometheus::Registry::new()));
+        Self::init(policy_config, metrics, fw_config).await
     }
 
-    /// Export state data. Note that this cannot be used for any strong consistency
-    /// guarantees, but should be sufficient for purposes such as reconfig/hot swap.
-    pub async fn exfiltrate(
+    async fn spawn(&self) {
+        let policy_config = { self.policy_config.read().await.clone() };
+        Self::set_policy_config_metrics(&policy_config, self.metrics.clone());
+        let (tx, rx) = mpsc::channel(policy_config.channel_capacity);
+        // Memoized drainfile existence state. This is passed into delegation
+        // funtions to prevent them from continuing to populate blocklists
+        // if drain is set, as otherwise it will grow without bounds
+        // without the firewall running to periodically clear it.
+        let mem_drainfile_present = self
+            .fw_config
+            .as_ref()
+            .map(|config| config.drain_path.exists())
+            .unwrap_or(false);
+        self.metrics
+            .deadmans_switch_enabled
+            .set(mem_drainfile_present as i64);
+        let blocklists = match self.acl.clone() {
+            Acl::Blocklists(blocklists) => blocklists,
+            Acl::Allowlist(_) => panic!("Allowlist ACL should not exist on spawn"),
+        };
+        let tally_loop_blocklists = blocklists.clone();
+        let clear_loop_blocklists = blocklists.clone();
+        let tally_loop_metrics = self.metrics.clone();
+        let clear_loop_metrics = self.metrics.clone();
+        let tally_loop_policy_config = policy_config.clone();
+        let tally_loop_fw_config = self.fw_config.clone();
+
+        let spam_policy = self
+            .spam_policy
+            .clone()
+            .expect("spam policy should exist on spawn");
+        let error_policy = self
+            .error_policy
+            .clone()
+            .expect("error policy should exist on spawn");
+        let spam_policy_clone = spam_policy.clone();
+        let error_policy_clone = error_policy.clone();
+
+        spawn_monitored_task!(run_tally_loop(
+            rx,
+            tally_loop_policy_config,
+            spam_policy_clone,
+            error_policy_clone,
+            tally_loop_fw_config,
+            tally_loop_blocklists,
+            tally_loop_metrics,
+            mem_drainfile_present,
+        ));
+        spawn_monitored_task!(run_clear_blocklists_loop(
+            clear_loop_blocklists,
+            clear_loop_metrics,
+        ));
+        self.open_tally_channel(tx).await;
+    }
+
+    pub async fn admin_reconfigure(
         &self,
-    ) -> (
-        Acl,
-        PolicyConfig,
-        Arc<TrafficControllerMetrics>,
-        Option<RemoteFirewallConfig>,
-        Option<TrafficControlPolicy>,
-        Option<TrafficControlPolicy>,
-    ) {
-        let spam_policy = if let Some(spam_policy) = self.spam_policy.as_ref() {
-            Some((*spam_policy.lock().await).clone())
-        } else {
-            None
-        };
-        let error_policy = if let Some(error_policy) = self.error_policy.as_ref() {
-            Some((*error_policy.lock().await).clone())
-        } else {
-            None
-        };
-        (
-            self.acl.clone(),
-            self.policy_config.clone(),
-            self.metrics.clone(),
-            self.fw_config.clone(),
-            spam_policy,
-            error_policy,
-        )
-    }
-
-    pub fn shutdown(&self) {
-        if let Some(sender) = &self.shutdown_sender {
-            // It's ok if there are no receivers
-            let _ = sender.send(());
-        }
-    }
-
-    pub fn admin_reconfigure_policy(
-        config: &mut PolicyConfig,
-        spam_policy: &mut TrafficControlPolicy,
-        error_policy: &mut TrafficControlPolicy,
         params: TrafficControlReconfigParams,
     ) -> Result<(), SuiError> {
         let TrafficControlReconfigParams {
@@ -207,138 +208,55 @@ impl TrafficController {
             dry_run,
         } = params;
         if let Some(error_threshold) = error_threshold {
-            match *error_policy {
-                TrafficControlPolicy::FreqThreshold(ref mut policy) => {
-                    policy.client_threshold = error_threshold;
-                    if let Some(dry_run) = dry_run {
-                        policy.config.dry_run = dry_run;
-                    }
-                }
-                TrafficControlPolicy::TestNConnIP(ref mut policy) => {
-                    policy.threshold = error_threshold;
-                    if let Some(dry_run) = dry_run {
-                        policy.config.dry_run = dry_run;
-                    }
-                }
-                _ => {
-                    return Err(SuiError::InvalidAdminRequest(
-                        "Unsupported prior error policy type during traffic control reconfiguration"
-                            .to_string(),
-                    ));
-                }
-            }
+            Self::update_policy_threshold(
+                self.error_policy.as_ref().unwrap(),
+                error_threshold,
+                dry_run,
+            )
+            .await?;
         }
         if let Some(spam_threshold) = spam_threshold {
-            match *spam_policy {
-                TrafficControlPolicy::FreqThreshold(ref mut policy) => {
-                    policy.client_threshold = spam_threshold;
-                    if let Some(dry_run) = dry_run {
-                        policy.config.dry_run = dry_run;
-                    }
-                }
-                TrafficControlPolicy::TestNConnIP(ref mut policy) => {
-                    policy.threshold = spam_threshold;
-                    if let Some(dry_run) = dry_run {
-                        policy.config.dry_run = dry_run;
-                    }
-                }
-                _ => {
-                    return Err(SuiError::InvalidAdminRequest(
-                        "Unsupported prior spam policy type during traffic control reconfiguration"
-                            .to_string(),
-                    ));
-                }
-            }
+            Self::update_policy_threshold(
+                self.spam_policy.as_ref().unwrap(),
+                spam_threshold,
+                dry_run,
+            )
+            .await?;
         }
         if let Some(dry_run) = dry_run {
-            config.dry_run = dry_run;
+            self.policy_config.write().await.dry_run = dry_run;
         }
         Ok(())
     }
 
-    async fn spawn(
-        policy_config: PolicyConfig,
-        metrics: Arc<TrafficControllerMetrics>,
-        fw_config: Option<RemoteFirewallConfig>,
-    ) -> Self {
-        let blocklists = Blocklists {
-            clients: Arc::new(DashMap::new()),
-            proxied_clients: Arc::new(DashMap::new()),
-        };
-        Self::spawn_from_state(
-            policy_config,
-            TrafficControlPolicy::from_spam_config(policy_config.clone()).await,
-            TrafficControlPolicy::from_error_config(policy_config.clone()).await,
-            metrics,
-            fw_config,
-            blocklists,
-        )
-        .await
+    async fn update_policy_threshold(
+        policy: &Arc<Mutex<TrafficControlPolicy>>,
+        threshold: u64,
+        dry_run: Option<bool>,
+    ) -> Result<(), SuiError> {
+        match *policy.lock().await {
+            TrafficControlPolicy::FreqThreshold(ref mut policy) => {
+                policy.client_threshold = threshold;
+                if let Some(dry_run) = dry_run {
+                    policy.config.dry_run = dry_run;
+                }
+                Ok(())
+            }
+            TrafficControlPolicy::TestNConnIP(ref mut policy) => {
+                policy.threshold = threshold;
+                if let Some(dry_run) = dry_run {
+                    policy.config.dry_run = dry_run;
+                }
+                Ok(())
+            }
+            _ => Err(SuiError::InvalidAdminRequest(
+                "Unsupported prior policy type during traffic control reconfiguration".to_string(),
+            )),
+        }
     }
 
-    async fn spawn_from_state(
-        policy_config: PolicyConfig,
-        spam_policy: TrafficControlPolicy,
-        error_policy: TrafficControlPolicy,
-        metrics: Arc<TrafficControllerMetrics>,
-        fw_config: Option<RemoteFirewallConfig>,
-        blocklists: Blocklists,
-    ) -> Self {
-        Self::set_policy_config_metrics(&policy_config, metrics.clone());
-        let (tx, rx) = mpsc::channel(policy_config.channel_capacity);
-        // Memoized drainfile existence state. This is passed into delegation
-        // funtions to prevent them from continuing to populate blocklists
-        // if drain is set, as otherwise it will grow without bounds
-        // without the firewall running to periodically clear it.
-        let mem_drainfile_present = fw_config
-            .as_ref()
-            .map(|config| config.drain_path.exists())
-            .unwrap_or(false);
-        metrics
-            .deadmans_switch_enabled
-            .set(mem_drainfile_present as i64);
-        let tally_loop_blocklists = blocklists.clone();
-        let clear_loop_blocklists = blocklists.clone();
-        let tally_loop_metrics = metrics.clone();
-        let clear_loop_metrics = metrics.clone();
-        let dry_run_mode = policy_config.dry_run;
-        let tally_loop_policy_config = policy_config.clone();
-        let tally_loop_fw_config = fw_config.clone();
-
-        // Create broadcast channel for shutdown signal
-        let (shutdown_tx, shutdown_rx1) = broadcast::channel(1);
-        let shutdown_rx2 = shutdown_tx.subscribe();
-
-        let spam_policy = Arc::new(Mutex::new(spam_policy));
-        let error_policy = Arc::new(Mutex::new(error_policy));
-
-        spawn_monitored_task!(run_tally_loop(
-            rx,
-            tally_loop_policy_config,
-            spam_policy.clone(),
-            error_policy.clone(),
-            tally_loop_fw_config,
-            tally_loop_blocklists,
-            tally_loop_metrics,
-            mem_drainfile_present,
-            shutdown_rx1,
-        ));
-        spawn_monitored_task!(run_clear_blocklists_loop(
-            clear_loop_blocklists,
-            clear_loop_metrics,
-            shutdown_rx2,
-        ));
-        Self {
-            tally_channel: Some(tx),
-            acl: Acl::Blocklists(blocklists),
-            metrics,
-            dry_run_mode,
-            spam_policy: Some(spam_policy),
-            error_policy: Some(error_policy),
-            policy_config,
-            fw_config,
-            shutdown_sender: Some(shutdown_tx),
-        }
+    async fn open_tally_channel(&self, tx: mpsc::Sender<TrafficTally>) {
+        self.tally_channel.lock().await.replace(tx);
     }
 
     fn set_policy_config_metrics(
@@ -363,16 +281,8 @@ impl TrafficController {
         }
     }
 
-    pub async fn init_for_test(
-        policy_config: PolicyConfig,
-        fw_config: Option<RemoteFirewallConfig>,
-    ) -> Self {
-        let metrics = Arc::new(TrafficControllerMetrics::new(&prometheus::Registry::new()));
-        Self::init(policy_config, metrics, fw_config).await
-    }
-
-    pub fn tally(&self, tally: TrafficTally) {
-        if let Some(channel) = self.tally_channel.as_ref() {
+    pub async fn tally(&self, tally: TrafficTally) {
+        if let Some(channel) = self.tally_channel.lock().await.as_ref() {
             // Use try_send rather than send mainly to avoid creating backpressure
             // on the caller if the channel is full, which may slow down the critical
             // path. Dropping the tally on the floor should be ok, as in this case
@@ -391,13 +301,16 @@ impl TrafficController {
                 }
                 Ok(_) => {}
             }
+        } else {
+            warn!("TrafficController not yet accepting tally requests.");
         }
     }
 
     /// Handle check with dry-run mode considered
     pub async fn check(&self, client: &Option<IpAddr>, proxied_client: &Option<IpAddr>) -> bool {
+        let policy_config = { self.policy_config.read().await.clone() };
         let check_with_dry_run_maybe = |allowed| -> bool {
-            match (allowed, self.dry_run_mode()) {
+            match (allowed, policy_config.dry_run) {
                 // request allowed
                 (true, _) => true,
                 // request blocked while in dry-run mode
@@ -451,10 +364,6 @@ impl TrafficController {
         client_check && proxied_client_check
     }
 
-    pub fn dry_run_mode(&self) -> bool {
-        self.dry_run_mode
-    }
-
     async fn check_and_clear_blocklist(
         &self,
         client: &Option<IpAddr>,
@@ -489,31 +398,20 @@ impl TrafficController {
 /// never checked again. This function runs periodically to clear out any
 /// such stale IPs. This also ensures that the blocklist length metric
 /// accurately reflects TTL.
-async fn run_clear_blocklists_loop(
-    blocklists: Blocklists,
-    metrics: Arc<TrafficControllerMetrics>,
-    mut shutdown_rx: broadcast::Receiver<()>,
-) {
+async fn run_clear_blocklists_loop(blocklists: Blocklists, metrics: Arc<TrafficControllerMetrics>) {
     loop {
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_secs(3)) => {
-                let now = SystemTime::now();
-                blocklists.clients.retain(|_, expiration| now < *expiration);
-                blocklists
-                    .proxied_clients
-                    .retain(|_, expiration| now < *expiration);
-                metrics
-                    .connection_ip_blocklist_len
-                    .set(blocklists.clients.len() as i64);
-                metrics
-                    .proxy_ip_blocklist_len
-                    .set(blocklists.proxied_clients.len() as i64);
-            }
-            _ = shutdown_rx.recv() => {
-                info!("Clear blocklists loop received shutdown signal");
-                break;
-            }
-        }
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        let now = SystemTime::now();
+        blocklists.clients.retain(|_, expiration| now < *expiration);
+        blocklists
+            .proxied_clients
+            .retain(|_, expiration| now < *expiration);
+        metrics
+            .connection_ip_blocklist_len
+            .set(blocklists.clients.len() as i64);
+        metrics
+            .proxy_ip_blocklist_len
+            .set(blocklists.proxied_clients.len() as i64);
     }
 }
 
@@ -526,7 +424,6 @@ async fn run_tally_loop(
     blocklists: Blocklists,
     metrics: Arc<TrafficControllerMetrics>,
     mut mem_drainfile_present: bool,
-    mut shutdown_rx: broadcast::Receiver<()>,
 ) {
     let spam_blocklists = Arc::new(blocklists.clone());
     let error_blocklists = Arc::new(blocklists);
@@ -595,10 +492,6 @@ async fn run_tally_loop(
                         metrics.deadmans_switch_enabled.set(1);
                     }
                 }
-            }
-            _ = shutdown_rx.recv() => {
-                info!("Tally loop received shutdown signal");
-                return;
             }
         }
 
@@ -899,7 +792,7 @@ impl TrafficSim {
         assert!(per_client_tps > 0);
         assert!(duration.as_secs() > 0);
 
-        let controller = TrafficController::init_for_test(policy.clone(), None);
+        let controller = TrafficController::init_for_test(policy.clone(), None).await;
         let tasks = (0..num_clients).map(|task_num| {
             tokio::spawn(Self::run_single_client(
                 controller.clone(),
@@ -987,14 +880,16 @@ impl TrafficSim {
                     total_time_blocked += time_blocked_start.elapsed();
                     currently_blocked = false;
                 }
-                controller.tally(TrafficTally::new(
-                    client,
-                    // TODO add proxy IP for testing
-                    None,
-                    // TODO add weight adjustments
-                    None,
-                    Weight::one(),
-                ));
+                controller
+                    .tally(TrafficTally::new(
+                        client,
+                        // TODO add proxy IP for testing
+                        None,
+                        // TODO add weight adjustments
+                        None,
+                        Weight::one(),
+                    ))
+                    .await;
             } else {
                 if !currently_blocked {
                     time_blocked_start = Instant::now();

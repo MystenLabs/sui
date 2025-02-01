@@ -4,7 +4,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use arc_swap::ArcSwapAny;
 use axum::body::Body;
 use axum::http;
 use hyper::Request;
@@ -12,10 +11,7 @@ use jsonrpsee::RpcModule;
 use metrics::Metrics;
 use metrics::MetricsLayer;
 use prometheus::Registry;
-use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
-use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_core::traffic_controller::TrafficController;
 use sui_types::traffic_control::PolicyConfig;
 use tokio::runtime::Handle;
@@ -56,7 +52,7 @@ pub struct JsonRpcServerBuilder {
     module: RpcModule<()>,
     rpc_doc: Project,
     registry: Registry,
-    traffic_controller: Option<Arc<ArcSwapAny<Arc<TrafficController>>>>,
+    traffic_controller: Option<Arc<TrafficController>>,
     policy_config: Option<PolicyConfig>,
 }
 
@@ -77,7 +73,7 @@ impl JsonRpcServerBuilder {
     pub fn new(
         version: &str,
         prometheus_registry: &Registry,
-        traffic_controller: Option<Arc<ArcSwapAny<Arc<TrafficController>>>>,
+        traffic_controller: Option<Arc<TrafficController>>,
         policy_config: Option<PolicyConfig>,
     ) -> Self {
         Self {

@@ -871,7 +871,7 @@ pub struct AuthorityState {
     pub(crate) congestion_tracker: Arc<CongestionTracker>,
 
     /// Traffic controller for Sui core servers (json-rpc, validator service)
-    pub traffic_controller: Option<Arc<ArcSwap<TrafficController>>>,
+    pub traffic_controller: Option<Arc<TrafficController>>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1595,38 +1595,7 @@ impl AuthorityState {
         params: TrafficControlReconfigParams,
     ) -> Result<(), SuiError> {
         if let Some(traffic_controller) = self.traffic_controller.as_ref() {
-            let (acl, mut config, metrics, fw_config, spam_policy, error_policy) =
-                traffic_controller.load().exfiltrate().await;
-            if spam_policy.is_none() {
-                return Err(SuiError::InvalidAdminRequest(
-                    "spam policy is not previously initialized".to_string(),
-                ));
-            }
-            if error_policy.is_none() {
-                return Err(SuiError::InvalidAdminRequest(
-                    "error policy is not previously initialized".to_string(),
-                ));
-            }
-            let mut spam_policy = spam_policy.unwrap();
-            let mut error_policy = error_policy.unwrap();
-            TrafficController::admin_reconfigure_policy(
-                &mut config,
-                &mut spam_policy,
-                &mut error_policy,
-                params,
-            )?;
-            let new_traffic_controller = TrafficController::from_state(
-                acl,
-                config,
-                spam_policy,
-                error_policy,
-                metrics,
-                fw_config,
-            )
-            .await;
-            // do atomic swap
-            let old_traffic_controller = traffic_controller.swap(Arc::new(new_traffic_controller));
-            old_traffic_controller.shutdown();
+            traffic_controller.admin_reconfigure(params).await?;
         }
         Ok(())
     }
@@ -3085,14 +3054,14 @@ impl AuthorityState {
         let traffic_controller_metrics =
             Arc::new(TrafficControllerMetrics::new(prometheus_registry));
         let traffic_controller = if let Some(policy_config) = policy_config {
-            Some(Arc::new(ArcSwap::new(Arc::new(
+            Some(Arc::new(
                 TrafficController::init(
                     policy_config,
                     traffic_controller_metrics,
                     firewall_config.clone(),
                 )
                 .await,
-            ))))
+            ))
         } else {
             None
         };

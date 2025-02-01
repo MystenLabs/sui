@@ -504,16 +504,6 @@ async fn dump_consensus_tx_cost_estimates(
     (StatusCode::OK, format!("{:#?}", estimates))
 }
 
-<<<<<<< HEAD
-#[derive(Deserialize)]
-struct TrafficControlConfig {
-    error_threshold: Option<u64>,
-    spam_threshold: Option<u64>,
-    dry_run: Option<bool>,
-}
-
-=======
->>>>>>> 28e5bffc0f (Change in approach - use arcswap to exfiltrate state, atomic swap references with a new instance containing old data, then shutdown old instance)
 async fn traffic_control(
     State(state): State<Arc<AppState>>,
     args: Query<TrafficControlReconfigParams>,
