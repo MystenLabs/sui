@@ -701,11 +701,10 @@ module sui_system::sui_system {
     #[test_only]
     public fun request_add_validator_for_testing(
         wrapper: &mut SuiSystemState,
-        min_joining_stake_for_testing: u64,
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        self.request_add_validator_for_testing(min_joining_stake_for_testing, ctx)
+        self.request_add_validator_for_testing(ctx)
     }
 
     #[test_only]
