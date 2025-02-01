@@ -1789,16 +1789,15 @@ fn hash_included_in_file_hashes(
     modified_files: &BTreeSet<PathBuf>,
     file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
 ) -> bool {
-    for fpath in modified_files {
-        let Some(fhash) = file_hashes.get(fpath) else {
-            debug_assert!(false);
-            continue;
-        };
-        if hash == *fhash {
-            return true;
-        }
-    }
-    false
+    modified_files.iter().any(|fpath| {
+        file_hashes.get(fpath).map_or_else(
+            || {
+                debug_assert!(false);
+                false
+            },
+            |fhash| hash == *fhash,
+        )
+    })
 }
 
 /// Checks if a parsed module has been modified by comparing
