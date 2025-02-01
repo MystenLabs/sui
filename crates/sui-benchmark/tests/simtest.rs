@@ -365,7 +365,7 @@ mod test {
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
         let grace_period_clone = grace_period.clone();
-        register_fail_point_async("crash", move || {
+        register_fail_point("crash", move || {
             let dead_validator = dead_validator.clone();
             let keep_alive_nodes_clone = keep_alive_nodes_clone.clone();
             let grace_period_clone = grace_period_clone.clone();
@@ -421,7 +421,6 @@ mod test {
             }
         });
         register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
-        register_fail_point_async("write_object_entry", || delay_failpoint(10..20, 0.001));
 
         register_fail_point_async("writeback-cache-commit", || delay_failpoint(10..20, 0.001));
 
