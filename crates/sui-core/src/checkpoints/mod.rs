@@ -2346,15 +2346,13 @@ impl CheckpointService {
         tasks.spawn(monitored_future!(builder.run()));
         tasks.spawn(monitored_future!(aggregator.run()));
 
-        loop {
-            if tokio::time::timeout(Duration::from_secs(10), self.wait_for_rebuilt_checkpoints())
-                .await
-                .is_ok()
-            {
-                break;
-            } else {
-                debug_fatal!("Still waiting for checkpoints to be rebuilt");
-            }
+        // If this times out, the validator may still start up. The worst that can
+        // happen is that we will crash later on (due to missing transactions).
+        if tokio::time::timeout(Duration::from_secs(10), self.wait_for_rebuilt_checkpoints())
+            .await
+            .is_err()
+        {
+            debug_fatal!("Timed out waiting for checkpoints to be rebuilt");
         }
 
         tasks
@@ -2382,7 +2380,7 @@ impl CheckpointService {
         epoch_store: &AuthorityPerEpochStore,
         checkpoint: PendingCheckpointV2,
     ) -> SuiResult {
-        use crate::authority::authority_per_epoch_store::ConsensusCommitOutput;
+        use crate::authority::authority_per_epoch_store::consensus_quarantine::ConsensusCommitOutput;
 
         let mut output = ConsensusCommitOutput::new(0);
         epoch_store.write_pending_checkpoint(&mut output, &checkpoint)?;

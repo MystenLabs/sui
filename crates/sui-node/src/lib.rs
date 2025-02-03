@@ -12,11 +12,14 @@ use anyhow::Result;
 use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
+use futures::future::BoxFuture;
 use futures::TryFutureExt;
+use mysten_common::debug_fatal;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
+use std::future::Future;
 use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
@@ -28,6 +31,7 @@ use sui_core::authority::authority_store_tables::{
 };
 use sui_core::authority::backpressure::BackpressureManager;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
+use sui_core::authority::execution_time_estimator::ExecutionTimeObserver;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
@@ -44,9 +48,12 @@ use sui_rpc_api::RpcMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
+use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::transaction::VerifiedCertificate;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::sync::{broadcast, mpsc, watch, Mutex};
@@ -147,7 +154,7 @@ mod handle;
 pub mod metrics;
 
 pub struct ValidatorComponents {
-    validator_server_handle: JoinHandle<Result<()>>,
+    validator_server_handle: SpawnOnce,
     validator_overload_monitor_handle: Option<JoinHandle<()>>,
     consensus_manager: ConsensusManager,
     consensus_store_pruner: ConsensusStorePruner,
@@ -832,23 +839,29 @@ impl SuiNode {
         let sui_node_metrics = Arc::new(SuiNodeMetrics::new(&registry_service.default_registry()));
 
         let validator_components = if state.is_validator(&epoch_store) {
-            let components = Self::construct_validator_components(
-                config.clone(),
-                state.clone(),
-                committee,
-                epoch_store.clone(),
-                checkpoint_store.clone(),
-                state_sync_handle.clone(),
-                randomness_handle.clone(),
-                Arc::downgrade(&accumulator),
-                backpressure_manager.clone(),
-                connection_monitor_status.clone(),
-                &registry_service,
-                sui_node_metrics.clone(),
-            )
-            .await?;
-            // This is only needed during cold start.
+            let (components, _) = futures::join!(
+                Self::construct_validator_components(
+                    config.clone(),
+                    state.clone(),
+                    committee,
+                    epoch_store.clone(),
+                    checkpoint_store.clone(),
+                    state_sync_handle.clone(),
+                    randomness_handle.clone(),
+                    Arc::downgrade(&accumulator),
+                    backpressure_manager.clone(),
+                    connection_monitor_status.clone(),
+                    &registry_service,
+                    sui_node_metrics.clone(),
+                ),
+                Self::reexecute_pending_consensus_certs(&epoch_store, &state,)
+            );
+            let mut components = components?;
+
             components.consensus_adapter.submit_recovered(&epoch_store);
+
+            // Start the gRPC server
+            components.validator_server_handle = components.validator_server_handle.start();
 
             Some(components)
         } else {
@@ -1319,13 +1332,13 @@ impl SuiNode {
         consensus_store_pruner: ConsensusStorePruner,
         accumulator: Weak<StateAccumulator>,
         backpressure_manager: Arc<BackpressureManager>,
-        validator_server_handle: JoinHandle<Result<()>>,
+        validator_server_handle: SpawnOnce,
         validator_overload_monitor_handle: Option<JoinHandle<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Result<ValidatorComponents> {
-        let checkpoint_service = Self::start_checkpoint_service(
+        let checkpoint_service = Self::build_checkpoint_service(
             config,
             consensus_adapter.clone(),
             checkpoint_store,
@@ -1357,6 +1370,12 @@ impl SuiNode {
                     .await?;
             }
         }
+
+        ExecutionTimeObserver::spawn(
+            &epoch_store,
+            Box::new(consensus_adapter.clone()),
+            config.local_execution_time_channel_capacity,
+        );
 
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
             None,
@@ -1421,7 +1440,7 @@ impl SuiNode {
         })
     }
 
-    fn start_checkpoint_service(
+    fn build_checkpoint_service(
         config: &NodeConfig,
         consensus_adapter: Arc<ConsensusAdapter>,
         checkpoint_store: Arc<CheckpointStore>,
@@ -1499,7 +1518,7 @@ impl SuiNode {
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
         prometheus_registry: &Registry,
-    ) -> Result<tokio::task::JoinHandle<Result<()>>> {
+    ) -> Result<SpawnOnce> {
         let validator_service = ValidatorService::new(
             state.clone(),
             consensus_adapter,
@@ -1527,9 +1546,69 @@ impl SuiNode {
             .map_err(|err| anyhow!(err.to_string()))?;
         let local_addr = server.local_addr();
         info!("Listening to traffic on {local_addr}");
-        let grpc_server = spawn_monitored_task!(server.serve().map_err(Into::into));
 
-        Ok(grpc_server)
+        Ok(SpawnOnce::new(server.serve().map_err(Into::into)))
+    }
+
+    async fn reexecute_pending_consensus_certs(
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        state: &Arc<AuthorityState>,
+    ) {
+        let pending_consensus_certificates = epoch_store
+            .get_all_pending_consensus_transactions()
+            .into_iter()
+            .filter_map(|tx| {
+                match tx.kind {
+                    // shared object txns will be re-executed by consensus replay
+                    ConsensusTransactionKind::CertifiedTransaction(tx)
+                        if !tx.contains_shared_object() =>
+                    {
+                        let tx = *tx;
+                        // we only need to re-execute if we previously signed the effects (which indicates we
+                        // returned the effects to a client).
+                        if let Some(fx_digest) = epoch_store
+                            .get_signed_effects_digest(tx.digest())
+                            .expect("db error")
+                        {
+                            // new_unchecked is safe because we never submit a transaction to consensus
+                            // without verifying it
+                            let tx = VerifiedExecutableTransaction::new_from_certificate(
+                                VerifiedCertificate::new_unchecked(tx),
+                            );
+                            Some((tx, fx_digest))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let digests = pending_consensus_certificates
+            .iter()
+            .map(|(tx, _)| *tx.digest())
+            .collect::<Vec<_>>();
+
+        info!("reexecuting pending consensus certificates: {:?}", digests);
+
+        state.enqueue_with_expected_effects_digest(pending_consensus_certificates, epoch_store);
+
+        // If this times out, the validator will still almost certainly start up fine. But, it is
+        // possible that it may temporarily "forget" about transactions that it had previously
+        // executed. This could confuse clients in some circumstances. However, the transactions
+        // are still in pending_consensus_certificates, so we cannot lose any finality guarantees.
+        if tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            state
+                .get_transaction_cache_reader()
+                .notify_read_executed_effects_digests(&digests),
+        )
+        .await
+        .is_err()
+        {
+            debug_fatal!("Timed out waiting for effects digests to be executed");
+        }
     }
 
     pub fn state(&self) -> Arc<AuthorityState> {
@@ -1831,23 +1910,25 @@ impl SuiNode {
                 if self.state.is_validator(&new_epoch_store) {
                     info!("Promoting the node from fullnode to validator, starting grpc server");
 
-                    Some(
-                        Self::construct_validator_components(
-                            self.config.clone(),
-                            self.state.clone(),
-                            Arc::new(next_epoch_committee.clone()),
-                            new_epoch_store.clone(),
-                            self.checkpoint_store.clone(),
-                            self.state_sync_handle.clone(),
-                            self.randomness_handle.clone(),
-                            weak_accumulator,
-                            self.backpressure_manager.clone(),
-                            self.connection_monitor_status.clone(),
-                            &self.registry_service,
-                            self.metrics.clone(),
-                        )
-                        .await?,
+                    let mut components = Self::construct_validator_components(
+                        self.config.clone(),
+                        self.state.clone(),
+                        Arc::new(next_epoch_committee.clone()),
+                        new_epoch_store.clone(),
+                        self.checkpoint_store.clone(),
+                        self.state_sync_handle.clone(),
+                        self.randomness_handle.clone(),
+                        weak_accumulator,
+                        self.backpressure_manager.clone(),
+                        self.connection_monitor_status.clone(),
+                        &self.registry_service,
+                        self.metrics.clone(),
                     )
+                    .await?;
+
+                    components.validator_server_handle = components.validator_server_handle.start();
+
+                    Some(components)
                 } else {
                     None
                 }
@@ -1972,6 +2053,30 @@ impl SuiNode {
         provider: &OIDCProvider,
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         get_jwk_injector()(authority, provider)
+    }
+}
+
+enum SpawnOnce {
+    // Mutex is only needed to make SpawnOnce Send
+    Unstarted(Mutex<BoxFuture<'static, Result<()>>>),
+    #[allow(unused)]
+    Started(JoinHandle<Result<()>>),
+}
+
+impl SpawnOnce {
+    pub fn new(future: impl Future<Output = Result<()>> + Send + 'static) -> Self {
+        Self::Unstarted(Mutex::new(Box::pin(future)))
+    }
+
+    pub fn start(self) -> Self {
+        match self {
+            Self::Unstarted(future) => {
+                let future = future.into_inner();
+                let handle = tokio::spawn(future);
+                Self::Started(handle)
+            }
+            Self::Started(_) => self,
+        }
     }
 }
 

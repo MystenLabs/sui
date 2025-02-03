@@ -1,9 +1,0 @@
-error[E13002]: feature is deprecated in specified edition
-  ┌─ tests/move_2024/parsing/address_weird_formatting.move:1:1
-  │
-1 │ address 
-  │ ^^^^^^^ 'address' blocks are deprecated. Use addresses directly in module definitions instead.
-  ·
-6 │     module m {
-  │            - Replace with '0x2::m'
-

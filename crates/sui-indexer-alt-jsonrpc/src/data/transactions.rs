@@ -13,15 +13,19 @@ use sui_types::digests::TransactionDigest;
 
 use super::reader::{ReadError, Reader};
 
+/// Key for fetching transaction contents (TransactionData, Effects, and Events) by digest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct TransactionKey(pub TransactionDigest);
+
 #[async_trait::async_trait]
-impl Loader<TransactionDigest> for Reader {
+impl Loader<TransactionKey> for Reader {
     type Value = StoredTransaction;
     type Error = Arc<ReadError>;
 
     async fn load(
         &self,
-        keys: &[TransactionDigest],
-    ) -> Result<HashMap<TransactionDigest, Self::Value>, Self::Error> {
+        keys: &[TransactionKey],
+    ) -> Result<HashMap<TransactionKey, Self::Value>, Self::Error> {
         use kv_transactions::dsl as t;
 
         if keys.is_empty() {
@@ -30,7 +34,7 @@ impl Loader<TransactionDigest> for Reader {
 
         let mut conn = self.connect().await.map_err(Arc::new)?;
 
-        let digests: BTreeSet<_> = keys.iter().map(|d| d.into_inner()).collect();
+        let digests: BTreeSet<_> = keys.iter().map(|d| d.0.into_inner()).collect();
         let transactions: Vec<StoredTransaction> = conn
             .results(t::kv_transactions.filter(t::tx_digest.eq_any(digests)))
             .await
@@ -44,7 +48,7 @@ impl Loader<TransactionDigest> for Reader {
         Ok(keys
             .iter()
             .filter_map(|key| {
-                let slice: &[u8] = key.as_ref();
+                let slice: &[u8] = key.0.as_ref();
                 Some((*key, digest_to_stored.get(slice).cloned()?))
             })
             .collect())

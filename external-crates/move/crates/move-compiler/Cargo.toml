@@ -24,7 +24,7 @@ serde_json.workspace = true
 similar.workspace = true
 stacker.workspace = true
 vfs.workspace = true
-
+insta.workspace = true
 
 bcs.workspace = true
 

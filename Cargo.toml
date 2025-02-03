@@ -206,7 +206,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.42.0"
+version = "1.43.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -477,6 +477,7 @@ shell-words = "1.1.0"
 shellexpand = "3.1.0"
 signature = "1.6.0"
 similar = "2.4.0"
+simple_moving_average = "1.0.2"
 simple-server-timing-header = "0.1.1"
 slip10_ed25519 = "0.1.3"
 smallvec = "1.10.0"
@@ -506,7 +507,7 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.12", features = ["transport", "tls-webpki-roots"] }
+tonic = { version = "0.12", features = ["zstd", "transport", "tls-webpki-roots"] }
 tonic-build = { version = "0.12", features = ["prost", "transport"] }
 tonic-health = "0.12"
 tonic-reflection = "0.12"

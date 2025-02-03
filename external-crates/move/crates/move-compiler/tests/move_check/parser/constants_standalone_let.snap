@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+input_file: crates/move-compiler/tests/move_check/parser/constants_standalone_let.move
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/constants_standalone_let.move:4:21
+  │
+4 │     const C1: u64 = let x = 0;
+  │                     ^^^
+  │                     │
+  │                     Unexpected 'let'
+  │                     Expected an expression term

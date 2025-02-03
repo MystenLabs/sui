@@ -1,8 +1,0 @@
-error[E13002]: feature is under active development
-  ┌─ tests/move_2024/matching/repeat_binding_okay.move:3:17
-  │
-3 │     public enum Two<T>{
-  │                 ^^^ Enums are not supported in bytecode.
-  │
-  = This feature is currently in development.
-

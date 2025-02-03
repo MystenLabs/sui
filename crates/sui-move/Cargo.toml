@@ -49,6 +49,7 @@ tempfile.workspace = true
 walkdir.workspace = true
 insta-cmd.workspace = true
 insta.workspace = true
+fs_extra.workspace = true
 
 move-package.workspace = true
 
@@ -60,10 +61,6 @@ sui-simulator.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]
-
-[[test]]
-name = "cli_tests"
-harness = false
 
 [lints]
 workspace = true

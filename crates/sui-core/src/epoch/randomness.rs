@@ -32,7 +32,9 @@ use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use typed_store::Map;
 
-use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, ConsensusCommitOutput};
+use crate::authority::authority_per_epoch_store::{
+    consensus_quarantine::ConsensusCommitOutput, AuthorityPerEpochStore,
+};
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::consensus_adapter::SubmitToConsensus;
 

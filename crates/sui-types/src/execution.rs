@@ -8,7 +8,8 @@ use crate::{
     is_system_package,
     object::{Data, Object, Owner},
     storage::{BackingPackageStore, ObjectChange},
-    transaction::Argument,
+    transaction::{Argument, Command},
+    type_input::TypeInput,
 };
 use move_core_types::language_storage::TypeTag;
 use once_cell::sync::Lazy;
@@ -171,10 +172,75 @@ impl ExecutionResultsV2 {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum ExecutionTimeObservationKey {
+    // Containts all the fields from `ProgrammableMoveCall` besides `arguments`.
+    MoveEntryPoint {
+        /// The package containing the module and function.
+        package: ObjectID,
+        /// The specific module in the package containing the function.
+        module: String,
+        /// The function to be called.
+        function: String,
+        /// The type arguments to the function.
+        type_arguments: Vec<TypeInput>,
+    },
+    TransferObjects,
+    SplitCoins,
+    MergeCoins,
+    Publish,
+    MakeMoveVec,
+    Upgrade,
+}
+
+impl ExecutionTimeObservationKey {
+    pub fn from_command(command: &Command) -> Self {
+        match command {
+            Command::MoveCall(call) => ExecutionTimeObservationKey::MoveEntryPoint {
+                package: call.package,
+                module: call.module.clone(),
+                function: call.function.clone(),
+                type_arguments: call.type_arguments.clone(),
+            },
+            Command::TransferObjects(_, _) => ExecutionTimeObservationKey::TransferObjects,
+            Command::SplitCoins(_, _) => ExecutionTimeObservationKey::SplitCoins,
+            Command::MergeCoins(_, _) => ExecutionTimeObservationKey::MergeCoins,
+            Command::Publish(_, _) => ExecutionTimeObservationKey::Publish,
+            Command::MakeMoveVec(_, _) => ExecutionTimeObservationKey::MakeMoveVec,
+            Command::Upgrade(_, _, _, _) => ExecutionTimeObservationKey::Upgrade,
+        }
+    }
+
+    // Returns the default estimated execution duration for the given key, for use if no
+    // observations are available.
+    pub fn default_duration(&self) -> Duration {
+        match self {
+            // TODO-DNS Do we want to choose these values more rigorously?
+            ExecutionTimeObservationKey::MoveEntryPoint { .. } => Duration::from_millis(1_500),
+            ExecutionTimeObservationKey::TransferObjects => Duration::from_millis(1),
+            ExecutionTimeObservationKey::SplitCoins => Duration::from_millis(1),
+            ExecutionTimeObservationKey::MergeCoins => Duration::from_millis(1),
+            ExecutionTimeObservationKey::Publish => Duration::from_millis(1),
+            ExecutionTimeObservationKey::MakeMoveVec => Duration::from_millis(1),
+            ExecutionTimeObservationKey::Upgrade => Duration::from_millis(1),
+        }
+    }
+}
+
 pub enum ExecutionTiming {
     Success(Duration),
     Abort(Duration),
 }
+
+impl ExecutionTiming {
+    pub fn duration(&self) -> Duration {
+        match self {
+            ExecutionTiming::Success(duration) => *duration,
+            ExecutionTiming::Abort(duration) => *duration,
+        }
+    }
+}
+
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
 
 /// If a transaction digest shows up in this list, when executing such transaction,

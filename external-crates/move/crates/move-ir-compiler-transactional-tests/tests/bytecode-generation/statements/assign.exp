@@ -1,5 +1,0 @@
-processed 1 task
-
-task 0, lines 1-9:
-//# print-bytecode
-Error: variable x undefined

@@ -1,0 +1,13 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+input_file: crates/move-compiler/tests/move_check/typing/shadowing_invalid_scope.move
+---
+error[E03009]: unbound variable
+  ┌─ tests/move_check/typing/shadowing_invalid_scope.move:5:10
+  │
+5 │         (x: bool);
+  │          ^ Unbound variable 'x'

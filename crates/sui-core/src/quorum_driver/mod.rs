@@ -7,13 +7,12 @@ pub use metrics::*;
 pub mod reconfig_observer;
 
 use arc_swap::ArcSwap;
-use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
-use sui_types::committee::{Committee, EpochId, StakeUnit};
+use sui_types::base_types::TransactionDigest;
+use sui_types::committee::{Committee, EpochId};
 use sui_types::messages_grpc::HandleCertificateRequestV3;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequestV3, QuorumDriverEffectsQueueResult, QuorumDriverError,
@@ -39,7 +38,6 @@ use mysten_metrics::{
 use std::fmt::Write;
 use sui_macros::fail_point;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::transaction::{CertifiedTransaction, Transaction};
 
 use self::reconfig_observer::ReconfigObserver;
@@ -303,8 +301,7 @@ where
         let tx_digest = *transaction.digest();
         let result = auth_agg.process_transaction(transaction, client_addr).await;
 
-        self.process_transaction_result(result, tx_digest, client_addr)
-            .await
+        self.process_transaction_result(result, tx_digest).await
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -312,43 +309,9 @@ where
         &self,
         result: Result<ProcessTransactionResult, AggregatorProcessTransactionError>,
         tx_digest: TransactionDigest,
-        client_addr: Option<SocketAddr>,
     ) -> Result<ProcessTransactionResult, Option<QuorumDriverError>> {
         match result {
             Ok(resp) => Ok(resp),
-            Err(AggregatorProcessTransactionError::RetryableConflictingTransaction {
-                conflicting_tx_digest_to_retry,
-                errors,
-                conflicting_tx_digests,
-            }) => {
-                self.metrics
-                    .total_err_process_tx_responses_with_nonzero_conflicting_transactions
-                    .inc();
-                debug!(
-                    ?tx_digest,
-                    "Observed {} conflicting transactions: {:?}",
-                    conflicting_tx_digests.len(),
-                    conflicting_tx_digests
-                );
-
-                if let Some(conflicting_tx_digest) = conflicting_tx_digest_to_retry {
-                    self.process_conflicting_tx(
-                        tx_digest,
-                        conflicting_tx_digest,
-                        conflicting_tx_digests,
-                        client_addr,
-                    )
-                    .await
-                } else {
-                    // If no retryable conflicting transaction was returned that means we have >= 2f+1 good stake for
-                    // the original transaction + retryable stake. Will continue to retry the original transaction.
-                    debug!(
-                        ?errors,
-                        "Observed Tx {tx_digest:} is still in retryable state. Conflicting Txes: {conflicting_tx_digests:?}",
-                    );
-                    Err(None)
-                }
-            }
 
             Err(AggregatorProcessTransactionError::FatalConflictingTransaction {
                 errors,
@@ -360,7 +323,6 @@ where
                 );
                 Err(Some(QuorumDriverError::ObjectsDoubleUsed {
                     conflicting_txes: conflicting_tx_digests,
-                    retried_tx_status: None,
                 }))
             }
 
@@ -419,65 +381,6 @@ where
         }
     }
 
-    #[instrument(level = "trace", skip_all)]
-    async fn process_conflicting_tx(
-        &self,
-        tx_digest: TransactionDigest,
-        conflicting_tx_digest: TransactionDigest,
-        conflicting_tx_digests: BTreeMap<
-            TransactionDigest,
-            (Vec<(AuthorityName, ObjectRef)>, StakeUnit),
-        >,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<ProcessTransactionResult, Option<QuorumDriverError>> {
-        // Safe to unwrap because tx_digest_to_retry is generated from conflicting_tx_digests
-        // in ProcessTransactionState::conflicting_tx_digest_with_most_stake()
-        let (validators, _) = conflicting_tx_digests.get(&conflicting_tx_digest).unwrap();
-        let attempt_result = self
-            .attempt_conflicting_transaction(
-                &conflicting_tx_digest,
-                &tx_digest,
-                validators.iter().map(|(pub_key, _)| *pub_key).collect(),
-                client_addr,
-            )
-            .await;
-        self.metrics
-            .total_attempts_retrying_conflicting_transaction
-            .inc();
-
-        match attempt_result {
-            Err(err) => {
-                debug!(
-                    ?tx_digest,
-                    ?conflicting_tx_digest,
-                    "Encountered error while attempting conflicting transaction: {:?}",
-                    err
-                );
-                Err(Some(QuorumDriverError::ObjectsDoubleUsed {
-                    conflicting_txes: conflicting_tx_digests,
-                    retried_tx_status: None,
-                }))
-            }
-            Ok(success) => {
-                debug!(
-                    ?tx_digest,
-                    ?conflicting_tx_digest,
-                    "Retried conflicting transaction. Success: {}",
-                    success
-                );
-                if success {
-                    self.metrics
-                        .total_successful_attempts_retrying_conflicting_transaction
-                        .inc();
-                }
-                Err(Some(QuorumDriverError::ObjectsDoubleUsed {
-                    conflicting_txes: conflicting_tx_digests,
-                    retried_tx_status: Some((conflicting_tx_digest, success)),
-                }))
-            }
-        }
-    }
-
     #[instrument(level = "trace", skip_all, fields(tx_digest = ?request.certificate.digest()))]
     pub(crate) async fn process_certificate(
         &self,
@@ -513,98 +416,6 @@ where
             })?;
 
         Ok(response)
-    }
-
-    /// Returns Some(true) if the conflicting transaction is executed successfully
-    /// (or already executed), or Some(false) if it did not.
-    #[instrument(level = "trace", skip_all)]
-    async fn attempt_conflicting_transaction(
-        &self,
-        tx_digest: &TransactionDigest,
-        original_tx_digest: &TransactionDigest,
-        validators: BTreeSet<AuthorityName>,
-        client_addr: Option<SocketAddr>,
-    ) -> SuiResult<bool> {
-        let response = self
-            .validators
-            .load()
-            .handle_transaction_info_request_from_some_validators(
-                tx_digest,
-                &validators,
-                Some(Duration::from_secs(10)),
-            )
-            .await?;
-
-        // If we are able to get a certificate right away, we use it and execute the cert;
-        // otherwise, we have to re-form a cert and execute it.
-        let transaction = match response {
-            PlainTransactionInfoResponse::ExecutedWithCert(cert, _, _) => {
-                self.metrics
-                    .total_times_conflicting_transaction_already_finalized_when_retrying
-                    .inc();
-                // We still want to ask validators to execute this certificate in case this certificate is not
-                // known to the rest of them (e.g. when *this* validator is bad).
-                let result = self
-                    .validators
-                    .load()
-                    .process_certificate(
-                        HandleCertificateRequestV3 {
-                            certificate: cert,
-                            include_events: true,
-                            include_input_objects: false,
-                            include_output_objects: false,
-                            include_auxiliary_data: false,
-                        },
-                        client_addr,
-                    )
-                    .await
-                    .tap_ok(|_resp| {
-                        debug!(
-                            ?tx_digest,
-                            ?original_tx_digest,
-                            "Retry conflicting transaction certificate succeeded."
-                        );
-                    })
-                    .tap_err(|err| {
-                        debug!(
-                            ?tx_digest,
-                            ?original_tx_digest,
-                            "Retry conflicting transaction certificate got an error: {:?}",
-                            err
-                        );
-                    });
-                // We only try it once.
-                return Ok(result.is_ok());
-            }
-            PlainTransactionInfoResponse::Signed(signed) => {
-                signed.verify_committee_sigs_only(&self.clone_committee())?;
-                signed.into_unsigned()
-            }
-            PlainTransactionInfoResponse::ExecutedWithoutCert(transaction, _, _) => transaction,
-        };
-        // Now ask validators to execute this transaction.
-        let result = self
-            .validators
-            .load()
-            .execute_transaction_block(&transaction, client_addr)
-            .await
-            .tap_ok(|_resp| {
-                debug!(
-                    ?tx_digest,
-                    ?original_tx_digest,
-                    "Retry conflicting transaction succeeded."
-                );
-            })
-            .tap_err(|err| {
-                debug!(
-                    ?tx_digest,
-                    ?original_tx_digest,
-                    "Retry conflicting transaction got an error: {:?}",
-                    err
-                );
-            });
-        // We only try it once
-        Ok(result.is_ok())
     }
 }
 

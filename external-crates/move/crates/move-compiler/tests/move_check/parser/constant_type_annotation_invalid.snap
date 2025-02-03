@@ -1,0 +1,13 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+input_file: crates/move-compiler/tests/move_check/parser/constant_type_annotation_invalid.move
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/constant_type_annotation_invalid.move:2:25
+  │
+2 │     const EThreadMaxxed = 1;
+  │                         ^ Expected a type annotation for this constant, e.g. 'EThreadMaxxed: <type>'

@@ -1,0 +1,9 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-compiler-transactional-tests/tests/dependencies/public_package.move
+---
+processed 3 tasks
+
+task 2, line 20:
+//# run 0x42::y::foo
+return values: { false }

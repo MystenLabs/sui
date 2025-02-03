@@ -71,6 +71,7 @@ feature_flags:
   native_charging_v2: true
   convert_type_argument_error: true
   variant_nodes: true
+  consensus_zstd_compression: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -347,4 +348,3 @@ gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
 use_object_per_epoch_marker_table_v2: true
-
