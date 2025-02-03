@@ -114,7 +114,9 @@ use crate::epoch::randomness::{
     VersionedUsedProcessedMessages, SINGLETON_KEY,
 };
 use crate::epoch::reconfiguration::ReconfigState;
+use crate::execution_cache::cache_types::CacheResult;
 use crate::execution_cache::{ObjectCacheRead, TransactionCacheRead};
+use crate::fallback_fetch::do_fallback_lookup;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
 use crate::signature_verifier::*;
@@ -135,7 +137,7 @@ pub(crate) type EncG = bls12381::G2Element;
 pub(crate) mod consensus_quarantine;
 
 use consensus_quarantine::ConsensusCommitOutput;
-use consensus_quarantine::ConsensusEphemeralOutput;
+use consensus_quarantine::ConsensusOutputCache;
 use consensus_quarantine::ConsensusOutputQuarantine;
 
 // CertLockGuard and CertTxGuard are functionally identical right now, but we retain a distinction
@@ -319,8 +321,11 @@ pub struct AuthorityPerEpochStore {
     /// and it needs to be cleared at the end of the epoch.
     tables: ArcSwapOption<AuthorityEpochTables>,
 
+    /// Holds the outputs of both consensus handler and checkpoint builder in memory
+    /// until they are proven not to have forked by a certified checkpoint.
     consensus_quarantine: RwLock<ConsensusOutputQuarantine>,
-    consensus_output_cache: ConsensusEphemeralOutput,
+    /// Holds variouis data from consensus_quarantine in a more easily accessible form.
+    consensus_output_cache: ConsensusOutputCache,
 
     protocol_config: ProtocolConfig,
 
@@ -888,7 +893,7 @@ impl AuthorityPerEpochStore {
         let jwk_aggregator = Mutex::new(jwk_aggregator);
 
         let consensus_output_cache =
-            ConsensusEphemeralOutput::new(&epoch_start_configuration, &tables);
+            ConsensusOutputCache::new(&epoch_start_configuration, &tables, metrics.clone());
 
         let s = Arc::new(Self {
             name,
@@ -898,6 +903,7 @@ impl AuthorityPerEpochStore {
             consensus_output_cache,
             consensus_quarantine: RwLock::new(ConsensusOutputQuarantine::new(
                 highest_executed_checkpoint,
+                metrics.clone(),
             )),
             parent_path: parent_path.to_path_buf(),
             db_options,
@@ -1309,15 +1315,12 @@ impl AuthorityPerEpochStore {
         &self,
         keys: impl IntoIterator<Item = &'a TransactionKey>,
     ) {
-        for tx_key in keys {
-            self.consensus_output_cache
-                .shared_version_assignments
-                .remove(tx_key);
-        }
+        self.consensus_output_cache
+            .remove_shared_object_assignments(keys);
     }
 
     pub fn num_shared_version_assignments(&self) -> usize {
-        self.consensus_output_cache.shared_version_assignments.len()
+        self.consensus_output_cache.num_shared_version_assignments()
     }
 
     pub fn revert_executed_transaction(&self, tx_digest: &TransactionDigest) -> SuiResult {
@@ -1587,11 +1590,7 @@ impl AuthorityPerEpochStore {
         assigned_versions: &[(ConsensusObjectSequenceKey, SequenceNumber)],
     ) -> SuiResult {
         self.consensus_output_cache
-            .shared_version_assignments
-            .insert(
-                TransactionKey::Digest(*tx_digest),
-                assigned_versions.to_owned(),
-            );
+            .set_shared_object_versions_for_testing(tx_digest, assigned_versions);
         Ok(())
     }
 
@@ -1771,18 +1770,12 @@ impl AuthorityPerEpochStore {
         key: &TransactionKey,
     ) -> Option<Vec<(ConsensusObjectSequenceKey, SequenceNumber)>> {
         self.consensus_output_cache
-            .shared_version_assignments
-            .get(key)
-            .map(|locks| locks.clone())
+            .get_assigned_shared_object_versions(key)
     }
 
     fn set_assigned_shared_object_versions(&self, versions: AssignedTxAndVersions) {
-        debug!("set_assigned_shared_object_versions: {:?}", versions);
-        for (key, value) in &versions {
-            self.consensus_output_cache
-                .shared_version_assignments
-                .insert(*key, value.clone());
-        }
+        self.consensus_output_cache
+            .insert_shared_object_assignments(&versions);
     }
 
     /// Given list of certificates, assign versions for all shared objects used in them.
@@ -2096,40 +2089,27 @@ impl AuthorityPerEpochStore {
         &self,
         keys: impl Iterator<Item = SequencedConsensusTransactionKey>,
     ) -> SuiResult<Vec<bool>> {
-        let size_hint = keys.size_hint().0;
-        let mut results = Vec::with_capacity(size_hint);
-        let mut fallback_keys = Vec::with_capacity(size_hint);
-        let mut fallback_indices = Vec::with_capacity(size_hint);
+        let keys = keys.collect::<Vec<_>>();
 
-        {
-            let consensus_quarantine = self.consensus_quarantine.read();
+        let consensus_quarantine = self.consensus_quarantine.read();
+        let tables = self.tables()?;
 
-            for (i, key) in keys.enumerate() {
-                if consensus_quarantine.is_consensus_message_processed(&key) {
-                    results.push(true);
+        Ok(do_fallback_lookup(
+            &keys,
+            |key| {
+                if consensus_quarantine.is_consensus_message_processed(key) {
+                    CacheResult::Hit(true)
                 } else {
-                    results.push(false);
-                    fallback_keys.push(key);
-                    fallback_indices.push(i);
+                    CacheResult::Miss
                 }
-            }
-        }
-
-        let fallback_results = self
-            .tables()?
-            .consensus_message_processed
-            .multi_contains_keys(fallback_keys)?;
-
-        assert_eq!(fallback_results.len(), fallback_indices.len());
-
-        for (result, i) in fallback_results
-            .into_iter()
-            .zip(fallback_indices.into_iter())
-        {
-            results[i] = result;
-        }
-
-        Ok(results)
+            },
+            |keys| {
+                tables
+                    .consensus_message_processed
+                    .multi_contains_keys(keys)
+                    .expect("db error")
+            },
+        ))
     }
 
     pub async fn consensus_messages_processed_notify(
@@ -2499,7 +2479,8 @@ impl AuthorityPerEpochStore {
         output.set_default_commit_stats_for_testing();
         self.consensus_quarantine
             .write()
-            .push_consensus_output(output);
+            .push_consensus_output(output, self)
+            .expect("push_consensus_output should not fail");
         self.consensus_notify_read.notify(&key, &());
     }
 
@@ -2507,13 +2488,11 @@ impl AuthorityPerEpochStore {
     pub(crate) fn push_consensus_output_for_tests(&self, output: ConsensusCommitOutput) {
         self.consensus_quarantine
             .write()
-            .push_consensus_output(output);
+            .push_consensus_output(output, self)
+            .expect("push_consensus_output should not fail");
     }
 
-    fn finish_consensus_certificate_process_with_batch(
-        &self,
-        certificates: &[VerifiedExecutableTransaction],
-    ) {
+    fn finish_consensus_certificate_process(&self, certificates: &[VerifiedExecutableTransaction]) {
         let sigs: Vec<_> = certificates
             .iter()
             .map(|certificate| (*certificate.digest(), certificate.tx_signatures().to_vec()))
@@ -2528,7 +2507,11 @@ impl AuthorityPerEpochStore {
         for (digest, sigs) in sigs {
             // User signatures are written in the same batch as consensus certificate processed flag,
             // which means we won't attempt to insert this twice for the same tx digest
-            assert!(user_sigs.insert(digest, sigs).is_none());
+            assert!(
+                user_sigs.insert(digest, sigs).is_none(),
+                "duplicate user signatures for transaction digest: {:?}",
+                digest
+            );
         }
     }
 
@@ -2982,7 +2965,7 @@ impl AuthorityPerEpochStore {
                     self,
                     consensus_commit_info.round,
                     true,
-                    &sequenced_transactions,
+                    &sequenced_randomness_transactions,
                 )?,
                 self.protocol_config(),
                 true,
@@ -3021,7 +3004,7 @@ impl AuthorityPerEpochStore {
                 authority_metrics,
             )
             .await?;
-        self.finish_consensus_certificate_process_with_batch(&verified_transactions);
+        self.finish_consensus_certificate_process(&verified_transactions);
         output.record_consensus_commit_stats(consensus_stats.clone());
 
         let mut verified_transactions = verified_transactions;
@@ -3109,14 +3092,9 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        {
-            let mut consensus_quarantine = self.consensus_quarantine.write();
-            consensus_quarantine.push_consensus_output(output);
-
-            // we may already have observed the certified checkpoint for this round, if state sync is running
-            // ahead of consensus, so there may be data to commit right away.
-            consensus_quarantine.commit(self)?;
-        }
+        self.consensus_quarantine
+            .write()
+            .push_consensus_output(output, self)?;
 
         // Only after batch is written, notify checkpoint service to start building any new
         // pending checkpoints.
@@ -3239,11 +3217,8 @@ impl AuthorityPerEpochStore {
             cancelled_txns,
         )?;
 
-        for (tx_key, objects) in &assigned_versions {
-            self.consensus_output_cache
-                .shared_version_assignments
-                .insert(*tx_key, objects.clone());
-        }
+        self.consensus_output_cache
+            .insert_shared_object_assignments(&assigned_versions);
 
         output.set_next_shared_object_versions(shared_input_next_versions);
         Ok(())
@@ -4059,6 +4034,9 @@ impl AuthorityPerEpochStore {
         &self,
         last: Option<CheckpointHeight>,
     ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
+        // TODO: Delete the db reads.
+        // Reading from the db table is only need when upgrading to data quarantining
+        // for the first time.
         let tables = self.tables()?;
         let mut db_iter = tables.pending_checkpoints_v2.unbounded_iter();
         if let Some(last_processed_height) = last {
@@ -4089,7 +4067,7 @@ impl AuthorityPerEpochStore {
             .pending_checkpoint_exists(index))
     }
 
-    pub fn process_pending_checkpoint(
+    pub fn process_constructed_checkpoint(
         &self,
         commit_height: CheckpointHeight,
         content_info: NonEmpty<(CheckpointSummary, CheckpointContents)>,
@@ -4205,40 +4183,25 @@ impl AuthorityPerEpochStore {
         &self,
         digests: impl Iterator<Item = &'a TransactionDigest>,
     ) -> SuiResult<Vec<bool>> {
-        let size_hint = digests.size_hint().0;
-        let mut results = Vec::with_capacity(size_hint);
-        let mut fallback_keys = Vec::with_capacity(size_hint);
-        let mut fallback_indices = Vec::with_capacity(size_hint);
-
-        {
-            let consensus_quarantine = self.consensus_quarantine.read();
-
-            for (i, digest) in digests.enumerate() {
+        let digests: Vec<_> = digests.cloned().collect();
+        let tables = self.tables()?;
+        Ok(do_fallback_lookup(
+            &digests,
+            |digest| {
+                let consensus_quarantine = self.consensus_quarantine.read();
                 if consensus_quarantine.included_transaction_in_checkpoint(digest) {
-                    results.push(true);
+                    CacheResult::Hit(true)
                 } else {
-                    results.push(false);
-                    fallback_keys.push(digest);
-                    fallback_indices.push(i);
+                    CacheResult::Miss
                 }
-            }
-        }
-
-        let fallback_results = self
-            .tables()?
-            .builder_digest_to_checkpoint
-            .multi_contains_keys(fallback_keys)?;
-
-        assert_eq!(fallback_results.len(), fallback_indices.len());
-
-        for (result, i) in fallback_results
-            .into_iter()
-            .zip(fallback_indices.into_iter())
-        {
-            results[i] = result;
-        }
-
-        Ok(results)
+            },
+            |remaining| {
+                tables
+                    .builder_digest_to_checkpoint
+                    .multi_contains_keys(remaining)
+                    .expect("db error")
+            },
+        ))
     }
 
     pub fn get_last_checkpoint_signature_index(&self) -> SuiResult<u64> {

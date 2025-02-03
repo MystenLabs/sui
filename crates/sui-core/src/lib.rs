@@ -20,6 +20,7 @@ pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod execution_cache;
 mod execution_driver;
+mod fallback_fetch;
 pub mod jsonrpc_index;
 pub mod metrics;
 pub mod mock_consensus;
