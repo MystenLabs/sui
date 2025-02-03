@@ -8,10 +8,12 @@ use std::time::Duration;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use tracing::info;
+use url::Url;
 
 use crate::direct::benchmark_config::BenchmarkConfig;
+use crate::direct::query_enricher::QueryEnricher;
 use crate::direct::query_executor::QueryExecutor;
-use crate::direct::query_generator::QueryGenerator;
+use crate::direct::query_template_generator::QueryTemplateGenerator;
 
 #[derive(Parser)]
 #[clap(
@@ -61,20 +63,27 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
             concurrency,
             duration_secs,
         } => {
+            let db_url = Url::parse(&db_url)?;
             info!("Running direct query benchmark against DB {}", db_url);
-            let query_generator = QueryGenerator {
-                db_url: db_url.clone(),
-            };
-            let benchmark_queries = query_generator.generate_benchmark_queries().await?;
-            info!("Generated {} benchmark queries", benchmark_queries.len());
+
+            let template_generator = QueryTemplateGenerator::new(db_url.clone());
+            let query_templates = template_generator.generate_query_templates().await?;
+            info!("Generated {} query templates", query_templates.len());
+
+            let query_enricher = QueryEnricher::new(&db_url).await?;
+            let enriched_queries = query_enricher.enrich_queries(query_templates).await?;
+            info!(
+                "Enriched {} queries with sample data",
+                enriched_queries.len()
+            );
 
             let config = BenchmarkConfig {
                 concurrency,
-                duration: Duration::from_secs(duration_secs),
+                timeout: Duration::from_secs(duration_secs),
             };
-
-            let mut query_executor = QueryExecutor::new(&db_url, benchmark_queries, config).await?;
+            let query_executor = QueryExecutor::new(&db_url, enriched_queries, config).await?;
             let result = query_executor.run().await?;
+
             info!("Total queries: {}", result.total_queries);
             info!("Total errors: {}", result.total_errors);
             info!("Average latency: {:.2}ms", result.avg_latency_ms);

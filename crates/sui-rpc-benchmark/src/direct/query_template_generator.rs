@@ -1,45 +1,60 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// This module generates SQL queries for benchmarking, including
-/// queries based on primary key columns and indexed columns.
+/// This module generates SQL query templates for benchmarking, including
+/// query templates based on primary key columns and indexed columns.
 ///
-/// The primary key queries ("pk queries") select a row by each PK,
+/// The primary key query templates ("pk queries") select a row by each PK,
 /// while the "index queries" filter by indexed columns. Instead
 /// of returning just a list of tables and indexes, this module
-/// returns a vector of BenchmarkQuery objects, each of which is
+/// returns a vector of QueryTemplate objects, each of which is
 /// ready to be executed. This approach streamlines the pipeline
 /// so we can directly run these queries as part of the benchmark.
 use tokio_postgres::NoTls;
-use tracing::info;
-
-pub struct QueryGenerator {
-    pub db_url: String,
-}
+use tracing::{debug, info};
+use url::Url;
 
 #[derive(Debug, Clone)]
-pub struct BenchmarkQuery {
+pub struct QueryTemplate {
     pub query_template: String,
     pub table_name: String,
     pub needed_columns: Vec<String>,
 }
 
-impl QueryGenerator {
-    async fn get_tables_and_indexes(&self) -> Result<Vec<BenchmarkQuery>, anyhow::Error> {
-        let (client, connection) = tokio_postgres::connect(&self.db_url, NoTls).await?;
+pub struct QueryTemplateGenerator {
+    db_url: Url,
+}
+
+impl QueryTemplateGenerator {
+    pub fn new(db_url: Url) -> Self {
+        Self { db_url }
+    }
+
+    pub async fn generate_query_templates(&self) -> Result<Vec<QueryTemplate>, anyhow::Error> {
+        let (client, connection) = tokio_postgres::connect(self.db_url.as_str(), NoTls).await?;
         tokio::spawn(connection);
-        let tables_query = r#"
-            SELECT tablename 
-            FROM pg_tables 
-            WHERE schemaname = 'public' 
-            AND tablename != '__diesel_schema_migrations'
-            ORDER BY tablename;
+
+        let pk_query = r#"
+            SELECT 
+                tc.table_name,  
+                array_agg(kcu.column_name ORDER BY kcu.ordinal_position)::text[] as primary_key_columns  
+            FROM information_schema.table_constraints tc  
+            JOIN information_schema.key_column_usage kcu 
+                ON tc.constraint_name = kcu.constraint_name  
+            WHERE tc.constraint_type = 'PRIMARY KEY'
+                AND tc.table_schema = 'public'
+                AND tc.table_name != '__diesel_schema_migrations'
+            GROUP BY tc.table_name
+            ORDER BY tc.table_name;
         "#;
-        let tables: Vec<String> = client
-            .query(tables_query, &[])
-            .await?
+
+        let mut queries = Vec::new();
+        let rows = client.query(pk_query, &[]).await?;
+        let tables: Vec<String> = rows
             .iter()
-            .map(|row| row.get::<_, String>(0))
+            .map(|row| row.get::<_, String>("table_name"))
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
             .collect();
         info!(
             "Found {} active tables in database: {:?}",
@@ -47,36 +62,11 @@ impl QueryGenerator {
             tables
         );
 
-        let pk_query = r#"
-            SELECT tc.table_name, kcu.column_name
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu 
-                ON tc.constraint_name = kcu.constraint_name
-            WHERE tc.constraint_type = 'PRIMARY KEY'
-                AND tc.table_schema = 'public'
-                AND tc.table_name != '__diesel_schema_migrations'
-            ORDER BY tc.table_name, kcu.ordinal_position;
-        "#;
-
-        let mut queries = Vec::new();
-        let rows = client.query(pk_query, &[]).await?;
-        let mut current_table = String::new();
-        let mut pk_columns = Vec::new();
-
+        // Process primary key queries - now each row has all columns for a table
         for row in rows {
             let table: String = row.get("table_name");
-            let column: String = row.get("column_name");
-
-            if table != current_table && !current_table.is_empty() {
-                queries.push(self.create_pk_query(&current_table, &pk_columns));
-                pk_columns.clear();
-            }
-
-            current_table = table;
-            pk_columns.push(column);
-        }
-        if !pk_columns.is_empty() {
-            queries.push(self.create_pk_query(&current_table, &pk_columns));
+            let pk_columns: Vec<String> = row.get("primary_key_columns");
+            queries.push(self.create_pk_benchmark_query(&table, &pk_columns));
         }
 
         let idx_query = r#"
@@ -101,12 +91,12 @@ impl QueryGenerator {
         for row in rows {
             let table: String = row.get("table_name");
             let columns: Vec<String> = row.get("column_names");
-            queries.push(self.create_index_query(&table, &columns));
+            queries.push(self.create_index_benchmark_query(&table, &columns));
         }
 
-        info!("\nGenerated {} queries:", queries.len());
+        debug!("Generated {} queries:", queries.len());
         for (i, query) in queries.iter().enumerate() {
-            info!(
+            debug!(
                 "  {}. Table: {}, Template: {}",
                 i + 1,
                 query.table_name,
@@ -117,7 +107,9 @@ impl QueryGenerator {
         Ok(queries)
     }
 
-    fn create_pk_query(&self, table: &str, columns: &[String]) -> BenchmarkQuery {
+    /// An example query template:
+    /// SELECT * FROM tx_kinds WHERE tx_kind = $1 AND tx_sequence_number = $2 LIMIT 1
+    fn create_pk_benchmark_query(&self, table: &str, columns: &[String]) -> QueryTemplate {
         let conditions = columns
             .iter()
             .enumerate()
@@ -125,14 +117,14 @@ impl QueryGenerator {
             .collect::<Vec<_>>()
             .join(" AND ");
 
-        BenchmarkQuery {
+        QueryTemplate {
             query_template: format!("SELECT * FROM {} WHERE {} LIMIT 1", table, conditions),
             table_name: table.to_string(),
             needed_columns: columns.to_vec(),
         }
     }
 
-    fn create_index_query(&self, table: &str, columns: &[String]) -> BenchmarkQuery {
+    fn create_index_benchmark_query(&self, table: &str, columns: &[String]) -> QueryTemplate {
         let conditions = columns
             .iter()
             .enumerate()
@@ -140,15 +132,10 @@ impl QueryGenerator {
             .collect::<Vec<_>>()
             .join(" AND ");
 
-        BenchmarkQuery {
+        QueryTemplate {
             query_template: format!("SELECT * FROM {} WHERE {} LIMIT 50", table, conditions),
             table_name: table.to_string(),
             needed_columns: columns.to_vec(),
         }
-    }
-
-    pub async fn generate_benchmark_queries(&self) -> Result<Vec<BenchmarkQuery>, anyhow::Error> {
-        let queries = self.get_tables_and_indexes().await?;
-        Ok(queries)
     }
 }

@@ -3,5 +3,6 @@
 
 pub mod benchmark_config;
 pub mod metrics;
+pub mod query_enricher;
 pub mod query_executor;
-pub mod query_generator;
+pub mod query_template_generator;

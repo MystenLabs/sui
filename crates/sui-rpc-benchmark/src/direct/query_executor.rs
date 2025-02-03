@@ -1,137 +1,47 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// This module executes enriched benchmark queries against the database.
+/// Each query's execution is timed and recorded via MetricsCollector.
+/// And the results are aggregated and reported via BenchmarkResult.
 use std::time::Instant;
 
 use anyhow::Result;
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use rand::seq::SliceRandom;
+use rand::SeedableRng;
 use sui_indexer_alt_framework::task::TrySpawnStreamExt;
-use tokio_postgres::{types::ToSql, types::Type, NoTls, Row};
+use tokio_postgres::{types::ToSql, NoTls};
 use tracing::info;
+use url::Url;
 
 use crate::direct::benchmark_config::BenchmarkConfig;
 use crate::direct::metrics::{BenchmarkResult, MetricsCollector};
-use crate::direct::query_generator::BenchmarkQuery;
+use crate::direct::query_enricher::{EnrichedBenchmarkQuery, SqlValue};
 
-/// This module contains the QueryExecutor, which coordinates benchmark queries
-/// against the database. It can “enrich” each BenchmarkQuery by sampling real
-/// data from the relevant table. Each query’s execution is timed and recorded
-/// via MetricsCollector, which is defined in the metrics module.
 pub struct QueryExecutor {
     pool: Pool<PostgresConnectionManager<NoTls>>,
-    queries: Vec<BenchmarkQuery>,
     enriched_queries: Vec<EnrichedBenchmarkQuery>,
     config: BenchmarkConfig,
     metrics: MetricsCollector,
 }
 
-/// Represents strongly typed SQL values used in parametric queries.
-/// Storing them as an enum allows us to handle different column types
-/// transparently when performing random queries from the database.
-/// This approach lets us build parameter lists matching each column's
-/// actual type at runtime, ensuring correct and safe query execution.
-///
-/// We store each value in an `Option` to handle `NULL` values that can
-/// appear in database columns.
-#[derive(Clone, Debug)]
-pub enum SqlValue {
-    Text(Option<String>),
-    Int4(Option<i32>),
-    Int8(Option<i64>),
-    Float8(Option<f64>),
-    Bool(Option<bool>),
-    Int2(Option<i16>),
-    Bytea(Option<Vec<u8>>),
-}
-
-#[derive(Debug, Clone)]
-pub struct EnrichedBenchmarkQuery {
-    pub query: BenchmarkQuery,
-    pub rows: Vec<Vec<SqlValue>>,
-    pub types: Vec<Type>,
-}
-
 impl QueryExecutor {
     pub async fn new(
-        db_url: &str,
-        queries: Vec<BenchmarkQuery>,
+        db_url: &Url,
+        enriched_queries: Vec<EnrichedBenchmarkQuery>,
         config: BenchmarkConfig,
     ) -> Result<Self> {
-        let manager = PostgresConnectionManager::new_from_stringlike(db_url, NoTls)?;
+        let manager = PostgresConnectionManager::new_from_stringlike(db_url.as_str(), NoTls)?;
         let pool = Pool::builder().build(manager).await?;
 
         Ok(Self {
             pool,
-            queries,
-            enriched_queries: Vec::new(),
+            enriched_queries,
             config,
             metrics: MetricsCollector::default(),
         })
-    }
-
-    fn row_to_values(row: &Row) -> Vec<SqlValue> {
-        (0..row.len())
-            .map(|i| match row.columns()[i].type_() {
-                &Type::TEXT | &Type::VARCHAR => SqlValue::Text(row.get(i)),
-                &Type::INT4 => SqlValue::Int4(row.get(i)),
-                &Type::INT8 => SqlValue::Int8(row.get(i)),
-                &Type::FLOAT8 => SqlValue::Float8(row.get(i)),
-                &Type::BOOL => SqlValue::Bool(row.get(i)),
-                &Type::INT2 => SqlValue::Int2(row.get(i)),
-                &Type::BYTEA => SqlValue::Bytea(row.get(i)),
-                ty => panic!("Unsupported type: {:?}", ty),
-            })
-            .collect()
-    }
-
-    /// "Enriching" a query involves discovering valid column values for
-    /// placeholders. By sampling data from the table, we can produce
-    /// realistic sets of parameters, rather than random or empty
-    /// placeholders, leading to more accurate benchmark results.
-    async fn enrich_query(&self, query: &BenchmarkQuery) -> Result<EnrichedBenchmarkQuery> {
-        let client = self.pool.get().await?;
-        let sql = format!(
-            "SELECT DISTINCT {} FROM {} WHERE {} IS NOT NULL LIMIT 1000",
-            query.needed_columns.join(", "),
-            query.table_name,
-            query.needed_columns[0]
-        );
-
-        let rows = client.query(&sql, &[]).await?;
-        if rows.is_empty() {
-            info!(
-                "Warning: No sample data found for query on table {}, table is empty",
-                query.table_name
-            );
-            return Ok(EnrichedBenchmarkQuery {
-                query: query.clone(),
-                rows: Vec::new(),
-                types: query.needed_columns.iter().map(|_| Type::TEXT).collect(), // default type
-            });
-        }
-
-        let types = rows[0]
-            .columns()
-            .iter()
-            .map(|c| c.type_().clone())
-            .collect();
-        let raw_rows = rows.iter().map(Self::row_to_values).collect();
-
-        Ok(EnrichedBenchmarkQuery {
-            query: query.clone(),
-            rows: raw_rows,
-            types,
-        })
-    }
-
-    pub async fn initialize_samples(&mut self) -> Result<()> {
-        for query in &self.queries.clone() {
-            let enriched = self.enrich_query(query).await?;
-            self.enriched_queries.push(enriched);
-        }
-        Ok(())
     }
 
     async fn worker_task(
@@ -141,8 +51,8 @@ impl QueryExecutor {
         deadline: Instant,
     ) -> Result<()> {
         let client = pool.get().await?;
-        let mut query_rng = rand::thread_rng();
-        let mut row_rng = rand::thread_rng();
+        let mut query_rng = rand::rngs::StdRng::from_entropy();
+        let mut row_rng = rand::rngs::StdRng::from_entropy();
         while Instant::now() < deadline {
             let enriched = enriched_queries
                 .choose(&mut query_rng)
@@ -174,23 +84,19 @@ impl QueryExecutor {
             let start = Instant::now();
             let result = client.query(&query_str, &param_refs[..]).await;
 
-            metrics.record_query(&enriched.query.table_name, start.elapsed(), result.is_err());
+            metrics.record_query(enriched.query.clone(), start.elapsed(), result.is_err());
         }
         Ok(())
     }
 
-    pub async fn run(&mut self) -> Result<BenchmarkResult> {
-        if self.enriched_queries.is_empty() {
-            self.initialize_samples().await?;
-        }
-
+    pub async fn run(&self) -> Result<BenchmarkResult> {
         info!(
             "Running benchmark with {} concurrent clients",
             self.config.concurrency
         );
 
         let start = Instant::now();
-        let deadline = start + self.config.duration;
+        let deadline = start + self.config.timeout;
         let (concurrency, metrics, pool, queries) = (
             self.config.concurrency,
             self.metrics.clone(),

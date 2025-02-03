@@ -7,6 +7,9 @@
 use dashmap::DashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::debug;
+
+use super::query_template_generator::QueryTemplate;
 
 #[derive(Debug, Default)]
 pub struct QueryMetrics {
@@ -38,17 +41,21 @@ pub struct MetricsCollector {
 
 impl MetricsCollector {
     /// Records a query execution with its latency and error status
-    /// 
+    ///
     /// # Arguments
-    /// * `query_type` - The type/name of the query being recorded
+    /// * `query_template` - The QueryTemplate being recorded
     /// * `latency` - The duration taken to execute the query
     /// * `is_error` - Whether the query resulted in an error
-    pub fn record_query(&self, query_type: &str, latency: Duration, is_error: bool) {
-        let mut entry = self.metrics.entry(query_type.to_string()).or_default();
+    pub fn record_query(&self, query_template: QueryTemplate, latency: Duration, is_error: bool) {
+        let mut entry = self
+            .metrics
+            .entry(query_template.table_name.to_string())
+            .or_default();
 
         entry.total_queries += 1;
         if is_error {
             entry.errors += 1;
+            debug!("Error executing query: {:?}", query_template);
         } else {
             entry.latency_ms.push(latency.as_secs_f64() * 1000.0);
         }
