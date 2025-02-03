@@ -1110,6 +1110,8 @@ impl ToolCommand {
                 let mut keys = HashMap::new();
                 let mut record_count = 0;
 
+                let mut object_frequency = HashMap::new();
+
                 while let Some(record) = log.next() {
                     let record = match record {
                         Ok(record) => record,
@@ -1126,15 +1128,26 @@ impl ToolCommand {
                     } = record;
 
                     record_count += 1;
+                    for object in transaction.shared_input_objects() {
+                        if object.mutable {
+                            let entry = object_frequency.entry(object.id).or_insert(0);
+                            *entry += 1;
+                        }
+                    }
+
                     if let TransactionKind::ProgrammableTransaction(tx) = transaction.into_kind() {
+                        let mut sum_duration = Duration::ZERO;
                         for (command, timing) in tx.commands.into_iter().zip(timings) {
                             let key = ExecutionTimeObservationKey::from_command(&command);
-                            if key.is_move_call() {
-                                let entry = keys.entry(key).or_insert((0, Duration::ZERO));
-                                *entry = (entry.0 + 1, entry.1 + timing.duration());
+                            println!("sample {}: {:?}", key, timing.duration());
+                            if timing.is_abort() {
+                                println!("abort: {}", key);
                             }
-                            //println!("Command: {:?}, Timing: {:?}", command, timing);
+                            let entry = keys.entry(key).or_insert((0, Duration::ZERO));
+                            *entry = (entry.0 + 1, entry.1 + timing.duration());
+                            sum_duration += timing.duration();
                         }
+                        println!("overhead: {:?}", (total_time - sum_duration).as_micros());
                     }
                 }
 
@@ -1149,6 +1162,13 @@ impl ToolCommand {
                 for (key, (count, total_duration)) in sorted_keys {
                     let avg_ms = total_duration.as_millis() as f64 / count as f64;
                     println!("{}: {:.1}ms avg ({} samples)", key, avg_ms, count);
+                }
+
+                println!("\nMost frequently accessed objects:");
+                let mut sorted_objects: Vec<_> = object_frequency.into_iter().collect();
+                sorted_objects.sort_by(|(_, a), (_, b)| b.cmp(a));
+                for (object_id, count) in sorted_objects.iter().take(100) {
+                    println!("{}: {} accesses", object_id, count);
                 }
             }
         };

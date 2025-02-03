@@ -223,7 +223,7 @@ impl ExecutionTimeObservationKey {
                 package: call.package,
                 module: call.module.clone(),
                 function: call.function.clone(),
-                type_arguments: call.type_arguments.clone(),
+                type_arguments: vec![],
             },
             Command::TransferObjects(_, _) => ExecutionTimeObservationKey::TransferObjects,
             Command::SplitCoins(_, _) => ExecutionTimeObservationKey::SplitCoins,
@@ -257,6 +257,10 @@ pub enum ExecutionTiming {
 }
 
 impl ExecutionTiming {
+    pub fn is_abort(&self) -> bool {
+        matches!(self, ExecutionTiming::Abort(_))
+    }
+
     pub fn duration(&self) -> Duration {
         match self {
             ExecutionTiming::Success(duration) => *duration,
