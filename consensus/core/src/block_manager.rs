@@ -539,10 +539,10 @@ impl BlockManager {
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
     ) -> Vec<VerifiedBlock> {
-        assert!(
-            self.dag_state.read().gc_enabled(),
-            "GC should be enabled when accepting committed blocks"
-        );
+        // If GC is disabled then should not run any of this logic.
+        if !self.dag_state.read().gc_enabled() {
+            return Vec::new();
+        }
 
         // Just accept the blocks
         let _s = monitored_scope("BlockManager::try_accept_committed_blocks");

@@ -685,7 +685,7 @@ mod tests {
     use crate::{
         authority_service::AuthorityService,
         block::{BlockAPI, BlockRef, SignedBlock, TestBlock, VerifiedBlock},
-        commit::CommitRange,
+        commit::{CertifiedCommit, CommitRange},
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -707,8 +707,6 @@ mod tests {
     use std::time::Duration;
     use tokio::sync::broadcast;
     use tokio::time::sleep;
-
-    use super::TrustedCommit;
 
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
@@ -744,10 +742,9 @@ mod tests {
             Ok(BTreeSet::new())
         }
 
-        async fn add_commits(
+        async fn add_certified_commits(
             &self,
-            _commits: Vec<TrustedCommit>,
-            _blocks: Vec<VerifiedBlock>,
+            _commits: Vec<CertifiedCommit>,
         ) -> Result<BTreeSet<BlockRef>, CoreError> {
             todo!()
         }

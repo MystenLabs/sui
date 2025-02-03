@@ -129,7 +129,7 @@ mod tests {
     use tokio::time::{sleep, Instant};
 
     use crate::block::{BlockRef, Round, VerifiedBlock};
-    use crate::commit::TrustedCommit;
+    use crate::commit::CertifiedCommit;
     use crate::context::Context;
     use crate::core::CoreSignals;
     use crate::core_thread::{CoreError, CoreThreadDispatcher};
@@ -165,10 +165,9 @@ mod tests {
             todo!()
         }
 
-        async fn add_commits(
+        async fn add_certified_commits(
             &self,
-            _commit: Vec<TrustedCommit>,
-            _blocks: Vec<VerifiedBlock>,
+            _commit: Vec<CertifiedCommit>,
         ) -> Result<BTreeSet<BlockRef>, CoreError> {
             todo!()
         }

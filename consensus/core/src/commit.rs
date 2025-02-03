@@ -207,6 +207,33 @@ impl Deref for TrustedCommit {
     }
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct CertifiedCommit {
+    commit: Arc<TrustedCommit>,
+    blocks: Vec<VerifiedBlock>,
+}
+
+impl CertifiedCommit {
+    pub(crate) fn new_certified(commit: TrustedCommit, blocks: Vec<VerifiedBlock>) -> Self {
+        Self {
+            commit: Arc::new(commit),
+            blocks,
+        }
+    }
+
+    pub fn blocks(&self) -> &[VerifiedBlock] {
+        &self.blocks
+    }
+}
+
+impl Deref for CertifiedCommit {
+    type Target = TrustedCommit;
+
+    fn deref(&self) -> &Self::Target {
+        &self.commit
+    }
+}
+
 /// Digest of a consensus commit.
 #[derive(Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommitDigest([u8; consensus_config::DIGEST_LENGTH]);

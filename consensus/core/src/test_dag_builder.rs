@@ -16,7 +16,7 @@ use crate::{
         genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot, TestBlock,
         VerifiedBlock,
     },
-    commit::{CommitDigest, TrustedCommit, DEFAULT_WAVE_LENGTH},
+    commit::{CertifiedCommit, CommitDigest, TrustedCommit, DEFAULT_WAVE_LENGTH},
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
@@ -262,6 +262,21 @@ impl DagBuilder {
             .clone()
             .into_iter()
             .filter(|(sub_dag, _)| leader_rounds.contains(&sub_dag.leader.round))
+            .collect()
+    }
+
+    pub(crate) fn get_sub_dag_and_certified_commits(
+        &mut self,
+        leader_rounds: RangeInclusive<Round>,
+    ) -> Vec<(CommittedSubDag, CertifiedCommit)> {
+        let commits = self.get_sub_dag_and_commits(leader_rounds);
+        commits
+            .into_iter()
+            .map(|(sub_dag, commit)| {
+                let certified_commit =
+                    CertifiedCommit::new_certified(commit, sub_dag.blocks.clone());
+                (sub_dag, certified_commit)
+            })
             .collect()
     }
 

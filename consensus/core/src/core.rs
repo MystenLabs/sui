@@ -31,7 +31,7 @@ use crate::{
         Slot, VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
-    commit::{CommitAPI, CommittedSubDag, TrustedCommit},
+    commit::{CertifiedCommit, CommitAPI, CommittedSubDag, DecidedLeader},
     commit_observer::CommitObserver,
     context::Context,
     dag_state::DagState,
@@ -305,44 +305,39 @@ impl Core {
         Ok(missing_block_refs)
     }
 
-    // Adds the commits and blocks that have been synced and certified via the commit syncer. We are using the commit info in order to skip running the decision
-    // rule and immediately commit the corresponding leaders and sub dags.
+    // Adds the certified commits that have been synced via the commit syncer. We are using the commit info in order to skip running the decision
+    // rule and immediately commit the corresponding leaders and sub dags. Pay attention that no block acceptance is happening here, but rather 
+    // internally in the `try_commit` method which ensures that everytime only the blocks corresponding to the certified commits that are about to
+    // be committed are accepted.
     #[tracing::instrument(skip_all)]
-    pub(crate) fn add_commits(
+    pub(crate) fn add_certified_commits(
         &mut self,
-        commits: Vec<TrustedCommit>,
-        blocks: Vec<VerifiedBlock>,
+        commits: Vec<CertifiedCommit>,
     ) -> ConsensusResult<BTreeSet<BlockRef>> {
-        let _scope = monitored_scope("Core::add_commit");
+        let _scope = monitored_scope("Core::add_certified_commits");
 
         // We want to enable the commit process logic when GC is enabled.
         if self.dag_state.read().gc_enabled() {
-            // Just accept all the blocks - maybe do some basic timestamp validation?
-            let accepted_blocks = self.block_manager.try_accept_committed_blocks(blocks);
+            // Try to commit the new blocks. Take into account the trusted commit that has been provided.
+            self.try_commit(commits)?;
 
-            if !accepted_blocks.is_empty() {
-                debug!(
-                    "Accepted blocks via add_commit: {}",
-                    accepted_blocks
-                        .iter()
-                        .map(|b| b.reference().to_string())
-                        .join(",")
-                );
+            // Try to propose now since there are new blocks accepted.
+            self.try_propose(false)?;
 
-                // Try to commit the new blocks. Take into account the trusted commit that has been provided.
-                self.try_commit(commits)?;
-
-                // Try to propose now since there are new blocks accepted.
-                self.try_propose(false)?;
-
-                // Now set up leader timeout if needed.
-                // This needs to be called after try_commit() and try_propose(), which may
-                // have advanced the threshold clock round.
-                self.try_signal_new_round();
-            };
+            // Now set up leader timeout if needed.
+            // This needs to be called after try_commit() and try_propose(), which may
+            // have advanced the threshold clock round.
+            self.try_signal_new_round();
 
             return Ok(BTreeSet::new());
         }
+
+        // If GC is not enabled then process blocks as usual.
+        let blocks = commits
+            .iter()
+            .flat_map(|commit| commit.blocks())
+            .cloned()
+            .collect::<Vec<_>>();
 
         self.add_blocks(blocks)
     }
@@ -667,7 +662,7 @@ impl Core {
     /// it will attempt to commit those first before trying to commit any further leaders.
     fn try_commit(
         &mut self,
-        mut certified_commits: Vec<TrustedCommit>,
+        mut certified_commits: Vec<CertifiedCommit>,
     ) -> ConsensusResult<Vec<CommittedSubDag>> {
         let _s = self
             .context
@@ -678,8 +673,8 @@ impl Core {
             .start_timer();
 
         let mut certified_commits_map = BTreeMap::new();
-        for commit in &certified_commits {
-            certified_commits_map.insert(commit.index(), commit.reference());
+        for c in &certified_commits {
+            certified_commits_map.insert(c.index(), c.reference());
         }
 
         if !certified_commits.is_empty() {
@@ -737,10 +732,28 @@ impl Core {
             }
             assert!(commits_until_update > 0);
 
-            // Always try to process the synced commits first
-            let mut decided_leaders = self
+            // Always try to process the synced commits first. If there are certified commits to process then the decided leaders and the commits will be returned.
+            let (mut decided_leaders, decided_certified_commits): (
+                Vec<DecidedLeader>,
+                Vec<CertifiedCommit>,
+            ) = self
                 .committer
-                .try_decide_certified(&mut certified_commits, commits_until_update);
+                .try_decide_certified(&mut certified_commits, commits_until_update)
+                .into_iter()
+                .unzip();
+
+            // Only accept blocks for the certified commits that we are certain to sequence.
+            // This ensures that only blocks corresponding to committed certified commits are flushed to disk.
+            // Blocks from non-committed certified commits will not be flushed, preventing issues during crash-recovery.
+            // This avoids scenarios where accepting and flushing blocks of non-committed certified commits could lead to
+            // premature commit rule execution. Due to GC, this could cause a panic if the commit rule tries to access
+            // missing causal history from blocks of certified commits.
+            let blocks = decided_certified_commits
+                .iter()
+                .flat_map(|c| c.blocks())
+                .cloned()
+                .collect::<Vec<_>>();
+            self.block_manager.try_accept_committed_blocks(blocks);
 
             // If the certified `decided_leaders` is empty then try to run the decision rule.
             if decided_leaders.is_empty() {
@@ -751,7 +764,7 @@ impl Core {
                 if decided_leaders.len() >= commits_until_update {
                     let _ = decided_leaders.split_off(commits_until_update);
                 }
-            };
+            }
 
             // If the decided leaders list is empty then just break the loop.
             let Some(last_decided) = decided_leaders.last().cloned() else {
@@ -808,6 +821,8 @@ impl Core {
                 .try_unsuspend_blocks_for_latest_gc_round();
 
             committed_sub_dags.extend(subdags);
+
+            fail_point!("consensus-after-handle-commit");
         }
 
         // Sanity check: for commits that have been linearized using the certified commits, ensure that the same sub dag has been committed.
@@ -3207,7 +3222,7 @@ mod test {
         }
 
         // Get all the committed sub dags up to round 10
-        let sub_dags_and_commits = dag_builder.get_sub_dag_and_commits(1..=10);
+        let sub_dags_and_commits = dag_builder.get_sub_dag_and_certified_commits(1..=10);
 
         // Now try to commit up to the latest leader (round = 4). Do not provide any certified commits.
         let committed_sub_dags = core.try_commit(vec![]).unwrap();
@@ -3226,7 +3241,8 @@ mod test {
         let certified_commits = sub_dags_and_commits
             .iter()
             .take(4)
-            .map(|(_, c)| c.clone())
+            .map(|(_, c)| c)
+            .cloned()
             .collect::<Vec<_>>();
         assert!(
             certified_commits.last().unwrap().index()

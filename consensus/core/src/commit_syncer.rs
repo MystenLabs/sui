@@ -48,7 +48,10 @@ use tracing::{debug, info, warn};
 use crate::{
     block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
-    commit::{Commit, CommitAPI as _, CommitDigest, CommitRange, CommitRef, TrustedCommit},
+    commit::{
+        CertifiedCommit, Commit, CommitAPI as _, CommitDigest, CommitRange, CommitRef,
+        TrustedCommit,
+    },
     commit_vote_monitor::CommitVoteMonitor,
     context::Context,
     core_thread::CoreThreadDispatcher,
@@ -299,6 +302,23 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 blocks.iter().map(|b| b.reference().to_string()).join(","),
             );
 
+            let mut blocks_map = BTreeMap::new();
+            for block in blocks {
+                blocks_map.insert(block.reference(), block);
+            }
+
+            let certified_commits = commits
+                .into_iter()
+                .map(|commit| {
+                    let blocks = commit
+                        .blocks()
+                        .iter()
+                        .map(|block_ref| blocks_map.remove(block_ref).expect("Block should exist"))
+                        .collect::<Vec<_>>();
+                    CertifiedCommit::new_certified(commit, blocks)
+                })
+                .collect();
+
             // If core thread cannot handle the incoming blocks, it is ok to block here.
             // Also it is possible to have missing ancestors because an equivocating validator
             // may produce blocks that are not included in commits but are ancestors to other blocks.
@@ -306,7 +326,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             match self
                 .inner
                 .core_thread_dispatcher
-                .add_commits(commits, blocks)
+                .add_certified_commits(certified_commits)
                 .await
             {
                 Ok(missing) => {

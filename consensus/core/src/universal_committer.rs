@@ -10,7 +10,7 @@ use parking_lot::RwLock;
 use crate::{
     base_committer::BaseCommitter,
     block::{Round, Slot, GENESIS_ROUND},
-    commit::{CommitAPI, DecidedLeader, Decision, TrustedCommit},
+    commit::{CertifiedCommit, CommitAPI, DecidedLeader, Decision},
     context::Context,
     dag_state::DagState,
 };
@@ -117,9 +117,9 @@ impl UniversalCommitter {
     #[tracing::instrument(skip_all)]
     pub(crate) fn try_decide_certified(
         &mut self,
-        certified_commits: &mut Vec<TrustedCommit>,
+        certified_commits: &mut Vec<CertifiedCommit>,
         limit: usize,
-    ) -> Vec<DecidedLeader> {
+    ) -> Vec<(DecidedLeader, CertifiedCommit)> {
         // If GC is disabled then should not run any of this logic.
         if !self.dag_state.read().gc_enabled() {
             return Vec::new();
@@ -165,22 +165,23 @@ impl UniversalCommitter {
         };
 
         let dag_state = self.dag_state.read();
+
+        tracing::info!(
+            "Decided {} certified leaders: {}",
+            to_commit.len(),
+            to_commit.iter().map(|c| c.leader().to_string()).join(",")
+        );
+
         let sequenced_leaders = to_commit
-            .iter()
+            .into_iter()
             .map(|commit| {
                 let leader = DecidedLeader::Commit(dag_state.get_block(&commit.leader()).unwrap());
                 self.update_metrics(&leader, Decision::Synced);
-                leader
+                (leader, commit)
             })
             .collect::<Vec<_>>();
 
         drop(dag_state);
-
-        tracing::info!(
-            "Decided {} certified leaders: {}",
-            sequenced_leaders.len(),
-            to_commit.iter().map(|c| c.leader().to_string()).join(",")
-        );
 
         sequenced_leaders
     }

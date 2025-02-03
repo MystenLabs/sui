@@ -22,7 +22,7 @@ use tracing::warn;
 
 use crate::{
     block::{BlockRef, Round, VerifiedBlock},
-    commit::TrustedCommit,
+    commit::CertifiedCommit,
     context::Context,
     core::Core,
     core_thread::CoreError::Shutdown,
@@ -40,11 +40,7 @@ enum CoreThreadCommand {
     /// Checks if block refs exist locally and sync missing ones.
     CheckBlockRefs(Vec<BlockRef>, oneshot::Sender<BTreeSet<BlockRef>>),
     /// Add committed sub dag blocks for processing and acceptance.
-    AddCommits(
-        Vec<TrustedCommit>,
-        Vec<VerifiedBlock>,
-        oneshot::Sender<BTreeSet<BlockRef>>,
-    ),
+    AddCertifiedCommits(Vec<CertifiedCommit>, oneshot::Sender<BTreeSet<BlockRef>>),
     /// Called when the min round has passed or the leader timeout occurred and a block should be produced.
     /// When the command is called with `force = true`, then the block will be created for `round` skipping
     /// any checks (ex leader existence of previous round). More information can be found on the `Core` component.
@@ -71,10 +67,9 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
         block_refs: Vec<BlockRef>,
     ) -> Result<BTreeSet<BlockRef>, CoreError>;
 
-    async fn add_commits(
+    async fn add_certified_commits(
         &self,
-        commits: Vec<TrustedCommit>,
-        blocks: Vec<VerifiedBlock>,
+        commits: Vec<CertifiedCommit>,
     ) -> Result<BTreeSet<BlockRef>, CoreError>;
 
     async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError>;
@@ -146,9 +141,9 @@ impl CoreThread {
                             let missing_block_refs = self.core.check_block_refs(blocks)?;
                             sender.send(missing_block_refs).ok();
                         }
-                        CoreThreadCommand::AddCommits(commits, blocks, sender) => {
-                            let _scope = monitored_scope("CoreThread::loop::add_commits");
-                            let missing_block_refs = self.core.add_commits(commits, blocks)?;
+                        CoreThreadCommand::AddCertifiedCommits(commits, sender) => {
+                            let _scope = monitored_scope("CoreThread::loop::add_certified_commits");
+                            let missing_block_refs = self.core.add_certified_commits(commits)?;
                             sender.send(missing_block_refs).ok();
                         }
                         CoreThreadCommand::NewBlock(round, sender, force) => {
@@ -329,21 +324,19 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         Ok(missing_block_refs)
     }
 
-    async fn add_commits(
+    async fn add_certified_commits(
         &self,
-        commits: Vec<TrustedCommit>,
-        blocks: Vec<VerifiedBlock>,
+        commits: Vec<CertifiedCommit>,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
-        for block in &blocks {
-            self.highest_received_rounds[block.author()].fetch_max(block.round(), Ordering::AcqRel);
+        for commit in &commits {
+            for block in commit.blocks() {
+                self.highest_received_rounds[block.author()]
+                    .fetch_max(block.round(), Ordering::AcqRel);
+            }
         }
         let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::AddCommits(
-            commits,
-            blocks.clone(),
-            sender,
-        ))
-        .await;
+        self.send(CoreThreadCommand::AddCertifiedCommits(commits, sender))
+            .await;
         let missing_block_refs = receiver.await.map_err(|e| Shutdown(e.to_string()))?;
         Ok(missing_block_refs)
     }
@@ -453,10 +446,9 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
         Ok(BTreeSet::new())
     }
 
-    async fn add_commits(
+    async fn add_certified_commits(
         &self,
-        _commits: Vec<TrustedCommit>,
-        _blocks: Vec<VerifiedBlock>,
+        _commits: Vec<CertifiedCommit>,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
         todo!()
     }

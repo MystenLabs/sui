@@ -783,7 +783,7 @@ async fn try_decide_certified() {
     }
 
     // WHEN
-    let sub_dags_and_commits = dag_builder.get_sub_dag_and_commits(1..=4);
+    let sub_dags_and_commits = dag_builder.get_sub_dag_and_certified_commits(1..=4);
     let mut certified_commits = sub_dags_and_commits
         .into_iter()
         .map(|(_, commit)| commit)
@@ -816,7 +816,7 @@ async fn try_decide_certified_gap_in_commits() {
     }
 
     // WHEN
-    let sub_dags_and_commits = dag_builder.get_sub_dag_and_commits(4..=5);
+    let sub_dags_and_commits = dag_builder.get_sub_dag_and_certified_commits(4..=5);
     let mut certified_commits = sub_dags_and_commits
         .into_iter()
         .map(|(_, commit)| commit)
