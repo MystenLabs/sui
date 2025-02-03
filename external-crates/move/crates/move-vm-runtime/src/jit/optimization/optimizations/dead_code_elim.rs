@@ -92,7 +92,12 @@ fn blocks(
         }
     }
 
+    // This invariant is enforced by the verifier's control flow analysis, but we double-check it
+    // here for sanity.
+    assert!(blocks.iter().last().unwrap().1.last().unwrap().is_unconditional_branch());
+
     // (B) Record any instruction that is a fall-through target
+    // NB: the Move bytecode verifier enforces that the last block
     let labels = blocks.keys().collect::<Vec<_>>();
     for ((_, block), next) in blocks.iter().zip(labels.into_iter().skip(1)) {
         // Check for fall-through
