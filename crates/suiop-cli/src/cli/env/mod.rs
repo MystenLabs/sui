@@ -5,6 +5,7 @@ use crate::run_cmd;
 use anyhow::Result;
 use clap::Parser;
 use inquire::Select;
+use query_shell::get_shell_name;
 use std::io::Write;
 use tracing::{debug, info};
 
@@ -17,6 +18,31 @@ pub struct LoadEnvironmentArgs {
     environment_name: Option<String>,
 }
 
+pub fn load_environment_new(args: &LoadEnvironmentArgs) -> Result<()> {
+    // list envs from pulumi using `pulumi env ls`
+    let env = args.environment_name.clone().unwrap_or_else(|| {
+        let output = run_cmd(vec!["pulumi", "env", "ls"], None).expect("Running pulumi env ls");
+        let output_str = String::from_utf8_lossy(&output.stdout);
+        let options: Vec<&str> = output_str.lines().collect();
+
+        if options.is_empty() {
+            panic!("No environments found. Make sure you are logged into the correct pulumi org.");
+        }
+
+        Select::new("Select an environment:", options)
+            .prompt()
+            .expect("Failed to select environment")
+            .to_owned()
+    });
+
+    setup_pulumi_environment(&env);
+
+    // get the user's shell
+    let shell = get_shell_name()?;
+    // use `pulumi env run <env_name> -i <shell>` to load the environment into the shell
+    run_cmd(vec!["pulumi", "env", "run", &env, "-i", &shell], None)?;
+    Ok(())
+}
 pub fn load_environment_cmd(args: &LoadEnvironmentArgs) -> Result<()> {
     setup_pulumi_environment(&args.environment_name.clone().unwrap_or_else(|| {
         let output = run_cmd(vec!["pulumi", "env", "ls"], None).expect("Running pulumi env ls");
