@@ -662,7 +662,7 @@ async fn deposit_on_sui(
     );
     let signed_tx = Transaction::from_data(tx_data, vec![sig]);
     let tx_digest = *signed_tx.digest();
-    info!(?tx_digest, "Sending deposit transction to Sui.");
+    info!(?tx_digest, "Sending deposit transaction to Sui.");
     let resp = sui_bridge_client
         .execute_transaction_block_with_effects(signed_tx)
         .await
