@@ -3301,6 +3301,128 @@ mod test {
         }
     }
 
+    #[tokio::test]
+    async fn try_commit_with_certified_commits_gced_blocks() {
+        const GC_DEPTH: u32 = 3;
+        telemetry_subscribers::init_for_testing();
+
+        let (mut context, mut key_pairs) = Context::new_for_test(5);
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+        //context.protocol_config.set_narwhal_new_leader_election_schedule_for_testing(val);
+        let context = Arc::new(context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        }));
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
+        let leader_schedule = Arc::new(
+            LeaderSchedule::from_store(context.clone(), dag_state.clone())
+                .with_num_commits_per_schedule(10),
+        );
+
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        // Need at least one subscriber to the block broadcast channel.
+        let _block_receiver = signal_receivers.block_broadcast_receiver();
+
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            commit_consumer,
+            dag_state.clone(),
+            store.clone(),
+            leader_schedule.clone(),
+        );
+
+        let mut core = Core::new(
+            context.clone(),
+            leader_schedule,
+            transaction_consumer,
+            block_manager,
+            true,
+            commit_observer,
+            signals,
+            key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
+            true,
+        );
+
+        // No new block should have been produced
+        assert_eq!(
+            core.last_proposed_round(),
+            GENESIS_ROUND,
+            "No block should have been created other than genesis"
+        );
+
+        let dag_str = "DAG {
+            Round 0 : { 5 },
+            Round 1 : { * },
+            Round 2 : { 
+                A -> [-E1],
+                B -> [-E1],
+                C -> [-E1],
+                D -> [-E1],
+            },
+            Round 3 : {
+                A -> [*],
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 4 : { 
+                A -> [*],
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 5 : { 
+                A -> [*],
+                B -> [*],
+                C -> [*],
+                D -> [*],
+                E -> [A4, B4, C4, D4, E1]
+            },
+            Round 6 : { * },
+            Round 7 : { * },
+        }";
+
+        let (_, mut dag_builder) = parse_dag(dag_str).expect("Invalid dag");
+        dag_builder.print();
+
+        // Now get all the committed sub dags from the DagBuilder
+        let (_sub_dags, certified_commits): (Vec<_>, Vec<_>) = dag_builder
+            .get_sub_dag_and_certified_commits(1..=5)
+            .into_iter()
+            .unzip();
+
+        // Now try to commit up to the latest leader (round = 5) with the provided certified commits. Not that we have not accepted any
+        // blocks. That should happen during the commit process.
+        let committed_sub_dags = core.try_commit(certified_commits).unwrap();
+
+        // We should have committed up to round 4
+        assert_eq!(committed_sub_dags.len(), 4);
+        for (index, committed_sub_dag) in committed_sub_dags.iter().enumerate() {
+            assert_eq!(committed_sub_dag.commit_ref.index as usize, index + 1);
+
+            // ensure that block from E1 node has not been committed
+            for block in committed_sub_dag.blocks.iter() {
+                if block.round() == 1 && block.author() == AuthorityIndex::new_for_test(5) {
+                    panic!("Did not expect to commit block E1");
+                }
+            }
+        }
+    }
+
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_commit_on_leader_schedule_change_boundary_without_multileader() {
         parameterized_test_commit_on_leader_schedule_change_boundary(Some(1)).await;
