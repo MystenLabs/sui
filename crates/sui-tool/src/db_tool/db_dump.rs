@@ -243,6 +243,7 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         &checkpoint_store,
         Some(&rpc_index),
         None,
+        None,
         pruning_config,
         metrics,
         archive_readers,
