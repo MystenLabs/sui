@@ -729,7 +729,7 @@ mod test {
         }
 
         // range operator is not inclusive of to
-        assert!(db.contains_key(&100).expect("Failed to query legel key"));
+        assert!(db.contains_key(&100).expect("Failed to query legal key"));
     }
 
     #[test]
