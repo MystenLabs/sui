@@ -88,6 +88,27 @@ impl RocksDBStore {
             commit_info,
         }
     }
+
+    pub fn read_blocks_by_round(&self, round: u32) -> ConsensusResult<Vec<VerifiedBlock>> {
+
+        let block_iter = self.blocks.iter_with_bounds(
+            Some((round, AuthorityIndex::MIN, BlockDigest::MIN)),
+            Some((round+1, AuthorityIndex::MIN, BlockDigest::MIN)));
+
+        let mut blocks = vec![];
+        for (_key, serialized) in block_iter {
+                let signed_block: SignedBlock =
+                    bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
+                // Only accepted blocks should have been written to storage.
+                let block = VerifiedBlock::new_verified(signed_block, serialized);
+                // Makes sure block data is not corrupted, by comparing digests.
+                blocks.push(block);
+        }
+        Ok(blocks)
+    }
+
+
+
 }
 
 impl Store for RocksDBStore {

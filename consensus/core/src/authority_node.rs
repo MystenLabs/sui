@@ -439,10 +439,51 @@ mod tests {
     use tempfile::TempDir;
     use tokio::time::{sleep, timeout};
     use typed_store::DBMetrics;
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    use std::fs::File;
+    use std::io::Write;
 
     use super::*;
     use crate::block::GENESIS_ROUND;
     use crate::{block::BlockAPI as _, transaction::NoopTransactionVerifier, CommittedSubDag};
+
+    fn calculate_hash<T: Hash>(t: &T) -> u64 {
+        let mut s = DefaultHasher::new();
+        t.hash(&mut s);
+        s.finish()
+    }
+
+    #[tokio::test]
+    async fn test_analyze_db() {
+        //let context = Arc::new(Context::new_for_test(128).0);
+        telemetry_subscribers::init_for_testing();
+        let rocks_db_store = RocksDBStore::new("/home/george/Projects/data/consensus_648/opt/sui/db/consensus_db/648");
+        let mut w = File::create("/home/george/Projects/data/consensus_648/summary.txt").unwrap();
+
+        for r in 1000..2000 {
+            let blocks = rocks_db_store.read_blocks_by_round(r).unwrap();
+
+            println!("Start");
+            for block in &blocks[..] {
+                let round = block.round();
+                let author = block.author().value();
+                let timestamp = block.timestamp_ms();
+
+                let ancestors =
+                    block.ancestors().iter().map(|b| (b.round,b.author.value() as u16)).collect::<Vec<_>>();
+
+                let tx_sizes = block.transactions().iter().map(|t| (t.data().len() as u32, calculate_hash(&t.data()))).collect::<Vec<_>>();
+                let size = block.serialized().len();
+
+
+                println!("({} {}) {} A{:?} T{:?} L{}", round, author, timestamp, ancestors, tx_sizes, size);
+                writeln!(w, "({} {}) {} A{:?} T{:?} L{}", round, author, timestamp, ancestors, tx_sizes, size).unwrap();
+            }
+
+        }
+    }
+
+
 
     #[rstest]
     #[tokio::test]
