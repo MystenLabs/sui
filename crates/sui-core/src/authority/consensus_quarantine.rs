@@ -52,16 +52,16 @@ use super::*;
 pub(crate) struct ConsensusCommitOutput {
     // Consensus and reconfig state
     consensus_round: Round,
-    consensus_messages_processed: BTreeSet<SequencedConsensusTransactionKey>, // done
-    end_of_publish: BTreeSet<AuthorityName>,                                  // done
-    reconfig_state: Option<ReconfigState>,                                    // done
-    consensus_commit_stats: Option<ExecutionIndicesWithStats>,                // done
+    consensus_messages_processed: BTreeSet<SequencedConsensusTransactionKey>,
+    end_of_publish: BTreeSet<AuthorityName>,
+    reconfig_state: Option<ReconfigState>,
+    consensus_commit_stats: Option<ExecutionIndicesWithStats>,
 
     // transaction scheduling state
     next_shared_object_versions: Option<HashMap<ConsensusObjectSequenceKey, SequenceNumber>>,
 
     // TODO: If we delay committing consensus output until after all deferrals have been loaded,
-    // we can move deferred_txns to the ConsensusEphemeralOutput and save disk bandwidth.
+    // we can move deferred_txns to the ConsensusOutputCache and save disk bandwidth.
     deferred_txns: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>,
     // deferred txns that have been loaded and can be removed
     deleted_deferred_txns: BTreeSet<DeferralKey>,
@@ -99,8 +99,7 @@ impl ConsensusCommitOutput {
     }
 
     fn get_highest_pending_checkpoint_height(&self) -> Option<CheckpointHeight> {
-        // TODO: can we simply get the height of the last checkpoint in the list?
-        self.pending_checkpoints.iter().map(|cp| cp.height()).max()
+        self.pending_checkpoints.last().map(|cp| cp.height())
     }
 
     fn get_pending_checkpoints(
@@ -339,10 +338,10 @@ impl ConsensusCommitOutput {
 /// Data quarantining guarantees that all of this data will be used (e.g. for building checkpoints)
 /// before the consensus commit from which it originated is marked as processed. Therefore we can rely
 /// on replay of consensus commits to recover this data.
-pub(crate) struct ConsensusEphemeralOutput {
+pub(crate) struct ConsensusOutputCache {
     // shared version assignments is a DashMap because it is read from execution so we don't
     // want contention.
-    pub(super) shared_version_assignments:
+    shared_version_assignments:
         DashMap<TransactionKey, Vec<(ConsensusObjectSequenceKey, SequenceNumber)>>,
 
     // deferred transactions is only used by consensus handler so there should never be lock contention
@@ -353,12 +352,15 @@ pub(crate) struct ConsensusEphemeralOutput {
     // The critical sections are small in both cases so a DashMap is probably not helpful.
     pub(super) user_signatures_for_checkpoints:
         Mutex<HashMap<TransactionDigest, Vec<GenericSignature>>>,
+
+    metrics: Arc<EpochMetrics>,
 }
 
-impl ConsensusEphemeralOutput {
+impl ConsensusOutputCache {
     pub(crate) fn new(
         epoch_start_configuration: &EpochStartConfiguration,
         tables: &AuthorityEpochTables,
+        metrics: Arc<EpochMetrics>,
     ) -> Self {
         let shared_version_assignments =
             Self::get_all_shared_version_assignments(epoch_start_configuration, tables);
@@ -375,7 +377,64 @@ impl ConsensusEphemeralOutput {
             shared_version_assignments: shared_version_assignments.into_iter().collect(),
             deferred_transactions: Mutex::new(deferred_transactions),
             user_signatures_for_checkpoints: Mutex::new(user_signatures_for_checkpoints),
+            metrics,
         }
+    }
+
+    pub fn num_shared_version_assignments(&self) -> usize {
+        self.shared_version_assignments.len()
+    }
+
+    pub fn get_assigned_shared_object_versions(
+        &self,
+        key: &TransactionKey,
+    ) -> Option<Vec<(ConsensusObjectSequenceKey, SequenceNumber)>> {
+        self.shared_version_assignments
+            .get(key)
+            .map(|locks| locks.clone())
+    }
+
+    pub fn insert_shared_object_assignments(&self, versions: &AssignedTxAndVersions) {
+        debug!("set_assigned_shared_object_versions: {:?}", versions);
+        let mut inserted_count = 0;
+        for (key, value) in versions {
+            if self
+                .shared_version_assignments
+                .insert(*key, value.clone())
+                .is_none()
+            {
+                inserted_count += 1;
+            }
+        }
+        self.metrics
+            .shared_object_assignments_size
+            .add(inserted_count as i64);
+    }
+
+    pub fn set_shared_object_versions_for_testing(
+        &self,
+        tx_digest: &TransactionDigest,
+        assigned_versions: &[(ConsensusObjectSequenceKey, SequenceNumber)],
+    ) {
+        self.shared_version_assignments.insert(
+            TransactionKey::Digest(*tx_digest),
+            assigned_versions.to_owned(),
+        );
+    }
+
+    pub fn remove_shared_object_assignments<'a>(
+        &self,
+        keys: impl IntoIterator<Item = &'a TransactionKey>,
+    ) {
+        let mut removed_count = 0;
+        for tx_key in keys {
+            if self.shared_version_assignments.remove(tx_key).is_some() {
+                removed_count += 1;
+            }
+        }
+        self.metrics
+            .shared_object_assignments_size
+            .sub(removed_count as i64);
     }
 
     // Used to read pre-existing shared object versions from the database after a crash.
@@ -439,10 +498,15 @@ pub(crate) struct ConsensusOutputQuarantine {
     congestion_control_object_debts: RefCountedHashMap<ObjectID, CongestionPerObjectDebt>,
 
     processed_consensus_messages: RefCountedHashMap<SequencedConsensusTransactionKey, ()>,
+
+    metrics: Arc<EpochMetrics>,
 }
 
 impl ConsensusOutputQuarantine {
-    pub(super) fn new(highest_executed_checkpoint: CheckpointSequenceNumber) -> Self {
+    pub(super) fn new(
+        highest_executed_checkpoint: CheckpointSequenceNumber,
+        authority_metrics: Arc<EpochMetrics>,
+    ) -> Self {
         Self {
             highest_executed_checkpoint,
 
@@ -453,6 +517,7 @@ impl ConsensusOutputQuarantine {
             processed_consensus_messages: RefCountedHashMap::new(),
             congestion_control_randomness_object_debts: RefCountedHashMap::new(),
             congestion_control_object_debts: RefCountedHashMap::new(),
+            metrics: authority_metrics,
         }
     }
 }
@@ -461,11 +526,23 @@ impl ConsensusOutputQuarantine {
 // There are only two sources! ConsensusHandler and CheckpointBuilder.
 impl ConsensusOutputQuarantine {
     // Push all data gathered from a consensus commit into the quarantine.
-    pub(super) fn push_consensus_output(&mut self, output: ConsensusCommitOutput) {
+    pub(super) fn push_consensus_output(
+        &mut self,
+        output: ConsensusCommitOutput,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult {
         self.insert_shared_object_next_versions(&output);
         self.insert_congestion_control_debts(&output);
         self.insert_processed_consensus_messages(&output);
         self.output_queue.push_back(output);
+
+        self.metrics
+            .consensus_quarantine_queue_size
+            .set(self.output_queue.len() as i64);
+
+        // we may already have observed the certified checkpoint for this round, if state sync is running
+        // ahead of consensus, so there may be data to commit right away.
+        self.commit(epoch_store)
     }
 
     // Record a newly built checkpoint.
@@ -606,12 +683,80 @@ impl ConsensusOutputQuarantine {
             }
         }
 
+        self.metrics
+            .consensus_quarantine_queue_size
+            .set(self.output_queue.len() as i64);
+
         Ok(())
     }
 }
 
+impl ConsensusOutputQuarantine {
+    fn insert_shared_object_next_versions(&mut self, output: &ConsensusCommitOutput) {
+        if let Some(next_versions) = output.next_shared_object_versions.as_ref() {
+            for (object_id, next_version) in next_versions {
+                self.shared_object_next_versions
+                    .insert(*object_id, *next_version);
+            }
+        }
+    }
+
+    fn insert_congestion_control_debts(&mut self, output: &ConsensusCommitOutput) {
+        let current_round = output.consensus_round;
+
+        for (object_id, debt) in output.congestion_control_object_debts.iter() {
+            self.congestion_control_object_debts.insert(
+                *object_id,
+                CongestionPerObjectDebt::new(current_round, *debt),
+            );
+        }
+
+        for (object_id, debt) in output.congestion_control_randomness_object_debts.iter() {
+            self.congestion_control_randomness_object_debts.insert(
+                *object_id,
+                CongestionPerObjectDebt::new(current_round, *debt),
+            );
+        }
+    }
+
+    fn remove_congestion_control_debts(&mut self, output: &ConsensusCommitOutput) {
+        for (object_id, _) in output.congestion_control_object_debts.iter() {
+            self.congestion_control_object_debts.remove(object_id);
+        }
+        for (object_id, _) in output.congestion_control_randomness_object_debts.iter() {
+            self.congestion_control_randomness_object_debts
+                .remove(object_id);
+        }
+    }
+
+    fn insert_processed_consensus_messages(&mut self, output: &ConsensusCommitOutput) {
+        for tx_key in output.consensus_messages_processed.iter() {
+            self.processed_consensus_messages.insert(tx_key.clone(), ());
+        }
+    }
+
+    fn remove_processed_consensus_messages(&mut self, output: &ConsensusCommitOutput) {
+        for tx_key in output.consensus_messages_processed.iter() {
+            self.processed_consensus_messages.remove(tx_key);
+        }
+    }
+
+    fn remove_shared_object_next_versions(&mut self, output: &ConsensusCommitOutput) {
+        if let Some(next_versions) = output.next_shared_object_versions.as_ref() {
+            for object_id in next_versions.keys() {
+                if !self.shared_object_next_versions.remove(object_id) {
+                    fatal!(
+                        "Shared object next version not found in quarantine: {:?}",
+                        object_id
+                    );
+                }
+            }
+        }
+    }
+}
+
 // Read methods - all methods in this block return data from the quarantine which would otherwise
-// by found in the database.
+// be found in the database.
 impl ConsensusOutputQuarantine {
     pub(super) fn last_built_summary(&self) -> Option<&BuilderCheckpointSummary> {
         self.builder_checkpoint_summary
@@ -680,68 +825,6 @@ impl ConsensusOutputQuarantine {
         }
 
         Ok(results)
-    }
-
-    fn insert_shared_object_next_versions(&mut self, output: &ConsensusCommitOutput) {
-        if let Some(next_versions) = output.next_shared_object_versions.as_ref() {
-            for (object_id, next_version) in next_versions {
-                self.shared_object_next_versions
-                    .insert(*object_id, *next_version);
-            }
-        }
-    }
-
-    fn insert_congestion_control_debts(&mut self, output: &ConsensusCommitOutput) {
-        let current_round = output.consensus_round;
-
-        for (object_id, debt) in output.congestion_control_object_debts.iter() {
-            self.congestion_control_object_debts.insert(
-                *object_id,
-                CongestionPerObjectDebt::new(current_round, *debt),
-            );
-        }
-
-        for (object_id, debt) in output.congestion_control_randomness_object_debts.iter() {
-            self.congestion_control_randomness_object_debts.insert(
-                *object_id,
-                CongestionPerObjectDebt::new(current_round, *debt),
-            );
-        }
-    }
-
-    fn remove_congestion_control_debts(&mut self, output: &ConsensusCommitOutput) {
-        for (object_id, _) in output.congestion_control_object_debts.iter() {
-            self.congestion_control_object_debts.remove(object_id);
-        }
-        for (object_id, _) in output.congestion_control_randomness_object_debts.iter() {
-            self.congestion_control_randomness_object_debts
-                .remove(object_id);
-        }
-    }
-
-    fn insert_processed_consensus_messages(&mut self, output: &ConsensusCommitOutput) {
-        for tx_key in output.consensus_messages_processed.iter() {
-            self.processed_consensus_messages.insert(tx_key.clone(), ());
-        }
-    }
-
-    fn remove_processed_consensus_messages(&mut self, output: &ConsensusCommitOutput) {
-        for tx_key in output.consensus_messages_processed.iter() {
-            self.processed_consensus_messages.remove(tx_key);
-        }
-    }
-
-    pub(super) fn remove_shared_object_next_versions(&mut self, output: &ConsensusCommitOutput) {
-        if let Some(next_versions) = output.next_shared_object_versions.as_ref() {
-            for object_id in next_versions.keys() {
-                if !self.shared_object_next_versions.remove(object_id) {
-                    fatal!(
-                        "Shared object next version not found in quarantine: {:?}",
-                        object_id
-                    );
-                }
-            }
-        }
     }
 
     pub(super) fn get_highest_pending_checkpoint_height(&self) -> Option<CheckpointHeight> {

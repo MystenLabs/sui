@@ -154,7 +154,7 @@ pub trait ExecutionCacheCommit: Send + Sync {
 
     /// Durably commit a transaction to the database. Used to store any transactions
     /// that cannot be reconstructed at start-up by consensus replay. Currently the only
-    /// case of this is RandomnessTransaction.
+    /// case of this is RandomnessStateUpdate.
     fn persist_transaction(&self, transaction: &VerifiedExecutableTransaction);
 
     // Number of pending uncommitted transactions
