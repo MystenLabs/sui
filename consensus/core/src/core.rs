@@ -306,7 +306,7 @@ impl Core {
     }
 
     // Adds the certified commits that have been synced via the commit syncer. We are using the commit info in order to skip running the decision
-    // rule and immediately commit the corresponding leaders and sub dags. Pay attention that no block acceptance is happening here, but rather 
+    // rule and immediately commit the corresponding leaders and sub dags. Pay attention that no block acceptance is happening here, but rather
     // internally in the `try_commit` method which ensures that everytime only the blocks corresponding to the certified commits that are about to
     // be committed are accepted.
     #[tracing::instrument(skip_all)]
