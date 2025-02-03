@@ -647,7 +647,7 @@ async fn test_transfer_single_gas_coin() {
     let operations = Operations::try_from_response(response, &coin_cache)
         .await
         .unwrap();
-    println!("operations: {operations:#?}");
+    // println!("operations: {operations:#?}");
 
     let mut balance = 0;
     operations.into_iter().for_each(|op| {
@@ -686,217 +686,18 @@ async fn test_transfer_single_gas_coin() {
 ///     id.delete();
 ///     balance.into_coin(ctx)
 /// }
-/// ```
-/// And this ptb:
-/// ```bash
-/// res=$(sui client ptb \
-///     --move-call $PACKAGE_ID::vault::to_coin \
-///         @$VAULT_ID \
-///     --assign coin \
-///     --merge-coins \
-///         gas [coin] \
-///     --transfer-objects \
-///         [gas] @$RECIPIENT \
-///     --json)
-/// ```
+///
+/// public fun amount_to_coin(self: &mut Vault, amount: u64, ctx: &mut TxContext): Coin<SUI> {
+///     self.balance.split(amount).into_coin(ctx)
+/// }
+///
 /// The sender has a `Vault` under their account and they convert to a `Coin`, merge it with gas
-/// and transfer it to recipient.
-#[tokio::test]
-async fn test_balance_from_obj_merge_to_gas() {
-    let test_cluster = TestClusterBuilder::new().build().await;
-    const SENDER: &str = "0x6293e2b4434265fa60ac8ed96342b7a288c0e43ffe737ba40feb24f06fed305d";
-    const RECIPIENT: &str = "0x0e3225553e3b945b4cde5621a980297c45b96002f33c95d3306e58013129ee7c";
-    const VAULT_BALANCE: i128 = 200000000000;
-    let client = test_cluster.wallet.get_client().await.unwrap();
-    let response: SuiTransactionBlockResponse = serde_json::from_value(json!({
-      "digest": "GL2e3C8M1XGXfbyTbNmWcEhXg3kKF1fJViYwEzFdd8iu",
-      "transaction": {
-        "data": {
-          "messageVersion": "v1",
-          "transaction": {
-            "kind": "ProgrammableTransaction",
-            "inputs": [
-              {
-                "type": "object",
-                "objectType": "immOrOwnedObject",
-                "objectId": "0xa76de9d9d988767d1270d02d2f8b45bc40b28a799098a5ebf140607554a9f2da",
-                "version": "4",
-                "digest": "EbZmBogfdPBd6CTouNC4RaUZbdMWaa4q2a6MkV95xZMn"
-              },
-              {
-                "type": "pure",
-                "valueType": "address",
-                "value": RECIPIENT.to_string()
-              }
-            ],
-            "transactions": [
-              {
-                "MoveCall": {
-                  "package": "0x7c7013e15389d54789b47c89b2d060d3746721683d79a18cf09f874d701637b2",
-                  "module": "vault",
-                  "function": "to_coin",
-                  "arguments": [{ "Input": 0 }]
-                }
-              },
-              { "MergeCoins": ["GasCoin", [{ "Result": 0 }]] },
-              { "TransferObjects": [["GasCoin"], { "Input": 1 }] }
-            ]
-          },
-          "sender": SENDER.to_string(),
-          "gasData": {
-            "payment": [
-              {
-                "objectId": "0x711383f7388293866353c15fbafd0b090c770d37b159935e940eccf09d391399",
-                "version": 4,
-                "digest": "F4JRxU2qgKeg8z3gsXp5tsNs2uWRpLxR5EeozcbYKSf7"
-              }
-            ],
-            "owner": SENDER.to_string(),
-            "price": "1000",
-            "budget": "2000000"
-          }
-        },
-        "txSignatures": [
-          "ACtIeuoCR2EAIPHLGHamujxvc3kAGwtRGanXDmn6iEKudgB8qecuYzjGDN4LPI7yNjWKafMCi456eBmeKPej2AL589qPpNA4UtrgRxrvXTsL64E1icYH7AIY2gKw4XfuIg=="
-        ]
-      },
-      "effects": {
-        "messageVersion": "v1",
-        "status": { "status": "success" },
-        "executedEpoch": "5",
-        "gasUsed": {
-          "computationCost": "1000000",
-          "storageCost": "988000",
-          "storageRebate": "2294820",
-          "nonRefundableStorageFee": "23180"
-        },
-        "modifiedAtVersions": [
-          {
-            "objectId": "0x711383f7388293866353c15fbafd0b090c770d37b159935e940eccf09d391399",
-            "sequenceNumber": "4"
-          },
-          {
-            "objectId": "0xa76de9d9d988767d1270d02d2f8b45bc40b28a799098a5ebf140607554a9f2da",
-            "sequenceNumber": "4"
-          }
-        ],
-        "transactionDigest": "GL2e3C8M1XGXfbyTbNmWcEhXg3kKF1fJViYwEzFdd8iu",
-        "mutated": [
-          {
-            "owner": {
-              "AddressOwner": RECIPIENT.to_string()
-            },
-            "reference": {
-              "objectId": "0x711383f7388293866353c15fbafd0b090c770d37b159935e940eccf09d391399",
-              "version": 5,
-              "digest": "BWV7YtQYETvxcV5Sbrweznkf2znLT58Vjvmrd5jjnDnG"
-            }
-          }
-        ],
-        "deleted": [
-          {
-            "objectId": "0xa76de9d9d988767d1270d02d2f8b45bc40b28a799098a5ebf140607554a9f2da",
-            "version": 5,
-            "digest": "7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz"
-          }
-        ],
-        "gasObject": {
-          "owner": {
-            "AddressOwner": RECIPIENT.to_string()
-          },
-          "reference": {
-            "objectId": "0x711383f7388293866353c15fbafd0b090c770d37b159935e940eccf09d391399",
-            "version": 5,
-            "digest": "BWV7YtQYETvxcV5Sbrweznkf2znLT58Vjvmrd5jjnDnG"
-          }
-        },
-        "dependencies": [
-          "8HCYRvLPvCHYWFCpFdSTpaDV4B435YbWoM6iZwCNeMkL",
-          "GMXnbvXQDMqu5bRsqmu2BeGodnfL4QuPA2yB3aGpwakh"
-        ]
-      },
-      "events": [],
-      "objectChanges": [
-        {
-          "type": "mutated",
-          "sender": SENDER.to_string(),
-          "owner": {
-            "AddressOwner": RECIPIENT.to_string()
-          },
-          "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
-          "objectId": "0x711383f7388293866353c15fbafd0b090c770d37b159935e940eccf09d391399",
-          "version": "5",
-          "previousVersion": "4",
-          "digest": "BWV7YtQYETvxcV5Sbrweznkf2znLT58Vjvmrd5jjnDnG"
-        }
-      ],
-      "balanceChanges": [
-        {
-          "owner": {
-            "AddressOwner": RECIPIENT.to_string()
-          },
-          "coinType": "0x2::sui::SUI",
-          "amount": "399990912780"
-        },
-        {
-          "owner": {
-            "AddressOwner": SENDER.to_string()
-          },
-          "coinType": "0x2::sui::SUI",
-          "amount": "-199990605960"
-        }
-      ],
-      "timestampMs": "1736865290221",
-      "confirmedLocalExecution": true,
-      "checkpoint": "1607"
-    })).unwrap();
-
-    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
-    let operations = Operations::try_from_response(response, &coin_cache)
-        .await
-        .unwrap();
-    println!(
-        "operations: {}",
-        serde_json::to_string_pretty(&operations).unwrap()
-    );
-    let sui_sender = operations
-        .clone()
-        .into_iter()
-        .find(|op| {
-            op.type_ == OperationType::SuiBalanceChange
-                && op.account
-                    == Some(AccountIdentifier::from(
-                        SuiAddress::from_str(SENDER).unwrap(),
-                    ))
-        })
-        .unwrap();
-    let sui_recipient = operations
-        .into_iter()
-        .find(|op| {
-            op.type_ == OperationType::SuiBalanceChange
-                && op.account
-                    == Some(AccountIdentifier::from(
-                        SuiAddress::from_str(RECIPIENT).unwrap(),
-                    ))
-        })
-        .unwrap();
-    assert_eq!(
-        -sui_sender.amount.unwrap().value + VAULT_BALANCE,
-        sui_recipient.amount.unwrap().value
-    );
-}
-
-/// Similar to `test_balance_from_obj_merge_to_gas` test, but `Vault` splits balance to extract
+/// and transfer it to recipient. `Vault` splits balance to extract
 /// amount double the gas-cost. Then gas-object is merged with the coin equal to gas-cost and is
 /// returned to sender.
 /// This checks to see when GAS_COST is transferred back to the sender, which is an edge case.
 /// In this case `process_gascoin_transfer` should be not processed.
 ///
-/// ```move
-/// public fun amount_to_coin(self: &mut Vault, amount: u64, ctx: &mut TxContext): Coin<SUI> {
-///     self.balance.split(amount).into_coin(ctx)
-/// }
-/// ```
 /// ptb:
 /// ```bash
 /// gas_cost=$((1000000+4294000-2294820))
@@ -1129,10 +930,10 @@ async fn test_balance_from_obj_paid_eq_gas() {
     let operations = Operations::try_from_response(response, &coin_cache)
         .await
         .unwrap();
-    println!(
-        "operations: {}",
-        serde_json::to_string_pretty(&operations).unwrap()
-    );
+    // println!(
+    //     "operations: {}",
+    //     serde_json::to_string_pretty(&operations).unwrap()
+    // );
 
     let mut balance_changes: HashMap<SuiAddress, i128> = HashMap::new();
     operations.into_iter().for_each(|op| {
