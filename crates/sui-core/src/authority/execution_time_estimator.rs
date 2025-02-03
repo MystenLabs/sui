@@ -411,7 +411,7 @@ mod tests {
         // new 115ms average should not be shared; it's <5% different from 110ms
         assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(110));
 
-        // Record last observation
+        // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
         let total_duration = Duration::from_millis(130);
         observer
@@ -425,7 +425,35 @@ mod tests {
             // average of [110ms, 120ms, 130ms]
             Duration::from_millis(120)
         );
-        // new 120ms average should be shared; it's >5% different from 110ms
+        // new 120ms average should not be shared; it's >5% different from 110ms,
+        // but not enough time has passed
+        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(110));
+
+        // Manually update last-shared time to long ago
+        observer
+            .local_observations
+            .get_mut(&key)
+            .unwrap()
+            .last_shared = Some((
+            Duration::from_millis(110),
+            Instant::now() - Duration::from_secs(60),
+        ));
+
+        // Record last observation
+        let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
+        let total_duration = Duration::from_millis(120);
+        observer
+            .record_local_observations(&ptb, &timings, total_duration)
+            .await;
+
+        // Verify that moving average is the same and a new observation was shared, as
+        // enough time has now elapsed
+        let local_obs = observer.local_observations.get(&key).unwrap();
+        assert_eq!(
+            local_obs.moving_average.get_average(),
+            // average of [110ms, 120ms, 120ms, 130ms]
+            Duration::from_millis(120)
+        );
         assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(120));
     }
 
