@@ -3230,11 +3230,7 @@ mod test {
         // We should have committed up to round 4
         assert_eq!(committed_sub_dags.len(), 4);
 
-        // Now try to commit providing the certified commits. We'll try 3 different scenarios
-        // 1. Provide sync commits that are all before the last committed round
-        // 2. Provide sync commits that are before and after the last committed round
-        // 3. Provide sync commits that are all after the last committed round and also there are additional blocks so can run the direct decide rule as well
-
+        // Now try to commit providing the certified commits. We'll try 3 different scenarios:
         println!("Case 1. Provide certified commits that are all before the last committed round.");
 
         // Highest certified commit should be for leader of round 4.
@@ -3256,7 +3252,7 @@ mod test {
         // Nothing should be committed
         assert!(committed_sub_dags.is_empty());
 
-        println!("Case 2. Provide certified commits that are all after the last committed round");
+        println!("Case 2. Provide certified commits that are all after the last committed round.");
 
         // Highest certified commit should be for leader of round 4.
         let certified_commits = sub_dags_and_commits
@@ -3275,22 +3271,23 @@ mod test {
         let committed_sub_dag = committed_sub_dags.first().unwrap();
         assert_eq!(committed_sub_dag.commit_ref.index, 5);
 
-        println!("Case 3. Provide certified commits that are all after the last committed round and also there are additional blocks so can run the direct decide rule as well");
+        println!("Case 3. Provide certified commits that are all after the last committed round and also there are additional blocks so can run the direct decide rule as well.");
 
+        // The commits of leader rounds 5-8 should be committed via the certified commits.
         let certified_commits = sub_dags_and_commits
             .iter()
             .skip(5)
-            .take(1)
+            .take(3)
             .map(|(_, c)| c.clone())
             .collect::<Vec<_>>();
 
-        // Now also add the blocks up to round 12
-        let blocks = dag_builder.blocks(7..=12);
+        // Now only add the blocks of rounds 8..=12. The blocks up to round 7 should be accepted via the certified commits processing.
+        let blocks = dag_builder.blocks(8..=12);
         for block in blocks {
             dag_state.write().accept_block(block);
         }
 
-        // Try commit using the certified commits
+        // Try commit using the certified commits. The corresponding blocks of the certified commits should be accepted and stored before linearizing and committing the DAG.
         let committed_sub_dags = core
             .try_commit(certified_commits.clone())
             .expect("Should not fail");

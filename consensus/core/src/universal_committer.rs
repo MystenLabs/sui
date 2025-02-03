@@ -164,8 +164,6 @@ impl UniversalCommitter {
             mem::take(certified_commits)
         };
 
-        let dag_state = self.dag_state.read();
-
         tracing::info!(
             "Decided {} certified leaders: {}",
             to_commit.len(),
@@ -175,13 +173,13 @@ impl UniversalCommitter {
         let sequenced_leaders = to_commit
             .into_iter()
             .map(|commit| {
-                let leader = DecidedLeader::Commit(dag_state.get_block(&commit.leader()).unwrap());
+                let leader = commit.blocks().last().expect("Certified commit should have at least one block");
+                assert_eq!(leader.reference(), commit.leader(), "Last block of the committed sub dag should have the same digest as the leader of the commit");
+                let leader = DecidedLeader::Commit(leader.clone());
                 self.update_metrics(&leader, Decision::Synced);
                 (leader, commit)
             })
             .collect::<Vec<_>>();
-
-        drop(dag_state);
 
         sequenced_leaders
     }
