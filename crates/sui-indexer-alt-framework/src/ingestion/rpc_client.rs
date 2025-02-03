@@ -4,6 +4,7 @@
 use crate::ingestion::client::{FetchError, FetchResult, IngestionClientTrait};
 use anyhow::anyhow;
 use bytes::Bytes;
+use sui_rpc_api::client::AuthInterceptor;
 use sui_rpc_api::Client;
 use sui_storage::blob::{Blob, BlobEncoding};
 use url::Url;
@@ -18,8 +19,8 @@ impl RpcIngestionClient {
         basic_auth: Option<(String, String)>,
     ) -> Result<Self, anyhow::Error> {
         let mut client = Client::new(url.to_string())?;
-        if let Some(basic_auth) = basic_auth {
-            client = client.with_basic_auth(basic_auth)?;
+        if let Some((username, password)) = basic_auth {
+            client = client.with_auth(AuthInterceptor::basic(username, Some(password)));
         }
         Ok(Self { client })
     }
