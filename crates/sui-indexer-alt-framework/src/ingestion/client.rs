@@ -45,7 +45,12 @@ pub enum FetchError {
     },
 }
 
-pub type FetchResult = Result<Bytes, FetchError>;
+pub type FetchResult = Result<FetchData, FetchError>;
+
+pub enum FetchData {
+    Raw(Bytes),
+    CheckPointData(CheckpointData),
+}
 
 #[derive(Clone)]
 pub struct IngestionClient {
@@ -66,6 +71,12 @@ impl IngestionClient {
         Self::new_impl(client, metrics)
     }
 
+    pub(crate) fn new_rpc(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
+        let client = Client::new(url.to_string())?
+            .with_auth(AuthInterceptor::basic(url.username(), url.password()));
+        Ok(Self::new_impl(Arc::new(client), metrics))
+    }
+
     fn new_impl(client: Arc<dyn IngestionClientTrait>, metrics: Arc<IndexerMetrics>) -> Self {
         let checkpoint_lag_reporter = CheckpointLagMetricReporter::new(
             metrics.ingested_checkpoint_timestamp_lag.clone(),
@@ -77,17 +88,6 @@ impl IngestionClient {
             metrics,
             checkpoint_lag_reporter,
         }
-    }
-
-    pub(crate) fn new_rpc(
-        url: Url,
-        basic_auth: Option<(String, String)>,
-        metrics: Arc<IndexerMetrics>,
-    ) -> IngestionResult<Self> {
-        let client = Arc::new(
-            RpcIngestionClient::new(url, basic_auth).map_err(IngestionError::RpcClientError)?,
-        );
-        Ok(Self::new_impl(client, metrics))
     }
 
     /// Fetch checkpoint data by sequence number.
@@ -147,7 +147,7 @@ impl IngestionClient {
                     return Err(BE::permanent(IngestionError::Cancelled));
                 }
 
-                let bytes = client.fetch(checkpoint).await.map_err(|err| match err {
+                let fetch_data = client.fetch(checkpoint).await.map_err(|err| match err {
                     FetchError::NotFound => BE::permanent(IngestionError::NotFound(checkpoint)),
                     FetchError::Permanent(error) => {
                         BE::permanent(IngestionError::FetchError(checkpoint, error))
@@ -159,16 +159,24 @@ impl IngestionClient {
                     ),
                 })?;
 
-                self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
-                let data: CheckpointData = Blob::from_bytes(&bytes).map_err(|e| {
-                    self.metrics.inc_retry(
-                        checkpoint,
-                        "deserialization",
-                        IngestionError::DeserializationError(checkpoint, e),
-                    )
-                })?;
-
-                Ok(data)
+                Ok(match fetch_data {
+                    FetchData::Raw(bytes) => {
+                        self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
+                        Blob::from_bytes(&bytes).map_err(|e| {
+                            self.metrics.inc_retry(
+                                checkpoint,
+                                "deserialization",
+                                IngestionError::DeserializationError(checkpoint, e),
+                            )
+                        })?
+                    }
+                    FetchData::CheckPointData(data) => {
+                        self.metrics
+                            .total_ingested_bytes
+                            .inc_by(size_of_val(&data) as u64);
+                        data
+                    }
+                })
             }
         };
 

@@ -44,11 +44,8 @@ pub struct ClientArgs {
 
     /// Path to the local ingestion directory.
     /// If all remote_store_url, local_ingestion_path and rpc_api_url are provided, remote_store_url will be used.
-    #[clap(long, group = "source")]
+    #[clap(long, env, group = "source")]
     pub rpc_api_url: Option<Url>,
-
-    #[clap(long)]
-    pub basic_auth: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -93,12 +90,7 @@ impl IngestionService {
         } else if let Some(path) = args.local_ingestion_path.as_ref() {
             IngestionClient::new_local(path.clone(), metrics.clone())
         } else if let Some(rpc_api_url) = args.rpc_api_url.as_ref() {
-            let basic_auth = args.basic_auth.map(|s| {
-                let split = s.split(":").collect::<Vec<_>>();
-                assert_eq!(2, split.len());
-                (split[0].to_string(), split[1].to_string())
-            });
-            IngestionClient::new_rpc(rpc_api_url.clone(), basic_auth, metrics.clone())?
+            IngestionClient::new_rpc(rpc_api_url.clone(), metrics.clone())?
         } else {
             panic!("One of remote_store_url, local_ingestion_path or rpc_api_url must be provided");
         };
@@ -222,7 +214,6 @@ mod tests {
                 remote_store_url: Some(Url::parse(&uri).unwrap()),
                 local_ingestion_path: None,
                 rpc_api_url: None,
-                basic_auth: None,
             },
             IngestionConfig {
                 checkpoint_buffer_size,

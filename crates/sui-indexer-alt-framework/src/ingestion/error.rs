@@ -24,5 +24,5 @@ pub enum Error {
     Cancelled,
 
     #[error(transparent)]
-    RpcClientError(anyhow::Error),
+    RpcClientError(#[from] tonic::Status),
 }
