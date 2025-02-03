@@ -613,6 +613,20 @@ impl Operations {
         }
     }
 
+    /// Compute total balance-changes for operations
+    fn total_balance_change(operations: &Vec<Operation>) -> i128 {
+        operations.iter().fold(0, |mut acc, operation| {
+            if operation.type_ == OperationType::SuiBalanceChange
+                || operation.type_ == OperationType::Gas
+            {
+                if let Some(amount) = &operation.amount {
+                    acc += amount.value;
+                }
+            }
+            acc
+        })
+    }
+
     /// If GasCoin is transferred as a part of transferObjects, operations need to be
     /// updated such that:
     /// 1) gas owner needs to be assigned back to the previous owner
@@ -627,6 +641,7 @@ impl Operations {
         let mut operations = vec![];
         if Self::is_gascoin_transfer(tx) && prev_gas_owner != new_gas_owner {
             operations = coin_change_operations.collect();
+            let original_total_balance_change = Self::total_balance_change(&operations);
             Self::add_missing_gas_owner(&mut operations, prev_gas_owner);
             Self::add_missing_gas_owner(&mut operations, new_gas_owner);
             for operation in &mut operations {
@@ -659,6 +674,11 @@ impl Operations {
                         ))
                     }
                 }
+            }
+            if Self::total_balance_change(&operations) != original_total_balance_change {
+                return Err(anyhow!(
+                    "Total balance-change does not match before and after updating operations",
+                ));
             }
         }
         Ok(operations)
