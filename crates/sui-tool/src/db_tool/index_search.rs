@@ -14,7 +14,7 @@ use std::fmt::Debug;
 use sui_core::jsonrpc_index::IndexStoreTables;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TxSequenceNumber},
-    Identifier, TypeTag,
+    Identifier,
 };
 
 #[derive(Clone, Debug)]
@@ -108,14 +108,6 @@ pub fn search_index(
             get_db_entries!(
                 db_read_only_handle.owner_index,
                 from_addr_oid,
-                start,
-                termination
-            )
-        }
-        "coin_index" => {
-            get_db_entries!(
-                db_read_only_handle.coin_index,
-                from_addr_str_oid,
                 start,
                 termination
             )
@@ -297,20 +289,6 @@ fn from_addr_oid(s: &str) -> Result<(SuiAddress, ObjectID), anyhow::Error> {
     let oid = ObjectID::from_str(tokens[1].trim())?;
 
     Ok((addr, oid))
-}
-
-fn from_addr_str_oid(s: &str) -> Result<(SuiAddress, String, ObjectID), anyhow::Error> {
-    // Remove whitespaces
-    let s = s.trim();
-    let tokens = s.split(',').collect::<Vec<&str>>();
-    if tokens.len() != 3 {
-        return Err(anyhow!("Invalid addr, type tag object id triplet"));
-    }
-    let address = SuiAddress::from_str(tokens[0].trim())?;
-    let tag: TypeTag = TypeTag::from_str(tokens[1].trim())?;
-    let oid: ObjectID = ObjectID::from_str(tokens[2].trim())?;
-
-    Ok((address, tag.to_string(), oid))
 }
 
 fn from_oid_oid(s: &str) -> Result<(ObjectID, ObjectID), anyhow::Error> {
