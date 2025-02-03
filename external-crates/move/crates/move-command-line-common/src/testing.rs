@@ -65,28 +65,37 @@ pub fn format_diff(expected: impl AsRef<str>, actual: impl AsRef<str>) -> String
 }
 
 /// See `insta_assert!` for documentation.
-pub struct InstaOptions<Info: serde::Serialize, Suffix: Into<String>> {
-    pub info: Option<Info>,
-    pub suffix: Option<Suffix>,
+pub struct InstaOptions {
+    info_set: bool,
+    suffix_set: bool,
+    settings: insta::Settings,
 }
 
-impl<Info: serde::Serialize, Suffix: Into<String>> InstaOptions<Info, Suffix> {
+impl InstaOptions {
     /// See `insta_assert!` for documentation.
     pub fn new() -> Self {
         Self {
-            info: None,
-            suffix: None,
+            info_set: false,
+            suffix_set: false,
+            settings: insta::Settings::clone_current(),
         }
     }
-}
 
-impl InstaOptions<(), String> {
-    /// See `insta_assert!` for documentation.
-    pub fn none() -> Self {
-        Self {
-            info: None,
-            suffix: None,
-        }
+    pub fn info<Info: serde::Serialize>(&mut self, info: Info) {
+        assert!(!self.info_set);
+        self.settings.set_info(&info);
+        self.info_set = true;
+    }
+
+    pub fn suffix<Suffix: Into<String>>(&mut self, suffix: Suffix) {
+        assert!(!self.suffix_set);
+        self.settings.set_snapshot_suffix(suffix);
+        self.suffix_set = true;
+    }
+
+    #[doc(hidden)]
+    pub fn into_settings(self) -> insta::Settings {
+        self.settings
     }
 }
 
@@ -145,15 +154,8 @@ macro_rules! insta_assert {
         let name: String = $name.into();
         let i: &std::path::Path = $input.as_ref();
         let c = $contents;
-        let $crate::testing::InstaOptions { info, suffix } = $options;
-        let mut settings = $crate::testing::insta::Settings::clone_current();
-        let output = settings.set_snapshot_path( i.canonicalize().unwrap().parent().unwrap());
-        if let Some(info) = info {
-            settings.set_info(&info);
-        }
-        if let Some(suffix) = suffix {
-            settings.set_snapshot_suffix(suffix);
-        }
+        let mut settings = $options.into_settings();
+        settings.set_snapshot_path(i.parent().unwrap());
         settings.set_prepend_module_to_snapshot(false);
         settings.set_omit_expression(true);
         settings.bind(|| {
@@ -163,26 +165,13 @@ macro_rules! insta_assert {
     {
         name: $name:expr,
         input_path: $input:expr,
-        contents: $contents:expr
-        $(,)?
-    } => {{
-        insta_assert! {
-            name: $name,
-            input_path: $input,
-            contents: $contents,
-            options: $crate::testing::InstaOptions::none(),
-        }
-    }};
-    {
-        name: $name:expr,
-        input_path: $input:expr,
         contents: $contents:expr,
-        $($k:ident: $v:expr),+$(,)?
+        $($k:ident: $v:expr),*$(,)?
     } => {{
         let mut opts = $crate::testing::InstaOptions::new();
         $(
-            opts.$k = Some($v);
-        )+
+            opts.$k($v);
+        )*
         insta_assert! {
             name: $name,
             input_path: $input,

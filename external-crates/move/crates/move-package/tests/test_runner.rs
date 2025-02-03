@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, bail};
-use move_command_line_common::testing::{
-    add_update_baseline_fix, format_diff, read_env_update_baseline,
-};
+use move_command_line_common::testing::insta_assert;
 use move_package::{
     compilation::{build_plan::BuildPlan, compiled_package::CompiledPackageInfo},
     package_hooks,
@@ -17,7 +15,6 @@ use move_package::{
 };
 use move_symbol_pool::Symbol;
 use std::{
-    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
 };
@@ -54,23 +51,25 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
 }
 
 struct Test<'a> {
+    test_name: String,
+    kind: &'static str,
     toml_path: &'a Path,
-    expected: PathBuf,
     output_dir: TempDir,
 }
 
 impl Test<'_> {
     fn from_path_with_kind<'p>(
         toml_path: &'p Path,
-        kind: &str,
+        kind: &'static str,
     ) -> datatest_stable::Result<Option<Test<'p>>> {
         let expected = toml_path.with_extension(kind);
         if !expected.is_file() {
             Ok(None)
         } else {
             Ok(Some(Test {
+                test_name: toml_path.file_stem().unwrap().to_string_lossy().to_string(),
                 toml_path,
-                expected,
+                kind,
                 output_dir: tempdir()?,
             }))
         }
@@ -78,36 +77,18 @@ impl Test<'_> {
 
     fn run(&self) -> datatest_stable::Result<()> {
         package_hooks::register_package_hooks(Box::new(TestHooks()));
-        let update_baseline = read_env_update_baseline();
-
         let output = self.output().unwrap_or_else(|err| format!("{:#}\n", err));
-
-        if update_baseline {
-            fs::write(&self.expected, &output)?;
-            return Ok(());
-        }
-
-        let expected = fs::read_to_string(&self.expected)?;
-        if expected != output {
-            return Err(anyhow!(add_update_baseline_fix(format!(
-                "Expected outputs differ for {:?}:\n{}",
-                self.expected,
-                format_diff(expected, output),
-            )))
-            .into());
-        }
+        insta_assert! {
+            name: self.test_name,
+            input_path: self.toml_path,
+            contents: output,
+            suffix: self.kind,
+        };
 
         Ok(())
     }
 
     fn output(&self) -> anyhow::Result<String> {
-        let Some(ext) = self.expected.extension().and_then(OsStr::to_str) else {
-            bail!(
-                "Unexpected snapshot file extension: {:?}",
-                self.expected.extension()
-            );
-        };
-
         let out_path = self.output_dir.path().to_path_buf();
         let lock_path = out_path.join("Move.lock");
 
@@ -118,7 +99,7 @@ impl Test<'_> {
             install_dir: Some(out_path),
             force_recompilation: false,
             lock_file: ["locked", "notlocked"]
-                .contains(&ext)
+                .contains(&self.kind)
                 .then(|| lock_path.clone()),
             ..Default::default()
         };
@@ -127,7 +108,7 @@ impl Test<'_> {
         let resolved_package =
             config.resolution_graph_for_package(self.toml_path, None, &mut progress);
 
-        Ok(match ext {
+        Ok(match self.kind {
             "progress" => String::from_utf8(progress)?,
 
             "locked" => fs::read_to_string(&lock_path)?,
