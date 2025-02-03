@@ -110,9 +110,9 @@ impl Indexer {
     /// - Where to download checkpoints from,
     /// - Concurrency and buffering parameters for downloading checkpoints.
     ///
-    /// `migrations` contains the SQL to run in order to bring the database schema up-to-date for
+    /// Optional `migrations` contains the SQL to run in order to bring the database schema up-to-date for
     /// the specific instance of the indexer, generated using diesel's `embed_migrations!` macro.
-    /// These migrations will be run as part of initializing the indexer.
+    /// These migrations will be run as part of initializing the indexer if provided.
     ///
     /// After initialization, at least one pipeline must be added using [Self::concurrent_pipeline]
     /// or [Self::sequential_pipeline], before the indexer is started using [Self::run].
