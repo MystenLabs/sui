@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/parser/dot_call_type_arguments_invalid.move
 ---
 error[E03010]: unbound field
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:9

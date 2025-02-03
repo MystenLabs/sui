@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/folding/unfoldable_constants_blocks.move
 ---
 error[E08001]: cannot compute constant value
   ┌─ tests/move_check/folding/unfoldable_constants_blocks.move:4:9

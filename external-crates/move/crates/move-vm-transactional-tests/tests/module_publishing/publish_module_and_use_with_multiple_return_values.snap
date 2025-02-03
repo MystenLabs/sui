@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/module_publishing/publish_module_and_use_with_multiple_return_values.mvir
 ---
 processed 2 tasks

@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/sui_mode/linter/true_positive_share_owned.move
 ---
 warning[Lint W99000]: possible owned object share
    ┌─ tests/sui_mode/linter/true_positive_share_owned.move:17:9

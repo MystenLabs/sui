@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/use_nested_self_duplicate.move
 ---
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/expansion/use_nested_self_duplicate.move:9:17

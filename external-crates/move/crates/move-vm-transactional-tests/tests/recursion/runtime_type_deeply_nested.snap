@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/recursion/runtime_type_deeply_nested.mvir
 ---
 processed 3 tasks
 

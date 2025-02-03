@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/cast_other_types.move
 ---
 error[E04003]: built-in operation not supported
   ┌─ tests/move_check/parser/cast_other_types.move:4:10

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/expansion/type_hole_as_type_param.move
 ---
 warning[W09006]: unused struct type parameter
   ┌─ tests/move_2024/expansion/type_hole_as_type_param.move:2:21

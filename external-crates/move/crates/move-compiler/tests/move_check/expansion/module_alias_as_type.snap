@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/module_alias_as_type.move
 ---
 warning[W09001]: unused alias
   ┌─ tests/move_check/expansion/module_alias_as_type.move:6:14

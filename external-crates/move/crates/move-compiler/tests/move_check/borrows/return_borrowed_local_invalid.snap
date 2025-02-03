@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/borrows/return_borrowed_local_invalid.move
 ---
 error[E07004]: invalid return of locally borrowed state
    ┌─ tests/move_check/borrows/return_borrowed_local_invalid.move:19:9

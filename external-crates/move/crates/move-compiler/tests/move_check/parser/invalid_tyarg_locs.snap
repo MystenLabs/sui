@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/invalid_tyarg_locs.move
 ---
 error[E01016]: invalid name
   ┌─ tests/move_check/parser/invalid_tyarg_locs.move:6:10

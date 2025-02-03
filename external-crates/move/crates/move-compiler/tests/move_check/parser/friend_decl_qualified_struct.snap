@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/friend_decl_qualified_struct.move
 ---
 error[E03006]: unexpected name in this position
   ┌─ tests/move_check/parser/friend_decl_qualified_struct.move:7:21

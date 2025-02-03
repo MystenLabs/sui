@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/naming/mut_underscore.move
 ---
 error[E03016]: invalid 'mut' declaration
   ┌─ tests/move_2024/naming/mut_underscore.move:3:13

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/linter/true_positive_meaningless_math_operation.move
 ---
 warning[Lint W01003]: math operator can be simplified
   ┌─ tests/linter/true_positive_meaningless_math_operation.move:3:9

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/standalone_fields.move
 ---
 error[E03009]: unbound variable
   ┌─ tests/move_check/expansion/standalone_fields.move:3:10

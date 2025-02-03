@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/other_builtins_invalid.move
 ---
 error[E04006]: invalid subtype
   ┌─ tests/move_check/typing/other_builtins_invalid.move:4:10

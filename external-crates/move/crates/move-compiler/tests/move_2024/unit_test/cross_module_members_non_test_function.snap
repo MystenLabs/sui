@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/unit_test/cross_module_members_non_test_function.move
 ---
 error[E03004]: unbound type
    ┌─ tests/move_2024/unit_test/cross_module_members_non_test_function.move:22:23

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/dependencies/use_friend_transitive_by_use.move
 ---
 error[E02004]: invalid 'module' declaration
    ┌─ tests/move_check/dependencies/use_friend_transitive_by_use.move:16:9

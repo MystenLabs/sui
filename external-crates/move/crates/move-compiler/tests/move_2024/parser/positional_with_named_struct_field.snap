@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/parser/positional_with_named_struct_field.move
 ---
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/positional_with_named_struct_field.move:3:23

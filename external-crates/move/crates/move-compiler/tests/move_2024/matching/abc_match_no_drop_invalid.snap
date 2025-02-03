@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/matching/abc_match_no_drop_invalid.move
 ---
 error[E06001]: unused value without 'drop'
    ┌─ tests/move_2024/matching/abc_match_no_drop_invalid.move:10:27

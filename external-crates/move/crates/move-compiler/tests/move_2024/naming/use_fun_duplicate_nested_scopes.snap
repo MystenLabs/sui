@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/naming/use_fun_duplicate_nested_scopes.move
 ---
 warning[W02021]: duplicate alias
    ┌─ tests/move_2024/naming/use_fun_duplicate_nested_scopes.move:10:5

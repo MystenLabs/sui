@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-compiler-transactional-tests/tests/constants/macro_call_line_number_abort.move
 ---
 processed 4 tasks
 

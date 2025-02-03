@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/locals/reassign_parameter.move
 ---
 error[E06001]: unused value without 'drop'
   ┌─ tests/move_check/locals/reassign_parameter.move:7:9

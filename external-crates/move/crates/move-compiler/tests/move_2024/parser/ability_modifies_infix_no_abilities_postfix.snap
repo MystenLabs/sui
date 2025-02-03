@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/parser/ability_modifies_infix_no_abilities_postfix.move
 ---
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/parser/ability_modifies_infix_no_abilities_postfix.move:3:5

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/borrow_field_non_ref_non_local_root.move
 ---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/borrow_field_non_ref_non_local_root.move:9:22

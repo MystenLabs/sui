@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/one_time_witness/other_mod_def.move
 ---
 error[Sui E02003]: invalid 'init' function
   ┌─ tests/sui_mode/one_time_witness/other_mod_def.move:7:9

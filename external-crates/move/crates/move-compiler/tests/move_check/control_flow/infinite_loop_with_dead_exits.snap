@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/control_flow/infinite_loop_with_dead_exits.move
 ---
 warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/control_flow/infinite_loop_with_dead_exits.move:13:17

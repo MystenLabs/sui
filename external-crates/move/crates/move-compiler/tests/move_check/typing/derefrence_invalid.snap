@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/derefrence_invalid.move
 ---
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/derefrence_invalid.move:6:15

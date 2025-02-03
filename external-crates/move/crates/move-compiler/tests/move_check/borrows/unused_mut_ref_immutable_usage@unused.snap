@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/borrows/unused_mut_ref_immutable_usage.move
 ---
 warning[W09014]: unused mutable reference '&mut' parameter
   ┌─ tests/move_check/borrows/unused_mut_ref_immutable_usage.move:5:33

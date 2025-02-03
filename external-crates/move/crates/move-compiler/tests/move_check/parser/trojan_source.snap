@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/trojan_source.move
 ---
 error[E01001]: invalid character
   ┌─ tests/move_check/parser/trojan_source.move:3:24

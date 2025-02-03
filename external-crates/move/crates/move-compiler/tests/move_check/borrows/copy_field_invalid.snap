@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/borrows/copy_field_invalid.move
 ---
 error[E07002]: mutable ownership violated
    ┌─ tests/move_check/borrows/copy_field_invalid.move:13:9

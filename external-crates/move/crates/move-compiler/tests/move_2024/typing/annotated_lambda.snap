@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/annotated_lambda.move
 ---
 error[E04032]: unable to expand macro function
   ┌─ tests/move_2024/typing/annotated_lambda.move:8:15

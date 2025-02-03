@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/module_call_missing_function.move
 ---
 error[E03003]: unbound module member
    ┌─ tests/move_check/typing/module_call_missing_function.move:13:9

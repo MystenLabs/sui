@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/sui_mode/linter/true_positive_public_mut_tx_context.move
 ---
 warning[Lint W99009]: prefer '&mut TxContext' over '&TxContext'
   ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:8:37

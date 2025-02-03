@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/use_module_member_invalid_comma.move
 ---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/use_module_member_invalid_comma.move:4:26

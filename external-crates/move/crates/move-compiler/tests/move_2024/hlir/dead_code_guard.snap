@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/hlir/dead_code_guard.move
 ---
 warning[W09005]: dead or unreachable code
    ┌─ tests/move_2024/hlir/dead_code_guard.move:14:20

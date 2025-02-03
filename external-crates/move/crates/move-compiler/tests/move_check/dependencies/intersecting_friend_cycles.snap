@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/dependencies/intersecting_friend_cycles.move
 ---
 error[E02004]: invalid 'module' declaration
    ┌─ tests/move_check/dependencies/intersecting_friend_cycles.move:8:5

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/use_nested_self_as_invalid.move
 ---
 warning[W09001]: unused alias
   ┌─ tests/move_check/expansion/use_nested_self_as_invalid.move:8:26

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/assert_invalid_cond_and_code_type.move
 ---
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/assert_invalid_cond_and_code_type.move:3:9

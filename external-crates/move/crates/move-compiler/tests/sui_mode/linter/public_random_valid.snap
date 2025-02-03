@@ -4,6 +4,5 @@ info:
   flavor: sui
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/sui_mode/linter/public_random_valid.move
 ---
 

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/ide_mode/index_autocomplete.move
 ---
 warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:9:9

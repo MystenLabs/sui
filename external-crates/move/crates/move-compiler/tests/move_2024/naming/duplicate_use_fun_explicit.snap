@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/naming/duplicate_use_fun_explicit.move
 ---
 error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_2024/naming/duplicate_use_fun_explicit.move:10:5

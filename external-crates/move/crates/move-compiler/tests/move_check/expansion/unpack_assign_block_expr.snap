@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/unpack_assign_block_expr.move
 ---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/expansion/unpack_assign_block_expr.move:4:9

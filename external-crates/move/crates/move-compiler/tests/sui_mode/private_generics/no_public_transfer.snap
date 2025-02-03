@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/private_generics/no_public_transfer.move
 ---
 error[Sui E02009]: invalid private transfer call
   ┌─ tests/sui_mode/private_generics/no_public_transfer.move:9:9

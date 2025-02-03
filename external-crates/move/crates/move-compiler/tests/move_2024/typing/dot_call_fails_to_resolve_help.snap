@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/dot_call_fails_to_resolve_help.move
 ---
 error[E04023]: invalid method call
    ┌─ tests/move_2024/typing/dot_call_fails_to_resolve_help.move:31:9

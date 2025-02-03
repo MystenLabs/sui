@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/unused_use_fun_silenced_by_macros.move
 ---
 warning[W02021]: duplicate alias
   ┌─ tests/move_2024/typing/unused_use_fun_silenced_by_macros.move:9:9

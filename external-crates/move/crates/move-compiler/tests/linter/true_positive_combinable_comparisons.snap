@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/linter/true_positive_combinable_comparisons.move
 ---
 warning[Lint W01012]: comparison operations condition can be simplified
   ┌─ tests/linter/true_positive_combinable_comparisons.move:4:9

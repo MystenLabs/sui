@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/borrow_field_internal.move
 ---
 error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/borrow_field_internal.move:13:11

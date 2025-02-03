@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-ir-compiler-transactional-tests/tests/bytecode-generation/expressions/unpack.mvir
 ---
 processed 3 tasks
 

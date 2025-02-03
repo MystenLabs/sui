@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/sui_mode/linter/collection_equality.move
 ---
 warning[Lint W99005]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:17:14

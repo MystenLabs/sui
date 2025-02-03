@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-compiler-transactional-tests/tests/matching/rhs_shadow_loop_label_0.move
 ---
 processed 3 tasks

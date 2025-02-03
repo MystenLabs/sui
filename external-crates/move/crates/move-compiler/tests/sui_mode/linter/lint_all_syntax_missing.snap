@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/sui_mode/linter/lint_all_syntax_missing.move
 ---
 warning[W10007]: issue with attribute value
   ┌─ tests/sui_mode/linter/lint_all_syntax_missing.move:2:14

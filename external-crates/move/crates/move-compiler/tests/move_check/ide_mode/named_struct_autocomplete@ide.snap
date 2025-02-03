@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/ide_mode/named_struct_autocomplete.move
 ---
 note[I15006]: IDE path autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:1:1

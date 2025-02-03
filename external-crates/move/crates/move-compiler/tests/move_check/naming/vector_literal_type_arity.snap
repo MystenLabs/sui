@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/naming/vector_literal_type_arity.move
 ---
 error[E03008]: too few type arguments
   ┌─ tests/move_check/naming/vector_literal_type_arity.move:4:18

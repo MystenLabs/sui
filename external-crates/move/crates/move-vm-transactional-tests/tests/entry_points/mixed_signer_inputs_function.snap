@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/entry_points/mixed_signer_inputs_function.mvir
 ---
 processed 4 tasks

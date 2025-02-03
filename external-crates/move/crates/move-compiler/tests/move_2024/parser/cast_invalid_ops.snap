@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/parser/cast_invalid_ops.move
 ---
 error[E01015]: ambiguous 'as'
   ┌─ tests/move_2024/parser/cast_invalid_ops.move:4:9

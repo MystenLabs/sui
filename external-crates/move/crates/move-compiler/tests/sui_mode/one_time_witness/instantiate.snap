@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/one_time_witness/instantiate.move
 ---
 error[Sui E02005]: invalid one-time witness usage
    ┌─ tests/sui_mode/one_time_witness/instantiate.move:12:9

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/linter/true_positive_equal_operands.move
 ---
 warning[Lint W02011]: redundant, always-equal operands for binary operation
   ┌─ tests/linter/true_positive_equal_operands.move:6:9

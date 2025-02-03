@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/naming/unbound_var_call.move
 ---
 error[E03005]: unbound unscoped name
   ┌─ tests/move_2024/naming/unbound_var_call.move:6:9

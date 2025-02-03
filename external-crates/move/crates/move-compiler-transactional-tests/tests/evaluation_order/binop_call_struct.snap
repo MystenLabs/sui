@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-compiler-transactional-tests/tests/evaluation_order/binop_call_struct.move
 ---
 processed 8 tasks

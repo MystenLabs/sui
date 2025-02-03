@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/feature_gate/macro_definition_with_usage.move
 ---
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/feature_gate/macro_definition_with_usage.move:2:12

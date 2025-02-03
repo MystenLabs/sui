@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/named_blocks_invalid.move
 ---
 error[E03009]: unbound variable
   ┌─ tests/move_check/parser/named_blocks_invalid.move:4:9
