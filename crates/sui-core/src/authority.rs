@@ -3181,7 +3181,10 @@ impl AuthorityState {
             .map(|c| *c.sequence_number())
             .unwrap_or(0);
 
-        assert!(epoch_last_checkpoint >= highest_locally_built_checkpoint_seq);
+        assert!(
+            epoch_last_checkpoint >= highest_locally_built_checkpoint_seq,
+            "{epoch_last_checkpoint} >= {highest_locally_built_checkpoint_seq}"
+        );
         if highest_locally_built_checkpoint_seq == epoch_last_checkpoint {
             // if we built the last checkpoint locally (as opposed to receiving it from a peer),
             // then all shared_version_assignments except the one for the ChangeEpoch transaction
