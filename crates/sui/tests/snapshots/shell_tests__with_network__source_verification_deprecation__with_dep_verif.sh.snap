@@ -1,0 +1,52 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/with_network/source_verification_deprecation/with_dep_verif.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# test that publishing with `--verify-deps` succeeds cleanly if deps match and fails if deps don't match
+
+echo "munge various Move.toml files"
+FRAMEWORK_DIR=$(echo $CARGO_MANIFEST_DIR | sed 's#/crates/sui#/crates/sui-framework/packages/sui-framework#g')
+for i in dependency/Move.toml example/Move.toml
+do
+  cat $i | sed "s#FRAMEWORK_DIR#$FRAMEWORK_DIR#g" > Move.toml
+  mv Move.toml $i
+done
+
+echo "publish dependency"
+sui client --client.config $CONFIG publish dependency --verify-deps \
+  --json | jq '.effects.status'
+
+echo "modify dependency"
+cat dependency/sources/dependency.move | sed 's#0#1#g' > dependency.move
+mv dependency.move dependency/sources/dependency.move
+
+echo "publish example - should fail since dep has changed (need to redact the module address)"
+sui client --client.config $CONFIG publish example --verify-deps \
+  | sed 's/at .*::dependency::dependency/at <package address>::dependency::dependency/g'
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+munge various Move.toml files
+publish dependency
+{
+  "status": "success"
+}
+modify dependency
+publish example - should fail since dep has changed (need to redact the module address)
+Failed to publish the Move module(s), reason: [warning] Local dependency did not match its on-chain version at <package address>::dependency::dependency
+
+This may indicate that the on-chain version(s) of your package's dependencies may behave differently than the source version(s) your package was built against.
+
+Fix this by rebuilding your packages with source versions matching on-chain versions of dependencies, or ignore this warning by re-running with the --skip-dependency-verification flag.
+
+----- stderr -----
+BUILDING dependency
+Successfully verified dependencies on-chain against source.
+INCLUDING DEPENDENCY dependency
+BUILDING example
