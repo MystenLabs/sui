@@ -1575,10 +1575,6 @@ impl AuthorityState {
                 .force_reload_system_packages(&BuiltInFramework::all_package_ids());
         }
 
-        if matches!(tx_key, TransactionKey::RandomnessRound(_, _)) {
-            epoch_store.remove_shared_version_assignments(&[tx_key]);
-        }
-
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
 
