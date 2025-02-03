@@ -4,13 +4,14 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Weak},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use super::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::SubmitToConsensus;
 use itertools::Itertools;
 use mysten_common::debug_fatal;
+use mysten_metrics::monitored_scope;
 use simple_moving_average::{SingleSumSMA, SMA};
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::{
@@ -31,6 +32,9 @@ const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 10;
 // this percent, we share a new one.
 const OBSERVATION_SHARING_DIFF_THRESHOLD: f64 = 0.05;
 
+// Minimum interval between sharing multiple observations of the same key.
+const OBSERVATION_SHARING_MIN_INTERVAL: Duration = Duration::from_secs(5);
+
 // Collects local execution time estimates to share via consensus.
 pub struct ExecutionTimeObserver {
     epoch_store: Weak<AuthorityPerEpochStore>,
@@ -42,7 +46,7 @@ pub struct ExecutionTimeObserver {
 #[derive(Debug, Clone)]
 pub struct LocalObservations {
     moving_average: SingleSumSMA<Duration, u32, LOCAL_OBSERVATION_WINDOW_SIZE>,
-    last_shared: Option<Duration>,
+    last_shared: Option<(Duration, Instant)>,
 }
 
 // Tracks local execution time observations and shares them via consensus.
@@ -102,6 +106,8 @@ impl ExecutionTimeObserver {
         timings: &[ExecutionTiming],
         total_duration: Duration,
     ) {
+        let _scope = monitored_scope("ExecutionTimeObserver::record_local_observations");
+
         assert!(tx.commands.len() >= timings.len());
 
         let total_command_duration: Duration = timings.iter().map(|t| t.duration()).sum();
@@ -140,13 +146,17 @@ impl ExecutionTimeObserver {
             // TODO: Consider only sharing observations for entrypoints with congestion.
             // TODO: Consider only sharing observations that disagree with consensus estimate.
             let new_average = local_observation.moving_average.get_average();
-            if local_observation.last_shared.map_or(true, |last_shared| {
-                let diff = last_shared.abs_diff(new_average);
-                diff > new_average.mul_f64(OBSERVATION_SHARING_DIFF_THRESHOLD)
-            }) {
+            if local_observation
+                .last_shared
+                .map_or(true, |(last_shared, last_shared_timestamp)| {
+                    let diff = last_shared.abs_diff(new_average);
+                    diff > new_average.mul_f64(OBSERVATION_SHARING_DIFF_THRESHOLD)
+                        && last_shared_timestamp.elapsed() > OBSERVATION_SHARING_MIN_INTERVAL
+                })
+            {
                 debug!("sharing new execution time observation for {key:?}: {new_average:?}");
                 to_share.push((key, new_average));
-                local_observation.last_shared = Some(new_average);
+                local_observation.last_shared = Some((new_average, Instant::now()));
             }
         }
 
@@ -154,11 +164,13 @@ impl ExecutionTimeObserver {
         if !to_share.is_empty() {
             if let Some(epoch_store) = self.epoch_store.upgrade() {
                 let epoch_store = epoch_store.clone();
+                epoch_store
+                    .metrics
+                    .epoch_execution_time_observations_shared
+                    .inc();
                 let transaction = ConsensusTransaction::new_execution_time_observation(
                     ExecutionTimeObservation::new(epoch_store.name, to_share),
                 );
-                // TODO: Add metrics for shared observations.
-                // TODO: Add a rate limit on consensus submissions.
                 if let Err(e) = self
                     .consensus_adapter
                     .submit_to_consensus(&[transaction], &epoch_store)
@@ -379,7 +391,7 @@ mod tests {
             // 10ms overhead should be entirely apportioned to the one command in the PTB
             Duration::from_millis(110)
         );
-        assert_eq!(local_obs.last_shared, Some(Duration::from_millis(110)));
+        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(110));
 
         // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(110))];
@@ -396,9 +408,9 @@ mod tests {
             Duration::from_millis(115)
         );
         // new 115ms average should not be shared; it's <5% different from 110ms
-        assert_eq!(local_obs.last_shared, Some(Duration::from_millis(110)));
+        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(110));
 
-        // Record last observation
+        // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
         let total_duration = Duration::from_millis(130);
         observer
@@ -412,8 +424,36 @@ mod tests {
             // average of [110ms, 120ms, 130ms]
             Duration::from_millis(120)
         );
-        // new 120ms average should be shared; it's >5% different from 110ms
-        assert_eq!(local_obs.last_shared, Some(Duration::from_millis(120)));
+        // new 120ms average should not be shared; it's >5% different from 110ms,
+        // but not enough time has passed
+        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(110));
+
+        // Manually update last-shared time to long ago
+        observer
+            .local_observations
+            .get_mut(&key)
+            .unwrap()
+            .last_shared = Some((
+            Duration::from_millis(110),
+            Instant::now() - Duration::from_secs(60),
+        ));
+
+        // Record last observation
+        let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
+        let total_duration = Duration::from_millis(120);
+        observer
+            .record_local_observations(&ptb, &timings, total_duration)
+            .await;
+
+        // Verify that moving average is the same and a new observation was shared, as
+        // enough time has now elapsed
+        let local_obs = observer.local_observations.get(&key).unwrap();
+        assert_eq!(
+            local_obs.moving_average.get_average(),
+            // average of [110ms, 120ms, 120ms, 130ms]
+            Duration::from_millis(120)
+        );
+        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(120));
     }
 
     #[tokio::test]
