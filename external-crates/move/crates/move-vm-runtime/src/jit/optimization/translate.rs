@@ -64,9 +64,6 @@ fn function(ndx: FunctionDefinitionIndex, fun: &FunctionDefinition) -> ast::Func
     ast::Function { ndx, code }
 }
 
-// NB: We use this instead of the VMControlFlowGraph because it reduces the number of labels
-// generated in some cases, overall reducing the number of blocks for a more-optimized form to work
-// over.
 fn generate_basic_blocks(
     input: &[FF::Bytecode],
     jump_tables: &[FF::VariantJumpTable],
@@ -191,7 +188,3 @@ fn bytecode(code: &FF::Bytecode) -> ast::Bytecode {
         }
     }
 }
-// 0: [CopyLoc(1), LdU64(10), Lt, BrFalse(5), Branch(19)],
-// 5: [CopyLoc(0), LdU64(10), Lt, BrFalse(14), MoveLoc(0), LdU64(1), Add, StLoc(0), Branch(5)],
-// 14: [MoveLoc(1), LdU64(1), Add, StLoc(1), Branch(0)],
-// 19: [LdU64(10), Ret],

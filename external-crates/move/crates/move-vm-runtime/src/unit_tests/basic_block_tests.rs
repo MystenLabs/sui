@@ -24,3 +24,5 @@ fn test_basic_blocks_0() {
     let pkg = optimization::to_optimized_form(verif_pkg);
     println!("Blocks\n---------------------------\n{:#?}", pkg.modules);
 }
+
+// TODO: Write more tests

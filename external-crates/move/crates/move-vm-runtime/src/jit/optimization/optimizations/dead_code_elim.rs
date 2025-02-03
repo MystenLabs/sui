@@ -79,17 +79,22 @@ fn blocks(
     for (_, block_code) in blocks.iter_mut() {
         eliminate_unreachable(context, block_code);
     }
-    // Now, write down the live labels:
-    // - Record any instruction that is a valid jump target
-    // - Record any instruction that is a fall-through target
-    let labels = blocks.keys().collect::<BTreeSet<_>>();
-    for ((_, block), next) in blocks.iter().zip(labels.into_iter().skip(1)) {
+
+    // Now, write down the live labels in two parts
+
+    // (A) Record any instruction that is a valid jump target
+    for (_, block) in blocks.iter() {
         // Find jump targets
         for instr in block {
             if let Some(labels) = instr.branch_target(context.jump_tables) {
                 context.live_labels.extend(labels);
             }
         }
+    }
+
+    // (B) Record any instruction that is a fall-through target
+    let labels = blocks.keys().collect::<Vec<_>>();
+    for ((_, block), next) in blocks.iter().zip(labels.into_iter().skip(1)) {
         // Check for fall-through
         if let Some(instr) = block.last() {
             if !instr.is_unconditional_branch() {
