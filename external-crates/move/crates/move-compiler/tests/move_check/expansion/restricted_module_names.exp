@@ -1,6 +1,0 @@
-error[E03011]: invalid use of reserved name
-  ┌─ tests/move_check/expansion/restricted_module_names.move:2:14
-  │
-2 │ module 0x42::Self {}
-  │              ^^^^ Invalid module name 'Self'. 'Self' is restricted and cannot be used to name a module
-

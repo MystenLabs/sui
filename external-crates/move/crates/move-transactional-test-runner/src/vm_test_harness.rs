@@ -350,6 +350,20 @@ fn test_vm_config() -> VMConfig {
 
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    run_test_impl::<SimpleVMTestAdapter>(path, Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())))
-        .await
+    run_test_impl::<SimpleVMTestAdapter>(
+        path,
+        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
+        /* use insta */ false,
+    )
+    .await
+}
+
+#[tokio::main]
+pub async fn run_test_with_insta(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    run_test_impl::<SimpleVMTestAdapter>(
+        path,
+        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
+        /* use insta */ true,
+    )
+    .await
 }

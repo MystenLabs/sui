@@ -155,11 +155,14 @@ jobs:
       - name: sui-execution
         run: |
           ./scripts/execution_layer.py generate-lib
-      - name: Install diesel CLI, and cache the binary
-        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
+      - name: Install diesel CLI
+        uses: baptiste0928/cargo-install@v3
         with:
           crate: diesel_cli
+          version: '=2.2.6'
           locked: true
+          args: --no-default-features
+          features: postgres
       - name: Indexer schema
         run: |
           ./scripts/generate_indexer_schema.sh

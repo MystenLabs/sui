@@ -1,7 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+use std::future::Future;
+use std::ops::Deref;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::time::Instant;
+
 use arc_swap::{ArcSwap, ArcSwapOption};
+use consensus_core::{BlockStatus, ConnectionStatus};
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{self, select, Either};
@@ -9,6 +18,7 @@ use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
+use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt, LATENCY_SEC_BUCKETS};
 use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
 use prometheus::HistogramVec;
@@ -21,46 +31,31 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry,
     register_int_gauge_with_registry,
 };
-use std::collections::HashMap;
-use std::future::Future;
-use std::ops::Deref;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
-use std::time::Instant;
+use sui_protocol_config::ProtocolConfig;
+use sui_simulator::anemo::PeerId;
+use sui_types::base_types::AuthorityName;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
-
+use sui_types::fp_ensure;
+use sui_types::messages_consensus::ConsensusTransactionKind;
+use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
+use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{oneshot, Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
+use tokio::time::Duration;
 use tokio::time::{self};
+use tracing::{debug, info, trace, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
 use crate::consensus_throughput_calculator::{ConsensusThroughputProfiler, Level};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 use crate::metrics::LatencyObserver;
-use consensus_core::{BlockStatus, ConnectionStatus};
-use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt};
-use sui_protocol_config::ProtocolConfig;
-use sui_simulator::anemo::PeerId;
-use sui_types::base_types::AuthorityName;
-use sui_types::fp_ensure;
-use sui_types::messages_consensus::ConsensusTransactionKind;
-use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
-use sui_types::transaction::TransactionDataAPI;
-use tokio::time::Duration;
-use tracing::{debug, info, trace, warn};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
-
-const SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.1, 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 4., 5., 6., 7., 10., 15.,
-    20., 25., 30., 60., 90., 120., 150., 180., 210., 240., 270., 300.,
-];
 
 const SEQUENCING_CERTIFICATE_POSITION_BUCKETS: &[f64] = &[
     0., 1., 2., 3., 5., 10., 15., 20., 25., 30., 50., 100., 150., 200.,
@@ -128,14 +123,14 @@ impl ConsensusAdapterMetrics {
                 "sequencing_acknowledge_latency",
                 "The latency for acknowledgement from sequencing engine. The overall sequencing latency is measured by the sequencing_certificate_latency metric",
                 &["retry", "tx_type"],
-                SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
                 &["position", "tx_type", "processed_method"],
-                SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             sequencing_certificate_authority_position: register_histogram_with_registry!(

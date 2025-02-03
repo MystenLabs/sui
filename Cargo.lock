@@ -7734,6 +7734,7 @@ dependencies = [
  "codespan-reporting",
  "dunce",
  "hex",
+ "insta",
  "lsp-types",
  "move-binary-format",
  "move-borrow-graph",

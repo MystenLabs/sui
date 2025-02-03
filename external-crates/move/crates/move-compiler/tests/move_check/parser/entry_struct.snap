@@ -1,0 +1,13 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+input_file: crates/move-compiler/tests/move_check/parser/entry_struct.move
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/entry_struct.move:3:5
+  │
+3 │     entry struct S {}
+  │     ^^^^^ Invalid struct declaration. 'entry' is used only on functions

@@ -1870,6 +1870,7 @@ dependencies = [
  "datatest-stable",
  "dunce",
  "hex",
+ "insta",
  "lsp-types",
  "move-binary-format",
  "move-borrow-graph",

@@ -1,0 +1,5 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/move-vm-transactional-tests/tests/stack_and_function_calls/function_composition.mvir
+---
+processed 2 tasks
