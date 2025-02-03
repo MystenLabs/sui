@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/call_on_non_lambda_arg.move
 ---
 error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/call_on_non_lambda_arg.move:4:9

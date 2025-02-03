@@ -4,6 +4,5 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/unit_test/entry_is_public_in_test_contexts.move
 ---
 

@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/private_generics/private_event_emit.move
 ---
 error[Sui E02008]: invalid event
   ┌─ tests/sui_mode/private_generics/private_event_emit.move:8:9

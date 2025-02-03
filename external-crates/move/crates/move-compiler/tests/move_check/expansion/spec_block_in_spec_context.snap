@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/spec_block_in_spec_context.move
 ---
 warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/expansion/spec_block_in_spec_context.move:3:5

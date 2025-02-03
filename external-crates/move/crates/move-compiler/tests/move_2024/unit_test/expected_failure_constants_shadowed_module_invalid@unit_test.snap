@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/unit_test/expected_failure_constants_shadowed_module_invalid.move
 ---
 error[E10003]: invalid attribute value
    ┌─ tests/move_2024/unit_test/expected_failure_constants_shadowed_module_invalid.move:10:24

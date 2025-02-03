@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/matching/bad_guard_3.move
 ---
 error[E07003]: invalid operation, could create dangling a reference
    ┌─ tests/move_2024/matching/bad_guard_3.move:16:20

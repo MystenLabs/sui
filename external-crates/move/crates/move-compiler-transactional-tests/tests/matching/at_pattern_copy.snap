@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-compiler-transactional-tests/tests/matching/at_pattern_copy.move
 ---
 processed 3 tasks

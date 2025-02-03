@@ -4,6 +4,5 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/id_leak/through_vector.move
 ---
 

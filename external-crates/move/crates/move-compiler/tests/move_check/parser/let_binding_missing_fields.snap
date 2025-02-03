@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/let_binding_missing_fields.move
 ---
 error[E04016]: too few arguments
   ┌─ tests/move_check/parser/let_binding_missing_fields.move:6:13

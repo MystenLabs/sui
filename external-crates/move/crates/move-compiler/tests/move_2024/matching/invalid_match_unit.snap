@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/matching/invalid_match_unit.move
 ---
 error[E04005]: expected a single type
   ┌─ tests/move_2024/matching/invalid_match_unit.move:6:16

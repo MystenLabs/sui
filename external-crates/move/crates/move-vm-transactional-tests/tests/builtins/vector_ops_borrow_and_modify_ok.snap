@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/builtins/vector_ops_borrow_and_modify_ok.mvir
 ---
 processed 3 tasks

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/unpack_all_field_cases.move
 ---
 warning[W09003]: unused assignment
    ┌─ tests/move_check/expansion/unpack_all_field_cases.move:10:13

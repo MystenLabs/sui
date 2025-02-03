@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/naming/lambda_with_type_args.move
 ---
 error[E03007]: too many type arguments
   ┌─ tests/move_2024/naming/lambda_with_type_args.move:3:9

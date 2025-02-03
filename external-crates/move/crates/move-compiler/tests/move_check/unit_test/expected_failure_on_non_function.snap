@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/unit_test/expected_failure_on_non_function.move
 ---
 error[E02015]: invalid attribute
   ┌─ tests/move_check/unit_test/expected_failure_on_non_function.move:3:7

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: true
-input_file: crates/move-compiler/tests/linter/move_2024/unneeded_return_okay.move
 ---
 warning[W09002]: unused variable
    ┌─ tests/linter/move_2024/unneeded_return_okay.move:14:9

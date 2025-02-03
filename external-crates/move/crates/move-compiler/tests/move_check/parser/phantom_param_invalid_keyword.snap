@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/phantom_param_invalid_keyword.move
 ---
 warning[W09006]: unused struct type parameter
   ┌─ tests/move_check/parser/phantom_param_invalid_keyword.move:2:18

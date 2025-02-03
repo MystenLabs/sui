@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/spec_parsing_inside_fun.move
 ---
 warning[W09002]: unused variable
   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:2:22

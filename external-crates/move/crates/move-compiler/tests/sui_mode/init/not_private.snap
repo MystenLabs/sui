@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/init/not_private.move
 ---
 error[Sui E02003]: invalid 'init' function
   ┌─ tests/sui_mode/init/not_private.move:4:16

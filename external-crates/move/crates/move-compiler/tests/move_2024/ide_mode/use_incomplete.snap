@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/ide_mode/use_incomplete.move
 ---
 error[E01002]: unexpected token
   ┌─ tests/move_2024/ide_mode/use_incomplete.move:5:9

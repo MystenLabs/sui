@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/entry_points/expected_u64_u64_address_got_u64_u64_address.move
 ---
 processed 1 task

@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-compiler-transactional-tests/tests/parser/hex_and_decimal_address.move
 ---
 processed 1 task

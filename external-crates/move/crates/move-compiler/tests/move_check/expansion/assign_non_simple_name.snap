@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/assign_non_simple_name.move
 ---
 error[E01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:16:9

@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/native_functions/non_existant_native_function.mvir
 ---
 processed 1 task
 

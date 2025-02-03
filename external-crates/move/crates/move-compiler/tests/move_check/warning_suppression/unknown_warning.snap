@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/warning_suppression/unknown_warning.move
 ---
 warning[W10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/unknown_warning.move:3:9

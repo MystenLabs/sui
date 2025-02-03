@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/deprecation_inter_module_calls.move
 ---
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:23:12

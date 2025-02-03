@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/exp_list_resource_drop.move
 ---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/exp_list_resource_drop.move:7:9

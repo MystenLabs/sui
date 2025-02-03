@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/clever_assertions_no_annotation.move
 ---
 error[E04035]: invalid constant usage in error context
   ┌─ tests/move_2024/typing/clever_assertions_no_annotation.move:5:24

@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-ir-compiler-transactional-tests/tests/bytecode-generation/statements/jump_if.mvir
 ---
 processed 4 tasks
 

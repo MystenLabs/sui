@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/conditional_copy_invalid.move
 ---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_copy_invalid.move:15:16

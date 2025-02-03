@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/eq_invalid.move
 ---
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/eq_invalid.move:12:17

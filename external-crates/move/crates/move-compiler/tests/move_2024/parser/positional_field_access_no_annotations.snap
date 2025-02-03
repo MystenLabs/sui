@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/parser/positional_field_access_no_annotations.move
 ---
 error[E03010]: unbound field
   ┌─ tests/move_2024/parser/positional_field_access_no_annotations.move:5:9

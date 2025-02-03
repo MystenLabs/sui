@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/const_in_const_invalid.move
 ---
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_check/typing/const_in_const_invalid.move:4:20

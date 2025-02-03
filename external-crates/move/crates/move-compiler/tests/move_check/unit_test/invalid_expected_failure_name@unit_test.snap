@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/unit_test/invalid_expected_failure_name.move
 ---
 error[E10003]: invalid attribute value
   ┌─ tests/move_check/unit_test/invalid_expected_failure_name.move:4:24

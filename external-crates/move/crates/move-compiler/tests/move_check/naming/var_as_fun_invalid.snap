@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/naming/var_as_fun_invalid.move
 ---
 error[E04029]: invalid function call
   ┌─ tests/move_check/naming/var_as_fun_invalid.move:4:9

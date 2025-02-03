@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/naming/lambda_shadows_function.move
 ---
 warning[W09002]: unused variable
   ┌─ tests/move_2024/naming/lambda_shadows_function.move:4:22

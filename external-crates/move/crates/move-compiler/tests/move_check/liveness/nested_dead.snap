@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/liveness/nested_dead.move
 ---
 warning[W09005]: dead or unreachable code
   ┌─ tests/move_check/liveness/nested_dead.move:3:16

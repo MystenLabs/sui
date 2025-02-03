@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/ide_mode/struct_method_autocomplete.move
 ---
 note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:19:23

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/byte_string_invalid_hex.move
 ---
 error[E01007]: invalid byte string
   ┌─ tests/move_check/parser/byte_string_invalid_hex.move:3:18

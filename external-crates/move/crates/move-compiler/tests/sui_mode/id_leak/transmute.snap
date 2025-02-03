@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/id_leak/transmute.move
 ---
 error[Sui E01001]: invalid object construction
    ┌─ tests/sui_mode/id_leak/transmute.move:17:19

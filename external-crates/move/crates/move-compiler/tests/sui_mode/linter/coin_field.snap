@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/sui_mode/linter/coin_field.move
 ---
 warning[Lint W99003]: sub-optimal 'sui::coin::Coin' field type
    ┌─ tests/sui_mode/linter/coin_field.move:13:12

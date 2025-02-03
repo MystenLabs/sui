@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/linter/true_positive_abort_constant.move
 ---
 warning[Lint W04005]: 'abort' or 'assert' without named constant
   ┌─ tests/linter/true_positive_abort_constant.move:6:15

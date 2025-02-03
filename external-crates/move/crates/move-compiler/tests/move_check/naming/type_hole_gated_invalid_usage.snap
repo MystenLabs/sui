@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/naming/type_hole_gated_invalid_usage.move
 ---
 error[E03021]: invalid type annotation
   ┌─ tests/move_check/naming/type_hole_gated_invalid_usage.move:2:22

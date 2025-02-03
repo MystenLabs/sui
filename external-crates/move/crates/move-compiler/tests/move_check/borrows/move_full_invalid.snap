@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/borrows/move_full_invalid.move
 ---
 error[E07003]: invalid operation, could create dangling a reference
    ┌─ tests/move_check/borrows/move_full_invalid.move:13:9

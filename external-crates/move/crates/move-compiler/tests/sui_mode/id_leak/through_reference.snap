@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/id_leak/through_reference.move
 ---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/sui_mode/id_leak/through_reference.move:11:10

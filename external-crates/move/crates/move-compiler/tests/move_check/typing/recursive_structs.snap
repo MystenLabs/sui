@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/recursive_structs.move
 ---
 error[E04018]: cyclic data
   ┌─ tests/move_check/typing/recursive_structs.move:4:21

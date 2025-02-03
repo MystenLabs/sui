@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/naming/unbound_builtin.move
 ---
 error[E03005]: unbound unscoped name
   ┌─ tests/move_check/naming/unbound_builtin.move:3:9

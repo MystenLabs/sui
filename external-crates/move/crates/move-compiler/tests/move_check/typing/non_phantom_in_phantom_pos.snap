@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/non_phantom_in_phantom_pos.move
 ---
 warning[W02014]: invalid non-phantom type parameter usage
   ┌─ tests/move_check/typing/non_phantom_in_phantom_pos.move:5:15
