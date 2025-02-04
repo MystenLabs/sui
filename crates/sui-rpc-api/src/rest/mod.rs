@@ -15,7 +15,6 @@ use crate::{reader::StateReader, RpcService};
 pub mod accept;
 pub mod accounts;
 pub mod checkpoints;
-pub mod coins;
 mod committee;
 pub mod content_type;
 pub mod health;
@@ -48,7 +47,6 @@ pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
     &transactions::ExecuteTransaction,
     &transactions::SimulateTransaction,
     &transactions::ResolveTransaction,
-    &coins::GetCoinInfo,
 ];
 
 pub fn build_rest_router(service: RpcService) -> axum::Router {

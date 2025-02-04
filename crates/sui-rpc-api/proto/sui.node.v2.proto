@@ -82,6 +82,9 @@ service NodeService {
   // Request that the provided transaction be relayed to the validator set for
   // execution and inclusion in the blockchain.
   rpc ExecuteTransaction(ExecuteTransactionRequest) returns (ExecuteTransactionResponse);
+
+  // Request information for the specified coin type.
+  rpc GetCoinInfo(GetCoinInfoRequest) returns (GetCoinInfoResponse);
 }
 
 // Request message for `NodeService.GetNodeInfo`.
@@ -665,4 +668,64 @@ message EffectsFinality {
     // that it might not be included in a checkpoint yet.
     google.protobuf.Empty quorum_executed = 3;
   }
+}
+
+// Request message for `NodeService.GetCoinInfo`.
+message GetCoinInfoRequest {
+  // The coin type to request information about
+  optional sui.types.TypeTag coin_type = 1;
+}
+
+// Response message for `NodeService.GetCoinInfo`.
+message GetCoinInfoResponse {
+  // Required. The coin type.
+  optional sui.types.TypeTag coin_type = 1;
+
+  // Optional. This field will be populated with information about this coin
+  // type's `0x2::coin::CoinMetadata` if it exists and has not been wrapped.
+  optional CoinMetadata metadata = 2;
+
+  // Optional. This field will be populated with information about this coin
+  // type's `0x2::coin::TreasuryCap` if it exists and has not been wrapped.
+  optional CoinTreasury treasury = 3;
+
+  // TODO add support for tracking RegulatedCoinMetadata
+  // Optional. If this coin type is a regulated coin, this field will be
+  // populated with information about its `0x2::coin::RegulatedCoinMetadata`
+  // object.
+  // optional RegulatedCoinMetadata regulated_metadata = 4;
+}
+
+// Metadata for a coin type
+message CoinMetadata {
+  // ObjectId of the `0x2::coin::CoinMetadata` object.
+  optional sui.types.ObjectId id = 1;
+  // Number of decimal places to coin uses.
+  optional uint32 decimals = 2;
+  // Name for the token
+  optional string name = 3;
+  // Symbol for the token
+  optional string symbol = 4;
+  // Description of the token
+  optional string description = 5;
+  // URL for the token logo
+  optional string icon_url = 6;
+}
+
+// Information about a coin type's `0x2::coin::TreasuryCap` and its total available supply
+message CoinTreasury {
+  // ObjectId of the `0x2::coin::TreasuryCap` object.
+  optional sui.types.ObjectId id = 1;
+  // Total available supply for this coin type.
+  optional uint64 total_supply = 2;
+}
+
+// Information about a regulated coin, which indicates that it makes use of the transfer deny list.
+message RegulatedCoinMetadata {
+  // ObjectId of the `0x2::coin::RegulatedCoinMetadata` object.
+  optional sui.types.ObjectId id = 1;
+  // The ID of the coin's `CoinMetadata` object.
+  optional sui.types.ObjectId coin_metadata_object = 2;
+  // The ID of the coin's `DenyCap` object.
+  optional sui.types.ObjectId deny_cap_object = 3;
 }
