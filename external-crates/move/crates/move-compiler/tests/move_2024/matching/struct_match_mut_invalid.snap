@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/matching/struct_match_mut_invalid.move
 ---
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:33:21

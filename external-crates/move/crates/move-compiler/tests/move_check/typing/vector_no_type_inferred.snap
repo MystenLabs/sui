@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/vector_no_type_inferred.move
 ---
 error[E04010]: cannot infer type
   ┌─ tests/move_check/typing/vector_no_type_inferred.move:4:9

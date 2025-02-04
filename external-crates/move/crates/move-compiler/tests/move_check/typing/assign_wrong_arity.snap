@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/assign_wrong_arity.move
 ---
 error[E04005]: expected a single type
   ┌─ tests/move_check/typing/assign_wrong_arity.move:5:13

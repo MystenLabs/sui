@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/number_literal_too_large.move
 ---
 error[E04021]: invalid number after type inference
   ┌─ tests/move_check/typing/number_literal_too_large.move:3:9

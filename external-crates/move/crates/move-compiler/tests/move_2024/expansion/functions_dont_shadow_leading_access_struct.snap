@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/expansion/functions_dont_shadow_leading_access_struct.move
 ---
 error[E02010]: invalid name
   ┌─ tests/move_2024/expansion/functions_dont_shadow_leading_access_struct.move:3:19

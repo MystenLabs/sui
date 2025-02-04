@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/invalid_call_lhs_return.move
 ---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/invalid_call_lhs_return.move:3:20

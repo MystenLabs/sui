@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/mutable_borrow_from_immutable.move
 ---
 error[E07001]: referential transparency violated
   ┌─ tests/move_check/typing/mutable_borrow_from_immutable.move:6:9

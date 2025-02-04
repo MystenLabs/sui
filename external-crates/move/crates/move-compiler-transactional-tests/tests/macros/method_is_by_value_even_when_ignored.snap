@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-compiler-transactional-tests/tests/macros/method_is_by_value_even_when_ignored.move
 ---
 processed 4 tasks
 

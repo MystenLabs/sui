@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.migration
   lint: false
-input_file: crates/move-compiler/tests/move_2024/migration/match_okay.move
 ---
 --- tests/move_2024/migration/match_okay.move
 +++ tests/move_2024/migration/match_okay.move

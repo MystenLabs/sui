@@ -144,12 +144,10 @@ macro_rules! insta_assert {
     } => {{
         let name: String = $name.into();
         let i: &std::path::Path = $input.as_ref();
-        let i = i.canonicalize().unwrap();
         let c = $contents;
         let $crate::testing::InstaOptions { info, suffix } = $options;
         let mut settings = $crate::testing::insta::Settings::clone_current();
-        settings.set_input_file(&i);
-        settings.set_snapshot_path(i.parent().unwrap());
+        let output = settings.set_snapshot_path( i.canonicalize().unwrap().parent().unwrap());
         if let Some(info) = info {
             settings.set_info(&info);
         }

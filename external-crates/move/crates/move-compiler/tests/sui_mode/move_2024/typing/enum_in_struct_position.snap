@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/move_2024/typing/enum_in_struct_position.move
 ---
 error[Sui E02007]: invalid object declaration
    ┌─ tests/sui_mode/move_2024/typing/enum_in_struct_position.move:11:13

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/unit_test/expected_failure_out_of_range_value.move
 ---
 warning[W10007]: issue with attribute value
   ┌─ tests/move_check/unit_test/expected_failure_out_of_range_value.move:6:24

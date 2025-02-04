@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/parser/top_level_module_double_invalid.move
 ---
 error[E02004]: invalid 'module' declaration
   ┌─ tests/move_2024/parser/top_level_module_double_invalid.move:7:11

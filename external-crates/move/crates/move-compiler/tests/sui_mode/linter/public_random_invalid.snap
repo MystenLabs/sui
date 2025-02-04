@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/sui_mode/linter/public_random_invalid.move
 ---
 warning[Lint W99006]: Risky use of 'sui::random'
   ┌─ tests/sui_mode/linter/public_random_invalid.move:7:42

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/naming/struct_ellipsis_invalid.move
 ---
 error[E03013]: positional call mismatch
   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:6:13

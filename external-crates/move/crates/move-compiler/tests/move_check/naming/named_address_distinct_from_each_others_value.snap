@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/naming/named_address_distinct_from_each_others_value.move
 ---
 error[E04001]: restricted visibility
    ┌─ tests/move_check/naming/named_address_distinct_from_each_others_value.move:18:9

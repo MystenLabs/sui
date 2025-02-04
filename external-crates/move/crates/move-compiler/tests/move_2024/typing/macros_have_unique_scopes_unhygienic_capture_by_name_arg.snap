@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture_by_name_arg.move
 ---
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture_by_name_arg.move:4:23

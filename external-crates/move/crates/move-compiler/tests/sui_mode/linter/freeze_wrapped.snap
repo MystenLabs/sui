@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/sui_mode/linter/freeze_wrapped.move
 ---
 warning[Lint W99004]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:43:40

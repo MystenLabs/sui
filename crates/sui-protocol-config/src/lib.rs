@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 73;
+const MAX_PROTOCOL_VERSION: u64 = 74;
 
 // Record history of protocol version allocations here:
 //
@@ -213,6 +213,8 @@ const MAX_PROTOCOL_VERSION: u64 = 73;
 //             Enable zstd compression for consensus tonic network in testnet.
 //             Enable smart ancestor selection in mainnet.
 //             Enable probing for accepted rounds in round prober in mainnet
+// Version 74:
+//
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3195,6 +3197,7 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .consensus_round_prober_probe_accepted_rounds = true;
                 }
+                74 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

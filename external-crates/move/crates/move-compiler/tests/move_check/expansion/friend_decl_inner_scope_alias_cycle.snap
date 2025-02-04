@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/friend_decl_inner_scope_alias_cycle.move
 ---
 error[E02004]: invalid 'module' declaration
    ┌─ tests/move_check/expansion/friend_decl_inner_scope_alias_cycle.move:8:5

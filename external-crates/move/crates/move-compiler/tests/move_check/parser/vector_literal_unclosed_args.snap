@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/vector_literal_unclosed_args.move
 ---
 warning[W09002]: unused variable
   ┌─ tests/move_check/parser/vector_literal_unclosed_args.move:4:13

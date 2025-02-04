@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/naming/generics_with_type_parameters.move
 ---
 error[E03006]: unexpected name in this position
   ┌─ tests/move_check/naming/generics_with_type_parameters.move:2:22

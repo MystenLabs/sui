@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/unit_test/other_failures_invalid_location.move
 ---
 error[E10004]: invalid usage of known attribute
   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:6:24

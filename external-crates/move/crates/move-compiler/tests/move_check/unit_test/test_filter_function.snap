@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/unit_test/test_filter_function.move
 ---
 error[E03005]: unbound unscoped name
   ┌─ tests/move_check/unit_test/test_filter_function.move:6:24

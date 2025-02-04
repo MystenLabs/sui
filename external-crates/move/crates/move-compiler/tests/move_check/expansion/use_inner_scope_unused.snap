@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/use_inner_scope_unused.move
 ---
 warning[W09001]: unused alias
    ┌─ tests/move_check/expansion/use_inner_scope_unused.move:13:23

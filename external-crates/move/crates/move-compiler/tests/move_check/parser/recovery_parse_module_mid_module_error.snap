@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/recovery_parse_module_mid_module_error.move
 ---
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/recovery_parse_module_mid_module_error.move:4:16

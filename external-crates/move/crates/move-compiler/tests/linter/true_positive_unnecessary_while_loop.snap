@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/linter/true_positive_unnecessary_while_loop.move
 ---
 warning[Lint W04002]: unnecessary 'while (true)', replace with 'loop'
   ┌─ tests/linter/true_positive_unnecessary_while_loop.move:3:9

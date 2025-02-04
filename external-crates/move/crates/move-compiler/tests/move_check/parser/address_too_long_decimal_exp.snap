@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/address_too_long_decimal_exp.move
 ---
 error[E01005]: invalid address
   ┌─ tests/move_check/parser/address_too_long_decimal_exp.move:4:18

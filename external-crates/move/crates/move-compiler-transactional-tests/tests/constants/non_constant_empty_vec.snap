@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-compiler-transactional-tests/tests/constants/non_constant_empty_vec.move
 ---
 processed 8 tasks
 

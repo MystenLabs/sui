@@ -1,0 +1,55 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/signature/reference_as_type_actual_in_struct_inst_for_bytecode_instruction.mvir
+---
+processed 5 tasks
+
+task 0, lines 1-13:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x1::M,
+    indices: [],
+    offsets: [],
+}
+
+task 1, lines 15-29:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x1::M,
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 2, lines 31-43:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x1::M,
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 3, lines 45-54:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x1::M,
+    indices: [],
+    offsets: [],
+}
+
+task 4, lines 56-65:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x1::M,
+    indices: [],
+    offsets: [],
+}

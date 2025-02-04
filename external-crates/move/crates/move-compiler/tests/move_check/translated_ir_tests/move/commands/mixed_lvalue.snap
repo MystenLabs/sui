@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/translated_ir_tests/move/commands/mixed_lvalue.move
 ---
 warning[W09002]: unused variable
    ┌─ tests/move_check/translated_ir_tests/move/commands/mixed_lvalue.move:11:13

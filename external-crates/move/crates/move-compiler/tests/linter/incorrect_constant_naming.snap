@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/linter/incorrect_constant_naming.move
 ---
 warning[Lint W04001]: constant should follow naming convention
   ┌─ tests/linter/incorrect_constant_naming.move:3:5

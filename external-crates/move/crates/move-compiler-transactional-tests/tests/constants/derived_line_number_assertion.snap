@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-compiler-transactional-tests/tests/constants/derived_line_number_assertion.move
 ---
 processed 2 tasks
 
