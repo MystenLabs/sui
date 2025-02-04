@@ -279,6 +279,15 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
+
+    async fn get_coin_info(
+        &self,
+        request: tonic::Request<crate::proto::node::v2::GetCoinInfoRequest>,
+    ) -> Result<tonic::Response<crate::proto::node::v2::GetCoinInfoResponse>, tonic::Status> {
+        self.get_coin_info(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
 }
 
 use crate::proto::node::v2alpha::SubscribeCheckpointsResponse;

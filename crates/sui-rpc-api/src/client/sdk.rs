@@ -13,7 +13,6 @@ use sui_sdk_types::Object;
 use sui_sdk_types::ObjectId;
 use sui_sdk_types::SignedCheckpointSummary;
 use sui_sdk_types::SignedTransaction;
-use sui_sdk_types::StructTag;
 use sui_sdk_types::Transaction;
 use sui_sdk_types::TransactionDigest;
 use sui_sdk_types::ValidatorCommittee;
@@ -23,7 +22,6 @@ use tap::Pipe;
 use crate::rest::accounts::AccountOwnedObjectInfo;
 use crate::rest::accounts::ListAccountOwnedObjectsQueryParameters;
 use crate::rest::checkpoints::ListCheckpointsPaginationParameters;
-use crate::rest::coins::CoinInfo;
 use crate::rest::health::Threshold;
 use crate::rest::objects::DynamicFieldInfo;
 use crate::rest::objects::ListDynamicFieldsQueryParameters;
@@ -101,14 +99,6 @@ impl Client {
         let response = self.inner.get(url).query(&query).send().await?;
 
         self.empty(response).await
-    }
-
-    pub async fn get_coin_info(&self, coin_type: &StructTag) -> Result<Response<CoinInfo>> {
-        let url = self.url().join(&format!("coins/{coin_type}"))?;
-
-        let request = self.inner.get(url);
-
-        self.json(request).await
     }
 
     pub async fn list_account_objects(

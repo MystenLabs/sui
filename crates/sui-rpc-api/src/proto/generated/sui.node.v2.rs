@@ -626,6 +626,73 @@ pub mod effects_finality {
         QuorumExecuted(()),
     }
 }
+/// Request message for `NodeService.GetCoinInfo`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetCoinInfoRequest {
+    /// The coin type to request information about
+    #[prost(message, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
+}
+/// Response message for `NodeService.GetCoinInfo`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetCoinInfoResponse {
+    /// Required. The coin type.
+    #[prost(message, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
+    /// Optional. This field will be populated with information about this coin
+    /// type's `0x2::coin::CoinMetadata` if it exists and has not been wrapped.
+    #[prost(message, optional, tag = "2")]
+    pub metadata: ::core::option::Option<CoinMetadata>,
+    /// Optional. This field will be populated with information about this coin
+    /// type's `0x2::coin::TreasuryCap` if it exists and has not been wrapped.
+    #[prost(message, optional, tag = "3")]
+    pub treasury: ::core::option::Option<CoinTreasury>,
+}
+/// Metadata for a coin type
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CoinMetadata {
+    /// ObjectId of the `0x2::coin::CoinMetadata` object.
+    #[prost(message, optional, tag = "1")]
+    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    /// Number of decimal places to coin uses.
+    #[prost(uint32, optional, tag = "2")]
+    pub decimals: ::core::option::Option<u32>,
+    /// Name for the token
+    #[prost(string, optional, tag = "3")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Symbol for the token
+    #[prost(string, optional, tag = "4")]
+    pub symbol: ::core::option::Option<::prost::alloc::string::String>,
+    /// Description of the token
+    #[prost(string, optional, tag = "5")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
+    /// URL for the token logo
+    #[prost(string, optional, tag = "6")]
+    pub icon_url: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Information about a coin type's `0x2::coin::TreasuryCap` and its total available supply
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CoinTreasury {
+    /// ObjectId of the `0x2::coin::TreasuryCap` object.
+    #[prost(message, optional, tag = "1")]
+    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    /// Total available supply for this coin type.
+    #[prost(uint64, optional, tag = "2")]
+    pub total_supply: ::core::option::Option<u64>,
+}
+/// Information about a regulated coin, which indicates that it makes use of the transfer deny list.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RegulatedCoinMetadata {
+    /// ObjectId of the `0x2::coin::RegulatedCoinMetadata` object.
+    #[prost(message, optional, tag = "1")]
+    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    /// The ID of the coin's `CoinMetadata` object.
+    #[prost(message, optional, tag = "2")]
+    pub coin_metadata_object: ::core::option::Option<super::super::types::ObjectId>,
+    /// The ID of the coin's `DenyCap` object.
+    #[prost(message, optional, tag = "3")]
+    pub deny_cap_object: ::core::option::Option<super::super::types::ObjectId>,
+}
 /// Generated client implementations.
 pub mod node_service_client {
     #![allow(
@@ -943,6 +1010,31 @@ pub mod node_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        /// Request information for the specified coin type.
+        pub async fn get_coin_info(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetCoinInfoRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetCoinInfoResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.node.v2.NodeService/GetCoinInfo",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("sui.node.v2.NodeService", "GetCoinInfo"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -1060,6 +1152,14 @@ pub mod node_service_server {
             request: tonic::Request<super::ExecuteTransactionRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ExecuteTransactionResponse>,
+            tonic::Status,
+        >;
+        /// Request information for the specified coin type.
+        async fn get_coin_info(
+            &self,
+            request: tonic::Request<super::GetCoinInfoRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetCoinInfoResponse>,
             tonic::Status,
         >;
     }
@@ -1442,6 +1542,51 @@ pub mod node_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ExecuteTransactionSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.node.v2.NodeService/GetCoinInfo" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetCoinInfoSvc<T: NodeService>(pub Arc<T>);
+                    impl<
+                        T: NodeService,
+                    > tonic::server::UnaryService<super::GetCoinInfoRequest>
+                    for GetCoinInfoSvc<T> {
+                        type Response = super::GetCoinInfoResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetCoinInfoRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as NodeService>::get_coin_info(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetCoinInfoSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
