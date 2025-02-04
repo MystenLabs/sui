@@ -1,0 +1,45 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/reference_safety/eq_bad.mvir
+---
+processed 4 tasks
+
+task 0, lines 1-13:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester'. Got VMError: {
+    major_status: READREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x1::Tester,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 1, lines 15-27:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester2'. Got VMError: {
+    major_status: READREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x1::Tester2,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 2, lines 29-41:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester3'. Got VMError: {
+    major_status: READREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x1::Tester3,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 3, lines 43-55:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester4'. Got VMError: {
+    major_status: READREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x1::Tester4,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
