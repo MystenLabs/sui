@@ -496,7 +496,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 builder.publish_immutable(modules_bytes, dependencies);
             };
             let pt = builder.finish();
-            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
+            TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price)
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction).await?;
@@ -808,7 +808,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         rec_arg,
                     ));
                     let pt = builder.finish();
-                    TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
+                    TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price)
                 });
                 let summary = self.execute_txn(transaction).await?;
                 let output = self.object_summary_output(&summary, /* summarize */ false);
@@ -888,11 +888,11 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     let transaction = self.sign_sponsor_txn(
                         sender,
                         sponsor,
-                        gas_payment,
+                        gas_payment.unwrap_or_default(),
                         |sender, sponsor, gas| {
                             TransactionData::new_programmable_allow_sponsor(
                                 sender,
-                                vec![gas],
+                                gas,
                                 ProgrammableTransaction { inputs, commands },
                                 gas_budget,
                                 gas_price,
@@ -907,11 +907,11 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     let sender = self.get_sender(sender);
                     let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
 
-                    let payment = self.get_payment(sponsor, gas_payment);
+                    let payments = self.get_payments(sponsor, gas_payment.unwrap_or_default());
 
                     let transaction = TransactionData::new_programmable(
                         sender.address,
-                        vec![payment],
+                        payments,
                         ProgrammableTransaction { inputs, commands },
                         gas_budget,
                         gas_price,
@@ -1464,9 +1464,8 @@ impl SuiTestAdapter {
 
         let pt = builder.finish();
 
-        let data = |sender, gas| {
-            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
-        };
+        let data =
+            |sender, gas| TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price);
 
         let transaction = self.sign_txn(Some(sender), data);
         let summary = self.execute_txn(transaction).await?;
@@ -1501,43 +1500,57 @@ impl SuiTestAdapter {
     fn sign_txn(
         &self,
         sender: Option<String>,
-        txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
+        txn_data: impl FnOnce(
+            /* sender */ SuiAddress,
+            /* gas */ Vec<ObjectRef>,
+        ) -> TransactionData,
     ) -> Transaction {
-        self.sign_sponsor_txn(sender, None, None, move |sender, _, gas| {
+        self.sign_sponsor_txn(sender, None, vec![], move |sender, _, gas| {
             txn_data(sender, gas)
         })
     }
 
-    fn get_payment(&self, sponsor: &TestAccount, payment: Option<FakeID>) -> ObjectRef {
-        let payment = if let Some(payment) = payment {
-            self.fake_to_real_object_id(payment)
-                .expect("Could not find specified payment object")
+    fn get_payments(&self, sponsor: &TestAccount, payments: Vec<FakeID>) -> Vec<ObjectRef> {
+        let payments = if payments.is_empty() {
+            vec![sponsor.gas]
         } else {
-            sponsor.gas
+            payments
+                .into_iter()
+                .map(|payment| {
+                    self.fake_to_real_object_id(payment)
+                        .expect("Could not find specified payment object")
+                })
+                .collect::<Vec<ObjectID>>()
         };
 
-        self.get_object(&payment, None)
-            .unwrap()
-            .compute_object_reference()
+        payments
+            .into_iter()
+            .map(|payment| {
+                self.get_object(&payment, None)
+                    .unwrap()
+                    .compute_object_reference()
+            })
+            .collect()
     }
 
     fn sign_sponsor_txn(
         &self,
         sender: Option<String>,
         sponsor: Option<String>,
-        payment: Option<FakeID>,
+        payment: Vec<FakeID>,
         txn_data: impl FnOnce(
             /* sender */ SuiAddress,
             /* sponsor */ SuiAddress,
-            /* gas */ ObjectRef,
+            /* gas */ Vec<ObjectRef>,
         ) -> TransactionData,
     ) -> Transaction {
         let sender = self.get_sender(sender);
         let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
 
-        let payment_ref = self.get_payment(sponsor, payment);
+        let payment_refs = self.get_payments(sponsor, payment);
 
-        let data = txn_data(sender.address, sponsor.address, payment_ref);
+        let data = txn_data(sender.address, sponsor.address, payment_refs);
+
         if sender.address == sponsor.address {
             to_sender_signed_transaction(data, &sender.key_pair)
         } else {
@@ -1590,7 +1603,7 @@ impl SuiTestAdapter {
                 arguments,
             ));
             let pt = builder.finish();
-            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
+            TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price)
         };
         Ok(self.sign_txn(sender, data))
     }

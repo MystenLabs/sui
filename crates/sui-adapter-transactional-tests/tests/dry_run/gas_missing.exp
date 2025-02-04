@@ -1,0 +1,77 @@
+processed 9 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 8-33:
+//# publish
+warning[W09001]: unused alias
+   ┌─ /var/folders/ls/qqj5rr7n7_32trkns_n4k7840000gn/T/tmp.cqc72ZKS3D/.tmpK5gopR:11:29
+   │
+11 │     use sui::dynamic_field::add;
+   │                             ^^^ Unused 'use' of alias 'add'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+created: object(1,0)
+mutated: object(0,3)
+gas summary: computation_cost: 1000000, storage_cost: 5745600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 34-37:
+//# programmable --sender A --inputs @B
+//> TransferObjects([Gas], Input(0))
+// Return a small amount of coin to A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 38-42:
+//# programmable --sender B --inputs 1 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+// Account A now has 3,0
+created: object(3,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 43-45:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 1u64,
+    },
+}
+
+task 5, lines 46-49:
+//# programmable --sender A --inputs 100 --dry-run --gas-payment 3,0
+//> 0: test::m::large_vector(Input(0));
+// give A 5000000000 gas but split across 2 objects
+Error: Error checking transaction input objects: GasBalanceTooLow { gas_balance: 1, needed_gas_amount: 5000000000 }
+
+task 6, lines 50-55:
+//# programmable --sender B --inputs 250000 240000 @A
+//> SplitCoins(Gas, [Input(0), Input(0)]);
+//> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(2))
+// Account A now has 6,0 6,1
+created: object(6,0), object(6,1)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 56-60:
+//# programmable --sender A --inputs 100 --dry-run --gas-payment 6,0 --gas-payment 6,1
+//> 0: test::m::large_vector(Input(0));
+// Account A now has 6,0 6,1
+Error: Error checking transaction input objects: GasBalanceTooLow { gas_balance: 500000, needed_gas_amount: 5000000000 }
+
+task 8, lines 61-62:
+//# programmable --sender A --inputs 100 --dev-inspect --gas-payment 6,0 --gas-payment 6,1
+//> 0: test::m::large_vector(Input(0));
+created: object(8,0)
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 2219200,  storage_rebate: 0, non_refundable_storage_fee: 0
