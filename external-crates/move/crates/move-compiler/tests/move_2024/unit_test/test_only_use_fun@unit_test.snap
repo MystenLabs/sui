@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/unit_test/test_only_use_fun.move
 ---
 warning[W09001]: unused alias
   ┌─ tests/move_2024/unit_test/test_only_use_fun.move:6:5

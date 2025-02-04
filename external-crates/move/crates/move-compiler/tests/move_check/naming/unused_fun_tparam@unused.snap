@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/naming/unused_fun_tparam.move
 ---
 warning[W09010]: unused function type parameter
   ┌─ tests/move_check/naming/unused_fun_tparam.move:3:23

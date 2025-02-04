@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/constraints_not_satisfied_type_annotation.move
 ---
 warning[W09005]: dead or unreachable code
   ┌─ tests/move_check/typing/constraints_not_satisfied_type_annotation.move:7:17

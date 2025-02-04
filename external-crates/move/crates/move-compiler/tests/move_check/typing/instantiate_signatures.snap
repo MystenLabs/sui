@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/instantiate_signatures.move
 ---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/instantiate_signatures.move:11:13

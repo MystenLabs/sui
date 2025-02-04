@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/recursive_local.move
 ---
 error[E04010]: cannot infer type
   ┌─ tests/move_check/typing/recursive_local.move:4:13

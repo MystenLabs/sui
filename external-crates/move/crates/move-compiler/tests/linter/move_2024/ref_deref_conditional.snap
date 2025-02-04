@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: true
-input_file: crates/move-compiler/tests/linter/move_2024/ref_deref_conditional.move
 ---
 error[E01003]: invalid modifier
   ┌─ tests/linter/move_2024/ref_deref_conditional.move:3:1

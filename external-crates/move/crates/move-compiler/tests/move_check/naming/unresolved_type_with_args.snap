@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/naming/unresolved_type_with_args.move
 ---
 error[E03004]: unbound type
   ┌─ tests/move_check/naming/unresolved_type_with_args.move:2:28

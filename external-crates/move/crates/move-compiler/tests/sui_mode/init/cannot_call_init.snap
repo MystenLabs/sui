@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/init/cannot_call_init.move
 ---
 error[Sui E02006]: invalid 'init' call
   ┌─ tests/sui_mode/init/cannot_call_init.move:9:9

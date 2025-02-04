@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/linter/true_positive_unnecessary_unit.move
 ---
 warning[Lint W04010]: unit `()` expression can be removed or simplified
   ┌─ tests/linter/true_positive_unnecessary_unit.move:6:16

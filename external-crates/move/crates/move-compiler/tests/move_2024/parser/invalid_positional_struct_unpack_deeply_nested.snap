@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move
 ---
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:13

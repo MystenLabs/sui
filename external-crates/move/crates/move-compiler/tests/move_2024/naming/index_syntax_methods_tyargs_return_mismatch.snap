@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/naming/index_syntax_methods_tyargs_return_mismatch.move
 ---
 error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_tyargs_return_mismatch.move:20:14

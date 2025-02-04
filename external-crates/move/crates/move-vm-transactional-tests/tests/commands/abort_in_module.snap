@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/commands/abort_in_module.mvir
 ---
 processed 2 tasks
 

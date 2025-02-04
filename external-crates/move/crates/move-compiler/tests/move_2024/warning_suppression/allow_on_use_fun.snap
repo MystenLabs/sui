@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/warning_suppression/allow_on_use_fun.move
 ---
 error[E02015]: invalid attribute
   ┌─ tests/move_2024/warning_suppression/allow_on_use_fun.move:2:7

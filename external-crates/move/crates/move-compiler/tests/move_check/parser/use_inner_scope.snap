@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/use_inner_scope.move
 ---
 error[E03002]: unbound module
   ┌─ tests/move_check/parser/use_inner_scope.move:5:13

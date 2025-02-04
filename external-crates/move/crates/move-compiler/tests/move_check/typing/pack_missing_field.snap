@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/pack_missing_field.move
 ---
 error[E04016]: too few arguments
   ┌─ tests/move_check/typing/pack_missing_field.move:7:10

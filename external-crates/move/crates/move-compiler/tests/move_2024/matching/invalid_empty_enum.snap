@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/matching/invalid_empty_enum.move
 ---
 error[E02022]: invalid 'enum' declaration
   ┌─ tests/move_2024/matching/invalid_empty_enum.move:2:5

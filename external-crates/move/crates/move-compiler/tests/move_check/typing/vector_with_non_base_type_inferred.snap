@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/vector_with_non_base_type_inferred.move
 ---
 error[E04004]: expected a single non-reference type
   ┌─ tests/move_check/typing/vector_with_non_base_type_inferred.move:4:9

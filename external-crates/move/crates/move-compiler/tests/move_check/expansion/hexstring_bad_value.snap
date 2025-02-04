@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/hexstring_bad_value.move
 ---
 error[E01008]: invalid hex string
   ┌─ tests/move_check/expansion/hexstring_bad_value.move:3:11

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/borrows/unused_ref.move
 ---
 error[E04017]: too many arguments
    ┌─ tests/move_check/borrows/unused_ref.move:28:5

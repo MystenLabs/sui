@@ -4,6 +4,5 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: true
-input_file: crates/move-compiler/tests/linter/move_2024/false_negative_equal_operands.move
 ---
 

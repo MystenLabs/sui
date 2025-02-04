@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/use_function_unbound.move
 ---
 error[E03003]: unbound module member
   ┌─ tests/move_check/expansion/use_function_unbound.move:6:17

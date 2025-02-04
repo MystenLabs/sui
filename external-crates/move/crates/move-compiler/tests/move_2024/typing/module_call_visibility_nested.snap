@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/module_call_visibility_nested.move
 ---
 error[E03003]: unbound module member
    ┌─ tests/move_2024/typing/module_call_visibility_nested.move:15:56

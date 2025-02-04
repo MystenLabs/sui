@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/positional_struct_unpack.move
 ---
 error[E03013]: positional call mismatch
   ┌─ tests/move_check/parser/positional_struct_unpack.move:7:9

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/unmatched_restricted_identifier.move
 ---
 error[E01012]: invalid identifier escape
   ┌─ tests/move_check/parser/unmatched_restricted_identifier.move:4:13

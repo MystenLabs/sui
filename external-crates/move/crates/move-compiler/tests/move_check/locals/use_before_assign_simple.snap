@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/locals/use_before_assign_simple.move
 ---
 error[E06002]: use of unassigned variable
   ┌─ tests/move_check/locals/use_before_assign_simple.move:6:17

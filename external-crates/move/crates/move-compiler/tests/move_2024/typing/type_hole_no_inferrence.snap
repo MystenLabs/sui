@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/type_hole_no_inferrence.move
 ---
 error[E04010]: cannot infer type
   ┌─ tests/move_2024/typing/type_hole_no_inferrence.move:3:23

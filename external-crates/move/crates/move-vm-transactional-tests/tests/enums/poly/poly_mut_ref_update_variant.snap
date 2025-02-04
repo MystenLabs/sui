@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/enums/poly/poly_mut_ref_update_variant.mvir
 ---
 processed 3 tasks
 

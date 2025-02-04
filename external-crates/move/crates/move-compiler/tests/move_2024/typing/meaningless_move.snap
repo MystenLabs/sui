@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/meaningless_move.move
 ---
 error[E04012]: invalid type for constant
   ┌─ tests/move_2024/typing/meaningless_move.move:2:16

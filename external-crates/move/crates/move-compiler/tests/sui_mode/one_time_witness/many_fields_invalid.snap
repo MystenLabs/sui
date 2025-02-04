@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/one_time_witness/many_fields_invalid.move
 ---
 error[Sui E02004]: invalid one-time witness declaration
   ┌─ tests/sui_mode/one_time_witness/many_fields_invalid.move:5:12

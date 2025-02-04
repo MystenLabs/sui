@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/instructions/arithmetic_operators_u32.mvir
 ---
 processed 17 tasks
 

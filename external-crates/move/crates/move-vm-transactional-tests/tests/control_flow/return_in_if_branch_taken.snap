@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/control_flow/return_in_if_branch_taken.mvir
 ---
 processed 2 tasks

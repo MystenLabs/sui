@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/unit_test/multiple_errors.move
 ---
 error[E10005]: unable to generate test
    ┌─ tests/move_check/unit_test/multiple_errors.move:19:7

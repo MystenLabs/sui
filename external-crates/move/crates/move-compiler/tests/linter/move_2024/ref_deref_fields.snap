@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: true
-input_file: crates/move-compiler/tests/linter/move_2024/ref_deref_fields.move
 ---
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:26:21

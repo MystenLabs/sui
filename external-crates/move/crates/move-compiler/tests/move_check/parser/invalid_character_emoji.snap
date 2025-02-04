@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/invalid_character_emoji.move
 ---
 error[E01001]: invalid character
   ┌─ tests/move_check/parser/invalid_character_emoji.move:5:4

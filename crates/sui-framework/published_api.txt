@@ -1507,6 +1507,9 @@ peel_vec_u128
 peel_vec_u256
 	public fun
 	0x2::bcs
+peel_enum_tag
+	public fun
+	0x2::bcs
 peel_option_address
 	public fun
 	0x2::bcs

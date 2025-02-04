@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/native_structs_pack_unpack.move
 ---
 error[E04001]: restricted visibility
   ┌─ tests/move_check/typing/native_structs_pack_unpack.move:9:9

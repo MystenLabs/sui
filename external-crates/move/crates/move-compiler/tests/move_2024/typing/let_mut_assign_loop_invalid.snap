@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/let_mut_assign_loop_invalid.move
 ---
 error[E04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:4:24

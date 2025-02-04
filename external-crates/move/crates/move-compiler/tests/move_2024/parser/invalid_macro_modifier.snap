@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/parser/invalid_macro_modifier.move
 ---
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/parser/invalid_macro_modifier.move:2:5

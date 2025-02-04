@@ -4,6 +4,5 @@ info:
   flavor: sui
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/move_2024/expansion/implicit_sui_aliases.move
 ---
 

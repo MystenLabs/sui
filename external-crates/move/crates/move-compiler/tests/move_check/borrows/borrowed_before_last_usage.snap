@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/borrows/borrowed_before_last_usage.move
 ---
 error[E07006]: ambiguous usage of variable
   ┌─ tests/move_check/borrows/borrowed_before_last_usage.move:5:13

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/block_comments_inline.move
 ---
 warning[W01004]: invalid documentation comment
    ┌─ tests/move_check/parser/block_comments_inline.move:11:61

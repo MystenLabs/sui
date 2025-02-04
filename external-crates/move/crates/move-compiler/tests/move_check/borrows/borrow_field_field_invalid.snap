@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/borrows/borrow_field_field_invalid.move
 ---
 error[E07001]: referential transparency violated
    ┌─ tests/move_check/borrows/borrow_field_field_invalid.move:14:18

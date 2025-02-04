@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/sui_mode/linter/freezing_capability_true_positives.move
 ---
 warning[Lint W99008]: freezing potential capability
    ┌─ tests/sui_mode/linter/freezing_capability_true_positives.move:21:9

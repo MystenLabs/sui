@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/naming/positional_struct_non_positional_unpack.move
 ---
 warning[W09002]: unused variable
   ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:5:13

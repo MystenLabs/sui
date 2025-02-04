@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/verification/cross_module_invalid.move
 ---
 warning[W00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/verification/cross_module_invalid.move:10:7

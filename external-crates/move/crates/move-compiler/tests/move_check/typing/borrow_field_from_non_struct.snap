@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/borrow_field_from_non_struct.move
 ---
 error[E04009]: expected specific type
   ┌─ tests/move_check/typing/borrow_field_from_non_struct.move:6:10

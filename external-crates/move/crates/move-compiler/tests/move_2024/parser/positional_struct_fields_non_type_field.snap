@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/parser/positional_struct_fields_non_type_field.move
 ---
 error[E03004]: unbound type
   ┌─ tests/move_2024/parser/positional_struct_fields_non_type_field.move:3:23

@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/instructions/casting_operators.mvir
 ---
 processed 38 tasks
 

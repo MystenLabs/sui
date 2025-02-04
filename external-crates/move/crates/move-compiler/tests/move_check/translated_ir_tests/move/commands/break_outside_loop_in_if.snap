@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/translated_ir_tests/move/commands/break_outside_loop_in_if.move
 ---
 error[E04014]: invalid loop control
   ┌─ tests/move_check/translated_ir_tests/move/commands/break_outside_loop_in_if.move:3:15

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/matching/invalid_empty_match.move
 ---
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/invalid_empty_match.move:7:16

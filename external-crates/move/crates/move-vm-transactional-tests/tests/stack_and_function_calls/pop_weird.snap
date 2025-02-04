@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/stack_and_function_calls/pop_weird.mvir
 ---
 processed 2 tasks

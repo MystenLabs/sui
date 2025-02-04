@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/friend_decl_nonexistent_alias.move
 ---
 error[E03002]: unbound module
   ┌─ tests/move_check/expansion/friend_decl_nonexistent_alias.move:3:12

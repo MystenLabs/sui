@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/linter/true_positive_loop_without_exit.move
 ---
 warning[Lint W02006]: 'loop' without 'break' or 'return'
   ┌─ tests/linter/true_positive_loop_without_exit.move:5:9

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move
 ---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:6:9
