@@ -795,7 +795,7 @@ async fn trade_updates(
     let limit = params
         .get("limit")
         .and_then(|v| v.parse::<i64>().ok())
-        .unwrap_or(2);
+        .unwrap_or(1);
 
     let mut query = schema::order_updates::table
         .filter(schema::order_updates::checkpoint_timestamp_ms.between(start_time, end_time))
