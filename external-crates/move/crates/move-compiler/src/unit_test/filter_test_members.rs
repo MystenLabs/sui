@@ -164,7 +164,7 @@ fn check_has_unit_test_module(
 }
 
 /// If a module is being compiled in test mode, create a dummy function that calls a native
-/// function `0x1::UnitTest::poison` that only exists if the VM is being run
+/// function `0x1::unit_test::poison` that only exists if the VM is being run
 /// with the "unit_test" feature flag set. This will then cause the module to fail to link if
 /// an attempt is made to publish a module that has been compiled in test mode on a VM that is not
 /// running in test mode.
