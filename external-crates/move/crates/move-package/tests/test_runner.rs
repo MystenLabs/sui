@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use move_command_line_common::testing::insta_assert;
 use move_package::{
     compilation::{build_plan::BuildPlan, compiled_package::CompiledPackageInfo},
@@ -20,8 +20,6 @@ use std::{
 };
 use tempfile::{tempdir, TempDir};
 
-const EXTENSIONS: &[&str] = &["progress", "resolved", "locked", "notlocked", "compiled"];
-
 pub fn snapshot_path(pkg: &Path, name: &str, kind: &str) -> PathBuf {
     pkg.join(format!("{name}@{kind}.snap"))
 }
@@ -31,55 +29,31 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
         return Ok(());
     }
 
-    let mut tests = EXTENSIONS
-        .iter()
-        .filter_map(|kind| Test::from_path_with_kind(path, kind).transpose())
-        .peekable();
-
-    if tests.peek().is_none() {
-        return Err(anyhow!(
-            "No snapshot file found for {:?}, please add a file with the same basename and one \
-             of the following extensions: {:#?}\n\n\
-             You probably want to re-run with `env UPDATE_BASELINE=1` after adding this file.",
-            path,
-            EXTENSIONS,
-        )
-        .into());
-    }
-
-    for test in tests {
-        test?.run()?
-    }
-
-    Ok(())
+    let kind = path.extension().unwrap().to_string_lossy();
+    let toml_path = path.with_extension("toml");
+    Test::from_path_with_kind(&toml_path, &kind)?.run()
 }
 
 struct Test<'a> {
     test_name: String,
-    kind: &'static str,
+    kind: &'a str,
     toml_path: &'a Path,
     output_dir: TempDir,
 }
 
 impl Test<'_> {
-    fn from_path_with_kind<'p>(
-        toml_path: &'p Path,
-        kind: &'static str,
-    ) -> datatest_stable::Result<Option<Test<'p>>> {
+    fn from_path_with_kind<'a>(
+        toml_path: &'a Path,
+        kind: &'a str,
+    ) -> datatest_stable::Result<Test<'a>> {
         dbg!(&toml_path);
         let name = toml_path.file_stem().unwrap().to_string_lossy().to_string();
-        let expected = snapshot_path(toml_path.parent().unwrap(), &name, kind);
-        dbg!(&expected);
-        if !expected.is_file() {
-            Ok(None)
-        } else {
-            Ok(Some(Test {
-                test_name: name,
-                toml_path,
-                kind,
-                output_dir: tempdir()?,
-            }))
-        }
+        Ok(Test {
+            test_name: name,
+            toml_path,
+            kind,
+            output_dir: tempdir()?,
+        })
     }
 
     fn run(&self) -> datatest_stable::Result<()> {
@@ -199,5 +173,21 @@ impl PackageHooks for TestHooks {
             .map(|v| Symbol::from(v.as_ref())))
     }
 }
-
-datatest_stable::harness!(run_test, "tests/test_sources", r".*\.toml$");
+// &["progress", "resolved", "locked", "notlocked", "compiled"];
+datatest_stable::harness!(
+    run_test,
+    "tests/test_sources",
+    r".*\.progress$",
+    run_test,
+    "tests/test_sources",
+    r".*\.resolved$",
+    run_test,
+    "tests/test_sources",
+    r".*\.locked$",
+    run_test,
+    "tests/test_sources",
+    r".*\.notlocked$",
+    run_test,
+    "tests/test_sources",
+    r".*\.compiled$",
+);
