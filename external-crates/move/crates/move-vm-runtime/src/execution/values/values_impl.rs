@@ -104,7 +104,7 @@ pub struct FixedSizeVec(Box<[Value]>);
 
 // XXX/TODO(vm-rewrite): Remove this and replace with proper value dirtying.
 #[derive(Debug)]
-pub struct GlobalFingerprint(String);
+pub struct GlobalFingerprint(Option<String>);
 
 // -------------------------------------------------------------------------------------------------
 // Alias Types
@@ -171,7 +171,7 @@ enum GlobalValueImpl {
         container: Box<Container>,
     },
     /// A resource used to exist in storage but has been deleted by the current transaction.
-    Deleted { fingerprint: GlobalFingerprint },
+    Deleted,
 }
 
 /// A wrapper around `GlobalValueImpl`, representing a "slot" in global storage that can
@@ -304,7 +304,11 @@ impl IndexMut<usize> for FixedSizeVec {
 impl GlobalFingerprint {
     pub fn fingerprint(container: &Container) -> Self {
         // XXX/TODO(vm-rewrite): Implement proper fingerprinting.
-        Self(format!("{:?}", container))
+        Self(Some(format!("{:?}", container)))
+    }
+
+    pub fn dirty() -> Self {
+        Self(None)
     }
 
     pub fn same_value(&self, other: &Container) -> bool {
@@ -2099,7 +2103,7 @@ impl GlobalValueImpl {
     fn move_from(&mut self) -> PartialVMResult<Value> {
         let value = std::mem::replace(self, Self::None);
         let container = match value {
-            Self::None | Self::Deleted { .. } => {
+            Self::None | Self::Deleted => {
                 return Err(PartialVMError::new(StatusCode::MISSING_DATA))
             }
             Self::Fresh { container } => {
@@ -2108,10 +2112,10 @@ impl GlobalValueImpl {
                 container
             }
             Self::Cached {
-                fingerprint,
+                fingerprint: _,
                 container,
             } => {
-                let previous = std::mem::replace(self, Self::Deleted { fingerprint });
+                let previous = std::mem::replace(self, Self::Deleted);
                 assert!(matches!(previous, Self::None));
                 container
             }
@@ -2128,11 +2132,11 @@ impl GlobalValueImpl {
                 ))
             }
             Self::None => *self = Self::fresh(val)?,
-            Self::Deleted { .. } => {
-                let Self::Deleted { fingerprint } = std::mem::replace(self, Self::None) else {
+            Self::Deleted => {
+                let Self::Deleted = std::mem::replace(self, Self::None) else {
                     unreachable!()
                 };
-                *self = Self::cached(val, Some(fingerprint))?
+                *self = Self::cached(val, Some(GlobalFingerprint::dirty()))?
             }
         }
         Ok(())
@@ -2141,13 +2145,13 @@ impl GlobalValueImpl {
     fn exists(&self) -> PartialVMResult<bool> {
         match self {
             Self::Fresh { .. } | Self::Cached { .. } => Ok(true),
-            Self::None | Self::Deleted { .. } => Ok(false),
+            Self::None | Self::Deleted => Ok(false),
         }
     }
 
     fn borrow_global(&self) -> PartialVMResult<Value> {
         match self {
-            Self::None | Self::Deleted { .. } => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
+            Self::None | Self::Deleted => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
             GlobalValueImpl::Fresh { container } => {
                 let container_ref = VMPointer::from_ref(container.as_ref());
                 Ok(Value::Reference(Box::new(Reference::Container(
@@ -2163,7 +2167,7 @@ impl GlobalValueImpl {
     fn into_effect(self) -> Option<Op<Value>> {
         match self {
             Self::None => None,
-            Self::Deleted { .. } => Some(Op::Delete),
+            Self::Deleted => Some(Op::Delete),
             Self::Fresh { container } => {
                 let struct_ @ Container::Struct(_) = *container else {
                     unreachable!()
@@ -2189,7 +2193,7 @@ impl GlobalValueImpl {
     fn is_mutated(&self) -> bool {
         match self {
             Self::None => false,
-            Self::Deleted { .. } => true,
+            Self::Deleted => true,
             Self::Fresh { .. } => true,
             Self::Cached {
                 fingerprint,
@@ -3233,7 +3237,7 @@ impl GlobalValue {
         }
 
         match &self.0 {
-            G::None | G::Deleted { .. } => None,
+            G::None | G::Deleted => None,
             G::Cached { container, .. } | G::Fresh { container } => Some(Wrapper(container)),
         }
     }
