@@ -34,6 +34,19 @@ const protocolInject = async function (source) {
     link: "scalar-value-types",
     messages: types,
   });
+  const handleCurlies = (text) => {
+    let isCodeblock = false;
+    let final = text.replace(/{/g, "&#123;").split("\n");
+    for (const [idx, line] of final.entries()) {
+      if (line.includes("```")) {
+        isCodeblock = !isCodeblock;
+      }
+      if (isCodeblock) {
+        final[idx] = line.replace(/(&#123;)/g, "{");
+      }
+    }
+    return final.join("\n");
+  };
 
   let content = [`<Protocol toc={${JSON.stringify(toc)}}/>`];
 
@@ -44,7 +57,10 @@ const protocolInject = async function (source) {
   for (const file of spec.files) {
     content.push(`\n## ${file.name} {#${createId(file.name)}}`);
     content.push(
-      `${file.description.replace(/{/g, "&#123;").replace(/^##? (.*)\n/, "### $1")}`,
+      `<div class="text-lg">\n${handleCurlies(file.description).replace(
+        /\n##? (.*)\n/,
+        "### $1",
+      )}\n</div>`,
     );
     for (const message of file.messages) {
       let fields = [];
@@ -63,17 +79,17 @@ const protocolInject = async function (source) {
       const allFields = [...messageSort(fields), ...messageSort(oneofFields)];
       content.push(`\n### ${message.name} {#${createId(message.fullName)}}`);
       content.push(
-        `${message.description
-          .replace(/{/g, "&#123;")
+        `<div class="text-lg">\n${handleCurlies(message.description)
           .replace(/</g, "&#lt;")
-          .replace(/^(#{1,2})\s(?!#)/gm, "### ")}`,
+          .replace(/^(#{1,2})\s(?!#)/gm, "### ")}\n
+        </div>`,
       );
 
       if (allFields.length > 0) {
         const attrStyle =
-          " text-xl before:pr-2 before:mr-2 before:text-sm before:border before:border-solid before:border-transparent before:border-r-sui-gray-65";
+          "text-lg before:pr-2 before:mr-2 before:text-sm before:border before:border-solid before:border-transparent before:border-r-sui-gray-65";
         const fieldStyle =
-          "p-2 font-medium text-xl rounded-lg bg-sui-ghost-white dark:bg-sui-ghost-dark";
+          "p-2 font-medium text-lg rounded-lg bg-sui-ghost-white dark:bg-sui-ghost-dark";
         const borderStyle =
           "border border-solid border-y-transparent border-r-transparent border-l-sui-gray-65";
         const leftArrowStyle =
@@ -116,9 +132,9 @@ const protocolInject = async function (source) {
           if (hasDesc) {
             content.push(`<div class="ml-4 pt-2">`);
             content.push(
-              `<div class="${attrStyle} before:content-['Description']">${field.description
+              `<div class="${attrStyle} before:content-['Description'] indent-[-88px] pl-[88px]">${field.description
                 .replace(/{/g, "&#123;")
-                .replace(/\n\/?/g, "")
+                .replace(/\n\/?/g, " ")
                 .replace(/<(http.*)>/g, "$1")}</div>`,
             );
             content.push(`</div>`);
@@ -140,7 +156,9 @@ const protocolInject = async function (source) {
     "p-4 pt-2 border border-solid border-transparent border-t-sui-gray-65 whitespace-break-spaces";
   for (const scalar of spec.scalarValueTypes) {
     content.push(`\n### ${scalar.protoType}`);
-    content.push(`${scalar.notes.replace(/{/g, "&#123;")}`);
+    content.push(
+      `<div class="text-lg">\n${scalar.notes.replace(/{/g, "&#123;")}\n</div>`,
+    );
     content.push(`<div class="flex flex-wrap">`);
     content.push(
       `<div class="${cellStyle}"><div class="${titleStyle}">C++</div><div class="${valStyle}">${scalar.cppType}</div></div>`,
@@ -165,7 +183,7 @@ const protocolInject = async function (source) {
     );
     content.push(`</div>`);
   }
-  //console.log(content.join(`\n`))
+
   return (
     callback &&
     callback(null, source.replace(/<Protocol ?\/>/, content.join(`\n`)))
