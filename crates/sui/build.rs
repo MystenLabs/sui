@@ -9,7 +9,8 @@ use std::{
 use sui_framework_snapshot::{load_bytecode_snapshot_manifest, manifest_path};
 
 /// Output a file `OUT_DIR/version_table.rs` containing the contents of the manifest as a
-/// rust literal of type `[(u64, FrameworkVersion)]`.
+/// rust literal of type `[(ProtocolVersion, FrameworkVersion)]`. This is included as the
+/// static [framework_versions::VERSION_TABLE]
 fn generate_framework_version_table() -> anyhow::Result<()> {
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("version_table.rs");
@@ -28,9 +29,12 @@ fn generate_framework_version_table() -> anyhow::Result<()> {
             "  (ProtocolVersion::new( {version:>2} ), FrameworkVersion {{"
         )?;
         writeln!(&mut file, "        git_revision: \"{hash}\".into(),")?;
-        writeln!(&mut file, "        framework_package_names: [")?;
+        writeln!(&mut file, "        packages: [")?;
         for _oid in entry.package_ids() {
-            writeln!(&mut file, "          \"TODO\".to_string(),")?;
+            writeln!(
+                &mut file,
+                "          FrameworkPackage {{ package_name: \"TODO\".into(), repo_path: \"TODO\".into() }},"
+            )?;
         }
         writeln!(&mut file, "        ].into(),")?;
         writeln!(&mut file, "      }}),")?;

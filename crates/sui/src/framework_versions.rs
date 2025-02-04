@@ -6,9 +6,27 @@ use std::{collections::BTreeMap, sync::LazyLock};
 use anyhow::{bail, Context};
 use sui_protocol_config::ProtocolVersion;
 
+pub struct FrameworkPackage {
+    package_name: String,
+    repo_path: String,
+}
+
 pub struct FrameworkVersion {
     git_revision: String,
-    framework_package_names: Vec<String>,
+    packages: Vec<FrameworkPackage>,
+}
+
+impl FrameworkPackage {
+    /// The name of the package, e.g. "Sui"
+    pub fn package_name(&self) -> &String {
+        &self.package_name
+    }
+
+    /// The path to the package in the sui monorepo
+    /// e.g. "crates/sui-framework/packages/sui-framework"
+    pub fn repo_path(&self) -> &String {
+        &self.repo_path
+    }
 }
 
 impl FrameworkVersion {
@@ -16,8 +34,9 @@ impl FrameworkVersion {
         &self.git_revision
     }
 
-    pub fn framework_package_names(&self) -> &Vec<String> {
-        &self.framework_package_names
+    /// Packages that are defined in this version of the framework
+    pub fn packages(&self) -> &Vec<FrameworkPackage> {
+        &self.packages
     }
 }
 
@@ -62,15 +81,13 @@ fn test_nonempty_version_table() {
 
 #[test]
 /// the hash for a specific version that we have one for is corretly returned
-fn test_hash_exact() {
+fn test_exact() {
     let framework = framework_for_protocol(4.into()).unwrap();
     assert_eq!(
         framework.git_revision(),
         "f5d26f1b3ae89f68cb66f3a007e90065e5286905"
     );
-    assert!(framework
-        .framework_package_names
-        .contains(&"Sui".to_string()));
+    assert!(framework.packages.iter().any(|p| p.package_name == "Sui"));
 }
 
 #[test]
