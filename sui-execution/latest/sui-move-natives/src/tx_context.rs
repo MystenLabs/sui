@@ -291,33 +291,6 @@ pub fn fresh_id(
 // //
 // // Test only function
 // //
-#[derive(Clone)]
-pub struct TxContextIncIdsCretedCostParams {
-    pub tx_context_inc_ids_created_cost_base: InternalGas,
-}
-pub fn inc_ids_created(
-    context: &mut NativeContext,
-    ty_args: Vec<Type>,
-    args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
-
-    let tx_context_inc_ids_created_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()
-        .tx_context_inc_ids_created_cost_params
-        .clone();
-    native_charge_gas_early_exit!(
-        context,
-        tx_context_inc_ids_created_cost_params.tx_context_inc_ids_created_cost_base
-    );
-
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
-    transaction_context.inc_ids_created();
-
-    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
-}
 
 #[derive(Clone)]
 pub struct TxContextIncEpochCostParams {

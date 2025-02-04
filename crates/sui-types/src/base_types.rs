@@ -1153,10 +1153,6 @@ impl TxContext {
     //
     // Move test only API
     //
-    pub fn inc_ids_created(self: &mut TxContext) {
-        self.ids_created += 1;
-    }
-
     pub fn inc_epoch(&mut self) {
         self.epoch += 1;
     }

@@ -795,10 +795,6 @@ impl TransactionContext {
     //
     // Test only function
     //
-    pub fn inc_ids_created(&self) {
-        self.tx_context.borrow_mut().inc_ids_created();
-    }
-
     pub fn inc_epoch(&self) {
         self.tx_context.borrow_mut().inc_epoch();
     }
