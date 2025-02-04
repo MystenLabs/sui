@@ -36,13 +36,30 @@ const protocolInject = async function (source) {
   });
   const handleCurlies = (text) => {
     let isCodeblock = false;
-    let final = text.replace(/{/g, "&#123;").split("\n");
+
+    let final = text.split("\n");
     for (const [idx, line] of final.entries()) {
       if (line.includes("```")) {
         isCodeblock = !isCodeblock;
       }
-      if (isCodeblock) {
-        final[idx] = line.replace(/(&#123;)/g, "{");
+      if (!isCodeblock) {
+        let curlyIndices = [];
+        let insideBackticks = false;
+        for (let i = 0; i < line.length; i++) {
+          if (line[i] === "`") {
+            insideBackticks = !insideBackticks;
+          }
+          if (line[i] === "{" && !insideBackticks) {
+            curlyIndices.unshift(i);
+          }
+        }
+        for (const j of curlyIndices) {
+          final[idx] = [
+            line.substring(0, j),
+            "&#123;",
+            line.substring(j + 1),
+          ].join("");
+        }
       }
     }
     return final.join("\n");
@@ -132,8 +149,9 @@ const protocolInject = async function (source) {
           if (hasDesc) {
             content.push(`<div class="ml-4 pt-2">`);
             content.push(
-              `<div class="${attrStyle} before:content-['Description'] indent-[-88px] pl-[88px]">${field.description
-                .replace(/{/g, "&#123;")
+              `<div class="${attrStyle} before:content-['Description'] indent-[-88px] pl-[88px]">${handleCurlies(
+                field.description,
+              )
                 .replace(/\n\/?/g, " ")
                 .replace(/<(http.*)>/g, "$1")}</div>`,
             );
@@ -157,7 +175,7 @@ const protocolInject = async function (source) {
   for (const scalar of spec.scalarValueTypes) {
     content.push(`\n### ${scalar.protoType}`);
     content.push(
-      `<div class="text-lg">\n${scalar.notes.replace(/{/g, "&#123;")}\n</div>`,
+      `<div class="text-lg">\n${handleCurlies(scalar.notes)}\n</div>`,
     );
     content.push(`<div class="flex flex-wrap">`);
     content.push(
