@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
+
 use crate::env::read_bool_env_var;
 
 /// Extension for raw output files
@@ -182,3 +184,18 @@ macro_rules! insta_assert {
     }};
 }
 pub use insta_assert;
+
+pub fn read_insta_snapshot(path: impl AsRef<Path>) -> anyhow::Result<String> {
+    let path = path.as_ref();
+    match insta::Snapshot::from_file(path)
+        .map_err(|_| anyhow::anyhow!("Failed to load snapshot: {}", path.display()))?
+        .contents()
+    {
+        insta::internals::SnapshotContents::Text(text_snapshot_contents) => {
+            Ok(format!("{text_snapshot_contents}"))
+        }
+        insta::internals::SnapshotContents::Binary(_) => {
+            anyhow::bail!("Unexpected binary snapshot for path: {}", path.display())
+        }
+    }
+}
