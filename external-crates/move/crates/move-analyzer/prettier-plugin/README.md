@@ -61,7 +61,7 @@ following command:
 # VSCode integration
 
 In order to use the plugin in VSCode you first need to install Prettier's VSCode
-[extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode).
+[extension](https://marketplace.visualstudio.com/?itemName=esbenp.prettier-vscode).
 
 Then, in the root directory of the package where you completed the installation [step](#installation) you need to place the `.prettierrc` file containing the following configuration:
 
