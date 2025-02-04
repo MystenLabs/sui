@@ -395,7 +395,7 @@ impl ConsensusOutputCache {
     }
 
     pub fn insert_shared_object_assignments(&self, versions: &AssignedTxAndVersions) {
-        debug!("set_assigned_shared_object_versions: {:?}", versions);
+        trace!("insert_shared_object_assignments: {:?}", versions);
         let mut inserted_count = 0;
         for (key, value) in versions {
             if self
@@ -796,35 +796,30 @@ impl ConsensusOutputQuarantine {
         db_transaction: &DBTransaction<'_>,
         objects_to_init: &[ConsensusObjectSequenceKey],
     ) -> SuiResult<Vec<Option<SequenceNumber>>> {
-        let mut results = Vec::with_capacity(objects_to_init.len());
-        let mut fallback_keys = Vec::with_capacity(objects_to_init.len());
-        let mut fallback_indices = Vec::with_capacity(objects_to_init.len());
-
-        for (i, object_key) in objects_to_init.iter().enumerate() {
-            if let Some(next_version) = self.shared_object_next_versions.get(object_key) {
-                results.push(Some(*next_version));
-            } else {
-                results.push(None);
-                fallback_keys.push(object_key);
-                fallback_indices.push(i);
-            }
-        }
-
-        let fallback_results = if epoch_start_config.use_version_assignment_tables_v3() {
-            db_transaction.multi_get(&tables.next_shared_object_versions_v2, fallback_keys)?
-        } else {
-            db_transaction.multi_get(
-                &tables.next_shared_object_versions,
-                fallback_keys.iter().map(|(id, _)| *id),
-            )?
-        };
-
-        assert_eq!(fallback_results.len(), fallback_indices.len());
-        for (i, result) in fallback_indices.into_iter().zip(fallback_results) {
-            results[i] = result;
-        }
-
-        Ok(results)
+        Ok(do_fallback_lookup(
+            objects_to_init,
+            |object_key| {
+                if let Some(next_version) = self.shared_object_next_versions.get(object_key) {
+                    CacheResult::Hit(Some(*next_version))
+                } else {
+                    CacheResult::Miss
+                }
+            },
+            |object_keys| {
+                if epoch_start_config.use_version_assignment_tables_v3() {
+                    db_transaction
+                        .multi_get(&tables.next_shared_object_versions_v2, object_keys)
+                        .expect("db error")
+                } else {
+                    db_transaction
+                        .multi_get(
+                            &tables.next_shared_object_versions,
+                            object_keys.iter().map(|(id, _)| *id),
+                        )
+                        .expect("db error")
+                }
+            },
+        ))
     }
 
     pub(super) fn get_highest_pending_checkpoint_height(&self) -> Option<CheckpointHeight> {
@@ -946,7 +941,7 @@ impl ConsensusOutputQuarantine {
                 default_per_commit_budget,
             )
         };
-        let shared_input_object_ids: BTreeSet<_> = transactions
+        let mut shared_input_object_ids: Vec<_> = transactions
             .iter()
             .filter_map(|tx| {
                 if let SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -961,27 +956,27 @@ impl ConsensusOutputQuarantine {
             })
             .flatten()
             .collect();
+        shared_input_object_ids.sort();
+        shared_input_object_ids.dedup();
 
-        let num_ids = shared_input_object_ids.len();
-        let mut results = Vec::with_capacity(num_ids);
-        let mut fallback_keys = Vec::with_capacity(num_ids);
-        let mut fallback_indices = Vec::with_capacity(num_ids);
-
-        for (i, object_id) in shared_input_object_ids.iter().enumerate() {
-            if let Some(debt) = hash_table.get(object_id) {
-                results.push(Some(debt.into_v1()));
-            } else {
-                results.push(None);
-                fallback_keys.push(object_id);
-                fallback_indices.push(i);
-            }
-        }
-
-        let fallback_results = db_table.multi_get(fallback_keys)?;
-        assert_eq!(fallback_results.len(), fallback_indices.len());
-        for (i, result) in fallback_indices.into_iter().zip(fallback_results) {
-            results[i] = result.map(|debt| debt.into_v1());
-        }
+        let results = do_fallback_lookup(
+            &shared_input_object_ids,
+            |object_id| {
+                if let Some(debt) = hash_table.get(object_id) {
+                    CacheResult::Hit(Some(debt.into_v1()))
+                } else {
+                    CacheResult::Miss
+                }
+            },
+            |object_ids| {
+                db_table
+                    .multi_get(object_ids)
+                    .expect("db error")
+                    .into_iter()
+                    .map(|debt| debt.map(|debt| debt.into_v1()))
+                    .collect()
+            },
+        );
 
         Ok(results
             .into_iter()
