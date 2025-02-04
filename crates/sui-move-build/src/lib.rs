@@ -333,7 +333,7 @@ pub fn build_from_resolution_graph(
     }
 
     // Filter out packages that are in the manifest but not referenced in the source code.
-    let deps: BTreeSet<_> = package
+    let mut deps: BTreeSet<_> = package
         .all_compiled_units()
         .filter_map(|x| {
             let address = x.address.into_inner();
@@ -341,7 +341,14 @@ pub fn build_from_resolution_graph(
         })
         .collect();
 
+    // manifest could contain the dependency of a package that is a bytecode dependency
+    // thus we need to get those addresses as well
+    let bytecode_deps_addresses: BTreeSet<_> =
+        bytecode_deps.iter().map(|x| x.1.address()).collect();
+    deps.extend(bytecode_deps_addresses);
+
     dependency_ids.published.retain(|name, id| {
+        // in case of package upgrades, we need to check the renamings table by pkg name
         if let Some(address) = renamings.get(&name.to_lowercase()) {
             deps.contains(address)
         } else {
