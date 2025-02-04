@@ -1,3 +1,6 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
 CompiledPackageInfo {
     package_name: "Root-rename",
     address_alias_instantiation: {
