@@ -202,13 +202,9 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
         ],
         is_incomplete: false,
     };
-    let args_ = vec![sp(
-        mloc,
-        P::Exp_::Value(sp(mloc, P::Value_::Num("0".into()))),
-    )];
     let nop_call = P::Exp_::Call(
         sp(mloc, P::NameAccessChain_::Path(name_path)),
-        sp(mloc, args_),
+        sp(mloc, vec![]),
     );
 
     // fun unit_test_poison() { 0x1::UnitTest::poison(0); () }
