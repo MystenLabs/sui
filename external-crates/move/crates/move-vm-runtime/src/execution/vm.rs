@@ -205,9 +205,9 @@ impl<'extensions> MoveVM<'extensions> {
     // External Queries
     // -------------------------------------------
 
+    /// NB: The `module_id` is using the _runtime_ ID.
     pub fn function_information(
         &self,
-        // NB: The module ID is using the _runtime_ ID.
         module_id: &ModuleId,
         function_name: &IdentStr,
         ty_args: &[Type],
