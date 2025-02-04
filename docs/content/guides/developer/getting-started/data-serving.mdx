@@ -41,7 +41,7 @@ If you setup your own indexer, you are responsible for its ongoing maintenance a
 
 Primary interfaces to access Sui access data in future will be:
 
-- Full node gRPC API will replace JSON-RPC on full nodes, and is currently available in alpha. If you already use the JSON-RPC or are starting to utilize it as a dependency for your use case, you would need to migrate to gRPC or GraphQL (see below) within a reasonable duration. Related migration timeline will be defined once the newer options are generally available (GA).
+- Full node gRPC API will replace JSON-RPC on full nodes, and is currently available in alpha. If you already use the JSON-RPC or are starting to utilize it as a dependency for your use case, you would need to migrate to gRPC or GraphQL (see below) within a reasonable duration. Refer to the high-level timeline for gRPC availability [below](#grpc-api).
 - [GraphQL RPC with Indexer 2.0](/references/sui-graphql.mdx) will replace the custom indexer mechanism and is currently available in beta. This will be a combination of a performant indexing mechanism that one could use to load and manage data in a postgres relational database, and a lightweight GraphQL RPC server that will be used to read data from that database.
 
 You would still be able to utilize a [RPC provider](https://sui.io/developers#dev-tools) (filter by `RPC`) or a [Data indexer operator](https://github.com/sui-foundation/awesome-sui?tab=readme-ov-file#indexers--data-services) with the above options.
@@ -51,7 +51,7 @@ You would still be able to utilize a [RPC provider](https://sui.io/developers#de
 As mentioned above, gRPC API will replace the JSON-RPC on full nodes, such that JSON-RPC will be deprecated when gRPC API is generally available. Apart from the message & request format changes between the two, the gRPC API will come with a couple of key functional differences:
 
 - It will have streaming or subscription API endpoints such that you could consume real-time streaming data in your application without having to poll for those records. This support will be a proper replacement of the deprecated Webdockets support in JSON-RPC.
-- It will not have a implicit fallback on the above mentioned [Mysten Labs managed key-value store for historical transaction data](/guides/operator/data-management.mdx#sui-full-node-key-value-store-backup). You would have an option to configure that dependency explicitly though, while other full-node operators or RPC providers will also be encouraged to run that key-value store.
+- It will not have a implicit fallback on the above mentioned [Mysten Labs managed key-value store for historical transaction data](/guides/operator/data-management.mdx#sui-full-node-key-value-store-backup). You would have an option to configure that dependency explicitly though, while other full-node operators or RPC providers will also be encouraged to run their own instance of the key-value store.
 
 :::info
 
