@@ -153,6 +153,7 @@ macro_rules! insta_assert {
     } => {{
         let name: String = $name.into();
         let i: &std::path::Path = $input.as_ref();
+        let i = i.canonicalize().unwrap();
         let c = $contents;
         let mut settings = $options.into_settings();
         settings.set_snapshot_path(i.parent().unwrap());

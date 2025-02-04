@@ -22,6 +22,10 @@ use tempfile::{tempdir, TempDir};
 
 const EXTENSIONS: &[&str] = &["progress", "resolved", "locked", "notlocked", "compiled"];
 
+pub fn snapshot_path(pkg: &Path, name: &str, kind: &str) -> PathBuf {
+    pkg.join(format!("{name}@{kind}.snap"))
+}
+
 pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     if path.iter().any(|part| part == "deps_only") {
         return Ok(());
@@ -62,12 +66,15 @@ impl Test<'_> {
         toml_path: &'p Path,
         kind: &'static str,
     ) -> datatest_stable::Result<Option<Test<'p>>> {
-        let expected = toml_path.with_extension(kind);
+        dbg!(&toml_path);
+        let name = toml_path.file_stem().unwrap().to_string_lossy().to_string();
+        let expected = snapshot_path(toml_path.parent().unwrap(), &name, kind);
+        dbg!(&expected);
         if !expected.is_file() {
             Ok(None)
         } else {
             Ok(Some(Test {
-                test_name: toml_path.file_stem().unwrap().to_string_lossy().to_string(),
+                test_name: name,
                 toml_path,
                 kind,
                 output_dir: tempdir()?,
@@ -79,7 +86,7 @@ impl Test<'_> {
         package_hooks::register_package_hooks(Box::new(TestHooks()));
         let output = self.output().unwrap_or_else(|err| format!("{:#}\n", err));
         insta_assert! {
-            name: self.test_name,
+            name: &self.test_name,
             input_path: self.toml_path,
             contents: output,
             suffix: self.kind,
