@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use api::checkpoints::Checkpoints;
+use api::dynamic_fields::DynamicFields;
 use api::objects::{Objects, ObjectsConfig};
 use api::rpc_module::RpcModule;
 use api::transactions::{QueryTransactions, Transactions, TransactionsConfig};
@@ -225,6 +226,7 @@ pub async fn start_rpc(
     );
 
     rpc.add_module(Checkpoints(context.clone()))?;
+    rpc.add_module(DynamicFields(context.clone()))?;
     rpc.add_module(Governance(context.clone()))?;
     rpc.add_module(Objects(context.clone(), objects_config))?;
     rpc.add_module(QueryTransactions(context.clone(), transactions_config))?;
