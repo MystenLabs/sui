@@ -1012,13 +1012,13 @@ fn find_all_wrapped_objects<'a, 'i>(
 
     let uid = UID::layout();
     for (_id, ty, value) in new_object_values {
-        let Ok(Some(layout)) = context.typetag_to_type_layout(&ty.clone().into()) else {
+        let Ok(Some(layout)) = context.type_tag_to_type_layout(&ty.clone().into()) else {
             debug_assert!(false);
             continue;
         };
 
         let Ok(Some(annotated_layout)) =
-            context.typetag_to_annotated_type_layout(&ty.clone().into())
+            context.type_tag_to_annotated_type_layout(&ty.clone().into())
         else {
             debug_assert!(false);
             continue;
