@@ -59,7 +59,17 @@ The gRPC API is in alpha and not recommended for production use. Its public docu
 
 :::
 
-See below for a comparison with GraphQL RPC with Indexer 2.0.
+**High-level timeline**
+
+| **Tentative time** | **Milestone** | **Description** |
+| -------- | ------- | ------- |
+| March 2025 | Beta release of the initial set of polling-based APIs | You can start validating the initial gRPC integration from your applications and share feedback on the improvements you would like to see. |
+| May 2025 | Beta release of the streaming APIs and the remaining set of polling-based APIs | If your use case requires streaming low-latency data, this would be apt time to start validating that integration. Also, the API coverage will be functionality wise complete at this point, so you can start migrating your application in the non-production environments. |
+| July 2025 | GA release of the polling-based APIs with appropriate SDK support | You can start migration and cutover of your application in the production environment, with the support for streaming APIs still in beta. **JSON-RPC will be deprecated at this point and migration notice period will start.** |
+| September 2025 | GA release of scalable and resumable streaming APIs | If you use case requires streaming low-latency data, you can now use those APIs at scale, along with the option to resume a paused stream. |
+| March 2026 | End of migration timeline | **JSON-RPC will be fully deactivated at this point.** This timeline assumes about 9 months of migration notice period. |
+
+See [below](#when-to-use-grpc-vs-graphql-with-indexer-20) for a comparison with GraphQL RPC with Indexer 2.0.
 
 ### GraphQL RPC with Indexer 2.0
 
@@ -79,14 +89,14 @@ A sneak preview of how Indexer 2.0 could be setup is available [here](https://gi
 
 :::
 
-See below for a comparison with the gRPC API.
+See [below](#when-to-use-grpc-vs-graphql-with-indexer-20) for a comparison with the gRPC API.
 
 ### When to use gRPC vs GraphQL with Indexer 2.0
 
 You can use the high-level criteria mentioned in the following table to determine whether gRPC API or GraphQL RPC with Indexer 2.0 would better serve your use case. It's not an exhaustive list and it's expected that either of the options could work suitably for some of the use cases.
 
 | **Dimension** | **gRPC API** | **GraphQL RPC with Indexer 2.0** |
- -------- | ------- | ------- |
+| -------- | ------- | ------- |
 | Type of application or data consumer | Ideal for Web3 exchanges, defi market maker apps, other defi protocols or apps with ultra low-latency needs | Ideal for webapp builders or builders with slightly relaxed latency needs |
 | Query patterns | Okay to read data from different endpoints separately and combine on the client-side; faster serialization, parsing and validation due to binary format | Need easier docoupling of the client with the ability to combine different types of data in fewer calls |
 | Retention period requirements | Default retention period will be 2 weeks with actual configuration dependent on the full node operator and their needs & goals; see history-related note after the table | Default retention period in postgres database will be 4 weeks with actual configuration depending on your or the data indexer operator's needs; see history-related note after the table |
