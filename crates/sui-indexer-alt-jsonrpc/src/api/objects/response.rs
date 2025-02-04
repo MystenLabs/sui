@@ -105,7 +105,7 @@ pub(super) async fn past_object(
 }
 
 /// Extract a representation of the object from its stored form, according to its response options.
-async fn object(
+pub(crate) async fn object(
     ctx: &Context,
     object_id: ObjectID,
     version: SequenceNumber,
