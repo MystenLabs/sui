@@ -262,15 +262,15 @@ impl OnDiskStateView {
             fs::create_dir_all(&pkg_path)?;
         }
 
-        for (nm, m_bytes) in package.modules {
-            let module = CompiledModule::deserialize_with_defaults(&m_bytes)?;
+        for (module_name, module_bytes) in package.modules {
+            let module = CompiledModule::deserialize_with_defaults(&module_bytes)?;
             let module_id = module.self_id();
-            debug_assert_eq!(module_id.name(), nm.as_ident_str());
-            let m_path = self.get_module_path(&pkg_id, module_id.name());
-            if !m_path.exists() {
-                fs::create_dir_all(m_path.parent().unwrap())?
+            debug_assert_eq!(module_id.name(), module_name.as_ident_str());
+            let module_path = self.get_module_path(&pkg_id, module_id.name());
+            if !module_path.exists() {
+                fs::create_dir_all(module_path.parent().unwrap())?
             }
-            fs::write(m_path, m_bytes)?
+            fs::write(module_path, module_bytes)?
         }
         let mut type_origin_table = BTreeMap::new();
         for TypeOrigin {
