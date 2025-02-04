@@ -162,20 +162,21 @@
 <p align="right"><a href="#top">Top</a></p>
 
 ## sui.node.v2.proto
-
+The sui.node.v2 package contains API definitions for services that are
+expected to run on Fullnodes.
 
 
 <a name="sui-node-v2-BalanceChange"></a>
 
 ### BalanceChange
-
+The delta, or change, in balance for an Address for a particular `Coin` type.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| address | [sui.types.Address](#sui-types-Address) | optional |  |
-| coin_type | [sui.types.TypeTag](#sui-types-TypeTag) | optional |  |
-| amount | [sui.types.I128](#sui-types-I128) | optional |  |
+| address | [sui.types.Address](#sui-types-Address) | optional | The Account Address that is affected by this balance change event. |
+| coin_type | [sui.types.TypeTag](#sui-types-TypeTag) | optional | The `Coin` type of this balance change event. |
+| amount | [sui.types.I128](#sui-types-I128) | optional | The amount or change in balance. |
 
 
 
@@ -185,7 +186,10 @@
 <a name="sui-node-v2-BalanceChanges"></a>
 
 ### BalanceChanges
+Set of BalanceChange&#39;s that occurred as the result of a Transaction.
 
+This set of events are calculated by analyzing all input and output `Coin`
+type Objects.
 
 
 | Field | Type | Label | Description |
@@ -200,14 +204,14 @@
 <a name="sui-node-v2-EffectsFinality"></a>
 
 ### EffectsFinality
-
+Indicates the finality of the executed Transaction.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| certified | [sui.types.ValidatorAggregatedSignature](#sui-types-ValidatorAggregatedSignature) |  |  |
-| checkpointed | [uint64](#uint64) |  |  |
-| quorum_executed | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
+| certified | [sui.types.ValidatorAggregatedSignature](#sui-types-ValidatorAggregatedSignature) |  | A quorum certificate certifying that a Transaction is final but may not have been included in a checkpoint yet. |
+| checkpointed | [uint64](#uint64) |  | Sequence number of the Checkpoint that includes the Transaction. |
+| quorum_executed | [google.protobuf.Empty](#google-protobuf-Empty) |  | Indicates that a quorum of Validators has executed the Transaction but that it may not have been included in a checkpoint yet. |
 
 
 
@@ -246,16 +250,18 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-ExecuteTransactionRequest"></a>
 
 ### ExecuteTransactionRequest
+Request message for NodeService.ExecuteTransaction.
 
+Note: At most one of `transaction` or `transaction_bcs`, must be provided.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| transaction | [sui.types.Transaction](#sui-types-Transaction) | optional |  |
-| transaction_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| signatures | [UserSignatures](#sui-node-v2-UserSignatures) | optional |  |
-| signatures_bytes | [UserSignaturesBytes](#sui-node-v2-UserSignaturesBytes) | optional |  |
-| options | [ExecuteTransactionOptions](#sui-node-v2-ExecuteTransactionOptions) | optional |  |
+| transaction | [sui.types.Transaction](#sui-types-Transaction) | optional | Optional. The Transaction to execute. |
+| transaction_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The Transaction to execute, encoded as BCS bytes. |
+| signatures | [UserSignatures](#sui-node-v2-UserSignatures) | optional | Optional. Set of UserSigantures authorizing the execution of the provided transaction. |
+| signatures_bytes | [UserSignaturesBytes](#sui-node-v2-UserSignaturesBytes) | optional | Optional. Set of UserSigantures authorizing the execution of the provided transaction, encoded as bytes. |
+| options | [ExecuteTransactionOptions](#sui-node-v2-ExecuteTransactionOptions) | optional | Optional. Options for specifying which parts of the ExecuteTransactionResponse should be returned. |
 
 
 
@@ -265,17 +271,19 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-ExecuteTransactionResponse"></a>
 
 ### ExecuteTransactionResponse
-
+Response message for NodeService.ExecuteTransaction.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| finality | [EffectsFinality](#sui-node-v2-EffectsFinality) | optional |  |
-| effects | [sui.types.TransactionEffects](#sui-types-TransactionEffects) | optional |  |
-| effects_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| events | [sui.types.TransactionEvents](#sui-types-TransactionEvents) | optional |  |
-| events_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| balance_changes | [BalanceChanges](#sui-node-v2-BalanceChanges) | optional |  |
+| finality | [EffectsFinality](#sui-node-v2-EffectsFinality) | optional | Indicates the finality of the executed Transaction. |
+| effects | [sui.types.TransactionEffects](#sui-types-TransactionEffects) | optional | Optional. The TransactionEffects for this transaction. |
+| effects_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [TransactionEffects](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html) for this transaction encoded as BCS bytes. |
+| events | [sui.types.TransactionEvents](#sui-types-TransactionEvents) | optional | Optional. The TransactionEvents for this transaction.
+
+This field may be empty, even if it was explicitly requested, if the transaction didn&#39;t produce any events. sui.types.TransactionEffects.events_digest will be populated if the transaction did produce any events. |
+| events_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [TransactionEvents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html) for this transaction encoded as BCS bytes. |
+| balance_changes | [BalanceChanges](#sui-node-v2-BalanceChanges) | optional | Optional. Set of balance change events as a result of this Transaction. |
 
 
 
@@ -285,16 +293,16 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-FullCheckpointObject"></a>
 
 ### FullCheckpointObject
-
+An Object used by or produced form a Transaction.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [sui.types.ObjectId](#sui-types-ObjectId) | optional |  |
-| version | [uint64](#uint64) | optional |  |
-| digest | [sui.types.Digest](#sui-types-Digest) | optional | The digest of this object |
-| object | [sui.types.Object](#sui-types-Object) | optional |  |
-| object_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
+| object_id | [sui.types.ObjectId](#sui-types-ObjectId) | optional | The ObjectId of this Object. |
+| version | [uint64](#uint64) | optional | The version of this Object. |
+| digest | [sui.types.Digest](#sui-types-Digest) | optional | The digest of this Object. |
+| object | [sui.types.Object](#sui-types-Object) | optional | Optional. The Object itself. |
+| object_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [Object](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Object.html) encoded as BCS bytes. |
 
 
 
@@ -304,7 +312,7 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-FullCheckpointObjects"></a>
 
 ### FullCheckpointObjects
-
+Set of Objects used by or produced from a Transaction.
 
 
 | Field | Type | Label | Description |
@@ -319,20 +327,22 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-FullCheckpointTransaction"></a>
 
 ### FullCheckpointTransaction
-
+A Transaction, will all of its inputs and outputs.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | digest | [sui.types.Digest](#sui-types-Digest) | optional | The digest of this transaction |
-| transaction | [sui.types.Transaction](#sui-types-Transaction) | optional |  |
-| transaction_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| effects | [sui.types.TransactionEffects](#sui-types-TransactionEffects) | optional |  |
-| effects_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| events | [sui.types.TransactionEvents](#sui-types-TransactionEvents) | optional |  |
-| events_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| input_objects | [FullCheckpointObjects](#sui-node-v2-FullCheckpointObjects) | optional |  |
-| output_objects | [FullCheckpointObjects](#sui-node-v2-FullCheckpointObjects) | optional |  |
+| transaction | [sui.types.Transaction](#sui-types-Transaction) | optional | Optional. The Transaction itself. |
+| transaction_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [Transaction](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html) encoded as BCS bytes. |
+| effects | [sui.types.TransactionEffects](#sui-types-TransactionEffects) | optional | Optional. The TransactionEffects for this transaction. |
+| effects_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [TransactionEffects](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html) for this transaction encoded as BCS bytes. |
+| events | [sui.types.TransactionEvents](#sui-types-TransactionEvents) | optional | Optional. The TransactionEvents for this transaction.
+
+This field may be empty, even if it was explicitly requested, if the transaction didn&#39;t produce any events. sui.types.TransactionEffects.events_digest will be populated if the transaction did produce any events. |
+| events_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [TransactionEvents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html) for this transaction encoded as BCS bytes. |
+| input_objects | [FullCheckpointObjects](#sui-node-v2-FullCheckpointObjects) | optional | Optional. Set of input objects used during the execution of this Transaction. |
+| output_objects | [FullCheckpointObjects](#sui-node-v2-FullCheckpointObjects) | optional | Optional. Set of output objects produced from the execution of this Transaction. |
 
 
 
@@ -342,7 +352,7 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetCheckpointOptions"></a>
 
 ### GetCheckpointOptions
-
+Options for which parts of the GetCheckpointResponse should be returned.
 
 
 | Field | Type | Label | Description |
@@ -371,14 +381,18 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetCheckpointRequest"></a>
 
 ### GetCheckpointRequest
+Request message for NodeService.GetCheckpoint.
 
+At most one of `sequence_number` or `digest` can be provided, an error will
+be returned if both are provided, and if neither are provided the service
+will return the latest executed checkpoint.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| sequence_number | [uint64](#uint64) | optional |  |
-| digest | [sui.types.Digest](#sui-types-Digest) | optional |  |
-| options | [GetCheckpointOptions](#sui-node-v2-GetCheckpointOptions) | optional |  |
+| sequence_number | [uint64](#uint64) | optional | Optional. The sequence number of the requested Checkpoint. |
+| digest | [sui.types.Digest](#sui-types-Digest) | optional | Optional. The digest of the requested Checkpoint. |
+| options | [GetCheckpointOptions](#sui-node-v2-GetCheckpointOptions) | optional | Optional. Options for specifying which parts of the GetCheckpointResponse should be returned. |
 
 
 
@@ -388,18 +402,18 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetCheckpointResponse"></a>
 
 ### GetCheckpointResponse
-
+Response message for NodeService.GetCheckpoint.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | sequence_number | [uint64](#uint64) | optional | The sequence number of this Checkpoint |
 | digest | [sui.types.Digest](#sui-types-Digest) | optional | The digest of this Checkpoint&#39;s CheckpointSummary |
-| summary | [sui.types.CheckpointSummary](#sui-types-CheckpointSummary) | optional |  |
-| summary_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| signature | [sui.types.ValidatorAggregatedSignature](#sui-types-ValidatorAggregatedSignature) | optional |  |
-| contents | [sui.types.CheckpointContents](#sui-types-CheckpointContents) | optional |  |
-| contents_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
+| summary | [sui.types.CheckpointSummary](#sui-types-CheckpointSummary) | optional | Optional. The CheckpointSummary for this checkpoint. |
+| summary_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [CheckpointSummary](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointSummary.html) for this checkpoint encoded as BCS bytes. |
+| signature | [sui.types.ValidatorAggregatedSignature](#sui-types-ValidatorAggregatedSignature) | optional | Optional. An aggregated quorum signature from the Validator committee that certifies this checkpoint. |
+| contents | [sui.types.CheckpointContents](#sui-types-CheckpointContents) | optional | Optional. The CheckpointContents for this checkpoint. |
+| contents_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [CheckpointContents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointContents.html) for this checkpoint encoded as BCS bytes. |
 
 
 
@@ -409,12 +423,12 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetCommitteeRequest"></a>
 
 ### GetCommitteeRequest
-
+Request message for NodeService.GetCommittee.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| epoch | [uint64](#uint64) | optional |  |
+| epoch | [uint64](#uint64) | optional | Optional. Request the sui.types.ValidatorCommittee corresponding to the provided epoch. If no epoch is provided the committee for the current epoch will be returned. |
 
 
 
@@ -424,12 +438,12 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetCommitteeResponse"></a>
 
 ### GetCommitteeResponse
-
+Response message for NodeService.GetCommittee.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| committee | [sui.types.ValidatorCommittee](#sui-types-ValidatorCommittee) | optional |  |
+| committee | [sui.types.ValidatorCommittee](#sui-types-ValidatorCommittee) | optional | The committee of either the requested epoch or the current epoch. |
 
 
 
@@ -439,7 +453,7 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetFullCheckpointOptions"></a>
 
 ### GetFullCheckpointOptions
-
+Options for which parts of the GetFullCheckpointResponse should be returned.
 
 
 | Field | Type | Label | Description |
@@ -498,14 +512,18 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetFullCheckpointRequest"></a>
 
 ### GetFullCheckpointRequest
+Request message for NodeService.GetFullCheckpoint.
 
+At most one of `sequence_number` or `digest` can be provided, an error will
+be returned if both are provided, and if neither are provided the service
+will return the latest executed checkpoint.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| sequence_number | [uint64](#uint64) | optional |  |
-| digest | [sui.types.Digest](#sui-types-Digest) | optional |  |
-| options | [GetFullCheckpointOptions](#sui-node-v2-GetFullCheckpointOptions) | optional |  |
+| sequence_number | [uint64](#uint64) | optional | Optional. The sequence number of the requested Checkpoint. |
+| digest | [sui.types.Digest](#sui-types-Digest) | optional | Optional. The digest of the requested Checkpoint. |
+| options | [GetFullCheckpointOptions](#sui-node-v2-GetFullCheckpointOptions) | optional | Optional. Options for specifying which parts of the GetFullCheckpointResponse should be returned. |
 
 
 
@@ -515,19 +533,19 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetFullCheckpointResponse"></a>
 
 ### GetFullCheckpointResponse
-
+Response message for NodeService.GetFullCheckpoint.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | sequence_number | [uint64](#uint64) | optional | The sequence number of this Checkpoint |
 | digest | [sui.types.Digest](#sui-types-Digest) | optional | The digest of this Checkpoint&#39;s CheckpointSummary |
-| summary | [sui.types.CheckpointSummary](#sui-types-CheckpointSummary) | optional |  |
-| summary_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| signature | [sui.types.ValidatorAggregatedSignature](#sui-types-ValidatorAggregatedSignature) | optional |  |
-| contents | [sui.types.CheckpointContents](#sui-types-CheckpointContents) | optional |  |
-| contents_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| transactions | [FullCheckpointTransaction](#sui-node-v2-FullCheckpointTransaction) | repeated |  |
+| summary | [sui.types.CheckpointSummary](#sui-types-CheckpointSummary) | optional | Optional. The CheckpointSummary for this checkpoint. |
+| summary_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [CheckpointSummary](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointSummary.html) for this checkpoint encoded as BCS bytes. |
+| signature | [sui.types.ValidatorAggregatedSignature](#sui-types-ValidatorAggregatedSignature) | optional | Optional. An aggregated quorum signature from the Validator committee that certifies this checkpoint. |
+| contents | [sui.types.CheckpointContents](#sui-types-CheckpointContents) | optional | Optional. The CheckpointContents for this checkpoint. |
+| contents_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [CheckpointContents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointContents.html) for this checkpoint encoded as BCS bytes. |
+| transactions | [FullCheckpointTransaction](#sui-node-v2-FullCheckpointTransaction) | repeated | List of Transactions included in this checkpoint. |
 
 
 
@@ -537,7 +555,7 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetNodeInfoRequest"></a>
 
 ### GetNodeInfoRequest
-
+Request message for NodeService.GetNodeInfo.
 
 
 
@@ -547,19 +565,23 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetNodeInfoResponse"></a>
 
 ### GetNodeInfoResponse
-
+Response message for NodeService.GetNodeInfo.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| chain_id | [sui.types.Digest](#sui-types-Digest) | optional | The chain identifier of the chain that this Node is on |
-| chain | [string](#string) | optional | Human readable name of the chain that this Node is on |
+| chain_id | [sui.types.Digest](#sui-types-Digest) | optional | The chain identifier of the chain that this Node is on.
+
+The chain identifier is the digest of the genesis Checkpoint, the checkpoint with sequence number 0. |
+| chain | [string](#string) | optional | Human readable name of the chain that this Node is on.
+
+This is intended to be a human readable name like &#39;mainnet&#39;, &#39;testnet&#39;, etc. |
 | epoch | [uint64](#uint64) | optional | Current epoch of the Node based on its highest executed checkpoint |
 | checkpoint_height | [uint64](#uint64) | optional | Checkpoint height of the most recently executed checkpoint |
 | timestamp | [google.protobuf.Timestamp](#google-protobuf-Timestamp) | optional | Unix timestamp of the most recently executed checkpoint |
 | lowest_available_checkpoint | [uint64](#uint64) | optional | The lowest checkpoint for which checkpoints and transaction data is available |
 | lowest_available_checkpoint_objects | [uint64](#uint64) | optional | The lowest checkpoint for which object data is available |
-| software_version | [string](#string) | optional |  |
+| software_version | [string](#string) | optional | Software version of the `sui-node` binary |
 
 
 
@@ -589,14 +611,14 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetObjectRequest"></a>
 
 ### GetObjectRequest
-
+Request message for NodeService.GetObject.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [sui.types.ObjectId](#sui-types-ObjectId) | optional |  |
-| version | [uint64](#uint64) | optional |  |
-| options | [GetObjectOptions](#sui-node-v2-GetObjectOptions) | optional |  |
+| object_id | [sui.types.ObjectId](#sui-types-ObjectId) | optional | Required. The ObjectId of the requested Object. |
+| version | [uint64](#uint64) | optional | Optional. Request that a specific version of the requested Object should be returned. If no version is provided then then the latest version for the Object will be returned. |
+| options | [GetObjectOptions](#sui-node-v2-GetObjectOptions) | optional | Optional. Options for specifying which parts of the GetObjectResponse should be returned. |
 
 
 
@@ -606,16 +628,16 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetObjectResponse"></a>
 
 ### GetObjectResponse
-
+Response message for NodeService.GetObject.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [sui.types.ObjectId](#sui-types-ObjectId) | optional |  |
-| version | [uint64](#uint64) | optional |  |
-| digest | [sui.types.Digest](#sui-types-Digest) | optional | The digest of this object |
-| object | [sui.types.Object](#sui-types-Object) | optional |  |
-| object_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
+| object_id | [sui.types.ObjectId](#sui-types-ObjectId) | optional | The ObjectId of this Object. |
+| version | [uint64](#uint64) | optional | The version of this Object. |
+| digest | [sui.types.Digest](#sui-types-Digest) | optional | The digest of this Object. |
+| object | [sui.types.Object](#sui-types-Object) | optional | Optional. The Object itself. |
+| object_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [Object](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Object.html) encoded as BCS bytes. |
 
 
 
@@ -625,7 +647,7 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetTransactionOptions"></a>
 
 ### GetTransactionOptions
-
+Options for which parts of the GetTransactionResponse should be returned.
 
 
 | Field | Type | Label | Description |
@@ -663,13 +685,13 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetTransactionRequest"></a>
 
 ### GetTransactionRequest
-
+Request message for NodeService.GetTransaction.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| digest | [sui.types.Digest](#sui-types-Digest) | optional |  |
-| options | [GetTransactionOptions](#sui-node-v2-GetTransactionOptions) | optional |  |
+| digest | [sui.types.Digest](#sui-types-Digest) | optional | Required. The digest of the requested Transaction. |
+| options | [GetTransactionOptions](#sui-node-v2-GetTransactionOptions) | optional | Optional. Options for specifying which parts of the GetTransactionResponse should be returned. |
 
 
 
@@ -679,22 +701,24 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-GetTransactionResponse"></a>
 
 ### GetTransactionResponse
-
+Response message for NodeService.GetTransaction.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | digest | [sui.types.Digest](#sui-types-Digest) | optional | The digest of this transaction |
-| transaction | [sui.types.Transaction](#sui-types-Transaction) | optional |  |
-| transaction_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| signatures | [UserSignatures](#sui-node-v2-UserSignatures) | optional |  |
-| signatures_bytes | [UserSignaturesBytes](#sui-node-v2-UserSignaturesBytes) | optional |  |
-| effects | [sui.types.TransactionEffects](#sui-types-TransactionEffects) | optional |  |
-| effects_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| events | [sui.types.TransactionEvents](#sui-types-TransactionEvents) | optional |  |
-| events_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional |  |
-| checkpoint | [uint64](#uint64) | optional |  |
-| timestamp | [google.protobuf.Timestamp](#google-protobuf-Timestamp) | optional |  |
+| transaction | [sui.types.Transaction](#sui-types-Transaction) | optional | Optional. The Transaction itself. |
+| transaction_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [Transaction](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html) encoded as BCS bytes. |
+| signatures | [UserSignatures](#sui-node-v2-UserSignatures) | optional | Optional. List of user signatures that were used to authorize the execution of this transaction. |
+| signatures_bytes | [UserSignaturesBytes](#sui-node-v2-UserSignaturesBytes) | optional | Optional. List of [UserSignature](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.UserSignature.html)s encoded as bytes. |
+| effects | [sui.types.TransactionEffects](#sui-types-TransactionEffects) | optional | Optional. The TransactionEffects for this transaction. |
+| effects_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [TransactionEffects](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html) for this transaction encoded as BCS bytes. |
+| events | [sui.types.TransactionEvents](#sui-types-TransactionEvents) | optional | Optional. The TransactionEvents for this transaction.
+
+This field may be empty, even if it was explicitly requested, if the transaction didn&#39;t produce any events. sui.types.TransactionEffects.events_digest will be populated if the transaction did produce any events. |
+| events_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | Optional. The [TransactionEvents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html) for this transaction encoded as BCS bytes. |
+| checkpoint | [uint64](#uint64) | optional | The sequence number for the checkpoint which includes this Transaction. |
+| timestamp | [google.protobuf.Timestamp](#google-protobuf-Timestamp) | optional | The Unix timestamp of the checkpoint which includes this Transaction. |
 
 
 
@@ -704,7 +728,7 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-UserSignatures"></a>
 
 ### UserSignatures
-
+List of UserSignatures used to authorize a transaction.
 
 
 | Field | Type | Label | Description |
@@ -719,7 +743,7 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-UserSignaturesBytes"></a>
 
 ### UserSignaturesBytes
-
+List of UserSignatures used to authorize a transaction encoded as bytes.
 
 
 | Field | Type | Label | Description |
@@ -740,17 +764,33 @@ Defaults to `false` if not included |
 <a name="sui-node-v2-NodeService"></a>
 
 ### NodeService
-
+Service for reading data from a Sui Fullnode.
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| GetNodeInfo | [GetNodeInfoRequest](#sui-node-v2-GetNodeInfoRequest) | [GetNodeInfoResponse](#sui-node-v2-GetNodeInfoResponse) |  |
-| GetCommittee | [GetCommitteeRequest](#sui-node-v2-GetCommitteeRequest) | [GetCommitteeResponse](#sui-node-v2-GetCommitteeResponse) |  |
-| GetObject | [GetObjectRequest](#sui-node-v2-GetObjectRequest) | [GetObjectResponse](#sui-node-v2-GetObjectResponse) |  |
-| GetTransaction | [GetTransactionRequest](#sui-node-v2-GetTransactionRequest) | [GetTransactionResponse](#sui-node-v2-GetTransactionResponse) |  |
-| GetCheckpoint | [GetCheckpointRequest](#sui-node-v2-GetCheckpointRequest) | [GetCheckpointResponse](#sui-node-v2-GetCheckpointResponse) |  |
-| GetFullCheckpoint | [GetFullCheckpointRequest](#sui-node-v2-GetFullCheckpointRequest) | [GetFullCheckpointResponse](#sui-node-v2-GetFullCheckpointResponse) |  |
-| ExecuteTransaction | [ExecuteTransactionRequest](#sui-node-v2-ExecuteTransactionRequest) | [ExecuteTransactionResponse](#sui-node-v2-ExecuteTransactionResponse) |  |
+| GetNodeInfo | [GetNodeInfoRequest](#sui-node-v2-GetNodeInfoRequest) | [GetNodeInfoResponse](#sui-node-v2-GetNodeInfoResponse) | Query a node for information about its current state. |
+| GetCommittee | [GetCommitteeRequest](#sui-node-v2-GetCommitteeRequest) | [GetCommitteeResponse](#sui-node-v2-GetCommitteeResponse) | Request the validator committee for a particular epoch or for the current epoch. |
+| GetObject | [GetObjectRequest](#sui-node-v2-GetObjectRequest) | [GetObjectResponse](#sui-node-v2-GetObjectResponse) | Request information for the specified object.
+
+This API can be used to request an object by its ObjectId. The version of the object that will be returned is dependent on if a specific version was requested. If no specific version was requested (e.g. GetObjectRequest.version is `None`), then the most recent version (if the object is live) will be returned, otherwise the requested version, if it historically existed and is available and has not been pruned, will be returned.
+
+Due to storage limitations, implementers of this service may prune older historical data which can limit the data availability of this API. In order to determine the data availability range for historical objects, clients can look at GetNodeInfoResponse.lowest_available_checkpoint_objects in order to see the lowest checkpoint for which historical object data is available. |
+| GetTransaction | [GetTransactionRequest](#sui-node-v2-GetTransactionRequest) | [GetTransactionResponse](#sui-node-v2-GetTransactionResponse) | Request information for the specified transaction.
+
+This API can be used to request information about a transaction, by its Digest.
+
+Due to storage limitations, implementers of this service may prune older historical data which can limit the data availability of this API. In order to determine the data availability range for historical transactions, clients can look at GetNodeInfoResponse.lowest_available_checkpoint in order to see the lowest checkpoint for which historical transaction data is available. |
+| GetCheckpoint | [GetCheckpointRequest](#sui-node-v2-GetCheckpointRequest) | [GetCheckpointResponse](#sui-node-v2-GetCheckpointResponse) | Request information for the specified checkpoint.
+
+This API can be used to request information about a checkpoint either by its digest or its sequence number (height).
+
+Due to storage limitations, implementers of this service may prune older historical data which can limit the data availability of this API. In order to determine the data availability range for historical checkpoints, clients can look at GetNodeInfoResponse.lowest_available_checkpoint in order to see the lowest checkpoint for which historical checkpoint data is available. |
+| GetFullCheckpoint | [GetFullCheckpointRequest](#sui-node-v2-GetFullCheckpointRequest) | [GetFullCheckpointResponse](#sui-node-v2-GetFullCheckpointResponse) | Request information for the entirety of the specified checkpoint.
+
+This API can be used to request information about a checkpoint either by its digest or its sequence number (height). In particular this API can be used to request information about all the transactions included in a checkpoint as well as their input and output objects.
+
+Due to storage limitations, implementers of this service may prune older historical data which can limit the data availability of this API. In order to determine the data availability range for historical checkpoints, clients can look at GetNodeInfoResponse.lowest_available_checkpoint in order to see the lowest checkpoint for which historical checkpoint/transaction data is available and GetNodeInfoResponse.lowest_available_checkpoint_objects for which historical object data is available. |
+| ExecuteTransaction | [ExecuteTransactionRequest](#sui-node-v2-ExecuteTransactionRequest) | [ExecuteTransactionResponse](#sui-node-v2-ExecuteTransactionResponse) | Request that the provided transaction be relayed to the validator set for execution and inclusion in the blockchain. |
 
  
 
@@ -760,20 +800,44 @@ Defaults to `false` if not included |
 <p align="right"><a href="#top">Top</a></p>
 
 ## sui.types.proto
+Protobuf definitions of public Sui core types
 
+This file contains a complete set of protobuf definitions for all of the
+public sui core types. All sui types are intended to have a 1:1 mapping to a
+protobuf message defined in this file and be able to roundtrip to/from their
+rust and protobuf definitions assuming a sufficiently up-to-date version of
+both these definitions.
+
+For more information on the types these proto messages correspond with, see
+the documentation for their rust versions defined in the
+[`sui-sdk-types`](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/)
+library.
+
+## Note on use of `optional`
+
+These message definitions use protobuf version 3 (proto3). In proto3, fields
+that are primitives (that is they are not a `message`) and are not present
+on the wire will be zero-initialized. In order to gain the ability to detect
+[field presence](https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md),
+these definitions follow the convention of having all fields marked
+`optional`, and wrapping `repeated` fields in a message as needed.
+
+Even if a field is marked as `optional` it may not in fact be optional from
+the perspective of the Sui protocol. Such fields will be explicitly marked
+as `Required` or `Optional` in their documentation.
 
 
 <a name="sui-types-ActiveJwk"></a>
 
 ### ActiveJwk
-
+A new Jwk
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| id | [JwkId](#sui-types-JwkId) | optional |  |
-| jwk | [Jwk](#sui-types-Jwk) | optional |  |
-| epoch | [uint64](#uint64) | optional |  |
+| id | [JwkId](#sui-types-JwkId) | optional | Identifier used to uniquely identify a Jwk |
+| jwk | [Jwk](#sui-types-Jwk) | optional | The Jwk |
+| epoch | [uint64](#uint64) | optional | Most recent epoch in which the jwk was validated |
 
 
 
@@ -783,12 +847,17 @@ Defaults to `false` if not included |
 <a name="sui-types-Address"></a>
 
 ### Address
+Unique identifier for an Account on the Sui blockchain.
 
+An `Address` is a 32-byte pseudonymous identifier used to uniquely identify an account and
+asset-ownership on the Sui blockchain. Often, human-readable addresses are encoded in
+hexadecimal with a `0x` prefix. For example, this is a valid Sui address:
+`0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331`.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| address | [bytes](#bytes) | optional |  |
+| address | [bytes](#bytes) | optional | Required. 32-byte address |
 
 
 
@@ -798,13 +867,13 @@ Defaults to `false` if not included |
 <a name="sui-types-AddressDeniedForCoinError"></a>
 
 ### AddressDeniedForCoinError
-
+Address is denied for this coin type
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| address | [Address](#sui-types-Address) | optional |  |
-| coin_type | [string](#string) | optional |  |
+| address | [Address](#sui-types-Address) | optional | Required. Denied address |
+| coin_type | [string](#string) | optional | Required. Coin type |
 
 
 
@@ -814,15 +883,15 @@ Defaults to `false` if not included |
 <a name="sui-types-Argument"></a>
 
 ### Argument
-
+An argument to a programmable transaction command
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| gas | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
-| input | [uint32](#uint32) |  |  |
-| result | [uint32](#uint32) |  |  |
-| nested_result | [NestedResult](#sui-types-NestedResult) |  |  |
+| gas | [google.protobuf.Empty](#google-protobuf-Empty) |  | The gas coin. The gas coin can only be used by-ref, except for with `TransferObjects`, which can use it by-value. |
+| input | [uint32](#uint32) |  | One of the input objects or primitive values (from `ProgrammableTransaction` inputs) |
+| result | [uint32](#uint32) |  | The result of another command (from `ProgrammableTransaction` commands) |
+| nested_result | [NestedResult](#sui-types-NestedResult) |  | Like a `Result` but it accesses a nested result. Currently, the only usage of this is to access a value from a Move call with multiple return values. |
 
 
 
@@ -832,13 +901,13 @@ Defaults to `false` if not included |
 <a name="sui-types-AuthenticatorStateExpire"></a>
 
 ### AuthenticatorStateExpire
-
+Expire old JWKs
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| min_epoch | [uint64](#uint64) | optional |  |
-| authenticator_object_initial_shared_version | [uint64](#uint64) | optional |  |
+| min_epoch | [uint64](#uint64) | optional | expire JWKs that have a lower epoch than this |
+| authenticator_object_initial_shared_version | [uint64](#uint64) | optional | The initial version of the authenticator object that it was shared at. |
 
 
 
@@ -848,15 +917,15 @@ Defaults to `false` if not included |
 <a name="sui-types-AuthenticatorStateUpdate"></a>
 
 ### AuthenticatorStateUpdate
-
+Update the set of valid JWKs
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| epoch | [uint64](#uint64) | optional |  |
-| round | [uint64](#uint64) | optional |  |
-| new_active_jwks | [ActiveJwk](#sui-types-ActiveJwk) | repeated |  |
-| authenticator_object_initial_shared_version | [uint64](#uint64) | optional |  |
+| epoch | [uint64](#uint64) | optional | Epoch of the authenticator state update transaction |
+| round | [uint64](#uint64) | optional | Consensus round of the authenticator state update |
+| new_active_jwks | [ActiveJwk](#sui-types-ActiveJwk) | repeated | newly active jwks |
+| authenticator_object_initial_shared_version | [uint64](#uint64) | optional | The initial version of the authenticator object that it was shared at. |
 
 
 
@@ -866,12 +935,14 @@ Defaults to `false` if not included |
 <a name="sui-types-Bcs"></a>
 
 ### Bcs
-
+Message that represents a type that is serialized and encoded using the
+[BCS](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/index.html#bcs)
+format.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| bcs | [bytes](#bytes) | optional |  |
+| bcs | [bytes](#bytes) | optional | Required. Bytes of a BCS encoded value |
 
 
 
@@ -881,12 +952,12 @@ Defaults to `false` if not included |
 <a name="sui-types-Bn254FieldElement"></a>
 
 ### Bn254FieldElement
-
+A point on the BN254 elliptic curve.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| element | [bytes](#bytes) | optional |  |
+| element | [bytes](#bytes) | optional | Required. 32-byte big-endian field element. |
 
 
 
@@ -896,13 +967,13 @@ Defaults to `false` if not included |
 <a name="sui-types-CancelledTransaction"></a>
 
 ### CancelledTransaction
-
+A transaction that was cancelled
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| digest | [Digest](#sui-types-Digest) | optional |  |
-| version_assignments | [VersionAssignment](#sui-types-VersionAssignment) | repeated |  |
+| digest | [Digest](#sui-types-Digest) | optional | Digest of the cancelled Transaction |
+| version_assignments | [VersionAssignment](#sui-types-VersionAssignment) | repeated | List of object version assignments |
 
 
 
@@ -912,7 +983,7 @@ Defaults to `false` if not included |
 <a name="sui-types-CancelledTransactions"></a>
 
 ### CancelledTransactions
-
+Set of cancelled transactions
 
 
 | Field | Type | Label | Description |
@@ -927,7 +998,7 @@ Defaults to `false` if not included |
 <a name="sui-types-ChangeEpoch"></a>
 
 ### ChangeEpoch
-
+System transaction used to change the epoch
 
 
 | Field | Type | Label | Description |
@@ -949,17 +1020,17 @@ Defaults to `false` if not included |
 <a name="sui-types-ChangedObject"></a>
 
 ### ChangedObject
-
+Input/output state of an object that was changed during execution
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| not_exist | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
-| exist | [ObjectExist](#sui-types-ObjectExist) |  |  |
-| removed | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
-| object_write | [ObjectWrite](#sui-types-ObjectWrite) |  |  |
-| package_write | [PackageWrite](#sui-types-PackageWrite) |  |  |
+| object_id | [ObjectId](#sui-types-ObjectId) | optional | Required. Id of the object |
+| not_exist | [google.protobuf.Empty](#google-protobuf-Empty) |  | Object did not exist prior to this transaction |
+| exist | [ObjectExist](#sui-types-ObjectExist) |  | Object existed prior to this transaction |
+| removed | [google.protobuf.Empty](#google-protobuf-Empty) |  | Object was removed from the store due to this transaction |
+| object_write | [ObjectWrite](#sui-types-ObjectWrite) |  | Object was written, including all of mutated, created, unwrapped |
+| package_write | [PackageWrite](#sui-types-PackageWrite) |  | Package was written. |
 | none | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
 | created | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
 | deleted | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
@@ -972,12 +1043,12 @@ Defaults to `false` if not included |
 <a name="sui-types-CheckpointCommitment"></a>
 
 ### CheckpointCommitment
-
+A commitment made by a checkpoint.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| ecmh_live_object_set | [Digest](#sui-types-Digest) |  |  |
+| ecmh_live_object_set | [Digest](#sui-types-Digest) |  | An Elliptic Curve Multiset Hash attesting to the set of Objects that comprise the live state of the Sui blockchain. |
 
 
 
@@ -987,7 +1058,7 @@ Defaults to `false` if not included |
 <a name="sui-types-CheckpointContents"></a>
 
 ### CheckpointContents
-
+The committed to contents of a checkpoint.
 
 
 | Field | Type | Label | Description |
@@ -1002,7 +1073,7 @@ Defaults to `false` if not included |
 <a name="sui-types-CheckpointContents-V1"></a>
 
 ### CheckpointContents.V1
-
+Version 1 of CheckpointContents
 
 
 | Field | Type | Label | Description |
@@ -1017,21 +1088,41 @@ Defaults to `false` if not included |
 <a name="sui-types-CheckpointSummary"></a>
 
 ### CheckpointSummary
+A header for a Checkpoint on the Sui blockchain.
 
+On the Sui network, checkpoints define the history of the blockchain. They are quite similar to
+the concept of blocks used by other blockchains like Bitcoin or Ethereum. The Sui blockchain,
+however, forms checkpoints after transaction execution has already happened to provide a
+certified history of the chain, instead of being formed before execution.
+
+Checkpoints commit to a variety of state including but not limited to:
+- The hash of the previous checkpoint.
+- The set of transaction digests, their corresponding effects digests, as well as the set of
+  user signatures which authorized its execution.
+- The object&#39;s produced by a transaction.
+- The set of live objects that make up the current state of the chain.
+- On epoch transitions, the next validator committee.
+
+`CheckpointSummary`s themselves don&#39;t directly include all of the above information but they
+are the top-level type by which all the above are committed to transitively via cryptographic
+hashes included in the summary. `CheckpointSummary`s are signed and certified by a quorum of
+the validator committee in a given epoch in order to allow verification of the chain&#39;s state.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| epoch | [uint64](#uint64) | optional |  |
-| sequence_number | [uint64](#uint64) | optional |  |
-| total_network_transactions | [uint64](#uint64) | optional |  |
-| content_digest | [Digest](#sui-types-Digest) | optional |  |
-| previous_digest | [Digest](#sui-types-Digest) | optional |  |
-| epoch_rolling_gas_cost_summary | [GasCostSummary](#sui-types-GasCostSummary) | optional |  |
-| timestamp_ms | [uint64](#uint64) | optional |  |
-| commitments | [CheckpointCommitment](#sui-types-CheckpointCommitment) | repeated |  |
-| end_of_epoch_data | [EndOfEpochData](#sui-types-EndOfEpochData) | optional |  |
-| version_specific_data | [bytes](#bytes) | optional |  |
+| epoch | [uint64](#uint64) | optional | Epoch that this checkpoint belongs to. |
+| sequence_number | [uint64](#uint64) | optional | The height of this checkpoint. |
+| total_network_transactions | [uint64](#uint64) | optional | Total number of transactions committed since genesis, including those in this checkpoint. |
+| content_digest | [Digest](#sui-types-Digest) | optional | The hash of the CheckpointContents for this checkpoint. |
+| previous_digest | [Digest](#sui-types-Digest) | optional | The hash of the previous `CheckpointSummary`.
+
+This will be only be `None` for the first, or genesis checkpoint. |
+| epoch_rolling_gas_cost_summary | [GasCostSummary](#sui-types-GasCostSummary) | optional | The running total gas costs of all transactions included in the current epoch so far until this checkpoint. |
+| timestamp_ms | [uint64](#uint64) | optional | Timestamp of the checkpoint - number of milliseconds from the Unix epoch Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent checkpoints can have same timestamp if they originate from the same underlining consensus commit |
+| commitments | [CheckpointCommitment](#sui-types-CheckpointCommitment) | repeated | Commitments to checkpoint-specific state. |
+| end_of_epoch_data | [EndOfEpochData](#sui-types-EndOfEpochData) | optional | Extra data only present in the final checkpoint of an epoch. |
+| version_specific_data | [bytes](#bytes) | optional | `CheckpointSummary` is not an evolvable structure - it must be readable by any version of the code. Therefore, in order to allow extensions to be added to `CheckpointSummary`, we allow opaque data to be added to checkpoints which can be deserialized based on the current protocol version. |
 
 
 
@@ -1041,14 +1132,14 @@ Defaults to `false` if not included |
 <a name="sui-types-CheckpointedTransactionInfo"></a>
 
 ### CheckpointedTransactionInfo
-
+Transaction information committed to in a checkpoint
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| transaction | [Digest](#sui-types-Digest) | optional | TransactionDigest |
-| effects | [Digest](#sui-types-Digest) | optional | EffectsDigest |
-| signatures | [UserSignature](#sui-types-UserSignature) | repeated |  |
+| transaction | [Digest](#sui-types-Digest) | optional | Digest of the Transaction |
+| effects | [Digest](#sui-types-Digest) | optional | Digest of the effects |
+| signatures | [UserSignature](#sui-types-UserSignature) | repeated | Set of user signatures that authorized the transaction |
 
 
 
@@ -1058,14 +1149,14 @@ Defaults to `false` if not included |
 <a name="sui-types-CircomG1"></a>
 
 ### CircomG1
-
+A G1 point
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| e0 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional |  |
-| e1 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional |  |
-| e2 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional |  |
+| e0 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional | Required. |
+| e1 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional | Required. |
+| e2 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional | Required. |
 
 
 
@@ -1075,17 +1166,17 @@ Defaults to `false` if not included |
 <a name="sui-types-CircomG2"></a>
 
 ### CircomG2
-
+A G2 point
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| e00 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional |  |
-| e01 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional |  |
-| e10 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional |  |
-| e11 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional |  |
-| e20 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional |  |
-| e21 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional |  |
+| e00 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional | Required. |
+| e01 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional | Required. |
+| e10 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional | Required. |
+| e11 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional | Required. |
+| e20 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional | Required. |
+| e21 | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional | Required. |
 
 
 
@@ -1095,18 +1186,18 @@ Defaults to `false` if not included |
 <a name="sui-types-Command"></a>
 
 ### Command
-
+A single command in a programmable transaction.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| move_call | [MoveCall](#sui-types-MoveCall) |  |  |
-| transfer_objects | [TransferObjects](#sui-types-TransferObjects) |  |  |
-| split_coins | [SplitCoins](#sui-types-SplitCoins) |  |  |
-| merge_coins | [MergeCoins](#sui-types-MergeCoins) |  |  |
-| publish | [Publish](#sui-types-Publish) |  |  |
-| make_move_vector | [MakeMoveVector](#sui-types-MakeMoveVector) |  |  |
-| upgrade | [Upgrade](#sui-types-Upgrade) |  |  |
+| move_call | [MoveCall](#sui-types-MoveCall) |  | A call to either an entry or a public Move function |
+| transfer_objects | [TransferObjects](#sui-types-TransferObjects) |  | `(Vec&lt;forall T:key&#43;store. T&gt;, address)` It sends n-objects to the specified address. These objects must have store (public transfer) and either the previous owner must be an address or the object must be newly created. |
+| split_coins | [SplitCoins](#sui-types-SplitCoins) |  | `(&amp;mut Coin&lt;T&gt;, Vec&lt;u64&gt;)` -&gt; `Vec&lt;Coin&lt;T&gt;&gt;` It splits off some amounts into a new coins with those amounts |
+| merge_coins | [MergeCoins](#sui-types-MergeCoins) |  | `(&amp;mut Coin&lt;T&gt;, Vec&lt;Coin&lt;T&gt;&gt;)` It merges n-coins into the first coin |
+| publish | [Publish](#sui-types-Publish) |  | Publishes a Move package. It takes the package bytes and a list of the package&#39;s transitive dependencies to link against on-chain. |
+| make_move_vector | [MakeMoveVector](#sui-types-MakeMoveVector) |  | `forall T: Vec&lt;T&gt; -&gt; vector&lt;T&gt;` Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified. |
+| upgrade | [Upgrade](#sui-types-Upgrade) |  | Upgrades a Move package Takes (in order): 1. A vector of serialized modules for the package. 2. A vector of object ids for the transitive dependencies of the new package. 3. The object ID of the package being upgraded. 4. An argument holding the `UpgradeTicket` that must have been produced from an earlier command in the same programmable transaction. |
 
 
 
@@ -1116,24 +1207,24 @@ Defaults to `false` if not included |
 <a name="sui-types-CommandArgumentError"></a>
 
 ### CommandArgumentError
-
+An error with an argument to a command
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| argument | [uint32](#uint32) | optional |  |
+| argument | [uint32](#uint32) | optional | Required. Position of the problematic argument |
 | type_mismatch | [google.protobuf.Empty](#google-protobuf-Empty) |  | The type of the value does not match the expected type |
 | invalid_bcs_bytes | [google.protobuf.Empty](#google-protobuf-Empty) |  | The argument cannot be deserialized into a value of the specified type |
 | invalid_usage_of_pure_argument | [google.protobuf.Empty](#google-protobuf-Empty) |  | The argument cannot be instantiated from raw bytes |
-| invalid_argument_to_private_entry_function | [google.protobuf.Empty](#google-protobuf-Empty) |  | Invalid argument to private entry function. / Private entry functions cannot take arguments from other Move functions. |
+| invalid_argument_to_private_entry_function | [google.protobuf.Empty](#google-protobuf-Empty) |  | Invalid argument to private entry function. Private entry functions cannot take arguments from other Move functions. |
 | index_out_of_bounds | [uint32](#uint32) |  | Out of bounds access to input or results |
 | secondary_index_out_of_bounds | [NestedResult](#sui-types-NestedResult) |  | Out of bounds access to subresult |
-| invalid_result_arity | [uint32](#uint32) |  | Invalid usage of result. / Expected a single result but found either no return value or multiple. |
-| invalid_gas_coin_usage | [google.protobuf.Empty](#google-protobuf-Empty) |  | Invalid usage of Gas coin. / The Gas coin can only be used by-value with a TransferObjects command. |
+| invalid_result_arity | [uint32](#uint32) |  | Invalid usage of result. Expected a single result but found either no return value or multiple. |
+| invalid_gas_coin_usage | [google.protobuf.Empty](#google-protobuf-Empty) |  | Invalid usage of Gas coin. The Gas coin can only be used by-value with a TransferObjects command. |
 | invalid_value_usage | [google.protobuf.Empty](#google-protobuf-Empty) |  | Invalid usage of move value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again. |
 | invalid_object_by_value | [google.protobuf.Empty](#google-protobuf-Empty) |  | Immutable objects cannot be passed by-value. |
 | invalid_object_by_mut_ref | [google.protobuf.Empty](#google-protobuf-Empty) |  | Immutable objects cannot be passed by mutable reference, &amp;mut. |
-| shared_object_operation_not_allowed | [google.protobuf.Empty](#google-protobuf-Empty) |  | Shared object operations such a wrapping, freezing, or converting to owned are not / allowed. |
+| shared_object_operation_not_allowed | [google.protobuf.Empty](#google-protobuf-Empty) |  | Shared object operations such a wrapping, freezing, or converting to owned are not allowed. |
 
 
 
@@ -1143,12 +1234,12 @@ Defaults to `false` if not included |
 <a name="sui-types-CongestedObjectsError"></a>
 
 ### CongestedObjectsError
-
+Set of objects that were congested, leading to the transaction&#39;s cancellation
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| congested_objects | [ObjectId](#sui-types-ObjectId) | repeated |  |
+| congested_objects | [ObjectId](#sui-types-ObjectId) | repeated | Set of congested objects |
 
 
 
@@ -1158,17 +1249,31 @@ Defaults to `false` if not included |
 <a name="sui-types-ConsensusCommitPrologue"></a>
 
 ### ConsensusCommitPrologue
+Consensus commit prologue system transaction
 
+This message can represent V1, V2, and V3 prologue types.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| epoch | [uint64](#uint64) | optional |  |
-| round | [uint64](#uint64) | optional |  |
-| commit_timestamp_ms | [uint64](#uint64) | optional |  |
-| consensus_commit_digest | [Digest](#sui-types-Digest) | optional |  |
-| sub_dag_index | [uint64](#uint64) | optional |  |
-| consensus_determined_version_assignments | [ConsensusDeterminedVersionAssignments](#sui-types-ConsensusDeterminedVersionAssignments) | optional |  |
+| epoch | [uint64](#uint64) | optional | Epoch of the commit prologue transaction
+
+Present in V1, V2, and V3 |
+| round | [uint64](#uint64) | optional | Consensus round of the commit
+
+Present in V1, V2, and V3 |
+| commit_timestamp_ms | [uint64](#uint64) | optional | Unix timestamp from consensus
+
+Present in V1, V2, and V3 |
+| consensus_commit_digest | [Digest](#sui-types-Digest) | optional | Digest of consensus output
+
+Present in V2 and V3. |
+| sub_dag_index | [uint64](#uint64) | optional | The sub DAG index of the consensus commit. This field will be populated if there are multiple consensus commits per round.
+
+Present in V3. |
+| consensus_determined_version_assignments | [ConsensusDeterminedVersionAssignments](#sui-types-ConsensusDeterminedVersionAssignments) | optional | Stores consensus handler determined shared object version assignments.
+
+Present in V3. |
 
 
 
@@ -1178,12 +1283,12 @@ Defaults to `false` if not included |
 <a name="sui-types-ConsensusDeterminedVersionAssignments"></a>
 
 ### ConsensusDeterminedVersionAssignments
-
+Version assignments performed by consensus
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| cancelled_transactions | [CancelledTransactions](#sui-types-CancelledTransactions) |  |  |
+| cancelled_transactions | [CancelledTransactions](#sui-types-CancelledTransactions) |  | Cancelled transaction version assignment. |
 
 
 
@@ -1193,12 +1298,12 @@ Defaults to `false` if not included |
 <a name="sui-types-Digest"></a>
 
 ### Digest
-
+32-byte output of hashing a Sui structure using the Blake2b256 hash function.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| digest | [bytes](#bytes) | optional |  |
+| digest | [bytes](#bytes) | optional | Required. 32-byte hash |
 
 
 
@@ -1208,14 +1313,14 @@ Defaults to `false` if not included |
 <a name="sui-types-EndOfEpochData"></a>
 
 ### EndOfEpochData
-
+Data, which when included in a `CheckpointSummary`, signals the end of an `Epoch`.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| next_epoch_committee | [ValidatorCommitteeMember](#sui-types-ValidatorCommitteeMember) | repeated |  |
-| next_epoch_protocol_version | [uint64](#uint64) | optional |  |
-| epoch_commitments | [CheckpointCommitment](#sui-types-CheckpointCommitment) | repeated |  |
+| next_epoch_committee | [ValidatorCommitteeMember](#sui-types-ValidatorCommitteeMember) | repeated | The set of Validators that will be in the ValidatorCommittee for the next epoch. |
+| next_epoch_protocol_version | [uint64](#uint64) | optional | The protocol version that is in effect during the next epoch. |
+| epoch_commitments | [CheckpointCommitment](#sui-types-CheckpointCommitment) | repeated | Commitments to epoch specific state (e.g. live object set) |
 
 
 
@@ -1225,7 +1330,8 @@ Defaults to `false` if not included |
 <a name="sui-types-EndOfEpochTransaction"></a>
 
 ### EndOfEpochTransaction
-
+Set of operations run at the end of the epoch to close out the current epoch
+and start the next one.
 
 
 | Field | Type | Label | Description |
@@ -1240,18 +1346,18 @@ Defaults to `false` if not included |
 <a name="sui-types-EndOfEpochTransactionKind"></a>
 
 ### EndOfEpochTransactionKind
-
+Operation run at the end of an epoch
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| change_epoch | [ChangeEpoch](#sui-types-ChangeEpoch) |  |  |
-| authenticator_state_expire | [AuthenticatorStateExpire](#sui-types-AuthenticatorStateExpire) |  |  |
-| authenticator_state_create | [google.protobuf.Empty](#google-protobuf-Empty) |  | Use higher field numbers for kinds which happen infrequently |
-| randomness_state_create | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
-| deny_list_state_create | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
-| bridge_state_create | [Digest](#sui-types-Digest) |  |  |
-| bridge_committee_init | [uint64](#uint64) |  |  |
+| change_epoch | [ChangeEpoch](#sui-types-ChangeEpoch) |  | End the epoch and start the next one |
+| authenticator_state_expire | [AuthenticatorStateExpire](#sui-types-AuthenticatorStateExpire) |  | Expire JWKs used for zklogin |
+| authenticator_state_create | [google.protobuf.Empty](#google-protobuf-Empty) |  | Create and initialize the authenticator object used for zklogin |
+| randomness_state_create | [google.protobuf.Empty](#google-protobuf-Empty) |  | Create and initialize the randomness object |
+| deny_list_state_create | [google.protobuf.Empty](#google-protobuf-Empty) |  | Create and initialize the deny list object |
+| bridge_state_create | [Digest](#sui-types-Digest) |  | Create and initialize the bridge object |
+| bridge_committee_init | [uint64](#uint64) |  | Initialize the bridge committee |
 
 
 
@@ -1261,16 +1367,16 @@ Defaults to `false` if not included |
 <a name="sui-types-Event"></a>
 
 ### Event
-
+An event
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| package_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| module | [Identifier](#sui-types-Identifier) | optional |  |
-| sender | [Address](#sui-types-Address) | optional |  |
-| event_type | [StructTag](#sui-types-StructTag) | optional |  |
-| contents | [bytes](#bytes) | optional |  |
+| package_id | [ObjectId](#sui-types-ObjectId) | optional | Package id of the top-level function invoked by a MoveCall command which triggered this event to be emitted. |
+| module | [Identifier](#sui-types-Identifier) | optional | Module name of the top-level function invoked by a MoveCall command which triggered this event to be emitted. |
+| sender | [Address](#sui-types-Address) | optional | Address of the account that sent the transaction where this event was emitted. |
+| event_type | [StructTag](#sui-types-StructTag) | optional | The type of the event emitted |
+| contents | [bytes](#bytes) | optional | BCS serialized bytes of the event |
 
 
 
@@ -1280,13 +1386,13 @@ Defaults to `false` if not included |
 <a name="sui-types-ExecutionStatus"></a>
 
 ### ExecutionStatus
-
+The status of an executed Transaction
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| success | [bool](#bool) | optional |  |
-| status | [FailureStatus](#sui-types-FailureStatus) | optional |  |
+| success | [bool](#bool) | optional | Required. Indicates if the transaction was successful or not. |
+| status | [FailureStatus](#sui-types-FailureStatus) | optional | Optional. The error if `success` if false |
 
 
 
@@ -1296,12 +1402,12 @@ Defaults to `false` if not included |
 <a name="sui-types-FailureStatus"></a>
 
 ### FailureStatus
-
+An error that can occur during the execution of a transaction
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| command | [uint64](#uint64) | optional |  |
+| command | [uint64](#uint64) | optional | The command, if any, during which the error occurred. |
 | insufficient_gas | [google.protobuf.Empty](#google-protobuf-Empty) |  | Insufficient Gas |
 | invalid_gas_object | [google.protobuf.Empty](#google-protobuf-Empty) |  | Invalid Gas Object. |
 | invariant_violation | [google.protobuf.Empty](#google-protobuf-Empty) |  | Invariant Violation |
@@ -1311,34 +1417,36 @@ Defaults to `false` if not included |
 | circular_object_ownership | [ObjectId](#sui-types-ObjectId) |  | Circular Object Ownership |
 | insufficient_coin_balance | [google.protobuf.Empty](#google-protobuf-Empty) |  | Coin errors
 
-/ Insufficient coin balance for requested operation |
+Insufficient coin balance for requested operation |
 | coin_balance_overflow | [google.protobuf.Empty](#google-protobuf-Empty) |  | Coin balance overflowed an u64 |
 | publish_error_non_zero_address | [google.protobuf.Empty](#google-protobuf-Empty) |  | Publish/Upgrade errors
 
-/ Publish Error, Non-zero Address. / The modules in the package must have their self-addresses set to zero. |
+Publish Error, Non-zero Address. The modules in the package must have their self-addresses set to zero. |
 | sui_move_verification_error | [google.protobuf.Empty](#google-protobuf-Empty) |  | Sui Move Bytecode Verification Error. |
 | move_primitive_runtime_error | [MoveError](#sui-types-MoveError) |  | MoveVm Errors
 
-/ Error from a non-abort instruction. / Possible causes: / Arithmetic error, stack overflow, max value depth, etc.&#34; |
+Error from a non-abort instruction. Possible causes: Arithmetic error, stack overflow, max value depth, etc.&#34; |
 | move_abort | [MoveError](#sui-types-MoveError) |  | Move runtime abort |
 | vm_verification_or_deserialization_error | [google.protobuf.Empty](#google-protobuf-Empty) |  | Bytecode verification error. |
 | vm_invariant_violation | [google.protobuf.Empty](#google-protobuf-Empty) |  | MoveVm invariant violation |
 | function_not_found | [google.protobuf.Empty](#google-protobuf-Empty) |  | Programmable Transaction Errors
 
-/ Function not found |
-| arity_mismatch | [google.protobuf.Empty](#google-protobuf-Empty) |  | Arity mismatch for Move function. / The number of arguments does not match the number of parameters |
-| type_arity_mismatch | [google.protobuf.Empty](#google-protobuf-Empty) |  | Type arity mismatch for Move function. / Mismatch between the number of actual versus expected type arguments. |
+Function not found |
+| arity_mismatch | [google.protobuf.Empty](#google-protobuf-Empty) |  | Arity mismatch for Move function. The number of arguments does not match the number of parameters |
+| type_arity_mismatch | [google.protobuf.Empty](#google-protobuf-Empty) |  | Type arity mismatch for Move function. Mismatch between the number of actual versus expected type arguments. |
 | non_entry_function_invoked | [google.protobuf.Empty](#google-protobuf-Empty) |  | Non Entry Function Invoked. Move Call must start with an entry function. |
 | command_argument_error | [CommandArgumentError](#sui-types-CommandArgumentError) |  | Invalid command argument |
 | type_argument_error | [TypeArgumentError](#sui-types-TypeArgumentError) |  | Type argument error |
 | unused_value_without_drop | [NestedResult](#sui-types-NestedResult) |  | Unused result without the drop ability. |
-| invalid_public_function_return_type | [uint32](#uint32) |  | Invalid public Move function signature. / Unsupported return type for return value |
+| invalid_public_function_return_type | [uint32](#uint32) |  | Invalid public Move function signature. Unsupported return type for return value |
 | invalid_transfer_object | [google.protobuf.Empty](#google-protobuf-Empty) |  | Invalid Transfer Object, object does not have public transfer. |
 | effects_too_large | [SizeError](#sui-types-SizeError) |  | Post-execution errors
 
-/ Effects from the transaction are too large |
+Effects from the transaction are too large |
 | publish_upgrade_missing_dependency | [google.protobuf.Empty](#google-protobuf-Empty) |  | Publish or Upgrade is missing dependency |
-| publish_upgrade_dependency_downgrade | [google.protobuf.Empty](#google-protobuf-Empty) |  | Publish or Upgrade dependency downgrade. / / Indirect (transitive) dependency of published or upgraded package has been assigned an / on-chain version that is less than the version required by one of the package&#39;s / transitive dependencies. |
+| publish_upgrade_dependency_downgrade | [google.protobuf.Empty](#google-protobuf-Empty) |  | Publish or Upgrade dependency downgrade.
+
+Indirect (transitive) dependency of published or upgraded package has been assigned an on-chain version that is less than the version required by one of the package&#39;s transitive dependencies. |
 | package_upgrade_error | [PackageUpgradeError](#sui-types-PackageUpgradeError) |  | Invalid package upgrade |
 | written_objects_too_large | [SizeError](#sui-types-SizeError) |  | Indicates the transaction tried to write objects too large to storage |
 | certificate_denied | [google.protobuf.Empty](#google-protobuf-Empty) |  | Certificate is on the deny list |
@@ -1358,15 +1466,38 @@ Defaults to `false` if not included |
 <a name="sui-types-GasCostSummary"></a>
 
 ### GasCostSummary
+Summary of gas charges.
 
+Storage is charged independently of computation.
+There are 3 parts to the storage charges:
+`storage_cost`: it is the charge of storage at the time the transaction is executed.
+                The cost of storage is the number of bytes of the objects being mutated
+                multiplied by a variable storage cost per byte
+`storage_rebate`: this is the amount a user gets back when manipulating an object.
+                  The `storage_rebate` is the `storage_cost` for an object minus fees.
+`non_refundable_storage_fee`: not all the value of the object storage cost is
+                              given back to user and there is a small fraction that
+                              is kept by the system. This value tracks that charge.
+
+When looking at a gas cost summary the amount charged to the user is
+`computation_cost &#43; storage_cost - storage_rebate`
+and that is the amount that is deducted from the gas coins.
+`non_refundable_storage_fee` is collected from the objects being mutated/deleted
+and it is tracked by the system in storage funds.
+
+Objects deleted, including the older versions of objects mutated, have the storage field
+on the objects added up to a pool of &#34;potential rebate&#34;. This rebate then is reduced
+by the &#34;nonrefundable rate&#34; such that:
+`potential_rebate(storage cost of deleted/mutated objects) =
+storage_rebate &#43; non_refundable_storage_fee`
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| computation_cost | [uint64](#uint64) | optional |  |
-| storage_cost | [uint64](#uint64) | optional |  |
-| storage_rebate | [uint64](#uint64) | optional |  |
-| non_refundable_storage_fee | [uint64](#uint64) | optional |  |
+| computation_cost | [uint64](#uint64) | optional | Cost of computation/execution |
+| storage_cost | [uint64](#uint64) | optional | Storage cost, it&#39;s the sum of all storage cost for all objects created or mutated. |
+| storage_rebate | [uint64](#uint64) | optional | The amount of storage cost refunded to the user for all objects deleted or mutated in the transaction. |
+| non_refundable_storage_fee | [uint64](#uint64) | optional | The fee for the rebate. The portion of the storage rebate kept by the system. |
 
 
 
@@ -1376,15 +1507,17 @@ Defaults to `false` if not included |
 <a name="sui-types-GasPayment"></a>
 
 ### GasPayment
-
+Payment information for executing a transaction
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| objects | [ObjectReference](#sui-types-ObjectReference) | repeated |  |
-| owner | [Address](#sui-types-Address) | optional |  |
-| price | [uint64](#uint64) | optional |  |
-| budget | [uint64](#uint64) | optional |  |
+| objects | [ObjectReference](#sui-types-ObjectReference) | repeated | Set of gas objects to use for payment |
+| owner | [Address](#sui-types-Address) | optional | Owner of the gas objects, either the transaction sender or a sponsor |
+| price | [uint64](#uint64) | optional | Gas unit price to use when charging for computation
+
+Must be greater-than-or-equal-to the network&#39;s current RGP (reference gas price) |
+| budget | [uint64](#uint64) | optional | Total budget willing to spend for the execution of a transaction |
 
 
 
@@ -1394,7 +1527,7 @@ Defaults to `false` if not included |
 <a name="sui-types-GenesisObject"></a>
 
 ### GenesisObject
-
+An object part of the initial chain state
 
 
 | Field | Type | Label | Description |
@@ -1412,12 +1545,12 @@ Defaults to `false` if not included |
 <a name="sui-types-GenesisTransaction"></a>
 
 ### GenesisTransaction
-
+The genesis transaction
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| objects | [GenesisObject](#sui-types-GenesisObject) | repeated |  |
+| objects | [GenesisObject](#sui-types-GenesisObject) | repeated | Set of genesis objects |
 
 
 
@@ -1427,12 +1560,12 @@ Defaults to `false` if not included |
 <a name="sui-types-I128"></a>
 
 ### I128
-Little-endian encoded i128
+A signed 128-bit integer encoded in little-endian using 16-bytes.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| bytes | [bytes](#bytes) | optional |  |
+| bytes | [bytes](#bytes) | optional | Required. 16-byte little-endian bytes |
 
 
 
@@ -1442,7 +1575,15 @@ Little-endian encoded i128
 <a name="sui-types-Identifier"></a>
 
 ### Identifier
+A move identifier
 
+Identifiers are only valid if they conform to the following ABNF:
+
+```text
+identifier = (ALPHA *127(ALPHA / DIGIT / UNDERSCORE)) /
+             (UNDERSCORE 1*127(ALPHA / DIGIT / UNDERSCORE))
+UNDERSCORE = %x95
+```
 
 
 | Field | Type | Label | Description |
@@ -1457,15 +1598,17 @@ Little-endian encoded i128
 <a name="sui-types-Input"></a>
 
 ### Input
-
+An input to a user transaction
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| pure | [bytes](#bytes) |  |  |
-| immutable_or_owned | [ObjectReference](#sui-types-ObjectReference) |  |  |
-| shared | [SharedObjectInput](#sui-types-SharedObjectInput) |  |  |
-| receiving | [ObjectReference](#sui-types-ObjectReference) |  |  |
+| pure | [bytes](#bytes) |  | A move value serialized as BCS.
+
+For normal operations this is required to be a move primitive type and not contain structs or objects. |
+| immutable_or_owned | [ObjectReference](#sui-types-ObjectReference) |  | A move object that is either immutable or address owned |
+| shared | [SharedObjectInput](#sui-types-SharedObjectInput) |  | A move object whose owner is &#34;Shared&#34; |
+| receiving | [ObjectReference](#sui-types-ObjectReference) |  | A move object that is attempted to be received in this transaction. |
 
 
 
@@ -1475,7 +1618,11 @@ Little-endian encoded i128
 <a name="sui-types-Jwk"></a>
 
 ### Jwk
+A JSON Web Key
 
+Struct that contains info for a JWK. A list of them for different kids can
+be retrieved from the JWK endpoint (e.g. &lt;https://www.googleapis.com/oauth2/v3/certs&gt;).
+The JWK is used to verify the JWT token.
 
 
 | Field | Type | Label | Description |
@@ -1493,13 +1640,13 @@ Little-endian encoded i128
 <a name="sui-types-JwkId"></a>
 
 ### JwkId
-
+Key to uniquely identify a JWK
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| iss | [string](#string) | optional |  |
-| kid | [string](#string) | optional |  |
+| iss | [string](#string) | optional | The issuer or identity of the OIDC provider. |
+| kid | [string](#string) | optional | A key id use to uniquely identify a key from an OIDC provider. |
 
 
 
@@ -1509,13 +1656,15 @@ Little-endian encoded i128
 <a name="sui-types-MakeMoveVector"></a>
 
 ### MakeMoveVector
-
+Command to build a move vector out of a set of individual elements
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| element_type | [TypeTag](#sui-types-TypeTag) | optional |  |
-| elements | [Argument](#sui-types-Argument) | repeated |  |
+| element_type | [TypeTag](#sui-types-TypeTag) | optional | Type of the individual elements
+
+This is required to be set when the type can&#39;t be inferred, for example when the set of provided arguments are all pure input values. |
+| elements | [Argument](#sui-types-Argument) | repeated | The set individual elements to build the vector with |
 
 
 
@@ -1525,13 +1674,15 @@ Little-endian encoded i128
 <a name="sui-types-MergeCoins"></a>
 
 ### MergeCoins
-
+Command to merge multiple coins of the same type into a single coin
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| coin | [Argument](#sui-types-Argument) | optional |  |
-| coins_to_merge | [Argument](#sui-types-Argument) | repeated |  |
+| coin | [Argument](#sui-types-Argument) | optional | Coin to merge coins into |
+| coins_to_merge | [Argument](#sui-types-Argument) | repeated | Set of coins to merge into `coin`
+
+All listed coins must be of the same type and be the same type as `coin` |
 
 
 
@@ -1541,13 +1692,13 @@ Little-endian encoded i128
 <a name="sui-types-ModifiedAtVersion"></a>
 
 ### ModifiedAtVersion
-
+Indicates that an Object was modified at a specific version
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| version | [uint64](#uint64) | optional |  |
+| object_id | [ObjectId](#sui-types-ObjectId) | optional | Required. ObjectId of the object |
+| version | [uint64](#uint64) | optional | Required. Version of the object prior to this transaction |
 
 
 
@@ -1557,16 +1708,19 @@ Little-endian encoded i128
 <a name="sui-types-MoveCall"></a>
 
 ### MoveCall
+Command to call a move function
 
+Functions that can be called by a `MoveCall` command are those that have a function signature
+that is either `entry` or `public` (which don&#39;t have a reference return type).
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| package | [ObjectId](#sui-types-ObjectId) | optional |  |
-| module | [Identifier](#sui-types-Identifier) | optional |  |
-| function | [Identifier](#sui-types-Identifier) | optional |  |
-| type_arguments | [TypeTag](#sui-types-TypeTag) | repeated |  |
-| arguments | [Argument](#sui-types-Argument) | repeated |  |
+| package | [ObjectId](#sui-types-ObjectId) | optional | The package containing the module and function. |
+| module | [Identifier](#sui-types-Identifier) | optional | The specific module in the package containing the function. |
+| function | [Identifier](#sui-types-Identifier) | optional | The function to be called. |
+| type_arguments | [TypeTag](#sui-types-TypeTag) | repeated | The type arguments to the function. |
+| arguments | [Argument](#sui-types-Argument) | repeated | The arguments to the function. |
 
 
 
@@ -1576,13 +1730,13 @@ Little-endian encoded i128
 <a name="sui-types-MoveError"></a>
 
 ### MoveError
-
+Error the occurred in move
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| location | [MoveLocation](#sui-types-MoveLocation) | optional |  |
-| abort_code | [uint64](#uint64) | optional |  |
+| location | [MoveLocation](#sui-types-MoveLocation) | optional | location in move where the error occurred |
+| abort_code | [uint64](#uint64) | optional | abort code from move |
 
 
 
@@ -1608,16 +1762,16 @@ Little-endian encoded i128
 <a name="sui-types-MoveLocation"></a>
 
 ### MoveLocation
-
+Location in move bytecode where an error occurred
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| package | [ObjectId](#sui-types-ObjectId) | optional |  |
-| module | [Identifier](#sui-types-Identifier) | optional |  |
-| function | [uint32](#uint32) | optional |  |
-| instruction | [uint32](#uint32) | optional |  |
-| function_name | [Identifier](#sui-types-Identifier) | optional |  |
+| package | [ObjectId](#sui-types-ObjectId) | optional | Required. The package id |
+| module | [Identifier](#sui-types-Identifier) | optional | Required. The module name |
+| function | [uint32](#uint32) | optional | Required. The function index |
+| instruction | [uint32](#uint32) | optional | Required. Offset of the instruction where the error occurred. |
+| function_name | [Identifier](#sui-types-Identifier) | optional | Optional. The name of the function if available |
 
 
 
@@ -1627,13 +1781,13 @@ Little-endian encoded i128
 <a name="sui-types-MoveModule"></a>
 
 ### MoveModule
-
+Module defined by a package
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| name | [Identifier](#sui-types-Identifier) | optional |  |
-| contents | [bytes](#bytes) | optional |  |
+| name | [Identifier](#sui-types-Identifier) | optional | Name of the module |
+| contents | [bytes](#bytes) | optional | Serialized bytecode of the module |
 
 
 
@@ -1643,16 +1797,16 @@ Little-endian encoded i128
 <a name="sui-types-MovePackage"></a>
 
 ### MovePackage
-
+A move package
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| version | [uint64](#uint64) | optional |  |
-| modules | [MoveModule](#sui-types-MoveModule) | repeated |  |
-| type_origin_table | [TypeOrigin](#sui-types-TypeOrigin) | repeated |  |
-| linkage_table | [UpgradeInfo](#sui-types-UpgradeInfo) | repeated |  |
+| id | [ObjectId](#sui-types-ObjectId) | optional | Address or Id of this package |
+| version | [uint64](#uint64) | optional | Version of the package |
+| modules | [MoveModule](#sui-types-MoveModule) | repeated | Set of modules defined by this package |
+| type_origin_table | [TypeOrigin](#sui-types-TypeOrigin) | repeated | Maps struct/module to a package version where it was first defined, stored as a vector for simple serialization and deserialization. |
+| linkage_table | [UpgradeInfo](#sui-types-UpgradeInfo) | repeated | For each dependency, maps original package ID to the info about the (upgraded) dependency version that this package is using |
 
 
 
@@ -1662,16 +1816,16 @@ Little-endian encoded i128
 <a name="sui-types-MoveStruct"></a>
 
 ### MoveStruct
-
+A move struct
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| object_type | [StructTag](#sui-types-StructTag) | optional |  |
-| has_public_transfer | [bool](#bool) | optional |  |
-| version | [uint64](#uint64) | optional |  |
-| contents | [bytes](#bytes) | optional |  |
+| object_id | [ObjectId](#sui-types-ObjectId) | optional | ObjectId for this object |
+| object_type | [StructTag](#sui-types-StructTag) | optional | The type of this object |
+| has_public_transfer | [bool](#bool) | optional | DEPRECATED this field is no longer used to determine whether a tx can transfer this object. Instead, it is always calculated from the objects type when loaded in execution |
+| version | [uint64](#uint64) | optional | Version of the object |
+| contents | [bytes](#bytes) | optional | BCS bytes of a Move struct value |
 
 
 
@@ -1756,15 +1910,17 @@ Little-endian encoded i128
 <a name="sui-types-MultisigAggregatedSignature"></a>
 
 ### MultisigAggregatedSignature
-
+Aggregated signature from members of a multisig committee.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| signatures | [MultisigMemberSignature](#sui-types-MultisigMemberSignature) | repeated |  |
-| bitmap | [uint32](#uint32) | optional |  |
-| legacy_bitmap | [RoaringBitmap](#sui-types-RoaringBitmap) | optional |  |
-| committee | [MultisigCommittee](#sui-types-MultisigCommittee) | optional |  |
+| signatures | [MultisigMemberSignature](#sui-types-MultisigMemberSignature) | repeated | The plain signatures encoded with signature scheme.
+
+The signatures must be in the same order as they are listed in the committee. |
+| bitmap | [uint32](#uint32) | optional | Required. Bitmap indicating which committee members contributed to the signature. |
+| legacy_bitmap | [RoaringBitmap](#sui-types-RoaringBitmap) | optional | Optional. If present, means this signature&#39;s onchain format uses the old legacy multisig format |
+| committee | [MultisigCommittee](#sui-types-MultisigCommittee) | optional | Required. The committee to use to validate this signature |
 
 
 
@@ -1774,13 +1930,13 @@ Little-endian encoded i128
 <a name="sui-types-MultisigCommittee"></a>
 
 ### MultisigCommittee
-
+A multisig committee
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| members | [MultisigMember](#sui-types-MultisigMember) | repeated |  |
-| threshold | [uint32](#uint32) | optional |  |
+| members | [MultisigMember](#sui-types-MultisigMember) | repeated | A list of committee members and their corresponding weight. |
+| threshold | [uint32](#uint32) | optional | Required. The threshold of signatures needed to validate a signature from this committee. |
 
 
 
@@ -1790,13 +1946,13 @@ Little-endian encoded i128
 <a name="sui-types-MultisigMember"></a>
 
 ### MultisigMember
-
+A member in a multisig committee
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| public_key | [MultisigMemberPublicKey](#sui-types-MultisigMemberPublicKey) | optional |  |
-| weight | [uint32](#uint32) | optional |  |
+| public_key | [MultisigMemberPublicKey](#sui-types-MultisigMemberPublicKey) | optional | Required. The public key of the committee member |
+| weight | [uint32](#uint32) | optional | Required. The weight of this member&#39;s signature |
 
 
 
@@ -1806,15 +1962,15 @@ Little-endian encoded i128
 <a name="sui-types-MultisigMemberPublicKey"></a>
 
 ### MultisigMemberPublicKey
-
+Set of valid public keys for multisig committee members
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| ed25519 | [bytes](#bytes) |  |  |
-| secp256k1 | [bytes](#bytes) |  |  |
-| secp256r1 | [bytes](#bytes) |  |  |
-| zklogin | [ZkLoginPublicIdentifier](#sui-types-ZkLoginPublicIdentifier) |  |  |
+| ed25519 | [bytes](#bytes) |  | An ed25519 public key |
+| secp256k1 | [bytes](#bytes) |  | A secp256k1 public key |
+| secp256r1 | [bytes](#bytes) |  | A secp256r1 public key |
+| zklogin | [ZkLoginPublicIdentifier](#sui-types-ZkLoginPublicIdentifier) |  | A zklogin public identifier |
 
 
 
@@ -1824,15 +1980,15 @@ Little-endian encoded i128
 <a name="sui-types-MultisigMemberSignature"></a>
 
 ### MultisigMemberSignature
-
+A signature from a member of a multisig committee.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| ed25519 | [bytes](#bytes) |  |  |
-| secp256k1 | [bytes](#bytes) |  |  |
-| secp256r1 | [bytes](#bytes) |  |  |
-| zklogin | [ZkLoginAuthenticator](#sui-types-ZkLoginAuthenticator) |  |  |
+| ed25519 | [bytes](#bytes) |  | An ed25519 signature |
+| secp256k1 | [bytes](#bytes) |  | A secp256k1 signature |
+| secp256r1 | [bytes](#bytes) |  | A secp256r1 signature |
+| zklogin | [ZkLoginAuthenticator](#sui-types-ZkLoginAuthenticator) |  | A zklogin signature |
 
 
 
@@ -1842,13 +1998,13 @@ Little-endian encoded i128
 <a name="sui-types-NestedResult"></a>
 
 ### NestedResult
-
+An argument type for a nested result
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| result | [uint32](#uint32) | optional |  |
-| subresult | [uint32](#uint32) | optional |  |
+| result | [uint32](#uint32) | optional | The command index |
+| subresult | [uint32](#uint32) | optional | The index into the command&#39;s output |
 
 
 
@@ -1858,17 +2014,17 @@ Little-endian encoded i128
 <a name="sui-types-Object"></a>
 
 ### Object
-
+An object on the sui blockchain
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| version | [uint64](#uint64) | optional |  |
-| owner | [Owner](#sui-types-Owner) | optional |  |
+| object_id | [ObjectId](#sui-types-ObjectId) | optional | ObjectId for this object |
+| version | [uint64](#uint64) | optional | Version of the object |
+| owner | [Owner](#sui-types-Owner) | optional | Owner of the object |
 | object | [ObjectData](#sui-types-ObjectData) | optional |  |
-| previous_transaction | [Digest](#sui-types-Digest) | optional |  |
-| storage_rebate | [uint64](#uint64) | optional |  |
+| previous_transaction | [Digest](#sui-types-Digest) | optional | The digest of the transaction that created or last mutated this object |
+| storage_rebate | [uint64](#uint64) | optional | The amount of SUI we would rebate if this object gets deleted. This number is re-calculated each time the object is mutated based on the present storage gas price. |
 
 
 
@@ -1878,7 +2034,7 @@ Little-endian encoded i128
 <a name="sui-types-ObjectData"></a>
 
 ### ObjectData
-
+Object data, either a package or struct
 
 
 | Field | Type | Label | Description |
@@ -1894,14 +2050,14 @@ Little-endian encoded i128
 <a name="sui-types-ObjectExist"></a>
 
 ### ObjectExist
-
+Information about the old version of the object
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| version | [uint64](#uint64) | optional |  |
-| digest | [Digest](#sui-types-Digest) | optional |  |
-| owner | [Owner](#sui-types-Owner) | optional |  |
+| version | [uint64](#uint64) | optional | Required. Version of the object |
+| digest | [Digest](#sui-types-Digest) | optional | Required. Digest of the object |
+| owner | [Owner](#sui-types-Owner) | optional | Required. Owner of the object |
 
 
 
@@ -1911,12 +2067,15 @@ Little-endian encoded i128
 <a name="sui-types-ObjectId"></a>
 
 ### ObjectId
+Unique identifier for an Object on the Sui blockchain.
 
+An `ObjectId` is a 32-byte identifier used to uniquely identify an object on the Sui
+blockchain.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [bytes](#bytes) | optional |  |
+| object_id | [bytes](#bytes) | optional | Required. 32-byte object-id |
 
 
 
@@ -1926,14 +2085,14 @@ Little-endian encoded i128
 <a name="sui-types-ObjectReference"></a>
 
 ### ObjectReference
-
+Reference to an object
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| version | [uint64](#uint64) | optional |  |
-| digest | [Digest](#sui-types-Digest) | optional |  |
+| object_id | [ObjectId](#sui-types-ObjectId) | optional | The object id of this object. |
+| version | [uint64](#uint64) | optional | The version of this object. |
+| digest | [Digest](#sui-types-Digest) | optional | The digest of this object. |
 
 
 
@@ -1943,13 +2102,13 @@ Little-endian encoded i128
 <a name="sui-types-ObjectReferenceWithOwner"></a>
 
 ### ObjectReferenceWithOwner
-
+An object reference with owner information
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| reference | [ObjectReference](#sui-types-ObjectReference) | optional |  |
-| owner | [Owner](#sui-types-Owner) | optional |  |
+| reference | [ObjectReference](#sui-types-ObjectReference) | optional | Required. ObjectReference |
+| owner | [Owner](#sui-types-Owner) | optional | Required. Owner |
 
 
 
@@ -1959,13 +2118,13 @@ Little-endian encoded i128
 <a name="sui-types-ObjectWrite"></a>
 
 ### ObjectWrite
-
+Object write, including all of mutated, created, unwrapped
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| digest | [Digest](#sui-types-Digest) | optional |  |
-| owner | [Owner](#sui-types-Owner) | optional |  |
+| digest | [Digest](#sui-types-Digest) | optional | Required. Digest of the new version of the object |
+| owner | [Owner](#sui-types-Owner) | optional | Required. Owner of the new version of the object |
 
 
 
@@ -1975,15 +2134,15 @@ Little-endian encoded i128
 <a name="sui-types-Owner"></a>
 
 ### Owner
-
+Enum of different types of ownership for an object.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| address | [Address](#sui-types-Address) |  |  |
-| object | [ObjectId](#sui-types-ObjectId) |  |  |
-| shared | [uint64](#uint64) |  |  |
-| immutable | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
+| address | [Address](#sui-types-Address) |  | Object is exclusively owned by a single address, and is mutable. |
+| object | [ObjectId](#sui-types-ObjectId) |  | Object is exclusively owned by a single object, and is mutable. |
+| shared | [uint64](#uint64) |  | Object is shared, can be used by any address, and is mutable. |
+| immutable | [google.protobuf.Empty](#google-protobuf-Empty) |  | Object is immutable, and hence ownership doesn&#39;t matter. |
 
 
 
@@ -1993,13 +2152,13 @@ Little-endian encoded i128
 <a name="sui-types-PackageIdDoesNotMatch"></a>
 
 ### PackageIdDoesNotMatch
-
+PackageId does not match PackageId in upgrade ticket
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| package_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| object_id | [ObjectId](#sui-types-ObjectId) | optional |  |
+| package_id | [ObjectId](#sui-types-ObjectId) | optional | Required. The package id |
+| ticket_id | [ObjectId](#sui-types-ObjectId) | optional | Required. The ticket id |
 
 
 
@@ -2009,17 +2168,17 @@ Little-endian encoded i128
 <a name="sui-types-PackageUpgradeError"></a>
 
 ### PackageUpgradeError
-
+An error with a upgrading a package
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| unable_to_fetch_package | [ObjectId](#sui-types-ObjectId) |  |  |
-| not_a_package | [ObjectId](#sui-types-ObjectId) |  |  |
-| incompatible_upgrade | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
-| digets_does_not_match | [Digest](#sui-types-Digest) |  |  |
-| unknown_upgrade_policy | [uint32](#uint32) |  |  |
-| package_id_does_not_match | [PackageIdDoesNotMatch](#sui-types-PackageIdDoesNotMatch) |  |  |
+| unable_to_fetch_package | [ObjectId](#sui-types-ObjectId) |  | Unable to fetch package |
+| not_a_package | [ObjectId](#sui-types-ObjectId) |  | Object is not a package |
+| incompatible_upgrade | [google.protobuf.Empty](#google-protobuf-Empty) |  | Package upgrade is incompatible with previous version |
+| digets_does_not_match | [Digest](#sui-types-Digest) |  | Digest in upgrade ticket and computed digest differ |
+| unknown_upgrade_policy | [uint32](#uint32) |  | Upgrade policy is not valid |
+| package_id_does_not_match | [PackageIdDoesNotMatch](#sui-types-PackageIdDoesNotMatch) |  | PackageId does not match PackageId in upgrade ticket |
 
 
 
@@ -2029,13 +2188,13 @@ Little-endian encoded i128
 <a name="sui-types-PackageWrite"></a>
 
 ### PackageWrite
-
+Package write
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| version | [uint64](#uint64) | optional |  |
-| digest | [Digest](#sui-types-Digest) | optional |  |
+| version | [uint64](#uint64) | optional | Version of the new package |
+| digest | [Digest](#sui-types-Digest) | optional | Required. Digest of the new package |
 
 
 
@@ -2045,14 +2204,23 @@ Little-endian encoded i128
 <a name="sui-types-PasskeyAuthenticator"></a>
 
 ### PasskeyAuthenticator
+A passkey authenticator.
 
+See this
+[documentation](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/struct.PasskeyAuthenticator.html#bcs)
+for more information on the requirements on the shape of the
+`client_data_json` field.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| authenticator_data | [bytes](#bytes) | optional |  |
-| client_data_json | [string](#string) | optional |  |
-| signature | [SimpleSignature](#sui-types-SimpleSignature) | optional |  |
+| authenticator_data | [bytes](#bytes) | optional | Required. Opaque authenticator data for this passkey signature.
+
+See [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) for more information on this field. |
+| client_data_json | [string](#string) | optional | Required. Structured, unparsed, JSON for this passkey signature.
+
+See [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata) for more information on this field. |
+| signature | [SimpleSignature](#sui-types-SimpleSignature) | optional | Required. A secp256r1 signature |
 
 
 
@@ -2062,13 +2230,16 @@ Little-endian encoded i128
 <a name="sui-types-ProgrammableTransaction"></a>
 
 ### ProgrammableTransaction
+A user transaction
 
+Contains a series of native commands and move calls where the results of one command can be
+used in future commands.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| inputs | [Input](#sui-types-Input) | repeated |  |
-| commands | [Command](#sui-types-Command) | repeated |  |
+| inputs | [Input](#sui-types-Input) | repeated | Input objects or primitive values |
+| commands | [Command](#sui-types-Command) | repeated | The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction. |
 
 
 
@@ -2078,13 +2249,13 @@ Little-endian encoded i128
 <a name="sui-types-Publish"></a>
 
 ### Publish
-
+Command to publish a new move package
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| modules | [bytes](#bytes) | repeated |  |
-| dependencies | [ObjectId](#sui-types-ObjectId) | repeated |  |
+| modules | [bytes](#bytes) | repeated | The serialized move modules |
+| dependencies | [ObjectId](#sui-types-ObjectId) | repeated | Set of packages that the to-be published package depends on |
 
 
 
@@ -2094,15 +2265,15 @@ Little-endian encoded i128
 <a name="sui-types-RandomnessStateUpdate"></a>
 
 ### RandomnessStateUpdate
-
+Randomness update
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| epoch | [uint64](#uint64) | optional |  |
-| randomness_round | [uint64](#uint64) | optional |  |
-| random_bytes | [bytes](#bytes) | optional |  |
-| randomness_object_initial_shared_version | [uint64](#uint64) | optional |  |
+| epoch | [uint64](#uint64) | optional | Epoch of the randomness state update transaction |
+| randomness_round | [uint64](#uint64) | optional | Randomness round of the update |
+| random_bytes | [bytes](#bytes) | optional | Updated random bytes |
+| randomness_object_initial_shared_version | [uint64](#uint64) | optional | The initial version of the randomness object that it was shared at. |
 
 
 
@@ -2112,13 +2283,13 @@ Little-endian encoded i128
 <a name="sui-types-ReadOnlyRoot"></a>
 
 ### ReadOnlyRoot
-
+Read-only shared object from the input.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| version | [uint64](#uint64) | optional |  |
-| digest | [Digest](#sui-types-Digest) | optional |  |
+| version | [uint64](#uint64) | optional | Required. Version of the shared object |
+| digest | [Digest](#sui-types-Digest) | optional | Required. Digest of the shared object |
 
 
 
@@ -2128,12 +2299,14 @@ Little-endian encoded i128
 <a name="sui-types-RoaringBitmap"></a>
 
 ### RoaringBitmap
-
+A RoaringBitmap. See
+[here](https://github.com/RoaringBitmap/RoaringFormatSpec) for the
+specification for the serialized format of RoaringBitmaps.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| bitmap | [bytes](#bytes) | optional |  |
+| bitmap | [bytes](#bytes) | optional | Required. Serialized RoaringBitmap |
 
 
 
@@ -2143,14 +2316,14 @@ Little-endian encoded i128
 <a name="sui-types-SharedObjectInput"></a>
 
 ### SharedObjectInput
-
+A shared object input
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| initial_shared_version | [uint64](#uint64) | optional |  |
-| mutable | [bool](#bool) | optional |  |
+| object_id | [ObjectId](#sui-types-ObjectId) | optional | ObjectId of the shared object |
+| initial_shared_version | [uint64](#uint64) | optional | Initial version of the object when it was shared |
+| mutable | [bool](#bool) | optional | Controls whether the caller asks for a mutable reference to the shared object. |
 
 
 
@@ -2160,14 +2333,17 @@ Little-endian encoded i128
 <a name="sui-types-SimpleSignature"></a>
 
 ### SimpleSignature
+A basic signature.
 
+Can either be an ed25519, secp256k1, or secp256r1 signature with
+corresponding public key.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| scheme | [SignatureScheme](#sui-types-SignatureScheme) | optional |  |
-| signature | [bytes](#bytes) | optional |  |
-| public_key | [bytes](#bytes) | optional |  |
+| scheme | [SignatureScheme](#sui-types-SignatureScheme) | optional | Required. Signature scheme of the signature and public key |
+| signature | [bytes](#bytes) | optional | Required. Signature bytes |
+| public_key | [bytes](#bytes) | optional | Required. Public key bytes |
 
 
 
@@ -2177,13 +2353,13 @@ Little-endian encoded i128
 <a name="sui-types-SizeError"></a>
 
 ### SizeError
-
+A size error
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| size | [uint64](#uint64) | optional |  |
-| max_size | [uint64](#uint64) | optional |  |
+| size | [uint64](#uint64) | optional | Required. The offending size |
+| max_size | [uint64](#uint64) | optional | Required. The maximum allowable size |
 
 
 
@@ -2193,13 +2369,13 @@ Little-endian encoded i128
 <a name="sui-types-SplitCoins"></a>
 
 ### SplitCoins
-
+Command to split a single coin object into multiple coins
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| coin | [Argument](#sui-types-Argument) | optional |  |
-| amounts | [Argument](#sui-types-Argument) | repeated |  |
+| coin | [Argument](#sui-types-Argument) | optional | The coin to split |
+| amounts | [Argument](#sui-types-Argument) | repeated | The amounts to split off |
 
 
 
@@ -2209,15 +2385,15 @@ Little-endian encoded i128
 <a name="sui-types-StructTag"></a>
 
 ### StructTag
-
+Type information for a move struct
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| address | [Address](#sui-types-Address) | optional |  |
-| module | [Identifier](#sui-types-Identifier) | optional |  |
-| name | [Identifier](#sui-types-Identifier) | optional |  |
-| type_parameters | [TypeTag](#sui-types-TypeTag) | repeated |  |
+| address | [Address](#sui-types-Address) | optional | Address of the package where this type was defined |
+| module | [Identifier](#sui-types-Identifier) | optional | Name of the module where this type was defined |
+| name | [Identifier](#sui-types-Identifier) | optional | Name of the type itself |
+| type_parameters | [TypeTag](#sui-types-TypeTag) | repeated | List of type parameters, if any |
 
 
 
@@ -2227,14 +2403,14 @@ Little-endian encoded i128
 <a name="sui-types-SystemPackage"></a>
 
 ### SystemPackage
-
+System package
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| version | [uint64](#uint64) | optional |  |
-| modules | [bytes](#bytes) | repeated |  |
-| dependencies | [ObjectId](#sui-types-ObjectId) | repeated |  |
+| version | [uint64](#uint64) | optional | Version of the package |
+| modules | [bytes](#bytes) | repeated | Move modules |
+| dependencies | [ObjectId](#sui-types-ObjectId) | repeated | Package dependencies |
 
 
 
@@ -2244,7 +2420,7 @@ Little-endian encoded i128
 <a name="sui-types-Transaction"></a>
 
 ### Transaction
-
+A transaction
 
 
 | Field | Type | Label | Description |
@@ -2259,7 +2435,7 @@ Little-endian encoded i128
 <a name="sui-types-Transaction-TransactionV1"></a>
 
 ### Transaction.TransactionV1
-
+Version 1 of Transaction
 
 
 | Field | Type | Label | Description |
@@ -2277,7 +2453,7 @@ Little-endian encoded i128
 <a name="sui-types-TransactionEffects"></a>
 
 ### TransactionEffects
-
+The output or effects of executing a transaction
 
 
 | Field | Type | Label | Description |
@@ -2293,25 +2469,25 @@ Little-endian encoded i128
 <a name="sui-types-TransactionEffectsV1"></a>
 
 ### TransactionEffectsV1
-
+Version 1 of TransactionEffects
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | status | [ExecutionStatus](#sui-types-ExecutionStatus) | optional | The status of the execution |
 | epoch | [uint64](#uint64) | optional | The epoch when this transaction was executed. |
-| gas_used | [GasCostSummary](#sui-types-GasCostSummary) | optional |  |
-| modified_at_versions | [ModifiedAtVersion](#sui-types-ModifiedAtVersion) | repeated | The version that every modified (mutated or deleted) object had before it was modified by / this transaction. |
+| gas_used | [GasCostSummary](#sui-types-GasCostSummary) | optional | The gas used by this transaction |
+| modified_at_versions | [ModifiedAtVersion](#sui-types-ModifiedAtVersion) | repeated | The version that every modified (mutated or deleted) object had before it was modified by this transaction. |
 | shared_objects | [ObjectReference](#sui-types-ObjectReference) | repeated | The object references of the shared objects used in this transaction. Empty if no shared objects were used. |
 | transaction_digest | [Digest](#sui-types-Digest) | optional | The transaction digest |
 | created | [ObjectReferenceWithOwner](#sui-types-ObjectReferenceWithOwner) | repeated | ObjectReference and owner of new objects created. |
 | mutated | [ObjectReferenceWithOwner](#sui-types-ObjectReferenceWithOwner) | repeated | ObjectReference and owner of mutated objects, including gas object. |
-| unwrapped | [ObjectReferenceWithOwner](#sui-types-ObjectReferenceWithOwner) | repeated | ObjectReference and owner of objects that are unwrapped in this transaction. / Unwrapped objects are objects that were wrapped into other objects in the past, / and just got extracted out. |
+| unwrapped | [ObjectReferenceWithOwner](#sui-types-ObjectReferenceWithOwner) | repeated | ObjectReference and owner of objects that are unwrapped in this transaction. Unwrapped objects are objects that were wrapped into other objects in the past, and just got extracted out. |
 | deleted | [ObjectReference](#sui-types-ObjectReference) | repeated | Object Refs of objects now deleted (the new refs). |
 | unwrapped_then_deleted | [ObjectReference](#sui-types-ObjectReference) | repeated | Object refs of objects previously wrapped in other objects but now deleted. |
 | wrapped | [ObjectReference](#sui-types-ObjectReference) | repeated | Object refs of objects now wrapped in other objects. |
-| gas_object | [ObjectReferenceWithOwner](#sui-types-ObjectReferenceWithOwner) | optional | The updated gas object reference. Have a dedicated field for convenient access. / It&#39;s also included in mutated. |
-| events_digest | [Digest](#sui-types-Digest) | optional | The digest of the events emitted during execution, / can be None if the transaction does not emit any event. |
+| gas_object | [ObjectReferenceWithOwner](#sui-types-ObjectReferenceWithOwner) | optional | The updated gas object reference. Have a dedicated field for convenient access. It&#39;s also included in mutated. |
+| events_digest | [Digest](#sui-types-Digest) | optional | The digest of the events emitted during execution, can be None if the transaction does not emit any event. |
 | dependencies | [Digest](#sui-types-Digest) | repeated | The set of transaction digests this transaction depends on. |
 
 
@@ -2322,22 +2498,22 @@ Little-endian encoded i128
 <a name="sui-types-TransactionEffectsV2"></a>
 
 ### TransactionEffectsV2
-
+Version 2 of TransactionEffects
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | status | [ExecutionStatus](#sui-types-ExecutionStatus) | optional | The status of the execution |
 | epoch | [uint64](#uint64) | optional | The epoch when this transaction was executed. |
-| gas_used | [GasCostSummary](#sui-types-GasCostSummary) | optional |  |
+| gas_used | [GasCostSummary](#sui-types-GasCostSummary) | optional | The gas used by this transaction |
 | transaction_digest | [Digest](#sui-types-Digest) | optional | The transaction digest |
-| gas_object_index | [uint32](#uint32) | optional | The updated gas object reference, as an index into the `changed_objects` vector. / Having a dedicated field for convenient access. / System transaction that don&#39;t require gas will leave this as None. |
-| events_digest | [Digest](#sui-types-Digest) | optional | The digest of the events emitted during execution, / can be None if the transaction does not emit any event. |
+| gas_object_index | [uint32](#uint32) | optional | The updated gas object reference, as an index into the `changed_objects` vector. Having a dedicated field for convenient access. System transaction that don&#39;t require gas will leave this as None. |
+| events_digest | [Digest](#sui-types-Digest) | optional | The digest of the events emitted during execution, can be None if the transaction does not emit any event. |
 | dependencies | [Digest](#sui-types-Digest) | repeated | The set of transaction digests this transaction depends on. |
 | lamport_version | [uint64](#uint64) | optional | The version number of all the written Move objects by this transaction. |
 | changed_objects | [ChangedObject](#sui-types-ChangedObject) | repeated | Objects whose state are changed in the object store. |
-| unchanged_shared_objects | [UnchangedSharedObject](#sui-types-UnchangedSharedObject) | repeated | Shared objects that are not mutated in this transaction. Unlike owned objects, / read-only shared objects&#39; version are not committed in the transaction, / and in order for a node to catch up and execute it without consensus sequencing, / the version needs to be committed in the effects. |
-| auxiliary_data_digest | [Digest](#sui-types-Digest) | optional | Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately. / Storing it separately allows us to avoid bloating the effects with data that are not critical. / It also provides more flexibility on the format and type of the data. |
+| unchanged_shared_objects | [UnchangedSharedObject](#sui-types-UnchangedSharedObject) | repeated | Shared objects that are not mutated in this transaction. Unlike owned objects, read-only shared objects&#39; version are not committed in the transaction, and in order for a node to catch up and execute it without consensus sequencing, the version needs to be committed in the effects. |
+| auxiliary_data_digest | [Digest](#sui-types-Digest) | optional | Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately. Storing it separately allows us to avoid bloating the effects with data that are not critical. It also provides more flexibility on the format and type of the data. |
 
 
 
@@ -2347,7 +2523,7 @@ Little-endian encoded i128
 <a name="sui-types-TransactionEvents"></a>
 
 ### TransactionEvents
-
+Events emitted during the successful execution of a transaction
 
 
 | Field | Type | Label | Description |
@@ -2362,13 +2538,13 @@ Little-endian encoded i128
 <a name="sui-types-TransactionExpiration"></a>
 
 ### TransactionExpiration
-
+A TTL for a transaction
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| none | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
-| epoch | [uint64](#uint64) |  |  |
+| none | [google.protobuf.Empty](#google-protobuf-Empty) |  | The transaction has no expiration |
+| epoch | [uint64](#uint64) |  | Validators wont sign and execute transaction unless the expiration Epoch is greater than or equal to the current epoch |
 
 
 
@@ -2378,20 +2554,24 @@ Little-endian encoded i128
 <a name="sui-types-TransactionKind"></a>
 
 ### TransactionKind
-
+Transaction type
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| programmable_transaction | [ProgrammableTransaction](#sui-types-ProgrammableTransaction) |  |  |
-| change_epoch | [ChangeEpoch](#sui-types-ChangeEpoch) |  |  |
-| genesis | [GenesisTransaction](#sui-types-GenesisTransaction) |  |  |
-| consensus_commit_prologue_v1 | [ConsensusCommitPrologue](#sui-types-ConsensusCommitPrologue) |  |  |
-| authenticator_state_update | [AuthenticatorStateUpdate](#sui-types-AuthenticatorStateUpdate) |  |  |
-| end_of_epoch | [EndOfEpochTransaction](#sui-types-EndOfEpochTransaction) |  |  |
-| randomness_state_update | [RandomnessStateUpdate](#sui-types-RandomnessStateUpdate) |  |  |
-| consensus_commit_prologue_v2 | [ConsensusCommitPrologue](#sui-types-ConsensusCommitPrologue) |  |  |
-| consensus_commit_prologue_v3 | [ConsensusCommitPrologue](#sui-types-ConsensusCommitPrologue) |  |  |
+| programmable_transaction | [ProgrammableTransaction](#sui-types-ProgrammableTransaction) |  | A user transaction comprised of a list of native commands and move calls |
+| change_epoch | [ChangeEpoch](#sui-types-ChangeEpoch) |  | System transaction used to end an epoch.
+
+The ChangeEpoch variant is now deprecated (but the ChangeEpoch struct is still used by EndOfEpochTransaction below). |
+| genesis | [GenesisTransaction](#sui-types-GenesisTransaction) |  | Transaction used to initialize the chain state.
+
+Only valid if in the genesis checkpoint (0) and if this is the very first transaction ever executed on the chain. |
+| consensus_commit_prologue_v1 | [ConsensusCommitPrologue](#sui-types-ConsensusCommitPrologue) |  | V1 consensus commit update |
+| authenticator_state_update | [AuthenticatorStateUpdate](#sui-types-AuthenticatorStateUpdate) |  | Update set of valid JWKs used for zklogin |
+| end_of_epoch | [EndOfEpochTransaction](#sui-types-EndOfEpochTransaction) |  | Set of operations to run at the end of the epoch to close out the current epoch and start the next one. |
+| randomness_state_update | [RandomnessStateUpdate](#sui-types-RandomnessStateUpdate) |  | Randomness update |
+| consensus_commit_prologue_v2 | [ConsensusCommitPrologue](#sui-types-ConsensusCommitPrologue) |  | V2 consensus commit update |
+| consensus_commit_prologue_v3 | [ConsensusCommitPrologue](#sui-types-ConsensusCommitPrologue) |  | V3 consensus commit update |
 
 
 
@@ -2401,13 +2581,13 @@ Little-endian encoded i128
 <a name="sui-types-TransferObjects"></a>
 
 ### TransferObjects
-
+Command to transfer ownership of a set of objects to an address
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| objects | [Argument](#sui-types-Argument) | repeated |  |
-| address | [Argument](#sui-types-Argument) | optional |  |
+| objects | [Argument](#sui-types-Argument) | repeated | Set of objects to transfer |
+| address | [Argument](#sui-types-Argument) | optional | The address to transfer ownership to |
 
 
 
@@ -2417,14 +2597,14 @@ Little-endian encoded i128
 <a name="sui-types-TypeArgumentError"></a>
 
 ### TypeArgumentError
-
+Type argument error
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| type_argument | [uint32](#uint32) | optional |  |
-| type_not_found | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
-| constraint_not_satisfied | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
+| type_argument | [uint32](#uint32) | optional | Required. Index of the problematic type argument |
+| type_not_found | [google.protobuf.Empty](#google-protobuf-Empty) |  | A type was not found in the module specified |
+| constraint_not_satisfied | [google.protobuf.Empty](#google-protobuf-Empty) |  | A type provided did not match the specified constraint |
 
 
 
@@ -2434,7 +2614,7 @@ Little-endian encoded i128
 <a name="sui-types-TypeOrigin"></a>
 
 ### TypeOrigin
-
+Identifies a struct and the module it was defined in
 
 
 | Field | Type | Label | Description |
@@ -2451,7 +2631,7 @@ Little-endian encoded i128
 <a name="sui-types-TypeTag"></a>
 
 ### TypeTag
-
+Type of a move value
 
 
 | Field | Type | Label | Description |
@@ -2476,12 +2656,12 @@ Little-endian encoded i128
 <a name="sui-types-U128"></a>
 
 ### U128
-Little-endian encoded u128
+An unsigned 128-bit integer encoded in little-endian using 16-bytes.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| bytes | [bytes](#bytes) | optional |  |
+| bytes | [bytes](#bytes) | optional | Required. 16-byte little-endian bytes |
 
 
 
@@ -2491,12 +2671,12 @@ Little-endian encoded u128
 <a name="sui-types-U256"></a>
 
 ### U256
-Little-endian encoded u256
+An unsigned 256-bit integer encoded in little-endian using 32-bytes.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| bytes | [bytes](#bytes) | optional |  |
+| bytes | [bytes](#bytes) | optional | Required. 16-byte little-endian bytes |
 
 
 
@@ -2506,17 +2686,17 @@ Little-endian encoded u256
 <a name="sui-types-UnchangedSharedObject"></a>
 
 ### UnchangedSharedObject
-
+A shared object that wasn&#39;t changed during execution
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| read_only_root | [ReadOnlyRoot](#sui-types-ReadOnlyRoot) |  |  |
-| mutate_deleted | [uint64](#uint64) |  |  |
-| read_deleted | [uint64](#uint64) |  |  |
-| cancelled | [uint64](#uint64) |  |  |
-| per_epoch_config | [google.protobuf.Empty](#google-protobuf-Empty) |  |  |
+| object_id | [ObjectId](#sui-types-ObjectId) | optional | Required. ObjectId of the shared object |
+| read_only_root | [ReadOnlyRoot](#sui-types-ReadOnlyRoot) |  | Read-only shared object from the input |
+| mutate_deleted | [uint64](#uint64) |  | Deleted shared objects that appear mutably/owned in the input. |
+| read_deleted | [uint64](#uint64) |  | Deleted shared object that appear as read-only in the input. |
+| cancelled | [uint64](#uint64) |  | Shared objects that was congested and resulted in this transaction being cancelled. |
+| per_epoch_config | [google.protobuf.Empty](#google-protobuf-Empty) |  | Read of a per-epoch config object that should remain the same during an epoch. |
 
 
 
@@ -2526,15 +2706,15 @@ Little-endian encoded u256
 <a name="sui-types-Upgrade"></a>
 
 ### Upgrade
-
+Command to upgrade an already published package
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| modules | [bytes](#bytes) | repeated |  |
-| dependencies | [ObjectId](#sui-types-ObjectId) | repeated |  |
-| package | [ObjectId](#sui-types-ObjectId) | optional |  |
-| ticket | [Argument](#sui-types-Argument) | optional |  |
+| modules | [bytes](#bytes) | repeated | The serialized move modules |
+| dependencies | [ObjectId](#sui-types-ObjectId) | repeated | Set of packages that the to-be published package depends on |
+| package | [ObjectId](#sui-types-ObjectId) | optional | Package id of the package to upgrade |
+| ticket | [Argument](#sui-types-Argument) | optional | Ticket authorizing the upgrade |
 
 
 
@@ -2544,14 +2724,14 @@ Little-endian encoded u256
 <a name="sui-types-UpgradeInfo"></a>
 
 ### UpgradeInfo
-
+Upgraded package info for the linkage table
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| original_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| upgraded_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| upgraded_version | [uint64](#uint64) | optional |  |
+| original_id | [ObjectId](#sui-types-ObjectId) | optional | Id of the original package |
+| upgraded_id | [ObjectId](#sui-types-ObjectId) | optional | Id of the upgraded package |
+| upgraded_version | [uint64](#uint64) | optional | Version of the upgraded package |
 
 
 
@@ -2561,7 +2741,7 @@ Little-endian encoded u256
 <a name="sui-types-UserSignature"></a>
 
 ### UserSignature
-
+A signature from a user
 
 
 | Field | Type | Label | Description |
@@ -2579,14 +2759,16 @@ Little-endian encoded u256
 <a name="sui-types-ValidatorAggregatedSignature"></a>
 
 ### ValidatorAggregatedSignature
-
+An aggregated signature from multiple validators.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| epoch | [uint64](#uint64) | optional |  |
-| signature | [bytes](#bytes) | optional |  |
-| bitmap | [RoaringBitmap](#sui-types-RoaringBitmap) | optional |  |
+| epoch | [uint64](#uint64) | optional | Required. The epoch when this signature was produced.
+
+This can be used to lookup the `ValidatorCommittee` from this epoch in order to verify this signature. |
+| signature | [bytes](#bytes) | optional | Required. The 48-byte Bls12381 aggregated signature. |
+| bitmap | [RoaringBitmap](#sui-types-RoaringBitmap) | optional | Required. Bitmap indicating which members of the committee contributed to this signature. |
 
 
 
@@ -2596,13 +2778,13 @@ Little-endian encoded u256
 <a name="sui-types-ValidatorCommittee"></a>
 
 ### ValidatorCommittee
-
+The validator set for a particular epoch
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| epoch | [uint64](#uint64) | optional |  |
-| members | [ValidatorCommitteeMember](#sui-types-ValidatorCommitteeMember) | repeated |  |
+| epoch | [uint64](#uint64) | optional | Required. The epoch where this committee governs. |
+| members | [ValidatorCommitteeMember](#sui-types-ValidatorCommitteeMember) | repeated | The committee members |
 
 
 
@@ -2612,13 +2794,13 @@ Little-endian encoded u256
 <a name="sui-types-ValidatorCommitteeMember"></a>
 
 ### ValidatorCommitteeMember
-
+A member of a validator committee.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| public_key | [bytes](#bytes) | optional |  |
-| stake | [uint64](#uint64) | optional |  |
+| public_key | [bytes](#bytes) | optional | Required. The 96-byte Bls12381 public key for this validator |
+| stake | [uint64](#uint64) | optional | Required. Stake weight this validator possesses. |
 
 
 
@@ -2628,13 +2810,13 @@ Little-endian encoded u256
 <a name="sui-types-VersionAssignment"></a>
 
 ### VersionAssignment
-
+Object version assignment from consensus
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| object_id | [ObjectId](#sui-types-ObjectId) | optional |  |
-| version | [uint64](#uint64) | optional |  |
+| object_id | [ObjectId](#sui-types-ObjectId) | optional | ObjectId of the object |
+| version | [uint64](#uint64) | optional | Assigned version |
 
 
 
@@ -2644,14 +2826,14 @@ Little-endian encoded u256
 <a name="sui-types-ZkLoginAuthenticator"></a>
 
 ### ZkLoginAuthenticator
-
+A zklogin authenticator
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| inputs | [ZkLoginInputs](#sui-types-ZkLoginInputs) | optional |  |
-| max_epoch | [uint64](#uint64) | optional |  |
-| signature | [SimpleSignature](#sui-types-SimpleSignature) | optional |  |
+| inputs | [ZkLoginInputs](#sui-types-ZkLoginInputs) | optional | Required. Zklogin proof and inputs required to perform proof verification. |
+| max_epoch | [uint64](#uint64) | optional | Required. Maximum epoch for which the proof is valid. |
+| signature | [SimpleSignature](#sui-types-SimpleSignature) | optional | Required. User signature with the public key attested to by the provided proof. |
 
 
 
@@ -2661,13 +2843,13 @@ Little-endian encoded u256
 <a name="sui-types-ZkLoginClaim"></a>
 
 ### ZkLoginClaim
-
+A claim of the iss in a zklogin proof
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| value | [string](#string) | optional |  |
-| index_mod_4 | [uint32](#uint32) | optional |  |
+| value | [string](#string) | optional | Required. |
+| index_mod_4 | [uint32](#uint32) | optional | Required. |
 
 
 
@@ -2677,15 +2859,15 @@ Little-endian encoded u256
 <a name="sui-types-ZkLoginInputs"></a>
 
 ### ZkLoginInputs
-
+A zklogin groth16 proof and the required inputs to perform proof verification.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| proof_points | [ZkLoginProof](#sui-types-ZkLoginProof) | optional |  |
-| iss_base64_details | [ZkLoginClaim](#sui-types-ZkLoginClaim) | optional |  |
-| header_base64 | [string](#string) | optional |  |
-| address_seed | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional |  |
+| proof_points | [ZkLoginProof](#sui-types-ZkLoginProof) | optional | Required. |
+| iss_base64_details | [ZkLoginClaim](#sui-types-ZkLoginClaim) | optional | Required. |
+| header_base64 | [string](#string) | optional | Required. |
+| address_seed | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional | Required. |
 
 
 
@@ -2695,14 +2877,14 @@ Little-endian encoded u256
 <a name="sui-types-ZkLoginProof"></a>
 
 ### ZkLoginProof
-
+A zklogin groth16 proof
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| a | [CircomG1](#sui-types-CircomG1) | optional |  |
-| b | [CircomG2](#sui-types-CircomG2) | optional |  |
-| c | [CircomG1](#sui-types-CircomG1) | optional |  |
+| a | [CircomG1](#sui-types-CircomG1) | optional | Required. |
+| b | [CircomG2](#sui-types-CircomG2) | optional | Required. |
+| c | [CircomG1](#sui-types-CircomG1) | optional | Required. |
 
 
 
@@ -2712,13 +2894,13 @@ Little-endian encoded u256
 <a name="sui-types-ZkLoginPublicIdentifier"></a>
 
 ### ZkLoginPublicIdentifier
-
+Public key equivalent for zklogin authenticators
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| iss | [string](#string) | optional |  |
-| address_seed | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional |  |
+| iss | [string](#string) | optional | Required. |
+| address_seed | [Bn254FieldElement](#sui-types-Bn254FieldElement) | optional | Required. |
 
 
 
@@ -2730,7 +2912,12 @@ Little-endian encoded u256
 <a name="sui-types-SignatureScheme"></a>
 
 ### SignatureScheme
-note: values do not match their bcs serialized values
+Flag use to disambiguate the signature schemes supported by Sui.
+
+note: the enum values defined by this proto message do not match their bcs
+serialized values. See
+[here](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/enum.SignatureScheme.html)
+for a mapping to their canonical serialized format.
 
 | Name | Number | Description |
 | ---- | ------ | ----------- |
