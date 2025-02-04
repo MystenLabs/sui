@@ -778,6 +778,7 @@ async fn trade_updates(
     let end_time = params
         .get("end_time")
         .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
         .unwrap_or_else(|| {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -788,13 +789,13 @@ async fn trade_updates(
     let start_time = params
         .get("start_time")
         .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
         .unwrap_or_else(|| end_time - 24 * 60 * 60 * 1000);
 
     let limit = params
         .get("limit")
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(2);
-    let balance_manager_filter = params.get("balance_manager_id").cloned();
 
     let mut query = schema::order_updates::table
         .filter(schema::order_updates::checkpoint_timestamp_ms.between(start_time, end_time))
@@ -814,8 +815,14 @@ async fn trade_updates(
         .limit(limit)
         .into_boxed();
 
+    let balance_manager_filter = params.get("balance_manager_id").cloned();
     if let Some(manager_id) = balance_manager_filter {
         query = query.filter(schema::order_updates::balance_manager_id.eq(manager_id));
+    }
+
+    let status_filter = params.get("status").cloned();
+    if let Some(status) = status_filter {
+        query = query.filter(schema::order_updates::status.eq(status));
     }
 
     let trades = query
