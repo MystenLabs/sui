@@ -102,10 +102,18 @@ impl PackageContext<'_> {
         Ok(output)
     }
 
-    fn try_resolve_function(&self, vtable_entry: &VirtualTableKey) -> Option<VMPointer<Function>> {
+    /// Try to resolve a function call (vtable entry) to a direct call (i.e. a call to a function
+    /// in the same package). If the vtable key represents an inter-package call this function
+    /// will return `None` as the call cannot be resolved to a direct call.
+    fn try_resolve_direct_function_call(
+        &self,
+        vtable_entry: &VirtualTableKey,
+    ) -> Option<VMPointer<Function>> {
+        // We are calling into a different package so we cannot resolve this to a direct call.
         if vtable_entry.package_key != self.runtime_id {
             return None;
         }
+        // TODO(vm-rewrite): Have this return an error if the function was not found.
         self.vtable
             .functions
             .get(&vtable_entry.inner_pkg_key)
@@ -1014,10 +1022,12 @@ fn call(
         },
     };
     dbg_println!(flag: function_resolution, "Resolving function: {:?}", vtable_key);
-    Ok(match package_context.try_resolve_function(&vtable_key) {
-        Some(func) => CallType::Direct(func),
-        None => CallType::Virtual(vtable_key),
-    })
+    Ok(
+        match package_context.try_resolve_direct_function_call(&vtable_key) {
+            Some(func) => CallType::Direct(func),
+            None => CallType::Virtual(vtable_key),
+        },
+    )
 }
 
 // -------------------------------------------------------------------------------------------------
