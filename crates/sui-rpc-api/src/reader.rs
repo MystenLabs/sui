@@ -144,6 +144,7 @@ impl StateReader {
         })
     }
 
+    #[allow(unused)]
     pub fn checkpoint_iter(
         &self,
         direction: Direction,
@@ -302,6 +303,7 @@ pub struct CheckpointIter {
 }
 
 impl CheckpointIter {
+    #[allow(unused)]
     pub fn new(reader: StateReader, direction: Direction, start: CheckpointSequenceNumber) -> Self {
         Self {
             reader,

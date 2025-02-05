@@ -401,7 +401,8 @@ impl crate::proto::node::v2alpha::node_service_server::NodeService for crate::Rp
     async fn get_coin_info(
         &self,
         request: tonic::Request<crate::proto::node::v2alpha::GetCoinInfoRequest>,
-    ) -> Result<tonic::Response<crate::proto::node::v2alpha::GetCoinInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<crate::proto::node::v2alpha::GetCoinInfoResponse>, tonic::Status>
+    {
         self.get_coin_info(request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)

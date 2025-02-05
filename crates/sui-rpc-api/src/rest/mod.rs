@@ -14,7 +14,6 @@ use crate::{reader::StateReader, RpcService};
 
 pub mod accept;
 pub mod accounts;
-pub mod checkpoints;
 pub mod content_type;
 pub mod health;
 pub mod system;
@@ -26,9 +25,7 @@ pub const APPLICATION_JSON: &str = "application/json";
 
 pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
     &health::HealthCheck,
-    &checkpoints::GetCheckpoint,
     &accounts::ListAccountObjects,
-    &checkpoints::ListCheckpoints,
     &transactions::GetTransaction,
     &transactions::ListTransactions,
     &system::GetSystemStateSummary,

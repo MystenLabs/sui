@@ -9,14 +9,12 @@ use sui_sdk_types::Address;
 use sui_sdk_types::CheckpointDigest;
 use sui_sdk_types::CheckpointSequenceNumber;
 use sui_sdk_types::EpochId;
-use sui_sdk_types::SignedCheckpointSummary;
 use sui_sdk_types::Transaction;
 use sui_sdk_types::TransactionDigest;
 use tap::Pipe;
 
 use crate::rest::accounts::AccountOwnedObjectInfo;
 use crate::rest::accounts::ListAccountOwnedObjectsQueryParameters;
-use crate::rest::checkpoints::ListCheckpointsPaginationParameters;
 use crate::rest::health::Threshold;
 use crate::rest::system::GasInfo;
 use crate::rest::system::ProtocolConfigResponse;
@@ -27,7 +25,6 @@ use crate::rest::transactions::ListTransactionsCursorParameters;
 use crate::rest::transactions::ResolveTransactionQueryParameters;
 use crate::rest::transactions::ResolveTransactionResponse;
 use crate::rest::transactions::TransactionSimulationResponse;
-use crate::types::CheckpointResponse;
 use crate::types::TransactionResponse;
 use crate::types::X_SUI_CHAIN;
 use crate::types::X_SUI_CHAIN_ID;
@@ -133,52 +130,6 @@ impl Client {
         let url = self.url().join("system")?;
 
         let request = self.inner.get(url);
-
-        self.json(request).await
-    }
-
-    pub async fn get_checkpoint(
-        &self,
-        checkpoint_sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Response<CheckpointResponse>> {
-        let url = self
-            .url()
-            .join(&format!("checkpoints/{checkpoint_sequence_number}"))?;
-
-        let request = self.inner.get(url);
-
-        self.json(request).await
-    }
-
-    pub async fn get_latest_checkpoint(&self) -> Result<Response<SignedCheckpointSummary>> {
-        let parameters = ListCheckpointsPaginationParameters {
-            limit: Some(1),
-            start: None,
-            direction: None,
-        };
-
-        let (mut page, parts) = self.list_checkpoints(&parameters).await?.into_parts();
-
-        let checkpoint = page
-            .pop()
-            .ok_or_else(|| Error::new_message("server returned empty checkpoint list"))?;
-
-        Ok(Response::new(
-            SignedCheckpointSummary {
-                checkpoint: checkpoint.summary.unwrap(),
-                signature: checkpoint.signature.unwrap(),
-            },
-            parts,
-        ))
-    }
-
-    pub async fn list_checkpoints(
-        &self,
-        parameters: &ListCheckpointsPaginationParameters,
-    ) -> Result<Response<Vec<CheckpointResponse>>> {
-        let url = self.url().join("checkpoints")?;
-
-        let request = self.inner.get(url).query(parameters);
 
         self.json(request).await
     }

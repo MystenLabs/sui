@@ -6,9 +6,7 @@ use crate::response::Bcs;
 use crate::{Result, RpcService};
 use axum::extract::{Query, State};
 use axum::Json;
-use sui_sdk_types::{
-    BalanceChange, Object, Transaction, TransactionEffects, TransactionEvents,
-};
+use sui_sdk_types::{BalanceChange, Object, Transaction, TransactionEffects, TransactionEvents};
 
 pub struct SimulateTransaction;
 
