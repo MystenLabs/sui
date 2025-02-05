@@ -47,6 +47,7 @@ pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
 pub const TICKER_PATH: &str = "/ticker";
 pub const TRADES_PATH: &str = "/trades/:pool_name";
+pub const TRADE_UPDATES_PATH: &str = "/trade_updates/:pool_name";
 pub const TRADE_COUNT_PATH: &str = "/trade_count";
 pub const ASSETS_PATH: &str = "/assets";
 pub const SUMMARY_PATH: &str = "/summary";
@@ -94,6 +95,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route(TICKER_PATH, get(ticker))
         .route(TRADES_PATH, get(trades))
         .route(TRADE_COUNT_PATH, get(trade_count))
+        .route(TRADE_UPDATES_PATH, get(trade_updates))
         .route(ASSETS_PATH, get(assets))
         .route(SUMMARY_PATH, get(summary))
         .route(DEEP_SUPPLY_PATH, get(deep_supply))
@@ -749,6 +751,134 @@ async fn price_change_24h(
     }
 
     Ok(response)
+}
+
+async fn trade_updates(
+    Path(pool_name): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
+    let connection = &mut state.pool.get().await?;
+
+    // Fetch pool data with proper error handling
+    let (pool_id, base_decimals, quote_decimals) = schema::pools::table
+        .filter(schema::pools::pool_name.eq(pool_name.clone()))
+        .select((
+            schema::pools::pool_id,
+            schema::pools::base_asset_decimals,
+            schema::pools::quote_asset_decimals,
+        ))
+        .first::<(String, i16, i16)>(connection)
+        .await
+        .map_err(|_| DeepBookError::InternalError(format!("Pool '{}' not found", pool_name)))?;
+
+    let base_decimals = base_decimals as u8;
+    let quote_decimals = quote_decimals as u8;
+
+    let end_time = params
+        .get("end_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64
+        });
+
+    let start_time = params
+        .get("start_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| end_time - 24 * 60 * 60 * 1000);
+
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(1);
+
+    let mut query = schema::order_updates::table
+        .filter(schema::order_updates::checkpoint_timestamp_ms.between(start_time, end_time))
+        .filter(schema::order_updates::pool_id.eq(pool_id))
+        .order_by(schema::order_updates::checkpoint_timestamp_ms.desc())
+        .select((
+            schema::order_updates::order_id,
+            schema::order_updates::price,
+            schema::order_updates::original_quantity,
+            schema::order_updates::quantity,
+            schema::order_updates::filled_quantity,
+            schema::order_updates::checkpoint_timestamp_ms,
+            schema::order_updates::is_bid,
+            schema::order_updates::balance_manager_id,
+            schema::order_updates::status,
+        ))
+        .limit(limit)
+        .into_boxed();
+
+    let balance_manager_filter = params.get("balance_manager_id").cloned();
+    if let Some(manager_id) = balance_manager_filter {
+        query = query.filter(schema::order_updates::balance_manager_id.eq(manager_id));
+    }
+
+    let status_filter = params.get("status").cloned();
+    if let Some(status) = status_filter {
+        query = query.filter(schema::order_updates::status.eq(status));
+    }
+
+    let trades = query
+        .load::<(String, i64, i64, i64, i64, i64, bool, String, String)>(connection)
+        .await
+        .map_err(|_| DeepBookError::InternalError("Error fetching trade details".to_string()))?;
+
+    let base_factor = 10u64.pow(base_decimals as u32);
+    let price_factor = 10u64.pow((9 - base_decimals + quote_decimals) as u32);
+
+    let trade_data: Vec<HashMap<String, Value>> = trades
+        .into_iter()
+        .map(
+            |(
+                order_id,
+                price,
+                original_quantity,
+                quantity,
+                filled_quantity,
+                timestamp,
+                is_bid,
+                balance_manager_id,
+                status,
+            )| {
+                let trade_type = if is_bid { "buy" } else { "sell" };
+                HashMap::from([
+                    ("order_id".to_string(), Value::from(order_id)),
+                    (
+                        "price".to_string(),
+                        Value::from(price as f64 / price_factor as f64),
+                    ),
+                    (
+                        "original_quantity".to_string(),
+                        Value::from(original_quantity as f64 / base_factor as f64),
+                    ),
+                    (
+                        "remaining_quantity".to_string(),
+                        Value::from(quantity as f64 / base_factor as f64),
+                    ),
+                    (
+                        "filled_quantity".to_string(),
+                        Value::from(filled_quantity as f64 / base_factor as f64),
+                    ),
+                    ("timestamp".to_string(), Value::from(timestamp as u64)),
+                    ("type".to_string(), Value::from(trade_type)),
+                    (
+                        "balance_manager_id".to_string(),
+                        Value::from(balance_manager_id),
+                    ),
+                    ("status".to_string(), Value::from(status)),
+                ])
+            },
+        )
+        .collect();
+
+    Ok(Json(trade_data))
 }
 
 async fn trades(
