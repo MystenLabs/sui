@@ -103,6 +103,9 @@ pub enum Reference {
 pub struct FixedSizeVec(Box<[Value]>);
 
 // XXX/TODO(vm-rewrite): Remove this and replace with proper value dirtying.
+#[deprecated(
+    note = "This is a temporary shim for the new VM. It _MUST_ be removed before final rollout."
+)]
 #[derive(Debug)]
 pub struct GlobalFingerprint(Option<String>);
 
