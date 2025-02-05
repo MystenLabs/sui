@@ -1600,7 +1600,7 @@ impl SuiNode {
         // executed. This could confuse clients in some circumstances. However, the transactions
         // are still in pending_consensus_certificates, so we cannot lose any finality guarantees.
         if tokio::time::timeout(
-            std::time::Duration::from_secs(10),
+            std::time::Duration::from_secs(60),
             state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects_digests(&digests),
