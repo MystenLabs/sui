@@ -153,6 +153,7 @@ impl StateReader {
         CheckpointIter::new(self.clone(), direction, start)
     }
 
+    #[allow(unused)]
     pub fn transaction_iter(
         &self,
         direction: Direction,
@@ -185,6 +186,7 @@ pub struct CheckpointTransactionsIter {
 }
 
 impl CheckpointTransactionsIter {
+    #[allow(unused)]
     pub fn new(
         reader: StateReader,
         direction: Direction,
@@ -285,6 +287,7 @@ impl Iterator for CheckpointTransactionsIter {
     }
 }
 
+#[allow(unused)]
 pub struct CursorInfo {
     pub checkpoint: CheckpointSequenceNumber,
     pub timestamp_ms: u64,

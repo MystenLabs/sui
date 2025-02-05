@@ -10,7 +10,6 @@ use sui_sdk_types::CheckpointDigest;
 use sui_sdk_types::CheckpointSequenceNumber;
 use sui_sdk_types::EpochId;
 use sui_sdk_types::Transaction;
-use sui_sdk_types::TransactionDigest;
 use tap::Pipe;
 
 use crate::rest::accounts::AccountOwnedObjectInfo;
@@ -21,11 +20,9 @@ use crate::rest::system::ProtocolConfigResponse;
 use crate::rest::system::SystemStateSummary;
 use crate::rest::system::X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION;
 use crate::rest::system::X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION;
-use crate::rest::transactions::ListTransactionsCursorParameters;
 use crate::rest::transactions::ResolveTransactionQueryParameters;
 use crate::rest::transactions::ResolveTransactionResponse;
 use crate::rest::transactions::TransactionSimulationResponse;
-use crate::types::TransactionResponse;
 use crate::types::X_SUI_CHAIN;
 use crate::types::X_SUI_CHAIN_ID;
 use crate::types::X_SUI_CHECKPOINT_HEIGHT;
@@ -130,28 +127,6 @@ impl Client {
         let url = self.url().join("system")?;
 
         let request = self.inner.get(url);
-
-        self.json(request).await
-    }
-
-    pub async fn get_transaction(
-        &self,
-        transaction: &TransactionDigest,
-    ) -> Result<Response<TransactionResponse>> {
-        let url = self.url().join(&format!("transactions/{transaction}"))?;
-
-        let request = self.inner.get(url);
-
-        self.json(request).await
-    }
-
-    pub async fn list_transactions(
-        &self,
-        parameters: &ListTransactionsCursorParameters,
-    ) -> Result<Response<Vec<TransactionResponse>>> {
-        let url = self.url().join("transactions")?;
-
-        let request = self.inner.get(url).query(parameters);
 
         self.json(request).await
     }

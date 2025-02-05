@@ -26,8 +26,6 @@ pub const APPLICATION_JSON: &str = "application/json";
 pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
     &health::HealthCheck,
     &accounts::ListAccountObjects,
-    &transactions::GetTransaction,
-    &transactions::ListTransactions,
     &system::GetSystemStateSummary,
     &system::GetCurrentProtocolConfig,
     &system::GetProtocolConfig,
