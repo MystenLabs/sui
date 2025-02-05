@@ -11974,10 +11974,11 @@ dependencies = [
 
 [[package]]
 name = "serde_path_to_error"
-version = "0.1.9"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26b04f22b563c91331a10074bda3dd5492e3cc39d56bd557e91c0af42b6c7341"
+checksum = "af99884400da37c88f5e9146b7f1fd0fbcae8f6eec4e9da38b67d05486f814a6"
 dependencies = [
+ "itoa",
  "serde",
 ]
 
@@ -15367,6 +15368,24 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "sui-sdk-macros"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "derive-syn-parse",
+ "itertools 0.13.0",
+ "proc-macro2 1.0.87",
+ "quote 1.0.37",
+ "reqwest 0.12.9",
+ "serde",
+ "sui-sdk",
+ "sui-types",
+ "syn 1.0.107",
+ "tokio",
+ "unescape",
 ]
 
 [[package]]

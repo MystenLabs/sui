@@ -158,6 +158,7 @@ members = [
     "crates/sui-rpc-api",
     "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
+    "crates/sui-sdk-macros",
     "crates/sui-security-watchdog",
     "crates/sui-simulator",
     "crates/sui-single-node-benchmark",
@@ -600,7 +601,7 @@ passkey-authenticator = { version = "0.2.0" }
 coset = "0.3"
 p256 = { version = "0.13.2", features = ["ecdsa"] }
 
-p384 = { version = "0.13.0", default-features = false, features = ["ecdsa","sha384"] }
+p384 = { version = "0.13.0", default-features = false, features = ["ecdsa", "sha384"] }
 ciborium = "0.2"
 
 # anemo dependencies
@@ -667,7 +668,7 @@ sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
-sui-kvstore = {path = "crates/sui-kvstore"}
+sui-kvstore = { path = "crates/sui-kvstore" }
 sui-macros = { path = "crates/sui-macros" }
 sui-metric-checker = { path = "crates/sui-metric-checker" }
 sui-move = { path = "crates/sui-move" }
@@ -691,6 +692,7 @@ sui-replay = { path = "crates/sui-replay" }
 sui-rosetta = { path = "crates/sui-rosetta" }
 sui-rpc-loadgen = { path = "crates/sui-rpc-loadgen" }
 sui-sdk = { path = "crates/sui-sdk" }
+sui-sdk-macros = { path = "crates/sui-sdk-macros" }
 sui-simulator = { path = "crates/sui-simulator" }
 sui-snapshot = { path = "crates/sui-snapshot" }
 sui-source-validation = { path = "crates/sui-source-validation" }

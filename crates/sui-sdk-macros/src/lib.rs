@@ -1,0 +1,207 @@
+use proc_macro::TokenStream;
+use quote::quote;
+use reqwest::header::CONTENT_TYPE;
+use serde::Deserialize;
+use std::collections::BTreeMap;
+use sui_sdk::rpc_types::{SuiMoveNormalizedModule, SuiMoveNormalizedType};
+use syn::{parse_macro_input, AttributeArgs, Lit, Meta, NestedMeta};
+
+#[proc_macro]
+pub fn move_contract(input: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(input as AttributeArgs);
+
+    let mut package_name = None;
+    let mut sui_env = SuiEnv::Mainnet;
+    let mut package = None;
+
+    // Parse macro arguments
+    for arg in args {
+        match arg {
+            NestedMeta::Meta(Meta::NameValue(nv)) if nv.path.is_ident("env") => {
+                if let Lit::Str(lit) = nv.lit {
+                    sui_env = match lit.value().to_lowercase().as_str() {
+                        "mainnet" => SuiEnv::Mainnet,
+                        "testnet" => SuiEnv::Testnet,
+                        _ => SuiEnv::Custom(lit.value()),
+                    };
+                }
+            }
+            NestedMeta::Meta(Meta::NameValue(nv)) if nv.path.is_ident("name") => {
+                if let Lit::Str(lit) = nv.lit {
+                    package_name = Some(lit.value());
+                }
+            }
+            NestedMeta::Meta(Meta::NameValue(nv)) if nv.path.is_ident("package") => {
+                if let Lit::Str(lit) = nv.lit {
+                    package = Some(lit.value());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let package = match package {
+        Some(package) => package,
+        None => {
+            return syn::Error::new_spanned(
+                proc_macro2::TokenStream::new(),
+                "Package must be provided (e.g., `package = \"0xb\"`).",
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+
+    let rpc_url = match sui_env {
+        SuiEnv::Mainnet => "https://rpc.mainnet.sui.io:443".to_string(),
+        SuiEnv::Testnet => "https://rpc.testnet.sui.io:443".to_string(),
+        SuiEnv::Custom(s) => s,
+    };
+
+    let client = reqwest::blocking::Client::new();
+    let res = client
+        .post(rpc_url)
+        .header(CONTENT_TYPE, "application/json")
+        .body(format!(
+            r#"
+                {{
+                  "jsonrpc": "2.0",
+                  "id": 1,
+                  "method": "sui_getNormalizedMoveModulesByPackage",
+                  "params": [
+                    "{package}"
+                  ]
+                }}
+        "#
+        ))
+        .send()
+        .unwrap();
+
+    let package_data = res
+        .json::<JsonRpcResponse<BTreeMap<String, SuiMoveNormalizedModule>>>()
+        .unwrap()
+        .result;
+
+    let package_name = match package_name {
+        Some(name) => name,
+        None => {
+            return syn::Error::new_spanned(
+                proc_macro2::TokenStream::new(),
+                "Package name must be provided (e.g., `name = \"MyPackage\"`).",
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+
+    let module_tokens = package_data.iter().map(|(name, module)| {
+        let module_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
+        let struct_tokens = module.structs.iter().map(|(name, move_struct)| {
+            let struct_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
+            let field_tokens = move_struct.fields.iter().map(|field| {
+                let field_ident = syn::Ident::new(&field.name, proc_macro2::Span::call_site());
+                let field_type: syn::Type =
+                    syn::parse_str(&to_rust_type(&package, &field.type_)).unwrap();
+                quote! {
+                    pub #field_ident: #field_type,
+                }
+            });
+            quote! {
+                #[derive(serde::Deserialize, Debug)]
+                pub struct #struct_ident {
+                    #(#field_tokens)*
+                }
+
+            }
+        });
+
+        quote! {
+            pub mod #module_ident{
+                #(#struct_tokens)*
+            }
+        }
+    });
+
+    let package_ident = syn::Ident::new(&package_name, proc_macro2::Span::call_site());
+    let expanded = quote! {
+        pub mod #package_ident{
+            #(#module_tokens)*
+        }
+    };
+    TokenStream::from(expanded)
+}
+
+enum SuiEnv {
+    Mainnet,
+    Testnet,
+    Custom(String),
+}
+
+#[derive(Deserialize, Debug)]
+struct JsonRpcResponse<T> {
+    jsonrpc: String,
+    id: u64,
+    result: T,
+}
+
+fn to_rust_type(own_package: &str, move_type: &SuiMoveNormalizedType) -> String {
+    match move_type {
+        SuiMoveNormalizedType::Bool => "bool".to_string(),
+        SuiMoveNormalizedType::U8 => "u8".to_string(),
+        SuiMoveNormalizedType::U16 => "u16".to_string(),
+        SuiMoveNormalizedType::U32 => "u32".to_string(),
+        SuiMoveNormalizedType::U64 => "u64".to_string(),
+        SuiMoveNormalizedType::U128 => "u128".to_string(),
+        SuiMoveNormalizedType::U256 => "u256".to_string(),
+        SuiMoveNormalizedType::Address => "sui_types::base_types::SuiAddress".to_string(),
+        SuiMoveNormalizedType::Signer => "sui_types::base_types::SuiAddress".to_string(),
+        t @ SuiMoveNormalizedType::Struct { .. } => try_resolve_known_types(own_package, t),
+        SuiMoveNormalizedType::Vector(t) => format!("Vec<{}>", to_rust_type(own_package, t)),
+        SuiMoveNormalizedType::TypeParameter(_) => "Vec<String>".to_string(),
+        SuiMoveNormalizedType::Reference(t) => format!("&{}", to_rust_type(own_package, t)),
+        SuiMoveNormalizedType::MutableReference(t) => {
+            format!("&mut{}", to_rust_type(own_package, t))
+        }
+    }
+}
+
+fn try_resolve_known_types(own_package: &str, move_type: &SuiMoveNormalizedType) -> String {
+    if let SuiMoveNormalizedType::Struct {
+        address,
+        module,
+        name,
+        type_arguments,
+    } = move_type
+    {
+        match format!("{address}::{module}::{name}").as_str() {
+            "0x2::object::UID" => "sui_types::id::UID".to_string(),
+            "0x2::versioned::Versioned" => "sui_types::versioned::Versioned".to_string(),
+            "0x2::bag::Bag" => "sui_types::collection_types::Bag".to_string(),
+            "0x1::type_name::TypeName" => "String".to_string(),
+            "0x2::object_bag::ObjectBag" => "sui_types::collection_types::Bag".to_string(),
+            "0x2::package::UpgradeCap" => "sui_types::move_package::UpgradeCap".to_string(),
+            "0x2::vec_map::VecMap" => format!(
+                "sui_types::collection_types::VecMap<{},{}>",
+                to_rust_type(own_package, &type_arguments[0]),
+                to_rust_type(own_package, &type_arguments[1])
+            ),
+            "0x2::linked_table::LinkedTable" => {
+                format!(
+                    "sui_types::collection_types::LinkedTable<{}>",
+                    to_rust_type(own_package, &type_arguments[0])
+                )
+            }
+            "0x1::option::Option" => {
+                format!("Option<{}>", to_rust_type(own_package, &type_arguments[0]))
+            }
+            _ if own_package == address => {
+                format!("super::{module}::{name}")
+            }
+            _ => {
+                format!("{name}")
+            }
+        }
+    } else {
+        unreachable!()
+    }
+}

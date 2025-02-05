@@ -1,0 +1,28 @@
+[package]
+name = "sui-sdk-macros"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+proc-macro = true
+
+[dependencies]
+tokio.workspace = true
+syn.workspace = true
+quote.workspace = true
+proc-macro2.workspace = true
+itertools.workspace = true
+derive-syn-parse.workspace = true
+unescape.workspace = true
+sui-sdk.workspace = true
+reqwest.workspace = true
+sui-types.workspace = true
+serde = { version = "1.0.217", features = ["derive"] }
+
+
+[dev-dependencies]
+bcs.workspace = true
