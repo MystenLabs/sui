@@ -184,6 +184,10 @@ impl ExecutionTimeObserver {
     }
 }
 
+// Default duration estimate used for transations containing a command without any
+// available observations.
+const DEFAULT_TRANSACTION_DURATION: Duration = Duration::from_millis(1_500);
+
 // Tracks global execution time observations provided by validators from consensus
 // and computes deterministic per-command estimates for use in congestion control.
 pub struct ExecutionTimeEstimator {
@@ -293,19 +297,20 @@ impl ExecutionTimeEstimator {
             debug_fatal!("get_estimate called on non-ProgrammableTransaction");
             return Duration::ZERO;
         };
-        tx.commands
-            .iter()
-            .map(|command| {
-                let key = ExecutionTimeObservationKey::from_command(command);
-                self.consensus_observations
-                    .get(&key)
-                    .map(|obs| obs.stake_weighted_median)
-                    .unwrap_or_else(|| key.default_duration())
-                    // For native commands, adjust duration by length of command's inputs/outputs.
-                    // This is sort of arbitrary, but hopefully works okay as a heuristic.
-                    .mul_f64(command_length(command))
-            })
-            .sum()
+        let mut estimate = Duration::ZERO;
+        for command in &tx.commands {
+            let key = ExecutionTimeObservationKey::from_command(command);
+            let Some(command_estimate) = self
+                .consensus_observations
+                .get(&key)
+                .map(|obs| obs.stake_weighted_median.mul_f64(command_length(command)))
+            else {
+                estimate = DEFAULT_TRANSACTION_DURATION;
+                break;
+            };
+            estimate += command_estimate;
+        }
+        estimate
     }
 }
 
