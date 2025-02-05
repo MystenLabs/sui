@@ -41,7 +41,6 @@ pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
     &system::GetCurrentProtocolConfig,
     &system::GetProtocolConfig,
     &system::GetGasInfo,
-    &transactions::ExecuteTransaction,
     &transactions::SimulateTransaction,
     &transactions::ResolveTransaction,
 ];

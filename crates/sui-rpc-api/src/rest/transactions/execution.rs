@@ -3,48 +3,12 @@
 
 use super::{ApiEndpoint, RouteHandler};
 use crate::response::Bcs;
-use crate::types::ExecuteTransactionOptions;
-use crate::types::ExecuteTransactionResponse;
 use crate::{Result, RpcService};
 use axum::extract::{Query, State};
 use axum::Json;
-use std::net::SocketAddr;
 use sui_sdk_types::{
-    BalanceChange, Object, SignedTransaction, Transaction, TransactionEffects, TransactionEvents,
+    BalanceChange, Object, Transaction, TransactionEffects, TransactionEvents,
 };
-
-pub struct ExecuteTransaction;
-
-impl ApiEndpoint<RpcService> for ExecuteTransaction {
-    fn method(&self) -> axum::http::Method {
-        axum::http::Method::POST
-    }
-
-    fn path(&self) -> &'static str {
-        "/transactions"
-    }
-
-    fn handler(&self) -> RouteHandler<RpcService> {
-        RouteHandler::new(self.method(), execute_transaction)
-    }
-}
-
-/// Execute Transaction REST endpoint.
-///
-/// Handles client transaction submission request by passing off the provided signed transaction to
-/// an internal QuorumDriver which drives execution of the transaction with the current validator
-/// set.
-async fn execute_transaction(
-    State(state): State<RpcService>,
-    Query(options): Query<ExecuteTransactionOptions>,
-    client_address: Option<axum::extract::ConnectInfo<SocketAddr>>,
-    Bcs(transaction): Bcs<SignedTransaction>,
-) -> Result<Json<ExecuteTransactionResponse>> {
-    state
-        .execute_transaction(transaction, client_address.map(|a| a.0), &options)
-        .await
-        .map(Json)
-}
 
 pub struct SimulateTransaction;
 
