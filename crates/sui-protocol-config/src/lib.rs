@@ -3186,10 +3186,10 @@ impl ProtocolConfig {
                         cfg.consensus_gc_depth = Some(60);
                     }
 
-                    if chain != Chain::Mainnet {
-                        // Enable zstd compression for consensus in testnet
-                        cfg.feature_flags.consensus_zstd_compression = true;
-                    }
+                    //if chain != Chain::Mainnet {
+                    //    // Enable zstd compression for consensus in testnet
+                    //    cfg.feature_flags.consensus_zstd_compression = true;
+                    //}
 
                     // Enable smart ancestor selection for mainnet
                     cfg.feature_flags.consensus_smart_ancestor_selection = true;
