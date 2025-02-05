@@ -4042,16 +4042,21 @@ impl AuthorityPerEpochStore {
         &self,
         last: Option<CheckpointHeight>,
     ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
-        // TODO: Delete the db reads.
-        // Reading from the db table is only need when upgrading to data quarantining
-        // for the first time.
-        let tables = self.tables()?;
-        let mut db_iter = tables.pending_checkpoints_v2.unbounded_iter();
-        if let Some(last_processed_height) = last {
-            db_iter = db_iter.skip_to(&(last_processed_height + 1))?;
-        }
-
-        let db_results: Vec<_> = db_iter.collect();
+        let db_results = if !self
+            .epoch_start_config()
+            .is_data_quarantine_active_from_beginning_of_epoch()
+        {
+            // Reading from the db table is only need when upgrading to data quarantining
+            // for the first time.
+            let tables = self.tables()?;
+            let mut db_iter = tables.pending_checkpoints_v2.unbounded_iter();
+            if let Some(last_processed_height) = last {
+                db_iter = db_iter.skip_to(&(last_processed_height + 1))?;
+            }
+            db_iter.collect()
+        } else {
+            vec![]
+        };
 
         let mut quarantine_results = self
             .consensus_quarantine
