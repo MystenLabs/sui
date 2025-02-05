@@ -1,0 +1,44 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-23:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5502400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 25-27:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::r();
+//> TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 29-36:
+//# programmable --sender A --inputs object(2,0) 200
+//> 0: test::m1::v();
+//> test::m1::clean(Input(0), Result(0));
+//> test::m1::priv(Input(0));
+//> test::m1::clean(Input(0), Input(1));
+//> test::m1::priv(Input(0));
+//> test::m1::priv(Input(0));
+//> test::m1::priv(Input(0));
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+
+task 4, lines 38-43:
+//# programmable --sender A --inputs @A  --gas-budget 10000000000
+//> 0: test::m1::v();
+//> 1: SplitCoins(Gas, [Result(0)]);
+//> test::m1::coin(Gas);
+//> test::m1::coin(Result(1));
+//> TransferObjects([Result(1)], Input(0))
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

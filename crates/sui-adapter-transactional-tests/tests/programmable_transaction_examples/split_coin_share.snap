@@ -1,0 +1,67 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-18:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4993200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 20-22:
+//# programmable --sender A --inputs 10
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::transfer::public_share_object<sui::coin::Coin<sui::sui::SUI>>(Result(0));
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 24-26:
+//# programmable --sender A --inputs 10
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: p::m::sharer<sui::coin::Coin<sui::sui::SUI>>(Result(0));
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 28:
+//# run p::m::mint_shared
+created: object(4,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 30-32:
+//# view-object 4,0
+Owner: Shared( 3 )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
+
+task 6, lines 33-37:
+//# programmable --sender A --inputs 0 object(4,0) @A
+//> 0: SplitCoins(Input(1), [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(2));
+// This is not OK -- split off from a shared object and transfer shared object
+created: object(6,0)
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 7, lines 38-41:
+//# programmable --sender A --inputs 0 object(4,0) @A
+//> 0: SplitCoins(Input(1), [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(2));
+//> 2: TransferObjects([Input(1)], Input(2));
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None

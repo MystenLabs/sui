@@ -1,0 +1,15 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 4-37:
+//# publish
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("PartialVMError with status UNKNOWN_VERIFICATION_ERROR with sub status 1 and message Invalid object creation in _::test::test. Object created without a newly created UID. The UID must come directly from sui::object::new. Or for tests, it can come from sui::test_scenario::new_object"), command: Some(0) } }
+
+task 1, lines 39-62:
+//# publish
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4902000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
