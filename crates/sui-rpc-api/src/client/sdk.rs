@@ -33,7 +33,6 @@ use crate::rest::transactions::ResolveTransactionQueryParameters;
 use crate::rest::transactions::ResolveTransactionResponse;
 use crate::rest::transactions::TransactionSimulationResponse;
 use crate::types::CheckpointResponse;
-use crate::types::NodeInfo;
 use crate::types::TransactionResponse;
 use crate::types::X_SUI_CHAIN;
 use crate::types::X_SUI_CHAIN_ID;
@@ -78,14 +77,6 @@ impl Client {
 
     pub fn url(&self) -> &Url {
         &self.url
-    }
-
-    pub async fn node_info(&self) -> Result<Response<NodeInfo>> {
-        let url = self.url().join("")?;
-
-        let request = self.inner.get(url);
-
-        self.json(request).await
     }
 
     pub async fn health_check(&self, threshold_seconds: Option<u32>) -> Result<Response<()>> {
