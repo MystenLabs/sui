@@ -2277,12 +2277,17 @@ impl CheckpointService {
     pub async fn wait_for_rebuilt_checkpoints(&self) {
         let highest_previously_built_seq = self.highest_previously_built_seq;
         let mut rx = self.highest_currently_built_seq_tx.subscribe();
+        let mut highest_currently_built_seq = *rx.borrow_and_update();
+        info!(
+            "Waiting for checkpoints to be rebuilt, previously built seq: {highest_previously_built_seq}, currently built seq: {highest_currently_built_seq}"
+        );
         loop {
-            let highest_currently_built_seq = *rx.borrow_and_update();
             if highest_currently_built_seq >= highest_previously_built_seq {
+                info!("Checkpoint rebuild complete");
                 break;
             }
             rx.changed().await.unwrap();
+            highest_currently_built_seq = *rx.borrow_and_update();
         }
     }
 
