@@ -1,0 +1,291 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 11-13:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u64, sui::coin::Coin<sui::sui::SUI>>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2979200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-17:
+//# programmable --sender A --inputs @A 42 43 44
+//> 0: SplitCoins(Gas, [Input(1), Input(2), Input(3)]);
+//> 1: TransferObjects([NestedResult(0,0), NestedResult(0,1), NestedResult(0,2)], Input(0))
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 19-21:
+//# programmable --sender A --inputs @A 45 46 47
+//> 0: SplitCoins(Gas, [Input(1), Input(2), Input(3)]);
+//> 1: TransferObjects([NestedResult(0,0), NestedResult(0,1), NestedResult(0,2)], Input(0))
+created: object(3,0), object(3,1), object(3,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 23:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 25-39:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": [
+    {
+      "data": {
+        "objectId": "0x8f6a9e2ab5d577014e24a3da8c8f3ca4b037132e3586cd4a25c5fd26d01b9965",
+        "version": "3",
+        "digest": "Hv8Uz2Jr45bANWHnEHukUdd6XzxnqYTKgrR7PQuowyp7",
+        "previousTransaction": "39cbD6LsWG38baffyLj8mHXt5RXFNzks9FCE9aJ6ZvCb"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x9413fd1f69f1d9310ad6a23fc1c45634c658cdd06187bdfa25f6a7e4c56361da",
+        "version": "3",
+        "digest": "Ee6o7whthmVr2mA1WfPWV7pcwbJDHXEfmeRTDFQwzN7t",
+        "previousTransaction": "39cbD6LsWG38baffyLj8mHXt5RXFNzks9FCE9aJ6ZvCb"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0xba0168804d275bf0e06d07d80af8e9217ba9ef544e7ea44fe91af30b9b0deabd",
+        "version": "3",
+        "digest": "F4HyAA7rcGZjYrpBwVrJ5H7jjtuSiWSbp2Yyvvacb2CK",
+        "previousTransaction": "39cbD6LsWG38baffyLj8mHXt5RXFNzks9FCE9aJ6ZvCb"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x22dc0e3ece8fff96d44adcdc4df625fb83d59cef839b9f753bdf09de5ad73c7d",
+        "version": "4",
+        "digest": "8kZPFg4X6tTYQD5hYWo3m6Tabw8mVUWgCYZFQ6DDCbnN",
+        "previousTransaction": "5FXfQ5B9shMYaXaJsqR4B3z4jDzVHw7bwCGabN1kJdir"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x9d8aed2d1c9ce29699db57bc37be56812257c92b15e17326fcd9a4fd693b8121",
+        "version": "4",
+        "digest": "CZtu4tdm685KfBMFMZz6NFgaKXagktQYsBeztGsEgE9C",
+        "previousTransaction": "5FXfQ5B9shMYaXaJsqR4B3z4jDzVHw7bwCGabN1kJdir"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0xd974de1faf8d949dcd839f8c489cc5bbf8dcd65255ce55988ddcd1d0e6a6911a",
+        "version": "4",
+        "digest": "5CgQpv3fyy7z87aLhw8x5L9FC5qtJerM1YPuEsqgUD7D",
+        "previousTransaction": "5FXfQ5B9shMYaXaJsqR4B3z4jDzVHw7bwCGabN1kJdir"
+      }
+    }
+  ]
+}
+
+task 6, lines 41-43:
+//# programmable --sender A --inputs object(2,0) 21
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 7, line 45:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 8, lines 47-61:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": [
+    {
+      "data": {
+        "objectId": "0x8f6a9e2ab5d577014e24a3da8c8f3ca4b037132e3586cd4a25c5fd26d01b9965",
+        "version": "5",
+        "digest": "J4X6cWTUYDeTKmpYBBmwvjKTA46tHeHnCSF2fPJmhadJ",
+        "previousTransaction": "2iS5PyX2Bxd3r7aHHDNtLVM3EJuRPQVAaWhJyjvYH4YZ"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x9413fd1f69f1d9310ad6a23fc1c45634c658cdd06187bdfa25f6a7e4c56361da",
+        "version": "3",
+        "digest": "Ee6o7whthmVr2mA1WfPWV7pcwbJDHXEfmeRTDFQwzN7t",
+        "previousTransaction": "39cbD6LsWG38baffyLj8mHXt5RXFNzks9FCE9aJ6ZvCb"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0xba0168804d275bf0e06d07d80af8e9217ba9ef544e7ea44fe91af30b9b0deabd",
+        "version": "3",
+        "digest": "F4HyAA7rcGZjYrpBwVrJ5H7jjtuSiWSbp2Yyvvacb2CK",
+        "previousTransaction": "39cbD6LsWG38baffyLj8mHXt5RXFNzks9FCE9aJ6ZvCb"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x22dc0e3ece8fff96d44adcdc4df625fb83d59cef839b9f753bdf09de5ad73c7d",
+        "version": "4",
+        "digest": "8kZPFg4X6tTYQD5hYWo3m6Tabw8mVUWgCYZFQ6DDCbnN",
+        "previousTransaction": "5FXfQ5B9shMYaXaJsqR4B3z4jDzVHw7bwCGabN1kJdir"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x9d8aed2d1c9ce29699db57bc37be56812257c92b15e17326fcd9a4fd693b8121",
+        "version": "4",
+        "digest": "CZtu4tdm685KfBMFMZz6NFgaKXagktQYsBeztGsEgE9C",
+        "previousTransaction": "5FXfQ5B9shMYaXaJsqR4B3z4jDzVHw7bwCGabN1kJdir"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0xd974de1faf8d949dcd839f8c489cc5bbf8dcd65255ce55988ddcd1d0e6a6911a",
+        "version": "4",
+        "digest": "5CgQpv3fyy7z87aLhw8x5L9FC5qtJerM1YPuEsqgUD7D",
+        "previousTransaction": "5FXfQ5B9shMYaXaJsqR4B3z4jDzVHw7bwCGabN1kJdir"
+      }
+    }
+  ]
+}
+
+task 9, lines 63-64:
+//# programmable --sender A --inputs object(1,0) 0 object(3,0)
+//> 0: sui::table::add<u64, sui::coin::Coin<sui::sui::SUI>>(Input(0), Input(1), Input(2))
+created: object(9,0)
+mutated: object(0,0), object(1,0)
+wrapped: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 5335200,  storage_rebate: 3927528, non_refundable_storage_fee: 39672
+
+task 10, line 66:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 11, lines 68-82:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": [
+    {
+      "data": {
+        "objectId": "0x8f6a9e2ab5d577014e24a3da8c8f3ca4b037132e3586cd4a25c5fd26d01b9965",
+        "version": "5",
+        "digest": "J4X6cWTUYDeTKmpYBBmwvjKTA46tHeHnCSF2fPJmhadJ",
+        "previousTransaction": "2iS5PyX2Bxd3r7aHHDNtLVM3EJuRPQVAaWhJyjvYH4YZ"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x9413fd1f69f1d9310ad6a23fc1c45634c658cdd06187bdfa25f6a7e4c56361da",
+        "version": "3",
+        "digest": "Ee6o7whthmVr2mA1WfPWV7pcwbJDHXEfmeRTDFQwzN7t",
+        "previousTransaction": "39cbD6LsWG38baffyLj8mHXt5RXFNzks9FCE9aJ6ZvCb"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0xba0168804d275bf0e06d07d80af8e9217ba9ef544e7ea44fe91af30b9b0deabd",
+        "version": "3",
+        "digest": "F4HyAA7rcGZjYrpBwVrJ5H7jjtuSiWSbp2Yyvvacb2CK",
+        "previousTransaction": "39cbD6LsWG38baffyLj8mHXt5RXFNzks9FCE9aJ6ZvCb"
+      }
+    },
+    {
+      "error": {
+        "code": "notExists",
+        "object_id": "0x22dc0e3ece8fff96d44adcdc4df625fb83d59cef839b9f753bdf09de5ad73c7d"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x9d8aed2d1c9ce29699db57bc37be56812257c92b15e17326fcd9a4fd693b8121",
+        "version": "4",
+        "digest": "CZtu4tdm685KfBMFMZz6NFgaKXagktQYsBeztGsEgE9C",
+        "previousTransaction": "5FXfQ5B9shMYaXaJsqR4B3z4jDzVHw7bwCGabN1kJdir"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0xd974de1faf8d949dcd839f8c489cc5bbf8dcd65255ce55988ddcd1d0e6a6911a",
+        "version": "4",
+        "digest": "5CgQpv3fyy7z87aLhw8x5L9FC5qtJerM1YPuEsqgUD7D",
+        "previousTransaction": "5FXfQ5B9shMYaXaJsqR4B3z4jDzVHw7bwCGabN1kJdir"
+      }
+    }
+  ]
+}
+
+task 12, lines 84-85:
+//# programmable --sender A --inputs object(2,1)
+//> MergeCoins(Gas, [Input(0)])
+mutated: object(0,0)
+deleted: object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 13, line 87:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 14, lines 89-103:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": [
+    {
+      "data": {
+        "objectId": "0x8f6a9e2ab5d577014e24a3da8c8f3ca4b037132e3586cd4a25c5fd26d01b9965",
+        "version": "5",
+        "digest": "J4X6cWTUYDeTKmpYBBmwvjKTA46tHeHnCSF2fPJmhadJ",
+        "previousTransaction": "2iS5PyX2Bxd3r7aHHDNtLVM3EJuRPQVAaWhJyjvYH4YZ"
+      }
+    },
+    {
+      "error": {
+        "code": "notExists",
+        "object_id": "0x9413fd1f69f1d9310ad6a23fc1c45634c658cdd06187bdfa25f6a7e4c56361da"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0xba0168804d275bf0e06d07d80af8e9217ba9ef544e7ea44fe91af30b9b0deabd",
+        "version": "3",
+        "digest": "F4HyAA7rcGZjYrpBwVrJ5H7jjtuSiWSbp2Yyvvacb2CK",
+        "previousTransaction": "39cbD6LsWG38baffyLj8mHXt5RXFNzks9FCE9aJ6ZvCb"
+      }
+    },
+    {
+      "error": {
+        "code": "notExists",
+        "object_id": "0x22dc0e3ece8fff96d44adcdc4df625fb83d59cef839b9f753bdf09de5ad73c7d"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x9d8aed2d1c9ce29699db57bc37be56812257c92b15e17326fcd9a4fd693b8121",
+        "version": "4",
+        "digest": "CZtu4tdm685KfBMFMZz6NFgaKXagktQYsBeztGsEgE9C",
+        "previousTransaction": "5FXfQ5B9shMYaXaJsqR4B3z4jDzVHw7bwCGabN1kJdir"
+      }
+    },
+    {
+      "data": {
+        "objectId": "0xd974de1faf8d949dcd839f8c489cc5bbf8dcd65255ce55988ddcd1d0e6a6911a",
+        "version": "4",
+        "digest": "5CgQpv3fyy7z87aLhw8x5L9FC5qtJerM1YPuEsqgUD7D",
+        "previousTransaction": "5FXfQ5B9shMYaXaJsqR4B3z4jDzVHw7bwCGabN1kJdir"
+      }
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 23 tasks
+
+init:
+C: object(0,0), validator_0: object(0,1)
+
+task 1, line 10:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, line 12:
+//# advance-epoch
+Epoch advanced: 0
+
+task 3, lines 14-16:
+//# programmable --sender C --inputs 10000000000 @C
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, line 18:
+//# run 0x3::sui_system::request_add_stake --args object(0x5) object(3,0) @validator_0 --sender C
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [248, 78, 186, 99, 231, 9, 139, 242, 111, 186, 194, 226, 178, 139, 36, 108, 107, 38, 243, 45, 234, 239, 71, 218, 67, 179, 228, 139, 121, 123, 170, 161, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 1, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
+created: object(4,0)
+mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 15078400,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 5, line 20:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 6, line 22:
+//# advance-epoch
+Epoch advanced: 1
+
+task 7, line 24:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 8, line 26:
+//# advance-epoch
+Epoch advanced: 2
+
+task 9, lines 28-30:
+//# programmable --sender C --inputs 10000000000 @C
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(9,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, line 32:
+//# create-checkpoint
+Checkpoint created: 7
+
+task 11, line 34:
+//# advance-epoch
+Epoch advanced: 3
+
+task 12, line 36:
+//# run 0x3::sui_system::request_withdraw_stake --args object(0x5) object(4,0) --sender C
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("UnstakingRequestEvent"), type_params: [] }, contents: [248, 78, 186, 99, 231, 9, 139, 242, 111, 186, 194, 226, 178, 139, 36, 108, 107, 38, 243, 45, 234, 239, 71, 218, 67, 179, 228, 139, 121, 123, 170, 161, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 2, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+created: object(12,0)
+mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0)
+deleted: object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 14774400,  storage_rebate: 14927616, non_refundable_storage_fee: 150784
+
+task 13, line 38:
+//# create-checkpoint
+Checkpoint created: 9
+
+task 14, line 40:
+//# advance-epoch
+Epoch advanced: 4
+
+task 15, lines 42-44:
+//# programmable --sender C --inputs 10000000000 @C
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(15,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, line 46:
+//# create-checkpoint
+Checkpoint created: 11
+
+task 17, line 48:
+//# advance-epoch
+Epoch advanced: 5
+
+task 18, lines 50-60:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "epochId": 4,
+      "systemStateVersion": 2,
+      "storageFund": {
+        "totalObjectStorageRebates": "16066400",
+        "nonRefundableBalance": "29640"
+      }
+    }
+  }
+}
+
+task 19, lines 62-72:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "epochId": 3,
+      "systemStateVersion": 2,
+      "storageFund": {
+        "totalObjectStorageRebates": "15078400",
+        "nonRefundableBalance": "19760"
+      }
+    }
+  }
+}
+
+task 20, lines 74-84:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "epochId": 2,
+      "systemStateVersion": 2,
+      "storageFund": {
+        "totalObjectStorageRebates": "15078400",
+        "nonRefundableBalance": "19760"
+      }
+    }
+  }
+}
+
+task 21, lines 86-96:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "epochId": 1,
+      "systemStateVersion": 2,
+      "storageFund": {
+        "totalObjectStorageRebates": "0",
+        "nonRefundableBalance": "0"
+      }
+    }
+  }
+}
+
+task 22, lines 98-108:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "epochId": 4,
+      "systemStateVersion": 2,
+      "storageFund": {
+        "totalObjectStorageRebates": "16066400",
+        "nonRefundableBalance": "29640"
+      }
+    }
+  }
+}

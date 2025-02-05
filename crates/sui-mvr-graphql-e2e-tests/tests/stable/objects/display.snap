@@ -1,0 +1,122 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-130:
+//# publish --sender A
+events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [50, 4, 50, 221, 146, 116, 124, 168, 170, 179, 99, 227, 72, 95, 129, 228, 10, 223, 66, 108, 254, 161, 49, 27, 162, 255, 7, 195, 168, 245, 89, 103] }
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 21470000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 132:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 134:
+//# view-checkpoint
+CheckpointSummary { epoch: 0, seq: 1, content_digest: 38F9Kd5S9DxwyU8sCegbmKqkYPZrjZBZicUNhhhbPsKu,
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 1000000, storage_cost: 21470000, storage_rebate: 0, non_refundable_storage_fee: 0 }}
+
+task 4, line 136:
+//# run Test::boars::create_bear --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3556800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 138:
+//# run Test::boars::update_display_faulty --sender A --args object(1,1)
+events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [50, 4, 50, 221, 146, 116, 124, 168, 170, 179, 99, 227, 72, 95, 129, 228, 10, 223, 66, 108, 254, 161, 49, 27, 162, 255, 7, 195, 168, 245, 89, 103, 1, 0, 3, 7, 118, 101, 99, 116, 111, 114, 115, 5, 123, 118, 101, 99, 125, 3, 105, 100, 100, 5, 123, 105, 100, 100, 125, 5, 110, 97, 109, 101, 101, 7, 123, 110, 97, 109, 101, 101, 125] }
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 2941200,  storage_rebate: 2625876, non_refundable_storage_fee: 26524
+
+task 6, line 140:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, line 142:
+//# view-checkpoint
+CheckpointSummary { epoch: 0, seq: 2, content_digest: 2UUsxLrzkkoM2BZmzxtmF2JyJrQVjUz7a3WbkQbMSkUN,
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 3000000, storage_cost: 27968000, storage_rebate: 3603996, non_refundable_storage_fee: 36404 }}
+
+task 8, lines 144-157:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "objects": {
+        "nodes": [
+          {
+            "display": null
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 9, line 159:
+//# run Test::boars::single_add --sender A --args object(1,1)
+events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [50, 4, 50, 221, 146, 116, 124, 168, 170, 179, 99, 227, 72, 95, 129, 228, 10, 223, 66, 108, 254, 161, 49, 27, 162, 255, 7, 195, 168, 245, 89, 103, 2, 0, 4, 7, 118, 101, 99, 116, 111, 114, 115, 5, 123, 118, 101, 99, 125, 3, 105, 100, 100, 5, 123, 105, 100, 100, 125, 5, 110, 97, 109, 101, 101, 7, 123, 110, 97, 109, 101, 101, 125, 4, 110, 117, 109, 115, 6, 123, 110, 117, 109, 115, 125] }
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 3032400,  storage_rebate: 2911788, non_refundable_storage_fee: 29412
+
+task 10, line 161:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 11, line 163:
+//# view-checkpoint
+CheckpointSummary { epoch: 0, seq: 3, content_digest: 6GU2oy7ZTAeGuvjYLJ7tERdTW5BuynyhRoTr34W2o6tw,
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 4000000, storage_cost: 31000400, storage_rebate: 6515784, non_refundable_storage_fee: 65816 }}
+
+task 12, lines 165-178:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "objects": {
+        "nodes": [
+          {
+            "display": null
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 13, line 180:
+//# run Test::boars::multi_add --sender A --args object(1,1)
+events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [50, 4, 50, 221, 146, 116, 124, 168, 170, 179, 99, 227, 72, 95, 129, 228, 10, 223, 66, 108, 254, 161, 49, 27, 162, 255, 7, 195, 168, 245, 89, 103, 3, 0, 15, 7, 118, 101, 99, 116, 111, 114, 115, 5, 123, 118, 101, 99, 125, 3, 105, 100, 100, 5, 123, 105, 100, 100, 125, 5, 110, 97, 109, 101, 101, 7, 123, 110, 97, 109, 101, 101, 125, 4, 110, 117, 109, 115, 6, 123, 110, 117, 109, 115, 125, 5, 98, 111, 111, 108, 115, 7, 123, 98, 111, 111, 108, 115, 125, 5, 98, 117, 121, 101, 114, 7, 123, 98, 117, 121, 101, 114, 125, 4, 110, 97, 109, 101, 6, 123, 110, 97, 109, 101, 125, 7, 99, 114, 101, 97, 116, 111, 114, 9, 123, 99, 114, 101, 97, 116, 111, 114, 125, 5, 112, 114, 105, 99, 101, 7, 123, 112, 114, 105, 99, 101, 125, 11, 112, 114, 111, 106, 101, 99, 116, 95, 117, 114, 108, 58, 85, 110, 105, 113, 117, 101, 32, 66, 111, 97, 114, 32, 102, 114, 111, 109, 32, 116, 104, 101, 32, 66, 111, 97, 114, 115, 32, 99, 111, 108, 108, 101, 99, 116, 105, 111, 110, 32, 119, 105, 116, 104, 32, 123, 110, 97, 109, 101, 125, 32, 97, 110, 100, 32, 123, 105, 100, 125, 8, 98, 97, 115, 101, 95, 117, 114, 108, 32, 104, 116, 116, 112, 115, 58, 47, 47, 103, 101, 116, 45, 97, 45, 98, 111, 97, 114, 46, 99, 111, 109, 47, 123, 105, 109, 103, 95, 117, 114, 108, 125, 11, 110, 111, 95, 116, 101, 109, 112, 108, 97, 116, 101, 23, 104, 116, 116, 112, 115, 58, 47, 47, 103, 101, 116, 45, 97, 45, 98, 111, 97, 114, 46, 99, 111, 109, 47, 3, 97, 103, 101, 21, 123, 109, 101, 116, 97, 100, 97, 116, 97, 46, 110, 101, 115, 116, 101, 100, 46, 97, 103, 101, 125, 8, 102, 117, 108, 108, 95, 117, 114, 108, 10, 123, 102, 117, 108, 108, 95, 117, 114, 108, 125, 13, 101, 115, 99, 97, 112, 101, 95, 115, 121, 110, 116, 97, 120, 8, 92, 123, 110, 97, 109, 101, 92, 125] }
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 3002076, non_refundable_storage_fee: 30324
+
+task 14, line 182:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 15, line 184:
+//# view-checkpoint
+CheckpointSummary { epoch: 0, seq: 4, content_digest: XAuLWwCkKRGkkGtQopDS64y6VLVMRxRZTKUrSmJWJPS,
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 5000000, storage_cost: 36236800, storage_rebate: 9517860, non_refundable_storage_fee: 96140 }}
+
+task 16, lines 186-199:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "objects": {
+        "nodes": [
+          {
+            "display": null
+          }
+        ]
+      }
+    }
+  }
+}
