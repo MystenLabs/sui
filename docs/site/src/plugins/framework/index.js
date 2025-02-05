@@ -15,11 +15,11 @@ const BRIDGE_PATH = path.join(
 );
 const FRAMEWORK_PATH = path.join(
   __dirname,
-  "../../../../../crates/sui-framework/docs/sui-framework",
+  "../../../../../crates/sui-framework/docs/sui",
 );
 const STDLIB_PATH = path.join(
   __dirname,
-  "../../../../../crates/sui-framework/docs/move-stdlib",
+  "../../../../../crates/sui-framework/docs/std",
 );
 const DEEPBOOK_PATH = path.join(
   __dirname,
@@ -27,7 +27,7 @@ const DEEPBOOK_PATH = path.join(
 );
 const SUISYS_PATH = path.join(
   __dirname,
-  "../../../../../crates/sui-framework/docs/sui-system",
+  "../../../../../crates/sui-framework/docs/sui_system",
 );
 const DOCS_PATH = path.join(
   __dirname,
@@ -86,14 +86,22 @@ const frameworkPlugin = (context, options) => {
           // Remove code blocks without pre's. Render automatically adds
           // pre element that messes up formatting.
           // Remove empty code blocks because it looks lame.
+          // Replace named anchor tags for titles with id'd title.
+          // Replace remaining named anchor tags with ids and scroll margin
+          // inline. Necessary for mdx to process correctly.
           let reMarkdown = markdown
             .replace(/<a\s+(.*?)\.md(.*?)>/g, `<a $1$2>`)
             .replace(
-              /(title: .*)Module `(0x[1-9a-f]{1,4}::)(.*)`/g,
+              /(title: .*)Module `(.*::)(.*)`/g,
               `$1 Module $2$3\nsidebar_label: $3`,
             )
             .replace(/(?<!<pre>)<code>(.*?)<\/code>/gs, `$1`)
-            .replace(/<pre><code><\/code><\/pre>/g, "");
+            .replace(/<pre><code><\/code><\/pre>/g, "")
+            .replace(
+              /<a name="([^"]+)"><\/a>\n\n(#+) (.+) `([^`]+)`/g,
+              `$2 $3 \`$4\` {#$1}`,
+            )
+            .replace(/<a name=/g, "<a style='scroll-margin-top:80px' id=");
           const filename = file.replace(/.*\/docs\/(.*)$/, `$1`);
           const parts = filename.split("/");
           const fileWrite = path.join(DOCS_PATH, filename);
