@@ -85,6 +85,9 @@ service NodeService {
 
   // Request information for the specified coin type.
   rpc GetCoinInfo(GetCoinInfoRequest) returns (GetCoinInfoResponse);
+
+  // List the dynamic fields for provided parent.
+  rpc ListDynamicFields(ListDynamicFieldsRequest) returns (ListDynamicFieldsResponse);
 }
 
 // Request message for `NodeService.GetNodeInfo`.
@@ -728,4 +731,54 @@ message RegulatedCoinMetadata {
   optional sui.types.ObjectId coin_metadata_object = 2;
   // The ID of the coin's `DenyCap` object.
   optional sui.types.ObjectId deny_cap_object = 3;
+}
+
+
+// Request message for `NodeService.ListDynamicFields`
+message ListDynamicFieldsRequest {
+  // Required. The `UID` of the parent, which owns the collections of dynamic fields.
+  optional sui.types.ObjectId parent = 1;
+
+  // The maximum number of dynamic fields to return. The service may return fewer than this value.
+  // If unspecified, at most `50` entries will be returned.
+  // The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+  optional uint32 page_size = 2;
+
+  // A page token, received from a previous `ListDynamicFields` call.
+  // Provide this to retrieve the subsequent page.
+  //
+  // When paginating, all other parameters provided to `ListDynamicFields` must
+  // match the call that provided the page token.
+  optional string page_token = 3;
+}
+
+// Response message for `NodeService.ListDynamicFields`
+message ListDynamicFieldsResponse {
+  // Page of dynamic fields owned by the specified parent.
+  repeated DynamicField dynamic_fields = 1;
+
+  // A token, which can be sent as `page_token` to retrieve the next page.
+  // If this field is omitted, there are no subsequent pages.
+  optional string next_page_token = 2;
+}
+
+message DynamicField {
+  // Required. ObjectId of this dynamic field's parent.
+  optional sui.types.ObjectId parent = 1;
+
+  // Required. ObjectId of this dynamic field.
+  optional sui.types.ObjectId field_id = 2;
+
+  // Required. The type of the dynamic field "name"
+  optional sui.types.TypeTag name_type = 3;
+
+  // Required. The serialized move value of "name"
+  optional bytes name_value = 4;
+
+  // Optional. The ObjectId of the child object when a child is a dynamic
+  // object field.
+  //
+  // The presence or absence of this field can be used to determine if a child
+  // is a dynamic field or a dynamic child object
+  optional sui.types.ObjectId dynamic_object_id = 5;
 }

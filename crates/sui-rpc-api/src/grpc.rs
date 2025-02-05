@@ -288,6 +288,18 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
+
+    async fn list_dynamic_fields(
+        &self,
+        request: tonic::Request<crate::proto::node::v2::ListDynamicFieldsRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2::ListDynamicFieldsResponse>,
+        tonic::Status,
+    > {
+        self.list_dynamic_fields(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
 }
 
 use crate::proto::node::v2alpha::SubscribeCheckpointsResponse;
