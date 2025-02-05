@@ -10,12 +10,21 @@ use move_core_types::{
 use lasso::{Spur, ThreadedRodeo};
 
 /// A wrapper around a lasso ThreadedRoade with some niceties to make it easier to use in the VM.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct IdentifierInterner(ThreadedRodeo);
+
+/// Maximum number of identifiers we can ever intern.
+/// FIXME: Set to 1 billion, but should be experimentally determined based on actual run data.
+const IDENTIFIER_SLOTS: usize = 1_000_000_000;
 
 pub type IdentifierKey = Spur;
 
 impl IdentifierInterner {
+    pub fn new() -> Self {
+        let rodeo = ThreadedRodeo::with_capacity(lasso::Capacity::for_strings(IDENTIFIER_SLOTS));
+        Self(rodeo)
+    }
+
     /// Resolve a string in the interner or produce an invariant violation (as they should always be
     /// there). The `key_type` is used to make a more-informative error message.
     pub fn resolve_string(&self, key: &IdentifierKey, key_type: &str) -> PartialVMResult<String> {
@@ -46,10 +55,8 @@ impl IdentifierInterner {
     fn get_or_intern_str(&self, string: &str) -> PartialVMResult<IdentifierKey> {
         match self.0.try_get_or_intern(string) {
             Ok(result) => Ok(result),
-            Err(err) => Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Failed to intern string {string}; error: {err:?}.")),
-            ),
+            Err(err) => Err(PartialVMError::new(StatusCode::INTERNER_LIMIT_REACHED)
+                .with_message(format!("Failed to intern string {string}; error: {err:?}."))),
         }
     }
 

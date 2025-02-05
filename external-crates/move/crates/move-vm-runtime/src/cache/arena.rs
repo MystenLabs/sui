@@ -3,6 +3,9 @@
 
 #![allow(unsafe_code)]
 
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::vm_status::StatusCode;
+
 use bumpalo::Bump;
 
 // -------------------------------------------------------------------------------------------------
@@ -11,13 +14,21 @@ use bumpalo::Bump;
 
 pub struct Arena(Bump);
 
+/// Size of a package arena.
+/// This is 10 megabytes, which should be more than enough room for any pacakge on chain.
+/// FIXME: Test this limit and validate. See how large packages are in backtesting and double that
+/// limit, setting it here.
+const ARENA_SIZE: usize = 10_000_000;
+
 // -------------------------------------------------------------------------------------------------
 // Impls
 // -------------------------------------------------------------------------------------------------
 
 impl Default for Arena {
     fn default() -> Self {
-        Self::new()
+        let bump = Bump::new();
+        bump.set_allocation_limit(Some(ARENA_SIZE));
+        Arena(bump)
     }
 }
 
@@ -30,9 +41,15 @@ impl Arena {
     /// threads during this call. This should be fine as the translation step that uses an arena
     /// should happen in a thread that holds that arena, with no other contention for allocation
     /// into it, and nothing should allocate into a LoadedModule after it is loaded.
-    pub fn alloc_slice<T>(&self, items: impl ExactSizeIterator<Item = T>) -> *mut [T] {
-        let slice = self.0.alloc_slice_fill_iter(items);
-        slice as *mut [T]
+    pub fn alloc_slice<T>(
+        &self,
+        items: impl ExactSizeIterator<Item = T>,
+    ) -> PartialVMResult<*mut [T]> {
+        if let Ok(slice) = self.0.try_alloc_slice_fill_iter(items) {
+            Ok(slice)
+        } else {
+            Err(PartialVMError::new(StatusCode::PACKAGE_ARENA_LIMIT_REACHED))
+        }
     }
 }
 

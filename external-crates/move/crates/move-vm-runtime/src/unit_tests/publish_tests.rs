@@ -24,7 +24,7 @@ fn publish_package_no_init() {
         .pop()
         .expect("heh");
 
-    let _ = adapter
+    adapter
         .publish_package(package_address, pkg.into_serialized_package())
         .expect("Failed verification");
 }

@@ -1134,9 +1134,9 @@ impl Type {
 // Into
 // -------------------------------------------------------------------------------------------------
 
-impl Into<Opcodes> for &Bytecode {
-    fn into(self) -> Opcodes {
-        match self {
+impl From<&Bytecode> for Opcodes {
+    fn from(val: &Bytecode) -> Self {
+        match val {
             Bytecode::Pop => Opcodes::POP,
             Bytecode::Ret => Opcodes::RET,
             Bytecode::BrTrue(_) => Opcodes::BR_TRUE,

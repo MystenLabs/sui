@@ -3512,7 +3512,7 @@ impl Container {
                     })
                     .collect::<Option<Vec<_>>>()?;
 
-                let tag = tag.clone();
+                let tag = *tag;
                 let type_ = type_.clone();
                 let variant_name = variant_name.clone();
                 let variant = AnnVariant {

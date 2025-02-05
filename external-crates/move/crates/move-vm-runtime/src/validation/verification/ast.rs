@@ -26,8 +26,8 @@ pub struct Package {
 /// A deserialized, internally-verified module.
 #[derive(Debug, Clone)]
 pub struct Module {
-    // This field is intentionally private, as we should not allow creation of verified Packages without
-    // going through the verifier.
+    // This field is intentionally crate-only, as we should not allow creation of verified Packages
+    // without going through the verifier.
     pub(crate) value: CompiledModule,
 }
 

@@ -12,7 +12,7 @@ pub(crate) const TRACING_ENABLED: bool = true;
 pub(crate) const TRACING_ENABLED: bool = false;
 
 #[inline]
-pub(crate) fn trace<'a, F: Fn(&mut VMTracer<'a>) -> ()>(tracer: &mut Option<VMTracer<'a>>, op: F) {
+pub(crate) fn trace<'a, F: Fn(&mut VMTracer<'a>)>(tracer: &mut Option<VMTracer<'a>>, op: F) {
     if TRACING_ENABLED {
         if let Some(tracer) = tracer {
             op(tracer)

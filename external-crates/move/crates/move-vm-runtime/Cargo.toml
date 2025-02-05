@@ -26,6 +26,7 @@ sha2.workspace = true
 sha3.workspace = true
 smallvec.workspace = true
 tracing.workspace = true
+move-abstract-interpreter.workspace = true
 
 # referred to via path for execution versioning
 move-bytecode-verifier = { path = "../move-bytecode-verifier" }
