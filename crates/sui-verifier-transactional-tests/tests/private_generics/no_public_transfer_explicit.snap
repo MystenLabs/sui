@@ -1,0 +1,75 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+task 1, lines 8-24:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 30-39:
+//# publish
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Enum StoreEnum cannot have the 'key' ability. Enums cannot have the 'key' ability."), command: Some(0) } }
+
+task 4, lines 41-51:
+//# publish --dependencies test
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::transfer' on an object of type 'test::m::KeyStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_transfer'"), command: Some(0) } }
+
+task 5, lines 53-63:
+//# publish --dependencies test
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::freeze_object' on an object of type 'test::m::KeyStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_freeze_object'"), command: Some(0) } }
+
+task 6, lines 65-75:
+//# publish --dependencies test
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::share_object' on an object of type 'test::m::KeyStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_share_object'"), command: Some(0) } }
+
+task 7, lines 77-91:
+//# publish --dependencies test
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::receive' on an object of type 'test::m::KeyStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_receive'"), command: Some(0) } }
+
+task 8, lines 93-103:
+//# publish --dependencies test
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::transfer' on an object of type 'test::m::KeyStoreStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_transfer'"), command: Some(0) } }
+
+task 9, lines 105-115:
+//# publish --dependencies test
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::freeze_object' on an object of type 'test::m::KeyStoreStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_freeze_object'"), command: Some(0) } }
+
+task 10, lines 117-127:
+//# publish --dependencies test
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::share_object' on an object of type 'test::m::KeyStoreStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_share_object'"), command: Some(0) } }
+
+task 11, lines 129-143:
+//# publish --dependencies test
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::receive' on an object of type 'test::m::KeyStoreStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_receive'"), command: Some(0) } }
+
+task 12, lines 145-155:
+//# publish --dependencies test
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: Some("expected type with abilities [Key, ] got type actual Struct(DatatypeHandleIndex(0)) with incompatible abilities [Store, ] at offset 2 "), exec_state: None, location: Module(ModuleId { address: _, name: Identifier("u") }), indices: [(Signature, 1), (FunctionDefinition, 0)], offsets: [] }), command: Some(0) } }
+
+task 13, lines 157-167:
+//# publish --dependencies test
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: Some("expected type with abilities [Key, ] got type actual Struct(DatatypeHandleIndex(0)) with incompatible abilities [Store, ] at offset 1 "), exec_state: None, location: Module(ModuleId { address: _, name: Identifier("u") }), indices: [(Signature, 1), (FunctionDefinition, 0)], offsets: [] }), command: Some(0) } }
+
+task 14, lines 169-179:
+//# publish --dependencies test
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: Some("expected type with abilities [Key, ] got type actual Struct(DatatypeHandleIndex(0)) with incompatible abilities [Store, ] at offset 1 "), exec_state: None, location: Module(ModuleId { address: _, name: Identifier("u") }), indices: [(Signature, 1), (FunctionDefinition, 0)], offsets: [] }), command: Some(0) } }
+
+task 15, lines 181-193:
+//# publish --dependencies test
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: Some("expected type with abilities [Key, ] got type actual Struct(DatatypeHandleIndex(0)) with incompatible abilities [Store, ]"), exec_state: None, location: Module(ModuleId { address: _, name: Identifier("u") }), indices: [(Signature, 0), (FunctionHandle, 0)], offsets: [] }), command: Some(0) } }

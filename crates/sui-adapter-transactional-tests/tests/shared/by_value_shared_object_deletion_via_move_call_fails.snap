@@ -1,0 +1,137 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+task 1, lines 6-57:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 8869200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 59:
+//# run t2::o2::create
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 61:
+//# run t2::o2::create
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 63:
+//# view-object 2,0
+Owner: Shared( 3 )
+Version: 3
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 5, lines 65-67:
+//# view-object 3,0
+Owner: Shared( 4 )
+Version: 4
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 6, lines 68-72:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: t2::o2::id<t2::o2::Obj2>(Input(1));
+//> 1: t2::o2::freezer(Result(0));
+// pass through a move function and then try to add as dof
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 7, lines 73-77:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: t2::o2::id<t2::o2::Obj2>(Input(1));
+//> 1: t2::o2::dofer(Input(0), Result(0));
+// pass through a move function and then try to add as df
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 8, lines 78-82:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: t2::o2::id<t2::o2::Obj2>(Input(1));
+//> 1: t2::o2::dfer(Input(0), Result(0));
+// pass through a move function and then try to transfer it
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 9, lines 83-85:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: t2::o2::id<t2::o2::Obj2>(Input(1));
+//> 1: t2::o2::transferer(Result(0));
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 10, line 87:
+//# run t2::o2::mint_shared_coin
+created: object(10,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, lines 89-91:
+//# view-object 10,0
+Owner: Shared( 9 )
+Version: 9
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(10,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
+
+task 12, lines 92-98:
+//# programmable --inputs 0 object(10,0) @0x0
+//> 0: t2::o2::id<sui::coin::Coin<sui::sui::SUI>>(Input(1));
+//> 1: SplitCoins(Result(0), [Input(0)]);
+//> 2: TransferObjects([Result(1)], Input(2));
+//> 3: sui::transfer::public_share_object<sui::coin::Coin<sui::sui::SUI>>(Input(1));
+// Try to double-use the input using a user-defined function
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(3)
+
+task 13, lines 99-105:
+//# programmable --inputs 0 object(10,0) @0x0
+//> 0: t2::o2::id<sui::coin::Coin<sui::sui::SUI>>(Input(1));
+//> 1: SplitCoins(Result(0), [Input(0)]);
+//> 2: TransferObjects([Result(1)], Input(2));
+//> 3: t2::o2::share_coin(Input(1));
+// Try to transfer the shared object and double-use the input
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(3)
+
+task 14, lines 106-112:
+//# programmable --inputs 0 object(10,0) @0x0
+//> 0: t2::o2::id<sui::coin::Coin<sui::sui::SUI>>(Input(1));
+//> 1: SplitCoins(Result(0), [Input(0)]);
+//> 2: TransferObjects([Result(1)], Input(2));
+//> 3: TransferObjects([Input(1)], Input(2));
+// Try to transfer the shared object
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(3)
+
+task 15, lines 113-117:
+//# programmable --inputs 0 object(10,0) @0x0
+//> 0: t2::o2::id<sui::coin::Coin<sui::sui::SUI>>(Input(1));
+//> 1: SplitCoins(Result(0), [Input(0)]);
+//> 2: TransferObjects([Result(1)], Input(2));
+//> 3: TransferObjects([Result(0)], Input(2));
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
