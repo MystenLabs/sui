@@ -54,6 +54,17 @@ pub(super) async fn live_object(
         ));
     }
 
+    latest_object(ctx, object_id, options).await
+}
+
+/// Assuming the latest version of this object exists, fetch it from the database and convert it
+/// into a response. This is intended to be used after checking with `obj_info` that the object is
+/// live.
+pub(super) async fn latest_object(
+    ctx: &Context,
+    object_id: ObjectID,
+    options: &SuiObjectDataOptions,
+) -> Result<SuiObjectResponse, RpcError> {
     // The fact that we found an `obj_info` record above means that the latest version of the
     // object does exist, so the following calls should find a valid latest version for the object,
     // and that version is expected to have content, so if either of those things don't happen,

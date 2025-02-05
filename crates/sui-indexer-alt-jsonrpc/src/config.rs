@@ -25,6 +25,8 @@ pub struct RpcConfig {
 #[derive(Clone, Default, Debug)]
 pub struct ObjectsLayer {
     pub max_multi_get_objects: Option<usize>,
+    pub default_page_size: Option<usize>,
+    pub max_page_size: Option<usize>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -64,6 +66,8 @@ impl ObjectsLayer {
             max_multi_get_objects: self
                 .max_multi_get_objects
                 .unwrap_or(base.max_multi_get_objects),
+            default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
+            max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
         }
     }
 }
@@ -82,6 +86,8 @@ impl From<ObjectsConfig> for ObjectsLayer {
     fn from(config: ObjectsConfig) -> Self {
         Self {
             max_multi_get_objects: Some(config.max_multi_get_objects),
+            default_page_size: Some(config.default_page_size),
+            max_page_size: Some(config.max_page_size),
             extra: Default::default(),
         }
     }

@@ -14204,6 +14204,7 @@ dependencies = [
  "pin-project-lite",
  "prometheus",
  "reqwest 0.12.9",
+ "schemars",
  "serde",
  "serde_json",
  "sui-default-config",

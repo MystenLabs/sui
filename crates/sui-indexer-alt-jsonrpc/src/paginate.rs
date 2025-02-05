@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Deref;
+
 use fastcrypto::{
     encoding::{Base64, Encoding},
     error::FastCryptoError,
@@ -19,8 +21,12 @@ pub(crate) trait Cursor: Sized {
     fn encode(&self) -> Result<String, Error>;
 }
 
-/// This type wraps a value used as a cursor in a paginated request or response. Cursors are
-/// serialized to JSON and then encoded as Base64.
+/// Wraps a value used as a cursor in a paginated request or response. This cursor format
+/// serializes to BCS and then encodes as Base64.
+pub(crate) struct BcsCursor<T>(pub T);
+
+/// Wraps a value used as a cursor in a paginated request or response. This cursor format
+/// serializes to JSON and then encodes as Base64.
 pub(crate) struct JsonCursor<T>(pub T);
 
 /// Description of a page to be fetched.
@@ -35,14 +41,33 @@ pub(crate) enum Error {
     #[error("Failed to decode Base64: {0}")]
     DecodingBase64(FastCryptoError),
 
+    #[error("Failed to decode BCS: {0}")]
+    DecodingBcs(bcs::Error),
+
     #[error("Failed to decode JSON: {0}")]
     DecodingJson(serde_json::error::Error),
+
+    #[error("Failed to encode BCS: {0}")]
+    EncodingBcs(bcs::Error),
 
     #[error("Failed to encode JSON: {0}")]
     EncodingJson(serde_json::error::Error),
 
     #[error("Requested page size {requested} exceeds maximum {max}")]
     ExceededMaxPageSize { requested: usize, max: usize },
+}
+
+impl<T: Serialize + DeserializeOwned> Cursor for BcsCursor<T> {
+    fn decode(s: &str) -> Result<Self, Error> {
+        let bytes = Base64::decode(s).map_err(Error::DecodingBase64)?;
+        let value = bcs::from_bytes(&bytes).map_err(Error::DecodingBcs)?;
+        Ok(BcsCursor(value))
+    }
+
+    fn encode(&self) -> Result<String, Error> {
+        let bytes = bcs::to_bytes(&self.0).map_err(Error::EncodingBcs)?;
+        Ok(Base64::encode(&bytes))
+    }
 }
 
 impl<T: Serialize + DeserializeOwned> Cursor for JsonCursor<T> {
@@ -88,5 +113,21 @@ impl<C: Cursor> Page<C> {
             limit: limit as i64,
             descending: descending.unwrap_or(false),
         })
+    }
+}
+
+impl<T> Deref for BcsCursor<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T> Deref for JsonCursor<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.0
     }
 }
