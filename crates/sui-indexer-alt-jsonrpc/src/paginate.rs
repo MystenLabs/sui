@@ -9,13 +9,23 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::error::{invalid_params, RpcError};
 
+pub(crate) trait Cursor: Sized {
+    /// Interpret the string as a cursor, Base64-decode it, and then deserialize it from JSON. A
+    /// failure to do so implies the cursor is invalid, which is treated as a user error.
+    fn decode(s: &str) -> Result<Self, Error>;
+
+    /// Represent the cursor in JSON, Base64-encoded. A failure implies the cursor is not properly
+    /// set-up, which is treated as an internal error.
+    fn encode(&self) -> Result<String, Error>;
+}
+
 /// This type wraps a value used as a cursor in a paginated request or response. Cursors are
 /// serialized to JSON and then encoded as Base64.
-pub(crate) struct Cursor<T>(pub T);
+pub(crate) struct JsonCursor<T>(pub T);
 
 /// Description of a page to be fetched.
-pub(crate) struct Page<T> {
-    pub cursor: Option<Cursor<T>>,
+pub(crate) struct Page<C: Cursor> {
+    pub cursor: Option<C>,
     pub limit: i64,
     pub descending: bool,
 }
@@ -35,26 +45,20 @@ pub(crate) enum Error {
     ExceededMaxPageSize { requested: usize, max: usize },
 }
 
-impl<T: DeserializeOwned> Cursor<T> {
-    /// Interpret the string as a cursor, Base64-decode it, and then deserialize it from JSON. A
-    /// failure to do so implies the cursor is invalid, which is treated as a user error.
-    pub(crate) fn decode(s: &str) -> Result<Self, Error> {
+impl<T: Serialize + DeserializeOwned> Cursor for JsonCursor<T> {
+    fn decode(s: &str) -> Result<Self, Error> {
         let bytes = Base64::decode(s).map_err(Error::DecodingBase64)?;
         let value: T = serde_json::from_slice(&bytes).map_err(Error::DecodingJson)?;
-        Ok(Cursor(value))
+        Ok(JsonCursor(value))
     }
-}
 
-impl<T: Serialize> Cursor<T> {
-    /// Represent the cursor in JSON, Base64-encoded. A failure implies the cursor is not properly
-    /// set-up, which is treated as an internal error.
-    pub(crate) fn encode(&self) -> Result<String, Error> {
+    fn encode(&self) -> Result<String, Error> {
         let bytes = serde_json::to_vec(&self.0).map_err(Error::EncodingJson)?;
         Ok(Base64::encode(&bytes))
     }
 }
 
-impl<T: DeserializeOwned> Page<T> {
+impl<C: Cursor> Page<C> {
     /// Interpret RPC method parameters as a description of a page to fetch.
     ///
     /// This operation can fail if the Cursor cannot be decoded, or the requested page is too
@@ -67,7 +71,7 @@ impl<T: DeserializeOwned> Page<T> {
         descending: Option<bool>,
     ) -> Result<Self, RpcError<E>> {
         let cursor = cursor
-            .map(|c| Cursor::decode(&c))
+            .map(|c| C::decode(&c))
             .transpose()
             .map_err(|e| invalid_params(E::from(e)))?;
 

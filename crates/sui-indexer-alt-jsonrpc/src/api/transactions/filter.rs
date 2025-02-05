@@ -26,11 +26,12 @@ use sui_types::{
 use crate::{
     data::{checkpoints::CheckpointKey, tx_digests::TxDigestKey},
     error::{invalid_params, RpcError},
-    paginate::{Cursor, Page},
+    paginate::{Cursor as _, JsonCursor, Page},
 };
 
 use super::{error::Error, Context, TransactionsConfig};
 
+type Cursor = JsonCursor<u64>;
 type Digests = PageResponse<TransactionDigest, String>;
 
 /// Fetch the digests for a page of transactions that satisfy the given `filter` and pagination
@@ -44,7 +45,7 @@ pub(super) async fn transactions(
     limit: Option<usize>,
     descending_order: Option<bool>,
 ) -> Result<Digests, RpcError<Error>> {
-    let page: Page<u64> = Page::from_params(
+    let page: Page<Cursor> = Page::from_params(
         config.default_page_size,
         config.max_page_size,
         cursor,
@@ -93,7 +94,7 @@ pub(super) async fn transactions(
 }
 
 /// Fetch a page of transaction digests without filtering them.
-async fn all_transactions(ctx: &Context, page: &Page<u64>) -> Result<Digests, RpcError<Error>> {
+async fn all_transactions(ctx: &Context, page: &Page<Cursor>) -> Result<Digests, RpcError<Error>> {
     use tx_digests::dsl as d;
 
     let query = d::tx_digests
@@ -115,7 +116,7 @@ async fn all_transactions(ctx: &Context, page: &Page<u64>) -> Result<Digests, Rp
 /// Fetch a page of transaction digests from the given `checkpoint` (by sequence number).
 async fn by_checkpoint(
     ctx: &Context,
-    page: &Page<u64>,
+    page: &Page<Cursor>,
     checkpoint: u64,
 ) -> Result<Digests, RpcError<Error>> {
     let Some(checkpoint) = ctx
@@ -184,7 +185,7 @@ async fn by_checkpoint(
 /// supply a package and function, but no module.
 async fn tx_calls(
     ctx: &Context,
-    page: &Page<u64>,
+    page: &Page<Cursor>,
     package: &ObjectID,
     module: Option<&String>,
     function: Option<&String>,
@@ -226,7 +227,7 @@ async fn tx_calls(
 /// or wrapped it).
 async fn tx_affected_objects(
     ctx: &Context,
-    page: &Page<u64>,
+    page: &Page<Cursor>,
     object: ObjectID,
 ) -> Result<Digests, RpcError<Error>> {
     use tx_affected_objects::dsl as o;
@@ -261,7 +262,7 @@ async fn tx_affected_objects(
 ///   (either it is the sender, or it is the recipient of one of the output objects).
 async fn tx_affected_addresses(
     ctx: &Context,
-    page: &Page<u64>,
+    page: &Page<Cursor>,
     from: Option<SuiAddress>,
     to: SuiAddress,
 ) -> Result<Digests, RpcError<Error>> {
@@ -301,7 +302,7 @@ async fn tx_affected_addresses(
 ///
 /// The query fetches one more element than the limit, to determine if there is a next page.
 fn paginate<'q, TX, ST, QS>(
-    page: &Page<u64>,
+    page: &Page<Cursor>,
     pipeline: &'static str,
     tx_sequence_number: TX,
     mut query: BoxedSelectStatement<'q, ST, FromClause<QS>, Pg>,
@@ -332,7 +333,7 @@ where
         )"#
     ))));
 
-    if let Some(Cursor(tx)) = page.cursor {
+    if let Some(JsonCursor(tx)) = page.cursor {
         if page.descending {
             query = query.filter(tx_sequence_number.lt(tx as i64));
         } else {
@@ -363,7 +364,7 @@ async fn from_sequence_numbers(
 
     let next_cursor = rows
         .last()
-        .map(|last| Cursor(*last).encode())
+        .map(|last| JsonCursor(*last).encode())
         .transpose()
         .context("Failed to encode next cursor")?;
 
@@ -410,7 +411,7 @@ fn from_digests(limit: i64, mut rows: Vec<(i64, Vec<u8>)>) -> Result<Digests, Rp
 
     let next_cursor = rows
         .last()
-        .map(|(last, _)| Cursor(*last).encode())
+        .map(|(last, _)| JsonCursor(*last).encode())
         .transpose()
         .context("Failed to encode next cursor")?;
 
