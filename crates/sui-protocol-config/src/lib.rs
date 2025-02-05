@@ -3267,7 +3267,7 @@ impl ProtocolConfig {
                     cfg.nitro_attestation_verify_base_cost = Some(49632 * 50);
                     cfg.nitro_attestation_verify_cost_per_cert = Some(52369 * 50);
 
-                    cfg.feature_flags.move_native_context = false;
+                    cfg.feature_flags.move_native_context = true;
 
                     cfg.tx_context_sender_cost_base = Some(30);
                     cfg.tx_context_epoch_cost_base = Some(30);

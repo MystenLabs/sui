@@ -118,6 +118,7 @@ mod checked {
             epoch_timestamp_ms,
             gas_price,
             sponsor,
+            protocol_config.move_native_context(),
         );
 
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();

@@ -15,6 +15,7 @@ const EBadTxHashLength: u64 = 0;
 /// Attempt to get the most recent created object ID when none has been created.
 const ENoIDsCreated: u64 = 1;
 
+#[allow(unused_field)]
 /// Information about the transaction currently being executed.
 /// This cannot be constructed by a transaction--it is a privileged object created by
 /// the VM and passed in to the entrypoint of the transaction as `&mut TxContext`.
@@ -34,45 +35,51 @@ public struct TxContext has drop {
 
 /// Return the address of the user that signed the current
 /// transaction
-public fun sender(self: &TxContext): address {
-    self.sender
+public fun sender(_self: &TxContext): address {
+    native_sender()
 }
+native fun native_sender(): address;
 
 /// Return the transaction digest (hash of transaction inputs).
 /// Please do not use as a source of randomness.
-public fun digest(self: &TxContext): &vector<u8> {
-    &self.tx_hash
+public fun digest(_self: &TxContext): &vector<u8> {
+    native_digest()
 }
+native fun native_digest(): &vector<u8>;
 
 /// Return the current epoch
-public fun epoch(self: &TxContext): u64 {
-    self.epoch
+public fun epoch(_self: &TxContext): u64 {
+    native_epoch()
 }
+native fun native_epoch(): u64;
 
 /// Return the epoch start time as a unix timestamp in milliseconds.
-public fun epoch_timestamp_ms(self: &TxContext): u64 {
-    self.epoch_timestamp_ms
+public fun epoch_timestamp_ms(_self: &TxContext): u64 {
+    native_epoch_timestamp_ms()
 }
+native fun native_epoch_timestamp_ms(): u64;
+
+/// Return the adress of the transaction sponsor or `None` if there was no sponsor.
+public fun sponsor(_self: &TxContext): Option<address> {
+    native_sponsor()
+}
+native fun native_sponsor(): Option<address>;
 
 /// Create an `address` that has not been used. As it is an object address, it will never
 /// occur as the address for a user.
 /// In other words, the generated address is a globally unique object ID.
-public fun fresh_object_address(ctx: &mut TxContext): address {
-    let ids_created = ctx.ids_created;
-    let id = derive_id(*&ctx.tx_hash, ids_created);
-    ctx.ids_created = ids_created + 1;
-    id
+public fun fresh_object_address(_ctx: &mut TxContext): address {
+    fresh_id()
 }
+native fun fresh_id(): address;
 
 #[allow(unused_function)]
 /// Return the number of id's created by the current transaction.
 /// Hidden for now, but may expose later
-fun ids_created(self: &TxContext): u64 {
-    self.ids_created
+fun ids_created(_self: &TxContext): u64 {
+    native_ids_created()
 }
-
-/// Native function for deriving an ID via hash(tx_hash || ids_created)
-native fun derive_id(tx_hash: vector<u8>, ids_created: u64): address;
+native fun native_ids_created(): u64;
 
 // ==== test-only functions ====
 
@@ -86,8 +93,24 @@ public fun new(
     ids_created: u64,
 ): TxContext {
     assert!(tx_hash.length() == TX_HASH_LENGTH, EBadTxHashLength);
-    TxContext { sender, tx_hash, epoch, epoch_timestamp_ms, ids_created }
+    native_replace(sender, tx_hash, epoch, epoch_timestamp_ms, ids_created);
+    // return an empty TxContext given all the info is held on the native side (call above)
+    TxContext {
+        sender: @0x0,
+        tx_hash: vector::empty(),
+        epoch: 0,
+        epoch_timestamp_ms: 0,
+        ids_created: 0,
+    }
 }
+#[test_only]
+native fun native_replace(
+    sender: address,
+    tx_hash: vector<u8>,
+    epoch: u64,
+    epoch_timestamp_ms: u64,
+    ids_created: u64,
+);
 
 #[test_only]
 /// Create a `TxContext` for testing, with a potentially non-zero epoch number.
@@ -125,17 +148,25 @@ public fun get_ids_created(self: &TxContext): u64 {
 #[test_only]
 /// Return the most recent created object ID.
 public fun last_created_object_id(self: &TxContext): address {
-    let ids_created = self.ids_created;
+    let ids_created = self.ids_created();
     assert!(ids_created > 0, ENoIDsCreated);
-    derive_id(*&self.tx_hash, ids_created - 1)
+    derive_id(*self.digest(), ids_created - 1)
 }
+#[test_only]
+/// Native function for deriving an ID via hash(tx_hash || ids_created)
+native fun derive_id(tx_hash: vector<u8>, ids_created: u64): address;
 
 #[test_only]
-public fun increment_epoch_number(self: &mut TxContext) {
-    self.epoch = self.epoch + 1
+public fun increment_epoch_number(_self: &mut TxContext) {
+    native_inc_epoch()
 }
+#[test_only]
+native fun native_inc_epoch();
 
 #[test_only]
-public fun increment_epoch_timestamp(self: &mut TxContext, delta_ms: u64) {
-    self.epoch_timestamp_ms = self.epoch_timestamp_ms + delta_ms
+public fun increment_epoch_timestamp(_self: &mut TxContext, delta_ms: u64) {
+    native_inc_epoch_timestamp(delta_ms)
 }
+#[test_only]
+native fun native_inc_epoch_timestamp(delta_ms: u64);
+

@@ -186,6 +186,7 @@ impl executor::Executor for Executor {
             epoch_timestamp_ms,
             1, // expose in the API if needed
             None,
+            protocol_config.move_native_context(),
         );
         let tx_context = Rc::new(RefCell::new(tx_context));
         execute_genesis_state_update(

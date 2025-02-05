@@ -91,6 +91,7 @@ mod checked {
             epoch_timestamp_ms,
             gas_price,
             sponsor,
+            protocol_config.move_native_context(),
         );
 
         let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));

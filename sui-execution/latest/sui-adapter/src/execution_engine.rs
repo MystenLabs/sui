@@ -134,6 +134,7 @@ mod checked {
             epoch_timestamp_ms,
             gas_price,
             sponsor,
+            protocol_config.move_native_context(),
         );
         let tx_ctx = Rc::new(RefCell::new(tx_ctx));
 

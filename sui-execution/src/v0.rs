@@ -190,6 +190,7 @@ impl executor::Executor for Executor {
             epoch_timestamp_ms,
             1, // expose in the API if needed
             None,
+            protocol_config.move_native_context(),
         );
         execute_genesis_state_update(
             store,

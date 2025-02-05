@@ -1016,6 +1016,8 @@ pub struct TxContext {
     gas_price: u64,
     // address of the sponsor if any
     sponsor: Option<AccountAddress>,
+    // flag to indicate whether the Move implementaion is native or not
+    is_native: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -1035,6 +1037,7 @@ impl TxContext {
         epoch_data: &EpochData,
         gas_price: u64,
         sponsor: Option<SuiAddress>,
+        is_native: bool,
     ) -> Self {
         Self::new_from_components(
             sender,
@@ -1043,6 +1046,7 @@ impl TxContext {
             epoch_data.epoch_start_timestamp(),
             gas_price,
             sponsor,
+            is_native,
         )
     }
 
@@ -1053,6 +1057,7 @@ impl TxContext {
         epoch_timestamp_ms: u64,
         gas_price: u64,
         sponsor: Option<SuiAddress>,
+        is_native: bool,
     ) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
@@ -1062,6 +1067,7 @@ impl TxContext {
             ids_created: 0,
             gas_price,
             sponsor: sponsor.map(|s| AccountAddress::new(s.0)),
+            is_native,
         }
     }
 
@@ -1124,7 +1130,21 @@ impl TxContext {
     }
 
     pub fn to_bcs_legacy_context(&self) -> Vec<u8> {
-        let move_context: MoveLegacyTxContext = self.into();
+        let move_context: MoveLegacyTxContext = if self.is_native {
+            let tx_context = &TxContext {
+                sender: AccountAddress::ZERO,
+                digest: vec![],
+                epoch: 0,
+                epoch_timestamp_ms: 0,
+                ids_created: 0,
+                gas_price: 0,
+                sponsor: None,
+                is_native: true,
+            };
+            tx_context.into()
+        } else {
+            self.into()
+        };
         bcs::to_bytes(&move_context).unwrap()
     }
 
@@ -1137,16 +1157,18 @@ impl TxContext {
     /// serialize/deserialize and this is the reason why this method
     /// consumes the other context..
     pub fn update_state(&mut self, other: MoveLegacyTxContext) -> Result<(), ExecutionError> {
-        if self.sender != other.sender
-            || self.digest != other.digest
-            || other.ids_created < self.ids_created
-        {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::InvariantViolation,
-                "Immutable fields for TxContext changed",
-            ));
+        if !self.is_native {
+            if self.sender != other.sender
+                || self.digest != other.digest
+                || other.ids_created < self.ids_created
+            {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::InvariantViolation,
+                    "Immutable fields for TxContext changed",
+                ));
+            }
+            self.ids_created = other.ids_created;
         }
-        self.ids_created = other.ids_created;
         Ok(())
     }
 

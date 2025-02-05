@@ -281,6 +281,8 @@ pub fn fresh_id(
 
     let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
     let fresh_id = transaction_context.fresh_id();
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    object_runtime.new_id(fresh_id)?;
 
     Ok(NativeResult::ok(
         context.gas_used(),
