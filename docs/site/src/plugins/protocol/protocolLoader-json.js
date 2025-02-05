@@ -34,6 +34,7 @@ const protocolInject = async function (source) {
     link: "scalar-value-types",
     messages: types,
   });
+  // Unescaped curly braces mess up docusaurus render
   const handleCurlies = (text) => {
     let isCodeblock = false;
 
