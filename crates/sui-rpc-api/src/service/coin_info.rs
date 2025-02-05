@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::proto::node::v2::CoinMetadata;
-use crate::proto::node::v2::CoinTreasury;
-use crate::proto::node::v2::GetCoinInfoRequest;
-use crate::proto::node::v2::GetCoinInfoResponse;
+use crate::proto::node::v2alpha::CoinMetadata;
+use crate::proto::node::v2alpha::CoinTreasury;
+use crate::proto::node::v2alpha::GetCoinInfoRequest;
+use crate::proto::node::v2alpha::GetCoinInfoResponse;
 use crate::Result;
 use crate::RpcService;
 use crate::RpcServiceError;

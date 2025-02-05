@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::proto::node::v2::DynamicField;
-use crate::proto::node::v2::ListDynamicFieldsRequest;
-use crate::proto::node::v2::ListDynamicFieldsResponse;
+use crate::proto::node::v2alpha::DynamicField;
+use crate::proto::node::v2alpha::ListDynamicFieldsRequest;
+use crate::proto::node::v2alpha::ListDynamicFieldsResponse;
 use crate::types::GetObjectOptions;
 use crate::types::ObjectResponse;
 use crate::Result;
