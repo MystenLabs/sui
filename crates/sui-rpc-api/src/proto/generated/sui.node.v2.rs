@@ -693,6 +693,58 @@ pub struct RegulatedCoinMetadata {
     #[prost(message, optional, tag = "3")]
     pub deny_cap_object: ::core::option::Option<super::super::types::ObjectId>,
 }
+/// Request message for `NodeService.ListDynamicFields`
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListDynamicFieldsRequest {
+    /// Required. The `UID` of the parent, which owns the collections of dynamic fields.
+    #[prost(message, optional, tag = "1")]
+    pub parent: ::core::option::Option<super::super::types::ObjectId>,
+    /// The maximum number of dynamic fields to return. The service may return fewer than this value.
+    /// If unspecified, at most `50` entries will be returned.
+    /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+    #[prost(uint32, optional, tag = "2")]
+    pub page_size: ::core::option::Option<u32>,
+    /// A page token, received from a previous `ListDynamicFields` call.
+    /// Provide this to retrieve the subsequent page.
+    ///
+    /// When paginating, all other parameters provided to `ListDynamicFields` must
+    /// match the call that provided the page token.
+    #[prost(string, optional, tag = "3")]
+    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Response message for `NodeService.ListDynamicFields`
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListDynamicFieldsResponse {
+    /// Page of dynamic fields owned by the specified parent.
+    #[prost(message, repeated, tag = "1")]
+    pub dynamic_fields: ::prost::alloc::vec::Vec<DynamicField>,
+    /// A token, which can be sent as `page_token` to retrieve the next page.
+    /// If this field is omitted, there are no subsequent pages.
+    #[prost(string, optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DynamicField {
+    /// Required. ObjectId of this dynamic field's parent.
+    #[prost(message, optional, tag = "1")]
+    pub parent: ::core::option::Option<super::super::types::ObjectId>,
+    /// Required. ObjectId of this dynamic field.
+    #[prost(message, optional, tag = "2")]
+    pub field_id: ::core::option::Option<super::super::types::ObjectId>,
+    /// Required. The type of the dynamic field "name"
+    #[prost(message, optional, tag = "3")]
+    pub name_type: ::core::option::Option<super::super::types::TypeTag>,
+    /// Required. The serialized move value of "name"
+    #[prost(bytes = "bytes", optional, tag = "4")]
+    pub name_value: ::core::option::Option<::prost::bytes::Bytes>,
+    /// Optional. The ObjectId of the child object when a child is a dynamic
+    /// object field.
+    ///
+    /// The presence or absence of this field can be used to determine if a child
+    /// is a dynamic field or a dynamic child object
+    #[prost(message, optional, tag = "5")]
+    pub dynamic_object_id: ::core::option::Option<super::super::types::ObjectId>,
+}
 /// Generated client implementations.
 pub mod node_service_client {
     #![allow(
@@ -1035,6 +1087,31 @@ pub mod node_service_client {
                 .insert(GrpcMethod::new("sui.node.v2.NodeService", "GetCoinInfo"));
             self.inner.unary(req, path, codec).await
         }
+        /// List the dynamic fields for provided parent.
+        pub async fn list_dynamic_fields(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListDynamicFieldsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListDynamicFieldsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.node.v2.NodeService/ListDynamicFields",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("sui.node.v2.NodeService", "ListDynamicFields"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -1160,6 +1237,14 @@ pub mod node_service_server {
             request: tonic::Request<super::GetCoinInfoRequest>,
         ) -> std::result::Result<
             tonic::Response<super::GetCoinInfoResponse>,
+            tonic::Status,
+        >;
+        /// List the dynamic fields for provided parent.
+        async fn list_dynamic_fields(
+            &self,
+            request: tonic::Request<super::ListDynamicFieldsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListDynamicFieldsResponse>,
             tonic::Status,
         >;
     }
@@ -1587,6 +1672,52 @@ pub mod node_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetCoinInfoSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.node.v2.NodeService/ListDynamicFields" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListDynamicFieldsSvc<T: NodeService>(pub Arc<T>);
+                    impl<
+                        T: NodeService,
+                    > tonic::server::UnaryService<super::ListDynamicFieldsRequest>
+                    for ListDynamicFieldsSvc<T> {
+                        type Response = super::ListDynamicFieldsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListDynamicFieldsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as NodeService>::list_dynamic_fields(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListDynamicFieldsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
