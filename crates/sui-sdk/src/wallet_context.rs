@@ -33,12 +33,33 @@ impl WalletContext {
         request_timeout: Option<std::time::Duration>,
         max_concurrent_requests: Option<u64>,
     ) -> Result<Self, anyhow::Error> {
-        let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
+        Self::new_with_env_override(config_path, None, request_timeout, max_concurrent_requests)
+    }
+
+    pub fn new_with_env_override(
+        config_path: &Path,
+        env_override: Option<&str>,
+        request_timeout: Option<std::time::Duration>,
+        max_concurrent_requests: Option<u64>,
+    ) -> Result<Self, anyhow::Error> {
+        let mut config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
             anyhow!(
                 "Cannot open wallet config file at {:?}. Err: {err}",
                 config_path
             )
         })?;
+
+        if let Some(env_override) = env_override {
+            // Allow caller to override the selection of the active env.
+            if !config.envs.iter().any(|env| env.alias == env_override) {
+                return Err(anyhow!(
+                    "Env '{}' not found in wallet config file '{}'.",
+                    env_override,
+                    config_path.display()
+                ));
+            }
+            config.active_env = Some(env_override.to_string());
+        }
 
         let config = config.persisted(config_path);
         let context = Self {
