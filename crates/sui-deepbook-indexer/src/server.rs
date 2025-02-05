@@ -15,6 +15,7 @@ use axum::{
     Json, Router,
 };
 use diesel::dsl::{count_star, sql};
+use diesel::dsl::{max, min};
 use diesel::BoolExpressionMethods;
 use diesel::QueryDsl;
 use diesel::{ExpressionMethods, SelectableHelper};
@@ -197,9 +198,9 @@ async fn historical_volume(
     // Query the database for the historical volume
     let connection = &mut state.pool.get().await?;
     let results: Vec<(String, i64)> = schema::order_fills::table
-        .select((schema::order_fills::pool_id, column_to_query))
-        .filter(schema::order_fills::pool_id.eq_any(pool_ids_list))
         .filter(schema::order_fills::checkpoint_timestamp_ms.between(start_time, end_time))
+        .filter(schema::order_fills::pool_id.eq_any(pool_ids_list))
+        .select((schema::order_fills::pool_id, column_to_query))
         .load(connection)
         .await?;
 
@@ -465,9 +466,18 @@ async fn ticker(
         .map(|pool| (pool.pool_id.clone(), pool))
         .collect();
 
-    // Fetch last prices for all pools in a single query
+    let end_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| DeepBookError::InternalError("System time error".to_string()))?
+        .as_millis() as i64;
+
+    // Calculate the start time for 24 hours ago
+    let start_time = end_time - (24 * 60 * 60 * 1000);
+
+    // Fetch last prices for all pools in a single query. Only trades in the last 24 hours will count.
     let connection = &mut state.pool.get().await?;
     let last_prices: Vec<(String, i64)> = schema::order_fills::table
+        .filter(schema::order_fills::checkpoint_timestamp_ms.between(start_time, end_time))
         .select((schema::order_fills::pool_id, schema::order_fills::price))
         .order_by((
             schema::order_fills::pool_id.asc(),
@@ -672,9 +682,14 @@ async fn high_low_prices_24h(
     let connection = &mut state.pool.get().await?;
 
     // Query for trades within the last 24 hours for all pools
-    let results: Vec<(String, i64)> = schema::order_fills::table
-        .select((schema::order_fills::pool_id, schema::order_fills::price))
+    let results: Vec<(String, Option<i64>, Option<i64>)> = schema::order_fills::table
         .filter(schema::order_fills::checkpoint_timestamp_ms.between(start_time, end_time))
+        .group_by(schema::order_fills::pool_id)
+        .select((
+            schema::order_fills::pool_id,
+            max(schema::order_fills::price),
+            min(schema::order_fills::price),
+        ))
         .order_by(schema::order_fills::pool_id.asc())
         .load(connection)
         .await?;
@@ -682,15 +697,16 @@ async fn high_low_prices_24h(
     // Aggregate the highest and lowest prices for each pool
     let mut price_map: HashMap<String, (f64, f64)> = HashMap::new();
 
-    for (pool_id, price) in results {
+    for (pool_id, max_price_opt, min_price_opt) in results {
         if let Some((base_decimals, quote_decimals)) = pool_decimals.get(&pool_id) {
             let scaling_factor = 10f64.powi((9 - base_decimals + quote_decimals) as i32);
-            let price_f64 = price as f64 / scaling_factor;
 
-            let entry = price_map.entry(pool_id).or_insert((f64::MIN, f64::MAX));
-            // Update the highest and lowest prices
-            entry.0 = entry.0.max(price_f64); // Highest price
-            entry.1 = entry.1.min(price_f64); // Lowest price
+            // Use unwrap_or(0) to handle None values and default to 0
+            let max_price_f64 = max_price_opt.unwrap_or(0) as f64 / scaling_factor;
+            let min_price_f64 = min_price_opt.unwrap_or(0) as f64 / scaling_factor;
+
+            // Insert prices (if both are zero, adjust this behavior as needed)
+            price_map.insert(pool_id, (max_price_f64, min_price_f64));
         }
     }
 
@@ -710,21 +726,26 @@ async fn price_change_24h(
         .as_millis() as i64;
 
     let timestamp_24h_ago = now - (24 * 60 * 60 * 1000); // 24 hours in milliseconds
+    let timestamp_48h_ago = now - (48 * 60 * 60 * 1000); // 24 hours in milliseconds
 
     let mut response = HashMap::new();
 
     for (pool_name, (pool_id, (base_decimals, quote_decimals))) in pool_metadata.iter() {
-        // Get the latest price <= 24 hours ago
+        // Get the latest price <= 24 hours ago. Only trades until 48 hours ago will count.
         let earliest_trade_24h = schema::order_fills::table
+            .filter(
+                schema::order_fills::checkpoint_timestamp_ms
+                    .between(timestamp_48h_ago, timestamp_24h_ago),
+            )
             .filter(schema::order_fills::pool_id.eq(pool_id))
-            .filter(schema::order_fills::checkpoint_timestamp_ms.le(timestamp_24h_ago))
             .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
             .select(schema::order_fills::price)
             .first::<i64>(connection)
             .await;
 
-        // Get the most recent price
+        // Get the most recent price. Only trades until 24 hours ago will count.
         let most_recent_trade = schema::order_fills::table
+            .filter(schema::order_fills::checkpoint_timestamp_ms.between(timestamp_24h_ago, now))
             .filter(schema::order_fills::pool_id.eq(pool_id))
             .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
             .select(schema::order_fills::price)
