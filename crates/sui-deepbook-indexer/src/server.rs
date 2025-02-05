@@ -47,7 +47,7 @@ pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
 pub const TICKER_PATH: &str = "/ticker";
 pub const TRADES_PATH: &str = "/trades/:pool_name";
-pub const TRADE_UPDATES_PATH: &str = "/trade_updates/:pool_name";
+pub const ORDER_UPDATES_PATH: &str = "/order_updates/:pool_name";
 pub const TRADE_COUNT_PATH: &str = "/trade_count";
 pub const ASSETS_PATH: &str = "/assets";
 pub const SUMMARY_PATH: &str = "/summary";
@@ -95,7 +95,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route(TICKER_PATH, get(ticker))
         .route(TRADES_PATH, get(trades))
         .route(TRADE_COUNT_PATH, get(trade_count))
-        .route(TRADE_UPDATES_PATH, get(trade_updates))
+        .route(ORDER_UPDATES_PATH, get(order_updates))
         .route(ASSETS_PATH, get(assets))
         .route(SUMMARY_PATH, get(summary))
         .route(DEEP_SUPPLY_PATH, get(deep_supply))
@@ -753,7 +753,7 @@ async fn price_change_24h(
     Ok(response)
 }
 
-async fn trade_updates(
+async fn order_updates(
     Path(pool_name): Path<String>,
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
