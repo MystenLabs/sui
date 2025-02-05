@@ -17,7 +17,6 @@ pub mod accounts;
 pub mod checkpoints;
 pub mod content_type;
 pub mod health;
-pub mod objects;
 pub mod system;
 pub mod transactions;
 
@@ -29,9 +28,6 @@ pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
     &health::HealthCheck,
     &checkpoints::GetCheckpoint,
     &accounts::ListAccountObjects,
-    &objects::GetObject,
-    &objects::GetObjectWithVersion,
-    &objects::ListDynamicFields,
     &checkpoints::ListCheckpoints,
     &transactions::GetTransaction,
     &transactions::ListTransactions,

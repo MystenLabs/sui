@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_macros::sim_test;
-use sui_rpc_api::client::sdk::Client;
 use sui_rpc_api::client::Client as CoreClient;
 use sui_rpc_api::proto::node::v2::node_service_client::NodeServiceClient;
 use sui_rpc_api::proto::node::v2::GetObjectOptions;
@@ -17,16 +16,13 @@ async fn get_object() {
 
     let id: ObjectId = "0x5".parse().unwrap();
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
     let core_client = CoreClient::new(test_cluster.rpc_url()).unwrap();
     let mut grpc_client = NodeServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
-    let _object = client.get_object(id).await.unwrap();
     let _object = core_client.get_object(id.into()).await.unwrap();
 
-    let _object = client.get_object_with_version(id, 1).await.unwrap();
     let _object = core_client
         .get_object_with_version(id.into(), 1.into())
         .await
