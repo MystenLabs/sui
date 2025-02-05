@@ -9,20 +9,15 @@ use sui_sdk_types::Address;
 use sui_sdk_types::CheckpointDigest;
 use sui_sdk_types::CheckpointSequenceNumber;
 use sui_sdk_types::EpochId;
-use sui_sdk_types::Object;
-use sui_sdk_types::ObjectId;
 use sui_sdk_types::SignedCheckpointSummary;
 use sui_sdk_types::Transaction;
 use sui_sdk_types::TransactionDigest;
-use sui_sdk_types::Version;
 use tap::Pipe;
 
 use crate::rest::accounts::AccountOwnedObjectInfo;
 use crate::rest::accounts::ListAccountOwnedObjectsQueryParameters;
 use crate::rest::checkpoints::ListCheckpointsPaginationParameters;
 use crate::rest::health::Threshold;
-use crate::rest::objects::DynamicFieldInfo;
-use crate::rest::objects::ListDynamicFieldsQueryParameters;
 use crate::rest::system::GasInfo;
 use crate::rest::system::ProtocolConfigResponse;
 use crate::rest::system::SystemStateSummary;
@@ -94,50 +89,6 @@ impl Client {
         parameters: &ListAccountOwnedObjectsQueryParameters,
     ) -> Result<Response<Vec<AccountOwnedObjectInfo>>> {
         let url = self.url().join(&format!("account/{account}/objects"))?;
-
-        let request = self.inner.get(url).query(parameters);
-
-        self.json(request).await
-    }
-
-    pub async fn get_object(&self, object_id: ObjectId) -> Result<Response<Object>> {
-        let url = self.url().join(&format!("objects/{object_id}"))?;
-
-        let request = self.inner.get(url).query(&crate::types::GetObjectOptions {
-            object: Some(true),
-            object_bcs: None,
-        });
-
-        self.json::<crate::ObjectResponse>(request)
-            .await?
-            .try_map(|response| response.object.ok_or("object missing from response"))
-    }
-
-    pub async fn get_object_with_version(
-        &self,
-        object_id: ObjectId,
-        version: Version,
-    ) -> Result<Response<Object>> {
-        let url = self
-            .url()
-            .join(&format!("objects/{object_id}/version/{version}"))?;
-
-        let request = self.inner.get(url).query(&crate::types::GetObjectOptions {
-            object: Some(true),
-            object_bcs: None,
-        });
-
-        self.json::<crate::ObjectResponse>(request)
-            .await?
-            .try_map(|response| response.object.ok_or("object missing from response"))
-    }
-
-    pub async fn list_dynamic_fields(
-        &self,
-        object_id: ObjectId,
-        parameters: &ListDynamicFieldsQueryParameters,
-    ) -> Result<Response<Vec<DynamicFieldInfo>>> {
-        let url = self.url().join(&format!("objects/{object_id}"))?;
 
         let request = self.inner.get(url).query(parameters);
 
