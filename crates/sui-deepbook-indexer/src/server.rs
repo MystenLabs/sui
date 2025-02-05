@@ -26,6 +26,7 @@ use std::{collections::HashMap, net::SocketAddr};
 use tokio::{net::TcpListener, task::JoinHandle};
 use tower_http::cors::{AllowMethods, Any, CorsLayer};
 
+use futures::future::join_all;
 use std::str::FromStr;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiObjectResponse};
 use sui_sdk::SuiClientBuilder;
@@ -36,6 +37,7 @@ use sui_types::{
     type_input::TypeInput,
     TypeTag,
 };
+use tokio::join;
 
 pub const SUI_MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";
 pub const GET_POOLS_PATH: &str = "/get_pools";
@@ -547,15 +549,11 @@ async fn fetch_historical_volume(
 async fn summary(
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
-    // Call the ticker function to get volumes and last price
-    let ticker_data = ticker(Query(HashMap::new()), State(state.clone())).await?;
-    let Json(ticker_map) = ticker_data;
-
-    // Prepare pool metadata (including decimals and pool_id <-> pool_name mapping)
+    // Fetch pools metadata first since it's required for other functions
     let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
     let pool_metadata: HashMap<String, (String, (i16, i16))> = pools
         .0
-        .into_iter()
+        .iter()
         .map(|pool| {
             (
                 pool.pool_name.clone(),
@@ -573,15 +571,36 @@ async fn summary(
         .map(|(_, (pool_id, decimals))| (pool_id.clone(), *decimals))
         .collect();
 
-    // Call the price_change_24h function to get price changes
-    let price_change_map = price_change_24h(&pool_metadata, State(state.clone())).await?;
+    // Parallelize fetching ticker, price changes, and high/low prices
+    let (ticker_result, price_change_result, high_low_result) = join!(
+        ticker(Query(HashMap::new()), State(state.clone())),
+        price_change_24h(&pool_metadata, State(state.clone())),
+        high_low_prices_24h(&pool_decimals, State(state.clone()))
+    );
 
-    // Call the high_low_prices_24h function to get the highest and lowest prices
-    let high_low_map = high_low_prices_24h(&pool_decimals, State(state.clone())).await?;
+    let Json(ticker_map) = ticker_result?;
+    let price_change_map = price_change_result?;
+    let high_low_map = high_low_result?;
+
+    // Prepare futures for orderbook queries
+    let orderbook_futures: Vec<_> = ticker_map
+        .keys()
+        .map(|pool_name| {
+            let pool_name_clone = pool_name.clone();
+            orderbook(
+                Path(pool_name_clone),
+                Query(HashMap::from([("level".to_string(), "1".to_string())])),
+                State(state.clone()),
+            )
+        })
+        .collect();
+
+    // Run all orderbook queries concurrently
+    let orderbook_results = join_all(orderbook_futures).await;
 
     let mut response = Vec::new();
 
-    for (pool_name, ticker_info) in &ticker_map {
+    for ((pool_name, ticker_info), orderbook_result) in ticker_map.iter().zip(orderbook_results) {
         if let Some((pool_id, _)) = pool_metadata.get(pool_name) {
             // Extract data from the ticker function response
             let last_price = ticker_info
@@ -606,15 +625,8 @@ async fn summary(
             let (highest_price, lowest_price) =
                 high_low_map.get(pool_id).copied().unwrap_or((0.0, 0.0));
 
-            // Fetch the highest bid and lowest ask from the orderbook
-            let orderbook_data = orderbook(
-                Path(pool_name.clone()),
-                Query(HashMap::from([("level".to_string(), "1".to_string())])),
-                State(state.clone()),
-            )
-            .await
-            .ok()
-            .map(|Json(data)| data);
+            // Process the parallel orderbook result
+            let orderbook_data = orderbook_result.ok().map(|Json(data)| data);
 
             let highest_bid = orderbook_data
                 .as_ref()
