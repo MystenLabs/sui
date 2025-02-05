@@ -1,3 +1,6 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
 Running Move unit tests
 [ FAIL    ] 0x6::M::fail
 [ FAIL    ] 0x6::M::fail_with_code

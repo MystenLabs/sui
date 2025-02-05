@@ -1,3 +1,6 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
 Running Move unit tests
 [ PASS    ] 0x42::m::t0
 [ PASS    ] 0x42::m::t1

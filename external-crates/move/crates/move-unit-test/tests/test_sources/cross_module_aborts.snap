@@ -1,3 +1,6 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
 Running Move unit tests
 [ PASS    ] 0x6::M::dummy_test
 [ FAIL    ] 0x7::B::failing_test
