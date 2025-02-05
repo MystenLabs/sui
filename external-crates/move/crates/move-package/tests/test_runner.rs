@@ -20,10 +20,6 @@ use std::{
 };
 use tempfile::{tempdir, TempDir};
 
-pub fn snapshot_path(pkg: &Path, name: &str, kind: &str) -> PathBuf {
-    pkg.join(format!("{name}@{kind}.snap"))
-}
-
 pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     if path.iter().any(|part| part == "deps_only") {
         return Ok(());
