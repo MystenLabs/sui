@@ -15,7 +15,6 @@ use crate::{reader::StateReader, RpcService};
 pub mod accept;
 pub mod accounts;
 pub mod checkpoints;
-mod committee;
 pub mod content_type;
 pub mod health;
 pub mod info;
@@ -38,8 +37,6 @@ pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
     &checkpoints::ListCheckpoints,
     &transactions::GetTransaction,
     &transactions::ListTransactions,
-    &committee::GetCommittee,
-    &committee::GetLatestCommittee,
     &system::GetSystemStateSummary,
     &system::GetCurrentProtocolConfig,
     &system::GetProtocolConfig,

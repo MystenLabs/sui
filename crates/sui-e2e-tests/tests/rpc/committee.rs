@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_macros::sim_test;
-use sui_rpc_api::client::sdk::Client;
 use sui_rpc_api::proto::node::v2::node_service_client::NodeServiceClient;
 use sui_rpc_api::proto::node::v2::GetCommitteeRequest;
 use test_cluster::TestClusterBuilder;
@@ -11,13 +10,9 @@ use test_cluster::TestClusterBuilder;
 async fn get_committee() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut grpc_client = NodeServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
-
-    let _committee = client.get_committee(0).await.unwrap();
-    let _committee = client.get_current_committee().await.unwrap();
 
     let latest_committee = grpc_client
         .get_committee(GetCommitteeRequest { epoch: None })
