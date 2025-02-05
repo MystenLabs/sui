@@ -27,7 +27,7 @@ mod checked {
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
-    use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
+    use legacy_move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
     use serde::{de::DeserializeSeed, Deserialize};
     use std::{
         collections::{BTreeMap, BTreeSet},

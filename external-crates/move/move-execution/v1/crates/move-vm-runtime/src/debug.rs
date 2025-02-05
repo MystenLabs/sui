@@ -7,7 +7,7 @@ use crate::{
     loader::{Function, Loader},
 };
 use move_binary_format::file_format::Bytecode;
-use move_vm_types::values::{self, Locals};
+use legacy_move_vm_types::values::{self, Locals};
 use std::{
     collections::BTreeSet,
     io::{self, Write},

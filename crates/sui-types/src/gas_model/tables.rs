@@ -944,7 +944,6 @@ pub fn initial_cost_schedule_for_unit_tests() -> TestCostTable {
     }
 }
 
-// TODO(vm-rewrite): Move this to a better place. Possibly under `sui-execution`?
 mod old_versions {
     use crate::gas_model::gas_predicates::native_function_threshold_exceeded;
     use crate::gas_model::gas_predicates::use_legacy_abstract_size;
@@ -955,6 +954,10 @@ mod old_versions {
         GasStatus, BOOL_SIZE, REFERENCE_SIZE, U128_SIZE, U16_SIZE, U256_SIZE, U32_SIZE, U64_SIZE,
         U8_SIZE,
     };
+    use legacy_move_vm_types::gas::GasMeter;
+    use legacy_move_vm_types::gas::SimpleInstruction;
+    use legacy_move_vm_types::views::TypeView;
+    use legacy_move_vm_types::views::ValueView;
     use move_binary_format::errors::PartialVMResult;
     use move_core_types::gas_algebra::AbstractMemorySize;
     use move_core_types::gas_algebra::InternalGas;
@@ -962,10 +965,6 @@ mod old_versions {
     use move_core_types::gas_algebra::NumBytes;
     use move_core_types::language_storage::ModuleId;
     use move_vm_profiler::GasProfiler;
-    use move_vm_types_old::gas::GasMeter;
-    use move_vm_types_old::gas::SimpleInstruction;
-    use move_vm_types_old::views::TypeView;
-    use move_vm_types_old::views::ValueView;
 
     /// Returns a tuple of (<pops>, <pushes>, <stack_size_decrease>, <stack_size_increase>)
     fn get_simple_instruction_stack_change(

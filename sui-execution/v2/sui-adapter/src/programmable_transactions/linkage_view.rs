@@ -14,7 +14,7 @@ use move_core_types::{
     language_storage::ModuleId,
     resolver::ModuleResolver,
 };
-use move_vm_types::data_store::LinkageResolver;
+use legacy_move_vm_types::data_store::LinkageResolver;
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
     base_types::ObjectID,

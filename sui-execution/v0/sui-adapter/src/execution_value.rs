@@ -3,7 +3,7 @@
 
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::identifier::IdentStr;
-use move_vm_types::loaded_data::runtime_types::Type;
+use legacy_move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},

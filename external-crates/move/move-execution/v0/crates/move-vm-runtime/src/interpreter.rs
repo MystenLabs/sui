@@ -23,7 +23,7 @@ use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use move_vm_profiler::{
     profile_close_frame, profile_close_instr, profile_open_frame, profile_open_instr,
 };
-use move_vm_types::{
+use legacy_move_vm_types::{
     data_store::DataStore,
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,

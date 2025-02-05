@@ -76,8 +76,7 @@ lru.workspace = true
 
 sui-sdk-types.workspace = true
 
-## TODO(vm-rewrite): Determine where to place the historical trait implementation of the `GasMeter` trait, and this will determine whether we remove this, or if we want to add it to the workspace officially.
-move-vm-types-old = { path = "../../external-crates/move/move-execution/shared/crates/move-vm-types", package = "move-vm-types" }
+legacy-move-vm-types.workspace = true 
 
 [dev-dependencies]
 bincode.workspace = true

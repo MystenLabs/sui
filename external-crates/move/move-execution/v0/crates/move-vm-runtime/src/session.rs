@@ -18,7 +18,7 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     runtime_value as R,
 };
-use move_vm_types::{
+use legacy_move_vm_types::{
     data_store::MoveResolver,
     gas::GasMeter,
     loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},

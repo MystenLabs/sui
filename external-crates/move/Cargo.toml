@@ -176,6 +176,7 @@ move-vm-config = { path = "crates/move-vm-config" }
 move-vm-profiler = { path = "crates/move-vm-profiler" }
 move-vm-runtime = { path = "crates/move-vm-runtime" }
 prover_bytecode = { path = "crates/move-stackless-bytecode", package="move-stackless-bytecode" }
+legacy-move-vm-types = { path = "crates/legacy-move-vm-types" }
 
 [profile.bench]
 debug = true
