@@ -12,7 +12,6 @@ use sui_sdk_types::EpochId;
 use sui_sdk_types::Object;
 use sui_sdk_types::ObjectId;
 use sui_sdk_types::SignedCheckpointSummary;
-use sui_sdk_types::SignedTransaction;
 use sui_sdk_types::Transaction;
 use sui_sdk_types::TransactionDigest;
 use sui_sdk_types::Version;
@@ -34,8 +33,6 @@ use crate::rest::transactions::ResolveTransactionQueryParameters;
 use crate::rest::transactions::ResolveTransactionResponse;
 use crate::rest::transactions::TransactionSimulationResponse;
 use crate::types::CheckpointResponse;
-use crate::types::ExecuteTransactionOptions;
-use crate::types::ExecuteTransactionResponse;
 use crate::types::NodeInfo;
 use crate::types::TransactionResponse;
 use crate::types::X_SUI_CHAIN;
@@ -262,25 +259,6 @@ impl Client {
         let url = self.url().join("transactions")?;
 
         let request = self.inner.get(url).query(parameters);
-
-        self.json(request).await
-    }
-
-    pub async fn execute_transaction(
-        &self,
-        parameters: &ExecuteTransactionOptions,
-        transaction: &SignedTransaction,
-    ) -> Result<Response<ExecuteTransactionResponse>> {
-        let url = self.url().join("transactions")?;
-
-        let body = bcs::to_bytes(transaction)?;
-
-        let request = self
-            .inner
-            .post(url)
-            .query(parameters)
-            .header(reqwest::header::CONTENT_TYPE, crate::rest::APPLICATION_BCS)
-            .body(body);
 
         self.json(request).await
     }

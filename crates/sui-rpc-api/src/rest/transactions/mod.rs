@@ -3,7 +3,6 @@
 
 mod execution;
 use axum::Json;
-pub use execution::ExecuteTransaction;
 pub use execution::SimulateTransaction;
 pub use execution::SimulateTransactionQueryParameters;
 pub use execution::TransactionSimulationResponse;
