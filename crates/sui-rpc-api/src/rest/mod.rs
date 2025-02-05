@@ -17,7 +17,6 @@ pub mod accounts;
 pub mod checkpoints;
 pub mod content_type;
 pub mod health;
-pub mod info;
 pub mod objects;
 pub mod system;
 pub mod transactions;
@@ -27,7 +26,6 @@ pub const APPLICATION_BCS: &str = "application/bcs";
 pub const APPLICATION_JSON: &str = "application/json";
 
 pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
-    &info::GetNodeInfo,
     &health::HealthCheck,
     &checkpoints::GetCheckpoint,
     &accounts::ListAccountObjects,
