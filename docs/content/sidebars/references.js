@@ -35,6 +35,7 @@ const references = [
 				label: 'JSON-RPC',
 				href: '/sui-api-ref',
 			},
+			'references/fullnode-protocol',
 			'references/sui-api/rpc-best-practices',
 		],
 	},
@@ -56,7 +57,6 @@ const references = [
 			'references/cli/validator',
 		],
 	},
-	'references/fullnode-protocol',
 	{
 		type: 'category',
 		label: 'Sui IDE Support',
