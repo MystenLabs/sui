@@ -513,7 +513,7 @@ fn functions(
     signature_cache: &mut SignatureCache,
     module: &mut input::Module,
 ) -> PartialVMResult<(
-    BTreeMap<ConstantPoolIndex, VMPointer<Constant>>,
+    ConstantCache,
     BTreeMap<SignatureIndex, VMPointer<Type>>,
 )> {
     let input::Module {
