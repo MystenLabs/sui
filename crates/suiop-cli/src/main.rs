@@ -6,7 +6,7 @@ use clap::Parser;
 use suioplib::{
     cli::{
         ci::{image_cmd, ImageAction, ImageArgs, ImageBuildArgs, ImageQueryArgs},
-        ci_cmd, docker_cmd, iam_cmd, incidents_cmd, load_environment_cmd, pulumi_cmd,
+        ci_cmd, docker_cmd, iam_cmd, incidents_cmd, load_environment, pulumi_cmd,
         service::ServiceAction,
         service_cmd, CIArgs, DockerArgs, IAMArgs, IncidentsArgs, LoadEnvironmentArgs, PulumiArgs,
         ServiceArgs,
@@ -118,7 +118,7 @@ async fn main() -> Result<()> {
             ci_cmd(&args).await?;
         }
         Resource::LoadEnvironment(args) => {
-            load_environment_cmd(&args)?;
+            load_environment(&args)?;
         }
         Resource::Logs => {
             service_cmd(&ServiceArgs {

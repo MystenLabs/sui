@@ -8,6 +8,7 @@ use spinners::Spinner;
 use spinners::Spinners;
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::ExitStatus;
 use std::process::Output;
 use std::process::Stdio;
 use tracing::debug;
@@ -45,7 +46,9 @@ pub fn run_cmd(cmd_in: Vec<&str>, options: Option<CommandOptions>) -> Result<Out
     let opts = options.unwrap_or_default();
 
     let mut cmd = Command::new(cmd_in[0]);
-    cmd.current_dir(opts.current_dir.unwrap_or_default());
+    if let Some(current_dir) = opts.current_dir.clone() {
+        cmd.current_dir(current_dir);
+    }
     // add extra args
     let cmd = if cmd_in.len() > 1 {
         cmd.args(cmd_in[1..].iter())
@@ -59,15 +62,25 @@ pub fn run_cmd(cmd_in: Vec<&str>, options: Option<CommandOptions>) -> Result<Out
     } else {
         cmd
     };
+    debug!("opts: {:?}", opts.clone());
     let res = if opts.show_spinner {
         let mut sp = Spinner::new(SPINNER, "".into());
+        debug!("running command: {:?}", cmd);
         let result = cmd.output().context(format!(
-            "failed to run command with spinner {}",
+            "failed to run command with spinner '{}'",
             cmd_in.join(" ")
         ))?;
         sp.stop();
         print!("\r");
         result
+    } else if opts.shared_stdio {
+        cmd.status()
+            .context(format!("failed to run command {}", cmd_in.join(" ")))?;
+        Output {
+            status: ExitStatus::default(),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        }
     } else {
         cmd.output()
             .context(format!("failed to run command {}", cmd_in.join(" ")))?
