@@ -2656,7 +2656,6 @@ impl AuthorityState {
             // Emit events
             self.subscription_handler
                 .process_tx(certificate.data().transaction_data(), &effects, &events)
-                .await
                 .tap_ok(|_| {
                     self.metrics
                         .post_processing_total_tx_had_event_processed
