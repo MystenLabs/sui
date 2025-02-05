@@ -3196,6 +3196,17 @@ impl ProtocolConfig {
                     // Enable probing for accepted rounds in round prober for mainnet
                     cfg.feature_flags
                         .consensus_round_prober_probe_accepted_rounds = true;
+
+                    // Increase congestion control budget.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalGasBudgetWithCap;
+                    cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(37_000_000);
+                    cfg.max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit =
+                        Some(7_400_000); // 20% of above
+                    cfg.max_txn_cost_overage_per_object_in_commit = Some(u64::MAX);
+                    cfg.gas_budget_based_txn_cost_absolute_cap_commit_count = Some(50);
+                    cfg.allowed_txn_cost_overage_burst_per_object_in_commit = Some(370_000_000);
                 }
                 74 => {}
                 // Use this template when making changes:

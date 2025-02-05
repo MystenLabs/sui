@@ -237,7 +237,6 @@ impl ExecutionTimeObservationKey {
     // observations are available.
     pub fn default_duration(&self) -> Duration {
         match self {
-            // TODO-DNS Do we want to choose these values more rigorously?
             ExecutionTimeObservationKey::MoveEntryPoint { .. } => Duration::from_millis(1_500),
             ExecutionTimeObservationKey::TransferObjects => Duration::from_millis(1),
             ExecutionTimeObservationKey::SplitCoins => Duration::from_millis(1),

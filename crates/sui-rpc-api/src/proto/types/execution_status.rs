@@ -422,7 +422,7 @@ impl From<sui_sdk_types::PackageUpgradeError> for super::package_upgrade_error::
                 ticket_id,
             } => Self::PackageIdDoesNotMatch(super::PackageIdDoesNotMatch {
                 package_id: Some(package_id.into()),
-                object_id: Some(ticket_id.into()),
+                ticket_id: Some(ticket_id.into()),
             }),
         }
     }
@@ -450,7 +450,7 @@ impl TryFrom<&super::package_upgrade_error::Kind> for sui_sdk_types::PackageUpgr
             },
             PackageIdDoesNotMatch(super::PackageIdDoesNotMatch {
                 package_id: Some(package_id),
-                object_id: Some(ticket_id),
+                ticket_id: Some(ticket_id),
             }) => Self::PackageIdDoesNotMatch {
                 package_id: package_id.try_into()?,
                 ticket_id: ticket_id.try_into()?,
