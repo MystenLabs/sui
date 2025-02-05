@@ -690,7 +690,6 @@ async fn high_low_prices_24h(
             max(schema::order_fills::price),
             min(schema::order_fills::price),
         ))
-        .order_by(schema::order_fills::pool_id.asc())
         .load(connection)
         .await?;
 
@@ -701,11 +700,9 @@ async fn high_low_prices_24h(
         if let Some((base_decimals, quote_decimals)) = pool_decimals.get(&pool_id) {
             let scaling_factor = 10f64.powi((9 - base_decimals + quote_decimals) as i32);
 
-            // Use unwrap_or(0) to handle None values and default to 0
             let max_price_f64 = max_price_opt.unwrap_or(0) as f64 / scaling_factor;
             let min_price_f64 = min_price_opt.unwrap_or(0) as f64 / scaling_factor;
 
-            // Insert prices (if both are zero, adjust this behavior as needed)
             price_map.insert(pool_id, (max_price_f64, min_price_f64));
         }
     }
