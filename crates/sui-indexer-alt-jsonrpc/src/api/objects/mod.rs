@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use filter::SuiObjectResponseQuery;
 use futures::future;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::{
-    SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    Page, SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
 };
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 
 use crate::{
     context::Context,
@@ -21,6 +22,7 @@ use super::rpc_module::RpcModule;
 use self::error::Error;
 
 mod error;
+mod filter;
 pub(crate) mod response;
 
 #[open_rpc(namespace = "sui", tag = "Objects API")]
@@ -77,12 +79,51 @@ trait ObjectsApi {
     ) -> RpcResult<Vec<SuiPastObjectResponse>>;
 }
 
+#[open_rpc(namespace = "suix", tag = "Query Objects API")]
+#[rpc(server, namespace = "suix")]
+trait QueryObjectsApi {
+    /// Query objects by their owner's address. Returns a paginated list of objects.
+    ///
+    /// If a cursor is provided, the query will start from the object after the one pointed to by
+    /// this cursor, otherwise pagination starts from the first page of objects owned by the
+    /// address.
+    ///
+    /// The definition of "first" page is somewhat arbitrary. It is a page such that continuing to
+    /// paginate an address's objects from this page will eventually reach all objects owned by
+    /// that address assuming that the owned object set does not change. If the owned object set
+    /// does change, pagination may not be consistent (may not reflect a set of objects that the
+    /// address owned at a single point in time).
+    ///
+    /// The size of each page is controlled by the `limit` parameter.
+    #[method(name = "getOwnedObjects")]
+    async fn get_owned_objects(
+        &self,
+        /// The owner's address.
+        address: SuiAddress,
+        /// Additional querying criteria for the object.
+        query: Option<SuiObjectResponseQuery>,
+        /// Cursor to start paginating from.
+        cursor: Option<String>,
+        /// Maximum number of objects to return per page.
+        limit: Option<usize>,
+    ) -> RpcResult<Page<SuiObjectResponse, String>>;
+}
+
 pub(crate) struct Objects(pub Context, pub ObjectsConfig);
+
+pub(crate) struct QueryObjects(pub Context, pub ObjectsConfig);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ObjectsConfig {
     /// The maximum number of keys that can be queried in a single multi-get request.
     pub max_multi_get_objects: usize,
+
+    /// The default page size limit when querying objects, if none is provided.
+    pub default_page_size: usize,
+
+    /// The largest acceptable page size when querying transactions. Requesting a page larger than
+    /// this is a user error.
+    pub max_page_size: usize,
 }
 
 #[async_trait::async_trait]
@@ -182,9 +223,61 @@ impl ObjectsApiServer for Objects {
     }
 }
 
+#[async_trait::async_trait]
+impl QueryObjectsApiServer for QueryObjects {
+    async fn get_owned_objects(
+        &self,
+        address: SuiAddress,
+        query: Option<SuiObjectResponseQuery>,
+        cursor: Option<String>,
+        limit: Option<usize>,
+    ) -> RpcResult<Page<SuiObjectResponse, String>> {
+        let Self(ctx, confige) = self;
+
+        let query = query.unwrap_or_default();
+
+        let Page {
+            data: object_ids,
+            next_cursor,
+            has_next_page,
+        } = filter::owned_objects(ctx, confige, address, &query.filter, cursor, limit).await?;
+
+        let options = query.options.unwrap_or_default();
+
+        let obj_futures = object_ids
+            .iter()
+            .map(|id| response::latest_object(ctx, *id, &options));
+
+        let data = future::join_all(obj_futures)
+            .await
+            .into_iter()
+            .zip(object_ids)
+            .map(|(r, id)| {
+                r.with_internal_context(|| format!("Failed to get object {id} at latest version"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Page {
+            data,
+            next_cursor,
+            has_next_page,
+        })
+    }
+}
+
 impl RpcModule for Objects {
     fn schema(&self) -> Module {
         ObjectsApiOpenRpc::module_doc()
+    }
+
+    fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
+        self.into_rpc()
+    }
+}
+
+impl RpcModule for QueryObjects {
+    fn schema(&self) -> Module {
+        QueryObjectsApiOpenRpc::module_doc()
     }
 
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
@@ -196,6 +289,8 @@ impl Default for ObjectsConfig {
     fn default() -> Self {
         Self {
             max_multi_get_objects: 50,
+            default_page_size: 50,
+            max_page_size: 100,
         }
     }
 }
