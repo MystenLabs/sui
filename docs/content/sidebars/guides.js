@@ -30,7 +30,7 @@ const guides = [
 					'guides/developer/getting-started/local-network',
 					'guides/developer/getting-started/get-address',
 					'guides/developer/getting-started/get-coins',
-					'guides/developer/getting-started/graphql-rpc',
+					'guides/developer/getting-started/data-serving',
 				],
 			},
 			{
@@ -143,6 +143,7 @@ const guides = [
 					'guides/developer/advanced/move-2024-migration',
 					'guides/developer/advanced/custom-indexer',
 					'guides/developer/advanced/randomness-onchain',
+					'guides/developer/getting-started/graphql-rpc',
 					'guides/developer/advanced/graphql-migration',
 				],
 			},
