@@ -362,22 +362,31 @@ impl ConsensusOutputCache {
         tables: &AuthorityEpochTables,
         metrics: Arc<EpochMetrics>,
     ) -> Self {
-        let shared_version_assignments =
-            Self::get_all_shared_version_assignments(epoch_start_configuration, tables);
-
         let deferred_transactions = tables
             .get_all_deferred_transactions()
             .expect("load deferred transactions cannot fail");
 
-        let user_signatures_for_checkpoints = tables
-            .get_all_user_signatures_for_checkpoints()
-            .expect("load user signatures for checkpoints cannot fail");
+        if !epoch_start_configuration.is_data_quarantine_active_from_beginning_of_epoch() {
+            let shared_version_assignments =
+                Self::get_all_shared_version_assignments(epoch_start_configuration, tables);
 
-        Self {
-            shared_version_assignments: shared_version_assignments.into_iter().collect(),
-            deferred_transactions: Mutex::new(deferred_transactions),
-            user_signatures_for_checkpoints: Mutex::new(user_signatures_for_checkpoints),
-            metrics,
+            let user_signatures_for_checkpoints = tables
+                .get_all_user_signatures_for_checkpoints()
+                .expect("load user signatures for checkpoints cannot fail");
+
+            Self {
+                shared_version_assignments: shared_version_assignments.into_iter().collect(),
+                deferred_transactions: Mutex::new(deferred_transactions),
+                user_signatures_for_checkpoints: Mutex::new(user_signatures_for_checkpoints),
+                metrics,
+            }
+        } else {
+            Self {
+                shared_version_assignments: Default::default(),
+                deferred_transactions: Mutex::new(deferred_transactions),
+                user_signatures_for_checkpoints: Default::default(),
+                metrics,
+            }
         }
     }
 
