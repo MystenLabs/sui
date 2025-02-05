@@ -165,11 +165,7 @@ mod checked {
                         "input checker ensures if args are empty, there is a type specified"
                     );
                 };
-                let tag = to_type_tag(linked_context, tag)?;
-
-                let elem_ty = linked_context
-                    .load_type(&tag)
-                    .map_err(|e| linked_context.convert_vm_error(e))?;
+                let elem_ty = load_type_input(linked_context, tag, 0)?;
                 let ty = ExecutionType {
                     type_: TypeTag::Vector(Box::new(elem_ty.type_)),
                     abilities: vector_abilites(elem_ty.abilities),
@@ -189,13 +185,7 @@ mod checked {
                 leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
                 let mut arg_iter = args.into_iter().enumerate();
                 let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
-                    Some(tag) => {
-                        let tag = to_type_tag(linked_context, tag)?;
-                        let elem_ty = linked_context
-                            .load_type(&tag)
-                            .map_err(|e| linked_context.convert_vm_error(e))?;
-                        (false, elem_ty)
-                    }
+                    Some(tag) => (false, load_type_input(linked_context, tag, 0)?),
                     // If no tag specified, it _must_ be an object
                     None => {
                         // empty args covered above
@@ -373,11 +363,13 @@ mod checked {
         // Convert type arguments to `Type`s
         let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
         for (ix, type_arg) in type_arguments.into_iter().enumerate() {
-            let type_arg = to_type_tag(context, type_arg)?;
+            let defining_type_arg = to_type_tag(context, type_arg)?;
+            let runtime_type_arg = context.runtime_type_tag_for_type_tag(&defining_type_arg)?;
             let ty = context
                 .vm_instance
-                .load_type(&type_arg)
+                .load_type(&runtime_type_arg)
                 .map_err(|e| context.convert_type_argument_error(ix, e))?;
+
             loaded_type_arguments.push(ty);
         }
 
@@ -1464,6 +1456,18 @@ mod checked {
             // tags and inputs.
             Ok(unsafe { type_input.into_type_tag_unchecked() })
         }
+    }
+
+    fn load_type_input(
+        linked_context: &mut LinkedContext<'_, '_, '_, '_>,
+        type_input: TypeInput,
+        idx: usize,
+    ) -> Result<ExecutionType, ExecutionError> {
+        let tag = to_type_tag(linked_context, type_input)?;
+        let runtime_tag = linked_context.runtime_type_tag_for_type_tag(&tag)?;
+        linked_context
+            .load_type(&runtime_tag)
+            .map_err(|e| linked_context.convert_type_argument_error(idx, e))
     }
 
     // Returns Some(kind) if the type is a reference to the TxnContext. kind being Mutable with
