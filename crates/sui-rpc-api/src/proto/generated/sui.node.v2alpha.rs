@@ -18,6 +18,125 @@ pub struct SubscribeCheckpointsResponse {
     #[prost(message, optional, tag = "2")]
     pub checkpoint: ::core::option::Option<super::v2::GetFullCheckpointResponse>,
 }
+/// Request message for `NodeService.GetCoinInfo`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetCoinInfoRequest {
+    /// The coin type to request information about
+    #[prost(message, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
+}
+/// Response message for `NodeService.GetCoinInfo`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetCoinInfoResponse {
+    /// Required. The coin type.
+    #[prost(message, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
+    /// Optional. This field will be populated with information about this coin
+    /// type's `0x2::coin::CoinMetadata` if it exists and has not been wrapped.
+    #[prost(message, optional, tag = "2")]
+    pub metadata: ::core::option::Option<CoinMetadata>,
+    /// Optional. This field will be populated with information about this coin
+    /// type's `0x2::coin::TreasuryCap` if it exists and has not been wrapped.
+    #[prost(message, optional, tag = "3")]
+    pub treasury: ::core::option::Option<CoinTreasury>,
+}
+/// Metadata for a coin type
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CoinMetadata {
+    /// ObjectId of the `0x2::coin::CoinMetadata` object.
+    #[prost(message, optional, tag = "1")]
+    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    /// Number of decimal places to coin uses.
+    #[prost(uint32, optional, tag = "2")]
+    pub decimals: ::core::option::Option<u32>,
+    /// Name for the token
+    #[prost(string, optional, tag = "3")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Symbol for the token
+    #[prost(string, optional, tag = "4")]
+    pub symbol: ::core::option::Option<::prost::alloc::string::String>,
+    /// Description of the token
+    #[prost(string, optional, tag = "5")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
+    /// URL for the token logo
+    #[prost(string, optional, tag = "6")]
+    pub icon_url: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Information about a coin type's `0x2::coin::TreasuryCap` and its total available supply
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CoinTreasury {
+    /// ObjectId of the `0x2::coin::TreasuryCap` object.
+    #[prost(message, optional, tag = "1")]
+    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    /// Total available supply for this coin type.
+    #[prost(uint64, optional, tag = "2")]
+    pub total_supply: ::core::option::Option<u64>,
+}
+/// Information about a regulated coin, which indicates that it makes use of the transfer deny list.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RegulatedCoinMetadata {
+    /// ObjectId of the `0x2::coin::RegulatedCoinMetadata` object.
+    #[prost(message, optional, tag = "1")]
+    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    /// The ID of the coin's `CoinMetadata` object.
+    #[prost(message, optional, tag = "2")]
+    pub coin_metadata_object: ::core::option::Option<super::super::types::ObjectId>,
+    /// The ID of the coin's `DenyCap` object.
+    #[prost(message, optional, tag = "3")]
+    pub deny_cap_object: ::core::option::Option<super::super::types::ObjectId>,
+}
+/// Request message for `NodeService.ListDynamicFields`
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListDynamicFieldsRequest {
+    /// Required. The `UID` of the parent, which owns the collections of dynamic fields.
+    #[prost(message, optional, tag = "1")]
+    pub parent: ::core::option::Option<super::super::types::ObjectId>,
+    /// The maximum number of dynamic fields to return. The service may return fewer than this value.
+    /// If unspecified, at most `50` entries will be returned.
+    /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+    #[prost(uint32, optional, tag = "2")]
+    pub page_size: ::core::option::Option<u32>,
+    /// A page token, received from a previous `ListDynamicFields` call.
+    /// Provide this to retrieve the subsequent page.
+    ///
+    /// When paginating, all other parameters provided to `ListDynamicFields` must
+    /// match the call that provided the page token.
+    #[prost(string, optional, tag = "3")]
+    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Response message for `NodeService.ListDynamicFields`
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListDynamicFieldsResponse {
+    /// Page of dynamic fields owned by the specified parent.
+    #[prost(message, repeated, tag = "1")]
+    pub dynamic_fields: ::prost::alloc::vec::Vec<DynamicField>,
+    /// A token, which can be sent as `page_token` to retrieve the next page.
+    /// If this field is omitted, there are no subsequent pages.
+    #[prost(string, optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DynamicField {
+    /// Required. ObjectId of this dynamic field's parent.
+    #[prost(message, optional, tag = "1")]
+    pub parent: ::core::option::Option<super::super::types::ObjectId>,
+    /// Required. ObjectId of this dynamic field.
+    #[prost(message, optional, tag = "2")]
+    pub field_id: ::core::option::Option<super::super::types::ObjectId>,
+    /// Required. The type of the dynamic field "name"
+    #[prost(message, optional, tag = "3")]
+    pub name_type: ::core::option::Option<super::super::types::TypeTag>,
+    /// Required. The serialized move value of "name"
+    #[prost(bytes = "bytes", optional, tag = "4")]
+    pub name_value: ::core::option::Option<::prost::bytes::Bytes>,
+    /// Optional. The ObjectId of the child object when a child is a dynamic
+    /// object field.
+    ///
+    /// The presence or absence of this field can be used to determine if a child
+    /// is a dynamic field or a dynamic child object
+    #[prost(message, optional, tag = "5")]
+    pub dynamic_object_id: ::core::option::Option<super::super::types::ObjectId>,
+}
 /// Generated client implementations.
 pub mod subscription_service_client {
     #![allow(
@@ -152,6 +271,152 @@ pub mod subscription_service_client {
                     ),
                 );
             self.inner.server_streaming(req, path, codec).await
+        }
+    }
+}
+/// Generated client implementations.
+pub mod node_service_client {
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
+    use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
+    /// Service for reading data from a Sui Full node.
+    #[derive(Debug, Clone)]
+    pub struct NodeServiceClient<T> {
+        inner: tonic::client::Grpc<T>,
+    }
+    impl NodeServiceClient<tonic::transport::Channel> {
+        /// Attempt to create a new client by connecting to a given endpoint.
+        pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
+        where
+            D: TryInto<tonic::transport::Endpoint>,
+            D::Error: Into<StdError>,
+        {
+            let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
+            Ok(Self::new(conn))
+        }
+    }
+    impl<T> NodeServiceClient<T>
+    where
+        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T::Error: Into<StdError>,
+        T::ResponseBody: Body<Data = Bytes> + std::marker::Send + 'static,
+        <T::ResponseBody as Body>::Error: Into<StdError> + std::marker::Send,
+    {
+        pub fn new(inner: T) -> Self {
+            let inner = tonic::client::Grpc::new(inner);
+            Self { inner }
+        }
+        pub fn with_origin(inner: T, origin: Uri) -> Self {
+            let inner = tonic::client::Grpc::with_origin(inner, origin);
+            Self { inner }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> NodeServiceClient<InterceptedService<T, F>>
+        where
+            F: tonic::service::Interceptor,
+            T::ResponseBody: Default,
+            T: tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+                Response = http::Response<
+                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                >,
+            >,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+        {
+            NodeServiceClient::new(InterceptedService::new(inner, interceptor))
+        }
+        /// Compress requests with the given encoding.
+        ///
+        /// This requires the server to support it otherwise it might respond with an
+        /// error.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.send_compressed(encoding);
+            self
+        }
+        /// Enable decompressing responses.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.accept_compressed(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_decoding_message_size(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_encoding_message_size(limit);
+            self
+        }
+        /// Request information for the specified coin type.
+        pub async fn get_coin_info(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetCoinInfoRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetCoinInfoResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.node.v2alpha.NodeService/GetCoinInfo",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("sui.node.v2alpha.NodeService", "GetCoinInfo"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// List the dynamic fields for provided parent.
+        pub async fn list_dynamic_fields(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListDynamicFieldsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListDynamicFieldsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.node.v2alpha.NodeService/ListDynamicFields",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.node.v2alpha.NodeService", "ListDynamicFields"),
+                );
+            self.inner.unary(req, path, codec).await
         }
     }
 }
@@ -360,6 +625,242 @@ pub mod subscription_service_server {
     /// Generated gRPC service name
     pub const SERVICE_NAME: &str = "sui.node.v2alpha.SubscriptionService";
     impl<T> tonic::server::NamedService for SubscriptionServiceServer<T> {
+        const NAME: &'static str = SERVICE_NAME;
+    }
+}
+/// Generated server implementations.
+pub mod node_service_server {
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
+    use tonic::codegen::*;
+    /// Generated trait containing gRPC methods that should be implemented for use with NodeServiceServer.
+    #[async_trait]
+    pub trait NodeService: std::marker::Send + std::marker::Sync + 'static {
+        /// Request information for the specified coin type.
+        async fn get_coin_info(
+            &self,
+            request: tonic::Request<super::GetCoinInfoRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetCoinInfoResponse>,
+            tonic::Status,
+        >;
+        /// List the dynamic fields for provided parent.
+        async fn list_dynamic_fields(
+            &self,
+            request: tonic::Request<super::ListDynamicFieldsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListDynamicFieldsResponse>,
+            tonic::Status,
+        >;
+    }
+    /// Service for reading data from a Sui Full node.
+    #[derive(Debug)]
+    pub struct NodeServiceServer<T> {
+        inner: Arc<T>,
+        accept_compression_encodings: EnabledCompressionEncodings,
+        send_compression_encodings: EnabledCompressionEncodings,
+        max_decoding_message_size: Option<usize>,
+        max_encoding_message_size: Option<usize>,
+    }
+    impl<T> NodeServiceServer<T> {
+        pub fn new(inner: T) -> Self {
+            Self::from_arc(Arc::new(inner))
+        }
+        pub fn from_arc(inner: Arc<T>) -> Self {
+            Self {
+                inner,
+                accept_compression_encodings: Default::default(),
+                send_compression_encodings: Default::default(),
+                max_decoding_message_size: None,
+                max_encoding_message_size: None,
+            }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> InterceptedService<Self, F>
+        where
+            F: tonic::service::Interceptor,
+        {
+            InterceptedService::new(Self::new(inner), interceptor)
+        }
+        /// Enable decompressing requests with the given encoding.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.accept_compression_encodings.enable(encoding);
+            self
+        }
+        /// Compress responses with the given encoding, if the client supports it.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.send_compression_encodings.enable(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.max_decoding_message_size = Some(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.max_encoding_message_size = Some(limit);
+            self
+        }
+    }
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for NodeServiceServer<T>
+    where
+        T: NodeService,
+        B: Body + std::marker::Send + 'static,
+        B::Error: Into<StdError> + std::marker::Send + 'static,
+    {
+        type Response = http::Response<tonic::body::BoxBody>;
+        type Error = std::convert::Infallible;
+        type Future = BoxFuture<Self::Response, Self::Error>;
+        fn poll_ready(
+            &mut self,
+            _cx: &mut Context<'_>,
+        ) -> Poll<std::result::Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+        fn call(&mut self, req: http::Request<B>) -> Self::Future {
+            match req.uri().path() {
+                "/sui.node.v2alpha.NodeService/GetCoinInfo" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetCoinInfoSvc<T: NodeService>(pub Arc<T>);
+                    impl<
+                        T: NodeService,
+                    > tonic::server::UnaryService<super::GetCoinInfoRequest>
+                    for GetCoinInfoSvc<T> {
+                        type Response = super::GetCoinInfoResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetCoinInfoRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as NodeService>::get_coin_info(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetCoinInfoSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.node.v2alpha.NodeService/ListDynamicFields" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListDynamicFieldsSvc<T: NodeService>(pub Arc<T>);
+                    impl<
+                        T: NodeService,
+                    > tonic::server::UnaryService<super::ListDynamicFieldsRequest>
+                    for ListDynamicFieldsSvc<T> {
+                        type Response = super::ListDynamicFieldsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListDynamicFieldsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as NodeService>::list_dynamic_fields(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListDynamicFieldsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                _ => {
+                    Box::pin(async move {
+                        let mut response = http::Response::new(empty_body());
+                        let headers = response.headers_mut();
+                        headers
+                            .insert(
+                                tonic::Status::GRPC_STATUS,
+                                (tonic::Code::Unimplemented as i32).into(),
+                            );
+                        headers
+                            .insert(
+                                http::header::CONTENT_TYPE,
+                                tonic::metadata::GRPC_CONTENT_TYPE,
+                            );
+                        Ok(response)
+                    })
+                }
+            }
+        }
+    }
+    impl<T> Clone for NodeServiceServer<T> {
+        fn clone(&self) -> Self {
+            let inner = self.inner.clone();
+            Self {
+                inner,
+                accept_compression_encodings: self.accept_compression_encodings,
+                send_compression_encodings: self.send_compression_encodings,
+                max_decoding_message_size: self.max_decoding_message_size,
+                max_encoding_message_size: self.max_encoding_message_size,
+            }
+        }
+    }
+    /// Generated gRPC service name
+    pub const SERVICE_NAME: &str = "sui.node.v2alpha.NodeService";
+    impl<T> tonic::server::NamedService for NodeServiceServer<T> {
         const NAME: &'static str = SERVICE_NAME;
     }
 }

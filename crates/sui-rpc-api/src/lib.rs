@@ -94,6 +94,10 @@ impl RpcService {
         let mut router = {
             let node_service =
                 crate::proto::node::v2::node_service_server::NodeServiceServer::new(self.clone());
+            let node_service_alpha =
+                crate::proto::node::v2alpha::node_service_server::NodeServiceServer::new(
+                    self.clone(),
+                );
 
             let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -101,6 +105,9 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(crate::proto::google::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::node::v2::FILE_DESCRIPTOR_SET)
+                .register_encoded_file_descriptor_set(
+                    crate::proto::node::v2alpha::FILE_DESCRIPTOR_SET,
+                )
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
                 .build_v1()
                 .unwrap();
@@ -109,6 +116,9 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(crate::proto::google::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::node::v2::FILE_DESCRIPTOR_SET)
+                .register_encoded_file_descriptor_set(
+                    crate::proto::node::v2alpha::FILE_DESCRIPTOR_SET,
+                )
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
                 .build_v1alpha()
                 .unwrap();
@@ -117,18 +127,23 @@ impl RpcService {
                 S::NAME
             }
 
-            health_reporter
-                .set_service_status(
-                    service_name(&node_service),
-                    tonic_health::ServingStatus::Serving,
-                )
-                .await;
+            for service_name in [
+                service_name(&node_service),
+                service_name(&node_service_alpha),
+                service_name(&reflection_v1),
+                service_name(&reflection_v1alpha),
+            ] {
+                health_reporter
+                    .set_service_status(service_name, tonic_health::ServingStatus::Serving)
+                    .await;
+            }
 
             let mut services = grpc::Services::new()
                 .add_service(health_service)
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha)
-                .add_service(node_service);
+                .add_service(node_service)
+                .add_service(node_service_alpha);
 
             if let Some(subscription_service_handle) = self.subscription_service_handle.clone() {
                 services = services
