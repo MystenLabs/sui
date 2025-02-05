@@ -50,7 +50,7 @@ use std::sync::Arc;
 ///    TODO: Set up this; `lasso` supports it but we need to expose that interface.
 /// 3. If absolutely necessary, the execution layer _can_ dump the interner.
 static STRING_INTERNER: Lazy<Arc<IdentifierInterner>> =
-    Lazy::new(|| Arc::new(IdentifierInterner::default()));
+    Lazy::new(|| Arc::new(IdentifierInterner::new()));
 
 /// Function to access the global StringInterner
 fn string_interner() -> Arc<IdentifierInterner> {
