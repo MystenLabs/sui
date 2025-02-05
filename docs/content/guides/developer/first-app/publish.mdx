@@ -31,7 +31,7 @@ In the **Object Changes** table, you can find the information about the package 
 │  │ PackageID: <PACKAGE-ID>                                          │
 │  │ Version: 1                                                       │
 │  │ Digest: <DIGEST-HASH>                                            │
-│  │ Modules: my_module                                               │
+│  │ Modules: example                                               │
 │  └──                                                                │
 ╰─────────────────────────────────────────────────────────────────────╯
 ```
@@ -46,7 +46,7 @@ $ sui client objects
 │ │ objectId   │  <OBJECT-ID>                                                         │ │
 │ │ version    │  10                                                                  │ │
 │ │ digest     │  <DIGEST-HASH>                                                       │ │
-│ │ objectType │  <PACKAGE-ID>::my_module::Forge                                      │ │
+│ │ objectType │  <PACKAGE-ID>::example::Forge                                      │ │
 │ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
 │ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
 │ │ objectId   │  <OBJECT-ID>                                                         │ │
@@ -86,25 +86,25 @@ Now that the package is on chain, you can call its functions to interact with th
 
 ```mermaid
 flowchart TB
-    my_module["my_module::new_sword(&Forge, strength, magic)"]
+    example["example::new_sword(&Forge, strength, magic)"]
     
-    Sui_client["Sui client"]
+    sui_client["Sui client"]
 
-    subgraph Sui Blockchain
-	my_module
-	my_module --Sword--> address
+    subgraph Sui blockchain
+	example
+	example --Sword--> address
     end
     
-    Sui_client --"PTB"--> my_module
+    sui_client --"PTB"--> example
 ```
 
-For example, you can create a new `Sword` object defined in the package by calling the `new_sword` function in the `my_module` package, and then transfer the `Sword` object to any address:
+For example, you can create a new `Sword` object defined in the package by calling the `new_sword` function in the `example` module, and then transfer the `Sword` object to any address:
 
 ```sh
 $ sui client ptb \
 	--assign forge @<FORGE-ID> \
 	--assign to_address @<TO-ADDRESS> \
-	--move-call <PACKAGE-ID>::my_module::new_sword forge 3 3 \
+	--move-call <PACKAGE-ID>::example::new_sword forge 3 3 \
 	--assign sword \
 	--transfer-objects "[sword]" to_address \
 	--gas-budget 20000000
@@ -126,7 +126,7 @@ After the transaction executes, you can check the status of the `Sword` object b
 │ │ objectId   │  <OBJECT-ID>                                                         │ │
 │ │ version    │  11                                                                  │ │
 │ │ digest     │  <DIGEST-HASH>                                                       │ │
-│ │ objectType │  <PACKAGE-ID>::my_module::Forge                                      │ │
+│ │ objectType │  <PACKAGE-ID>::example::Forge                                      │ │
 │ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
 │ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
 │ │ objectId   │  <OBJECT-ID>                                                         │ │
@@ -138,7 +138,7 @@ After the transaction executes, you can check the status of the `Sword` object b
 │ │ objectId   │  <OBJECT-ID>                                                         │ │
 │ │ version    │  11                                                                  │ │
 │ │ digest     │  <DIGEST-HASH>                                                       │ │
-│ │ objectType │  <PACKAGE-ID>::my_module::Sword                                      │ │
+│ │ objectType │  <PACKAGE-ID>::example::Sword                                      │ │
 │ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
 │ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
 │ │ objectId   │  <OBJECT-ID>                                                         │ │
