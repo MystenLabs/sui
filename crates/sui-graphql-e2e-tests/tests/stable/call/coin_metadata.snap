@@ -1,0 +1,62 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-17:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 19:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 21-32:
+//# run-graphql
+Response: {
+  "data": {
+    "coinMetadata": {
+      "decimals": 2,
+      "name": "",
+      "symbol": "FAKE",
+      "description": "",
+      "iconUrl": null,
+      "supply": "0",
+      "hasPublicTransfer": true
+    }
+  }
+}
+
+task 4, lines 35-37:
+//# programmable --sender A --inputs object(1,2) 100 @A
+//> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+created: object(4,0)
+mutated: object(0,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 5, line 39:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 41-52:
+//# run-graphql
+Response: {
+  "data": {
+    "coinMetadata": {
+      "decimals": 2,
+      "name": "",
+      "symbol": "FAKE",
+      "description": "",
+      "iconUrl": null,
+      "supply": "100",
+      "hasPublicTransfer": true
+    }
+  }
+}

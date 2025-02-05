@@ -1,0 +1,230 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 23 tasks
+
+task 1, lines 6-8:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 11-13:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 5, lines 16-18:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, lines 21-23:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 9, lines 26-28:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 11, lines 31-33:
+//# create-checkpoint
+Checkpoint created: 6
+
+task 13, lines 36-38:
+//# create-checkpoint
+Checkpoint created: 7
+
+task 15, line 41:
+//# advance-epoch
+Epoch advanced: 0
+
+task 16, lines 43-45:
+//# create-checkpoint
+Checkpoint created: 9
+
+task 19, line 51:
+//# create-checkpoint
+Checkpoint created: 10
+
+task 20, line 53:
+//# advance-epoch
+Epoch advanced: 1
+
+task 21, lines 55-66:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoints": {
+      "nodes": [
+        {
+          "sequenceNumber": 2,
+          "timestamp": "1970-01-01T00:00:00.001Z",
+          "epoch": {
+            "epochId": 0
+          }
+        },
+        {
+          "sequenceNumber": 3,
+          "timestamp": "1970-01-01T00:00:00.002Z",
+          "epoch": {
+            "epochId": 0
+          }
+        },
+        {
+          "sequenceNumber": 4,
+          "timestamp": "1970-01-01T00:00:00.003Z",
+          "epoch": {
+            "epochId": 0
+          }
+        },
+        {
+          "sequenceNumber": 5,
+          "timestamp": "1970-01-01T00:00:00.013Z",
+          "epoch": {
+            "epochId": 0
+          }
+        },
+        {
+          "sequenceNumber": 6,
+          "timestamp": "1970-01-01T00:00:02.013Z",
+          "epoch": {
+            "epochId": 0
+          }
+        },
+        {
+          "sequenceNumber": 7,
+          "timestamp": "1970-01-01T00:16:32.013Z",
+          "epoch": {
+            "epochId": 0
+          }
+        },
+        {
+          "sequenceNumber": 8,
+          "timestamp": "1970-01-01T03:01:32.013Z",
+          "epoch": {
+            "epochId": 0
+          }
+        },
+        {
+          "sequenceNumber": 9,
+          "timestamp": "1970-01-01T03:01:32.013Z",
+          "epoch": {
+            "epochId": 1
+          }
+        },
+        {
+          "sequenceNumber": 10,
+          "timestamp": "1970-01-01T03:01:34Z",
+          "epoch": {
+            "epochId": 1
+          }
+        },
+        {
+          "sequenceNumber": 11,
+          "timestamp": "1970-01-01T03:01:34Z",
+          "epoch": {
+            "epochId": 1
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 22, lines 68-86:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction",
+            "epoch": {
+              "epochId": 0
+            },
+            "commitTimestamp": "1970-01-01T00:00:00.002Z",
+            "consensusCommitDigest": "11111111111111111111111111111111"
+          }
+        },
+        {
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction",
+            "epoch": {
+              "epochId": 0
+            },
+            "commitTimestamp": "1970-01-01T00:00:00.003Z",
+            "consensusCommitDigest": "11111111111111111111111111111111"
+          }
+        },
+        {
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction",
+            "epoch": {
+              "epochId": 0
+            },
+            "commitTimestamp": "1970-01-01T00:00:00.013Z",
+            "consensusCommitDigest": "11111111111111111111111111111111"
+          }
+        },
+        {
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction",
+            "epoch": {
+              "epochId": 0
+            },
+            "commitTimestamp": "1970-01-01T00:00:02.013Z",
+            "consensusCommitDigest": "11111111111111111111111111111111"
+          }
+        },
+        {
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction",
+            "epoch": {
+              "epochId": 0
+            },
+            "commitTimestamp": "1970-01-01T00:16:32.013Z",
+            "consensusCommitDigest": "11111111111111111111111111111111"
+          }
+        },
+        {
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction",
+            "epoch": {
+              "epochId": 0
+            },
+            "commitTimestamp": "1970-01-01T03:01:32.013Z",
+            "consensusCommitDigest": "11111111111111111111111111111111"
+          }
+        },
+        {
+          "kind": {
+            "__typename": "EndOfEpochTransaction"
+          }
+        },
+        {
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction",
+            "epoch": {
+              "epochId": 1
+            },
+            "commitTimestamp": "1970-01-01T03:01:33.901Z",
+            "consensusCommitDigest": "11111111111111111111111111111111"
+          }
+        },
+        {
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction",
+            "epoch": {
+              "epochId": 1
+            },
+            "commitTimestamp": "1970-01-01T03:01:34Z",
+            "consensusCommitDigest": "11111111111111111111111111111111"
+          }
+        },
+        {
+          "kind": {
+            "__typename": "EndOfEpochTransaction"
+          }
+        }
+      ]
+    }
+  }
+}

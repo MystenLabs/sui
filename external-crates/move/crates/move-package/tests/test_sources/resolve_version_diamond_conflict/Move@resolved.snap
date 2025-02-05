@@ -1,0 +1,8 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+When resolving dependencies for package Root, conflicting versions of package C found:
+At A -> C
+	C = { local = "deps_only/C-loc-1" }
+At B -> C
+	C = { local = "deps_only/C-loc-2" }

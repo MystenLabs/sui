@@ -1,0 +1,4 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+Found unbound dev address assignment 'B = 0x1' in root package 'test'. Dev addresses cannot introduce new named addresses

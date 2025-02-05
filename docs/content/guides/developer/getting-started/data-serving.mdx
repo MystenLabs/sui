@@ -1,6 +1,6 @@
 ---
 title: Access Sui Data
-description: Overview of the types of data access mechanisms available in Sui
+description: Overview of the types of data access mechanisms available in Sui.
 ---
 
 You can access Sui network data like [Transactions](/concepts/transactions.mdx), [Checkpoints](/concepts/cryptography/system/checkpoint-verification.mdx), [Objects](/concepts/object-model.mdx), [Events](/guides/developer/sui-101/using-events.mdx), and more through the available interfaces. You can use this data in your application workflows, to analyze network behavior across applications or protocols of interest, or to perform audits on parts or the whole of the network.
@@ -31,7 +31,7 @@ You can currently get real-time or historical data from a Sui Full node. Retenti
 
 :::caution
 
-Websocket-based JSON RPCs `suix_subscribeEvent` and `suix_subscribeTransaction` were deprecated in July 2024. Do not rely on those RPCs in your applications. Refer to [Future data access interfaces](#future-state-data-interfaces) to learn about a future alternative.
+WebSocket-based JSON RPCs `suix_subscribeEvent` and `suix_subscribeTransaction` were deprecated in July 2024. Do not rely on those RPCs in your applications. Refer to [Future data access interfaces](#future-state-data-interfaces) to learn about a future alternative.
 
 :::
 
@@ -57,7 +57,7 @@ You could still utilize an [RPC provider](https://sui.io/developers#dev-tools) (
 
 As mentioned previously, gRPC API will replace the JSON-RPC on Full nodes, such that JSON-RPC will be deprecated when gRPC API is generally available. Apart from the message and request format changes between the two, the gRPC API comes with a couple of key functional differences:
 
-- It has streaming or subscription API endpoints to consume real-time streaming data in your application without having to poll for those records. This support is a proper replacement of the deprecated Websocket support in JSON-RPC.
+- It has streaming or subscription API endpoints to consume real-time streaming data in your application without having to poll for those records. This support is a proper replacement of the deprecated WebSocket support in JSON-RPC.
 - It doesn't have implicit fallback on the previously mentioned [Sui Foundation-managed key-value store for historical transaction data](/guides/operator/data-management.mdx#sui-full-node-key-value-store-backup). Full node operators, RPC providers, and data indexer operators are encouraged to run their own instance of a similar archival store, which you can explicitly define a dependency on to get the relevant historical data.
 
 See [When to use gRPC vs GraphQL with Indexer 2.0](#when-to-use-grpc-vs-graphql-with-indexer-20) for a comparison with GraphQL RPC.

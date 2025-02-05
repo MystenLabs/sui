@@ -1,0 +1,69 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-27:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6118000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 29-31:
+//# programmable --sender A --inputs @A
+//> 0: P0::M::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2447200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 33-35:
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: P0::M::unwrap(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1))
+mutated: object(0,0), object(2,0)
+unwrapped: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3412400,  storage_rebate: 2422728, non_refundable_storage_fee: 24472
+
+task 4, line 37:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 39-43:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "digest": "JBHReYdBYTUoFhGZgCVG3jFUoHQSYTz7Sgt7yW6TPzFz",
+    "objectChanges": [
+      {
+        "type": "mutated",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+        "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+        "version": "3",
+        "previousVersion": "2",
+        "digest": "7jod7CYtkuwxrc8HcBNj5HYy3D32kQ45MxTZhvCzzfb8"
+      },
+      {
+        "type": "mutated",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0x54c05d65095bba68361751ed13055e1330ab7d78ac032dfbc03eb5eb0b43b6d3::M::O",
+        "objectId": "0xc1e6b79d26aafd5940fe4fcfcb5f83ae4101388c849e1d9bbd4f1048f4fe10ee",
+        "version": "3",
+        "previousVersion": "2",
+        "digest": "Htp48aPEeYX141zEKbAQW9bB2jyUsL2MKVDDT9B3PXcw"
+      }
+    ]
+  }
+}
