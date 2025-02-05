@@ -5,7 +5,8 @@ use sui_sdk_macros::move_contract;
 use sui_types::base_types::ObjectID;
 use sui_types::dynamic_field::Field;
 
-move_contract! {name = "bridge", package = "0xb"}
+move_contract! {alias = "sui", package = "0x2"}
+move_contract! {alias = "bridge", package = "0xb"}
 #[tokio::test]
 async fn test() {
     let client = SuiClientBuilder::default()

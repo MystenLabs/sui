@@ -10,7 +10,7 @@ use syn::{parse_macro_input, AttributeArgs, Lit, Meta, NestedMeta};
 pub fn move_contract(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as AttributeArgs);
 
-    let mut package_name = None;
+    let mut package_alias = None;
     let mut sui_env = SuiEnv::Mainnet;
     let mut package = None;
 
@@ -26,9 +26,9 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
                     };
                 }
             }
-            NestedMeta::Meta(Meta::NameValue(nv)) if nv.path.is_ident("name") => {
+            NestedMeta::Meta(Meta::NameValue(nv)) if nv.path.is_ident("alias") => {
                 if let Lit::Str(lit) = nv.lit {
-                    package_name = Some(lit.value());
+                    package_alias = Some(lit.value());
                 }
             }
             NestedMeta::Meta(Meta::NameValue(nv)) if nv.path.is_ident("package") => {
@@ -82,7 +82,7 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
         .unwrap()
         .result;
 
-    let package_name = match package_name {
+    let package_alias = match package_alias {
         Some(name) => name,
         None => {
             return syn::Error::new_spanned(
@@ -94,14 +94,17 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
         }
     };
 
-    let module_tokens = package_data.iter().map(|(name, module)| {
-        let module_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
+    let module_tokens = package_data.iter().map(|(module_name, module)| {
+        let module_ident = syn::Ident::new(module_name, proc_macro2::Span::call_site());
         let struct_tokens = module.structs.iter().map(|(name, move_struct)| {
             let struct_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
             let field_tokens = move_struct.fields.iter().map(|field| {
-                let field_ident = syn::Ident::new(&field.name, proc_macro2::Span::call_site());
+                let field_ident = syn::Ident::new(
+                    &escape_keyword(field.name.clone()),
+                    proc_macro2::Span::call_site(),
+                );
                 let field_type: syn::Type =
-                    syn::parse_str(&to_rust_type(&package, &field.type_)).unwrap();
+                    syn::parse_str(&to_rust_type(&package, module_name, &field.type_)).unwrap();
                 quote! {
                     pub #field_ident: #field_type,
                 }
@@ -117,12 +120,13 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
 
         quote! {
             pub mod #module_ident{
+                use super::*;
                 #(#struct_tokens)*
             }
         }
     });
 
-    let package_ident = syn::Ident::new(&package_name, proc_macro2::Span::call_site());
+    let package_ident = syn::Ident::new(&package_alias, proc_macro2::Span::call_site());
     let expanded = quote! {
         pub mod #package_ident{
             #(#module_tokens)*
@@ -137,6 +141,7 @@ enum SuiEnv {
     Custom(String),
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct JsonRpcResponse<T> {
     jsonrpc: String,
@@ -144,7 +149,11 @@ struct JsonRpcResponse<T> {
     result: T,
 }
 
-fn to_rust_type(own_package: &str, move_type: &SuiMoveNormalizedType) -> String {
+fn to_rust_type(
+    own_package: &str,
+    current_module: &str,
+    move_type: &SuiMoveNormalizedType,
+) -> String {
     match move_type {
         SuiMoveNormalizedType::Bool => "bool".to_string(),
         SuiMoveNormalizedType::U8 => "u8".to_string(),
@@ -155,17 +164,27 @@ fn to_rust_type(own_package: &str, move_type: &SuiMoveNormalizedType) -> String 
         SuiMoveNormalizedType::U256 => "u256".to_string(),
         SuiMoveNormalizedType::Address => "sui_types::base_types::SuiAddress".to_string(),
         SuiMoveNormalizedType::Signer => "sui_types::base_types::SuiAddress".to_string(),
-        t @ SuiMoveNormalizedType::Struct { .. } => try_resolve_known_types(own_package, t),
-        SuiMoveNormalizedType::Vector(t) => format!("Vec<{}>", to_rust_type(own_package, t)),
+        t @ SuiMoveNormalizedType::Struct { .. } => {
+            try_resolve_known_types(own_package, current_module, t)
+        }
+        SuiMoveNormalizedType::Vector(t) => {
+            format!("Vec<{}>", to_rust_type(own_package, current_module, t))
+        }
         SuiMoveNormalizedType::TypeParameter(_) => "Vec<String>".to_string(),
-        SuiMoveNormalizedType::Reference(t) => format!("&{}", to_rust_type(own_package, t)),
+        SuiMoveNormalizedType::Reference(t) => {
+            format!("&{}", to_rust_type(own_package, current_module, t))
+        }
         SuiMoveNormalizedType::MutableReference(t) => {
-            format!("&mut{}", to_rust_type(own_package, t))
+            format!("&mut{}", to_rust_type(own_package, current_module, t))
         }
     }
 }
 
-fn try_resolve_known_types(own_package: &str, move_type: &SuiMoveNormalizedType) -> String {
+fn try_resolve_known_types(
+    own_package: &str,
+    current_module: &str,
+    move_type: &SuiMoveNormalizedType,
+) -> String {
     if let SuiMoveNormalizedType::Struct {
         address,
         module,
@@ -182,20 +201,23 @@ fn try_resolve_known_types(own_package: &str, move_type: &SuiMoveNormalizedType)
             "0x2::package::UpgradeCap" => "sui_types::move_package::UpgradeCap".to_string(),
             "0x2::vec_map::VecMap" => format!(
                 "sui_types::collection_types::VecMap<{},{}>",
-                to_rust_type(own_package, &type_arguments[0]),
-                to_rust_type(own_package, &type_arguments[1])
+                to_rust_type(own_package, current_module, &type_arguments[0]),
+                to_rust_type(own_package, current_module, &type_arguments[1])
             ),
             "0x2::linked_table::LinkedTable" => {
                 format!(
                     "sui_types::collection_types::LinkedTable<{}>",
-                    to_rust_type(own_package, &type_arguments[0])
+                    to_rust_type(own_package, current_module, &type_arguments[0])
                 )
             }
             "0x1::option::Option" => {
-                format!("Option<{}>", to_rust_type(own_package, &type_arguments[0]))
+                format!(
+                    "Option<{}>",
+                    to_rust_type(own_package, current_module, &type_arguments[0])
+                )
             }
-            _ if own_package == address => {
-                format!("super::{module}::{name}")
+            _ if own_package == address && current_module != module => {
+                format!("{module}::{name}")
             }
             _ => {
                 format!("{name}")
@@ -203,5 +225,15 @@ fn try_resolve_known_types(own_package: &str, move_type: &SuiMoveNormalizedType)
         }
     } else {
         unreachable!()
+    }
+}
+
+fn escape_keyword(mut name: String) -> String {
+    match name.as_str() {
+        "for" | "ref" => {
+            name.push('_');
+            name
+        }
+        _ => name,
     }
 }
