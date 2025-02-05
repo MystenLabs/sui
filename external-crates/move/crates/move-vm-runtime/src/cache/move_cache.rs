@@ -6,8 +6,8 @@
 // and publishing packages to the VM.
 
 use crate::{
-    jit, natives::functions::NativeFunctions, shared::types::PackageStorageId,
-    validation::verification,
+    cache::identifier_interner::IdentifierInterner, jit, natives::functions::NativeFunctions,
+    shared::types::PackageStorageId, validation::verification,
 };
 use move_vm_config::runtime::VMConfig;
 use parking_lot::RwLock;
@@ -44,6 +44,7 @@ pub struct MoveCache {
     pub(crate) natives: Arc<NativeFunctions>,
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) package_cache: Arc<RwLock<PackageCache>>,
+    pub(crate) string_cache: Arc<IdentifierInterner>,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -56,6 +57,7 @@ impl MoveCache {
             natives,
             vm_config,
             package_cache: Arc::new(RwLock::new(HashMap::new())),
+            string_cache: Arc::new(IdentifierInterner::default()),
         }
     }
 
@@ -90,6 +92,10 @@ impl MoveCache {
     pub fn package_cache(&self) -> &RwLock<PackageCache> {
         &self.package_cache
     }
+
+    pub fn string_interner(&self) -> &IdentifierInterner {
+        &self.string_cache
+    }
 }
 
 impl Package {
@@ -118,11 +124,13 @@ impl Clone for MoveCache {
             natives,
             vm_config,
             package_cache,
+            string_cache,
         } = self;
         Self {
             natives: natives.clone(),
             vm_config: vm_config.clone(),
             package_cache: package_cache.clone(),
+            string_cache: string_cache.clone(),
         }
     }
 }

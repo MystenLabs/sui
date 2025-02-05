@@ -395,8 +395,6 @@ pub enum StatusCode {
     MEMORY_LIMIT_EXCEEDED = 4028,
     VM_MAX_TYPE_NODES_REACHED = 4029,
     VARIANT_TAG_MISMATCH = 4030,
-    PACKAGE_ARENA_LIMIT_REACHED = 4031,
-    INTERNER_LIMIT_REACHED = 4032,
 
     // A reserved status to represent an unknown vm status.
     // this is std::u64::MAX, but we can't pattern match on that, so put the hardcoded value in

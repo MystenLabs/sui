@@ -354,7 +354,6 @@ impl<'a> VMTracer<'a> {
 
     /// Snapshot the value at the root of a location. This is used to create the value snapshots
     /// for TraceValue references.
-    #[allow(clippy::only_used_in_recursion)]
     fn root_location_snapshot(
         &self,
         vtables: &VMDispatchTables,

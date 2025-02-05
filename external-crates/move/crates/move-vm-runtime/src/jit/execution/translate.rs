@@ -490,7 +490,7 @@ fn functions(
         .collect::<PartialVMResult<Vec<_>>>()?;
     let loaded_functions = package_context
         .package_arena
-        .alloc_slice(prealloc_functions.into_iter())?;
+        .alloc_slice(prealloc_functions.into_iter());
 
     package_context.insert_and_make_module_function_vtable(
         self_id,
@@ -641,7 +641,7 @@ fn code(
             .map(|bc| bytecode(context, bc))
             .collect::<PartialVMResult<Vec<Bytecode>>>()?
             .into_iter(),
-    )?;
+    );
     Ok(result as *const [Bytecode])
 }
 
