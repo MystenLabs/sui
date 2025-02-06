@@ -86,8 +86,6 @@ pub use insta;
 /// # Arguments
 /// The macro has three required arguments:
 ///
-/// - `name`: The name of the test. This will be used to name the snapshot file. For datatest this
-///           should likely be the file name.
 /// - `input_path`: The path to the input file. This is used to determine the snapshot path.
 /// - `contents`: The contents to snapshot.
 ///
@@ -96,6 +94,8 @@ pub use insta;
 /// the snapshot. If needed the `InstaOptions` struct can be used directly by specifying the
 /// `options` argument. Options include:
 ///
+///  - `name`: The name of the test. This will be used to name the snapshot file. By default, the
+///            file stem (the name without the extension) of the input path is used.
 ///  - `info`: Additional information to include in the header of the snapshot file. This can be
 ///           useful for debugging tests. The value can be any type that implements
 ///           `serde::Serialize`.
