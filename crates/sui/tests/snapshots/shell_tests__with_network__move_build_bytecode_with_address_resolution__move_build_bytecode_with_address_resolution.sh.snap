@@ -7,7 +7,7 @@ description: tests/shell_tests/with_network/move_build_bytecode_with_address_res
 # SPDX-License-Identifier: Apache-2.0
 
 sui client --client.config $CONFIG \
-  publish simple \
+  publish simple --verify-deps \
   --json | jq '.effects.status'
 
 sui move --client.config $CONFIG \
