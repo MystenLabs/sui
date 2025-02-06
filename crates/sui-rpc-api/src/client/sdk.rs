@@ -15,7 +15,6 @@ use tap::Pipe;
 use crate::rest::accounts::AccountOwnedObjectInfo;
 use crate::rest::accounts::ListAccountOwnedObjectsQueryParameters;
 use crate::rest::health::Threshold;
-use crate::rest::system::SystemStateSummary;
 use crate::rest::transactions::ResolveTransactionQueryParameters;
 use crate::rest::transactions::ResolveTransactionResponse;
 use crate::rest::transactions::TransactionSimulationResponse;
@@ -81,14 +80,6 @@ impl Client {
         let url = self.url().join(&format!("account/{account}/objects"))?;
 
         let request = self.inner.get(url).query(parameters);
-
-        self.json(request).await
-    }
-
-    pub async fn get_system_state_summary(&self) -> Result<Response<SystemStateSummary>> {
-        let url = self.url().join("system")?;
-
-        let request = self.inner.get(url);
 
         self.json(request).await
     }
