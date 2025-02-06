@@ -421,6 +421,18 @@ impl crate::proto::node::v2alpha::node_service_server::NodeService for crate::Rp
             .map_err(Into::into)
     }
 
+    async fn list_account_objects(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::ListAccountObjectsRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::ListAccountObjectsResponse>,
+        tonic::Status,
+    > {
+        self.list_account_objects(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
     async fn get_protocol_config(
         &self,
         request: tonic::Request<crate::proto::node::v2alpha::GetProtocolConfigRequest>,

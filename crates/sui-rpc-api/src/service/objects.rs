@@ -151,7 +151,7 @@ impl RpcService {
         Ok(ListDynamicFieldsResponse {
             dynamic_fields: dynamic_fields
                 .into_iter()
-                .map(DynamicFieldInfo::to_proto)
+                .map(DynamicFieldInfo::into_proto)
                 .collect(),
             next_page_token,
         })
@@ -205,7 +205,7 @@ impl TryFrom<(DynamicFieldKey, DynamicFieldIndexInfo)> for DynamicFieldInfo {
 }
 
 impl DynamicFieldInfo {
-    fn to_proto(self) -> DynamicField {
+    fn into_proto(self) -> DynamicField {
         DynamicField {
             parent: Some(self.parent.into()),
             field_id: Some(self.field_id.into()),
