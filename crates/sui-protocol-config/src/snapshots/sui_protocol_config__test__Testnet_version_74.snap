@@ -1,6 +1,7 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
+snapshot_kind: text
 ---
 version: 74
 feature_flags:
@@ -292,6 +293,10 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
+nitro_attestation_parse_base_cost: 53
+nitro_attestation_parse_cost_per_byte: 1
+nitro_attestation_verify_base_cost: 49632
+nitro_attestation_verify_cost_per_cert: 52369
 bcs_per_byte_serialized_cost: 2
 bcs_legacy_min_output_size_cost: 1
 bcs_failure_cost: 52
