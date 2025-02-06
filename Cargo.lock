@@ -13946,6 +13946,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-move-build",
+ "sui-name-service",
  "sui-package-resolver",
  "sui-pg-db",
  "sui-protocol-config",
@@ -14061,6 +14062,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-keys",
  "sui-move-build",
+ "sui-name-service",
  "sui-open-rpc",
  "sui-package-resolver",
  "sui-pg-db",
@@ -14366,6 +14368,7 @@ dependencies = [
  "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-macros",
+ "sui-name-service",
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-protocol-config",
@@ -14808,6 +14811,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-move-build",
+ "sui-name-service",
  "sui-package-resolver",
  "sui-pg-db",
  "sui-protocol-config",
@@ -14828,6 +14832,17 @@ dependencies = [
  "tower-http 0.5.2",
  "tracing",
  "uuid 1.2.2",
+]
+
+[[package]]
+name = "sui-name-service"
+version = "1.44.0"
+dependencies = [
+ "bcs",
+ "move-core-types",
+ "serde",
+ "sui-types",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -14904,6 +14919,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-api",
  "sui-macros",
+ "sui-name-service",
  "sui-network",
  "sui-protocol-config",
  "sui-rpc-api",
@@ -16082,6 +16098,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "sui-data-ingestion-core",
  "sui-json-rpc",
+ "sui-name-service",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",

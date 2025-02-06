@@ -139,6 +139,7 @@ members = [
     "crates/sui-move-lsp",
     "crates/sui-mvr-graphql-e2e-tests",
     "crates/sui-mvr-graphql-rpc",
+    "crates/sui-name-service",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",
@@ -673,6 +674,7 @@ sui-move = { path = "crates/sui-move" }
 sui-move-build = { path = "crates/sui-move-build" }
 sui-move-lsp = { path = "crates/sui-move-lsp" }
 sui-mvr-graphql-rpc = { path = "crates/sui-mvr-graphql-rpc" }
+sui-name-service = { path = "crates/sui-name-service" }
 sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }
 sui-open-rpc = { path = "crates/sui-open-rpc" }
