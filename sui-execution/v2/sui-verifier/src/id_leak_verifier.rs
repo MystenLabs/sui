@@ -11,7 +11,7 @@
 //! 1. Returned
 //! 2. Written into a mutable reference
 //! 3. Added to a vector
-//! 4. Passed to a function cal::;
+//! 4. Passed to a function call::;
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     errors::PartialVMError,
@@ -149,7 +149,7 @@ fn verify_id_leak(
         verifier
             .analyze_function(initial_state, &func_view, meter)
             .map_err(|err| {
-                // Handle verifificaiton timeout specially
+                // Handle verification timeout specially
                 if check_for_verifier_timeout(&err.major_status()) {
                     to_verification_timeout_error(err.to_string())
                 } else if let Some(message) = err.source().as_ref() {
