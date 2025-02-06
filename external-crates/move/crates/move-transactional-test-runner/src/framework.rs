@@ -17,7 +17,6 @@ use move_command_line_common::{
     env::read_bool_env_var,
     files::{MOVE_EXTENSION, MOVE_IR_EXTENSION},
     insta_assert,
-    testing::{add_update_baseline_fix, format_diff, read_env_update_baseline, EXP_EXT},
 };
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
@@ -775,7 +774,6 @@ pub async fn run_tasks_with_adapter<'a, Adapter>(
     path: &Path,
     mut adapter: Adapter,
     mut output: String,
-    use_insta_snapshot: bool,
 ) -> Result<()>
 where
     Adapter: MoveTestAdapter<'a>,
@@ -808,11 +806,7 @@ where
         handle_known_task(&mut output, &mut adapter, task).await;
     }
 
-    if use_insta_snapshot {
-        insta_snapshot(path, output)
-    } else {
-        handle_expected_output(path, output)?;
-    }
+    insta_snapshot(path, output);
     Ok(())
 }
 
@@ -821,7 +815,6 @@ where
 pub async fn run_test_impl<'a, Adapter>(
     path: &Path,
     fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
-    use_insta_snapshot: bool,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,
@@ -832,7 +825,7 @@ where
     Adapter::Subcommand: Debug,
 {
     let (output, adapter) = create_adapter::<Adapter>(path, fully_compiled_program_opt).await?;
-    run_tasks_with_adapter(path, adapter, output, use_insta_snapshot).await?;
+    run_tasks_with_adapter(path, adapter, output).await?;
     Ok(())
 }
 
@@ -874,34 +867,6 @@ async fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
         "\ntask {task_number}, {line_number}:\n{task_text}\n{result_string}"
     )
     .unwrap();
-}
-
-fn handle_expected_output(test_path: &Path, output: impl AsRef<str>) -> Result<()> {
-    let output = output.as_ref();
-    assert!(!output.is_empty());
-    let exp_path = test_path.with_extension(EXP_EXT);
-
-    if read_env_update_baseline() {
-        std::fs::write(exp_path, output).unwrap();
-        return Ok(());
-    }
-
-    if !exp_path.exists() {
-        std::fs::write(&exp_path, "").unwrap();
-    }
-    let expected_output = std::fs::read_to_string(&exp_path)
-        .unwrap()
-        .replace("\r\n", "\n")
-        .replace('\r', "\n");
-    if output != expected_output {
-        let msg = format!(
-            "Expected errors differ from actual errors:\n{}",
-            format_diff(expected_output, output),
-        );
-        anyhow::bail!(add_update_baseline_fix(msg))
-    } else {
-        Ok(())
-    }
 }
 
 fn insta_snapshot(test_path: &Path, output: impl AsRef<str>) {
