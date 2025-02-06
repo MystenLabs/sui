@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == M8.move ========================================================
 -- test 0 -------------------
 use line: 3, use_ndx: 0
@@ -158,4 +161,3 @@ Def: 'ERROR_CONST', line: 33, def char: 10
 TypeDef: no info
 On Hover:
 const Symbols::M8::ERROR_CONST: u64 = 42
-

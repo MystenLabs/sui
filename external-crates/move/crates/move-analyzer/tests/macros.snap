@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == fun_type.move ========================================================
 -- test 0 -------------------
 use line: 3, use_ndx: 0
@@ -310,4 +313,3 @@ On Hover:
 public struct Macros::macros::SomeStruct has drop {
 	some_field: u64
 }
-

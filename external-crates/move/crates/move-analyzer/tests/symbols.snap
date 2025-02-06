@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == M1.move ========================================================
 -- test 0 -------------------
 use line: 3, use_ndx: 0
@@ -701,4 +704,3 @@ public fun vector::singleton<Element>(
 ): vector<Element>
 
  Return a vector of size one containing element `e`.
-

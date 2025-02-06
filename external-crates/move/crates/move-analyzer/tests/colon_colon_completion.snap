@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == colon_colon.move ========================================================
 -- test 0 -------------------
 use line: 15, use_col: 68
@@ -1753,4 +1756,3 @@ Module 'macro_dot'
 Module 'object'
 Module 'other_mod_dot'
 Module 'uses'
-

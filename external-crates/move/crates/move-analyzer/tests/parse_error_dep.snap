@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == M2.move ========================================================
 -- test 0 -------------------
 use line: 5, use_ndx: 0
@@ -14,4 +17,3 @@ Def: 's', line: 8, def char: 29
 TypeDef: 'SomeStruct', line: 2, char: 11
 On Hover:
 s: ParseErrorDep::M1::SomeStruct
-

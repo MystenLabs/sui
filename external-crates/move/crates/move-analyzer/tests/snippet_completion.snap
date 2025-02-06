@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == init.move ========================================================
 -- test 0 -------------------
 use line: 3, use_col: 9
@@ -24,4 +27,3 @@ Snippet 'id: UID'
 	id: UID,
 	$1
 '
-
