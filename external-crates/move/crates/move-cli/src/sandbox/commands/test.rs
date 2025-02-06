@@ -7,7 +7,6 @@ use crate::{DEFAULT_BUILD_DIR, DEFAULT_STORAGE_DIR};
 use move_command_line_common::{
     env::read_bool_env_var,
     files::{find_filenames, path_to_string},
-    testing::{add_update_baseline_fix, format_diff, read_env_update_baseline, EXP_EXT},
 };
 use move_compiler::command_line::COLOR_MODE_ENV_VAR;
 use move_coverage::coverage_map::{CoverageMap, ExecCoverageMapWithModules};
@@ -396,4 +395,64 @@ pub fn run_all(
     }
 
     Ok(())
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// The following code is migrated from `move-command-line-common` crate, which switched to `insta`
+// for expected output testing. That is not really desierable for the Move CLI, so it has kept
+// this hand rolled approach.
+
+/// Extension for expected output files
+const EXP_EXT: &str = "exp";
+
+/// If any of these env vars is set, the test harness should overwrite
+/// the existing .exp files with the output instead of checking
+/// them against the output.
+const UPDATE_BASELINE: &str = "UPDATE_BASELINE";
+const UPBL: &str = "UPBL";
+const UB: &str = "UB";
+
+fn read_env_update_baseline() -> bool {
+    read_bool_env_var(UPDATE_BASELINE) || read_bool_env_var(UPBL) || read_bool_env_var(UB)
+}
+
+fn add_update_baseline_fix(s: impl AsRef<str>) -> String {
+    format!(
+        "{}\n\
+        Run with `env {}=1` (or `env {}=1`) to save the current output as \
+        the new expected output",
+        s.as_ref(),
+        UB,
+        UPDATE_BASELINE
+    )
+}
+
+fn format_diff(expected: impl AsRef<str>, actual: impl AsRef<str>) -> String {
+    use difference::*;
+
+    let changeset = Changeset::new(expected.as_ref(), actual.as_ref(), "\n");
+
+    let mut ret = String::new();
+
+    for seq in changeset.diffs {
+        match &seq {
+            Difference::Same(x) => {
+                ret.push_str(x);
+                ret.push('\n');
+            }
+            Difference::Add(x) => {
+                ret.push_str("\x1B[92m");
+                ret.push_str(x);
+                ret.push_str("\x1B[0m");
+                ret.push('\n');
+            }
+            Difference::Rem(x) => {
+                ret.push_str("\x1B[91m");
+                ret.push_str(x);
+                ret.push_str("\x1B[0m");
+                ret.push('\n');
+            }
+        }
+    }
+    ret
 }
