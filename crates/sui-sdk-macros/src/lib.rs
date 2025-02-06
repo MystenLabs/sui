@@ -137,6 +137,7 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
     let package_ident = syn::Ident::new(&package_alias, proc_macro2::Span::call_site());
     let expanded = quote! {
         pub mod #package_ident{
+            use super::*;
             #(#module_tokens)*
         }
     };
@@ -231,6 +232,8 @@ fn try_resolve_known_types(
             "0x1::type_name::TypeName" => "String".to_string(),
             "0x2::object_bag::ObjectBag" => "sui_types::collection_types::Bag".to_string(),
             "0x2::package::UpgradeCap" => "sui_types::move_package::UpgradeCap".to_string(),
+            "0x2::coin::Coin" => "sui_types::coin::Coin".to_string(),
+            "0x2::balance::Balance" => "sui_types::balance::Balance".to_string(),
             "0x2::table::Table" => "sui_types::collection_types::Table".to_string(),
             "0x2::vec_map::VecMap" => format!(
                 "sui_types::collection_types::VecMap<{},{}>",
