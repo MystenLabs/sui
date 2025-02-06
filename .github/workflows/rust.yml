@@ -99,6 +99,11 @@ jobs:
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
+      - name: 'Setup jq'
+        uses: dcarbone/install-jq-action@v3
+        with:
+          version: '1.7'
+          force: true
       - name: cargo test
         run: |
           cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
@@ -133,6 +138,11 @@ jobs:
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
+      - name: 'Setup jq'
+        uses: dcarbone/install-jq-action@v3
+        with:
+          version: '1.7'
+          force: true
       - name: cargo test (sui-graphql staging)
         run: |
           cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)'
@@ -228,6 +238,11 @@ jobs:
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
+      - name: 'Setup jq'
+        uses: dcarbone/install-jq-action@v3
+        with:
+          version: '1.7'
+          force: true
       - name: cargo simtest
         run: |
           MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
