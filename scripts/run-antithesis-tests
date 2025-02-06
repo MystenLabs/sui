@@ -1,7 +1,13 @@
 #!/bin/bash
 
+# Script requires sui-operations repo be locally checked out in order to kick off the antithesis workflow. If SUI_OPS_REPO is not provided then it will default to the path below.
 if [ -z "$SUI_OPS_REPO" ]; then
   SUI_OPS_REPO="${HOME}/dev/sui-operations"
+fi
+
+if [ ! -d "$SUI_OPS_REPO" ]; then
+  echo "sui-operations repo directory $SUI_OPS_REPO does not exist. Please make sure you have correctly set the sui-operatios repo directory." >&2
+  exit 1
 fi
 
 # check if git repo is dirty
