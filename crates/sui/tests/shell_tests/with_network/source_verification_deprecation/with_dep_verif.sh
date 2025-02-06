@@ -17,7 +17,7 @@ sui client --client.config $CONFIG publish "dependency" --verify-deps \
 
 echo "=== publish package v0 (should NOT warn) ===" | tee /dev/stderr
 UPGRADE_CAP=$(sui client --client.config $CONFIG publish "example" --verify-deps \
-  --json | jq -r '.objectChanges.[] | select(.objectType == "0x2::package::UpgradeCap") | .objectId')
+  --json | jq -r '.objectChanges[] | select(.objectType == "0x2::package::UpgradeCap") | .objectId')
 
 echo "=== upgrade package (should NOT warn) ===" | tee /dev/stderr
 sui client --client.config $CONFIG upgrade --upgrade-capability $UPGRADE_CAP example --verify-deps \

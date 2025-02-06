@@ -17,7 +17,7 @@ sui client --client.config $CONFIG publish "dependency" --skip-dependency-verifi
 
 echo "=== publish package v0 (should NOT warn) ===" | tee /dev/stderr
 UPGRADE_CAP=$(sui client --client.config $CONFIG publish "example" --skip-dependency-verification \
-  --json | jq -r '.objectChanges.[] | select(.objectType == "0x2::package::UpgradeCap") | .objectId')
+  --json | jq -r '.objectChanges[] | select(.objectType == "0x2::package::UpgradeCap") | .objectId')
 
 echo "=== upgrade package (should NOT warn) ===" | tee /dev/stderr
 sui client --client.config $CONFIG upgrade --upgrade-capability $UPGRADE_CAP example --skip-dependency-verification \
@@ -29,7 +29,7 @@ mv dependency.move dependency/sources/dependency.move
 
 echo "=== try to publish with modified dep (should succeed) ===" | tee /dev/stderr
 UPGRADE_CAP=$(sui client --client.config $CONFIG publish "example" --skip-dependency-verification \
-  --json | jq -r '.objectChanges.[] | select(.objectType == "0x2::package::UpgradeCap") | .objectId')
+  --json | jq -r '.objectChanges[] | select(.objectType == "0x2::package::UpgradeCap") | .objectId')
 
 echo "=== try to upgrade with modified dep (should succeed) ===" | tee /dev/stderr
 sui client --client.config $CONFIG upgrade --upgrade-capability $UPGRADE_CAP example --skip-dependency-verification \
