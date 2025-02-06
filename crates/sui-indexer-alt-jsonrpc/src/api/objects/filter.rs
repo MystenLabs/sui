@@ -10,10 +10,12 @@ use diesel::{
 use move_core_types::language_storage::StructTag;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use sui_indexer_alt_schema::{objects::StoredOwnerKind, schema::obj_info};
 use sui_json_rpc_types::{Page as PageResponse, SuiObjectDataOptions};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
+    sui_serde::SuiStructTag,
     Identifier,
 };
 
@@ -34,6 +36,7 @@ pub(crate) struct SuiObjectResponseQuery {
     pub options: Option<SuiObjectDataOptions>,
 }
 
+#[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub(crate) enum SuiObjectDataFilter {
     /// Query by the object type's package.
@@ -47,7 +50,11 @@ pub(crate) enum SuiObjectDataFilter {
         module: Identifier,
     },
     /// Query by the object's type.
-    StructType(#[schemars(with = "String")] StructTag),
+    StructType(
+        #[serde_as(as = "SuiStructTag")]
+        #[schemars(with = "String")]
+        StructTag,
+    ),
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -73,6 +80,14 @@ impl SuiObjectDataFilter {
             SuiObjectDataFilter::Package(_) => None,
             SuiObjectDataFilter::MoveModule { module, .. } => Some(module.as_str()),
             SuiObjectDataFilter::StructType(tag) => Some(tag.module.as_str()),
+        }
+    }
+
+    fn name(&self) -> Option<&str> {
+        match self {
+            SuiObjectDataFilter::Package(_) => None,
+            SuiObjectDataFilter::MoveModule { .. } => None,
+            SuiObjectDataFilter::StructType(tag) => Some(tag.name.as_str()),
         }
     }
 }
@@ -144,6 +159,10 @@ pub(super) async fn owned_objects(
 
     if let Some(module) = filter.and_then(|f| f.module()) {
         query = query.filter(candidates!(module).eq(module));
+    }
+
+    if let Some(name) = filter.and_then(|f| f.name()) {
+        query = query.filter(candidates!(name).eq(name));
     }
 
     let mut results: Vec<(Vec<u8>, i64)> = ctx
