@@ -15381,6 +15381,7 @@ dependencies = [
  "quote 1.0.37",
  "reqwest 0.12.9",
  "serde",
+ "serde_json",
  "sui-sdk",
  "sui-types",
  "syn 1.0.107",

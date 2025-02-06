@@ -7,6 +7,9 @@ use sui_types::dynamic_field::Field;
 
 move_contract! {alias = "sui", package = "0x2"}
 move_contract! {alias = "bridge", package = "0xb"}
+move_contract! {alias = "mvr_metadata", package = "@mvr/metadata"}
+move_contract! {alias = "mvr_core", package = "@mvr/core"}
+
 #[tokio::test]
 async fn test() {
     let client = SuiClientBuilder::default()
@@ -26,5 +29,5 @@ async fn test() {
         .unwrap();
 
     let bridge: Field<u64, BridgeInner> = bcs::from_bytes(&bridge_bcs).unwrap();
-    println!("{:#?}", bridge.value.limiter.transfer_records)
+    println!("{:#?}", bridge.value)
 }

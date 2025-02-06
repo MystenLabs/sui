@@ -2,8 +2,11 @@ use proc_macro::TokenStream;
 use quote::quote;
 use reqwest::header::CONTENT_TYPE;
 use serde::Deserialize;
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use sui_sdk::rpc_types::{SuiMoveNormalizedModule, SuiMoveNormalizedType};
+use sui_types::base_types::ObjectID;
 use syn::{parse_macro_input, AttributeArgs, Lit, Meta, NestedMeta};
 
 #[proc_macro]
@@ -33,7 +36,12 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
             }
             NestedMeta::Meta(Meta::NameValue(nv)) if nv.path.is_ident("package") => {
                 if let Lit::Str(lit) = nv.lit {
-                    package = Some(lit.value());
+                    let package_input = lit.value();
+                    if package_input.contains("@") || package_input.contains(".sui") {
+                        package = Some(resolve_mvr_name(package_input))
+                    } else {
+                        package = Some(lit.value());
+                    }
                 }
             }
             _ => {}
@@ -135,6 +143,25 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+fn resolve_mvr_name(package: String) -> String {
+    let client = reqwest::blocking::Client::new();
+    let request = format!(r#"{{packageByName(name:"{package}"){{address}}}}"#);
+
+    let res = client
+        .post("https://mvr-rpc.sui-mainnet.mystenlabs.com/graphql")
+        .header(CONTENT_TYPE, "application/json")
+        .json(&json! ({
+            "query": request,
+            "variables": Value::Null
+        }))
+        .send()
+        .unwrap();
+    res.json::<Value>().unwrap()["data"]["packageByName"]["address"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
 enum SuiEnv {
     Mainnet,
     Testnet,
@@ -192,28 +219,34 @@ fn try_resolve_known_types(
         type_arguments,
     } = move_type
     {
+        // normalise address
+        let address = ObjectID::from_str(address).unwrap().to_hex_literal();
+        let own_package = ObjectID::from_str(own_package).unwrap().to_hex_literal();
+
         match format!("{address}::{module}::{name}").as_str() {
             "0x2::object::UID" => "sui_types::id::UID".to_string(),
+            "0x2::object::ID" => "sui_types::id::ID".to_string(),
             "0x2::versioned::Versioned" => "sui_types::versioned::Versioned".to_string(),
             "0x2::bag::Bag" => "sui_types::collection_types::Bag".to_string(),
             "0x1::type_name::TypeName" => "String".to_string(),
             "0x2::object_bag::ObjectBag" => "sui_types::collection_types::Bag".to_string(),
             "0x2::package::UpgradeCap" => "sui_types::move_package::UpgradeCap".to_string(),
+            "0x2::table::Table" => "sui_types::collection_types::Table".to_string(),
             "0x2::vec_map::VecMap" => format!(
                 "sui_types::collection_types::VecMap<{},{}>",
-                to_rust_type(own_package, current_module, &type_arguments[0]),
-                to_rust_type(own_package, current_module, &type_arguments[1])
+                to_rust_type(&own_package, current_module, &type_arguments[0]),
+                to_rust_type(&own_package, current_module, &type_arguments[1])
             ),
             "0x2::linked_table::LinkedTable" => {
                 format!(
                     "sui_types::collection_types::LinkedTable<{}>",
-                    to_rust_type(own_package, current_module, &type_arguments[0])
+                    to_rust_type(&own_package, current_module, &type_arguments[0])
                 )
             }
             "0x1::option::Option" => {
                 format!(
                     "Option<{}>",
-                    to_rust_type(own_package, current_module, &type_arguments[0])
+                    to_rust_type(&own_package, current_module, &type_arguments[0])
                 )
             }
             _ if own_package == address && current_module != module => {
