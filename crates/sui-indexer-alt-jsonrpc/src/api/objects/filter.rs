@@ -67,6 +67,14 @@ impl SuiObjectDataFilter {
             SuiObjectDataFilter::StructType(tag) => tag.address.into(),
         }
     }
+
+    fn module(&self) -> Option<&str> {
+        match self {
+            SuiObjectDataFilter::Package(_) => None,
+            SuiObjectDataFilter::MoveModule { module, .. } => Some(module.as_str()),
+            SuiObjectDataFilter::StructType(tag) => Some(tag.module.as_str()),
+        }
+    }
 }
 
 /// Fetch ObjectIDs for a page of objects owned by `owner` that satisfy the given `filter` and
@@ -132,7 +140,10 @@ pub(super) async fn owned_objects(
     let filter = filter.as_ref();
     if let Some(package) = filter.map(|f| f.package()) {
         query = query.filter(candidates!(package).eq(package.into_bytes()));
+    }
 
+    if let Some(module) = filter.and_then(|f| f.module()) {
+        query = query.filter(candidates!(module).eq(module));
     }
 
     let mut results: Vec<(Vec<u8>, i64)> = ctx
