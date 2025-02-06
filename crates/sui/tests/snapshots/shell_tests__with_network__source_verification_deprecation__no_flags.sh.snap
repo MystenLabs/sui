@@ -8,8 +8,6 @@ description: tests/shell_tests/with_network/source_verification_deprecation/no_f
 
 # check that we get a deprecation warning when upgrading without any dependency verification flags
 
-echo "=== jq version $(jq --version)"
-
 echo "=== munge Move.toml files ===" | tee /dev/stderr
 FRAMEWORK_DIR=$(echo $CARGO_MANIFEST_DIR | sed 's#/crates/sui#/crates/sui-framework/packages/sui-framework#g')
 for i in dependency/Move.toml example/Move.toml
@@ -46,7 +44,6 @@ sui client --client.config $CONFIG upgrade --upgrade-capability $UPGRADE_CAP exa
 success: true
 exit_code: 0
 ----- stdout -----
-=== jq version jq-1.7.1
 === munge Move.toml files ===
 === publish dependency ===
 {
@@ -75,29 +72,24 @@ Fix this by rebuilding your packages with source versions matching on-chain vers
 === munge Move.toml files ===
 === publish dependency ===
 [warning]: In a future release, dependency source code will no longer be verified by default during publication and upgrade. You can opt in to source verification using `--verify-deps` or disable this warning using `--skip-dependency-verification`. You can also manually verify dependencies using `sui client verify-source`.
-
 BUILDING dependency
 Successfully verified dependencies on-chain against source.
 === publish package v0 (should warn) ===
 [warning]: In a future release, dependency source code will no longer be verified by default during publication and upgrade. You can opt in to source verification using `--verify-deps` or disable this warning using `--skip-dependency-verification`. You can also manually verify dependencies using `sui client verify-source`.
-
 INCLUDING DEPENDENCY dependency
 BUILDING example
 Successfully verified dependencies on-chain against source.
 === upgrade package (should warn) ===
 [warning]: In a future release, dependency source code will no longer be verified by default during publication and upgrade. You can opt in to source verification using `--verify-deps` or disable this warning using `--skip-dependency-verification`. You can also manually verify dependencies using `sui client verify-source`.
-
 INCLUDING DEPENDENCY dependency
 BUILDING example
 Successfully verified dependencies on-chain against source.
 === modify dependency ===
 === try to publish with modified dep (should fail) ===
 [warning]: In a future release, dependency source code will no longer be verified by default during publication and upgrade. You can opt in to source verification using `--verify-deps` or disable this warning using `--skip-dependency-verification`. You can also manually verify dependencies using `sui client verify-source`.
-
 INCLUDING DEPENDENCY dependency
 BUILDING example
 === try to upgrade with modified dep (should fail) ===
 [warning]: In a future release, dependency source code will no longer be verified by default during publication and upgrade. You can opt in to source verification using `--verify-deps` or disable this warning using `--skip-dependency-verification`. You can also manually verify dependencies using `sui client verify-source`.
-
 INCLUDING DEPENDENCY dependency
 BUILDING example

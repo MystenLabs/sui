@@ -3,8 +3,6 @@
 
 # check that we get a deprecation warning when upgrading without any dependency verification flags
 
-echo "=== jq version $(jq --version)"
-
 echo "=== munge Move.toml files ===" | tee /dev/stderr
 FRAMEWORK_DIR=$(echo $CARGO_MANIFEST_DIR | sed 's#/crates/sui#/crates/sui-framework/packages/sui-framework#g')
 for i in dependency/Move.toml example/Move.toml
