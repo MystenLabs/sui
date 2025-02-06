@@ -47,7 +47,7 @@ If you set up your own indexer, you are responsible for its ongoing maintenance 
 
 Primary interfaces to access Sui access data in the future include:
 
-- Full node gRPC API will replace JSON-RPC on Full nodes, and is currently available in alpha. If you already use the JSON-RPC or are starting to utilize it as a dependency for your use case, you would need to migrate to gRPC or GraphQL (see below) within a reasonable duration. Refer to the []high-level timeline for gRPC availability](#grpc-api).
+- Full node gRPC API will replace JSON-RPC on Full nodes, and is currently available in alpha. If you already use the JSON-RPC or are starting to utilize it as a dependency for your use case, you would need to migrate to gRPC or GraphQL (see below) within a reasonable duration. Refer to the [high-level timeline for gRPC availability](#grpc-api).
 - Indexer 2.0 will include a performant and scalable implementation of the Sui indexer framework and is currently available in alpha. You can use it to load data at scale from Full nodes into a Postgres relational database.
 - [GraphQL RPC](/references/sui-graphql.mdx) will include a lightweight GraphQL RPC Server that you can use to read data from the Indexer 2.0's relational database. It is currently available in alpha. You can use it as an alternative to gRPC, including for migration from JSON-RPC for an existing application. Refer to the [high-level timeline for GraphQL availability](#graphql-rpc-with-indexer-20).
 
