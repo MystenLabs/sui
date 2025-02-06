@@ -62,9 +62,6 @@ tempfile.workspace = true
 rstest.workspace = true
 telemetry-subscribers.workspace = true
 
-[target.'cfg(msim)'.dependencies]
-sui-simulator.workspace = true
-
 [build-dependencies]
 anemo-build.workspace = true
 tonic-build.workspace = true

@@ -2735,7 +2735,6 @@ dependencies = [
  "sui-http",
  "sui-macros",
  "sui-protocol-config",
- "sui-simulator",
  "sui-tls",
  "tap",
  "telemetry-subscribers",
@@ -2749,6 +2748,32 @@ dependencies = [
  "tonic-rustls",
  "tower 0.4.13",
  "tower-http 0.5.2",
+ "tracing",
+ "typed-store",
+]
+
+[[package]]
+name = "consensus-simtests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "consensus-config",
+ "consensus-core",
+ "mysten-metrics",
+ "mysten-network",
+ "parking_lot 0.12.1",
+ "prometheus",
+ "rand 0.8.5",
+ "sui-config",
+ "sui-macros",
+ "sui-protocol-config",
+ "sui-simulator",
+ "telemetry-subscribers",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.7.10",
  "tracing",
  "typed-store",
 ]

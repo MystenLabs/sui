@@ -351,7 +351,7 @@ pub enum ValidationError {
 
 /// `NoopTransactionVerifier` accepts all transactions.
 #[cfg(any(test, msim))]
-pub(crate) struct NoopTransactionVerifier;
+pub struct NoopTransactionVerifier;
 
 #[cfg(any(test, msim))]
 #[async_trait::async_trait]
