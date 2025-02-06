@@ -19,7 +19,7 @@ use mysten_metrics::{
     monitored_scope, spawn_monitored_task,
 };
 use serde::{Deserialize, Serialize};
-use sui_macros::{fail_point_async, fail_point_if};
+use sui_macros::{fail_point, fail_point_if};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     authenticator_state::ActiveJwk,
@@ -453,7 +453,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         });
 
-        fail_point_async!("crash"); // for tests that produce random crashes
+        fail_point!("crash"); // for tests that produce random crashes
 
         self.transaction_manager_sender
             .send(executable_transactions);
