@@ -16,7 +16,6 @@ pub mod accept;
 pub mod accounts;
 pub mod content_type;
 pub mod health;
-pub mod system;
 pub mod transactions;
 
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
@@ -26,7 +25,6 @@ pub const APPLICATION_JSON: &str = "application/json";
 pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
     &health::HealthCheck,
     &accounts::ListAccountObjects,
-    &system::GetSystemStateSummary,
     &transactions::SimulateTransaction,
     &transactions::ResolveTransaction,
 ];

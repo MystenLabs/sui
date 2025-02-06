@@ -52,12 +52,14 @@ impl StateReader {
             .map(|committee| (*committee).clone().into())
     }
 
-    pub fn get_system_state_summary(&self) -> Result<super::rest::system::SystemStateSummary> {
+    pub fn get_system_state_summary(
+        &self,
+    ) -> Result<sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary> {
         use sui_types::sui_system_state::SuiSystemStateTrait;
 
         let system_state = sui_types::sui_system_state::get_sui_system_state(self.inner())
             .map_err(StorageError::custom)?;
-        let summary = system_state.into_sui_system_state_summary().into();
+        let summary = system_state.into_sui_system_state_summary();
 
         Ok(summary)
     }

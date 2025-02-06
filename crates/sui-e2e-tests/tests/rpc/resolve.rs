@@ -222,15 +222,8 @@ async fn resolve_transaction_mutable_shared_object() {
     let (sender, mut gas) = test_cluster.wallet.get_one_account().await.unwrap();
     gas.sort_by_key(|object_ref| object_ref.0);
     let obj_to_stake = gas.first().unwrap().0;
-    let validator_address = rest_client
-        .get_system_state_summary()
-        .await
-        .unwrap()
-        .inner()
-        .active_validators
-        .first()
-        .unwrap()
-        .address;
+
+    let validator_address = test_cluster.swarm.config().validator_configs()[0].sui_address();
 
     let unresolved_transaction = unresolved::Transaction {
         ptb: unresolved::ProgrammableTransaction {
