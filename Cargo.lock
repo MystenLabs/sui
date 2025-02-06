@@ -2761,7 +2761,7 @@ dependencies = [
  "consensus-core",
  "mysten-metrics",
  "mysten-network",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "rand 0.8.5",
  "sui-config",
@@ -2772,7 +2772,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-stream",
- "tokio-util 0.7.10",
+ "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "typed-store",
 ]
