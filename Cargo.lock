@@ -13615,6 +13615,7 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tokio-stream",
+ "tonic 0.12.3",
  "tracing",
  "url",
 ]

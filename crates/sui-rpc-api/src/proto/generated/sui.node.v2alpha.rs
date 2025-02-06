@@ -169,6 +169,48 @@ pub struct GetGasInfoResponse {
     #[prost(uint64, optional, tag = "1")]
     pub reference_gas_price: ::core::option::Option<u64>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SimulateTransactionRequest {
+    #[prost(message, optional, tag = "2")]
+    pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
+    #[prost(message, optional, tag = "3")]
+    pub options: ::core::option::Option<SimulateTransactionOptions>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SimulateTransactionOptions {
+    /// Include the `BalanceChanges` in the response.
+    ///
+    /// Defaults to `false` if not included.
+    #[prost(bool, optional, tag = "8")]
+    pub balance_changes: ::core::option::Option<bool>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SimulateTransactionResponse {
+    #[prost(message, optional, tag = "3")]
+    pub effects_bcs: ::core::option::Option<super::super::types::Bcs>,
+    #[prost(message, optional, tag = "5")]
+    pub events_bcs: ::core::option::Option<super::super::types::Bcs>,
+    #[prost(message, optional, tag = "6")]
+    pub balance_changes: ::core::option::Option<super::v2::BalanceChanges>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ResolveTransactionRequest {
+    /// TODO FIX TYPE
+    /// Json unresolved transaction type
+    #[prost(string, optional, tag = "1")]
+    pub unresolved_transaction: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(bool, optional, tag = "2")]
+    pub simulate: ::core::option::Option<bool>,
+    #[prost(message, optional, tag = "3")]
+    pub simulate_options: ::core::option::Option<SimulateTransactionOptions>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ResolveTransactionResponse {
+    #[prost(message, optional, tag = "2")]
+    pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
+    #[prost(message, optional, tag = "3")]
+    pub simulation: ::core::option::Option<SimulateTransactionResponse>,
+}
 /// Generated client implementations.
 pub mod subscription_service_client {
     #![allow(
@@ -500,6 +542,61 @@ pub mod node_service_client {
                 .insert(GrpcMethod::new("sui.node.v2alpha.NodeService", "GetGasInfo"));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn simulate_transaction(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SimulateTransactionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SimulateTransactionResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.node.v2alpha.NodeService/SimulateTransaction",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sui.node.v2alpha.NodeService",
+                        "SimulateTransaction",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn resolve_transaction(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ResolveTransactionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ResolveTransactionResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.node.v2alpha.NodeService/ResolveTransaction",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.node.v2alpha.NodeService", "ResolveTransaction"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -753,6 +850,20 @@ pub mod node_service_server {
             tonic::Response<super::GetGasInfoResponse>,
             tonic::Status,
         >;
+        async fn simulate_transaction(
+            &self,
+            request: tonic::Request<super::SimulateTransactionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SimulateTransactionResponse>,
+            tonic::Status,
+        >;
+        async fn resolve_transaction(
+            &self,
+            request: tonic::Request<super::ResolveTransactionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ResolveTransactionResponse>,
+            tonic::Status,
+        >;
     }
     /// Service for reading data from a Sui Full node.
     #[derive(Debug)]
@@ -998,6 +1109,98 @@ pub mod node_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetGasInfoSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.node.v2alpha.NodeService/SimulateTransaction" => {
+                    #[allow(non_camel_case_types)]
+                    struct SimulateTransactionSvc<T: NodeService>(pub Arc<T>);
+                    impl<
+                        T: NodeService,
+                    > tonic::server::UnaryService<super::SimulateTransactionRequest>
+                    for SimulateTransactionSvc<T> {
+                        type Response = super::SimulateTransactionResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SimulateTransactionRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as NodeService>::simulate_transaction(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SimulateTransactionSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.node.v2alpha.NodeService/ResolveTransaction" => {
+                    #[allow(non_camel_case_types)]
+                    struct ResolveTransactionSvc<T: NodeService>(pub Arc<T>);
+                    impl<
+                        T: NodeService,
+                    > tonic::server::UnaryService<super::ResolveTransactionRequest>
+                    for ResolveTransactionSvc<T> {
+                        type Response = super::ResolveTransactionResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ResolveTransactionRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as NodeService>::resolve_transaction(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ResolveTransactionSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

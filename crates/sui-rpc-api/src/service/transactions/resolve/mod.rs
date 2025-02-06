@@ -4,17 +4,13 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
-use super::execution::SimulateTransactionQueryParameters;
-use super::TransactionSimulationResponse;
-use super::{ApiEndpoint, RouteHandler};
 use crate::reader::StateReader;
 use crate::service::objects::ObjectNotFoundError;
+use crate::types::ResolveTransactionQueryParameters;
+use crate::types::ResolveTransactionResponse;
 use crate::Result;
 use crate::RpcService;
 use crate::RpcServiceError;
-use axum::extract::Query;
-use axum::extract::State;
-use axum::Json;
 use itertools::Itertools;
 use move_binary_format::normalized;
 use sui_protocol_config::ProtocolConfig;
@@ -22,7 +18,6 @@ use sui_sdk_transaction_builder::unresolved;
 use sui_sdk_types::Argument;
 use sui_sdk_types::Command;
 use sui_sdk_types::ObjectId;
-use sui_sdk_types::Transaction;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -40,131 +35,104 @@ use tap::Pipe;
 
 mod literal;
 
-pub struct ResolveTransaction;
+impl RpcService {
+    pub fn resolve_transaction(
+        &self,
+        parameters: ResolveTransactionQueryParameters,
+        unresolved_transaction: unresolved::Transaction,
+    ) -> Result<ResolveTransactionResponse> {
+        let executor = self
+            .executor
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
+        let (reference_gas_price, protocol_config) = {
+            let system_state = self.reader.get_system_state_summary()?;
 
-impl ApiEndpoint<RpcService> for ResolveTransaction {
-    fn method(&self) -> axum::http::Method {
-        axum::http::Method::POST
-    }
+            let current_protocol_version = system_state.protocol_version;
 
-    fn path(&self) -> &'static str {
-        "/transactions/resolve"
-    }
-
-    fn handler(&self) -> RouteHandler<RpcService> {
-        RouteHandler::new(self.method(), resolve_transaction)
-    }
-}
-
-async fn resolve_transaction(
-    State(state): State<RpcService>,
-    Query(parameters): Query<ResolveTransactionQueryParameters>,
-    Json(unresolved_transaction): Json<unresolved::Transaction>,
-) -> Result<Json<ResolveTransactionResponse>> {
-    let executor = state
-        .executor
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
-    let (reference_gas_price, protocol_config) = {
-        let system_state = state.reader.get_system_state_summary()?;
-
-        let current_protocol_version = state.reader.get_system_state_summary()?.protocol_version;
-
-        let protocol_config = ProtocolConfig::get_for_version_if_supported(
-            current_protocol_version.into(),
-            state.reader.inner().get_chain_identifier()?.chain(),
-        )
-        .ok_or_else(|| {
-            RpcServiceError::new(
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                "unable to get current protocol config",
+            let protocol_config = ProtocolConfig::get_for_version_if_supported(
+                current_protocol_version.into(),
+                self.reader.inner().get_chain_identifier()?.chain(),
             )
-        })?;
+            .ok_or_else(|| {
+                RpcServiceError::new(
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "unable to get current protocol config",
+                )
+            })?;
 
-        (system_state.reference_gas_price, protocol_config)
-    };
-    let called_packages =
-        called_packages(&state.reader, &protocol_config, &unresolved_transaction)?;
-    let user_provided_budget = unresolved_transaction
-        .gas_payment
-        .as_ref()
-        .and_then(|payment| payment.budget);
-    let mut resolved_transaction = resolve_unresolved_transaction(
-        &state.reader,
-        &called_packages,
-        reference_gas_price,
-        protocol_config.max_tx_gas(),
-        unresolved_transaction,
-    )?;
-
-    // If the user didn't provide a budget we need to run a quick simulation in order to calculate
-    // a good estimated budget to use
-    let budget = if let Some(user_provided_budget) = user_provided_budget {
-        user_provided_budget
-    } else {
-        let simulation_result = executor
-            .simulate_transaction(resolved_transaction.clone())
-            .map_err(anyhow::Error::from)?;
-
-        let estimate = estimate_gas_budget_from_gas_cost(
-            simulation_result.effects.gas_cost_summary(),
+            (system_state.reference_gas_price, protocol_config)
+        };
+        let called_packages =
+            called_packages(&self.reader, &protocol_config, &unresolved_transaction)?;
+        let user_provided_budget = unresolved_transaction
+            .gas_payment
+            .as_ref()
+            .and_then(|payment| payment.budget);
+        let mut resolved_transaction = resolve_unresolved_transaction(
+            &self.reader,
+            &called_packages,
             reference_gas_price,
-        );
-        resolved_transaction.gas_data_mut().budget = estimate;
-        estimate
-    };
-
-    // If the user didn't provide any gas payment we need to do gas selection now
-    if resolved_transaction.gas_data().payment.is_empty() {
-        let input_objects = resolved_transaction
-            .input_objects()
-            .map_err(anyhow::Error::from)?
-            .iter()
-            .flat_map(|obj| match obj {
-                sui_types::transaction::InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
-                    Some(*id)
-                }
-                _ => None,
-            })
-            .collect_vec();
-        let gas_coins = select_gas(
-            &state.reader,
-            resolved_transaction.gas_data().owner,
-            budget,
-            protocol_config.max_gas_payment_objects(),
-            &input_objects,
+            protocol_config.max_tx_gas(),
+            unresolved_transaction,
         )?;
-        resolved_transaction.gas_data_mut().payment = gas_coins;
-    }
 
-    let simulation = if parameters.simulate {
-        state
-            .simulate_transaction(
+        // If the user didn't provide a budget we need to run a quick simulation in order to calculate
+        // a good estimated budget to use
+        let budget = if let Some(user_provided_budget) = user_provided_budget {
+            user_provided_budget
+        } else {
+            let simulation_result = executor
+                .simulate_transaction(resolved_transaction.clone())
+                .map_err(anyhow::Error::from)?;
+
+            let estimate = estimate_gas_budget_from_gas_cost(
+                simulation_result.effects.gas_cost_summary(),
+                reference_gas_price,
+            );
+            resolved_transaction.gas_data_mut().budget = estimate;
+            estimate
+        };
+
+        // If the user didn't provide any gas payment we need to do gas selection now
+        if resolved_transaction.gas_data().payment.is_empty() {
+            let input_objects = resolved_transaction
+                .input_objects()
+                .map_err(anyhow::Error::from)?
+                .iter()
+                .flat_map(|obj| match obj {
+                    sui_types::transaction::InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
+                        Some(*id)
+                    }
+                    _ => None,
+                })
+                .collect_vec();
+            let gas_coins = select_gas(
+                &self.reader,
+                resolved_transaction.gas_data().owner,
+                budget,
+                protocol_config.max_gas_payment_objects(),
+                &input_objects,
+            )?;
+            resolved_transaction.gas_data_mut().payment = gas_coins;
+        }
+
+        let simulation = if parameters.simulate {
+            self.simulate_transaction(
                 &parameters.simulate_transaction_parameters,
                 resolved_transaction.clone().try_into()?,
             )?
             .pipe(Some)
-    } else {
-        None
-    };
+        } else {
+            None
+        };
 
-    ResolveTransactionResponse {
-        transaction: resolved_transaction.try_into()?,
-        simulation,
+        ResolveTransactionResponse {
+            transaction: resolved_transaction.try_into()?,
+            simulation,
+        }
+        .pipe(Ok)
     }
-    .pipe(Json)
-    .pipe(Ok)
-}
-
-/// Query parameters for the resolve transaction endpoint
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
-pub struct ResolveTransactionQueryParameters {
-    /// Request that the fully resolved transaction be simulated and have its results sent back in
-    /// the response.
-    #[serde(default)]
-    pub simulate: bool,
-    #[serde(flatten)]
-    pub simulate_transaction_parameters: SimulateTransactionQueryParameters,
 }
 
 struct NormalizedPackage {
@@ -268,13 +236,6 @@ fn resolve_unresolved_transaction(
             expiration,
         },
     ))
-}
-
-/// Response type for the execute transaction endpoint
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct ResolveTransactionResponse {
-    pub transaction: Transaction,
-    pub simulation: Option<TransactionSimulationResponse>,
 }
 
 fn resolve_object_reference(

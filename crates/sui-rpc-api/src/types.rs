@@ -632,3 +632,48 @@ pub struct FullCheckpointObject {
     pub object: Option<sui_sdk_types::Object>,
     pub object_bcs: Option<Vec<u8>>,
 }
+
+/// Response type for the transaction simulation endpoint
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct TransactionSimulationResponse {
+    pub effects: sui_sdk_types::TransactionEffects,
+    pub events: Option<sui_sdk_types::TransactionEvents>,
+    pub balance_changes: Option<Vec<sui_sdk_types::BalanceChange>>,
+    pub input_objects: Option<Vec<sui_sdk_types::Object>>,
+    pub output_objects: Option<Vec<sui_sdk_types::Object>>,
+}
+
+/// Query parameters for the simulate transaction endpoint
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct SimulateTransactionQueryParameters {
+    /// Request `BalanceChanges` be included in the Response.
+    #[serde(default)]
+    #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
+    pub balance_changes: bool,
+    /// Request input `Object`s be included in the Response.
+    #[serde(default)]
+    #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
+    pub input_objects: bool,
+    /// Request output `Object`s be included in the Response.
+    #[serde(default)]
+    #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
+    pub output_objects: bool,
+}
+
+/// Response type for the execute transaction endpoint
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct ResolveTransactionResponse {
+    pub transaction: sui_sdk_types::Transaction,
+    pub simulation: Option<TransactionSimulationResponse>,
+}
+
+/// Query parameters for the resolve transaction endpoint
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct ResolveTransactionQueryParameters {
+    /// Request that the fully resolved transaction be simulated and have its results sent back in
+    /// the response.
+    #[serde(default)]
+    pub simulate: bool,
+    #[serde(flatten)]
+    pub simulate_transaction_parameters: SimulateTransactionQueryParameters,
+}
