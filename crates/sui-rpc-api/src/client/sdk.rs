@@ -16,10 +16,7 @@ use crate::rest::accounts::AccountOwnedObjectInfo;
 use crate::rest::accounts::ListAccountOwnedObjectsQueryParameters;
 use crate::rest::health::Threshold;
 use crate::rest::system::GasInfo;
-use crate::rest::system::ProtocolConfigResponse;
 use crate::rest::system::SystemStateSummary;
-use crate::rest::system::X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION;
-use crate::rest::system::X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION;
 use crate::rest::transactions::ResolveTransactionQueryParameters;
 use crate::rest::transactions::ResolveTransactionResponse;
 use crate::rest::transactions::TransactionSimulationResponse;
@@ -102,25 +99,6 @@ impl Client {
             .await
             .map(Response::into_inner)
             .map(|info| info.reference_gas_price)
-    }
-
-    pub async fn get_current_protocol_config(&self) -> Result<Response<ProtocolConfigResponse>> {
-        let url = self.url().join("system/protocol")?;
-
-        let request = self.inner.get(url);
-
-        self.json(request).await
-    }
-
-    pub async fn get_protocol_config(
-        &self,
-        version: u64,
-    ) -> Result<Response<ProtocolConfigResponse>> {
-        let url = self.url().join(&format!("system/protocol/{version}"))?;
-
-        let request = self.inner.get(url);
-
-        self.json(request).await
     }
 
     pub async fn get_system_state_summary(&self) -> Result<Response<SystemStateSummary>> {
@@ -226,8 +204,6 @@ pub struct ResponseParts {
     pub lowest_available_checkpoint: Option<CheckpointSequenceNumber>,
     pub lowest_available_checkpoint_objects: Option<CheckpointSequenceNumber>,
     pub cursor: Option<String>,
-    pub min_supported_protocol_version: Option<u64>,
-    pub max_supported_protocol_version: Option<u64>,
 }
 
 impl ResponseParts {
@@ -266,14 +242,6 @@ impl ResponseParts {
             .get(X_SUI_CURSOR)
             .and_then(|h| h.to_str().ok())
             .map(ToOwned::to_owned);
-        let min_supported_protocol_version = headers
-            .get(X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION)
-            .and_then(|h| h.to_str().ok())
-            .and_then(|s| s.parse().ok());
-        let max_supported_protocol_version = headers
-            .get(X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION)
-            .and_then(|h| h.to_str().ok())
-            .and_then(|s| s.parse().ok());
 
         Self {
             status,
@@ -285,8 +253,6 @@ impl ResponseParts {
             lowest_available_checkpoint,
             lowest_available_checkpoint_objects,
             cursor,
-            min_supported_protocol_version,
-            max_supported_protocol_version,
         }
     }
 }

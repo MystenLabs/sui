@@ -7,4 +7,5 @@ mod committee;
 mod health;
 mod info;
 pub(crate) mod objects;
+mod protocol_config;
 pub(crate) mod transactions;

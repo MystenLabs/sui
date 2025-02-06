@@ -419,4 +419,16 @@ impl crate::proto::node::v2alpha::node_service_server::NodeService for crate::Rp
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
+
+    async fn get_protocol_config(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::GetProtocolConfigRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::GetProtocolConfigResponse>,
+        tonic::Status,
+    > {
+        self.get_protocol_config(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
 }
