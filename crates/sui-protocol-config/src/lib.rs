@@ -213,7 +213,8 @@ const MAX_PROTOCOL_VERSION: u64 = 74;
 //             Enable zstd compression for consensus tonic network in testnet.
 //             Enable smart ancestor selection in mainnet.
 //             Enable probing for accepted rounds in round prober in mainnet
-// Version 74:
+// Version 74: Enable load_nitro_attestation move function in sui framework in devnet.
+//             Enable all gas costs for load_nitro_attestation.
 //
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -471,6 +472,10 @@ struct FeatureFlags {
     // Enable native function for msm.
     #[serde(skip_serializing_if = "is_false")]
     enable_group_ops_native_function_msm: bool,
+
+    // Enable nitro attestation.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -1225,6 +1230,12 @@ pub struct ProtocolConfig {
     vdf_verify_vdf_cost: Option<u64>,
     vdf_hash_to_input_cost: Option<u64>,
 
+    // nitro_attestation::load_nitro_attestation
+    nitro_attestation_parse_base_cost: Option<u64>,
+    nitro_attestation_parse_cost_per_byte: Option<u64>,
+    nitro_attestation_verify_base_cost: Option<u64>,
+    nitro_attestation_verify_cost_per_cert: Option<u64>,
+
     // Stdlib costs
     bcs_per_byte_serialized_cost: Option<u64>,
     bcs_legacy_min_output_size_cost: Option<u64>,
@@ -1790,6 +1801,9 @@ impl ProtocolConfig {
     pub fn consensus_zstd_compression(&self) -> bool {
         self.feature_flags.consensus_zstd_compression
     }
+    pub fn enable_nitro_attestation(&self) -> bool {
+        self.feature_flags.enable_nitro_attestation
+    }
 }
 
 #[cfg(not(msim))]
@@ -2223,6 +2237,12 @@ impl ProtocolConfig {
 
             vdf_verify_vdf_cost: None,
             vdf_hash_to_input_cost: None,
+
+            // nitro_attestation::verify_nitro_attestation
+            nitro_attestation_parse_base_cost: None,
+            nitro_attestation_parse_cost_per_byte: None,
+            nitro_attestation_verify_base_cost: None,
+            nitro_attestation_verify_cost_per_cert: None,
 
             bcs_per_byte_serialized_cost: None,
             bcs_legacy_min_output_size_cost: None,
@@ -3208,7 +3228,16 @@ impl ProtocolConfig {
                     cfg.gas_budget_based_txn_cost_absolute_cap_commit_count = Some(50);
                     cfg.allowed_txn_cost_overage_burst_per_object_in_commit = Some(370_000_000);
                 }
-                74 => {}
+                74 => {
+                    // Enable nitro attestation verify native move function for devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_nitro_attestation = true;
+                    }
+                    cfg.nitro_attestation_parse_base_cost = Some(53);
+                    cfg.nitro_attestation_parse_cost_per_byte = Some(1);
+                    cfg.nitro_attestation_verify_base_cost = Some(49632);
+                    cfg.nitro_attestation_verify_cost_per_cert = Some(52369);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

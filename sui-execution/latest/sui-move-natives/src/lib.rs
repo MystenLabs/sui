@@ -41,6 +41,7 @@ use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use better_any::{Tid, TidAble};
+use crypto::nitro_attestation::{self, NitroAttestationCostParams};
 use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -167,6 +168,9 @@ pub struct NativesCostTable {
 
     // Receive object
     pub transfer_receive_object_internal_cost_params: TransferReceiveObjectInternalCostParams,
+
+    // nitro attestation
+    pub nitro_attestation_cost_params: NitroAttestationCostParams,
 }
 
 impl NativesCostTable {
@@ -651,6 +655,20 @@ impl NativesCostTable {
                     .vdf_hash_to_input_cost_as_option()
                     .map(Into::into),
             },
+            nitro_attestation_cost_params: NitroAttestationCostParams {
+                parse_base_cost: protocol_config
+                    .nitro_attestation_parse_base_cost_as_option()
+                    .map(Into::into),
+                parse_cost_per_byte: protocol_config
+                    .nitro_attestation_parse_cost_per_byte_as_option()
+                    .map(Into::into),
+                verify_base_cost: protocol_config
+                    .nitro_attestation_verify_base_cost_as_option()
+                    .map(Into::into),
+                verify_cost_per_cert: protocol_config
+                    .nitro_attestation_verify_cost_per_cert_as_option()
+                    .map(Into::into),
+            },
         }
     }
 }
@@ -1062,6 +1080,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "ecdsa_k1",
             "secp256k1_keypair_from_seed",
             make_native!(ecdsa_k1::secp256k1_keypair_from_seed),
+        ),
+        (
+            "nitro_attestation",
+            "load_nitro_attestation_internal",
+            make_native!(nitro_attestation::load_nitro_attestation_internal),
         ),
     ];
     let sui_framework_natives_iter =
