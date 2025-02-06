@@ -27,10 +27,12 @@ use sui_types::transaction::{
 };
 use tokio::time::sleep;
 
+use std::path::Path;
+use std::{fs, io};
 use sui::{
     client_commands::{
-        estimate_gas_budget, Opts, OptsWithGas, SuiClientCommandResult, SuiClientCommands,
-        SwitchResponse,
+        estimate_gas_budget, fetch_move_packages, Opts, OptsWithGas, SuiClientCommandResult,
+        SuiClientCommands, SwitchResponse,
     },
     sui_commands::{parse_host_port, SuiCommand},
 };
@@ -3959,4 +3961,303 @@ async fn test_parse_host_port() {
     assert!(parse_host_port(input.to_string(), 9123).is_err());
     let input = "127.9.0.1:asb";
     assert!(parse_host_port(input.to_string(), 9123).is_err());
+}
+
+#[tokio::test]
+async fn test_tree_shaking() -> Result<(), anyhow::Error> {
+    // This test checks that tree shaking works as expected. See the README.md file in the
+    // tree_shaking tests data dir, and follow the comments in this test function!
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+    let temp_dir = tempfile::tempdir()?;
+    std::fs::create_dir_all(temp_dir.path().join("tree_shaking"))?;
+
+    // copy all tests data to a temp dir to make it easier to manipulate files as needed
+    let tests_dir = PathBuf::from(TEST_DATA_DIR);
+    copy_dir_all(tests_dir, temp_dir.path()).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to copy test data dir to temp dir ({}): {}",
+            temp_dir.path().display(),
+            e.to_string()
+        )
+    })?;
+
+    // ============== TEST 1 ================ //
+    // Publish package A
+    let package_path = temp_dir.path().join("tree_shaking").join("A");
+    let (package_a_id, cap) = publish_package(
+        package_path,
+        context,
+        rgp,
+        gas_obj_id,
+        false, /* skip dep verif */
+    )
+    .await?;
+
+    // fetch linkage table of A
+    let move_pkg_a = fetch_move_packages(&client, vec![package_a_id]).await?;
+    let linkage_table_a = move_pkg_a.get(0).unwrap().linkage_table();
+    // A has no deps, linkage table should be empty!
+    assert!(linkage_table_a.is_empty());
+
+    // ============== TEST 2 ================ //
+    // Publish package B_depends_on_A and check the linkage table
+    let package_path = temp_dir.path().join("tree_shaking").join("B_depends_on_A");
+    let (package_b_id, _) = publish_package(
+        package_path,
+        context,
+        rgp,
+        gas_obj_id,
+        false, /* skip dep verif */
+    )
+    .await?;
+
+    // get linkage table of package B_depends_on_A
+    let move_pkg_b = fetch_move_packages(&client, vec![package_b_id]).await?;
+    let linkage_table_b = move_pkg_b.get(0).unwrap().linkage_table();
+    // B depends on A, so the linkage table should contain A's object ID
+    assert!(linkage_table_b.contains_key(&package_a_id));
+
+    // ============== TEST 3 ================ //
+    // Publish package B_depends_on_A_but_no_code_references_A and check the linkage table
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("B_depends_on_A_but_no_code_references_A");
+    let (package_b_1_id, _) = publish_package(
+        package_path,
+        context,
+        rgp,
+        gas_obj_id,
+        false, /* skip dep verif */
+    )
+    .await?;
+
+    // get linkage table of package B_depends_on_A_but_no_code_references_A
+    let move_pkg_b_1 = fetch_move_packages(&client, vec![package_b_1_id]).await?;
+    let linkage_table_b_1 = move_pkg_b_1.get(0).unwrap().linkage_table();
+    // B_no_code_reference_to_A depends on A in the manifest, but no code is referenced, so the linkage table should be
+    // empty
+    assert!(linkage_table_b_1.is_empty());
+
+    // ============== TEST 4 ================ //
+    // Publish package C_depends_on_B_which_depends_on_A and check the linkage table
+    // we use here the package B published in TEST 2
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("C_depends_on_B_which_depends_on_A");
+    let (package_c_id, _) = publish_package(
+        package_path,
+        context,
+        rgp,
+        gas_obj_id,
+        false, /* skip dep verif */
+    )
+    .await?;
+
+    // get linkage table of package C
+    let move_pkg_c = fetch_move_packages(&client, vec![package_c_id]).await?;
+
+    let linkage_table_c = move_pkg_c
+        .iter()
+        .flat_map(|x| x.linkage_table())
+        .collect::<std::collections::BTreeMap<_, _>>();
+    // C depends on B, which depends on A, so the linkage table should contain A's object ID, and
+    // B's object ID
+    assert!(linkage_table_c.contains_key(&package_a_id));
+    assert!(linkage_table_c.contains_key(&package_b_id));
+    assert!(linkage_table_c.len() == 2);
+
+    // ============== TEST 5 ================ //
+    // Publish package C_depends_on_B_but_no_code_references_B and check the linkage table
+    // we use here the package B published in TEST 3
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("C_depends_on_B_but_no_code_references_B");
+    let (package_c_1_id, _) = publish_package(
+        package_path,
+        context,
+        rgp,
+        gas_obj_id,
+        false, /* skip dep verif */
+    )
+    .await?;
+
+    // get linkage table of package C
+    let move_pkg_c_1 = fetch_move_packages(&client, vec![package_c_1_id]).await?;
+    let linkage_table_c_1 = move_pkg_c_1
+        .iter()
+        .flat_map(|x| x.linkage_table())
+        .collect::<std::collections::BTreeMap<_, _>>();
+    // C depends on B, and B depends on A, but no code references B, so the linkage table should
+    // be empty
+    assert!(linkage_table_c_1.is_empty());
+
+    // ============== TEST 6 ================ //
+    // Upgrade Package A and publish package D that depends on A_v1 but no code references A
+    let pkg_a_v1_path = temp_dir.path().join("tree_shaking").join("A_v1");
+    let mut build_config = BuildConfig::new_for_testing().config;
+    std::fs::copy(
+        temp_dir
+            .path()
+            .join("tree_shaking")
+            .join("A")
+            .join("Move.lock"),
+        pkg_a_v1_path.join("Move.lock"),
+    )?;
+
+    let a_v1_move_lock_path = pkg_a_v1_path.join("Move.lock");
+    build_config.lock_file = Some(a_v1_move_lock_path.clone());
+
+    // upgrade package A (named A_v1)
+    let resp = SuiClientCommands::Upgrade {
+        package_path: pkg_a_v1_path.clone(),
+        upgrade_capability: cap,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        build_config,
+        skip_dependency_verification: false,
+        verify_compatibility: true,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+    assert!(effects.status.is_ok());
+
+    let package_a_v1 = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("D_depends_on_A_v1_but_no_code_references_A");
+    let (package_d_id, _) = publish_package(
+        package_path,
+        context,
+        rgp,
+        gas_obj_id,
+        false, /* skip dep verif */
+    )
+    .await?;
+
+    // fetch linkage table of D
+    let move_pkg_d = fetch_move_packages(&client, vec![package_d_id]).await?;
+    let linkage_table_d = move_pkg_d.get(0).unwrap().linkage_table();
+    // D depends on A_v1, but no code references A, so the linkage table should be empty
+    assert!(linkage_table_d.is_empty());
+
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("D_depends_on_A_v1");
+    let (package_d_1_id, _) = publish_package(
+        package_path,
+        context,
+        rgp,
+        gas_obj_id,
+        false, /* skip dep verif */
+    )
+    .await?;
+
+    // fetch linkage table of D
+    let move_pkg_d_1 = fetch_move_packages(&client, vec![package_d_1_id]).await?;
+    let linkage_table_d_1 = move_pkg_d_1
+        .iter()
+        .flat_map(|x| x.linkage_table())
+        .collect::<std::collections::BTreeMap<_, _>>();
+
+    // D depends on A_v1, so the linkage table should contain an entry that has its key the A orig
+    // id, and the upgraded id should be the A_v1 id
+    assert!(linkage_table_d_1.contains_key(&package_a_id));
+    assert!(linkage_table_d_1
+        .get(&package_a_id)
+        .is_some_and(|x| x.upgraded_id == package_a_v1.reference.object_id));
+
+    Ok(())
+}
+
+async fn publish_package(
+    package_path: PathBuf,
+    context: &mut WalletContext,
+    rgp: u64,
+    gas_obj_id: ObjectID,
+    skip_dependency_verification: bool,
+) -> Result<(ObjectID, ObjectID), anyhow::Error> {
+    let mut build_config = BuildConfig::new_for_testing().config;
+    let move_lock_path = package_path.clone().join("Move.lock");
+    build_config.lock_file = Some(move_lock_path.clone());
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config: build_config.clone(),
+        skip_dependency_verification,
+        with_unpublished_dependencies: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    let package_a = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+    let cap = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    Ok((package_a.reference.object_id, cap.reference.object_id))
+}
+
+// Recursively copy a directory and all its contents
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
 }

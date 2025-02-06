@@ -1,0 +1,12 @@
+[package]
+name = "D_depends_on_A_v1_but_no_code_references_A"
+edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+# license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
+# authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
+
+[dependencies]
+A = { local = "../A_v1" }
+
+[addresses]
+d_depends_on_a_v1_but_no_code_references_a = "0x0"
+

@@ -1,0 +1,9 @@
+[package]
+name = "C"
+edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+
+[dependencies]
+B = { local = "../B_depends_on_A"}
+
+[addresses]
+c = "0x0"
