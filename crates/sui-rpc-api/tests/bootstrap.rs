@@ -50,6 +50,7 @@ fn bootstrap() {
         .build_client(true)
         .build_server(true)
         .bytes(["."])
+        .btree_map([".sui.node.v2alpha.GetProtocolConfigResponse"])
         .out_dir(&out_dir)
         .compile_fds(fds)
     {
