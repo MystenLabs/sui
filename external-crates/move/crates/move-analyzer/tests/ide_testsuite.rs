@@ -3,7 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs::{self, File},
+    fs::File,
     io::{self, BufWriter},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -20,9 +20,7 @@ use move_analyzer::{
         SymbolsComputationData, UseDefMap,
     },
 };
-use move_command_line_common::testing::{
-    add_update_baseline_fix, format_diff, read_env_update_baseline, EXP_EXT,
-};
+use move_command_line_common::testing::insta_assert;
 use move_compiler::linters::LintLevel;
 use serde::{Deserialize, Serialize};
 use vfs::{MemoryFS, VfsPath};
@@ -342,31 +340,6 @@ impl HintTest {
 // Test Suite Runner Code
 //**************************************************************************************************
 
-fn check_expected(expected_path: &Path, result: &str) -> anyhow::Result<()> {
-    let update_baseline = read_env_update_baseline();
-
-    if update_baseline {
-        fs::write(expected_path, result)?;
-        Ok(())
-    } else {
-        let exp_exists = expected_path.is_file();
-        if exp_exists {
-            let expected = fs::read_to_string(expected_path)?;
-            if result != expected {
-                let msg = format!(
-                    "Expected output differ from actual output:\n{}",
-                    format_diff(result, expected),
-                );
-                anyhow::bail!(add_update_baseline_fix(msg))
-            } else {
-                Ok(())
-            }
-        } else {
-            anyhow::bail!(add_update_baseline_fix("No baseline file found."))
-        }
-    }
-}
-
 fn initial_symbols(
     project: String,
     files: &BTreeSet<&String>,
@@ -549,13 +522,12 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
         } => hint_test_suite(project, file_tests),
     }?;
 
-    let exp_string = test_path
-        .with_extension(EXP_EXT)
-        .to_string_lossy()
-        .to_string();
-    let exp_path = Path::new(&exp_string);
-
-    check_expected(exp_path, &output)?;
+    let test_name = test_path.file_stem().unwrap().to_str().unwrap();
+    insta_assert! {
+        name: test_name,
+        input_path: test_path,
+        contents: output,
+    };
     Ok(())
 }
 
