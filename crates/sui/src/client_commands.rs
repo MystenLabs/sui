@@ -1739,11 +1739,10 @@ fn check_dep_verification_flags(
         (true, true) => bail!("[error]: --skip_dependency_verification and --verify_dependencies are mutually exclusive"),
 
         (false, false) => {
-            eprintln!("{}: {}", "[warning]".bold().yellow(),
-            format!("In a future release, dependency source code will no longer be verified by default during publication and upgrade. \
-            You can opt in to source verification using `--verify-deps` or disable this warning using `--skip-dependency-verification`. \
-            You can also manually verify dependencies using `sui client verify-source`.
-            "));
+            eprintln!("{}: In a future release, dependency source code will no longer be verified by default during publication and upgrade. \
+                You can opt in to source verification using `--verify-deps` or disable this warning using `--skip-dependency-verification`. \
+                You can also manually verify dependencies using `sui client verify-source`.",
+                "[warning]".bold().yellow());
             Ok(true)
         },
 
