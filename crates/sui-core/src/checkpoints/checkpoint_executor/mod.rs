@@ -283,7 +283,7 @@ impl CheckpointExecutor {
                     pending.is_empty(),
                     "Pending checkpoint execution buffer should be empty after processing last checkpoint of epoch",
                 );
-                fail_point_async!("crash");
+                fail_point!("crash");
                 debug!(epoch = epoch_store.epoch(), "finished epoch");
                 return StopReason::EpochComplete;
             }
