@@ -38,7 +38,6 @@ exclude = [
     "external-crates/move/crates/move-model",
     "external-crates/move/crates/move-package",
     "external-crates/move/crates/move-proc-macros",
-    "external-crates/move/crates/move-prover-test-utils",
     "external-crates/move/crates/move-stackless-bytecode",
     "external-crates/move/crates/move-stdlib",
     "external-crates/move/crates/move-stdlib-natives",
