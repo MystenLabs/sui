@@ -318,6 +318,11 @@ impl Core {
 
         // We want to enable the commit process logic when GC is enabled.
         if self.dag_state.read().gc_enabled() {
+            // Accept the certified commit votes. This is optimisticallyd done to increase the chances of having votes available when this node
+            // will need to sync commits to other nodes.
+            self.block_manager
+                .try_accept_blocks(commits.iter().flat_map(|c| c.blocks()).cloned().collect());
+
             // Try to commit the new blocks. Take into account the trusted commit that has been provided.
             self.try_commit(commits)?;
 
