@@ -5,7 +5,7 @@ mod test {
     use mysten_network::Multiaddr;
     use std::{sync::Arc, time::Duration};
 
-    use crate::swarm::{self, node::NodeConfig};
+    use crate::swarm::{self, node::Config};
     use consensus_config::{
         Authority, AuthorityIndex, AuthorityKeyPair, Committee, Epoch, NetworkKeyPair,
         ProtocolKeyPair, Stake,
@@ -55,7 +55,7 @@ mod test {
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
 
         for (index, _authority_info) in committee.authorities() {
-            let config = NodeConfig {
+            let config = Config {
                 authority_index: index,
                 db_dir: Arc::new(TempDir::new().unwrap()),
                 committee: committee.clone(),
@@ -64,7 +64,7 @@ mod test {
                 boot_counter: boot_counters[index],
                 protocol_config: protocol_config.clone(),
             };
-            let node = swarm::node::Node::new(config);
+            let node = swarm::node::AuthorityNode::new(config);
 
             if index != AuthorityIndex::new_for_test(NUM_OF_AUTHORITIES as u32 - 1) {
                 node.start().await.unwrap();
