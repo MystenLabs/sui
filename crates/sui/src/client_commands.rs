@@ -366,7 +366,7 @@ pub enum SuiClientCommands {
         skip_dependency_verification: bool,
 
         /// Check that the dependency source code compiles to the on-chain bytecode before
-        /// publishing the package
+        /// publishing the package (currently the default behavior)
         #[clap(long, conflicts_with = "skip_dependency_verification")]
         verify_deps: bool,
 
@@ -475,7 +475,8 @@ pub enum SuiClientCommands {
         #[clap(long)]
         skip_dependency_verification: bool,
 
-        /// Check that the dependency source code compiles to the on-chain bytecode before upgrading the package
+        /// Check that the dependency source code compiles to the on-chain bytecode before
+        /// upgrading the package (currently the default behavior)
         #[clap(long, conflicts_with = "skip_dependency_verification")]
         verify_deps: bool,
 
