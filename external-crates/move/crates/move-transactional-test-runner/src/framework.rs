@@ -806,7 +806,10 @@ where
         handle_known_task(&mut output, &mut adapter, task).await;
     }
 
-    insta_snapshot(path, output);
+    insta_assert! {
+        input_path: path,
+        contents: output,
+    }
     Ok(())
 }
 
@@ -867,14 +870,4 @@ async fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
         "\ntask {task_number}, {line_number}:\n{task_text}\n{result_string}"
     )
     .unwrap();
-}
-
-fn insta_snapshot(test_path: &Path, output: impl AsRef<str>) {
-    let test_name = test_path.file_stem().unwrap().to_string_lossy();
-    let contents = output.as_ref();
-    insta_assert! {
-        name: test_name,
-        input_path: test_path,
-        contents: contents,
-    }
 }

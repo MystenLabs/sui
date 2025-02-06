@@ -191,9 +191,7 @@ fn test_runner(path: &Path) -> datatest_stable::Result<()> {
         }
         text
     };
-    let test_name = path.file_stem().unwrap().to_str().unwrap();
     insta_assert! {
-        name: test_name,
         input_path: path,
         contents: out,
     };

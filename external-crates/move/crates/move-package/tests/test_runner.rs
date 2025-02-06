@@ -31,7 +31,6 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
 }
 
 struct Test<'a> {
-    test_name: String,
     kind: &'a str,
     toml_path: &'a Path,
     output_dir: TempDir,
@@ -43,9 +42,7 @@ impl Test<'_> {
         kind: &'a str,
     ) -> datatest_stable::Result<Test<'a>> {
         dbg!(&toml_path);
-        let name = toml_path.file_stem().unwrap().to_string_lossy().to_string();
         Ok(Test {
-            test_name: name,
             toml_path,
             kind,
             output_dir: tempdir()?,
@@ -56,7 +53,6 @@ impl Test<'_> {
         package_hooks::register_package_hooks(Box::new(TestHooks()));
         let output = self.output().unwrap_or_else(|err| format!("{:#}\n", err));
         insta_assert! {
-            name: &self.test_name,
             input_path: self.toml_path,
             contents: output,
             suffix: self.kind,
