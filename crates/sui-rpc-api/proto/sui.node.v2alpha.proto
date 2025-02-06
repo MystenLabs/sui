@@ -53,6 +53,8 @@ service NodeService {
   rpc ListDynamicFields(ListDynamicFieldsRequest) returns (ListDynamicFieldsResponse);
 
   rpc GetProtocolConfig(GetProtocolConfigRequest) returns (GetProtocolConfigResponse);
+
+  rpc GetGasInfo(GetGasInfoRequest) returns (GetGasInfoResponse);
 }
 
 // Request message for `NodeService.GetCoinInfo`.
@@ -175,4 +177,11 @@ message GetProtocolConfigResponse {
 
   optional uint64 max_suppported_protocol_version = 4;
   optional uint64 min_suppported_protocol_version = 5;
+}
+
+message GetGasInfoRequest {}
+
+message GetGasInfoResponse {
+  // Reference gas price denominated in MIST
+  optional uint64 reference_gas_price = 1;
 }

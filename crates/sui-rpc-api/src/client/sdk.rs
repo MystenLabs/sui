@@ -15,7 +15,6 @@ use tap::Pipe;
 use crate::rest::accounts::AccountOwnedObjectInfo;
 use crate::rest::accounts::ListAccountOwnedObjectsQueryParameters;
 use crate::rest::health::Threshold;
-use crate::rest::system::GasInfo;
 use crate::rest::system::SystemStateSummary;
 use crate::rest::transactions::ResolveTransactionQueryParameters;
 use crate::rest::transactions::ResolveTransactionResponse;
@@ -84,21 +83,6 @@ impl Client {
         let request = self.inner.get(url).query(parameters);
 
         self.json(request).await
-    }
-
-    pub async fn get_gas_info(&self) -> Result<Response<GasInfo>> {
-        let url = self.url().join("system/gas")?;
-
-        let request = self.inner.get(url);
-
-        self.json(request).await
-    }
-
-    pub async fn get_reference_gas_price(&self) -> Result<u64> {
-        self.get_gas_info()
-            .await
-            .map(Response::into_inner)
-            .map(|info| info.reference_gas_price)
     }
 
     pub async fn get_system_state_summary(&self) -> Result<Response<SystemStateSummary>> {

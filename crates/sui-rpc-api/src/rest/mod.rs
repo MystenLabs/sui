@@ -27,7 +27,6 @@ pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
     &health::HealthCheck,
     &accounts::ListAccountObjects,
     &system::GetSystemStateSummary,
-    &system::GetGasInfo,
     &transactions::SimulateTransaction,
     &transactions::ResolveTransaction,
 ];
