@@ -161,6 +161,14 @@ pub struct GetProtocolConfigResponse {
     #[prost(uint64, optional, tag = "5")]
     pub min_suppported_protocol_version: ::core::option::Option<u64>,
 }
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GetGasInfoRequest {}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GetGasInfoResponse {
+    /// Reference gas price denominated in MIST
+    #[prost(uint64, optional, tag = "1")]
+    pub reference_gas_price: ::core::option::Option<u64>,
+}
 /// Generated client implementations.
 pub mod subscription_service_client {
     #![allow(
@@ -468,6 +476,30 @@ pub mod node_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_gas_info(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetGasInfoRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetGasInfoResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.node.v2alpha.NodeService/GetGasInfo",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("sui.node.v2alpha.NodeService", "GetGasInfo"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -714,6 +746,13 @@ pub mod node_service_server {
             tonic::Response<super::GetProtocolConfigResponse>,
             tonic::Status,
         >;
+        async fn get_gas_info(
+            &self,
+            request: tonic::Request<super::GetGasInfoRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetGasInfoResponse>,
+            tonic::Status,
+        >;
     }
     /// Service for reading data from a Sui Full node.
     #[derive(Debug)]
@@ -914,6 +953,51 @@ pub mod node_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetProtocolConfigSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.node.v2alpha.NodeService/GetGasInfo" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetGasInfoSvc<T: NodeService>(pub Arc<T>);
+                    impl<
+                        T: NodeService,
+                    > tonic::server::UnaryService<super::GetGasInfoRequest>
+                    for GetGasInfoSvc<T> {
+                        type Response = super::GetGasInfoResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetGasInfoRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as NodeService>::get_gas_info(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetGasInfoSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

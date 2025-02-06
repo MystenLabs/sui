@@ -431,4 +431,16 @@ impl crate::proto::node::v2alpha::node_service_server::NodeService for crate::Rp
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
+
+    async fn get_gas_info(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::GetGasInfoRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::GetGasInfoResponse>,
+        tonic::Status,
+    > {
+        self.get_gas_info(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
 }
