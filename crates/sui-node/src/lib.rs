@@ -2226,16 +2226,16 @@ pub async fn build_http_server(
                 config.name_service_registry_id,
                 config.name_service_reverse_registry_id,
             ) {
-                sui_json_rpc::name_service::NameServiceConfig::new(
+                sui_name_service::NameServiceConfig::new(
                     package_address,
                     registry_id,
                     reverse_registry_id,
                 )
             } else {
                 match state.get_chain_identifier().chain() {
-                    Chain::Mainnet => sui_json_rpc::name_service::NameServiceConfig::mainnet(),
-                    Chain::Testnet => sui_json_rpc::name_service::NameServiceConfig::testnet(),
-                    Chain::Unknown => sui_json_rpc::name_service::NameServiceConfig::default(),
+                    Chain::Mainnet => sui_name_service::NameServiceConfig::mainnet(),
+                    Chain::Testnet => sui_name_service::NameServiceConfig::testnet(),
+                    Chain::Unknown => sui_name_service::NameServiceConfig::default(),
                 }
             };
 

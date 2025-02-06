@@ -19,7 +19,7 @@ use crate::types::type_filter::ExactTypeFilter;
 
 use async_graphql::connection::Connection;
 use async_graphql::*;
-use sui_json_rpc::name_service::NameServiceConfig;
+use sui_name_service::NameServiceConfig;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::gas_coin::GAS;
 

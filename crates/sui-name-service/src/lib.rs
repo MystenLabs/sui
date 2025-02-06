@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt;
+use std::marker::PhantomData;
+use std::str::FromStr;
+
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::marker::PhantomData;
-use std::str::FromStr;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::collection_types::VecMap;
 use sui_types::dynamic_field::Field;
@@ -22,14 +23,6 @@ const DEFAULT_TLD: &str = "sui";
 const ACCEPTED_SEPARATORS: [char; 2] = ['.', '*'];
 const SUI_NEW_FORMAT_SEPARATOR: char = '@';
 
-/// Two different view options for a domain.
-/// `At` -> `test@example` | `Dot` -> `test.example.sui`
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub enum DomainFormat {
-    At,
-    Dot,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Registry {
     /// The `registry` table maps `Domain` to `NameRecord`.
@@ -38,6 +31,63 @@ pub struct Registry {
     /// The `reverse_registry` table maps `address` to `domain_name`.
     /// Updated in the `set_reverse_lookup` function.
     reverse_registry: Table<SuiAddress, Domain>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
+pub struct Domain {
+    labels: Vec<String>,
+}
+
+/// A single record in the registry.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct NameRecord {
+    /// The ID of the `RegistrationNFT` assigned to this record.
+    ///
+    /// The owner of the corrisponding `RegistrationNFT` has the rights to
+    /// be able to change and adjust the `target_address` of this domain.
+    ///
+    /// It is possible that the ID changes if the record expires and is
+    /// purchased by someone else.
+    pub nft_id: ID,
+    /// Timestamp in milliseconds when the record expires.
+    pub expiration_timestamp_ms: u64,
+    /// The target address that this domain points to
+    pub target_address: Option<SuiAddress>,
+    /// Additional data which may be stored in a record
+    pub data: VecMap<String, String>,
+}
+
+/// A SuinsRegistration object to manage an SLD
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct SuinsRegistration {
+    pub id: UID,
+    pub domain: Domain,
+    pub domain_name: String,
+    pub expiration_timestamp_ms: u64,
+    pub image_url: String,
+}
+
+/// A SubDomainRegistration object to manage a subdomain.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct SubDomainRegistration {
+    pub id: UID,
+    pub nft: SuinsRegistration,
+}
+
+/// Two different view options for a domain.
+/// `At` -> `test@example` | `Dot` -> `test.example.sui`
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum DomainFormat {
+    At,
+    Dot,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct NameServiceConfig {
+    pub package_address: SuiAddress,
+    pub registry_id: ObjectID,
+    pub reverse_registry_id: ObjectID,
 }
 
 /// Rust version of the Move sui::table::Table type.
@@ -52,9 +102,25 @@ pub struct Table<K, V> {
     _value: PhantomData<V>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
-pub struct Domain {
-    labels: Vec<String>,
+#[derive(thiserror::Error, Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub enum NameServiceError {
+    #[error("Name Service: String length: {0} exceeds maximum allowed length: {1}")]
+    ExceedsMaxLength(usize, usize),
+    #[error("Name Service: String length: {0} outside of valid range: [{1}, {2}]")]
+    InvalidLength(usize, usize, usize),
+    #[error("Name Service: Hyphens are not allowed as the first or last character")]
+    InvalidHyphens,
+    #[error("Name Service: Only lowercase letters, numbers, and hyphens are allowed")]
+    InvalidUnderscore,
+    #[error("Name Service: Domain must contain at least one label")]
+    LabelsEmpty,
+    #[error("Name Service: Domain must include only one separator")]
+    InvalidSeparator,
+
+    #[error("Name Service: Name has expired.")]
+    NameExpired,
+    #[error("Name Service: Malformed object for {0}")]
+    MalformedObject(ObjectID),
 }
 
 impl Domain {
@@ -109,14 +175,6 @@ impl Domain {
 
         format!("{}{}{}", labels.join(sep), SUI_NEW_FORMAT_SEPARATOR, sld)
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub struct NameServiceConfig {
-    pub package_address: SuiAddress,
-    pub registry_id: ObjectID,
-    pub reverse_registry_id: ObjectID,
 }
 
 impl NameServiceConfig {
@@ -186,9 +244,24 @@ impl NameServiceConfig {
     }
 }
 
-impl Default for NameServiceConfig {
-    fn default() -> Self {
-        Self::mainnet()
+impl NameRecord {
+    /// Leaf records expire when their parent expires.
+    /// The `expiration_timestamp_ms` is set to `0` (on-chain) to indicate this.
+    pub fn is_leaf_record(&self) -> bool {
+        self.expiration_timestamp_ms == LEAF_EXPIRATION_TIMESTAMP
+    }
+
+    /// Validate that a `NameRecord` is a valid parent of a child `NameRecord`.
+    ///
+    /// WARNING: This only applies for `leaf` records
+    pub fn is_valid_leaf_parent(&self, child: &NameRecord) -> bool {
+        self.nft_id == child.nft_id
+    }
+
+    /// Checks if a `node` name record has expired.
+    /// Expects the latest checkpoint's timestamp.
+    pub fn is_node_expired(&self, checkpoint_timestamp_ms: u64) -> bool {
+        self.expiration_timestamp_ms < checkpoint_timestamp_ms
     }
 }
 
@@ -222,6 +295,45 @@ impl FromStr for Domain {
 
         let labels = labels.into_iter().map(ToOwned::to_owned).collect();
         Ok(Domain { labels })
+    }
+}
+
+impl fmt::Display for Domain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // We use to_string() to check on-chain state and parse on-chain data
+        // so we should always default to DOT format.
+        let output = self.format(DomainFormat::Dot);
+        f.write_str(&output)?;
+
+        Ok(())
+    }
+}
+
+impl Default for NameServiceConfig {
+    fn default() -> Self {
+        Self::mainnet()
+    }
+}
+
+impl TryFrom<Object> for NameRecord {
+    type Error = NameServiceError;
+
+    fn try_from(object: Object) -> Result<Self, NameServiceError> {
+        object
+            .to_rust::<Field<Domain, Self>>()
+            .map(|record| record.value)
+            .ok_or_else(|| NameServiceError::MalformedObject(object.id()))
+    }
+}
+
+impl TryFrom<MoveObject> for NameRecord {
+    type Error = NameServiceError;
+
+    fn try_from(object: MoveObject) -> Result<Self, NameServiceError> {
+        object
+            .to_rust::<Field<Domain, Self>>()
+            .map(|record| record.value)
+            .ok_or_else(|| NameServiceError::MalformedObject(object.id()))
     }
 }
 
@@ -308,113 +420,111 @@ pub fn validate_label(label: &str) -> Result<&str, NameServiceError> {
     Ok(label)
 }
 
-impl fmt::Display for Domain {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // We use to_string() to check on-chain state and parse on-chain data
-        // so we should always default to DOT format.
-        let output = self.format(DomainFormat::Dot);
-        f.write_str(&output)?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        Ok(())
-    }
-}
+    #[test]
+    fn test_parent_extraction() {
+        let mut name = Domain::from_str("leaf.node.test.sui").unwrap();
 
-/// A single record in the registry.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct NameRecord {
-    /// The ID of the `RegistrationNFT` assigned to this record.
-    ///
-    /// The owner of the corrisponding `RegistrationNFT` has the rights to
-    /// be able to change and adjust the `target_address` of this domain.
-    ///
-    /// It is possible that the ID changes if the record expires and is
-    /// purchased by someone else.
-    pub nft_id: ID,
-    /// Timestamp in milliseconds when the record expires.
-    pub expiration_timestamp_ms: u64,
-    /// The target address that this domain points to
-    pub target_address: Option<SuiAddress>,
-    /// Additional data which may be stored in a record
-    pub data: VecMap<String, String>,
-}
+        assert_eq!(name.parent().to_string(), "node.test.sui");
 
-impl NameRecord {
-    /// Leaf records expire when their parent expires.
-    /// The `expiration_timestamp_ms` is set to `0` (on-chain) to indicate this.
-    pub fn is_leaf_record(&self) -> bool {
-        self.expiration_timestamp_ms == LEAF_EXPIRATION_TIMESTAMP
+        name = Domain::from_str("node.test.sui").unwrap();
+
+        assert_eq!(name.parent().to_string(), "test.sui");
     }
 
-    /// Validate that a `NameRecord` is a valid parent of a child `NameRecord`.
-    ///
-    /// WARNING: This only applies for `leaf` records
-    pub fn is_valid_leaf_parent(&self, child: &NameRecord) -> bool {
-        self.nft_id == child.nft_id
+    #[test]
+    fn test_expirations() {
+        let system_time: u64 = 100;
+
+        let mut name = NameRecord {
+            nft_id: sui_types::id::ID::new(ObjectID::random()),
+            data: VecMap { contents: vec![] },
+            target_address: Some(SuiAddress::random_for_testing_only()),
+            expiration_timestamp_ms: system_time + 10,
+        };
+
+        assert!(!name.is_node_expired(system_time));
+
+        name.expiration_timestamp_ms = system_time - 10;
+
+        assert!(name.is_node_expired(system_time));
     }
 
-    /// Checks if a `node` name record has expired.
-    /// Expects the latest checkpoint's timestamp.
-    pub fn is_node_expired(&self, checkpoint_timestamp_ms: u64) -> bool {
-        self.expiration_timestamp_ms < checkpoint_timestamp_ms
+    #[test]
+    fn test_name_service_outputs() {
+        assert_eq!("@test".parse::<Domain>().unwrap().to_string(), "test.sui");
+        assert_eq!(
+            "test.sui".parse::<Domain>().unwrap().to_string(),
+            "test.sui"
+        );
+        assert_eq!(
+            "test@sld".parse::<Domain>().unwrap().to_string(),
+            "test.sld.sui"
+        );
+        assert_eq!(
+            "test.test@example".parse::<Domain>().unwrap().to_string(),
+            "test.test.example.sui"
+        );
+        assert_eq!(
+            "sui@sui".parse::<Domain>().unwrap().to_string(),
+            "sui.sui.sui"
+        );
+
+        assert_eq!("@sui".parse::<Domain>().unwrap().to_string(), "sui.sui");
+
+        assert_eq!(
+            "test*test@test".parse::<Domain>().unwrap().to_string(),
+            "test.test.test.sui"
+        );
+        assert_eq!(
+            "test.test.sui".parse::<Domain>().unwrap().to_string(),
+            "test.test.sui"
+        );
+        assert_eq!(
+            "test.test.test.sui".parse::<Domain>().unwrap().to_string(),
+            "test.test.test.sui"
+        );
     }
-}
 
-impl TryFrom<Object> for NameRecord {
-    type Error = NameServiceError;
+    #[test]
+    fn test_different_wildcard() {
+        assert_eq!("test.sui".parse::<Domain>(), "test*sui".parse::<Domain>(),);
 
-    fn try_from(object: Object) -> Result<Self, NameServiceError> {
-        object
-            .to_rust::<Field<Domain, Self>>()
-            .map(|record| record.value)
-            .ok_or_else(|| NameServiceError::MalformedObject(object.id()))
+        assert_eq!("@test".parse::<Domain>(), "test*sui".parse::<Domain>(),);
     }
-}
 
-impl TryFrom<MoveObject> for NameRecord {
-    type Error = NameServiceError;
-
-    fn try_from(object: MoveObject) -> Result<Self, NameServiceError> {
-        object
-            .to_rust::<Field<Domain, Self>>()
-            .map(|record| record.value)
-            .ok_or_else(|| NameServiceError::MalformedObject(object.id()))
+    #[test]
+    fn test_invalid_inputs() {
+        assert!("*".parse::<Domain>().is_err());
+        assert!(".".parse::<Domain>().is_err());
+        assert!("@".parse::<Domain>().is_err());
+        assert!("@inner.sui".parse::<Domain>().is_err());
+        assert!("@inner*sui".parse::<Domain>().is_err());
+        assert!("test@".parse::<Domain>().is_err());
+        assert!("sui".parse::<Domain>().is_err());
+        assert!("test.test@example.sui".parse::<Domain>().is_err());
+        assert!("test@test@example".parse::<Domain>().is_err());
     }
-}
 
-#[derive(thiserror::Error, Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub enum NameServiceError {
-    #[error("Name Service: String length: {0} exceeds maximum allowed length: {1}")]
-    ExceedsMaxLength(usize, usize),
-    #[error("Name Service: String length: {0} outside of valid range: [{1}, {2}]")]
-    InvalidLength(usize, usize, usize),
-    #[error("Name Service: Hyphens are not allowed as the first or last character")]
-    InvalidHyphens,
-    #[error("Name Service: Only lowercase letters, numbers, and hyphens are allowed")]
-    InvalidUnderscore,
-    #[error("Name Service: Domain must contain at least one label")]
-    LabelsEmpty,
-    #[error("Name Service: Domain must include only one separator")]
-    InvalidSeparator,
+    #[test]
+    fn output_tests() {
+        let mut domain = "test.sui".parse::<Domain>().unwrap();
+        assert!(domain.format(DomainFormat::Dot) == "test.sui");
+        assert!(domain.format(DomainFormat::At) == "@test");
 
-    #[error("Name Service: Name has expired.")]
-    NameExpired,
-    #[error("Name Service: Malformed object for {0}")]
-    MalformedObject(ObjectID),
-}
+        domain = "test.test.sui".parse::<Domain>().unwrap();
+        assert!(domain.format(DomainFormat::Dot) == "test.test.sui");
+        assert!(domain.format(DomainFormat::At) == "test@test");
 
-/// A SuinsRegistration object to manage an SLD
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct SuinsRegistration {
-    pub id: UID,
-    pub domain: Domain,
-    pub domain_name: String,
-    pub expiration_timestamp_ms: u64,
-    pub image_url: String,
-}
+        domain = "test.test.test.sui".parse::<Domain>().unwrap();
+        assert!(domain.format(DomainFormat::Dot) == "test.test.test.sui");
+        assert!(domain.format(DomainFormat::At) == "test.test@test");
 
-/// A SubDomainRegistration object to manage a subdomain.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct SubDomainRegistration {
-    pub id: UID,
-    pub nft: SuinsRegistration,
+        domain = "test.test.test.test.sui".parse::<Domain>().unwrap();
+        assert!(domain.format(DomainFormat::Dot) == "test.test.test.test.sui");
+        assert!(domain.format(DomainFormat::At) == "test.test.test@test");
+    }
 }
