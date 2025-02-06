@@ -4,7 +4,6 @@
 use mysten_network::callback::CallbackLayer;
 use proto::node::v2alpha::subscription_service_server::SubscriptionServiceServer;
 use reader::StateReader;
-use rest::build_rest_router;
 use std::sync::Arc;
 use subscription::SubscriptionServiceHandle;
 use sui_types::storage::RpcStateReader;
@@ -19,7 +18,6 @@ mod metrics;
 pub mod proto;
 mod reader;
 mod response;
-pub mod rest;
 mod service;
 pub mod subscription;
 pub mod types;
@@ -91,7 +89,7 @@ impl RpcService {
     pub async fn into_router(self) -> axum::Router {
         let metrics = self.metrics.clone();
 
-        let mut router = {
+        let router = {
             let node_service =
                 crate::proto::node::v2::node_service_server::NodeServiceServer::new(self.clone());
             let node_service_alpha =
@@ -153,12 +151,8 @@ impl RpcService {
             services.into_router()
         };
 
-        if self.config.enable_experimental_rest_api() {
-            router = router.merge(build_rest_router(self.clone()));
-        }
-
         let health_endpoint = axum::Router::new()
-            .route("/health", axum::routing::get(rest::health::health))
+            .route("/health", axum::routing::get(service::health::health))
             .with_state(self.clone());
 
         router

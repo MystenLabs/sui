@@ -6,7 +6,7 @@ pub(crate) mod checkpoints;
 mod coin_info;
 mod committee;
 mod gas_info;
-mod health;
+pub(crate) mod health;
 mod info;
 pub(crate) mod objects;
 mod protocol_config;
