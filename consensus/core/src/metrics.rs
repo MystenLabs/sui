@@ -125,6 +125,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) dag_state_store_write_count: IntCounter,
     pub(crate) fetch_blocks_scheduler_inflight: IntGauge,
     pub(crate) fetch_blocks_scheduler_skipped: IntCounterVec,
+    pub(crate) fetch_commits_skip_uncertified: IntCounter,
     pub(crate) synchronizer_fetched_blocks_by_peer: IntCounterVec,
     pub(crate) synchronizer_missing_blocks_by_authority: IntCounterVec,
     pub(crate) synchronizer_current_missing_blocks_by_authority: IntGaugeVec,
@@ -691,6 +692,11 @@ impl NodeMetrics {
                 "Number of errors when attempting to fetch commits and blocks from single authority during commit sync.",
                 &["authority", "error"],
                 registry
+            ).unwrap(),
+            fetch_commits_skip_uncertified: register_int_counter_with_registry!(
+                "fetch_commits_skip_uncertified",
+                "Number of uncertified commits that got skipped to return when fetching commits",
+                registry,
             ).unwrap(),
             round_prober_received_quorum_round_gaps: register_int_gauge_vec_with_registry!(
                 "round_prober_received_quorum_round_gaps",

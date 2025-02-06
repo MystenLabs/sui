@@ -423,6 +423,17 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 certifier_block_refs = votes;
                 break 'commit;
             } else {
+                debug!(
+                    "Commit {} votes did not reach quorum to certify, {} < {}, skipping",
+                    index,
+                    stake_aggregator.stake(),
+                    stake_aggregator.threshold(&self.context.committee)
+                );
+                self.context
+                    .metrics
+                    .node_metrics
+                    .fetch_commits_skip_uncertified
+                    .inc();
                 commits.pop();
             }
         }
