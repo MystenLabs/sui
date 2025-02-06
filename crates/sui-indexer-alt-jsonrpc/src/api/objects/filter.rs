@@ -18,7 +18,7 @@ use sui_types::{
 };
 
 use crate::{
-    error::{rpc_bail, RpcError},
+    error::RpcError,
     paginate::{BcsCursor, Cursor as _, Page},
     Context,
 };
@@ -58,6 +58,16 @@ struct ObjectCursor {
 
 type Cursor = BcsCursor<ObjectCursor>;
 type ObjectIDs = PageResponse<ObjectID, String>;
+
+impl SuiObjectDataFilter {
+    fn package(&self) -> ObjectID {
+        match self {
+            SuiObjectDataFilter::Package(p) => *p,
+            SuiObjectDataFilter::MoveModule { package, .. } => *package,
+            SuiObjectDataFilter::StructType(tag) => tag.address.into(),
+        }
+    }
+}
 
 /// Fetch ObjectIDs for a page of objects owned by `owner` that satisfy the given `filter` and
 /// pagination parameters. Returns the digests and a cursor point to the last result (if there are
@@ -119,10 +129,10 @@ pub(super) async fn owned_objects(
         );
     }
 
-    match filter {
-        None => { /* nop */ }
+    let filter = filter.as_ref();
+    if let Some(package) = filter.map(|f| f.package()) {
+        query = query.filter(candidates!(package).eq(package.into_bytes()));
 
-        Some(_) => rpc_bail!("unimplemented"),
     }
 
     let mut results: Vec<(Vec<u8>, i64)> = ctx
