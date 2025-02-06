@@ -2210,6 +2210,7 @@ dependencies = [
  "move-stdlib",
  "num",
  "petgraph",
+ "regex",
  "serde",
 ]
 
