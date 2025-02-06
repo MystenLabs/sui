@@ -211,6 +211,47 @@ pub struct ResolveTransactionResponse {
     #[prost(message, optional, tag = "3")]
     pub simulation: ::core::option::Option<SimulateTransactionResponse>,
 }
+/// Request message for `NodeService.ListAccountObjects`
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListAccountObjectsRequest {
+    /// Required. The address of the account that owns the objects.
+    #[prost(message, optional, tag = "1")]
+    pub owner: ::core::option::Option<super::super::types::Address>,
+    /// The maximum number of entries return. The service may return fewer than this value.
+    /// If unspecified, at most `50` entries will be returned.
+    /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+    #[prost(uint32, optional, tag = "2")]
+    pub page_size: ::core::option::Option<u32>,
+    /// A page token, received from a previous `ListAccountObjects` call.
+    /// Provide this to retrieve the subsequent page.
+    ///
+    /// When paginating, all other parameters provided to `ListAccountObjects` must
+    /// match the call that provided the page token.
+    #[prost(string, optional, tag = "3")]
+    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Response message for `NodeService.ListAccountObjects`
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListAccountObjectsResponse {
+    /// Page of dynamic fields owned by the specified parent.
+    #[prost(message, repeated, tag = "1")]
+    pub objects: ::prost::alloc::vec::Vec<AccountObject>,
+    /// A token, which can be sent as `page_token` to retrieve the next page.
+    /// If this field is omitted, there are no subsequent pages.
+    #[prost(string, optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AccountObject {
+    #[prost(message, optional, tag = "1")]
+    pub owner: ::core::option::Option<super::super::types::Address>,
+    #[prost(message, optional, tag = "2")]
+    pub object_id: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(uint64, optional, tag = "3")]
+    pub version: ::core::option::Option<u64>,
+    #[prost(message, optional, tag = "4")]
+    pub object_type: ::core::option::Option<super::super::types::StructTag>,
+}
 /// Generated client implementations.
 pub mod subscription_service_client {
     #![allow(
@@ -489,6 +530,32 @@ pub mod node_service_client {
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new("sui.node.v2alpha.NodeService", "ListDynamicFields"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_account_objects(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListAccountObjectsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListAccountObjectsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.node.v2alpha.NodeService/ListAccountObjects",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.node.v2alpha.NodeService", "ListAccountObjects"),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -836,6 +903,13 @@ pub mod node_service_server {
             tonic::Response<super::ListDynamicFieldsResponse>,
             tonic::Status,
         >;
+        async fn list_account_objects(
+            &self,
+            request: tonic::Request<super::ListAccountObjectsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListAccountObjectsResponse>,
+            tonic::Status,
+        >;
         async fn get_protocol_config(
             &self,
             request: tonic::Request<super::GetProtocolConfigRequest>,
@@ -1018,6 +1092,52 @@ pub mod node_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ListDynamicFieldsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.node.v2alpha.NodeService/ListAccountObjects" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListAccountObjectsSvc<T: NodeService>(pub Arc<T>);
+                    impl<
+                        T: NodeService,
+                    > tonic::server::UnaryService<super::ListAccountObjectsRequest>
+                    for ListAccountObjectsSvc<T> {
+                        type Response = super::ListAccountObjectsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListAccountObjectsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as NodeService>::list_account_objects(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListAccountObjectsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

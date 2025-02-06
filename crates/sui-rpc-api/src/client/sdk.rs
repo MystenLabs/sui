@@ -4,14 +4,11 @@
 use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
 use reqwest::Url;
-use sui_sdk_types::Address;
 use sui_sdk_types::CheckpointDigest;
 use sui_sdk_types::CheckpointSequenceNumber;
 use sui_sdk_types::EpochId;
 use tap::Pipe;
 
-use crate::rest::accounts::AccountOwnedObjectInfo;
-use crate::rest::accounts::ListAccountOwnedObjectsQueryParameters;
 use crate::rest::health::Threshold;
 use crate::types::X_SUI_CHAIN;
 use crate::types::X_SUI_CHAIN_ID;
@@ -67,18 +64,6 @@ impl Client {
         self.empty(response).await
     }
 
-    pub async fn list_account_objects(
-        &self,
-        account: Address,
-        parameters: &ListAccountOwnedObjectsQueryParameters,
-    ) -> Result<Response<Vec<AccountOwnedObjectInfo>>> {
-        let url = self.url().join(&format!("account/{account}/objects"))?;
-
-        let request = self.inner.get(url).query(parameters);
-
-        self.json(request).await
-    }
-
     async fn check_response(
         &self,
         response: reqwest::Response,
@@ -101,21 +86,6 @@ impl Client {
     async fn empty(&self, response: reqwest::Response) -> Result<Response<()>> {
         let (_response, parts) = self.check_response(response).await?;
         Ok(Response::new((), parts))
-    }
-
-    async fn json<T: serde::de::DeserializeOwned>(
-        &self,
-        request: reqwest::RequestBuilder,
-    ) -> Result<Response<T>> {
-        let response = request
-            .header(reqwest::header::ACCEPT, crate::rest::APPLICATION_JSON)
-            .send()
-            .await?;
-
-        let (response, parts) = self.check_response(response).await?;
-
-        let json = response.json().await?;
-        Ok(Response::new(json, parts))
     }
 }
 

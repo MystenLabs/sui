@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod accounts;
 pub(crate) mod checkpoints;
 mod coin_info;
 mod committee;
