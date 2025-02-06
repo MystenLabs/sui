@@ -29,7 +29,7 @@ use sui_types::{
     transaction::TransactionKey,
 };
 use tracing::{debug, info};
-use typed_store::rocks::{DBBatch, DBTransaction};
+use typed_store::rocks::DBBatch;
 use typed_store::Map;
 
 use crate::{
@@ -802,7 +802,6 @@ impl ConsensusOutputQuarantine {
         &self,
         epoch_start_config: &EpochStartConfiguration,
         tables: &AuthorityEpochTables,
-        db_transaction: &DBTransaction<'_>,
         objects_to_init: &[ConsensusObjectSequenceKey],
     ) -> SuiResult<Vec<Option<SequenceNumber>>> {
         Ok(do_fallback_lookup(
@@ -816,15 +815,14 @@ impl ConsensusOutputQuarantine {
             },
             |object_keys| {
                 if epoch_start_config.use_version_assignment_tables_v3() {
-                    db_transaction
-                        .multi_get(&tables.next_shared_object_versions_v2, object_keys)
+                    tables
+                        .next_shared_object_versions_v2
+                        .multi_get(object_keys)
                         .expect("db error")
                 } else {
-                    db_transaction
-                        .multi_get(
-                            &tables.next_shared_object_versions,
-                            object_keys.iter().map(|(id, _)| *id),
-                        )
+                    tables
+                        .next_shared_object_versions
+                        .multi_get(object_keys.iter().map(|(id, _)| *id))
                         .expect("db error")
                 }
             },

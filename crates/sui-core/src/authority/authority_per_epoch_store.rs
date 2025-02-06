@@ -1688,12 +1688,7 @@ impl AuthorityPerEpochStore {
         let next_versions = self
             .consensus_quarantine
             .read()
-            .get_next_shared_object_versions(
-                self.epoch_start_config(),
-                &tables,
-                &db_transaction,
-                objects_to_init,
-            )?;
+            .get_next_shared_object_versions(self.epoch_start_config(), &tables, objects_to_init)?;
 
         let uninitialized_objects: Vec<ConsensusObjectSequenceKey> = next_versions
             .iter()
