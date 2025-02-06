@@ -72,7 +72,6 @@ impl StateReader {
         sui_sdk_types::TransactionEffects,
         Option<sui_sdk_types::TransactionEvents>,
     )> {
-        use super::rest::transactions::TransactionNotFoundError;
         use sui_types::effects::TransactionEffectsAPI;
 
         let transaction_digest = digest.into();
@@ -351,5 +350,22 @@ impl Iterator for CheckpointIter {
         };
 
         Some(Ok((checkpoint, contents)))
+    }
+}
+
+#[derive(Debug)]
+pub struct TransactionNotFoundError(pub sui_sdk_types::TransactionDigest);
+
+impl std::fmt::Display for TransactionNotFoundError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Transaction {} not found", self.0)
+    }
+}
+
+impl std::error::Error for TransactionNotFoundError {}
+
+impl From<TransactionNotFoundError> for crate::RpcServiceError {
+    fn from(value: TransactionNotFoundError) -> Self {
+        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
     }
 }

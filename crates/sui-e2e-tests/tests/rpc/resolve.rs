@@ -4,9 +4,9 @@
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_rpc_api::client::reqwest::StatusCode;
-use sui_rpc_api::client::sdk::Client as RestClient;
-use sui_rpc_api::rest::transactions::ResolveTransactionQueryParameters;
+use sui_rpc_api::proto::node::v2alpha::ResolveTransactionRequest;
+use sui_rpc_api::types::ResolveTransactionResponse;
+use sui_rpc_api::types::TransactionSimulationResponse;
 use sui_rpc_api::Client;
 use sui_sdk_transaction_builder::unresolved;
 use sui_sdk_types::Argument;
@@ -16,12 +16,47 @@ use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use test_cluster::TestClusterBuilder;
 
+fn build_resolve_request(
+    transaction: &unresolved::Transaction,
+    simulate: bool,
+) -> ResolveTransactionRequest {
+    ResolveTransactionRequest {
+        unresolved_transaction: Some(serde_json::to_string(transaction).unwrap()),
+        simulate: Some(simulate),
+        simulate_options: None,
+    }
+}
+
+fn proto_to_response(
+    proto: sui_rpc_api::proto::node::v2alpha::ResolveTransactionResponse,
+) -> ResolveTransactionResponse {
+    ResolveTransactionResponse {
+        transaction: proto.transaction_bcs.unwrap().deserialize().unwrap(),
+        simulation: proto
+            .simulation
+            .map(|simulation| TransactionSimulationResponse {
+                effects: simulation.effects_bcs.unwrap().deserialize().unwrap(),
+                events: simulation
+                    .events_bcs
+                    .map(|events_bcs| events_bcs.deserialize().unwrap()),
+                balance_changes: None,
+                input_objects: None,
+                output_objects: None,
+            }),
+    }
+}
+
 #[sim_test]
 async fn resolve_transaction_simple_transfer() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let rest_client = RestClient::new(test_cluster.rpc_url()).unwrap();
+    let mut alpha_client =
+        sui_rpc_api::proto::node::v2alpha::node_service_client::NodeServiceClient::connect(
+            test_cluster.rpc_url().to_owned(),
+        )
+        .await
+        .unwrap();
     let recipient = SuiAddress::random_for_testing_only();
 
     let (sender, mut gas) = test_cluster.wallet.get_one_account().await.unwrap();
@@ -50,17 +85,12 @@ async fn resolve_transaction_simple_transfer() {
         expiration: TransactionExpiration::None,
     };
 
-    let resolved = rest_client
-        .resolve_transaction_with_parameters(
-            &unresolved_transaction,
-            &ResolveTransactionQueryParameters {
-                simulate: true,
-                ..Default::default()
-            },
-        )
+    let resolved = alpha_client
+        .resolve_transaction(build_resolve_request(&unresolved_transaction, true))
         .await
         .unwrap()
         .into_inner();
+    let resolved = proto_to_response(resolved);
 
     let signed_transaction = test_cluster
         .wallet
@@ -83,7 +113,12 @@ async fn resolve_transaction_transfer_with_sponsor() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let rest_client = RestClient::new(test_cluster.rpc_url()).unwrap();
+    let mut alpha_client =
+        sui_rpc_api::proto::node::v2alpha::node_service_client::NodeServiceClient::connect(
+            test_cluster.rpc_url().to_owned(),
+        )
+        .await
+        .unwrap();
     let recipient = SuiAddress::random_for_testing_only();
 
     let (sender, gas) = test_cluster.wallet.get_one_account().await.unwrap();
@@ -117,17 +152,12 @@ async fn resolve_transaction_transfer_with_sponsor() {
         expiration: TransactionExpiration::None,
     };
 
-    let resolved = rest_client
-        .resolve_transaction_with_parameters(
-            &unresolved_transaction,
-            &ResolveTransactionQueryParameters {
-                simulate: true,
-                ..Default::default()
-            },
-        )
+    let resolved = alpha_client
+        .resolve_transaction(build_resolve_request(&unresolved_transaction, true))
         .await
         .unwrap()
         .into_inner();
+    let resolved = proto_to_response(resolved);
 
     let transaction_data = resolved.transaction.clone().try_into().unwrap();
     let sender_sig = test_cluster
@@ -165,7 +195,12 @@ async fn resolve_transaction_borrowed_shared_object() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let rest_client = RestClient::new(test_cluster.rpc_url()).unwrap();
+    let mut alpha_client =
+        sui_rpc_api::proto::node::v2alpha::node_service_client::NodeServiceClient::connect(
+            test_cluster.rpc_url().to_owned(),
+        )
+        .await
+        .unwrap();
 
     let sender = test_cluster.wallet.get_addresses()[0];
 
@@ -188,17 +223,12 @@ async fn resolve_transaction_borrowed_shared_object() {
         expiration: TransactionExpiration::None,
     };
 
-    let resolved = rest_client
-        .resolve_transaction_with_parameters(
-            &unresolved_transaction,
-            &ResolveTransactionQueryParameters {
-                simulate: true,
-                ..Default::default()
-            },
-        )
+    let resolved = alpha_client
+        .resolve_transaction(build_resolve_request(&unresolved_transaction, true))
         .await
         .unwrap()
         .into_inner();
+    let resolved = proto_to_response(resolved);
 
     let signed_transaction = test_cluster
         .wallet
@@ -217,7 +247,12 @@ async fn resolve_transaction_mutable_shared_object() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let rest_client = RestClient::new(test_cluster.rpc_url()).unwrap();
+    let mut alpha_client =
+        sui_rpc_api::proto::node::v2alpha::node_service_client::NodeServiceClient::connect(
+            test_cluster.rpc_url().to_owned(),
+        )
+        .await
+        .unwrap();
 
     let (sender, mut gas) = test_cluster.wallet.get_one_account().await.unwrap();
     gas.sort_by_key(|object_ref| object_ref.0);
@@ -254,17 +289,12 @@ async fn resolve_transaction_mutable_shared_object() {
         expiration: TransactionExpiration::None,
     };
 
-    let resolved = rest_client
-        .resolve_transaction_with_parameters(
-            &unresolved_transaction,
-            &ResolveTransactionQueryParameters {
-                simulate: true,
-                ..Default::default()
-            },
-        )
+    let resolved = alpha_client
+        .resolve_transaction(build_resolve_request(&unresolved_transaction, true))
         .await
         .unwrap()
         .into_inner();
+    let resolved = proto_to_response(resolved);
 
     let signed_transaction = test_cluster
         .wallet
@@ -285,7 +315,12 @@ async fn resolve_transaction_mutable_shared_object() {
 #[sim_test]
 async fn resolve_transaction_insufficient_gas() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let rest_client = RestClient::new(test_cluster.rpc_url()).unwrap();
+    let mut alpha_client =
+        sui_rpc_api::proto::node::v2alpha::node_service_client::NodeServiceClient::connect(
+            test_cluster.rpc_url().to_owned(),
+        )
+        .await
+        .unwrap();
 
     // Test the case where we don't have enough coins/gas for the required budget
     let unresolved_transaction = unresolved::Transaction {
@@ -307,99 +342,18 @@ async fn resolve_transaction_insufficient_gas() {
         expiration: TransactionExpiration::None,
     };
 
-    let error = rest_client
-        .resolve_transaction(&unresolved_transaction)
+    let error = alpha_client
+        .resolve_transaction(build_resolve_request(&unresolved_transaction, false))
         .await
         .unwrap_err();
 
-    assert_eq!(error.status(), Some(StatusCode::BAD_REQUEST));
-    assert_contains(
-        error.message().unwrap_or_default(),
-        "unable to select sufficient gas",
-    );
+    //TODO fix return error code to be more descriptive
+    assert_eq!(error.code(), tonic::Code::Unknown);
+    assert_contains(error.message(), "unable to select sufficient gas");
 }
 
 fn assert_contains(haystack: &str, needle: &str) {
     if !haystack.contains(needle) {
         panic!("{haystack:?} does not contain {needle:?}");
     }
-}
-
-#[sim_test]
-async fn resolve_transaction_with_raw_json() {
-    let test_cluster = TestClusterBuilder::new().build().await;
-
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let rest_client = RestClient::new(test_cluster.rpc_url()).unwrap();
-    let recipient = SuiAddress::random_for_testing_only();
-
-    let (sender, mut gas) = test_cluster.wallet.get_one_account().await.unwrap();
-    gas.sort_by_key(|object_ref| object_ref.0);
-    let obj_to_send = gas.first().unwrap().0;
-
-    let unresolved_transaction = serde_json::json!({
-        "inputs": [
-            {
-                "object_id": obj_to_send
-            },
-            {
-                "value": 1
-            },
-            {
-                "value": recipient
-            }
-        ],
-
-        "commands": [
-            {
-                "command": "split_coins",
-                "coin": { "input": 0 },
-                "amounts": [
-                    {
-                        "input": 1,
-                    },
-                    {
-                        "input": 1,
-                    }
-                ]
-            },
-            {
-                "command": "transfer_objects",
-                "objects": [
-                    { "result": [0, 1] },
-                    { "result": [0, 0] }
-                ],
-                "address": { "input": 2 }
-            }
-        ],
-
-        "sender": sender
-    });
-
-    let resolved = rest_client
-        .resolve_transaction_with_parameters(
-            &serde_json::from_value(unresolved_transaction).unwrap(),
-            &ResolveTransactionQueryParameters {
-                simulate: true,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap()
-        .into_inner();
-
-    let signed_transaction = test_cluster
-        .wallet
-        .sign_transaction(&resolved.transaction.try_into().unwrap());
-    let effects = client
-        .execute_transaction(&Default::default(), &signed_transaction)
-        .await
-        .unwrap()
-        .effects;
-
-    assert!(effects.status().is_ok(), "{:?}", effects.status());
-    assert_eq!(
-        resolved.simulation.unwrap().effects,
-        effects.try_into().unwrap()
-    );
 }

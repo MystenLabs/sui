@@ -4,20 +4,15 @@
 use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
 use reqwest::Url;
-use sui_sdk_transaction_builder::unresolved::Transaction as UnresolvedTransaction;
 use sui_sdk_types::Address;
 use sui_sdk_types::CheckpointDigest;
 use sui_sdk_types::CheckpointSequenceNumber;
 use sui_sdk_types::EpochId;
-use sui_sdk_types::Transaction;
 use tap::Pipe;
 
 use crate::rest::accounts::AccountOwnedObjectInfo;
 use crate::rest::accounts::ListAccountOwnedObjectsQueryParameters;
 use crate::rest::health::Threshold;
-use crate::rest::transactions::ResolveTransactionQueryParameters;
-use crate::rest::transactions::ResolveTransactionResponse;
-use crate::rest::transactions::TransactionSimulationResponse;
 use crate::types::X_SUI_CHAIN;
 use crate::types::X_SUI_CHAIN_ID;
 use crate::types::X_SUI_CHECKPOINT_HEIGHT;
@@ -80,50 +75,6 @@ impl Client {
         let url = self.url().join(&format!("account/{account}/objects"))?;
 
         let request = self.inner.get(url).query(parameters);
-
-        self.json(request).await
-    }
-
-    pub async fn simulate_transaction(
-        &self,
-        transaction: &Transaction,
-    ) -> Result<Response<TransactionSimulationResponse>> {
-        let url = self.url().join("transactions/simulate")?;
-
-        let body = bcs::to_bytes(transaction)?;
-
-        let request = self
-            .inner
-            .post(url)
-            .header(reqwest::header::CONTENT_TYPE, crate::rest::APPLICATION_BCS)
-            .body(body);
-
-        self.json(request).await
-    }
-
-    pub async fn resolve_transaction(
-        &self,
-        unresolved_transaction: &UnresolvedTransaction,
-    ) -> Result<Response<ResolveTransactionResponse>> {
-        let url = self.url.join("transactions/resolve")?;
-
-        let request = self.inner.post(url).json(unresolved_transaction);
-
-        self.json(request).await
-    }
-
-    pub async fn resolve_transaction_with_parameters(
-        &self,
-        unresolved_transaction: &UnresolvedTransaction,
-        parameters: &ResolveTransactionQueryParameters,
-    ) -> Result<Response<ResolveTransactionResponse>> {
-        let url = self.url.join("transactions/resolve")?;
-
-        let request = self
-            .inner
-            .post(url)
-            .query(&parameters)
-            .json(unresolved_transaction);
 
         self.json(request).await
     }

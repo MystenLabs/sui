@@ -55,6 +55,10 @@ service NodeService {
   rpc GetProtocolConfig(GetProtocolConfigRequest) returns (GetProtocolConfigResponse);
 
   rpc GetGasInfo(GetGasInfoRequest) returns (GetGasInfoResponse);
+
+  rpc SimulateTransaction(SimulateTransactionRequest) returns (SimulateTransactionResponse);
+
+  rpc ResolveTransaction(ResolveTransactionRequest) returns (ResolveTransactionResponse);
 }
 
 // Request message for `NodeService.GetCoinInfo`.
@@ -184,4 +188,35 @@ message GetGasInfoRequest {}
 message GetGasInfoResponse {
   // Reference gas price denominated in MIST
   optional uint64 reference_gas_price = 1;
+}
+
+message SimulateTransactionRequest {
+  optional sui.types.Bcs transaction_bcs = 2;
+  optional SimulateTransactionOptions options = 3;
+}
+
+message SimulateTransactionOptions {
+  // Include the `BalanceChanges` in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool balance_changes = 8;
+}
+
+message SimulateTransactionResponse {
+  optional sui.types.Bcs effects_bcs = 3;
+  optional sui.types.Bcs events_bcs = 5;
+  optional sui.node.v2.BalanceChanges balance_changes = 6;
+}
+
+message ResolveTransactionRequest {
+  // TODO FIX TYPE
+  // Json unresolved transaction type
+  optional string unresolved_transaction = 1;
+  optional bool simulate = 2;
+  optional SimulateTransactionOptions simulate_options = 3;
+}
+
+message ResolveTransactionResponse {
+  optional sui.types.Bcs transaction_bcs = 2;
+  optional SimulateTransactionResponse simulation = 3;
 }
