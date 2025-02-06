@@ -202,6 +202,21 @@ impl Argument {
             {
                 MoveValue::Vector(s.bytes().map(MoveValue::U8).collect::<Vec<_>>())
             }
+            (Argument::Option(sp!(loc, o)), TypeTag::Vector(ty)) => {
+                if let Some(v) = o {
+                    let v = v
+                        .as_ref()
+                        .checked_to_pure_move_value(*loc, ty)
+                        .map_err(|e| {
+                            e.with_help(
+                                "Literal option values cannot contain object values.".to_string(),
+                            )
+                        })?;
+                    MoveValue::Vector(vec![v])
+                } else {
+                    MoveValue::Vector(vec![])
+                }
+            }
             (Argument::Option(sp!(loc, o)), TypeTag::Struct(stag))
                 if (
                     &stag.address,
