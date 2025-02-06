@@ -30,7 +30,6 @@ insta.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
-move-prover-test-utils.workspace = true
 
 [[test]]
 name = "testsuite"

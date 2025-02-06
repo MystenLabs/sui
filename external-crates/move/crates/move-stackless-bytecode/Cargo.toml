@@ -29,7 +29,6 @@ petgraph.workspace = true
 [dev-dependencies]
 move-stdlib.workspace = true
 datatest-stable.workspace = true
-move-prover-test-utils.workspace = true
 anyhow.workspace = true
 regex.workspace = true
 
