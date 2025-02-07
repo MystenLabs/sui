@@ -181,6 +181,7 @@ async fn run_publish(
         package_path: package_path.clone(),
         build_config,
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
@@ -208,6 +209,7 @@ async fn run_upgrade(
         upgrade_capability: cap.reference.object_id,
         build_config,
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         verify_compatibility: true,

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 sui client --client.config $CONFIG \
-  publish simple \
+  publish simple --verify-deps \
   --json | jq '.effects.status'
 
 sui move --client.config $CONFIG \
