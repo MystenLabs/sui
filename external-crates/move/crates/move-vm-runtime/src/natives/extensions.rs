@@ -3,12 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use better_any::{Tid, TidAble, TidExt};
-use std::{
-    any::TypeId,
-    cell::{Ref, RefCell, RefMut},
-    collections::HashMap,
-    rc::Rc,
-};
+use std::{any::TypeId, cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 /// A helper wrapper around a `Tid`able type that encapsulates interior mutability in a single-threaded
 /// manner.
@@ -25,18 +20,15 @@ impl<'a, T: Tid<'a>> NativeContextMut<'a, T> {
         NativeContextMut(RefCell::new(t), std::marker::PhantomData)
     }
 
-    /// Get the inner value by `&mut`.
-    pub fn get_mut(&self) -> RefMut<T> {
-        self.0.borrow_mut()
-    }
-
-    /// Get the inner value by `&`.
-    pub fn get(&self) -> Ref<T> {
-        self.0.borrow()
-    }
-
     pub fn into_inner(self) -> T {
         self.0.into_inner()
+    }
+}
+
+impl<'a, T: Tid<'a>> Deref for NativeContextMut<'a, T> {
+    type Target = RefCell<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -100,10 +92,10 @@ mod tests {
         let e = Ext { a: &mut v };
         let mut exts = NativeContextExtensions::default();
         exts.add(NativeContextMut::new(e));
-        *exts.get::<NativeContextMut<Ext>>().get_mut().a += 1;
-        assert_eq!(*exts.get::<NativeContextMut<Ext>>().get_mut().a, 24);
-        *exts.get::<NativeContextMut<Ext>>().get_mut().a += 1;
+        *exts.get::<NativeContextMut<Ext>>().borrow_mut().a += 1;
+        assert_eq!(*exts.get::<NativeContextMut<Ext>>().borrow_mut().a, 24);
+        *exts.get::<NativeContextMut<Ext>>().borrow_mut().a += 1;
         let e1 = exts.get::<NativeContextMut<Ext>>();
-        assert_eq!(*e1.get().a, 25);
+        assert_eq!(*e1.borrow().a, 25);
     }
 }
