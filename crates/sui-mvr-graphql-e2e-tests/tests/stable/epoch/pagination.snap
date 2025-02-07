@@ -1,0 +1,197 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+init:
+C: object(0,0)
+
+task 1, line 6:
+//# advance-epoch
+Epoch advanced: 0
+
+task 2, line 8:
+//# advance-epoch
+Epoch advanced: 1
+
+task 3, line 10:
+//# advance-epoch
+Epoch advanced: 2
+
+task 4, line 12:
+//# advance-epoch
+Epoch advanced: 3
+
+task 5, line 14:
+//# advance-epoch
+Epoch advanced: 4
+
+task 6, line 16:
+//# advance-epoch
+Epoch advanced: 5
+
+task 7, lines 18-29:
+//# run-graphql 
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "epochId": 4
+        },
+        {
+          "epochId": 5
+        }
+      ]
+    }
+  }
+}
+
+task 8, lines 31-42:
+//# run-graphql 
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "epochId": 0
+        },
+        {
+          "epochId": 1
+        },
+        {
+          "epochId": 2
+        }
+      ]
+    }
+  }
+}
+
+task 9, lines 44-55:
+//# run-graphql --cursors {"c":5,"e":2} 
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "epochId": 0
+        },
+        {
+          "epochId": 1
+        }
+      ]
+    }
+  }
+}
+
+task 10, lines 57-68:
+//# run-graphql --cursors {"c":3,"e":4} 
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "epochId": 0
+        },
+        {
+          "epochId": 1
+        },
+        {
+          "epochId": 2
+        }
+      ]
+    }
+  }
+}
+
+task 11, lines 70-81:
+//# run-graphql --cursors {"c":11,"e":1}
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "epochId": 2
+        },
+        {
+          "epochId": 3
+        },
+        {
+          "epochId": 4
+        },
+        {
+          "epochId": 5
+        },
+        {
+          "epochId": 6
+        }
+      ]
+    }
+  }
+}
+
+task 12, lines 83-94:
+//# run-graphql --cursors {"c":0,"e":5}
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "epochId": 0
+        }
+      ]
+    }
+  }
+}
+
+task 13, lines 96-107:
+//# run-graphql --cursors {"c":3,"e":4}
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 14, lines 109-120:
+//# run-graphql --cursors {"c":0,"e":0}
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": []
+    }
+  }
+}

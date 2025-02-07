@@ -1,0 +1,30 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 8-30:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4332000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 32:
+//# run test::m::abort_
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::abort_ (function index 0) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("abort_") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m::abort_ at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 3, line 34:
+//# run test::m::loop_ --gas-budget 1000000
+Error: Transaction Effects Status: Insufficient Gas.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: Some(VMError { major_status: OUT_OF_GAS, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 0)] }), command: Some(0) } }
+
+task 4, line 36:
+//# run test::m::math
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::m::math (function index 2) at offset 2. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 2, instruction: 2, function_name: Some("math") }))), source: Some(VMError { major_status: ARITHMETIC_ERROR, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 2)] }), command: Some(0) } }
+
+task 5, line 38:
+//# run test::m::vector_
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::m::vector_ (function index 3) at offset 4. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 3, instruction: 4, function_name: Some("vector_") }))), source: Some(VMError { major_status: VECTOR_OPERATION_ERROR, sub_status: Some(1), message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 4)] }), command: Some(0) } }

@@ -1323,6 +1323,7 @@
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
+                "enable_nitro_attestation": false,
                 "enable_poseidon": false,
                 "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
@@ -1853,6 +1854,10 @@
                 "move_binary_format_version": {
                   "u32": "6"
                 },
+                "nitro_attestation_parse_base_cost": null,
+                "nitro_attestation_parse_cost_per_byte": null,
+                "nitro_attestation_verify_base_cost": null,
+                "nitro_attestation_verify_cost_per_cert": null,
                 "obj_access_cost_delete_per_byte": {
                   "u64": "40"
                 },

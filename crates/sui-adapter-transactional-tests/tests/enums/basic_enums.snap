@@ -1,0 +1,49 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 6-31:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6262400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 33:
+//# run Test::f::create_and_test
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 35:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 3
+Contents: Test::f::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    data: Test::f::F::V1{},
+}
+
+task 4, line 37:
+//# run Test::f::update_inner --args object(2,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+
+task 5, line 39:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 4
+Contents: Test::f::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    data: Test::f::F::V4{
+        x: 42u64,
+    },
+}

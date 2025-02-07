@@ -1,0 +1,188 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 18 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 13-15:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u64, sui::coin::Coin<sui::sui::SUI>>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2979200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-19:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 21:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 23-27:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": {
+      "objectId": "0xa305393e33fd6731559f651b5718c817eb91aee862fd203bd85e46b08c456c5d",
+      "version": "3",
+      "digest": "7xrrTER6S874SBJBszf4CDxmF79DpGELaMbi9xnNx9yC",
+      "content": {
+        "dataType": "moveObject",
+        "type": "0x2::coin::Coin<0x2::sui::SUI>",
+        "hasPublicTransfer": true,
+        "fields": {
+          "balance": "42",
+          "id": {
+            "id": "0xa305393e33fd6731559f651b5718c817eb91aee862fd203bd85e46b08c456c5d"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 5, lines 29-31:
+//# programmable --sender A --inputs object(2,0) 21
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 6, line 33:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 35-39:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "data": {
+      "objectId": "0xa305393e33fd6731559f651b5718c817eb91aee862fd203bd85e46b08c456c5d",
+      "version": "4",
+      "digest": "4ChF24sgkRSajSk9i9mwjTKXgyJPnb2PMxiAdUoAZLKH",
+      "content": {
+        "dataType": "moveObject",
+        "type": "0x2::coin::Coin<0x2::sui::SUI>",
+        "hasPublicTransfer": true,
+        "fields": {
+          "balance": "21",
+          "id": {
+            "id": "0xa305393e33fd6731559f651b5718c817eb91aee862fd203bd85e46b08c456c5d"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 8, lines 41-42:
+//# programmable --sender A --inputs object(1,0) 0 object(2,0)
+//> 0: sui::table::add<u64, sui::coin::Coin<sui::sui::SUI>>(Input(0), Input(1), Input(2));
+created: object(8,0)
+mutated: object(0,0), object(1,0)
+wrapped: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5335200,  storage_rebate: 3927528, non_refundable_storage_fee: 39672
+
+task 9, line 44:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 10, lines 46-50:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "error": {
+      "code": "notExists",
+      "object_id": "0xa305393e33fd6731559f651b5718c817eb91aee862fd203bd85e46b08c456c5d"
+    }
+  }
+}
+
+task 11, lines 52-54:
+//# programmable --sender A --inputs object(1,0) 0 @A
+//> 0: sui::table::remove<u64, sui::coin::Coin<sui::sui::SUI>>(Input(0), Input(1));
+//> 1: TransferObjects([Result(0)], Input(2))
+mutated: object(0,0), object(1,0)
+unwrapped: object(2,0)
+deleted: object(8,0)
+gas summary: computation_cost: 1000000, storage_cost: 3967200,  storage_rebate: 5281848, non_refundable_storage_fee: 53352
+
+task 12, line 56:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 13, lines 58-62:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "data": {
+      "objectId": "0xa305393e33fd6731559f651b5718c817eb91aee862fd203bd85e46b08c456c5d",
+      "version": "6",
+      "digest": "EgjhvDZUPAmiGDmZZgqVWRyfjsAc88wua5jnTbjwidQ1",
+      "content": {
+        "dataType": "moveObject",
+        "type": "0x2::coin::Coin<0x2::sui::SUI>",
+        "hasPublicTransfer": true,
+        "fields": {
+          "balance": "21",
+          "id": {
+            "id": "0xa305393e33fd6731559f651b5718c817eb91aee862fd203bd85e46b08c456c5d"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 14, lines 64-65:
+//# programmable --sender A --inputs object(2,0)
+//> 0: MergeCoins(Gas, [Input(0)])
+mutated: object(0,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 15, line 67:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 16, lines 69-73:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "error": {
+      "code": "notExists",
+      "object_id": "0xa305393e33fd6731559f651b5718c817eb91aee862fd203bd85e46b08c456c5d"
+    }
+  }
+}
+
+task 17, lines 75-79:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 5,
+  "result": {
+    "error": {
+      "code": "notExists",
+      "object_id": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+  }
+}

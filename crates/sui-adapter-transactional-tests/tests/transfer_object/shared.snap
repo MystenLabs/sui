@@ -1,0 +1,83 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-25:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5525200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 27:
+//# run test::m::mint_s
+created: object(2,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 29:
+//# run test::m::mint_s2
+created: object(3,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 31:
+//# view-object 2,0
+Owner: Shared( 3 )
+Version: 3
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 5, line 33:
+//# view-object 3,0
+Owner: Shared( 4 )
+Version: 4
+Contents: test::m::S2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 6, line 35:
+//# transfer-object 2,0 --sender A --recipient B
+Error: Transaction Effects Status: Invalid Transfer Object, object does not have public transfer.
+Debug of error: InvalidTransferObject at command Some(0)
+
+task 7, line 37:
+//# transfer-object 3,0 --sender A --recipient B
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 8, line 39:
+//# view-object 2,0
+Owner: Shared( 3 )
+Version: 4
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 9, line 41:
+//# view-object 3,0
+Owner: Shared( 4 )
+Version: 5
+Contents: test::m::S2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}

@@ -2791,6 +2791,45 @@ sqrt_u128
 divide_and_round_up
 	public fun
 	0x2::math
+PCREntry
+	public struct
+	0x2::nitro_attestation
+NitroAttestationDocument
+	public struct
+	0x2::nitro_attestation
+load_nitro_attestation
+	entry fun
+	0x2::nitro_attestation
+module_id
+	public fun
+	0x2::nitro_attestation
+timestamp
+	public fun
+	0x2::nitro_attestation
+digest
+	public fun
+	0x2::nitro_attestation
+pcrs
+	public fun
+	0x2::nitro_attestation
+public_key
+	public fun
+	0x2::nitro_attestation
+user_data
+	public fun
+	0x2::nitro_attestation
+nonce
+	public fun
+	0x2::nitro_attestation
+index
+	public fun
+	0x2::nitro_attestation
+value
+	public fun
+	0x2::nitro_attestation
+load_nitro_attestation_internal
+	fun
+	0x2::nitro_attestation
 ObjectBag
 	public struct
 	0x2::object_bag

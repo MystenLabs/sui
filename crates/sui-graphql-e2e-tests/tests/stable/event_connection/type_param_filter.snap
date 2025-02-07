@@ -1,0 +1,199 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-29:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 32:
+//# run Test::M1::emit_T1 --sender A
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [Struct(StructTag { address: Test, module: Identifier("M1"), name: Identifier("T1"), type_params: [] })] }, contents: [0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 34:
+//# run Test::M1::emit_T2 --sender A
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [Struct(StructTag { address: Test, module: Identifier("M1"), name: Identifier("T2"), type_params: [] })] }, contents: [0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 36:
+//# run Test::M1::emit_both --sender A
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [Struct(StructTag { address: Test, module: Identifier("M1"), name: Identifier("T1"), type_params: [] })] }, contents: [0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [Struct(StructTag { address: Test, module: Identifier("M1"), name: Identifier("T2"), type_params: [] })] }, contents: [0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 38:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 40-47:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "digest": "J7mHXcoa7LXwyjzZUWsk8zvYZjek359TM4d2hQK4LGHo"
+        },
+        {
+          "digest": "Ch3i5cdtNPU5v8oSg3V5cdKtZDa3YjqjMd7Qh4NQLAx6"
+        },
+        {
+          "digest": "6taTf6v2NQCFtd9A4nw3mBbkHwUw8RUoJjqQGSB5cBNt"
+        },
+        {
+          "digest": "AEXpVZ7Vpsk7ZSTsR2QNPT7zhq8oqpJXRGgx3kAaTdn"
+        },
+        {
+          "digest": "9nu1ivpL9hHcbJ9GwGfmD3Kuet5w74t2GBp8f1Ggy3UD"
+        }
+      ]
+    }
+  }
+}
+
+task 7, lines 49-64:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::EventA<0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::T1>"
+            },
+            "json": {
+              "value": {
+                "dummy_field": false
+              }
+            }
+          }
+        },
+        {
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::EventA<0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::T2>"
+            },
+            "json": {
+              "value": {
+                "dummy_field": false
+              }
+            }
+          }
+        },
+        {
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::EventA<0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::T1>"
+            },
+            "json": {
+              "value": {
+                "dummy_field": false
+              }
+            }
+          }
+        },
+        {
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::EventA<0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::T2>"
+            },
+            "json": {
+              "value": {
+                "dummy_field": false
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 8, lines 66-81:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::EventA<0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::T1>"
+            },
+            "json": {
+              "value": {
+                "dummy_field": false
+              }
+            }
+          }
+        },
+        {
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::EventA<0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::T1>"
+            },
+            "json": {
+              "value": {
+                "dummy_field": false
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 9, lines 83-98:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::EventA<0xe722de9e58a9bab3a202b769b7518f91f852460d3d2c6d6743c301d08b9e614a::M1::T2>"
+            },
+            "json": {
+              "value": {
+                "dummy_field": false
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

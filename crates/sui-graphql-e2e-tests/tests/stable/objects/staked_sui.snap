@@ -1,0 +1,113 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+C: object(0,0)
+
+task 1, lines 6-31:
+//# run-graphql
+Response: {
+  "data": {
+    "objects": {
+      "edges": [
+        {
+          "cursor": "IJdddv7ctEE+DF5quWpbQy6Gbh1zoREdiDCwOweZutarAAAAAAAAAAA=",
+          "node": {
+            "asMoveObject": {
+              "asStakedSui": {
+                "principal": "20000000000000000"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "address": {
+      "stakedSuis": {
+        "edges": []
+      }
+    }
+  }
+}
+
+task 2, lines 33-35:
+//# programmable --sender C --inputs 10000000000 @C
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 37:
+//# run 0x3::sui_system::request_add_stake --args object(0x5) object(2,0) @validator_0 --sender C
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [135, 141, 242, 35, 38, 24, 124, 195, 86, 219, 178, 127, 110, 40, 201, 151, 112, 169, 166, 183, 93, 180, 71, 210, 141, 37, 35, 151, 110, 94, 69, 29, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
+created: object(3,0), object(3,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0)
+deleted: object(_), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 15078400,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 4, line 39:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, line 41:
+//# advance-epoch
+Epoch advanced: 0
+
+task 6, lines 43-69:
+//# run-graphql
+Response: {
+  "data": {
+    "objects": {
+      "edges": [
+        {
+          "cursor": "IAIBJktCWLXHqadKvg7cMsx5K2wvGEif2hRpCOa1abMjAgAAAAAAAAA=",
+          "node": {
+            "asMoveObject": {
+              "asStakedSui": {
+                "principal": "40000",
+                "poolId": "0x878df22326187cc356dbb27f6e28c99770a9a6b75db447d28d2523976e5e451d"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "IIfCdVF/ksapbQZhjXV6RV32ZC1RPOn4asTmI03lIcvOAgAAAAAAAAA=",
+          "node": {
+            "asMoveObject": {
+              "asStakedSui": {
+                "principal": "10000000000",
+                "poolId": "0x878df22326187cc356dbb27f6e28c99770a9a6b75db447d28d2523976e5e451d"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "IJdddv7ctEE+DF5quWpbQy6Gbh1zoREdiDCwOweZutarAgAAAAAAAAA=",
+          "node": {
+            "asMoveObject": {
+              "asStakedSui": {
+                "principal": "20000000000000000",
+                "poolId": "0x878df22326187cc356dbb27f6e28c99770a9a6b75db447d28d2523976e5e451d"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "address": {
+      "stakedSuis": {
+        "edges": [
+          {
+            "cursor": "IIfCdVF/ksapbQZhjXV6RV32ZC1RPOn4asTmI03lIcvOAgAAAAAAAAA=",
+            "node": {
+              "principal": "10000000000"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

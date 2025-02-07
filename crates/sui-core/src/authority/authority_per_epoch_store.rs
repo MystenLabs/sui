@@ -80,7 +80,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::rocks::{read_size_from_env, ReadWriteOptions};
 use typed_store::rocksdb::Options;
 use typed_store::DBMapUtils;
-use typed_store::{retry_transaction_forever, Map};
+use typed_store::Map;
 use typed_store::{
     rocks::{default_db_options, DBBatch, DBMap, DBOptions, MetricConf},
     traits::{TableSummary, TypedStoreDebug},
@@ -369,6 +369,8 @@ pub struct AuthorityPerEpochStore {
 
     /// MutexTable for transaction locks (prevent concurrent execution of same transaction)
     mutex_table: MutexTable<TransactionDigest>,
+    /// Mutex table for shared version assignment
+    version_assignment_mutex_table: MutexTable<ObjectID>,
 
     /// The moment when the current epoch started locally on this validator. Note that this
     /// value could be skewed if the node crashed and restarted in the middle of the epoch. That's
@@ -990,6 +992,7 @@ impl AuthorityPerEpochStore {
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: RwLock::new(pending_consensus_certificates),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
+            version_assignment_mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
             epoch_open_time: current_time,
             epoch_close_time: Default::default(),
             metrics,
@@ -1753,92 +1756,91 @@ impl AuthorityPerEpochStore {
         objects_to_init: &[ConsensusObjectSequenceKey],
         cache_reader: &dyn ObjectCacheRead,
     ) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
-        let mut ret: HashMap<_, _>;
-        // Since this can be called from consensus task, we must retry forever - the only other
-        // option is to panic. It is extremely unlikely that more than 2 retries will be needed, as
-        // the only two writers are the consensus task and checkpoint execution.
-        retry_transaction_forever!({
-            // This code may still be correct without using a transaction snapshot, but I couldn't
-            // convince myself of that.
-            let tables = self.tables()?;
-            let mut db_transaction = tables.next_shared_object_versions.transaction()?;
+        // get_or_init_next_object_versions can be called
+        // from consensus or checkpoint executor,
+        // so we need to protect version assignment with a critical section
+        let _locks = self
+            .version_assignment_mutex_table
+            .acquire_locks(objects_to_init.iter().map(|(id, _)| *id))
+            .await;
+        let tables = self.tables()?;
 
-            let next_versions = if self.epoch_start_config().use_version_assignment_tables_v3() {
-                db_transaction.multi_get(&tables.next_shared_object_versions_v2, objects_to_init)?
-            } else {
-                db_transaction.multi_get(
-                    &tables.next_shared_object_versions,
-                    objects_to_init.iter().map(|(id, _)| *id),
-                )?
-            };
+        let next_versions = if self.epoch_start_config().use_version_assignment_tables_v3() {
+            tables
+                .next_shared_object_versions_v2
+                .multi_get(objects_to_init)?
+        } else {
+            tables
+                .next_shared_object_versions
+                .multi_get(objects_to_init.iter().map(|(id, _)| *id))?
+        };
 
-            let uninitialized_objects: Vec<ConsensusObjectSequenceKey> = next_versions
-                .iter()
-                .zip(objects_to_init)
-                .filter_map(|(next_version, id_and_version)| match next_version {
-                    None => Some(*id_and_version),
-                    Some(_) => None,
-                })
-                .collect();
+        let uninitialized_objects: Vec<ConsensusObjectSequenceKey> = next_versions
+            .iter()
+            .zip(objects_to_init)
+            .filter_map(|(next_version, id_and_version)| match next_version {
+                None => Some(*id_and_version),
+                Some(_) => None,
+            })
+            .collect();
 
-            // The common case is that there are no uninitialized versions - this early return will
-            // happen every time except the first time an object is used in an epoch.
-            if uninitialized_objects.is_empty() {
-                // unwrap ok - we already verified that next_versions is not missing any keys.
-                return Ok(izip!(
-                    objects_to_init.iter().cloned(),
-                    next_versions.into_iter().map(|v| v.unwrap())
-                )
-                .collect());
-            }
+        // The common case is that there are no uninitialized versions - this early return will
+        // happen every time except the first time an object is used in an epoch.
+        if uninitialized_objects.is_empty() {
+            // unwrap ok - we already verified that next_versions is not missing any keys.
+            return Ok(izip!(
+                objects_to_init.iter().cloned(),
+                next_versions.into_iter().map(|v| v.unwrap())
+            )
+            .collect());
+        }
 
-            let versions_to_write: Vec<_> = uninitialized_objects
-                .iter()
-                .map(|(id, initial_version)| {
-                    // Note: we don't actually need to read from the transaction here, as no writer
-                    // can update object_store until after get_or_init_next_object_versions
-                    // completes.
-                    match cache_reader.get_object(id) {
-                        Some(obj) => {
-                            if obj.owner().start_version() == Some(*initial_version) {
-                                ((*id, *initial_version), obj.version())
-                             } else {
-                                // If we can't find a matching start version, treat the object as
-                                // if it's absent.
-                                if let Some(obj_start_version) = obj.owner().start_version() {
-                                    assert!(*initial_version >= obj_start_version,
+        let versions_to_write: Vec<_> = uninitialized_objects
+            .iter()
+            .map(|(id, initial_version)| {
+                // Note: we don't actually need to read from the transaction here, as no writer
+                // can update object_store until after get_or_init_next_object_versions
+                // completes.
+                match cache_reader.get_object(id) {
+                    Some(obj) => {
+                        if obj.owner().start_version() == Some(*initial_version) {
+                            ((*id, *initial_version), obj.version())
+                        } else {
+                            // If we can't find a matching start version, treat the object as
+                            // if it's absent.
+                            if let Some(obj_start_version) = obj.owner().start_version() {
+                                assert!(*initial_version >= obj_start_version,
                                         "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
-                                }
-                                ((*id, *initial_version), *initial_version)
-                             }
+                            }
+                            ((*id, *initial_version), *initial_version)
                         }
-                        None => ((*id, *initial_version), *initial_version),
                     }
-                })
-                .collect();
+                    None => ((*id, *initial_version), *initial_version),
+                }
+            })
+            .collect();
 
-            ret = izip!(objects_to_init.iter().cloned(), next_versions.into_iter(),)
-                // take all the previously initialized versions
-                .filter_map(|(key, next_version)| next_version.map(|v| (key, v)))
-                // add all the versions we're going to write
-                .chain(versions_to_write.iter().cloned())
-                .collect();
+        let ret = izip!(objects_to_init.iter().cloned(), next_versions.into_iter(),)
+            // take all the previously initialized versions
+            .filter_map(|(key, next_version)| next_version.map(|v| (key, v)))
+            // add all the versions we're going to write
+            .chain(versions_to_write.iter().cloned())
+            .collect();
 
-            debug!(
-                ?versions_to_write,
-                "initializing next_shared_object_versions"
-            );
-            if self.epoch_start_config().use_version_assignment_tables_v3() {
-                db_transaction
-                    .insert_batch(&tables.next_shared_object_versions_v2, versions_to_write)?;
-            } else {
-                db_transaction.insert_batch(
-                    &tables.next_shared_object_versions,
-                    versions_to_write.into_iter().map(|(key, v)| (key.0, v)),
-                )?;
-            }
-            db_transaction.commit()
-        })?;
+        debug!(
+            ?versions_to_write,
+            "initializing next_shared_object_versions"
+        );
+        let mut batch = tables.next_shared_object_versions_v2.batch();
+        if self.epoch_start_config().use_version_assignment_tables_v3() {
+            batch.insert_batch(&tables.next_shared_object_versions_v2, versions_to_write)?;
+        } else {
+            batch.insert_batch(
+                &tables.next_shared_object_versions,
+                versions_to_write.into_iter().map(|(key, v)| (key.0, v)),
+            )?;
+        }
+        batch.write()?;
 
         Ok(ret)
     }

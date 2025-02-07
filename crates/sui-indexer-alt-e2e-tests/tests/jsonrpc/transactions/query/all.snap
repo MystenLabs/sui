@@ -1,0 +1,337 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 16-18:
+//# programmable --sender A --inputs 12 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 20-22:
+//# programmable --sender A --inputs 34 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 24-26:
+//# programmable --sender A --inputs 56 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 28-30:
+//# programmable --sender A --inputs 78 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 32-34:
+//# programmable --sender A --inputs 90 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 36:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 7, lines 38-42:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": [
+      {
+        "digest": "3FJ4fSrf7toVCANccxAbeJ5A1iSzwKLghCYcaz9atbCD"
+      },
+      {
+        "digest": "Fx83wfghpUeiBQJ2C1Vt9WwY5rkGUWWgoXSCGfomqqnv"
+      },
+      {
+        "digest": "4tTfhF9TpbEbJ1efxQbc6A4DWVbBzUYwNhXgt7zsmJsc"
+      },
+      {
+        "digest": "BULsDepy775taHDviboyivQdnoWkB5QMDYiM1kGcfbQ9"
+      },
+      {
+        "digest": "3H9FD5LGcHgFSQBfiziYa5f31b86iuQe9Cn5DVMenMAG"
+      },
+      {
+        "digest": "8p2kdvQUf3TKihDPyC62ggc79intjzNW7TnfaA7an9At"
+      }
+    ],
+    "nextCursor": "NQ==",
+    "hasNextPage": false
+  }
+}
+
+task 8, lines 44-52:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "data": [
+      {
+        "digest": "3FJ4fSrf7toVCANccxAbeJ5A1iSzwKLghCYcaz9atbCD"
+      },
+      {
+        "digest": "Fx83wfghpUeiBQJ2C1Vt9WwY5rkGUWWgoXSCGfomqqnv"
+      },
+      {
+        "digest": "4tTfhF9TpbEbJ1efxQbc6A4DWVbBzUYwNhXgt7zsmJsc"
+      }
+    ],
+    "nextCursor": "Mg==",
+    "hasNextPage": true
+  }
+}
+
+task 9, lines 54-62:
+//# run-jsonrpc --cursors 2
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "data": [
+      {
+        "digest": "BULsDepy775taHDviboyivQdnoWkB5QMDYiM1kGcfbQ9"
+      },
+      {
+        "digest": "3H9FD5LGcHgFSQBfiziYa5f31b86iuQe9Cn5DVMenMAG"
+      },
+      {
+        "digest": "8p2kdvQUf3TKihDPyC62ggc79intjzNW7TnfaA7an9At"
+      }
+    ],
+    "nextCursor": "NQ==",
+    "hasNextPage": false
+  }
+}
+
+task 10, lines 64-73:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "data": [
+      {
+        "digest": "8p2kdvQUf3TKihDPyC62ggc79intjzNW7TnfaA7an9At"
+      },
+      {
+        "digest": "3H9FD5LGcHgFSQBfiziYa5f31b86iuQe9Cn5DVMenMAG"
+      },
+      {
+        "digest": "BULsDepy775taHDviboyivQdnoWkB5QMDYiM1kGcfbQ9"
+      },
+      {
+        "digest": "4tTfhF9TpbEbJ1efxQbc6A4DWVbBzUYwNhXgt7zsmJsc"
+      },
+      {
+        "digest": "Fx83wfghpUeiBQJ2C1Vt9WwY5rkGUWWgoXSCGfomqqnv"
+      },
+      {
+        "digest": "3FJ4fSrf7toVCANccxAbeJ5A1iSzwKLghCYcaz9atbCD"
+      }
+    ],
+    "nextCursor": "MA==",
+    "hasNextPage": false
+  }
+}
+
+task 11, lines 75-84:
+//# run-jsonrpc --cursors 3
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "data": [
+      {
+        "digest": "4tTfhF9TpbEbJ1efxQbc6A4DWVbBzUYwNhXgt7zsmJsc"
+      },
+      {
+        "digest": "Fx83wfghpUeiBQJ2C1Vt9WwY5rkGUWWgoXSCGfomqqnv"
+      }
+    ],
+    "nextCursor": "MQ==",
+    "hasNextPage": true
+  }
+}
+
+task 12, lines 86-93:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 5,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Pagination issue: Failed to decode Base64: Invalid value was given to the function"
+  }
+}
+
+task 13, lines 95-103:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 6,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Pagination issue: Requested page size 10000 exceeds maximum 100"
+  }
+}
+
+task 14, lines 105-117:
+//# run-jsonrpc --cursors 1
+Response: {
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "data": [
+      {
+        "digest": "4tTfhF9TpbEbJ1efxQbc6A4DWVbBzUYwNhXgt7zsmJsc",
+        "transaction": {
+          "data": {
+            "messageVersion": "v1",
+            "transaction": {
+              "kind": "ProgrammableTransaction",
+              "inputs": [
+                {
+                  "type": "pure",
+                  "valueType": "u64",
+                  "value": "34"
+                },
+                {
+                  "type": "pure",
+                  "valueType": "address",
+                  "value": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+                }
+              ],
+              "transactions": [
+                {
+                  "SplitCoins": [
+                    "GasCoin",
+                    [
+                      {
+                        "Input": 0
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "TransferObjects": [
+                    [
+                      {
+                        "Result": 0
+                      }
+                    ],
+                    {
+                      "Input": 1
+                    }
+                  ]
+                }
+              ]
+            },
+            "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+            "gasData": {
+              "payment": [
+                {
+                  "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                  "version": 2,
+                  "digest": "HPfMHJxiZ7ozY7jppcCGe2MwZ2TCFCCcmugtNvUgRuts"
+                }
+              ],
+              "owner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+              "price": "1000",
+              "budget": "5000000000"
+            }
+          },
+          "txSignatures": [
+            "APiQZonSLcnMfxma2YMk7AvdgkWSew2B3HWH98dbyf5Z67cR5ojet/acq516WO9rbD/hEJJMd51bgmjm3MOyTgN/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
+          ]
+        }
+      },
+      {
+        "digest": "BULsDepy775taHDviboyivQdnoWkB5QMDYiM1kGcfbQ9",
+        "transaction": {
+          "data": {
+            "messageVersion": "v1",
+            "transaction": {
+              "kind": "ProgrammableTransaction",
+              "inputs": [
+                {
+                  "type": "pure",
+                  "valueType": "u64",
+                  "value": "56"
+                },
+                {
+                  "type": "pure",
+                  "valueType": "address",
+                  "value": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+                }
+              ],
+              "transactions": [
+                {
+                  "SplitCoins": [
+                    "GasCoin",
+                    [
+                      {
+                        "Input": 0
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "TransferObjects": [
+                    [
+                      {
+                        "Result": 0
+                      }
+                    ],
+                    {
+                      "Input": 1
+                    }
+                  ]
+                }
+              ]
+            },
+            "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+            "gasData": {
+              "payment": [
+                {
+                  "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                  "version": 3,
+                  "digest": "CnQFnb8LS9rdRHjkWFo5GKnP5QBNkRAe6eoamKnxFWEQ"
+                }
+              ],
+              "owner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+              "price": "1000",
+              "budget": "5000000000"
+            }
+          },
+          "txSignatures": [
+            "AEgcwTWMXQYfQwFRXqb3R26Z7LMv7ODaZHJ8zJd2LT88eg+2Y98zJwUUDxxmMj3tAadcwBgLTdcRFe6lzcO2jgl/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
+          ]
+        }
+      }
+    ],
+    "nextCursor": "Mw==",
+    "hasNextPage": true
+  }
+}

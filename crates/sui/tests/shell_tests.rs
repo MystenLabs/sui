@@ -48,6 +48,7 @@ async fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
             "PATH",
             format!("{}:{}", get_sui_bin_path(), std::env::var("PATH")?),
         )
+        .env("RUST_BACKTRACE", "0")
         .current_dir(sandbox)
         .arg(path.file_name().unwrap());
 

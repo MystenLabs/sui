@@ -1,0 +1,139 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-51:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 7516400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 53:
+//# run test::m::mint --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 55:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, line 57:
+//# run test::m::add --sender A --args object(2,0) 1
+created: object(4,0), object(4,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+
+task 5, line 59:
+//# run test::m::remove --sender A --args object(2,0) 1
+mutated: object(0,0), object(2,0)
+deleted: object(4,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 5801004, non_refundable_storage_fee: 58596
+
+task 6, lines 61-65:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 4
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 7, line 67:
+//# run test::m::mint --sender A
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 69:
+//# view-object 7,0
+Owner: Account Address ( A )
+Version: 5
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+}
+
+task 9, line 71:
+//# run test::m::add --sender A --args object(7,0) 1
+created: object(9,0), object(9,1)
+mutated: object(0,0), object(7,0)
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+
+task 10, line 73:
+//# run test::m::remove_and_add --sender A --args object(7,0) 1
+mutated: object(0,0), object(7,0), object(9,0), object(9,1)
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 5801004, non_refundable_storage_fee: 58596
+
+task 11, lines 75-79:
+//# view-object 7,0
+Owner: Account Address ( A )
+Version: 7
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+}
+
+task 12, line 81:
+//# run test::m::mint --sender A
+created: object(12,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, line 83:
+//# view-object 12,0
+Owner: Account Address ( A )
+Version: 8
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,0),
+        },
+    },
+}
+
+task 14, line 85:
+//# run test::m::add --sender A --args object(12,0) 1
+created: object(14,0), object(14,1)
+mutated: object(0,0), object(12,0)
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+
+task 15, line 87:
+//# run test::m::remove_and_wrap --sender A --args object(12,0) 1
+created: object(15,0)
+mutated: object(0,0), object(12,0), object(14,0)
+wrapped: object(14,1)
+gas summary: computation_cost: 1000000, storage_cost: 6102800,  storage_rebate: 5801004, non_refundable_storage_fee: 58596
+
+task 16, line 89:
+//# view-object 12,0
+Owner: Account Address ( A )
+Version: 10
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,0),
+        },
+    },
+}

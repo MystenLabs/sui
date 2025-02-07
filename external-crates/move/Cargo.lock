@@ -2307,7 +2307,6 @@ name = "move-trace-format"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "arbitrary",
  "enum-compat-util",
  "getrandom 0.2.15",
  "move-binary-format",

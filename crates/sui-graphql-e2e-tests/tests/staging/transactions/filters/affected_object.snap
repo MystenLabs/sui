@@ -1,0 +1,393 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 23 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-56:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8147200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 58-60:
+//# programmable --sender A --inputs 1 @A
+//> P::M::new(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 62-64:
+//# programmable --sender A --inputs 2 @A
+//> P::M::new(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 66-68:
+//# programmable --sender A --inputs 3 @A
+//> P::M::new(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 70-73:
+//# programmable --sender A --inputs 4 @A
+//> P::M::new(Input(0));
+//> P::M::wrap(Result(0));
+//> TransferObjects([Result(1)], Input(1))
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2546000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 75-76:
+//# programmable --sender A --inputs object(2,0)
+//> P::M::inc(Input(0))
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 2272248, non_refundable_storage_fee: 22952
+
+task 7, lines 78-79:
+//# programmable --sender A --inputs object(5,0)
+//> P::M::incw(Input(0))
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2546000,  storage_rebate: 2520540, non_refundable_storage_fee: 25460
+
+task 8, lines 81-83:
+//# programmable --sender A --inputs object(2,0) @A
+//> P::M::wrap(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(8,0)
+mutated: object(0,0)
+wrapped: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2546000,  storage_rebate: 2272248, non_refundable_storage_fee: 22952
+
+task 9, lines 85-86:
+//# programmable --sender A --inputs object(8,0)
+//> P::M::incw(Input(0))
+mutated: object(0,0), object(8,0)
+gas summary: computation_cost: 1000000, storage_cost: 2546000,  storage_rebate: 2520540, non_refundable_storage_fee: 25460
+
+task 10, lines 88-90:
+//# programmable --sender A --inputs object(8,0) @A
+//> P::M::unwrap(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+mutated: object(0,0)
+unwrapped: object(2,0)
+deleted: object(8,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 2520540, non_refundable_storage_fee: 25460
+
+task 11, lines 92-93:
+//# programmable --sender A --inputs object(3,0) object(2,0)
+//> P::M::transfer(Input(0), Input(1))
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3602400,  storage_rebate: 3566376, non_refundable_storage_fee: 36024
+
+task 12, lines 95-96:
+//# programmable --sender A --inputs receiving(2,0)
+//> P::M::drop_receiving(Input(0))
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, lines 98-100:
+//# programmable --sender A --inputs object(4,0) receiving(2,0) @A
+//> P::M::receive(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 12) at offset 0, Abort Code: 3
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 12, instruction: 0, function_name: Some("receive_impl") }, 3), source: Some(VMError { major_status: ABORTED, sub_status: Some(3), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 0)] }), command: Some(0) } }
+
+task 14, lines 102-104:
+//# programmable --sender A --inputs object(3,0) receiving(2,0) @A
+//> P::M::receive(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3602400,  storage_rebate: 3566376, non_refundable_storage_fee: 36024
+
+task 15, lines 106-107:
+//# programmable --sender A --inputs object(2,0)
+//> P::M::destroy(Input(0))
+mutated: object(0,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2272248, non_refundable_storage_fee: 22952
+
+task 16, lines 109-110:
+//# programmable --sender A --inputs object(3,0)
+//> P::M::destroy(Input(0))
+mutated: object(0,0)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2272248, non_refundable_storage_fee: 22952
+
+task 17, lines 112-113:
+//# programmable --sender A --inputs object(4,0)
+//> P::M::destroy(Input(0))
+mutated: object(0,0)
+deleted: object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2272248, non_refundable_storage_fee: 22952
+
+task 18, lines 115-117:
+//# programmable --sender A --inputs object(5,0) @A
+//> P::M::unwrap(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+mutated: object(0,0)
+unwrapped: object(18,0)
+deleted: object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 2520540, non_refundable_storage_fee: 25460
+
+task 19, lines 119-121:
+//# programmable --sender A --inputs object(18,0) @A
+//> P::M::wrap(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(19,0)
+mutated: object(0,0)
+wrapped: object(18,0)
+gas summary: computation_cost: 1000000, storage_cost: 2546000,  storage_rebate: 2272248, non_refundable_storage_fee: 22952
+
+task 20, lines 123-125:
+//# programmable --sender A --inputs object(19,0)
+//> P::M::unwrap(Input(0));
+//> P::M::destroy(Result(0))
+mutated: object(0,0)
+deleted: object(19,0)
+unwrapped_then_deleted: object(18,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2520540, non_refundable_storage_fee: 25460
+
+task 21, line 127:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 22, lines 129-150:
+//# run-graphql
+Response: {
+  "data": {
+    "all": {
+      "nodes": [
+        {
+          "digest": "EAu7t7RFbwASW5ZLxtqa33ody8xidNR3U3KFKBKAFU5q"
+        },
+        {
+          "digest": "9Gorn5uVdjc7eHBW3WafnpiqQfYg6iPSkxhZ6CbuBqwk"
+        },
+        {
+          "digest": "3qPssWeR5bvwaZiwkjbYTkR7ng9XSDp7aaky8A4DJp6S"
+        },
+        {
+          "digest": "CU6apQSKPqGNqSxg2D5v3TVFzbDmx4gPhLEaJwiiWqXC"
+        },
+        {
+          "digest": "5E5JyrSFLvhB2EcN74bUk4dEpm23jGP2GRnVK4JCBCTa"
+        },
+        {
+          "digest": "2jmmPvyktGqZcF5KFNmNvyisGwRwkvRWqGzmoY8Mucda"
+        },
+        {
+          "digest": "ELRa9MREFjzU2wuUTN8hkoUQ57FhEiuPCbvWyDEAZLRr"
+        },
+        {
+          "digest": "2AdEFXvVLU8eXS5VamF1Dcn2VfqXdy46BFgiaawaMaTY"
+        },
+        {
+          "digest": "4Wx6uuwb2swwLwYghbFvGyt6ReKiKX7eUsXZY16y23to"
+        },
+        {
+          "digest": "D6NJc8Mg1cqXPXTdVCtVmHbxzyepNBh26K6mfUmW7pxU"
+        },
+        {
+          "digest": "2DXNdmsHtk4YvcJKbb4hKSggWqRwxzXxDyVBzDAdotDZ"
+        },
+        {
+          "digest": "GPSMkMRGn4X9VY41STGdDR8tFC2pneWuCtXkdjqhZiZP"
+        },
+        {
+          "digest": "3bAse3nV4m79aUEq8hAVVeDuJGMs4qtyHQUJUKLoyhnQ"
+        },
+        {
+          "digest": "2uiRgJ2ddzdhy32JpxBt3gajXNz1GyRr6zQjBgnnzwDW"
+        },
+        {
+          "digest": "3vLFyUwCW4jC6kVhqcgtpVpMSVKxX63nNfKqRqQKW1Hg"
+        },
+        {
+          "digest": "92UgLjnEiiRkxWuxME8wD3Bh439gMX7RTtRoZm3G29Lx"
+        },
+        {
+          "digest": "CqYXBbBtW4nNGp66DtDuEsexmVUgasqRX1cwD2o9mojr"
+        },
+        {
+          "digest": "9A8Nc4qZkEVpRSemjZ7kVJSdTzJbPGxKijPy86ZsWSK3"
+        },
+        {
+          "digest": "Du8zQ2HM6GzfdZDpwobpntZfrQReEqkDyKCeBoXGeEEA"
+        }
+      ]
+    },
+    "affect2": {
+      "nodes": [
+        {
+          "digest": "EAu7t7RFbwASW5ZLxtqa33ody8xidNR3U3KFKBKAFU5q"
+        },
+        {
+          "digest": "5E5JyrSFLvhB2EcN74bUk4dEpm23jGP2GRnVK4JCBCTa"
+        },
+        {
+          "digest": "ELRa9MREFjzU2wuUTN8hkoUQ57FhEiuPCbvWyDEAZLRr"
+        },
+        {
+          "digest": "4Wx6uuwb2swwLwYghbFvGyt6ReKiKX7eUsXZY16y23to"
+        },
+        {
+          "digest": "D6NJc8Mg1cqXPXTdVCtVmHbxzyepNBh26K6mfUmW7pxU"
+        },
+        {
+          "digest": "3bAse3nV4m79aUEq8hAVVeDuJGMs4qtyHQUJUKLoyhnQ"
+        },
+        {
+          "digest": "2uiRgJ2ddzdhy32JpxBt3gajXNz1GyRr6zQjBgnnzwDW"
+        }
+      ]
+    },
+    "input2": {
+      "nodes": [
+        {
+          "digest": "5E5JyrSFLvhB2EcN74bUk4dEpm23jGP2GRnVK4JCBCTa"
+        },
+        {
+          "digest": "ELRa9MREFjzU2wuUTN8hkoUQ57FhEiuPCbvWyDEAZLRr"
+        },
+        {
+          "digest": "D6NJc8Mg1cqXPXTdVCtVmHbxzyepNBh26K6mfUmW7pxU"
+        },
+        {
+          "digest": "2uiRgJ2ddzdhy32JpxBt3gajXNz1GyRr6zQjBgnnzwDW"
+        }
+      ]
+    },
+    "change2": {
+      "nodes": [
+        {
+          "digest": "EAu7t7RFbwASW5ZLxtqa33ody8xidNR3U3KFKBKAFU5q"
+        },
+        {
+          "digest": "5E5JyrSFLvhB2EcN74bUk4dEpm23jGP2GRnVK4JCBCTa"
+        },
+        {
+          "digest": "4Wx6uuwb2swwLwYghbFvGyt6ReKiKX7eUsXZY16y23to"
+        },
+        {
+          "digest": "D6NJc8Mg1cqXPXTdVCtVmHbxzyepNBh26K6mfUmW7pxU"
+        },
+        {
+          "digest": "3bAse3nV4m79aUEq8hAVVeDuJGMs4qtyHQUJUKLoyhnQ"
+        }
+      ]
+    },
+    "affect3": {
+      "nodes": [
+        {
+          "digest": "9Gorn5uVdjc7eHBW3WafnpiqQfYg6iPSkxhZ6CbuBqwk"
+        },
+        {
+          "digest": "D6NJc8Mg1cqXPXTdVCtVmHbxzyepNBh26K6mfUmW7pxU"
+        },
+        {
+          "digest": "3bAse3nV4m79aUEq8hAVVeDuJGMs4qtyHQUJUKLoyhnQ"
+        },
+        {
+          "digest": "3vLFyUwCW4jC6kVhqcgtpVpMSVKxX63nNfKqRqQKW1Hg"
+        }
+      ]
+    },
+    "input3": {
+      "nodes": [
+        {
+          "digest": "D6NJc8Mg1cqXPXTdVCtVmHbxzyepNBh26K6mfUmW7pxU"
+        },
+        {
+          "digest": "3bAse3nV4m79aUEq8hAVVeDuJGMs4qtyHQUJUKLoyhnQ"
+        },
+        {
+          "digest": "3vLFyUwCW4jC6kVhqcgtpVpMSVKxX63nNfKqRqQKW1Hg"
+        }
+      ]
+    },
+    "change3": {
+      "nodes": [
+        {
+          "digest": "9Gorn5uVdjc7eHBW3WafnpiqQfYg6iPSkxhZ6CbuBqwk"
+        },
+        {
+          "digest": "D6NJc8Mg1cqXPXTdVCtVmHbxzyepNBh26K6mfUmW7pxU"
+        },
+        {
+          "digest": "3bAse3nV4m79aUEq8hAVVeDuJGMs4qtyHQUJUKLoyhnQ"
+        }
+      ]
+    },
+    "affect4": {
+      "nodes": [
+        {
+          "digest": "3qPssWeR5bvwaZiwkjbYTkR7ng9XSDp7aaky8A4DJp6S"
+        },
+        {
+          "digest": "GPSMkMRGn4X9VY41STGdDR8tFC2pneWuCtXkdjqhZiZP"
+        },
+        {
+          "digest": "92UgLjnEiiRkxWuxME8wD3Bh439gMX7RTtRoZm3G29Lx"
+        }
+      ]
+    },
+    "input4": {
+      "nodes": [
+        {
+          "digest": "GPSMkMRGn4X9VY41STGdDR8tFC2pneWuCtXkdjqhZiZP"
+        },
+        {
+          "digest": "92UgLjnEiiRkxWuxME8wD3Bh439gMX7RTtRoZm3G29Lx"
+        }
+      ]
+    },
+    "change4": {
+      "nodes": [
+        {
+          "digest": "3qPssWeR5bvwaZiwkjbYTkR7ng9XSDp7aaky8A4DJp6S"
+        },
+        {
+          "digest": "GPSMkMRGn4X9VY41STGdDR8tFC2pneWuCtXkdjqhZiZP"
+        }
+      ]
+    },
+    "affect5": {
+      "nodes": [
+        {
+          "digest": "CU6apQSKPqGNqSxg2D5v3TVFzbDmx4gPhLEaJwiiWqXC"
+        },
+        {
+          "digest": "CqYXBbBtW4nNGp66DtDuEsexmVUgasqRX1cwD2o9mojr"
+        },
+        {
+          "digest": "9A8Nc4qZkEVpRSemjZ7kVJSdTzJbPGxKijPy86ZsWSK3"
+        },
+        {
+          "digest": "Du8zQ2HM6GzfdZDpwobpntZfrQReEqkDyKCeBoXGeEEA"
+        }
+      ]
+    },
+    "input5": {
+      "nodes": [
+        {
+          "digest": "9A8Nc4qZkEVpRSemjZ7kVJSdTzJbPGxKijPy86ZsWSK3"
+        }
+      ]
+    },
+    "change5": {
+      "nodes": [
+        {
+          "digest": "CqYXBbBtW4nNGp66DtDuEsexmVUgasqRX1cwD2o9mojr"
+        }
+      ]
+    }
+  }
+}

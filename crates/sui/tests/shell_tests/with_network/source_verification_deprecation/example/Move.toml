@@ -1,0 +1,10 @@
+[package]
+name = "example"
+edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+
+[dependencies]
+# Sui = { local = "FRAMEWORK_DIR" }
+dependency = { local = "../dependency" }
+
+[addresses]
+example = "0x0"

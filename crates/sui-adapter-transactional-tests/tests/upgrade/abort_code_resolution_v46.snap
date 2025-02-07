@@ -1,0 +1,40 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-11:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-19:
+//# upgrade --package Test1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 21-26:
+//# upgrade --package Test2 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4, lines 28-30:
+//# run Test1::M1::f1
+Error: Transaction Effects Status: Move Runtime Abort. Location: Test1::M1::f1 (function index 0) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: Test1, name: Identifier("M1") }, function: 0, instruction: 1, function_name: Some("f1") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("Test1::M1::f1 at offset 1"), exec_state: None, location: Module(ModuleId { address: Test1, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 5, lines 31-33:
+//# run Test2::M1::f1
+Error: Transaction Effects Status: Move Runtime Abort. Location: Test1::M1::f1 (function index 0) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: Test1, name: Identifier("M1") }, function: 0, instruction: 1, function_name: Some("f1") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("Test1::M1::f1 at offset 1"), exec_state: None, location: Module(ModuleId { address: Test1, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 6, line 34:
+//# run Test3::M1::f1
+Error: Transaction Effects Status: Move Runtime Abort. Location: Test1::M1::f1 (function index 0) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: Test1, name: Identifier("M1") }, function: 0, instruction: 1, function_name: Some("f1") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("Test1::M1::f1 at offset 1"), exec_state: None, location: Module(ModuleId { address: Test1, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }

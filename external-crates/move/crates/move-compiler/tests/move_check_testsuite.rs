@@ -244,8 +244,10 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     }
 
     let mut options = InstaOptions::new();
-    options.info = Some(test_info);
-    options.suffix = suffix;
+    options.info(test_info);
+    if let Some(suffix) = suffix {
+        options.suffix(suffix);
+    }
     insta_assert! {
         name: test_name,
         input_path: move_path,

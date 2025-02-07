@@ -1,0 +1,34 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-67:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9317600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 69:
+//# run test::object_basics::create --args 10 @A --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 71:
+//# run test::object_basics::freeze_object --args object(2,0) --sender A
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 2362536, non_refundable_storage_fee: 23864
+
+task 4, line 73:
+//# run test::object_basics::transfer_ --args object(2,0) @A --sender A
+Error: Transaction Effects Status: Invalid command argument at 0. Immutable objects cannot be passed by-value.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue }, source: None, command: Some(0) } }
+
+task 5, line 75:
+//# run test::object_basics::set_value --args object(2,0) 1 --sender A
+Error: Transaction Effects Status: Invalid command argument at 0. Immutable objects cannot be passed by mutable reference, &mut.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByMutRef }, source: None, command: Some(0) } }

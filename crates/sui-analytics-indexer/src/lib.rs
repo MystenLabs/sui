@@ -887,17 +887,16 @@ pub async fn get_starting_checkpoint_seq_num(
     config: AnalyticsIndexerConfig,
     file_type: FileType,
 ) -> Result<u64> {
-    let checkpoint = if let Some(starting_checkpoint_seq_num) = config.starting_checkpoint_seq_num {
-        starting_checkpoint_seq_num
-    } else {
-        read_store_for_checkpoint(
-            config.remote_store_config.clone(),
-            file_type,
-            config.remote_store_path_prefix,
-        )
-        .await?
-    };
-    Ok(checkpoint)
+    let remote_latest = read_store_for_checkpoint(
+        config.remote_store_config,
+        file_type,
+        config.remote_store_path_prefix,
+    )
+    .await?;
+
+    Ok(config
+        .starting_checkpoint_seq_num
+        .map_or(remote_latest, |start| start.max(remote_latest)))
 }
 
 pub async fn make_analytics_processor(
