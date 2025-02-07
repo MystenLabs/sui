@@ -14,7 +14,7 @@ use move_vm_runtime::{
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
-use std::{cell::RefMut, collections::VecDeque};
+use std::collections::VecDeque;
 
 #[derive(Clone)]
 pub struct BorrowUidCostParams {
@@ -80,10 +80,10 @@ pub fn delete_impl(
     // unwrap safe because the interface of native function guarantees it.
     let uid_bytes = pop_arg!(args, AccountAddress);
 
-    let mut obj_runtime: RefMut<ObjectRuntime> = context
+    let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     obj_runtime.delete_id(uid_bytes.into())?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
@@ -120,10 +120,10 @@ pub fn record_new_uid(
     // unwrap safe because the interface of native function guarantees it.
     let uid_bytes = pop_arg!(args, AccountAddress);
 
-    let mut obj_runtime: RefMut<ObjectRuntime> = context
+    let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     obj_runtime.new_id(uid_bytes.into())?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }

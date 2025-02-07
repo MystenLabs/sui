@@ -29,7 +29,7 @@ use move_vm_runtime::{
 use smallvec::smallvec;
 use std::{
     borrow::Borrow,
-    cell::{RefCell, RefMut},
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet, VecDeque},
     thread::LocalKey,
 };
@@ -100,10 +100,10 @@ pub fn end_transaction(
 ) -> PartialVMResult<NativeResult> {
     assert!(ty_args.is_empty());
     assert!(args.is_empty());
-    let mut object_runtime_ref: RefMut<ObjectRuntime> = context
+    let object_runtime_ref: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let taken_shared_or_imm: BTreeMap<_, _> = object_runtime_ref
         .test_inventories
         .taken
@@ -275,10 +275,10 @@ pub fn end_transaction(
     }
     // find all wrapped objects
     let mut all_wrapped = BTreeSet::new();
-    let mut object_runtime_ref: RefMut<ObjectRuntime> = context
+    let object_runtime_ref: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     find_all_wrapped_objects(
         context,
         &mut all_wrapped,
@@ -392,7 +392,7 @@ pub fn take_from_address_by_id(
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
         |x| {
@@ -425,10 +425,10 @@ pub fn ids_for_address(
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
     let specified_obj_ty = context.type_to_type_tag(&specified_ty)?;
-    let mut object_runtime: RefMut<ObjectRuntime> = context
+    let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let ids = inventories
         .address_inventories
@@ -450,10 +450,10 @@ pub fn most_recent_id_for_address(
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
     let specified_obj_ty = context.type_to_type_tag(&specified_ty)?;
-    let mut object_runtime: RefMut<ObjectRuntime> = context
+    let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = match inventories.address_inventories.get(&account) {
         None => pack_option(None),
@@ -475,10 +475,10 @@ pub fn was_taken_from_address(
     let id = pop_id(&mut args)?;
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
-    let mut object_runtime: RefMut<ObjectRuntime> = context
+    let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories
         .taken
@@ -505,7 +505,7 @@ pub fn take_immutable_by_id(
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
         |x| {
@@ -543,10 +543,10 @@ pub fn most_recent_immutable_id(
     let specified_ty = get_specified_ty(ty_args);
     assert!(args.is_empty());
     let specified_obj_ty = context.type_to_type_tag(&specified_ty)?;
-    let mut object_runtime: RefMut<ObjectRuntime> = context
+    let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = most_recent_at_ty(
         &inventories.taken,
@@ -568,10 +568,10 @@ pub fn was_taken_immutable(
     assert!(ty_args.is_empty());
     let id = pop_id(&mut args)?;
     assert!(args.is_empty());
-    let mut object_runtime: RefMut<ObjectRuntime> = context
+    let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories
         .taken
@@ -598,7 +598,7 @@ pub fn take_shared_by_id(
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
         |x| {
@@ -629,10 +629,10 @@ pub fn most_recent_id_shared(
     let specified_ty = get_specified_ty(ty_args);
     assert!(args.is_empty());
     let specified_obj_ty = context.type_to_type_tag(&specified_ty)?;
-    let mut object_runtime: RefMut<ObjectRuntime> = context
+    let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = most_recent_at_ty(
         &inventories.taken,
@@ -654,10 +654,10 @@ pub fn was_taken_shared(
     assert!(ty_args.is_empty());
     let id = pop_id(&mut args)?;
     assert!(args.is_empty());
-    let mut object_runtime: RefMut<ObjectRuntime> = context
+    let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories
         .taken
@@ -685,10 +685,10 @@ pub fn allocate_receiving_ticket_for_object(
             E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET,
         ));
     };
-    let mut object_runtime: RefMut<ObjectRuntime> = context
+    let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let object_version = SequenceNumber::new();
     let inventories = &mut object_runtime.test_inventories;
     if inventories.allocated_tickets.contains_key(&id) {
@@ -765,10 +765,10 @@ pub fn deallocate_receiving_ticket_for_object(
 ) -> PartialVMResult<NativeResult> {
     let id = pop_id(&mut args)?;
 
-    let mut object_runtime: RefMut<ObjectRuntime> = context
+    let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     // Deallocate the ticket -- we should never hit this scenario
     let Some((_, value)) = inventories.allocated_tickets.remove(&id) else {

@@ -19,7 +19,6 @@ use move_vm_runtime::{
     pop_arg,
 };
 use smallvec::smallvec;
-use std::cell::RefMut;
 use std::collections::VecDeque;
 use sui_types::{base_types::MoveObjectType, TypeTag};
 use tracing::{error, instrument};
@@ -87,22 +86,25 @@ pub fn read_setting_impl(
             E_BCS_SERIALIZATION_FAILURE,
         ));
     };
-    let object_runtime: RefMut<ObjectRuntime> = context
-        .extensions_mut()
-        .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
 
-    let read_value_opt = consistent_value_before_current_epoch(
-        object_runtime,
-        field_setting_tag,
-        &field_setting_layout,
-        &setting_value_ty,
-        &setting_data_value_ty,
-        &value_ty,
-        config_addr,
-        name_df_addr,
-        current_epoch,
-    )?;
+    let read_value_opt = {
+        let object_runtime: &mut ObjectRuntime = &mut context
+            .extensions_mut()
+            .get::<NativeContextMut<ObjectRuntime>>()
+            .borrow_mut();
+
+        consistent_value_before_current_epoch(
+            object_runtime,
+            field_setting_tag,
+            &field_setting_layout,
+            &setting_value_ty,
+            &setting_data_value_ty,
+            &value_ty,
+            config_addr,
+            name_df_addr,
+            current_epoch,
+        )?
+    };
 
     native_charge_gas_early_exit!(
         context,
@@ -116,7 +118,7 @@ pub fn read_setting_impl(
 }
 
 fn consistent_value_before_current_epoch(
-    mut object_runtime: RefMut<ObjectRuntime>,
+    object_runtime: &mut ObjectRuntime,
     field_setting_tag: StructTag,
     field_setting_layout: &R::MoveTypeLayout,
     _setting_value_ty: &Type,

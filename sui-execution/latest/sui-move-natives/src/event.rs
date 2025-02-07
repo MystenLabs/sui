@@ -10,7 +10,7 @@ use move_vm_runtime::{
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
-use std::{cell::RefMut, collections::VecDeque};
+use std::collections::VecDeque;
 use sui_types::error::VMMemoryLimitExceededSubStatusCode;
 
 #[derive(Clone, Debug)]
@@ -75,10 +75,10 @@ pub fn emit(
             * u64::from(tag_size).into()
     );
 
-    let mut obj_runtime: RefMut<ObjectRuntime> = context
+    let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let max_event_emit_size = obj_runtime.protocol_config.max_event_emit_size();
     let ev_size = u64::from(tag_size + event_value_size);
     // Check if the event size is within the limit

@@ -17,7 +17,6 @@ use move_vm_runtime::{
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
-use std::cell::RefMut;
 use std::collections::VecDeque;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
@@ -76,10 +75,10 @@ pub fn receive_object_internal(
         ));
     };
 
-    let mut object_runtime: RefMut<ObjectRuntime> = context
+    let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     let child = match object_runtime.receive_object(
         parent,
         child_id,
@@ -248,9 +247,9 @@ fn object_runtime_transfer(
         }
     };
 
-    let mut obj_runtime: RefMut<ObjectRuntime> = context
+    let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     obj_runtime.transfer(owner, object_type, obj)
 }

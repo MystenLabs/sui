@@ -10,7 +10,7 @@ use move_vm_runtime::{
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
-use std::{cell::RefMut, collections::VecDeque, convert::TryFrom};
+use std::{collections::VecDeque, convert::TryFrom};
 use sui_types::base_types::{ObjectID, TransactionDigest};
 
 use crate::{object_runtime::ObjectRuntime, NativesCostTable};
@@ -48,10 +48,10 @@ pub fn derive_id(
     // unwrap safe because all digests in Move are serialized from the Rust `TransactionDigest`
     let digest = TransactionDigest::try_from(tx_hash.as_slice()).unwrap();
     let address = AccountAddress::from(ObjectID::derive_id(digest, ids_created));
-    let mut obj_runtime: RefMut<ObjectRuntime> = context
+    let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
         .get::<NativeContextMut<ObjectRuntime>>()
-        .get_mut();
+        .borrow_mut();
     obj_runtime.new_id(address.into())?;
 
     Ok(NativeResult::ok(
