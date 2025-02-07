@@ -117,6 +117,9 @@
       { "source": "/concepts/sui-move-concepts/collections", "destination": "/concepts/sui-move-concepts", "permanent": true },
       { "source": "/concepts/sui-move-concepts/init", "destination": "/concepts/sui-move-concepts", "permanent": true },
       { "source": "/concepts/sui-move-concepts/entry-functions", "destination": "/concepts/sui-move-concepts", "permanent": true },
-      { "source": "/concepts/sui-move-concepts/one-time-witness", "destination": "/concepts/sui-move-concepts", "permanent": true }
+      { "source": "/concepts/sui-move-concepts/one-time-witness", "destination": "/concepts/sui-move-concepts", "permanent": true },
+      { "source": "/references/framework/sui-framework/:path*", "destination": "/references/framework/sui/:path*", "permanent": true },
+      { "source": "/references/framework/move-stdlib/:path*", "destination": "/references/framework/std/:path*", "permanent": true },
+      { "source": "/references/framework/sui-system/:path*", "destination": "/references/framework/sui_system/:path*", "permanent": true }
     ]
   }
