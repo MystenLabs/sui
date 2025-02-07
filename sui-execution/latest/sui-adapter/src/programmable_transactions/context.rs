@@ -974,6 +974,7 @@ mod checked {
                 &mut data_store,
                 gas_status,
                 &mut self.native_extensions,
+                None,
             )
         }
 
