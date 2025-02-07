@@ -819,7 +819,7 @@ mod test {
                 };
                 if let Some(new_framework_ref) = new_framework_ref {
                     for package in new_framework_ref {
-                        framework_injection::set_override(*package.id(), package.modules().clone());
+                        framework_injection::set_override(package.id, package.modules().clone());
                     }
                     info!("Framework injected for next_version {next_version}");
                 } else {

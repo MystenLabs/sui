@@ -116,7 +116,12 @@ test-cluster.workspace = true
 sui-macros.workspace = true
 sui-simulator.workspace = true
 sui-test-transaction-builder.workspace = true
+sui-protocol-config.workspace = true
 serde_json.workspace = true
+
+[build-dependencies]
+sui-framework-snapshot.workspace = true
+anyhow.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true

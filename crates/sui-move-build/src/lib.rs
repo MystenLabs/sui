@@ -37,8 +37,7 @@ use move_package::{
     BuildConfig as MoveBuildConfig,
 };
 use move_package::{
-    resolution::resolution_graph::Package, source_package::parsed_manifest::OnChainInfo,
-    source_package::parsed_manifest::SourceManifest,
+    source_package::parsed_manifest::OnChainInfo, source_package::parsed_manifest::SourceManifest,
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
@@ -745,9 +744,8 @@ pub fn gather_published_ids(
     )
 }
 
-pub fn published_at_property(package: &Package) -> Result<ObjectID, PublishedAtError> {
-    let Some(value) = package
-        .source_package
+pub fn published_at_property(manifest: &SourceManifest) -> Result<ObjectID, PublishedAtError> {
+    let Some(value) = manifest
         .package
         .custom_properties
         .get(&Symbol::from(PUBLISHED_AT_MANIFEST_FIELD))

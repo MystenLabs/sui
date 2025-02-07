@@ -697,7 +697,7 @@ fn create_genesis_context(
     hasher.update(bcs::to_bytes(genesis_validators).unwrap());
     hasher.update(bcs::to_bytes(token_distribution_schedule).unwrap());
     for system_package in system_packages {
-        hasher.update(bcs::to_bytes(system_package.bytes()).unwrap());
+        hasher.update(bcs::to_bytes(&system_package.bytes).unwrap());
     }
 
     let hash = hasher.finalize();
@@ -984,7 +984,7 @@ fn create_genesis_objects(
             executor.as_ref(),
             genesis_ctx,
             &system_package.modules(),
-            system_package.dependencies().to_vec(),
+            system_package.dependencies,
             &protocol_config,
             metrics.clone(),
         )
