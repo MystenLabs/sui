@@ -16,13 +16,14 @@ export default function BetaTag(props) {
   // content as opposed to at top of topic based on `beta` frontmatter.
   return (
     <Admonition
-      title="Beta Feature"
+      title="Early-Stage Feature"
       icon="⚙️"
       className={`${props.slim ? "" : "!my-12"} bg-sui-blue-light border-sui-blue-dark dark:bg-sui-blue-dark dark:border-sui-blue-light`}
     >
       <p className="pt-2">
-        This content describes a beta feature or service. Beta features and
-        services are in active development, so details are likely to change.
+        This content describes an alpha/beta feature or service. These early
+        stage features and services are in active development, so details are
+        likely to change.
       </p>
       {(beta.includes("testnet") ||
         beta.includes("devnet") ||
