@@ -16,6 +16,12 @@ static VERSION_TABLE: LazyLock<BTreeMap<ProtocolVersion, FrameworkVersion>> = La
 });
 
 #[derive(Debug)]
+pub struct FrameworkVersion {
+    pub git_revision: String,
+    pub packages: Vec<FrameworkPackage>,
+}
+
+#[derive(Debug)]
 pub struct FrameworkPackage {
     /// The name of the package, e.g. "Sui"
     pub package_name: String,
@@ -23,12 +29,6 @@ pub struct FrameworkPackage {
     /// The path to the package in the sui monorepo
     /// e.g. "crates/sui-framework/packages/sui-framework"
     pub repo_path: String,
-}
-
-#[derive(Debug)]
-pub struct FrameworkVersion {
-    pub git_revision: String,
-    pub packages: Vec<FrameworkPackage>,
 }
 
 impl PartialEq for FrameworkVersion {

@@ -13,6 +13,20 @@ use sui_types::{
 
 pub type SnapshotManifest = BTreeMap<u64, Snapshot>;
 
+/// Encapsulation of an entry in the manifest file corresponding to a single version of the system
+/// packages.
+///
+// Note: the [Snapshot] and [SnapshotPackage] types are similar to the
+// [sui_framework::{SystemPackageMetadata, SystemPackage}] types,
+// and also to the [sui::framework_versions::{FrameworkVersion, FrameworkPackage}] types.
+// They are sort of a stepping stone from one to the other - the [sui_framework] types contain
+// additional information about the compiled bytecode of the package, while the
+// [framework_versions] types do not contain information about the object IDs of the packages.
+//
+// These types serve as a kind of stepping stone; they are constructed from the [sui_framework]
+// types and serialized in the manifest, and then the build script for the [sui] crate reads them
+// from the manifest file and encodes them in the `sui` binary. A little information is dropped in
+// each of these steps.
 #[derive(Serialize, Deserialize)]
 pub struct Snapshot {
     /// Git revision that this snapshot is taken on.
@@ -22,6 +36,7 @@ pub struct Snapshot {
     pub packages: Vec<SnapshotPackage>,
 }
 
+/// Entry in the manifest file corresponding to a specific version of a specific system package
 #[derive(Serialize, Deserialize)]
 pub struct SnapshotPackage {
     /// Name of the package (e.g. "MoveStdLib")
