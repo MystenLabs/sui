@@ -13,8 +13,11 @@ use api::name_service::NameService;
 use api::objects::{Objects, QueryObjects};
 use api::rpc_module::RpcModule;
 use api::transactions::{QueryTransactions, Transactions};
+use api::write::Write;
+use args::WriteArgs;
 use config::RpcConfig;
 use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
+use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use jsonrpsee::server::{BatchRequestConfig, RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
 use metrics::RpcMetrics;
@@ -39,6 +42,8 @@ pub mod data;
 mod error;
 mod metrics;
 mod paginate;
+
+pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct RpcArgs {
@@ -218,6 +223,7 @@ pub async fn start_rpc(
     database_url: Url,
     db_args: DbArgs,
     rpc_args: RpcArgs,
+    write_args: Option<WriteArgs>,
     system_package_task_args: SystemPackageTaskArgs,
     rpc_config: RpcConfig,
     registry: &Registry,
@@ -245,6 +251,13 @@ pub async fn start_rpc(
     rpc.add_module(QueryTransactions(context.clone()))?;
     rpc.add_module(Transactions(context.clone()))?;
 
+    // Add the write module if a fullnode rpc url is provided.
+    if let Some(write_args) = write_args {
+        let http_client = get_http_client(&write_args.fullnode_rpc_url)
+            .context("Failed to create fullnode RPC client")?;
+        rpc.add_module(Write(http_client))?;
+    }
+
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
     let h_system_package_task = system_package_task.run();
 
@@ -253,6 +266,25 @@ pub async fn start_rpc(
         cancel.cancel();
         let _ = h_system_package_task.await;
     }))
+}
+
+fn get_http_client(rpc_client_url: &Url) -> anyhow::Result<HttpClient> {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        CLIENT_SDK_TYPE_HEADER,
+        HeaderValue::from_static("indexer-alt"),
+    );
+
+    HttpClientBuilder::default()
+        .max_request_size(2 << 30)
+        .set_headers(headers.clone())
+        .build(rpc_client_url)
+        .map_err(|e| {
+            anyhow::anyhow!(format!(
+                "Failed to initialize fullnode RPC client with error: {:?}",
+                e
+            ))
+        })
 }
 
 #[cfg(test)]

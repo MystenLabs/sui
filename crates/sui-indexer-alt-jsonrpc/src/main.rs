@@ -53,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
                 database_url,
                 db_args,
                 rpc_args,
+                args.write_args,
                 system_package_task_args,
                 rpc_config,
                 metrics.registry(),
