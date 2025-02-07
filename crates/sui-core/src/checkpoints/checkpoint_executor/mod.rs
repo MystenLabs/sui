@@ -46,6 +46,7 @@ use sui_types::{
 };
 use sui_types::{error::SuiResult, transaction::TransactionDataAPI};
 use tap::{TapFallible, TapOptional};
+use tokio::task::JoinSet;
 use tokio::{
     sync::broadcast::{self, error::RecvError},
     task::JoinHandle,
@@ -447,6 +448,26 @@ impl CheckpointExecutor {
         all_tx_digests: &[TransactionDigest],
         randomness_rounds: Vec<RandomnessRound>,
     ) {
+        // Execute expensive tasks in parallel. The tasks must be independent of each other.
+        let mut tasks = JoinSet::new();
+
+        // Start index updates processor task.
+        tasks.spawn({
+            let rpc_index = self.state.rpc_index.clone();
+            let subscription_service_checkpoint_sender =
+                self.subscription_service_checkpoint_sender.clone();
+            async move {
+                if let Some(checkpoint_data) = checkpoint_data {
+                    Self::commit_index_updates_and_enqueue_to_subscription_service(
+                        &rpc_index,
+                        &subscription_service_checkpoint_sender,
+                        checkpoint_data,
+                    )
+                    .await;
+                }
+            }
+        });
+
         // Commit all transaction effects to disk
         let cache_commit = self.state.get_cache_commit();
         debug!("committing checkpoint transactions to disk");
@@ -480,16 +501,17 @@ impl CheckpointExecutor {
             }
         }
 
-        if let Some(checkpoint_data) = checkpoint_data {
-            self.commit_index_updates_and_enqueue_to_subscription_service(checkpoint_data)
-                .await;
-        }
-
         if !checkpoint.is_last_checkpoint_of_epoch() {
             self.accumulator
                 .accumulate_running_root(epoch_store, checkpoint.sequence_number, checkpoint_acc)
                 .await
                 .expect("Failed to accumulate running root");
+        }
+
+        // Wait for all async tasks to complete before bumping execution watermark.
+        tasks.join_all().await;
+
+        if !checkpoint.is_last_checkpoint_of_epoch() {
             self.bump_highest_executed_checkpoint(checkpoint);
         }
     }
@@ -497,16 +519,17 @@ impl CheckpointExecutor {
     /// If configured, commit the pending index updates for the provided checkpoint as well as
     /// enqueuing the checkpoint to the subscription service
     async fn commit_index_updates_and_enqueue_to_subscription_service(
-        &self,
+        rpc_index: &Option<Arc<crate::rpc_index::RpcIndexStore>>,
+        subscription_service_checkpoint_sender: &Option<tokio::sync::mpsc::Sender<CheckpointData>>,
         checkpoint: CheckpointData,
     ) {
-        if let Some(rpc_index) = &self.state.rpc_index {
+        if let Some(rpc_index) = rpc_index {
             rpc_index
                 .commit_update_for_checkpoint(checkpoint.checkpoint_summary.sequence_number)
                 .expect("failed to update rpc_indexes");
         }
 
-        if let Some(sender) = &self.subscription_service_checkpoint_sender {
+        if let Some(sender) = &subscription_service_checkpoint_sender {
             if let Err(e) = sender.send(checkpoint).await {
                 tracing::warn!("unable to send checkpoint to subscription service: {e}");
             }
@@ -770,8 +793,12 @@ impl CheckpointExecutor {
                     .await
                     .expect("Finalizing checkpoint cannot fail");
 
-                    self.commit_index_updates_and_enqueue_to_subscription_service(checkpoint_data)
-                        .await;
+                    Self::commit_index_updates_and_enqueue_to_subscription_service(
+                        &self.state.rpc_index,
+                        &self.subscription_service_checkpoint_sender,
+                        checkpoint_data,
+                    )
+                    .await;
 
                     self.checkpoint_store
                         .insert_epoch_last_checkpoint(cur_epoch, checkpoint)
