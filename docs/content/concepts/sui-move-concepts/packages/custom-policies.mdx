@@ -866,10 +866,10 @@ If you receive a `ReferenceError: fetch is not defined` error, use Node.js versi
 Use the CLI to test that your newly published package works:
 
 ```sh
-$ sui client call --gas-budget 10000000 \
+$ sui client call \
     --package '<EXAMPLE-PACKAGE-ID>' \
     --module 'example' \
-    --function 'nudge' \
+    --function 'nudge'
 ```
 
 <details>
@@ -1109,7 +1109,7 @@ BUILDING example
 Use the Sui Client CLI to test the upgraded package (the package ID is **different** from the original version of your example package):
 
 ```sh
-$ sui client call --gas-budget 10000000 \
+$ sui client call \
     --package '<UPGRADED-EXAMPLE-PACKAGE>' \
     --module 'example' \
     --function 'nudge'

@@ -126,8 +126,7 @@ tx.moveCall({
 $ sui client call \
     --package 0x2 \
     --module kiosk \
-    --function default \
-    --gas-budget 1000000000
+    --function default
 ```
 
 ### Create a Sui Kiosk with advanced options
@@ -191,8 +190,7 @@ $ sui client call \
     --module kiosk \
     --function place \
     --args "<KIOSK_ID>" "<CAP_ID>" "<ITEM_ID>" \
-    --type-args "<ITEM_TYPE>" \
-    --gas-budget 1000000000
+    --type-args "<ITEM_TYPE>"
 ```
 
 ## Take items from a kiosk
@@ -264,8 +262,7 @@ $ sui client call \
     --module kiosk \
     --function lock \
     --args "<KIOSK_ID>" "<CAP_ID>" "<TRANSFER_POLICY_ID>" "<ITEM_ID>" \
-    --type-args "<ITEM_TYPE>" \
-    --gas-budget 1000000000
+    --type-args "<ITEM_TYPE>"
 ```
 
 ## List and delist items from a kiosk
@@ -309,8 +306,7 @@ $ sui client call \
     --module kiosk \
     --function list \
     --args "<KIOSK_ID>" "<CAP_ID>" "<ITEM_ID>" "<PRICE>" \
-    --type-args "ITEM_TYPE" \
-    --gas-budget 1000000000
+    --type-args "ITEM_TYPE"
 ```
 
 ### Delist an item
@@ -345,8 +341,7 @@ $ sui client call \
     --module kiosk \
     --function delist \
     --args "<KIOSK_ID>" "<CAP_ID>" "<ITEM_ID>" \
-    --type-args "ITEM_TYPE" \
-    --gas-budget 1000000000
+    --type-args "ITEM_TYPE"
 ```
 
 ## Purchase an item from a kiosk {#purchase}

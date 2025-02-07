@@ -252,11 +252,8 @@ If you have a package with a dependency, and that dependency is upgraded, your p
 
 ## Upgrading
 
-Use the `sui client upgrade` command to upgrade packages that meet the previous requirements, providing values for the following flags:
+Use the `sui client upgrade` command to upgrade packages that meet the previous requirements, providing values for the following option:
 
-{@include: ../../../snippets/info-gas-budget.mdx}
-
-- `--gas-budget`: The maximum number of gas units that can be expended before the network cancels the transaction.
 - `--cap`: The ID of the `UpgradeCap`. You receive this ID as a return from the publish command.
 
 Developers upgrading packages using Move code have access to types and functions to define custom upgrade policies. For example, a Move developer might want to disallow upgrading a package, regardless of the current package owner. The [`make_immutable` function](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/package.md#0x2_package_make_immutable) is available to them to create this behavior. More advanced policies using available types like `UpgradeTicket` and `Upgrade Receipt` are also possible. For an example, see this [custom upgrade policy](https://github.com/MystenLabs/sui/issues/2045#:~:text=Implement%20a%20custom%20upgrade%20policy) on GitHub.

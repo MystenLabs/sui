@@ -4,7 +4,7 @@ title: Publish a Package
 
 Before you can call functions in a Move package (beyond an emulated Sui execution scenario), that package must be available on the Sui network. When you publish a package, you are actually creating an immutable Sui object on the network that anyone can access.
 
-To publish your package to the Sui network, use the `publish` CLI command in the root of your package. Use the `--gas-budget` flag to set a value for the maximum amount of gas the transaction can cost. If the cost of the transaction is more than the budget you set, the transaction fails and your package doesn't publish. 
+To publish your package to the Sui network, use the `publish` CLI command in the root of your package.
 
 {@include: ../../../snippets/info-gas-budget.mdx}
 
@@ -31,7 +31,7 @@ In the **Object Changes** table, you can find the information about the package 
 │  │ PackageID: <PACKAGE-ID>                                          │
 │  │ Version: 1                                                       │
 │  │ Digest: <DIGEST-HASH>                                            │
-│  │ Modules: example                                               │
+│  │ Modules: example                                                 │
 │  └──                                                                │
 ╰─────────────────────────────────────────────────────────────────────╯
 ```
@@ -46,7 +46,7 @@ $ sui client objects
 │ │ objectId   │  <OBJECT-ID>                                                         │ │
 │ │ version    │  10                                                                  │ │
 │ │ digest     │  <DIGEST-HASH>                                                       │ │
-│ │ objectType │  <PACKAGE-ID>::example::Forge                                      │ │
+│ │ objectType │  <PACKAGE-ID>::example::Forge                                        │ │
 │ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
 │ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
 │ │ objectId   │  <OBJECT-ID>                                                         │ │
@@ -106,8 +106,7 @@ $ sui client ptb \
 	--assign to_address @<TO-ADDRESS> \
 	--move-call <PACKAGE-ID>::example::new_sword forge 3 3 \
 	--assign sword \
-	--transfer-objects "[sword]" to_address \
-	--gas-budget 20000000
+	--transfer-objects "[sword]" to_address
 ```
 
 :::info 
@@ -126,7 +125,7 @@ After the transaction executes, you can check the status of the `Sword` object b
 │ │ objectId   │  <OBJECT-ID>                                                         │ │
 │ │ version    │  11                                                                  │ │
 │ │ digest     │  <DIGEST-HASH>                                                       │ │
-│ │ objectType │  <PACKAGE-ID>::example::Forge                                      │ │
+│ │ objectType │  <PACKAGE-ID>::example::Forge                                        │ │
 │ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
 │ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
 │ │ objectId   │  <OBJECT-ID>                                                         │ │
@@ -138,7 +137,7 @@ After the transaction executes, you can check the status of the `Sword` object b
 │ │ objectId   │  <OBJECT-ID>                                                         │ │
 │ │ version    │  11                                                                  │ │
 │ │ digest     │  <DIGEST-HASH>                                                       │ │
-│ │ objectType │  <PACKAGE-ID>::example::Sword                                      │ │
+│ │ objectType │  <PACKAGE-ID>::example::Sword                                        │ │
 │ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
 │ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
 │ │ objectId   │  <OBJECT-ID>                                                         │ │

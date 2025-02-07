@@ -17,7 +17,7 @@ The following example demonstrates how to serialize data for a transfer using th
 {@include: ../../../snippets/info-gas-budget.mdx}
 
 ```sh
-$ sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-unsigned-transaction
+$ sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --serialize-unsigned-transaction
 ```
 
 The console responds with the resulting `<TX_BYTES>` value.
@@ -81,7 +81,7 @@ Mutated Objects:
 Alternatively, you can use the active key in Sui Keystore to sign and output a Base64-encoded sender signed data with flag `--serialize-signed-transaction`. 
 
 ```sh
-$ sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-signed-transaction
+$ sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --serialize-signed-transaction
 ```
 
 The console responds with the resulting `<SIGNED-TX-BYTES>` value.

@@ -129,13 +129,13 @@ Publish the `ColorObject` code on-chain using the Sui Client CLI:
 {@include: ../../snippets/info-gas-budget.mdx}
 
 ```sh
-$ sui client publish $ROOT/examples/move/color_object --gas-budget <GAS-AMOUNT>
+$ sui client publish $ROOT/examples/move/color_object
 ```
 
 Set the package object ID to the `$PACKAGE` environment variable, if you have it set. Then create a new `ColorObject`:
 
 ```sh
-$ sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
+$ sui client call --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
 ```
 
 Set the newly created object ID to `$OBJECT`. To view the objects in the current active address:
@@ -147,7 +147,7 @@ $ sui client objects $ADDR
 You should see an object with the ID you used for `$OBJECT`. To turn it into an immutable object:
 
 ```sh
-$ sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "freeze_object" --args \"$OBJECT\"
+$ sui client call --package $PACKAGE --module "color_object" --function "freeze_object" --args \"$OBJECT\"
 ```
 
 View the list of objects again:
@@ -171,7 +171,7 @@ Owner: Immutable
 If you try to mutate it:
 
 ```sh
-$ sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "update" --args \"$OBJECT\" 0 0 0
+$ sui client call --package $PACKAGE --module "color_object" --function "update" --args \"$OBJECT\" 0 0 0
 ```
 
 The response indicates that you can't pass an immutable object to a mutable argument.
