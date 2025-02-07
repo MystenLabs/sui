@@ -81,12 +81,13 @@ const guides = [
 					id: 'guides/developer/coin',
 				},
 				items: [
+					'guides/developer/stablecoins',
 					'guides/developer/coin/regulated',
 					'guides/developer/coin/in-game-token',
 					'guides/developer/coin/loyalty',
+					'guides/developer/coin/multisig',
 				],
 			},
-			'guides/developer/stablecoins',
 			{
 				type: 'category',
 				label: 'NFTs',
