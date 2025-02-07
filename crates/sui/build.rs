@@ -23,17 +23,19 @@ fn generate_framework_version_table() -> anyhow::Result<()> {
     writeln!(&mut file, "[")?;
 
     for (version, entry) in manifest.iter() {
-        let hash = entry.git_revision();
+        let hash = &entry.git_revision;
         writeln!(
             &mut file,
             "  (ProtocolVersion::new( {version:>2} ), FrameworkVersion {{"
         )?;
         writeln!(&mut file, "        git_revision: \"{hash}\".into(),")?;
         writeln!(&mut file, "        packages: [")?;
-        for _oid in entry.package_ids() {
+        for package in &entry.packages {
             writeln!(
                 &mut file,
-                "          FrameworkPackage {{ package_name: \"TODO\".into(), repo_path: \"TODO\".into() }},"
+                "          FrameworkPackage {{ package_name: \"{}\".into(), repo_path: \"{}\".into() }},",
+                package.name,
+                package.path,
             )?;
         }
         writeln!(&mut file, "        ].into(),")?;

@@ -16,23 +16,23 @@ pub type SnapshotManifest = BTreeMap<u64, SingleSnapshot>;
 #[derive(Serialize, Deserialize)]
 pub struct SingleSnapshot {
     /// Git revision that this snapshot is taken on.
-    git_revision: String,
-    /// List of file names (also identical to object ID) of the bytecode package files.
-    packages: Vec<SinglePackage>,
+    pub git_revision: String,
+
+    /// List of system packages in this version
+    pub packages: Vec<SinglePackage>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct SinglePackage {
-    name: String,
-    path: String,
-    id: ObjectID,
+    /// Name of the package (e.g. "MoveStdLib")
+    pub name: String,
+    /// Path to the package in the monorepo (e.g. "crates/sui-framework/packages/move-stdlib")
+    pub path: String,
+    /// Object ID of the published package
+    pub id: ObjectID,
 }
 
 impl SingleSnapshot {
-    pub fn git_revision(&self) -> &str {
-        &self.git_revision
-    }
-
     pub fn package_ids(&self) -> Vec<ObjectID> {
         self.packages.iter().map(|p| p.id).collect()
     }

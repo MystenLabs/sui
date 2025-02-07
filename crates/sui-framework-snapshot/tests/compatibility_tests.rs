@@ -2,9 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod compatibility_tests {
+    use move_package::source_package::{
+        manifest_parser::parse_move_manifest_from_file, parsed_manifest::SourceManifest,
+    };
     use std::collections::BTreeMap;
+    use std::path::Path;
     use sui_framework::{compare_system_package, BuiltInFramework};
     use sui_framework_snapshot::{load_bytecode_snapshot, load_bytecode_snapshot_manifest};
+    use sui_move_build::published_at_property;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::execution_config_utils::to_binary_config;
 
@@ -66,12 +71,40 @@ mod compatibility_tests {
             );
     }
 
+    /// This test checks that the the `SinglePackage` entries in `manifest.json` match the metadata
+    /// in the `Move.toml` files in the repo.
+    ///
+    /// Note that this test currently assumes that no framework packages will be removed or moved
+    /// within the repo; we check the historical metadata against the current repository. If
+    /// needed, we could be more precise by first checking out the revision of the package listed
+    /// in the manifest (this should actually be fairly cheap since the git history is present).
+    #[test]
+    fn check_manifest_against_tomls() {
+        let manifest = load_bytecode_snapshot_manifest();
+        for entry in manifest.values() {
+            for package in &entry.packages {
+                // parse package.path/Move.toml
+                let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../..")
+                    .join(&package.path);
+                let package_toml: SourceManifest =
+                    parse_move_manifest_from_file(&manifest_path).expect("Move.toml exists");
+                // check manifest name field is package.name
+                assert_eq!(package_toml.package.name.to_string(), package.name);
+                // check manifest published-at field is package.id
+                let published_at_field = published_at_property(&package_toml)
+                    .expect("Move.toml file has published-at field");
+                assert_eq!(published_at_field, package.id);
+            }
+        }
+    }
+
     #[test]
     fn check_no_dirty_manifest_commit() {
         let snapshots = load_bytecode_snapshot_manifest();
         for snapshot in snapshots.values() {
             assert!(
-                !snapshot.git_revision().contains("dirty"),
+                !snapshot.git_revision.contains("dirty"),
                 "If you are trying to regenerate the bytecode snapshot after cherry-picking, please do so in a standalone PR after the cherry-pick is merged on the release branch.",
             );
         }
