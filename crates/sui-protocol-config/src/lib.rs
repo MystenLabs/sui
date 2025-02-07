@@ -3233,10 +3233,10 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_nitro_attestation = true;
                     }
-                    cfg.nitro_attestation_parse_base_cost = Some(53);
-                    cfg.nitro_attestation_parse_cost_per_byte = Some(1);
-                    cfg.nitro_attestation_verify_base_cost = Some(49632);
-                    cfg.nitro_attestation_verify_cost_per_cert = Some(52369);
+                    cfg.nitro_attestation_parse_base_cost = Some(53 * 50);
+                    cfg.nitro_attestation_parse_cost_per_byte = Some(50);
+                    cfg.nitro_attestation_verify_base_cost = Some(49632 * 50);
+                    cfg.nitro_attestation_verify_cost_per_cert = Some(52369 * 50);
                 }
                 // Use this template when making changes:
                 //
