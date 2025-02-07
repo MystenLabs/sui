@@ -48,8 +48,8 @@ pub struct SnapshotPackage {
 }
 
 impl Snapshot {
-    pub fn package_ids(&self) -> Vec<ObjectID> {
-        self.packages.iter().map(|p| p.id).collect()
+    pub fn package_ids(&self) -> impl Iterator<Item = ObjectID> + '_ {
+        self.packages.iter().map(|p| p.id)
     }
 }
 

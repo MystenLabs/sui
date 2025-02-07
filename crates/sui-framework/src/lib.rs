@@ -50,7 +50,7 @@ impl SystemPackageMetadata {
         SystemPackageMetadata {
             name: name.to_string(),
             path: path.to_string(),
-            compiled: SystemPackage::new(id, raw_bytes, dependencies.into()),
+            compiled: SystemPackage::new(id, raw_bytes, dependencies),
         }
     }
 }
