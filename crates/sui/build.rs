@@ -15,8 +15,8 @@ fn generate_framework_version_table() -> anyhow::Result<()> {
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("framework_version_table.rs");
 
-    let manifest = load_bytecode_snapshot_manifest();
     let manifest_path = manifest_path().to_string_lossy().into_owned();
+    let manifest = load_bytecode_snapshot_manifest();
 
     let mut file = BufWriter::new(File::create(&dest_path)?);
 
