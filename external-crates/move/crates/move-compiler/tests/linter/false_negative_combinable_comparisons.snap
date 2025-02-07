@@ -4,6 +4,5 @@ info:
   flavor: core
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/linter/false_negative_combinable_comparisons.move
 ---
 

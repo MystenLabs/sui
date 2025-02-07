@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/expansion/unbound_named_address.move
 ---
 error[E03002]: unbound module
   ┌─ tests/move_2024/expansion/unbound_named_address.move:3:9

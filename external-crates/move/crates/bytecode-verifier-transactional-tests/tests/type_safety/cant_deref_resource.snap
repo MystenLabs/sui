@@ -1,0 +1,25 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/cant_deref_resource.mvir
+---
+processed 2 tasks
+
+task 0, lines 1-39:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Token'. Got VMError: {
+    major_status: READREF_WITHOUT_COPY_ABILITY,
+    sub_status: None,
+    location: 0x1::Token,
+    indices: [(FunctionDefinition, 4)],
+    offsets: [(FunctionDefinitionIndex(4), 10)],
+}
+
+task 1, lines 41-79:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::Token'. Got VMError: {
+    major_status: READREF_WITHOUT_COPY_ABILITY,
+    sub_status: None,
+    location: 0x2::Token,
+    indices: [(FunctionDefinition, 4)],
+    offsets: [(FunctionDefinitionIndex(4), 10)],
+}

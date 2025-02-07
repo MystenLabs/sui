@@ -1,0 +1,624 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 18 tasks
+
+task 1, line 31:
+//# create-checkpoint 12
+Checkpoint created: 12
+
+task 2, lines 33-45:
+//# run-graphql --cursors {"c":12,"s":6}
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6N30",
+          "node": {
+            "sequenceNumber": 7
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6OH0",
+          "node": {
+            "sequenceNumber": 8
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6OX0",
+          "node": {
+            "sequenceNumber": 9
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
+          "node": {
+            "sequenceNumber": 10
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 3, lines 47-59:
+//# run-graphql --cursors {"c":12,"s":6} {"c":12,"s":8}
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6N30",
+          "node": {
+            "sequenceNumber": 7
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 4, lines 61-73:
+//# run-graphql --cursors {"c":12,"s":6}
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6MH0",
+          "node": {
+            "sequenceNumber": 0
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MX0",
+          "node": {
+            "sequenceNumber": 1
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
+          "node": {
+            "sequenceNumber": 2
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6M30",
+          "node": {
+            "sequenceNumber": 3
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5, lines 75-87:
+//# run-graphql --cursors {"c":12,"s":3} {"c":12,"s":6}
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6NH0",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6NX0",
+          "node": {
+            "sequenceNumber": 5
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 6, lines 89-101:
+//# run-graphql --cursors {"c":12,"s":3}
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6MH0",
+          "node": {
+            "sequenceNumber": 0
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MX0",
+          "node": {
+            "sequenceNumber": 1
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
+          "node": {
+            "sequenceNumber": 2
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 7, lines 103-115:
+//# run-graphql --cursors {"c":12,"s":6}
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6OX0",
+          "node": {
+            "sequenceNumber": 9
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 8, lines 117-129:
+//# run-graphql --cursors {"c":12,"s":4}
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6MH0",
+          "node": {
+            "sequenceNumber": 0
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MX0",
+          "node": {
+            "sequenceNumber": 1
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
+          "node": {
+            "sequenceNumber": 2
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6M30",
+          "node": {
+            "sequenceNumber": 3
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 9, lines 131-143:
+//# run-graphql --cursors {"c":12,"s":4}
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6NX0",
+          "node": {
+            "sequenceNumber": 5
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6Nn0",
+          "node": {
+            "sequenceNumber": 6
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6N30",
+          "node": {
+            "sequenceNumber": 7
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6OH0",
+          "node": {
+            "sequenceNumber": 8
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6OX0",
+          "node": {
+            "sequenceNumber": 9
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 10, lines 145-157:
+//# run-graphql --cursors {"c":12,"s":6}
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
+          "node": {
+            "sequenceNumber": 2
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6M30",
+          "node": {
+            "sequenceNumber": 3
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6NH0",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6NX0",
+          "node": {
+            "sequenceNumber": 5
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 11, lines 159-171:
+//# run-graphql --cursors {"c":12,"s":3} {"c":12,"s":6}
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6NH0",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6NX0",
+          "node": {
+            "sequenceNumber": 5
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12, lines 173-185:
+//# run-graphql --cursors {"c":12,"s":9}
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 13, lines 187-199:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6MH0",
+          "node": {
+            "sequenceNumber": 0
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MX0",
+          "node": {
+            "sequenceNumber": 1
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
+          "node": {
+            "sequenceNumber": 2
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6M30",
+          "node": {
+            "sequenceNumber": 3
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6NH0",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6NX0",
+          "node": {
+            "sequenceNumber": 5
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6Nn0",
+          "node": {
+            "sequenceNumber": 6
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6N30",
+          "node": {
+            "sequenceNumber": 7
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6OH0",
+          "node": {
+            "sequenceNumber": 8
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6OX0",
+          "node": {
+            "sequenceNumber": 9
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 14, lines 201-213:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6MH0",
+          "node": {
+            "sequenceNumber": 0
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MX0",
+          "node": {
+            "sequenceNumber": 1
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
+          "node": {
+            "sequenceNumber": 2
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6M30",
+          "node": {
+            "sequenceNumber": 3
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 15, lines 215-227:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6OX0",
+          "node": {
+            "sequenceNumber": 9
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 16, lines 229-241:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "'first' and 'last' must not be used together",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "checkpoints"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 17, lines 243-256:
+//# run-graphql --cursors {"c":10,"s":3} {"c":12,"s":6}
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "The provided cursors are taken from different checkpoints and cannot be used together in the same query.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 3
+        }
+      ],
+      "path": [
+        "checkpoints"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

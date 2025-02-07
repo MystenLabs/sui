@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/enums/variant_switch_loop.mvir
 ---
 processed 3 tasks
 

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/recursive_macros_by_name_arg_invalid.move
 ---
 error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_by_name_arg_invalid.move:8:9

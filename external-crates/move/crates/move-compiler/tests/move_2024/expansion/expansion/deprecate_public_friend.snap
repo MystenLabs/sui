@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/expansion/expansion/deprecate_public_friend.move
 ---
 error[E13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/expansion/expansion/deprecate_public_friend.move:2:5

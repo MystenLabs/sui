@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/type_variable_join_threaded_unpack.move
 ---
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/type_variable_join_threaded_unpack.move:39:42

@@ -4,6 +4,5 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/struct_with_key/unused_id_field.move
 ---
 

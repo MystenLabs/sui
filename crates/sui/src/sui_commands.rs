@@ -441,8 +441,10 @@ impl SuiCommand {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config, false).await?;
                 let context = WalletContext::new(&config, None, None)?;
-                if let Err(e) = context.get_client().await?.check_api_version() {
-                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                if let Ok(client) = context.get_client().await {
+                    if let Err(e) = client.check_api_version() {
+                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                    }
                 }
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
@@ -456,16 +458,10 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 if let Some(cmd) = cmd {
                     let mut context = WalletContext::new(&config_path, None, None)?;
-                    // we need to allow switching from localnet to another network; if a local
-                    // network is not running and we want to switch to another network, the code
-                    // will throw a low level network error because it cannot connect to the
-                    // network to fetch the api version.
-                    if let SuiClientCommands::Switch { .. } = cmd {
-                        cmd.execute(&mut context).await?.print(!json);
-                        return Ok(());
-                    }
-                    if let Err(e) = context.get_client().await?.check_api_version() {
-                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                    if let Ok(client) = context.get_client().await {
+                        if let Err(e) = client.check_api_version() {
+                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                        }
                     }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -486,8 +482,10 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 let mut context = WalletContext::new(&config_path, None, None)?;
                 if let Some(cmd) = cmd {
-                    if let Err(e) = context.get_client().await?.check_api_version() {
-                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                    if let Ok(client) = context.get_client().await {
+                        if let Err(e) = client.check_api_version() {
+                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                        }
                     }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -517,8 +515,10 @@ impl SuiCommand {
                                 client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                             prompt_if_no_config(&config, false).await?;
                             let context = WalletContext::new(&config, None, None)?;
-                            if let Err(e) = context.get_client().await?.check_api_version() {
-                                eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                            if let Ok(client) = context.get_client().await {
+                                if let Err(e) = client.check_api_version() {
+                                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                                }
                             }
                             let client = context.get_client().await?;
                             let chain_id = client.read_api().get_chain_identifier().await.ok();
@@ -556,8 +556,10 @@ impl SuiCommand {
                 let config_path =
                     client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 let mut context = WalletContext::new(&config_path, None, None)?;
-                if let Err(e) = context.get_client().await?.check_api_version() {
-                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                if let Ok(client) = context.get_client().await {
+                    if let Err(e) = client.check_api_version() {
+                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                    }
                 }
                 let rgp = context.get_reference_gas_price().await?;
                 let rpc_url = &context.config.get_active_env()?.rpc;

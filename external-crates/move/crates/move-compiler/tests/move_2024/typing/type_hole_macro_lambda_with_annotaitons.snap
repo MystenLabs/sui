@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/type_hole_macro_lambda_with_annotaitons.move
 ---
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/type_hole_macro_lambda_with_annotaitons.move:6:37

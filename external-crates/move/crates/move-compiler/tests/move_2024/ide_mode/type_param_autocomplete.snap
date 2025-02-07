@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/ide_mode/type_param_autocomplete.move
 ---
 error[E04009]: expected specific type
   ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:6:10

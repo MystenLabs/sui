@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/invalid_assertion_const.move
 ---
 error[E04035]: invalid constant usage in error context
   ┌─ tests/move_2024/typing/invalid_assertion_const.move:5:15

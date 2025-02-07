@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/borrows/call_mutual_borrows_invalid.move
 ---
 error[E07005]: invalid transfer of references
    ┌─ tests/move_check/borrows/call_mutual_borrows_invalid.move:15:9

@@ -1,0 +1,114 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 18 tasks
+
+task 1, lines 6-39:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 9872400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 41:
+//# run tto::M1::start
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 43:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, line 45:
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 5, line 47:
+//# run tto::M1::call_mut_ref --args object(2,0) receiving(2,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+
+task 6, line 49:
+//# run tto::M1::call_immut_ref --args object(2,0) receiving(2,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+
+task 7, line 51:
+//# run tto::M1::call_mut_ref_ret --args object(2,0) receiving(2,1)
+Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }
+
+task 8, line 53:
+//# run tto::M1::call_mut_ref_immut_ret --args object(2,0) receiving(2,1)
+Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }
+
+task 9, lines 55-56:
+//# programmable --inputs receiving(2,1)
+//> tto::M1::immut_immut_ref(Input(0), Input(0))
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, lines 58-59:
+//# programmable --inputs receiving(2,1)
+//> tto::M1::immut_mut_ref(Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 11, lines 61-62:
+//# programmable --inputs receiving(2,1)
+//> tto::M1::mut_immut_ref(Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 12, lines 64-65:
+//# programmable --inputs receiving(2,1)
+//> tto::M1::mut_mut_ref(Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 13, lines 67-68:
+//# programmable --inputs receiving(2,1)
+//> tto::M1::take_mut_ref(Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 14, lines 70-71:
+//# programmable --inputs receiving(2,1)
+//> tto::M1::take_immut_ref(Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 15, lines 73-74:
+//# programmable --inputs receiving(2,1)
+//> tto::M1::immut_ref_take(Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 16, lines 76-77:
+//# programmable --inputs receiving(2,1)
+//> tto::M1::mut_ref_take(Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 17, lines 79-80:
+//# programmable --inputs receiving(2,1)
+//> tto::M1::double_take(Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }

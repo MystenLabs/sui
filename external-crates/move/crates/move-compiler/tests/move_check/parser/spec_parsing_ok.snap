@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/spec_parsing_ok.move
 ---
 warning[W00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_ok.move:11:5

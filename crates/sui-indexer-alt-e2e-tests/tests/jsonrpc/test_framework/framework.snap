@@ -1,0 +1,33 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 19-22:
+//# run-graphql
+Error: GraphQL queries are not supported in these tests
+
+task 2, line 24:
+//# run-jsonrpc
+Error: Missing JSON-RPC query
+
+task 3, lines 26-29:
+//# run-jsonrpc
+Error: Failed to parse JSON-RPC query
+
+task 4, lines 31-35:
+//# run-jsonrpc
+Error: Failed to parse JSON-RPC query
+
+task 5, lines 37-41:
+//# run-jsonrpc --show-headers
+Headers: {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "40",
+}
+
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": "1000"
+}

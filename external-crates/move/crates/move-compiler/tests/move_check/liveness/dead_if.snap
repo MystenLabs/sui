@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/liveness/dead_if.move
 ---
 warning[W09005]: dead or unreachable code
   ┌─ tests/move_check/liveness/dead_if.move:4:23

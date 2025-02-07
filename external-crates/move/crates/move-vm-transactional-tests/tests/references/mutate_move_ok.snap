@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/references/mutate_move_ok.mvir
 ---
 processed 2 tasks

@@ -10408,6 +10408,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "query-shell"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "300d1c86e9638eceb24568649d5ad0f31b949ff11ff1ffbacbe3e382a4dfee25"
+dependencies = [
+ "sysinfo",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16069,6 +16079,7 @@ dependencies = [
  "once_cell",
  "open",
  "prettytable-rs",
+ "query-shell",
  "rand 0.8.5",
  "regex",
  "reqwest 0.12.9",

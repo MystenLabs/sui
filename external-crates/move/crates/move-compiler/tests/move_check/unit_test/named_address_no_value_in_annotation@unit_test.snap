@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/unit_test/named_address_no_value_in_annotation.move
 ---
 error[E03001]: address with no value
   ┌─ tests/move_check/unit_test/named_address_no_value_in_annotation.move:2:18

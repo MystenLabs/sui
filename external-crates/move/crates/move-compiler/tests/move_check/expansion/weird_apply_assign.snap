@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/weird_apply_assign.move
 ---
 error[E01009]: invalid assignment
   ┌─ tests/move_check/expansion/weird_apply_assign.move:5:9

@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-compiler-transactional-tests/tests/macros/break_from_macro_arg.move
 ---
 processed 4 tasks
 

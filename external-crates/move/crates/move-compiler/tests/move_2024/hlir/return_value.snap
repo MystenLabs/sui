@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/hlir/return_value.move
 ---
 warning[W09005]: dead or unreachable code
   ┌─ tests/move_2024/hlir/return_value.move:4:5

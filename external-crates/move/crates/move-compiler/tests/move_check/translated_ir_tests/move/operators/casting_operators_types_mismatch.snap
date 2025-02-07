@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/translated_ir_tests/move/operators/casting_operators_types_mismatch.move
 ---
 error[E04003]: built-in operation not supported
   ┌─ tests/move_check/translated_ir_tests/move/operators/casting_operators_types_mismatch.move:4:10

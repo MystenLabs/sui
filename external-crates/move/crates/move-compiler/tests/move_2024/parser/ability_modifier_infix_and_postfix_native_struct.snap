@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/parser/ability_modifier_infix_and_postfix_native_struct.move
 ---
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/ability_modifier_infix_and_postfix_native_struct.move:4:46

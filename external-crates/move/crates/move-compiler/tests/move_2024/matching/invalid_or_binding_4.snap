@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/matching/invalid_or_binding_4.move
 ---
 warning[W09002]: unused variable
    ┌─ tests/move_2024/matching/invalid_or_binding_4.move:11:19

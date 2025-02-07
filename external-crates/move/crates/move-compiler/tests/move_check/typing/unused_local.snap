@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/unused_local.move
 ---
 warning[W09002]: unused variable
   ┌─ tests/move_check/typing/unused_local.move:5:13

@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/module_publishing/use_modules_published.mvir
 ---
 processed 6 tasks
 

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/naming/type_hole_valid_location_invalid_usage.move
 ---
 error[E04003]: built-in operation not supported
   ┌─ tests/move_2024/naming/type_hole_valid_location_invalid_usage.move:6:9

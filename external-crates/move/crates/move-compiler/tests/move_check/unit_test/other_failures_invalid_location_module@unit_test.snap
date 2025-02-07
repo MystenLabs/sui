@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/unit_test/other_failures_invalid_location_module.move
 ---
 error[E03002]: unbound module
   ┌─ tests/move_check/unit_test/other_failures_invalid_location_module.move:6:51

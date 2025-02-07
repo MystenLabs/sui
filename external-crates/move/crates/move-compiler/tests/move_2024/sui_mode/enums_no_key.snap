@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/sui_mode/enums_no_key.move
 ---
 error[Sui E02007]: invalid object declaration
   ┌─ tests/move_2024/sui_mode/enums_no_key.move:3:17

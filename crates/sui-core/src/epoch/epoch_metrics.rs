@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use prometheus::{
+    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
+    Registry,
+};
 use std::sync::Arc;
 
 pub struct EpochMetrics {
@@ -98,6 +101,12 @@ pub struct EpochMetrics {
     /// The amount of time taken to complete first phase of the random beacon DKG protocol,
     /// at which point the node has submitted a DKG Confirmation, for the most recent epoch.
     pub epoch_random_beacon_dkg_confirmation_time_ms: IntGauge,
+
+    /// The number of execution time observations messages shared by this node.
+    pub epoch_execution_time_observations_shared: IntCounter,
+
+    /// The number of execution time observations dropped due to backpressure from the observer.
+    pub epoch_execution_time_observations_dropped: IntCounter,
 }
 
 impl EpochMetrics {
@@ -213,6 +222,18 @@ impl EpochMetrics {
             epoch_random_beacon_dkg_confirmation_time_ms: register_int_gauge_with_registry!(
                 "epoch_random_beacon_dkg_confirmation_time_ms",
                 "The amount of time taken to complete first phase of the random beacon DKG protocol, at which point the node has submitted a DKG Confirmation, for the most recent epoch",
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observations_shared: register_int_counter_with_registry!(
+                "epoch_execution_time_observations_shared",
+                "The number of execution time observations messages shared by this node",
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observations_dropped: register_int_counter_with_registry!(
+                "epoch_execution_time_observations_dropped",
+                "The number of execution time observations dropped due to backpressure from the observer",
                 registry
             )
             .unwrap(),

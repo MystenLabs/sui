@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/unused_struct_field.move
 ---
 warning[W09009]: unused struct field
    ┌─ tests/move_check/typing/unused_struct_field.move:13:9

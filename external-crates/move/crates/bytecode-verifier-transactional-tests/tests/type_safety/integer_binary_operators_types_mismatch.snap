@@ -1,0 +1,1915 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/integer_binary_operators_types_mismatch.mvir
+---
+processed 191 tasks
+
+task 0, lines 1-13:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 1, lines 15-24:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 2, lines 26-35:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 3, lines 37-46:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 4, lines 48-57:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 5, lines 59-68:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 6, lines 70-79:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 7, lines 81-90:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 8, lines 92-101:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 9, lines 103-112:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 10, lines 114-123:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 11, lines 125-134:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 12, lines 136-144:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 13, lines 146-154:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 14, lines 156-168:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 15, lines 169-178:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 16, lines 180-189:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 17, lines 191-200:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 18, lines 202-211:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 19, lines 213-222:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 20, lines 224-233:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 21, lines 235-244:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 22, lines 246-255:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 23, lines 257-266:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 24, lines 268-277:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 25, lines 279-288:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 26, lines 290-299:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 27, lines 301-309:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 28, lines 311-319:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 29, lines 321-333:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 30, lines 334-343:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 31, lines 345-354:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 32, lines 356-365:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 33, lines 367-376:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 34, lines 378-387:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 35, lines 389-398:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 36, lines 400-409:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 37, lines 411-420:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 38, lines 422-431:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 39, lines 433-442:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 40, lines 444-453:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 41, lines 455-464:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 42, lines 466-474:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 43, lines 476-484:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 44, lines 486-498:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 45, lines 499-508:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 46, lines 510-519:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 47, lines 521-530:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 48, lines 532-541:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 49, lines 543-552:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 50, lines 554-563:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 51, lines 565-574:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 52, lines 576-585:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 53, lines 587-596:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 54, lines 598-607:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 55, lines 609-618:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 56, lines 620-629:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 57, lines 631-639:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 58, lines 641-649:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 59, lines 651-663:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 60, lines 664-673:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 61, lines 675-684:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 62, lines 686-695:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 63, lines 697-706:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 64, lines 708-717:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 65, lines 719-728:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 66, lines 730-739:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 67, lines 741-750:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 68, lines 752-761:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 69, lines 763-772:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 70, lines 774-783:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 71, lines 785-794:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 72, lines 796-804:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 73, lines 806-814:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 74, lines 816-828:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 75, lines 829-838:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 76, lines 840-849:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 77, lines 851-860:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 78, lines 862-871:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 79, lines 873-882:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 80, lines 884-893:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 81, lines 895-904:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 82, lines 906-915:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 83, lines 917-926:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 84, lines 928-937:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 85, lines 939-948:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 86, lines 950-959:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 87, lines 961-969:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 88, lines 971-979:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 89, lines 981-993:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 90, lines 994-1003:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 91, lines 1005-1014:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 92, lines 1016-1025:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 93, lines 1027-1036:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 94, lines 1038-1047:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 95, lines 1049-1058:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 96, lines 1060-1069:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 97, lines 1071-1080:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 98, lines 1082-1091:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 99, lines 1093-1102:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 100, lines 1104-1113:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 101, lines 1115-1124:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 102, lines 1126-1134:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 103, lines 1136-1144:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 104, lines 1146-1158:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 105, lines 1159-1168:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 106, lines 1170-1179:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 107, lines 1181-1190:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 108, lines 1192-1201:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 109, lines 1203-1212:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 110, lines 1214-1223:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 111, lines 1225-1234:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 112, lines 1236-1245:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 113, lines 1247-1256:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 114, lines 1258-1267:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 115, lines 1269-1277:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 116, lines 1279-1290:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 117, lines 1291-1300:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 118, lines 1302-1311:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 119, lines 1313-1322:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 120, lines 1324-1333:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 121, lines 1335-1344:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 122, lines 1346-1355:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 123, lines 1357-1366:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 124, lines 1368-1377:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 125, lines 1379-1388:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 126, lines 1390-1399:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 127, lines 1401-1409:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 128, lines 1411-1423:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 129, lines 1424-1433:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 130, lines 1435-1444:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 131, lines 1446-1455:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 132, lines 1457-1466:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 133, lines 1468-1477:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 134, lines 1479-1488:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 135, lines 1490-1499:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 136, lines 1501-1510:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 137, lines 1512-1521:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 138, lines 1523-1534:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 139, lines 1535-1544:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 140, lines 1546-1555:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 141, lines 1557-1566:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 142, lines 1568-1577:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 143, lines 1579-1588:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 144, lines 1590-1599:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 145, lines 1601-1610:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 146, lines 1612-1621:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 147, lines 1623-1632:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 148, lines 1634-1645:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 149, lines 1646-1655:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 150, lines 1657-1666:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 151, lines 1668-1677:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 152, lines 1679-1688:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 153, lines 1690-1699:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 154, lines 1701-1710:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 155, lines 1712-1721:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 156, lines 1723-1732:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 157, lines 1734-1743:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 158, lines 1745-1756:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 159, lines 1757-1766:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 160, lines 1768-1777:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 161, lines 1779-1788:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 162, lines 1790-1799:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 163, lines 1801-1810:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 164, lines 1812-1821:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 165, lines 1823-1832:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 166, lines 1834-1843:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 167, lines 1845-1854:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 168, lines 1856-1867:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 169, lines 1868-1877:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 170, lines 1879-1888:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 171, lines 1890-1899:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 172, lines 1901-1910:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 173, lines 1912-1921:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 174, lines 1923-1932:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 175, lines 1934-1943:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 176, lines 1945-1954:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 177, lines 1956-1964:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 178, lines 1966-1974:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 179, lines 1976-1988:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 180, lines 1989-1998:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 181, lines 2000-2009:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 182, lines 2011-2020:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 183, lines 2022-2031:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 184, lines 2033-2042:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 185, lines 2044-2053:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 186, lines 2055-2064:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 187, lines 2066-2075:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 188, lines 2077-2085:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 189, lines 2087-2095:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 190, lines 2097-2105:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: INTEGER_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}

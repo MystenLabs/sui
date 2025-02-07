@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/continue_any_type.move
 ---
 warning[W09005]: dead or unreachable code
   ┌─ tests/move_check/typing/continue_any_type.move:6:17

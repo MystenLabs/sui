@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/declare_duplicate_binding.move
 ---
 warning[W09002]: unused variable
   ┌─ tests/move_check/typing/declare_duplicate_binding.move:5:14

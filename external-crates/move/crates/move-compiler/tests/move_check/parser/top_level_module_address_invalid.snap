@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/top_level_module_address_invalid.move
 ---
 error[E02004]: invalid 'module' declaration
   ┌─ tests/move_check/parser/top_level_module_address_invalid.move:2:12

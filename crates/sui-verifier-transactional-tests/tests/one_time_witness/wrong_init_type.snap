@@ -1,0 +1,9 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 6-17:
+//# publish
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("init function of a module containing one-time witness type candidate must have _::m::M as the first parameter (a struct which has no fields or a single field of type bool)"), command: Some(0) } }

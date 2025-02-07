@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/expansion/or_pat_mutability_mismatch.move
 ---
 error[E03019]: invalid pattern
   ┌─ tests/move_2024/expansion/or_pat_mutability_mismatch.move:9:18

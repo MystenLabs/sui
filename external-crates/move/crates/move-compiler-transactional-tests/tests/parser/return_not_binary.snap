@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-compiler-transactional-tests/tests/parser/return_not_binary.move
 ---
 processed 3 tasks
 

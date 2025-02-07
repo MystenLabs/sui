@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: true
-input_file: crates/move-compiler/tests/sui_mode/linter/custom_state_change.move
 ---
 warning[Lint W99002]: potentially unenforceable custom transfer/share/freeze policy
    ┌─ tests/sui_mode/linter/custom_state_change.move:15:16

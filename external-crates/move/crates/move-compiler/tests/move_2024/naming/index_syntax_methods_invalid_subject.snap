@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/naming/index_syntax_methods_invalid_subject.move
 ---
 error[E02015]: invalid attribute
   ┌─ tests/move_2024/naming/index_syntax_methods_invalid_subject.move:5:14

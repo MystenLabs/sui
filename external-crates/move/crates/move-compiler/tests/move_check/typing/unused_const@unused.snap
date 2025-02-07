@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/unused_const.move
 ---
 warning[W09011]: unused constant
   ┌─ tests/move_check/typing/unused_const.move:2:11

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/typing/syntax_methods_args_invalid.move
 ---
 error[E04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:7:39

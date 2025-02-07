@@ -1,0 +1,307 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, line 13:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, line 15:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 3, line 17:
+//# advance-epoch
+Epoch advanced: 0
+
+task 4, lines 19-34:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 3
+    },
+    "epoch": {
+      "epochId": 0,
+      "checkpoints": {
+        "nodes": [
+          {
+            "sequenceNumber": 0
+          },
+          {
+            "sequenceNumber": 1
+          },
+          {
+            "sequenceNumber": 2
+          },
+          {
+            "sequenceNumber": 3
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 5, line 36:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 6, line 38:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 7, line 40:
+//# create-checkpoint
+Checkpoint created: 6
+
+task 8, line 42:
+//# advance-epoch
+Epoch advanced: 1
+
+task 9, line 44:
+//# create-checkpoint
+Checkpoint created: 8
+
+task 10, line 46:
+//# create-checkpoint
+Checkpoint created: 9
+
+task 11, lines 48-87:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 9
+    },
+    "epoch_0": {
+      "epochId": 0,
+      "checkpoints": {
+        "edges": [
+          {
+            "cursor": "eyJjIjo5LCJzIjowfQ",
+            "node": {
+              "sequenceNumber": 0
+            }
+          },
+          {
+            "cursor": "eyJjIjo5LCJzIjoxfQ",
+            "node": {
+              "sequenceNumber": 1
+            }
+          },
+          {
+            "cursor": "eyJjIjo5LCJzIjoyfQ",
+            "node": {
+              "sequenceNumber": 2
+            }
+          },
+          {
+            "cursor": "eyJjIjo5LCJzIjozfQ",
+            "node": {
+              "sequenceNumber": 3
+            }
+          }
+        ]
+      }
+    },
+    "epoch_1": {
+      "epochId": 1,
+      "checkpoints": {
+        "edges": [
+          {
+            "cursor": "eyJjIjo5LCJzIjo0fQ",
+            "node": {
+              "sequenceNumber": 4
+            }
+          },
+          {
+            "cursor": "eyJjIjo5LCJzIjo1fQ",
+            "node": {
+              "sequenceNumber": 5
+            }
+          },
+          {
+            "cursor": "eyJjIjo5LCJzIjo2fQ",
+            "node": {
+              "sequenceNumber": 6
+            }
+          },
+          {
+            "cursor": "eyJjIjo5LCJzIjo3fQ",
+            "node": {
+              "sequenceNumber": 7
+            }
+          }
+        ]
+      }
+    },
+    "epoch_2": {
+      "epochId": 2,
+      "checkpoints": {
+        "edges": [
+          {
+            "cursor": "eyJjIjo5LCJzIjo4fQ",
+            "node": {
+              "sequenceNumber": 8
+            }
+          },
+          {
+            "cursor": "eyJjIjo5LCJzIjo5fQ",
+            "node": {
+              "sequenceNumber": 9
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 12, line 89:
+//# create-checkpoint
+Checkpoint created: 10
+
+task 13, lines 91-122:
+//# run-graphql --cursors {"s":3,"c":4} {"s":7,"c":8} {"s":9,"c":10}
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 10
+    },
+    "epoch_0": {
+      "epochId": 0,
+      "checkpoints": {
+        "nodes": [
+          {
+            "sequenceNumber": 0
+          },
+          {
+            "sequenceNumber": 1
+          },
+          {
+            "sequenceNumber": 2
+          }
+        ]
+      }
+    },
+    "epoch_1": {
+      "epochId": 1,
+      "checkpoints": {
+        "nodes": [
+          {
+            "sequenceNumber": 4
+          },
+          {
+            "sequenceNumber": 5
+          },
+          {
+            "sequenceNumber": 6
+          }
+        ]
+      }
+    },
+    "epoch_2": {
+      "epochId": 2,
+      "checkpoints": {
+        "nodes": [
+          {
+            "sequenceNumber": 8
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 14, lines 124-155:
+//# run-graphql --cursors {"s":0,"c":3} {"s":4,"c":7} {"s":8,"c":9}
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 10
+    },
+    "epoch_0": {
+      "epochId": 0,
+      "checkpoints": {
+        "nodes": [
+          {
+            "sequenceNumber": 1
+          },
+          {
+            "sequenceNumber": 2
+          },
+          {
+            "sequenceNumber": 3
+          }
+        ]
+      }
+    },
+    "epoch_1": {
+      "epochId": 1,
+      "checkpoints": {
+        "nodes": [
+          {
+            "sequenceNumber": 5
+          },
+          {
+            "sequenceNumber": 6
+          },
+          {
+            "sequenceNumber": 7
+          }
+        ]
+      }
+    },
+    "epoch_2": {
+      "epochId": 2,
+      "checkpoints": {
+        "nodes": [
+          {
+            "sequenceNumber": 9
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 15, lines 157-188:
+//# run-graphql --cursors {"s":1,"c":2} {"s":5,"c":6} {"s":9,"c":9}
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 10
+    },
+    "epoch_0": {
+      "epochId": 0,
+      "checkpoints": {
+        "nodes": [
+          {
+            "sequenceNumber": 2
+          }
+        ]
+      }
+    },
+    "epoch_1": {
+      "epochId": 1,
+      "checkpoints": {
+        "nodes": [
+          {
+            "sequenceNumber": 6
+          }
+        ]
+      }
+    },
+    "epoch_2": {
+      "epochId": 2,
+      "checkpoints": {
+        "nodes": []
+      }
+    }
+  }
+}

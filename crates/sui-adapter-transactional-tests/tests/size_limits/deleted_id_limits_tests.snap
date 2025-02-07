@@ -1,0 +1,35 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+task 1, lines 8-32:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5259200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 33-35:
+//# run Test::M1::delete_n_ids --args 1 --gas-budget 100000000000000
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 36-38:
+//# run Test::M1::delete_n_ids --args 256 --gas-budget 100000000000000
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 39-41:
+//# run Test::M1::delete_n_ids --args 2048 --gas-budget 100000000000000
+mutated: object(0,0)
+gas summary: computation_cost: 19000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 42-44:
+//# run Test::M1::delete_n_ids --args 2049 --gas-budget 100000000000000
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::tx_context::derive_id (function index 6) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("tx_context") }, function: 6, instruction: 0, function_name: Some("derive_id") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(2), message: Some("Creating more than 2048 IDs is not allowed"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("tx_context") }), indices: [], offsets: [(FunctionDefinitionIndex(6), 0)] }), command: Some(0) } }
+
+task 6, line 45:
+//# run Test::M1::delete_n_ids --args 4096 --gas-budget 100000000000000
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::tx_context::derive_id (function index 6) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("tx_context") }, function: 6, instruction: 0, function_name: Some("derive_id") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(2), message: Some("Creating more than 2048 IDs is not allowed"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("tx_context") }), indices: [], offsets: [(FunctionDefinitionIndex(6), 0)] }), command: Some(0) } }

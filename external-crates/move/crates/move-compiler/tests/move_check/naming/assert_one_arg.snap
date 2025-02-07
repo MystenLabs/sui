@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/naming/assert_one_arg.move
 ---
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/naming/assert_one_arg.move:3:9

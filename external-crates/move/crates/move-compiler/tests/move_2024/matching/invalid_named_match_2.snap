@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: 2024.alpha
   lint: false
-input_file: crates/move-compiler/tests/move_2024/matching/invalid_named_match_2.move
 ---
 error[E03013]: positional call mismatch
   ┌─ tests/move_2024/matching/invalid_named_match_2.move:9:13

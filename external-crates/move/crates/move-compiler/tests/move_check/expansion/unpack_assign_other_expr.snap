@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/unpack_assign_other_expr.move
 ---
 error[E03013]: positional call mismatch
   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9

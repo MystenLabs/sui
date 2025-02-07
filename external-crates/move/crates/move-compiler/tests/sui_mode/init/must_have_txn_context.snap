@@ -4,7 +4,6 @@ info:
   flavor: sui
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/sui_mode/init/must_have_txn_context.move
 ---
 error[Sui E02003]: invalid 'init' function
   ┌─ tests/sui_mode/init/must_have_txn_context.move:3:9

@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/restricted_address_names.move
 ---
 error[E03011]: invalid use of reserved name
   ┌─ tests/move_check/expansion/restricted_address_names.move:1:8

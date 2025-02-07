@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/expansion/constant_invalid_names.move
 ---
 error[E02010]: invalid name
   ┌─ tests/move_check/expansion/constant_invalid_names.move:3:11

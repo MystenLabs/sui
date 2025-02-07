@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-vm-transactional-tests/tests/enums/mono/enum_decl_monomorphic_fail_unpack.mvir
 ---
 processed 2 tasks
 

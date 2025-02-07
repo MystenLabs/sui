@@ -1,0 +1,39 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-18:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5403600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 20-24:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::r();
+//> 1: test::m1::r();
+//> 2: test::m1::r();
+//> TransferObjects([Result(0), Result(1), Result(2)], Input(0))
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 26-29:
+//# programmable --sender A --inputs object(2,0) object(2,1) object(2,2)
+//> 0: test::m1::dirty(Input(2));
+//> 1: MakeMoveVec([Input(0), Input(1), Input(2)]);
+//> test::m1::priv(Result(1))
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(2) } }
+
+task 4, lines 31-34:
+//# programmable --sender A --inputs 0 0 0
+//> 0: test::m1::dirty_u64(Input(1));
+//> 1: MakeMoveVec<u64>([Input(0), Input(1), Input(2)]);
+//> test::m1::priv(Result(1))
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(2) } }

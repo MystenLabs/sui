@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/ability_modifier_postfix_no_semi.move
 ---
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/ability_modifier_postfix_no_semi.move:5:19

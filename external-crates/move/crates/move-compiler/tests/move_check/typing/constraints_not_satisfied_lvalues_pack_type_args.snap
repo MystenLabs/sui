@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/typing/constraints_not_satisfied_lvalues_pack_type_args.move
 ---
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/constraints_not_satisfied_lvalues_pack_type_args.move:8:15

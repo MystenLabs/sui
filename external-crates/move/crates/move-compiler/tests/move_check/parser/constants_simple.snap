@@ -4,7 +4,6 @@ info:
   flavor: core
   edition: legacy
   lint: false
-input_file: crates/move-compiler/tests/move_check/parser/constants_simple.move
 ---
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_check/parser/constants_simple.move:5:21

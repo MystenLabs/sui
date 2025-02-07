@@ -1,5 +1,4 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/move-compiler-transactional-tests/tests/evaluation_order/short_circuiting.move
 ---
 processed 2 tasks
