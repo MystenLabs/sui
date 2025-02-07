@@ -7,7 +7,6 @@ use std::{
     any::TypeId,
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
-    ops::{Deref, DerefMut},
     rc::Rc,
 };
 
@@ -38,19 +37,6 @@ impl<'a, T: Tid<'a>> NativeContextMut<'a, T> {
 
     pub fn into_inner(self) -> T {
         self.0.into_inner()
-    }
-}
-
-impl<'a, T: Tid<'a>> Deref for NativeContextMut<'a, T> {
-    type Target = RefCell<T>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<'a, T: Tid<'a>> DerefMut for NativeContextMut<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
