@@ -1,7 +1,7 @@
 {
   "3": {
     "git_revision": "de632da6adf673d746155a1624c60a761567c215",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"}
@@ -9,7 +9,7 @@
   },
   "4": {
     "git_revision": "f5d26f1b3ae89f68cb66f3a007e90065e5286905",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"}
@@ -17,7 +17,7 @@
   },
   "5": {
     "git_revision": "3a70c4374090b020b95465787f3220a95d8ab0ba",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -26,7 +26,7 @@
   },
   "6": {
     "git_revision": "b7f6c8e5fcc73eb85ce230e3a9d490366daedefe",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -35,7 +35,7 @@
   },
   "7": {
     "git_revision": "16e0132840a6b77a7077feb0df99b07cf3bd0a69",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -44,7 +44,7 @@
   },
   "8": {
     "git_revision": "415994bf864c634680bcc89c7de9ee9fa10715b3",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -53,7 +53,7 @@
   },
   "9": {
     "git_revision": "09b2081498366df936abae26eea4b2d5cafb2788",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -62,7 +62,7 @@
   },
   "10": {
     "git_revision": "e4fe9f5ed5e240a718571f23bc75e12e60445288",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -71,7 +71,7 @@
   },
   "11": {
     "git_revision": "2e08ae862d",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -80,7 +80,7 @@
   },
   "12": {
     "git_revision": "f652942f12",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -89,7 +89,7 @@
   },
   "13": {
     "git_revision": "434eb193a1",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -98,7 +98,7 @@
   },
   "14": {
     "git_revision": "a2af559f9e",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -107,7 +107,7 @@
   },
   "15": {
     "git_revision": "1d1c34fa30",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -116,7 +116,7 @@
   },
   "16": {
     "git_revision": "0f31634377",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -125,7 +125,7 @@
   },
   "17": {
     "git_revision": "a26be77372",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -134,7 +134,7 @@
   },
   "18": {
     "git_revision": "1828bbd10",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -143,7 +143,7 @@
   },
   "19": {
     "git_revision": "ee604ddd81",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -152,7 +152,7 @@
   },
   "20": {
     "git_revision": "c42fe84a5",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -161,7 +161,7 @@
   },
   "21": {
     "git_revision": "77a9e0d24e",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -170,7 +170,7 @@
   },
   "22": {
     "git_revision": "a83e5ac1fa",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -179,7 +179,7 @@
   },
   "23": {
     "git_revision": "f217258725",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -188,7 +188,7 @@
   },
   "24": {
     "git_revision": "d5e5d34d1",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -197,7 +197,7 @@
   },
   "25": {
     "git_revision": "a0e136a04",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -206,7 +206,7 @@
   },
   "26": {
     "git_revision": "f82b8f7a5",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -215,7 +215,7 @@
   },
   "27": {
     "git_revision": "a30c6a42ec",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -224,7 +224,7 @@
   },
   "28": {
     "git_revision": "3c826825fc",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -233,7 +233,7 @@
   },
   "30": {
     "git_revision": "4922d58a26",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -242,7 +242,7 @@
   },
   "31": {
     "git_revision": "ac208a8cb1",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -251,12 +251,12 @@
   },
   "32": {
     "git_revision": "4927dc9a38",
-    "package_ids": [
+    "packages": [
     ]
   },
   "33": {
     "git_revision": "31b226d161",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -265,7 +265,7 @@
   },
   "34": {
     "git_revision": "66b3329fda",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -274,7 +274,7 @@
   },
   "35": {
     "git_revision": "0a8dc2df9d",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -283,7 +283,7 @@
   },
   "36": {
     "git_revision": "bbc6060313",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -292,7 +292,7 @@
   },
   "37": {
     "git_revision": "417671d496",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -301,7 +301,7 @@
   },
   "38": {
     "git_revision": "95b939eb76",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -310,7 +310,7 @@
   },
   "39": {
     "git_revision": "3c33da179c",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -319,7 +319,7 @@
   },
   "40": {
     "git_revision": "4e759d9b48",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -328,7 +328,7 @@
   },
   "42": {
     "git_revision": "404b5aa266",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -337,7 +337,7 @@
   },
   "43": {
     "git_revision": "127f2cb316",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -346,7 +346,7 @@
   },
   "44": {
     "git_revision": "a7b644cc47",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -355,7 +355,7 @@
   },
   "45": {
     "git_revision": "180aae21da3a",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -365,7 +365,7 @@
   },
   "47": {
     "git_revision": "b0138f3e7f21",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -375,7 +375,7 @@
   },
   "48": {
     "git_revision": "dedfac760bc7",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -385,7 +385,7 @@
   },
   "49": {
     "git_revision": "50d489d4bf4a",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -395,7 +395,7 @@
   },
   "51": {
     "git_revision": "07501cae5293",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -405,7 +405,7 @@
   },
   "52": {
     "git_revision": "b608337971ee",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -415,7 +415,7 @@
   },
   "53": {
     "git_revision": "e2aab492da81",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -425,7 +425,7 @@
   },
   "54": {
     "git_revision": "3f4cab62afbf",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -435,7 +435,7 @@
   },
   "55": {
     "git_revision": "e19a8015fb45",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -445,7 +445,7 @@
   },
   "58": {
     "git_revision": "2b3991a841ce",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -455,7 +455,7 @@
   },
   "60": {
     "git_revision": "dcdf415602dd",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -465,7 +465,7 @@
   },
   "62": {
     "git_revision": "bfe1c64a258c",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -475,7 +475,7 @@
   },
   "65": {
     "git_revision": "3e8d2312106e",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -485,7 +485,7 @@
   },
   "66": {
     "git_revision": "86fa6e86b62a",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -495,7 +495,7 @@
   },
   "67": {
     "git_revision": "3ada97c109cc",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -505,7 +505,7 @@
   },
   "68": {
     "git_revision": "ef0d78c638e3",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -515,7 +515,7 @@
   },
   "69": {
     "git_revision": "5d70ec6f5d4b",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -525,7 +525,7 @@
   },
   "70": {
     "git_revision": "31775158335a",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -535,7 +535,7 @@
   },
   "71": {
     "git_revision": "ea3d71eb4d92",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "id": "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "id": "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "id": "0x0000000000000000000000000000000000000000000000000000000000000003"},
@@ -545,7 +545,7 @@
   },
   "72": {
     "git_revision": "acd6152865be",
-    "package_ids": [
+    "packages": [
       {"name": "MoveStdLib", "path": "crates/sui-framework/packages/move-stdlib", "0x0000000000000000000000000000000000000000000000000000000000000001"},
       {"name": "Sui", "path": "crates/sui-framework/packages/sui-framework", "0x0000000000000000000000000000000000000000000000000000000000000002"},
       {"name": "SuiSystem", "path": "crates/sui-framework/packages/sui-system", "0x0000000000000000000000000000000000000000000000000000000000000003"},
