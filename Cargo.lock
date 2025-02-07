@@ -6553,9 +6553,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.64"
+version = "0.3.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5f195fe497f702db0f318b07fdd68edb16955aed830df8363d837542f8f935a"
+checksum = "1868808506b929d7b0cfa8f75951347aa71bb21144b7791bae35d9bccfcfe37a"
 dependencies = [
  "wasm-bindgen",
 ]
@@ -9812,9 +9812,9 @@ checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
 
 [[package]]
 name = "plotters"
-version = "0.3.4"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2538b639e642295546c50fcd545198c9d64ee2a38620a628724a3b266d5fbf97"
+checksum = "5aeb6f403d7a4911efb1e33402027fc44f29b5bf6def3effcc22d7bb75f2b747"
 dependencies = [
  "num-traits",
  "plotters-backend",
@@ -9825,15 +9825,15 @@ dependencies = [
 
 [[package]]
 name = "plotters-backend"
-version = "0.3.4"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "193228616381fecdc1224c62e96946dfbc73ff4384fba576e052ff8c1bea8142"
+checksum = "df42e13c12958a16b3f7f4386b9ab1f3e7933914ecea48da7139435263a4172a"
 
 [[package]]
 name = "plotters-svg"
-version = "0.3.3"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9a81d2759aae1dae668f783c308bc5c8ebd191ff4184aaa1b37f65a6ae5a56f"
+checksum = "51bae2ac328883f7acdfea3d66a7c35751187f870bc81f94563733a154d7a670"
 dependencies = [
  "plotters-backend",
 ]
@@ -18018,9 +18018,9 @@ dependencies = [
 
 [[package]]
 name = "web-sys"
-version = "0.3.64"
+version = "0.3.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b85cbef8c220a6abc02aefd892dfc0fc23afb1c6a426316ec33253a3877249b"
+checksum = "26fdeaafd9bd129f65e7c031593c24d62186301e0c72c8978fa1678be7d532c0"
 dependencies = [
  "js-sys",
  "wasm-bindgen",

@@ -10,7 +10,7 @@ publish = false
 name = "consensus_core"
 
 [[bin]]
-name = "dag_analyzer"
+name = "dag-analyzer"
 path = "src/dag_analyzer/main.rs"
 
 [lints]

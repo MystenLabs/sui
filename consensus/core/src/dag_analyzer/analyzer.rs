@@ -6,7 +6,7 @@ use std::sync::Arc;
 use consensus_config::AuthorityIndex;
 use futures::future::try_join_all;
 
-use super::metrics::DagAnalysisMetrics;
+use super::metrics::{DagAnalysisMetrics, MetricsCollection};
 use crate::{
     block::BlockAPI,
     storage::{rocksdb_store::RocksDBStore, Store},
@@ -14,11 +14,11 @@ use crate::{
 
 pub async fn read() {
     // The path to the consensus database
-    let path = "core/assets/consensus_db/648";
+    let path = "core/assets/consensus_db/testnet-630";
     // The number of rounds to scan (starting from the last round of the epoch)
     let total_rounds = 10_000;
     // The maximum number of authorities.
-    let max_authorities = 110;
+    let max_authorities = 115;
 
     let store = Arc::new(RocksDBStore::new(path));
 
@@ -27,11 +27,11 @@ pub async fn read() {
             let store = store.clone();
             tokio::spawn(async move {
                 let authority = AuthorityIndex::new_for_test(i);
-                let mut metrics = DagAnalysisMetrics::new(authority);
+                let mut metrics = DagAnalysisMetrics::new(authority, max_authorities as usize);
                 let Ok(blocks) = store.scan_last_blocks_by_author(authority, total_rounds, None)
                 else {
                     tracing::warn!("No blocks readable for authority {authority}, skipping");
-                    return;
+                    return metrics;
                 };
 
                 for block in blocks {
@@ -44,10 +44,13 @@ pub async fn read() {
                     }
                 }
 
-                metrics.print_summary();
+                metrics
             })
         })
         .collect();
 
-    try_join_all(handles).await.unwrap();
+    let all_metrics = try_join_all(handles).await.unwrap();
+    let collection = MetricsCollection::new(all_metrics);
+    collection.print_average_parents_per_round().unwrap();
+    collection.print_peer_connections().unwrap();
 }
