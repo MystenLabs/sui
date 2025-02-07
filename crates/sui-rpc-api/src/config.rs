@@ -4,12 +4,6 @@
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
-    /// Enable the experimental REST api
-    ///
-    /// Defaults to `false`
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enable_experimental_rest_api: Option<bool>,
-
     /// Enable indexing of transactions and objects
     ///
     /// This enables indexing of transactions and objects which allows for a slightly richer rpc
@@ -30,10 +24,6 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn enable_experimental_rest_api(&self) -> bool {
-        self.enable_experimental_rest_api.unwrap_or(false)
-    }
-
     pub fn enable_indexing(&self) -> bool {
         self.enable_indexing.unwrap_or(false)
     }

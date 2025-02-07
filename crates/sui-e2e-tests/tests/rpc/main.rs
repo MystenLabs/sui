@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod checkpoints;
+mod coin_info;
 mod committee;
 mod execute;
 mod node_info;

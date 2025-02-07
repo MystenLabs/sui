@@ -218,7 +218,6 @@ impl ValidatorConfigBuilder {
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: None,
             rpc: Some(sui_rpc_api::Config {
-                enable_experimental_rest_api: Some(true),
                 ..Default::default()
             }),
             jwk_fetch_interval_seconds: self
@@ -520,7 +519,6 @@ impl FullnodeConfigBuilder {
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: Default::default(),
             rpc: Some(sui_rpc_api::Config {
-                enable_experimental_rest_api: Some(true),
                 enable_indexing: Some(true),
                 ..Default::default()
             }),

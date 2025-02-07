@@ -61,7 +61,8 @@ use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transaction_executor::SimulateTransactionResult;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::sync::RwLock;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tracing::trace;
 use tracing::{debug, error, info, instrument, warn};
@@ -941,7 +942,7 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         // Ensure that validator cannot reconfigure while we are signing the tx
-        let _execution_lock = self.execution_lock_for_signing().await;
+        let _execution_lock = self.execution_lock_for_signing();
 
         let checked_input_objects =
             self.handle_transaction_deny_checks(&transaction, epoch_store)?;
@@ -964,14 +965,12 @@ impl AuthorityState {
         // The call to self.set_transaction_lock checks the lock is not conflicting,
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
-        self.get_cache_writer()
-            .acquire_transaction_locks(
-                epoch_store,
-                &owned_objects,
-                tx_digest,
-                signed_transaction.clone(),
-            )
-            .await?;
+        self.get_cache_writer().acquire_transaction_locks(
+            epoch_store,
+            &owned_objects,
+            tx_digest,
+            signed_transaction.clone(),
+        )?;
 
         Ok(signed_transaction)
     }
@@ -1226,7 +1225,7 @@ impl AuthorityState {
         let tx_digest = certificate.digest();
 
         // prevent concurrent executions of the same tx.
-        let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
+        let tx_guard = epoch_store.acquire_tx_guard(certificate)?;
 
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
@@ -1259,7 +1258,6 @@ impl AuthorityState {
                 expected_effects_digest,
                 epoch_store,
             )
-            .await
             .tap_err(|e| info!("process_certificate failed: {e}"))
             .tap_ok(
             |(fx, _, _)| debug!(?tx_digest, fx_digest=?fx.digest(), "process_certificate succeeded"),
@@ -1364,7 +1362,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub(crate) async fn process_certificate(
+    pub(crate) fn process_certificate(
         &self,
         tx_guard: CertTxGuard,
         certificate: &VerifiedExecutableTransaction,
@@ -1385,9 +1383,7 @@ impl AuthorityState {
             }
         });
 
-        let execution_guard = self
-            .execution_lock_for_executable_transaction(certificate)
-            .await;
+        let execution_guard = self.execution_lock_for_executable_transaction(certificate);
         // Any caller that verifies the signatures on the certificate will have already checked the
         // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
         // present the possibility of an epoch mismatch. If this cert is not finalzied in previous
@@ -1462,7 +1458,7 @@ impl AuthorityState {
             }
         }
 
-        fail_point_async!("crash");
+        fail_point!("crash");
 
         self.commit_certificate(
             certificate,
@@ -1471,8 +1467,7 @@ impl AuthorityState {
             tx_guard,
             execution_guard,
             epoch_store,
-        )
-        .await?;
+        )?;
 
         if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
             certificate.data().transaction_data().kind()
@@ -1515,7 +1510,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    async fn commit_certificate(
+    fn commit_certificate(
         &self,
         certificate: &VerifiedExecutableTransaction,
         inner_temporary_store: InnerTemporaryStore,
@@ -1538,7 +1533,6 @@ impl AuthorityState {
         // index certificate
         let _ = self
             .post_process_one_tx(certificate, effects, &inner_temporary_store, epoch_store)
-            .await
             .tap_err(|e| {
                 self.metrics.post_processing_total_failures.inc();
                 error!(?tx_digest, "tx post processing failed: {e}");
@@ -1549,23 +1543,21 @@ impl AuthorityState {
         epoch_store.insert_tx_key(&tx_key, tx_digest)?;
 
         // Allow testing what happens if we crash here.
-        fail_point_async!("crash");
+        fail_point!("crash");
 
         let transaction_outputs = TransactionOutputs::build_transaction_outputs(
             certificate.clone().into_unsigned(),
             effects.clone(),
             inner_temporary_store,
         );
-        self.get_cache_writer()
-            .write_transaction_outputs(
-                epoch_store.epoch(),
-                transaction_outputs.into(),
-                epoch_store
-                    .protocol_config()
-                    .use_object_per_epoch_marker_table_v2_as_option()
-                    .unwrap_or(false),
-            )
-            .await;
+        self.get_cache_writer().write_transaction_outputs(
+            epoch_store.epoch(),
+            transaction_outputs.into(),
+            epoch_store
+                .protocol_config()
+                .use_object_per_epoch_marker_table_v2_as_option()
+                .unwrap_or(false),
+        );
 
         if certificate.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force
@@ -1728,7 +1720,7 @@ impl AuthorityState {
         TransactionEffects,
         Option<ExecutionError>,
     )> {
-        let lock: RwLock<EpochId> = RwLock::new(epoch_store.epoch());
+        let lock = RwLock::new(epoch_store.epoch());
         let execution_guard = lock.try_read().unwrap();
 
         let (inner_temp_store, effects, _timings, execution_error_opt) =
@@ -1762,10 +1754,10 @@ impl AuthorityState {
         }
 
         self.dry_exec_transaction_impl(&epoch_store, transaction, transaction_digest)
-            .await
     }
 
-    pub async fn dry_exec_transaction_for_benchmark(
+    #[allow(clippy::type_complexity)]
+    pub fn dry_exec_transaction_for_benchmark(
         &self,
         transaction: TransactionData,
         transaction_digest: TransactionDigest,
@@ -1777,10 +1769,10 @@ impl AuthorityState {
     )> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         self.dry_exec_transaction_impl(&epoch_store, transaction, transaction_digest)
-            .await
     }
 
-    async fn dry_exec_transaction_impl(
+    #[allow(clippy::type_complexity)]
+    fn dry_exec_transaction_impl(
         &self,
         epoch_store: &AuthorityPerEpochStore,
         transaction: TransactionData,
@@ -2307,7 +2299,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all, err)]
-    async fn index_tx(
+    fn index_tx(
         &self,
         indexes: &IndexStore,
         digest: &TransactionDigest,
@@ -2324,34 +2316,32 @@ impl AuthorityState {
             .process_object_index(effects, written, inner_temporary_store)
             .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
-        indexes
-            .index_tx(
-                cert.data().intent_message().value.sender(),
-                cert.data()
-                    .intent_message()
-                    .value
-                    .input_objects()?
-                    .iter()
-                    .map(|o| o.object_id()),
-                effects
-                    .all_changed_objects()
-                    .into_iter()
-                    .map(|(obj_ref, owner, _kind)| (obj_ref, owner)),
-                cert.data()
-                    .intent_message()
-                    .value
-                    .move_calls()
-                    .into_iter()
-                    .map(|(package, module, function)| {
-                        (*package, module.to_owned(), function.to_owned())
-                    }),
-                events,
-                changes,
-                digest,
-                timestamp_ms,
-                tx_coins,
-            )
-            .await
+        indexes.index_tx(
+            cert.data().intent_message().value.sender(),
+            cert.data()
+                .intent_message()
+                .value
+                .input_objects()?
+                .iter()
+                .map(|o| o.object_id()),
+            effects
+                .all_changed_objects()
+                .into_iter()
+                .map(|(obj_ref, owner, _kind)| (obj_ref, owner)),
+            cert.data()
+                .intent_message()
+                .value
+                .move_calls()
+                .into_iter()
+                .map(|(package, module, function)| {
+                    (*package, module.to_owned(), function.to_owned())
+                }),
+            events,
+            changes,
+            digest,
+            timestamp_ms,
+            tx_coins,
+        )
     }
 
     #[cfg(msim)]
@@ -2608,7 +2598,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all, err)]
-    async fn post_process_one_tx(
+    fn post_process_one_tx(
         &self,
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
@@ -2640,7 +2630,6 @@ impl AuthorityState {
                     written,
                     inner_temporary_store,
                 )
-                .await
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"))
                 .expect("Indexing tx should not fail");
@@ -3120,11 +3109,14 @@ impl AuthorityState {
     /// Attempts to acquire execution lock for an executable transaction.
     /// Returns the lock if the transaction is matching current executed epoch
     /// Returns None otherwise
-    pub async fn execution_lock_for_executable_transaction(
+    pub fn execution_lock_for_executable_transaction(
         &self,
         transaction: &VerifiedExecutableTransaction,
     ) -> SuiResult<ExecutionLockReadGuard> {
-        let lock = self.execution_lock.read().await;
+        let lock = self
+            .execution_lock
+            .try_read()
+            .map_err(|_| SuiError::ValidatorHaltedAtEpochEnd)?;
         if *lock == transaction.auth_sig().epoch() {
             Ok(lock)
         } else {
@@ -3139,8 +3131,10 @@ impl AuthorityState {
     /// This prevents reconfiguration from starting until we are finished handling the signing request.
     /// Otherwise, in-memory lock state could be cleared (by `ObjectLocks::clear_cached_locks`)
     /// while we are attempting to acquire locks for the transaction.
-    pub async fn execution_lock_for_signing(&self) -> ExecutionLockReadGuard {
-        self.execution_lock.read().await
+    pub fn execution_lock_for_signing(&self) -> SuiResult<ExecutionLockReadGuard> {
+        self.execution_lock
+            .try_read()
+            .map_err(|_| SuiError::ValidatorHaltedAtEpochEnd)
     }
 
     pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
@@ -5075,7 +5069,7 @@ impl AuthorityState {
         );
 
         fail_point_async!("change_epoch_tx_delay");
-        let tx_lock = epoch_store.acquire_tx_lock(tx_digest).await;
+        let tx_lock = epoch_store.acquire_tx_lock(tx_digest);
 
         // The tx could have been executed by state sync already - if so simply return an error.
         // The checkpoint builder will shortly be terminated by reconfiguration anyway.
@@ -5089,18 +5083,14 @@ impl AuthorityState {
             ));
         }
 
-        let execution_guard = self
-            .execution_lock_for_executable_transaction(&executable_tx)
-            .await?;
+        let execution_guard = self.execution_lock_for_executable_transaction(&executable_tx)?;
 
         // We must manually assign the shared object versions to the transaction before executing it.
         // This is because we do not sequence end-of-epoch transactions through consensus.
-        epoch_store
-            .assign_shared_object_versions_idempotent(
-                self.get_object_cache_reader().as_ref(),
-                &[executable_tx.clone()],
-            )
-            .await?;
+        epoch_store.assign_shared_object_versions_idempotent(
+            self.get_object_cache_reader().as_ref(),
+            &[executable_tx.clone()],
+        )?;
 
         let input_objects =
             self.read_objects_for_execution(&tx_lock, &executable_tx, epoch_store)?;
