@@ -37,6 +37,6 @@ mod tests {
 
     #[test]
     fn package_version_works() {
-        assert_eq!(package_version!(), "0.0.1",);
+        assert_eq!(package_version!(), "0.0.1");
     }
 }
