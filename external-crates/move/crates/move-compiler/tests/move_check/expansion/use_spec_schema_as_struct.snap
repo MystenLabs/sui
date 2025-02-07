@@ -1,0 +1,29 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/expansion/use_spec_schema_as_struct.move:3:5
+  │  
+3 │ ╭     spec schema Foo<T> {
+4 │ │         ensures true;
+5 │ │     }
+  │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+error[E03003]: unbound module member
+  ┌─ tests/move_check/expansion/use_spec_schema_as_struct.move:9:17
+  │
+2 │ module X {
+  │        - Module '0x2::X' declared here
+  ·
+9 │     use 0x2::X::Foo;
+  │                 ^^^ Invalid 'use'. Unbound member 'Foo' in module '0x2::X'
+
+error[E03004]: unbound type
+   ┌─ tests/move_check/expansion/use_spec_schema_as_struct.move:10:14
+   │
+10 │     fun t(): Foo<u64> {
+   │              ^^^ Unbound type 'Foo' in current scope

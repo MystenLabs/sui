@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04010]: cannot infer type
+  ┌─ tests/move_2024/typing/type_hole_no_inferrence.move:3:23
+  │
+3 │         let _: vector<_> = vector[];
+  │                       ^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+  ┌─ tests/move_2024/typing/type_hole_no_inferrence.move:3:28
+  │
+3 │         let _: vector<_> = vector[];
+  │                            ^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+  ┌─ tests/move_2024/typing/type_hole_no_inferrence.move:4:13
+  │
+4 │         any<_>();
+  │             ^ Could not infer this type. Try adding an annotation

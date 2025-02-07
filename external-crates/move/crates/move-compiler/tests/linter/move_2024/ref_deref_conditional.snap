@@ -1,0 +1,119 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: true
+---
+error[E01003]: invalid modifier
+  ┌─ tests/linter/move_2024/ref_deref_conditional.move:3:1
+  │
+3 │ struct MyResource has copy, drop {
+  │ ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:10:17
+   │
+10 │     let _ref = &*&resource;  // Should be flagged
+   │                 ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:16:21
+   │
+16 │     let _ref = &mut *&resource;  // Should be flagged
+   │                     ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:22:17
+   │
+22 │     let _ref = &*&resource.value;  // Should be flagged
+   │                 ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:30:5
+   │
+28 │     let resource = MyResource { value: 10 };
+   │         -------- To use the variable mutably, it must be declared 'mut', e.g. 'mut resource'
+29 │     let ref1 = &resource;
+30 │     resource.value = 20;  // Modifying the resource
+   │     ^^^^^^^^^^^^^^ Invalid mutable borrow of immutable variable 'resource'
+
+error[E07002]: mutable ownership violated
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:30:5
+   │
+29 │     let ref1 = &resource;
+   │                --------- It is still being borrowed by this reference
+30 │     resource.value = 20;  // Modifying the resource
+   │     ^^^^^^^^^^^^^^ Invalid mutable borrow at field 'value'.
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:37:17
+   │
+37 │     let _ref = &*(&*&resource);  // Should be flagged
+   │                 ^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:37:20
+   │
+37 │     let _ref = &*(&*&resource);  // Should be flagged
+   │                    ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:50:17
+   │
+50 │     let _copy = *&resource;  // Should be flagged, making a copy
+   │                 ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:59:17
+   │
+59 │     let _ref = &*&get_resource();  // Should be flagged
+   │                 ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:64:17
+   │
+64 │     let _ref = &*&0;  // Should be flagged
+   │                 ^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:72:21
+   │
+72 │         let _ref = &*&resource;  // Should be flagged regardless
+   │                     ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:83:17
+   │
+83 │     let _ref = &*&E;  // Should be flagged
+   │                 ^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:88:17
+   │
+88 │     let _ref = &*&vector[1,2,3];  // Should be flagged
+   │                 ^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

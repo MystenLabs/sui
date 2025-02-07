@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03009]: unbound variable
+  ┌─ tests/move_check/parser/invalid_call_lhs_parens_around_name.move:3:10
+  │
+3 │         (foo)()
+  │          ^^^ Unbound variable 'foo'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/invalid_call_lhs_parens_around_name.move:3:14
+  │
+3 │         (foo)()
+  │              ^
+  │              │
+  │              Unexpected '('
+  │              Expected ';'

@@ -1,0 +1,65 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-44:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 19471200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 45-47:
+//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
+
+task 3, lines 48-50:
+//# run sui::coin::deny_list_v2_add --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 51, 57, 57, 50, 48, 100, 100, 53, 50, 49, 99, 56, 48, 55, 101, 54, 98, 97, 99, 54, 99, 56, 97, 98, 51, 52, 102, 54, 49, 52, 48, 54, 49, 49, 53, 56, 56, 56, 49, 57, 57, 55, 56, 56, 52, 52, 98, 52, 51, 53, 57, 52, 53, 56, 57, 100, 55, 102, 56, 56, 98, 100, 57, 57, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 79, 194, 17, 174, 74, 227, 253, 26, 173, 100, 153, 228, 250, 55, 174, 175, 17, 33, 34, 53, 27, 207, 230, 188, 240, 54, 6, 177, 124, 66, 182, 148] }
+created: object(3,0), object(3,1), object(3,2)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 12190400,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
+
+task 4, lines 51-53:
+//# run sui::coin::deny_list_v2_add --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
+
+task 5, lines 54-56:
+//# run test::regulated_coin::assert_address_deny_status --args immshared(0x403) @B true --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 57-59:
+//# transfer-object 2,0 --sender B --recipient A
+Error: Error checking transaction input objects: AddressDeniedForCoin { address: @B, coin_type: "object(1,0)::regulated_coin::REGULATED_COIN" }
+
+task 7, lines 60-62:
+//# run sui::pay::split_and_transfer --args object(2,0) 1 @A --type-args test::regulated_coin::REGULATED_COIN --sender B
+Error: Error checking transaction input objects: AddressDeniedForCoin { address: @B, coin_type: "object(1,0)::regulated_coin::REGULATED_COIN" }
+
+task 8, lines 63-65:
+//# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+deleted: object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 4400400,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
+
+task 9, lines 66-68:
+//# run test::regulated_coin::assert_address_deny_status --args immshared(0x403) @B false --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, line 69:
+//# transfer-object 2,0 --sender B --recipient A
+mutated: object(0,1), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 1459656, non_refundable_storage_fee: 14744

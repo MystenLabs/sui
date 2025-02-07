@@ -6,6 +6,7 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use arc_swap::ArcSwapOption;
 use enum_dispatch::enum_dispatch;
@@ -20,6 +21,7 @@ use itertools::{izip, Itertools};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
+use mysten_common::{debug_fatal, fatal};
 use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
 use parking_lot::RwLock;
@@ -50,14 +52,15 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
 };
+use sui_types::execution::ExecutionTiming;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
 };
 use sui_types::messages_consensus::{
     check_total_jwk_size, AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, ConsensusTransaction,
-    ConsensusTransactionKey, ConsensusTransactionKind, Round, TimestampMs,
-    VersionedDkgConfirmation,
+    ConsensusTransactionKey, ConsensusTransactionKind, ExecutionTimeObservation, Round,
+    TimestampMs, VersionedDkgConfirmation,
 };
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{BackingPackageStore, InputKey, ObjectStore};
@@ -65,18 +68,19 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
 use sui_types::transaction::{
-    AuthenticatorStateUpdate, CertifiedTransaction, InputObjectKind, SenderSignedData, Transaction,
-    TransactionDataAPI, TransactionKey, TransactionKind, VerifiedCertificate,
-    VerifiedSignedTransaction, VerifiedTransaction,
+    AuthenticatorStateUpdate, CallArg, CertifiedTransaction, InputObjectKind, ObjectArg,
+    ProgrammableTransaction, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
+    TransactionKey, TransactionKind, VerifiedCertificate, VerifiedSignedTransaction,
+    VerifiedTransaction,
 };
 use tap::TapOptional;
-use tokio::sync::OnceCell;
+use tokio::sync::{mpsc, OnceCell};
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::rocks::{read_size_from_env, ReadWriteOptions};
 use typed_store::rocksdb::Options;
 use typed_store::DBMapUtils;
-use typed_store::{retry_transaction_forever, Map};
+use typed_store::Map;
 use typed_store::{
     rocks::{default_db_options, DBBatch, DBMap, DBOptions, MetricConf},
     traits::{TableSummary, TypedStoreDebug},
@@ -85,6 +89,7 @@ use typed_store::{
 
 use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::epoch_start_configuration::EpochStartConfigTrait;
+use super::execution_time_estimator::ExecutionTimeEstimator;
 use super::shared_object_congestion_tracker::{
     CongestionPerObjectDebt, SharedObjectCongestionTracker,
 };
@@ -364,6 +369,8 @@ pub struct AuthorityPerEpochStore {
 
     /// MutexTable for transaction locks (prevent concurrent execution of same transaction)
     mutex_table: MutexTable<TransactionDigest>,
+    /// Mutex table for shared version assignment
+    version_assignment_mutex_table: MutexTable<ObjectID>,
 
     /// The moment when the current epoch started locally on this validator. Note that this
     /// value could be skewed if the node crashed and restarted in the middle of the epoch. That's
@@ -380,7 +387,6 @@ pub struct AuthorityPerEpochStore {
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
 
-    /// Chain identifier
     chain_identifier: ChainIdentifier,
 
     /// aggregator for JWK votes
@@ -389,6 +395,11 @@ pub struct AuthorityPerEpochStore {
     /// State machine managing randomness DKG and generation.
     randomness_manager: OnceCell<tokio::sync::Mutex<RandomnessManager>>,
     randomness_reporter: OnceCell<RandomnessReporter>,
+
+    /// Manages recording execution time observations and generating estimates.
+    execution_time_estimator: tokio::sync::Mutex<ExecutionTimeEstimator>,
+    tx_local_execution_time:
+        OnceCell<mpsc::Sender<(ProgrammableTransaction, Vec<ExecutionTiming>, Duration)>>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -961,7 +972,7 @@ impl AuthorityPerEpochStore {
 
         let s = Arc::new(Self {
             name,
-            committee,
+            committee: committee.clone(),
             protocol_config,
             tables: ArcSwapOption::new(Some(Arc::new(tables))),
             parent_path: parent_path.to_path_buf(),
@@ -981,6 +992,7 @@ impl AuthorityPerEpochStore {
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: RwLock::new(pending_consensus_certificates),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
+            version_assignment_mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
             epoch_open_time: current_time,
             epoch_close_time: Default::default(),
             metrics,
@@ -990,6 +1002,10 @@ impl AuthorityPerEpochStore {
             jwk_aggregator,
             randomness_manager: OnceCell::new(),
             randomness_reporter: OnceCell::new(),
+            execution_time_estimator: tokio::sync::Mutex::new(ExecutionTimeEstimator::new(
+                committee,
+            )),
+            tx_local_execution_time: OnceCell::new(),
         });
 
         s.update_buffer_stake_metric();
@@ -1224,6 +1240,52 @@ impl AuthorityPerEpochStore {
 
     pub fn executor(&self) -> &Arc<dyn Executor + Send + Sync> {
         &self.execution_component.executor
+    }
+
+    pub fn set_local_execution_time_channel(
+        &self,
+        tx_local_execution_time: mpsc::Sender<(
+            ProgrammableTransaction,
+            Vec<ExecutionTiming>,
+            Duration,
+        )>,
+    ) {
+        if let Err(e) = self.tx_local_execution_time.set(tx_local_execution_time) {
+            debug_fatal!(
+                "failed to set tx_local_execution_time channel on AuthorityPerEpochStore: {e:?}"
+            );
+        }
+    }
+
+    pub fn record_local_execution_time(
+        &self,
+        tx: &TransactionData,
+        timings: Vec<ExecutionTiming>,
+        total_duration: Duration,
+    ) {
+        let Some(tx_local_execution_time) = self.tx_local_execution_time.get() else {
+            // Drop observations if no ExecutionTimeObserver has been configured.
+            return;
+        };
+
+        // Only record timings for PTBs with shared inputs.
+        let TransactionKind::ProgrammableTransaction(ptb) = tx.kind() else {
+            return;
+        };
+        if !ptb
+            .inputs
+            .iter()
+            .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
+        {
+            return;
+        }
+
+        if let Err(e) = tx_local_execution_time.try_send((ptb.clone(), timings, total_duration)) {
+            // This channel should not overflow, but if it does, don't wait; just log an error
+            // and drop the observation.
+            self.metrics.epoch_execution_time_observations_dropped.inc();
+            warn!("failed to send local execution time to observer: {e}");
+        }
     }
 
     pub async fn acquire_tx_guard(
@@ -1694,92 +1756,91 @@ impl AuthorityPerEpochStore {
         objects_to_init: &[ConsensusObjectSequenceKey],
         cache_reader: &dyn ObjectCacheRead,
     ) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
-        let mut ret: HashMap<_, _>;
-        // Since this can be called from consensus task, we must retry forever - the only other
-        // option is to panic. It is extremely unlikely that more than 2 retries will be needed, as
-        // the only two writers are the consensus task and checkpoint execution.
-        retry_transaction_forever!({
-            // This code may still be correct without using a transaction snapshot, but I couldn't
-            // convince myself of that.
-            let tables = self.tables()?;
-            let mut db_transaction = tables.next_shared_object_versions.transaction()?;
+        // get_or_init_next_object_versions can be called
+        // from consensus or checkpoint executor,
+        // so we need to protect version assignment with a critical section
+        let _locks = self
+            .version_assignment_mutex_table
+            .acquire_locks(objects_to_init.iter().map(|(id, _)| *id))
+            .await;
+        let tables = self.tables()?;
 
-            let next_versions = if self.epoch_start_config().use_version_assignment_tables_v3() {
-                db_transaction.multi_get(&tables.next_shared_object_versions_v2, objects_to_init)?
-            } else {
-                db_transaction.multi_get(
-                    &tables.next_shared_object_versions,
-                    objects_to_init.iter().map(|(id, _)| *id),
-                )?
-            };
+        let next_versions = if self.epoch_start_config().use_version_assignment_tables_v3() {
+            tables
+                .next_shared_object_versions_v2
+                .multi_get(objects_to_init)?
+        } else {
+            tables
+                .next_shared_object_versions
+                .multi_get(objects_to_init.iter().map(|(id, _)| *id))?
+        };
 
-            let uninitialized_objects: Vec<ConsensusObjectSequenceKey> = next_versions
-                .iter()
-                .zip(objects_to_init)
-                .filter_map(|(next_version, id_and_version)| match next_version {
-                    None => Some(*id_and_version),
-                    Some(_) => None,
-                })
-                .collect();
+        let uninitialized_objects: Vec<ConsensusObjectSequenceKey> = next_versions
+            .iter()
+            .zip(objects_to_init)
+            .filter_map(|(next_version, id_and_version)| match next_version {
+                None => Some(*id_and_version),
+                Some(_) => None,
+            })
+            .collect();
 
-            // The common case is that there are no uninitialized versions - this early return will
-            // happen every time except the first time an object is used in an epoch.
-            if uninitialized_objects.is_empty() {
-                // unwrap ok - we already verified that next_versions is not missing any keys.
-                return Ok(izip!(
-                    objects_to_init.iter().cloned(),
-                    next_versions.into_iter().map(|v| v.unwrap())
-                )
-                .collect());
-            }
+        // The common case is that there are no uninitialized versions - this early return will
+        // happen every time except the first time an object is used in an epoch.
+        if uninitialized_objects.is_empty() {
+            // unwrap ok - we already verified that next_versions is not missing any keys.
+            return Ok(izip!(
+                objects_to_init.iter().cloned(),
+                next_versions.into_iter().map(|v| v.unwrap())
+            )
+            .collect());
+        }
 
-            let versions_to_write: Vec<_> = uninitialized_objects
-                .iter()
-                .map(|(id, initial_version)| {
-                    // Note: we don't actually need to read from the transaction here, as no writer
-                    // can update object_store until after get_or_init_next_object_versions
-                    // completes.
-                    match cache_reader.get_object(id) {
-                        Some(obj) => {
-                            if obj.owner().start_version() == Some(*initial_version) {
-                                ((*id, *initial_version), obj.version())
-                             } else {
-                                // If we can't find a matching start version, treat the object as
-                                // if it's absent.
-                                if let Some(obj_start_version) = obj.owner().start_version() {
-                                    assert!(*initial_version >= obj_start_version,
+        let versions_to_write: Vec<_> = uninitialized_objects
+            .iter()
+            .map(|(id, initial_version)| {
+                // Note: we don't actually need to read from the transaction here, as no writer
+                // can update object_store until after get_or_init_next_object_versions
+                // completes.
+                match cache_reader.get_object(id) {
+                    Some(obj) => {
+                        if obj.owner().start_version() == Some(*initial_version) {
+                            ((*id, *initial_version), obj.version())
+                        } else {
+                            // If we can't find a matching start version, treat the object as
+                            // if it's absent.
+                            if let Some(obj_start_version) = obj.owner().start_version() {
+                                assert!(*initial_version >= obj_start_version,
                                         "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
-                                }
-                                ((*id, *initial_version), *initial_version)
-                             }
+                            }
+                            ((*id, *initial_version), *initial_version)
                         }
-                        None => ((*id, *initial_version), *initial_version),
                     }
-                })
-                .collect();
+                    None => ((*id, *initial_version), *initial_version),
+                }
+            })
+            .collect();
 
-            ret = izip!(objects_to_init.iter().cloned(), next_versions.into_iter(),)
-                // take all the previously initialized versions
-                .filter_map(|(key, next_version)| next_version.map(|v| (key, v)))
-                // add all the versions we're going to write
-                .chain(versions_to_write.iter().cloned())
-                .collect();
+        let ret = izip!(objects_to_init.iter().cloned(), next_versions.into_iter(),)
+            // take all the previously initialized versions
+            .filter_map(|(key, next_version)| next_version.map(|v| (key, v)))
+            // add all the versions we're going to write
+            .chain(versions_to_write.iter().cloned())
+            .collect();
 
-            debug!(
-                ?versions_to_write,
-                "initializing next_shared_object_versions"
-            );
-            if self.epoch_start_config().use_version_assignment_tables_v3() {
-                db_transaction
-                    .insert_batch(&tables.next_shared_object_versions_v2, versions_to_write)?;
-            } else {
-                db_transaction.insert_batch(
-                    &tables.next_shared_object_versions,
-                    versions_to_write.into_iter().map(|(key, v)| (key.0, v)),
-                )?;
-            }
-            db_transaction.commit()
-        })?;
+        debug!(
+            ?versions_to_write,
+            "initializing next_shared_object_versions"
+        );
+        let mut batch = tables.next_shared_object_versions_v2.batch();
+        if self.epoch_start_config().use_version_assignment_tables_v3() {
+            batch.insert_batch(&tables.next_shared_object_versions_v2, versions_to_write)?;
+        } else {
+            batch.insert_batch(
+                &tables.next_shared_object_versions,
+                versions_to_write.into_iter().map(|(key, v)| (key.0, v)),
+            )?;
+        }
+        batch.write()?;
 
         Ok(ret)
     }
@@ -1957,6 +2018,7 @@ impl AuthorityPerEpochStore {
 
     fn should_defer(
         &self,
+        execution_time_estimator: &ExecutionTimeEstimator,
         cert: &VerifiedExecutableTransaction,
         commit_round: Round,
         dkg_failed: bool,
@@ -1984,6 +2046,7 @@ impl AuthorityPerEpochStore {
         // Defer transaction if it uses shared objects that are congested.
         if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
             .should_defer_due_to_object_congestion(
+                execution_time_estimator,
                 cert,
                 previously_deferred_tx_digests,
                 commit_round,
@@ -2744,6 +2807,18 @@ impl AuthorityPerEpochStore {
                     return None;
                 }
             }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::ExecutionTimeObservation(msg),
+                ..
+            }) => {
+                if transaction.sender_authority() != msg.authority {
+                    warn!(
+                        "ExecutionTimeObservation authority {} does not match its author from consensus {}",
+                        msg.authority, transaction.certificate_author_index
+                    );
+                    return None;
+                }
+            }
             SequencedConsensusTransactionKind::System(_) => {}
         }
         Some(VerifiedSequencedConsensusTransaction(transaction))
@@ -2788,9 +2863,12 @@ impl AuthorityPerEpochStore {
         let mut current_commit_sequenced_randomness_transactions =
             Vec::with_capacity(verified_transactions.len());
         let mut end_of_publish_transactions = Vec::with_capacity(verified_transactions.len());
-        for tx in verified_transactions {
+        let mut execution_time_observations = Vec::with_capacity(verified_transactions.len());
+        for mut tx in verified_transactions {
             if tx.0.is_end_of_publish() {
                 end_of_publish_transactions.push(tx);
+            } else if let Some(observation) = tx.0.try_take_execution_time_observation() {
+                execution_time_observations.push(observation);
             } else if tx.0.is_system() {
                 system_transactions.push(tx);
             } else if tx
@@ -2939,6 +3017,24 @@ impl AuthorityPerEpochStore {
             self.protocol_config.consensus_transaction_ordering(),
         );
 
+        // Process new execution time observations for use by congestion control.
+        let mut execution_time_estimator = self
+            .execution_time_estimator
+            .try_lock()
+            .expect("should only ever be called from the commit handler thread");
+        for ExecutionTimeObservation {
+            authority,
+            generation,
+            estimates,
+        } in execution_time_observations
+        {
+            execution_time_estimator.process_observations_from_consensus(
+                self.committee.authority_index(&authority).unwrap(),
+                generation,
+                estimates,
+            );
+        }
+
         // We track transaction execution cost separately for regular transactions and transactions using randomness, since
         // they will be in different PendingCheckpoints.
         let tables = self.tables()?;
@@ -2987,6 +3083,7 @@ impl AuthorityPerEpochStore {
                 randomness_manager.as_deref_mut(),
                 dkg_failed,
                 randomness_round,
+                &execution_time_estimator,
                 authority_metrics,
             )
             .await?;
@@ -3292,6 +3389,7 @@ impl AuthorityPerEpochStore {
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_failed: bool,
         randomness_round: Option<RandomnessRound>,
+        execution_time_estimator: &ExecutionTimeEstimator,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,    // transactions to schedule
@@ -3349,6 +3447,7 @@ impl AuthorityPerEpochStore {
                     dkg_failed,
                     randomness_round.is_some(),
                     execution_cost,
+                    execution_time_estimator,
                     authority_metrics,
                 )
                 .await?
@@ -3587,6 +3686,7 @@ impl AuthorityPerEpochStore {
         dkg_failed: bool,
         generating_randomness: bool,
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
+        execution_time_estimator: &ExecutionTimeEstimator,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_transaction");
@@ -3626,6 +3726,7 @@ impl AuthorityPerEpochStore {
                     dkg_failed,
                     generating_randomness,
                     shared_object_congestion_tracker,
+                    execution_time_estimator,
                     authority_metrics,
                 )
             }
@@ -3790,6 +3891,14 @@ impl AuthorityPerEpochStore {
             }
 
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::ExecutionTimeObservation(_),
+                ..
+            }) => {
+                // These are partitioned earlier.
+                fatal!("process_consensus_transaction called with ExecutionTimeObservation transaction");
+            }
+
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(tx),
                 ..
             }) => {
@@ -3812,6 +3921,7 @@ impl AuthorityPerEpochStore {
                     dkg_failed,
                     generating_randomness,
                     shared_object_congestion_tracker,
+                    execution_time_estimator,
                     authority_metrics,
                 )
             }
@@ -3848,6 +3958,7 @@ impl AuthorityPerEpochStore {
         dkg_failed: bool,
         generating_randomness: bool,
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
+        execution_time_estimator: &ExecutionTimeEstimator,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_user_transaction");
@@ -3882,6 +3993,7 @@ impl AuthorityPerEpochStore {
         }
 
         let deferral_info = self.should_defer(
+            execution_time_estimator,
             &transaction,
             commit_round,
             dkg_failed,
@@ -3948,7 +4060,8 @@ impl AuthorityPerEpochStore {
 
         // This certificate will be scheduled. Update object execution cost.
         if transaction.contains_shared_object() {
-            shared_object_congestion_tracker.bump_object_execution_cost(&transaction);
+            shared_object_congestion_tracker
+                .bump_object_execution_cost(execution_time_estimator, &transaction);
         }
 
         Ok(ConsensusCertificateResult::SuiTransaction(transaction))

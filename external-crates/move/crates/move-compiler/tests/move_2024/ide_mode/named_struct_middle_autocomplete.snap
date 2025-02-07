@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:1:9
+  │
+1 │ #[allow(ide_path_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:14:21
+   │
+14 │         let _tmp2 = _s.b.x;
+   │                     ^^^^ Unbound field 'b' in 'a::m::B'

@@ -1341,6 +1341,7 @@ dependencies = [
  "console",
  "linked-hash-map",
  "once_cell",
+ "serde",
  "similar",
 ]
 
@@ -1847,6 +1848,7 @@ dependencies = [
  "difference",
  "dirs-next",
  "hex",
+ "insta",
  "move-binary-format",
  "move-core-types",
  "once_cell",
@@ -1868,6 +1870,7 @@ dependencies = [
  "datatest-stable",
  "dunce",
  "hex",
+ "insta",
  "lsp-types",
  "move-binary-format",
  "move-borrow-graph",
@@ -2304,7 +2307,6 @@ name = "move-trace-format"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "arbitrary",
  "enum-compat-util",
  "getrandom 0.2.15",
  "move-binary-format",

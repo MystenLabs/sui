@@ -10,7 +10,7 @@ Currently we support trace-debugging of Move unit tests only. and the following 
 - line breakpoints
 - disassembly view (disassembled bytecode view) with support for stepping and setting breakpoints in disassembled bytecode files
 
-Note that support for trace-debugging macros and enums is limited at this point - stepping through macros or code related to enums may result in somewhat unexpected results due to how these constructs are handled internally by the Move execution framework. In particular, variable value tracking may be affected when trace-debugging these constructs. Work is ongoing to improve state-of-the-art - improvement suggestions and bug reports files as issues agains Sui's GitHub [repository](https://github.com/MystenLabs/sui) are greatly appreciated.
+Note that support for trace-debugging macros and enums is limited at this point - stepping through macros or code related to enums may result in somewhat unexpected results due to how these constructs are handled internally by the Move execution framework. In particular, variable value tracking may be affected when trace-debugging these constructs. Work is ongoing to improve state-of-the-art - improvement suggestions and bug reports files as issues against Sui's GitHub [repository](https://github.com/MystenLabs/sui) are greatly appreciated.
 
 # How to Install
 

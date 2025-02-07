@@ -1,0 +1,41 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/typing/unused_use_fun.move:5:5
+  │
+5 │     use fun foo as u64.f;
+  │     ^^^^^^^^^^^^^^^^^^^^^ Unused 'use fun' of 'u64.f'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/typing/unused_use_fun.move:8:26
+  │
+8 │         use a::m::foo as f;
+  │                          ^ Unused 'use' of alias 'f'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+   ┌─ tests/move_2024/typing/unused_use_fun.move:22:27
+   │
+19 │     use a::x::drop as f;
+   │                       - The same alias was previously declared here
+   ·
+22 │         use a::x::drop as f;
+   │                           ^ Unnecessary alias 'f' for module member 'a::x::drop'. It was already in scope
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/move_2024/typing/unused_use_fun.move:22:27
+   │
+22 │         use a::x::drop as f;
+   │                           ^ Unused 'use' of alias 'f'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

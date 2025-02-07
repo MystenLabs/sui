@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/recovery_parse_member_end_line_error.move:6:5
+  │
+6 │     public fun wrong_return(): u64 {
+  │     ^^^^^^
+  │     │
+  │     Unexpected 'public'
+  │     Expected '('
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/parser/recovery_parse_member_end_line_error.move:6:36
+  │    
+6 │         public fun wrong_return(): u64 {
+  │                                    --- Expected: 'u64'
+  │ ╭──────────────────────────────────────^
+  │ │ ╭────────────────────────────────────'
+7 │ │ │     }
+  │ ╰─│─────^ Invalid return expression
+  │   ╰─────' Given: '()'

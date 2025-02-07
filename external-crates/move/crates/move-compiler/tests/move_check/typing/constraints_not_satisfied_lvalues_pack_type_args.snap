@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/constraints_not_satisfied_lvalues_pack_type_args.move:8:15
+  │
+2 │     struct CupC<phantom T: copy> {}
+  │                            ---- 'copy' constraint declared here
+3 │     struct R {}
+  │            - To satisfy the constraint, the 'copy' ability would need to be added here
+  ·
+8 │         let B<CupC<R>> {} = abort 0;
+  │               ^^^^^^^
+  │               │    │
+  │               │    The type '0x8675309::M::R' does not have the ability 'copy'
+  │               'copy' constraint not satisifed
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/typing/constraints_not_satisfied_lvalues_pack_type_args.move:8:29
+  │
+8 │         let B<CupC<R>> {} = abort 0;
+  │                             ^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/constraints_not_satisfied_lvalues_pack_type_args.move:9:11
+  │
+2 │     struct CupC<phantom T: copy> {}
+  │                            ---- 'copy' constraint declared here
+3 │     struct R {}
+  │            - To satisfy the constraint, the 'copy' ability would need to be added here
+  ·
+9 │         B<CupC<R>> {} = abort 0;
+  │           ^^^^^^^
+  │           │    │
+  │           │    The type '0x8675309::M::R' does not have the ability 'copy'
+  │           'copy' constraint not satisifed

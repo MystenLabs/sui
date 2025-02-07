@@ -1,0 +1,19 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.migration
+  lint: false
+---
+--- tests/move_2024/migration/let_mut_migrate.move
++++ tests/move_2024/migration/let_mut_migrate.move
+@@ -3,3 +3,3 @@
+-    public fun t(x: u64, yip: u64, s: S): u64  {
+-        let yes = 0;
+-        let S { f: fin } = s;
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
++        let mut yes = 0;
++        let S { f: mut fin } = s;
+@@ -15 +15 @@
+-        let x = 5; let y = 10;
++        let mut x = 5; let mut y = 10;

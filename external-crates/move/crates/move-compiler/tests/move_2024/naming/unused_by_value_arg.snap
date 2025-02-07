@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/naming/unused_by_value_arg.move:4:19
+  │
+4 │     macro fun foo($x: X) {}
+  │                   ^^ Unused parameter '$x'. Consider removing or prefixing with an underscore: '_$x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+  ┌─ tests/move_2024/naming/unused_by_value_arg.move:4:19
+  │
+4 │     macro fun foo($x: X) {}
+  │                   ^^ Unused assignment for variable '$x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_$x')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

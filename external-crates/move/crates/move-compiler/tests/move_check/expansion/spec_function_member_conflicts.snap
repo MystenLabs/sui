@@ -1,0 +1,62 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:4:5
+  │  
+4 │ ╭     spec module {
+5 │ │         fun Foo(): bool { true }
+6 │ │     }
+  │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:11:5
+   │  
+11 │ ╭     spec module {
+12 │ │         fun Foo(): bool { true }
+13 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:14:5
+   │  
+14 │ ╭     spec schema Foo<T> {
+15 │ │         ensures true;
+16 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:20:5
+   │  
+20 │ ╭     spec module {
+21 │ │         fun Foo(): bool { true }
+22 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:27:5
+   │  
+27 │ ╭     spec module {
+28 │ │         fun foo(): bool { true }
+29 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:34:5
+   │  
+34 │ ╭     spec module {
+35 │ │         fun foo(): bool { true }
+36 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:37:5
+   │  
+37 │ ╭     spec module {
+38 │ │         fun foo(): bool { true }
+39 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used

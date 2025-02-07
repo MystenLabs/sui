@@ -1,0 +1,122 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:2:73
+   │
+ 2 │     macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                                                         ^^^^^^^^
+   │                                                                         │
+   │                                                                         Invalid type annotation
+   │                                                                         Expected expression list of length 2: '(vector<u8>, vector<u8>)'
+   ·
+32 │             || (b"hello", b"world", b"!"), // invalid
+   │                -------------------------- Given expression list of length 3: '(vector<u8>, vector<u8>, vector<u8>)'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:2:73
+   │
+ 2 │     macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                                                         ^^^^^^^^
+   │                                                                         │
+   │                                                                         Invalid type annotation
+   │                                                                         Expected: '(vector<u8>, vector<u8>)'
+   ·
+37 │             || b"hello", // invalid
+   │                -------- Given: 'vector<u8>'
+
+error[E04017]: too many arguments
+  ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
+  │
+3 │         $f(0);
+  │         ^^^^^
+  │         │ │
+  │         │ Found 1 argument(s) here
+  │         Invalid lambda call of '$f'. The call expected 0 argument(s) but got 1
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
+  │
+3 │         $f(0);
+  │         ^^^^^
+  │         │ │
+  │         │ Found 1 argument(s) here
+  │         Invalid lambda call of '$f'. The call expected 2 argument(s) but got 1
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:4:9
+  │
+4 │         $g(0, 1);
+  │         ^^^^^^^^
+  │         │ │
+  │         │ Found 2 argument(s) here
+  │         Invalid lambda call of '$g'. The call expected 3 argument(s) but got 2
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:9:9
+   │  
+ 2 │       macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                 ---------- Expected a lambda with 1 arguments: '|u64| -> vector<u8>'
+   ·  
+ 9 │ ╭         foo!<u64, vector<u8>>(
+10 │ │             || vector[], // invalid
+   │ │             ----------- Given lambda with 0 arguments: '|| -> _'
+11 │ │             |a, b| vector[(a as u8), (b as u8)],
+12 │ │             || (b"hello", b"world"),
+13 │ │         );
+   │ ╰─────────^ Invalid call of 'a::m::foo'. Invalid argument for parameter '$f'
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:10:16
+   │
+10 │             || vector[], // invalid
+   │                ^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:14:9
+   │  
+ 2 │       macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                 ---------- Expected a lambda with 1 arguments: '|u64| -> vector<u8>'
+   ·  
+14 │ ╭         foo!<u64, vector<u8>>(
+15 │ │             |_, _| vector[], // invalid
+   │ │             --------------- Given lambda with 2 arguments: '|_, _| -> _'
+16 │ │             |a, b| vector[(a as u8), (b as u8)],
+17 │ │             || (b"hello", b"world"),
+18 │ │         );
+   │ ╰─────────^ Invalid call of 'a::m::foo'. Invalid argument for parameter '$f'
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:15:20
+   │
+15 │             |_, _| vector[], // invalid
+   │                    ^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:19:19
+   │
+19 │         foo!<u64, vector<u8>>(
+   │                   ^^^^^^^^^^
+   │                   │
+   │                   Invalid type annotation
+   │                   Expected: 'vector<u8>'
+20 │             |_| (vector<u8>[], vector<u8>[]), // invalid
+   │                 ---------------------------- Given: '(vector<u8>, vector<u8>)'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:24:9
+   │  
+ 2 │       macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                                 -------------- Expected a lambda with 2 arguments: '|u64, u64| -> vector<u8>'
+   ·  
+24 │ ╭         foo!<u64, vector<u8>>(
+25 │ │             |_| vector[],
+26 │ │             |a, b, _| vector[(a as u8), (b as u8)], // invalid
+   │ │             -------------------------------------- Given lambda with 3 arguments: '|_, _, _| -> _'
+27 │ │             || (b"hello", b"world"),
+28 │ │         );
+   │ ╰─────────^ Invalid call of 'a::m::foo'. Invalid argument for parameter '$g'

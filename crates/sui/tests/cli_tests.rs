@@ -245,6 +245,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         package_path: package_path.clone(),
         build_config,
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
@@ -353,43 +354,6 @@ async fn test_ptb_publish() -> Result<(), anyhow::Error> {
         .execute(context)
         .await?;
     Ok(())
-}
-
-// fixing issue https://github.com/MystenLabs/sui/issues/6546
-#[tokio::test]
-async fn test_regression_6546() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let address = test_cluster.get_address_0();
-    let context = &mut test_cluster.wallet;
-
-    let SuiClientCommandResult::Objects(coins) = SuiClientCommands::Objects {
-        address: Some(KeyIdentity::Address(address)),
-    }
-    .execute(context)
-    .await?
-    else {
-        panic!()
-    };
-    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
-
-    test_with_sui_binary(&[
-        "client",
-        "--client.config",
-        config_path.to_str().unwrap(),
-        "call",
-        "--package",
-        "0x2",
-        "--module",
-        "sui",
-        "--function",
-        "transfer",
-        "--args",
-        &coins.first().unwrap().object()?.object_id.to_string(),
-        &test_cluster.get_address_1().to_string(),
-        "--gas-budget",
-        "100000000",
-    ])
-    .await
 }
 
 #[sim_test]
@@ -561,6 +525,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -825,6 +790,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -895,6 +861,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
         build_config: build_config.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -965,6 +932,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -1069,6 +1037,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -1193,6 +1162,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -1317,6 +1287,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         build_config,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
+        verify_deps: true,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
@@ -1443,6 +1414,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies,
     }
     .execute(context)
@@ -1512,6 +1484,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies,
     }
     .execute(context)
@@ -1555,6 +1528,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies,
     }
     .execute(context)
@@ -1607,6 +1581,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies,
     }
     .execute(context)
@@ -1646,6 +1621,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -1686,6 +1662,7 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -1738,6 +1715,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -1809,6 +1787,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         verify_compatibility: true,
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -1874,6 +1853,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         build_config: build_config.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -1928,6 +1908,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         verify_compatibility: true,
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -2008,6 +1989,7 @@ async fn test_package_management_on_upgrade_command_conflict() -> Result<(), any
         build_config: build_config_publish.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -2076,6 +2058,7 @@ async fn test_package_management_on_upgrade_command_conflict() -> Result<(), any
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         verify_compatibility: true,
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -3845,6 +3828,7 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
         package_path: package_path.clone(),
         build_config,
         skip_dependency_verification: false,
+        verify_deps: true,
         with_unpublished_dependencies: false,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
@@ -3941,59 +3925,6 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
     );
 
     insta::assert_snapshot!(error_string);
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_move_build_bytecode_with_address_resolution() -> Result<(), anyhow::Error> {
-    let test_cluster = TestClusterBuilder::new().build().await;
-    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
-
-    // Package setup: a simple package depends on another and copied to tmpdir
-    let mut simple_package_path = PathBuf::from(TEST_DATA_DIR);
-    simple_package_path.push("simple");
-
-    let mut depends_on_simple_package_path = PathBuf::from(TEST_DATA_DIR);
-    depends_on_simple_package_path.push("depends_on_simple");
-
-    let tmp_dir = tempfile::tempdir().unwrap();
-
-    fs_extra::dir::copy(
-        &simple_package_path,
-        &tmp_dir,
-        &fs_extra::dir::CopyOptions::default(),
-    )?;
-
-    fs_extra::dir::copy(
-        &depends_on_simple_package_path,
-        &tmp_dir,
-        &fs_extra::dir::CopyOptions::default(),
-    )?;
-
-    // Publish simple package.
-    let simple_tmp_dir = tmp_dir.path().join("simple");
-    test_with_sui_binary(&[
-        "client",
-        "--client.config",
-        config_path.to_str().unwrap(),
-        "publish",
-        simple_tmp_dir.to_str().unwrap(),
-    ])
-    .await?;
-
-    // Build the package that depends on 'simple' package. Addresses must resolve successfully
-    // from the `Move.lock` for this command to succeed at all.
-    let depends_on_simple_tmp_dir = tmp_dir.path().join("depends_on_simple");
-    test_with_sui_binary(&[
-        "move",
-        "--client.config",
-        config_path.to_str().unwrap(),
-        "build",
-        "--dump-bytecode-as-base64",
-        "--path",
-        depends_on_simple_tmp_dir.to_str().unwrap(),
-    ])
-    .await?;
     Ok(())
 }
 

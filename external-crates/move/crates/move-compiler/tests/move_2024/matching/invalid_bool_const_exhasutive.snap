@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/invalid_bool_const_exhasutive.move:7:16
+  │
+7 │         match (b) {
+  │                ^ Pattern '_' not covered
+  │
+  = Match arms with guards are not considered for coverage.

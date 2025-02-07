@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/ability_modifier_no_abilities.move:4:20
+  │
+4 │     struct Foo has {}
+  │                    ^ Unexpected '{'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'

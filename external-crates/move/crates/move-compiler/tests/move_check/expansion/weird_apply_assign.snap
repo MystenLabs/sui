@@ -1,0 +1,29 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01009]: invalid assignment
+  ┌─ tests/move_check/expansion/weird_apply_assign.move:5:9
+  │
+5 │         { f } = S { f: 0 };
+  │         ^^^^^ Invalid assignment syntax. Expected: a local, a field write, or a deconstructing assignment
+
+error[E03022]: invalid usage position
+  ┌─ tests/move_check/expansion/weird_apply_assign.move:7:9
+  │
+7 │         S f = S { f: 0 };
+  │         ^ Expected a local or constant, but found struct 'S' in current scope
+  │
+  = Struct with named arguments must be written as 'S { ... }'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/weird_apply_assign.move:7:11
+  │
+7 │         S f = S { f: 0 };
+  │           ^
+  │           │
+  │           Unexpected 'f'
+  │           Expected ';'

@@ -546,7 +546,7 @@ impl NodeMetrics {
             ).unwrap(),
             block_suspensions: register_int_counter_vec_with_registry!(
                 "block_suspensions",
-                "The number block suspensions. The counter is reported uniquely, so if a block is sent for reprocessing while alreadly suspended then is not double counted",
+                "The number block suspensions. The counter is reported uniquely, so if a block is sent for reprocessing while already suspended then is not double counted",
                 &["authority"],
                 registry,
             ).unwrap(),

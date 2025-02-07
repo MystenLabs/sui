@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_check/parser/top_level_module_address_invalid.move:2:12
+  │
+2 │     module m;
+  │            ^ Cannot define 'module' label in address block
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/top_level_module_address_invalid.move:2:12
+  │
+2 │     module m;
+  │            ^ 'module' label forms (ending with ';') are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.

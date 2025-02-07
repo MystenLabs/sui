@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03005]: unbound unscoped name
+  ┌─ tests/move_2024/naming/unknown_contructor_name.move:4:13
+  │
+4 │     let _ = X<Y<X>>();
+  │             ^ Unbound datatype or function 'X' in current scope

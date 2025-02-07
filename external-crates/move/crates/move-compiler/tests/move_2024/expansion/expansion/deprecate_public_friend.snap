@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/expansion/expansion/deprecate_public_friend.move:2:5
+  │
+2 │     public(friend) fun foo() {}
+  │     ^^^^^^^^^^^^^^ 'public(friend)' is deprecated. Replace with 'public(package)'

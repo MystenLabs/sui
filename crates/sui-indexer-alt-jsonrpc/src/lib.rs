@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::Context as _;
+use api::objects::{Objects, ObjectsConfig};
 use api::rpc_module::RpcModule;
 use api::transactions::{QueryTransactions, Transactions, TransactionsConfig};
 use config::RpcConfig;
@@ -192,8 +193,8 @@ impl Default for RpcArgs {
 /// command-line). The service will continue to run until the cancellation token is triggered, and
 /// will signal cancellation on the token when it is shutting down.
 ///
-/// The service may spin up auxilliary services (such as the system package task) to support
-/// itself, and will clean these up on shutdown as well.
+/// The service may spin up auxiliary services (such as the system package task) to support itself,
+/// and will clean these up on shutdown as well.
 pub async fn start_rpc(
     db_args: DbArgs,
     rpc_args: RpcArgs,
@@ -203,10 +204,12 @@ pub async fn start_rpc(
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
     let RpcConfig {
+        objects,
         transactions,
         extra: _,
     } = rpc_config.finish();
 
+    let objects_config = objects.finish(ObjectsConfig::default());
     let transactions_config = transactions.finish(TransactionsConfig::default());
 
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
@@ -221,6 +224,7 @@ pub async fn start_rpc(
     );
 
     rpc.add_module(Governance(context.clone()))?;
+    rpc.add_module(Objects(context.clone(), objects_config))?;
     rpc.add_module(QueryTransactions(context.clone(), transactions_config))?;
     rpc.add_module(Transactions(context.clone()))?;
 

@@ -1,0 +1,120 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 1-24:
+//# print-bytecode
+// Move bytecode v6
+module 6.m {
+
+entry foo() {
+L0:	loc0: u64
+B0:
+	0: LdU64(42)
+	1: LdU64(0)
+	2: Gt
+	3: BrTrue(5)
+B1:
+	4: Branch(8)
+B2:
+	5: LdU64(1)
+	6: StLoc[0](loc0: u64)
+	7: Branch(11)
+B3:
+	8: LdU64(2)
+	9: StLoc[0](loc0: u64)
+	10: Branch(11)
+B4:
+	11: Ret
+}
+
+}
+
+
+task 1, lines 26-45:
+//# print-bytecode
+// Move bytecode v6
+module 7.m {
+
+entry foo() {
+L0:	loc0: u64
+B0:
+	0: LdU64(42)
+	1: LdU64(0)
+	2: Gt
+	3: BrTrue(7)
+B1:
+	4: LdU64(2)
+	5: StLoc[0](loc0: u64)
+	6: Branch(9)
+B2:
+	7: LdU64(1)
+	8: StLoc[0](loc0: u64)
+B3:
+	9: Ret
+}
+
+}
+
+
+task 2, lines 47-65:
+//# print-bytecode
+// Move bytecode v6
+module 8.m {
+
+entry foo() {
+L0:	loc0: u64
+B0:
+	0: LdU64(0)
+	1: LdU64(1)
+	2: Lt
+	3: BrTrue(7)
+B1:
+	4: LdU64(0)
+	5: StLoc[0](loc0: u64)
+	6: Branch(16)
+B2:
+	7: LdU64(2)
+	8: LdU64(1)
+	9: Gt
+	10: BrTrue(14)
+B3:
+	11: LdU64(1)
+	12: StLoc[0](loc0: u64)
+	13: Branch(16)
+B4:
+	14: LdU64(2)
+	15: StLoc[0](loc0: u64)
+B5:
+	16: Ret
+}
+
+}
+
+
+task 3, lines 67-82:
+//# print-bytecode
+// Move bytecode v6
+module 9.m {
+
+entry foo() {
+L0:	loc0: u64
+B0:
+	0: LdU64(0)
+	1: LdU64(1)
+	2: Neq
+	3: BrTrue(7)
+B1:
+	4: LdU64(1)
+	5: StLoc[0](loc0: u64)
+	6: Branch(10)
+B2:
+	7: LdU64(2)
+	8: StLoc[0](loc0: u64)
+	9: Ret
+B3:
+	10: Ret
+}
+
+}

@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/verification/double_annotation.move:3:7
+  │
+3 │     #[verify_only]
+  │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
+
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/verification/double_annotation.move:7:7
+  │
+7 │     #[verify_only]
+  │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/verification/double_annotation.move:13:7
+   │
+13 │     #[verify_only]
+   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/verification/double_annotation.move:17:7
+   │
+17 │     #[verify_only]
+   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks

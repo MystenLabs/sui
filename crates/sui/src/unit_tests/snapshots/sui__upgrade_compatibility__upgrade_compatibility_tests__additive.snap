@@ -1,5 +1,5 @@
 ---
-source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
+source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility_tests.rs
 expression: normalize_path(err.to_string())
 ---
 error[Compatibility E01007]: missing declaration
@@ -8,8 +8,8 @@ error[Compatibility E01007]: missing declaration
 4 │ module upgrades::upgrades {
   │                  ^^^^^^^^ enum 'EnumToRemove' is missing
   │
-  = enums cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
-  = add missing enum 'EnumToRemove' back to the module 'upgrades'.
+  = Enums cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
+  = Add missing enum 'EnumToRemove' back to the module 'upgrades'.
 
 error[Compatibility E01007]: missing declaration
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:18
@@ -17,8 +17,8 @@ error[Compatibility E01007]: missing declaration
 4 │ module upgrades::upgrades {
   │                  ^^^^^^^^ function 'function_to_remove' is missing
   │
-  = functions cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
-  = add missing function 'function_to_remove' back to the module 'upgrades'.
+  = Functions cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
+  = Add missing function 'function_to_remove' back to the module 'upgrades'.
 
 error[Compatibility E01007]: missing declaration
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:18
@@ -26,8 +26,8 @@ error[Compatibility E01007]: missing declaration
 4 │ module upgrades::upgrades {
   │                  ^^^^^^^^ struct 'StructToRemove' is missing
   │
-  = structs cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
-  = add missing struct 'StructToRemove' back to the module 'upgrades'.
+  = Structs cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
+  = Add missing struct 'StructToRemove' back to the module 'upgrades'.
 
 error[Compatibility E01002]: type mismatch
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:7:9

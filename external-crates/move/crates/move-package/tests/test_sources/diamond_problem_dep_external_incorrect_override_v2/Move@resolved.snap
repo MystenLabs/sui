@@ -1,0 +1,8 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+When resolving dependencies for package Root, conflicting versions of package ADep found:
+At A -> ADep
+	ADep = { local = "deps_only/ADep" } # Resolved by ../resolvers/successful.sh
+At B -> ADep
+	ADep = { local = "deps_only/ADep-v1" }

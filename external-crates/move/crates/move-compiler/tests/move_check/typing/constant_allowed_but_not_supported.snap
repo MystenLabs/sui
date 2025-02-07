@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03009]: unbound variable
+  ┌─ tests/move_check/typing/constant_allowed_but_not_supported.move:4:14
+  │
+4 │         move x;
+  │              ^ Unbound variable 'x'
+
+error[E03009]: unbound variable
+  ┌─ tests/move_check/typing/constant_allowed_but_not_supported.move:5:14
+  │
+5 │         copy y;
+  │              ^ Unbound variable 'y'
+
+error[E03009]: unbound variable
+  ┌─ tests/move_check/typing/constant_allowed_but_not_supported.move:6:9
+  │
+6 │         z;
+  │         ^ Unbound variable 'z'

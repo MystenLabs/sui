@@ -24,6 +24,8 @@ type Subscribers<T, F> = Arc<RwLock<BTreeMap<String, (tokio::sync::mpsc::Sender<
 pub struct Streamer<T, S, F: Filter<T>> {
     streamer_queue: Sender<T>,
     subscribers: Subscribers<S, F>,
+    metrics: Arc<SubscriptionMetrics>,
+    metrics_label: &'static str,
 }
 
 impl<T, S, F> Streamer<T, S, F>
@@ -56,6 +58,8 @@ where
         let streamer = Self {
             streamer_queue: tx,
             subscribers: Default::default(),
+            metrics: metrics.clone(),
+            metrics_label,
         };
         let mut rx = rx;
         let subscribers = streamer.subscribers.clone();
@@ -136,12 +140,16 @@ where
         ReceiverStream::new(rx)
     }
 
-    pub async fn send(&self, data: T) -> Result<(), SuiError> {
-        self.streamer_queue
-            .send(data)
-            .await
-            .map_err(|e| SuiError::FailedToDispatchSubscription {
+    pub fn try_send(&self, data: T) -> Result<(), SuiError> {
+        self.streamer_queue.try_send(data).map_err(|e| {
+            self.metrics
+                .dropped_submissions
+                .with_label_values(&[self.metrics_label])
+                .inc();
+
+            SuiError::FailedToDispatchSubscription {
                 error: e.to_string(),
-            })
+            }
+        })
     }
 }

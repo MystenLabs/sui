@@ -1,0 +1,202 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/eq_invalid.move:12:17
+   │
+12 │         (0: u8) == (1: u128);
+   │             --  ^^     ---- Found: 'u128'. It is not compatible with the other type.
+   │             │   │       
+   │             │   Incompatible arguments to '=='
+   │             Found: 'u8'. It is not compatible with the other type.
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/eq_invalid.move:13:11
+   │
+13 │         0 == false;
+   │         - ^^ ----- Found: 'bool'. It is not compatible with the other type.
+   │         │ │   
+   │         │ Incompatible arguments to '=='
+   │         Found: integer. It is not compatible with the other type.
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/eq_invalid.move:14:12
+   │
+14 │         &0 == 1;
+   │         -- ^^ - Found: integer. It is not compatible with the other type.
+   │         │  │   
+   │         │  Incompatible arguments to '=='
+   │         Found: '&{integer}'. It is not compatible with the other type.
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/eq_invalid.move:15:11
+   │
+15 │         1 == &0;
+   │         - ^^ -- Found: '&{integer}'. It is not compatible with the other type.
+   │         │ │   
+   │         │ Incompatible arguments to '=='
+   │         Found: integer. It is not compatible with the other type.
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/eq_invalid.move:16:9
+   │
+ 2 │     struct S { u: u64 }
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+11 │     fun t0(s: S, s_ref: &S, s_mut: &mut S) {
+   │               - The type '0x8675309::M::S' does not have the ability 'drop'
+   ·
+16 │         s == s_ref;
+   │         ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/eq_invalid.move:16:11
+   │
+11 │     fun t0(s: S, s_ref: &S, s_mut: &mut S) {
+   │               -         -- Found: '&0x8675309::M::S'. It is not compatible with the other type.
+   │               │          
+   │               Found: '0x8675309::M::S'. It is not compatible with the other type.
+   ·
+16 │         s == s_ref;
+   │           ^^ Incompatible arguments to '=='
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/eq_invalid.move:17:15
+   │
+11 │     fun t0(s: S, s_ref: &S, s_mut: &mut S) {
+   │               -                    ------ Found: '&mut 0x8675309::M::S'. It is not compatible with the other type.
+   │               │                     
+   │               Found: '0x8675309::M::S'. It is not compatible with the other type.
+   ·
+17 │         s_mut == s;
+   │               ^^ Incompatible arguments to '=='
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/eq_invalid.move:17:18
+   │
+ 2 │     struct S { u: u64 }
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+11 │     fun t0(s: S, s_ref: &S, s_mut: &mut S) {
+   │               - The type '0x8675309::M::S' does not have the ability 'drop'
+   ·
+17 │         s_mut == s;
+   │                  ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/eq_invalid.move:21:9
+   │
+ 3 │     struct R has key {
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+20 │     fun t1(r: R) {
+   │               - The type '0x8675309::M::R' does not have the ability 'drop'
+21 │         r == r;
+   │         ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/eq_invalid.move:21:14
+   │
+ 3 │     struct R has key {
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+20 │     fun t1(r: R) {
+   │               - The type '0x8675309::M::R' does not have the ability 'drop'
+21 │         r == r;
+   │              ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/eq_invalid.move:25:9
+   │
+25 │         G0<R>{ f: R { f: 1 } } == G0<R>{ f: R { f: 1 } };
+   │         ^^^^^^^^^^^^^^^^^^^^^^
+   │         │  │
+   │         │  The type '0x8675309::M::G0<0x8675309::M::R>' can have the ability 'drop' but the type argument '0x8675309::M::R' does not have the required ability 'drop'
+   │         '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+   │         The type '0x8675309::M::G0<0x8675309::M::R>' does not have the ability 'drop'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/eq_invalid.move:25:35
+   │
+25 │         G0<R>{ f: R { f: 1 } } == G0<R>{ f: R { f: 1 } };
+   │                                   ^^^^^^^^^^^^^^^^^^^^^^
+   │                                   │  │
+   │                                   │  The type '0x8675309::M::G0<0x8675309::M::R>' can have the ability 'drop' but the type argument '0x8675309::M::R' does not have the required ability 'drop'
+   │                                   '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+   │                                   The type '0x8675309::M::G0<0x8675309::M::R>' does not have the ability 'drop'
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_check/typing/eq_invalid.move:27:9
+   │
+27 │         G2{} == G2{};
+   │         ^^^^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_check/typing/eq_invalid.move:27:17
+   │
+27 │         G2{} == G2{};
+   │                 ^^^^ Could not infer this type. Try adding an annotation
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/eq_invalid.move:28:9
+   │
+ 7 │     struct G1<T: key> { f: T }
+   │            -- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+28 │         G1{ f: t } == G1{ f: t };
+   │         ^^^^^^^^^^
+   │         │
+   │         '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+   │         The type '0x8675309::M::G1<T>' does not have the ability 'drop'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/eq_invalid.move:28:23
+   │
+ 7 │     struct G1<T: key> { f: T }
+   │            -- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+28 │         G1{ f: t } == G1{ f: t };
+   │                       ^^^^^^^^^^
+   │                       │
+   │                       '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+   │                       The type '0x8675309::M::G1<T>' does not have the ability 'drop'
+
+error[E04005]: expected a single type
+   ┌─ tests/move_check/typing/eq_invalid.move:32:9
+   │
+32 │         () == ();
+   │         ^^^^^^^^
+   │         │     │
+   │         │     Expected a single type, but found expression list type: '()'
+   │         Incompatible arguments to '=='
+
+error[E04005]: expected a single type
+   ┌─ tests/move_check/typing/eq_invalid.move:33:9
+   │
+33 │         (0, 1) == (0, 1);
+   │         ^^^^^^^^^^^^^^^^
+   │         │         │
+   │         │         Expected a single type, but found expression list type: '(u64, u64)'
+   │         Incompatible arguments to '=='
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/eq_invalid.move:34:19
+   │
+34 │         (1, 2, 3) == (0, 1);
+   │         --------- ^^ ------ Found expression list of length 2: '({integer}, {integer})'. It is not compatible with the other type of length 3.
+   │         │         │   
+   │         │         Incompatible arguments to '=='
+   │         Found expression list of length 3: '({integer}, {integer}, {integer})'. It is not compatible with the other type of length 2.
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/eq_invalid.move:35:16
+   │
+35 │         (0, 1) == (1, 2, 3);
+   │         ------ ^^ --------- Found expression list of length 3: '({integer}, {integer}, {integer})'. It is not compatible with the other type of length 2.
+   │         │      │   
+   │         │      Incompatible arguments to '=='
+   │         Found expression list of length 2: '({integer}, {integer})'. It is not compatible with the other type of length 3.

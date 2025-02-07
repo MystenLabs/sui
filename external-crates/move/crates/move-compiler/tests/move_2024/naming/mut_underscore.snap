@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03016]: invalid 'mut' declaration
+  ┌─ tests/move_2024/naming/mut_underscore.move:3:13
+  │
+3 │     fun foo(mut _: u64) {
+  │             ^^^ Invalid 'mut' declaration. 'mut' is applied to variables and cannot be applied to the '_' pattern
+
+error[E03016]: invalid 'mut' declaration
+  ┌─ tests/move_2024/naming/mut_underscore.move:4:13
+  │
+4 │         let mut _ = 0;
+  │             ^^^ Invalid 'mut' declaration. 'mut' is applied to variables and cannot be applied to the '_' pattern
+
+error[E03016]: invalid 'mut' declaration
+  ┌─ tests/move_2024/naming/mut_underscore.move:5:17
+  │
+5 │         callf!(|mut _: u64| ());
+  │                 ^^^ Invalid 'mut' declaration. 'mut' is applied to variables and cannot be applied to the '_' pattern

@@ -1,0 +1,260 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-14:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7379600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 16:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 18-66:
+//# run-graphql --cursors {"i":0,"c":1} {"i":2,"c":1}
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "all": {
+            "edges": [
+              {
+                "cursor": "eyJpIjowLCJjIjoxfQ",
+                "node": {
+                  "name": "m0"
+                }
+              },
+              {
+                "cursor": "eyJpIjoxLCJjIjoxfQ",
+                "node": {
+                  "name": "m1"
+                }
+              },
+              {
+                "cursor": "eyJpIjoyLCJjIjoxfQ",
+                "node": {
+                  "name": "m2"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": false
+            }
+          },
+          "after": {
+            "edges": [
+              {
+                "cursor": "eyJpIjoxLCJjIjoxfQ",
+                "node": {
+                  "name": "m1"
+                }
+              },
+              {
+                "cursor": "eyJpIjoyLCJjIjoxfQ",
+                "node": {
+                  "name": "m2"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "before": {
+            "edges": [
+              {
+                "cursor": "eyJpIjowLCJjIjoxfQ",
+                "node": {
+                  "name": "m0"
+                }
+              },
+              {
+                "cursor": "eyJpIjoxLCJjIjoxfQ",
+                "node": {
+                  "name": "m1"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 4, lines 68-87:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": null
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Connection's page size of 1000 exceeds max of 50",
+      "locations": [
+        {
+          "line": 5,
+          "column": 13
+        }
+      ],
+      "path": [
+        "object",
+        "asMovePackage",
+        "module",
+        "friends"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 5, lines 89-141:
+//# run-graphql --cursors {"i":0,"c":1} {"i":2,"c":1}
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "prefix": {
+            "edges": [
+              {
+                "cursor": "eyJpIjoxLCJjIjoxfQ",
+                "node": {
+                  "name": "m1"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "prefixAll": {
+            "edges": [
+              {
+                "cursor": "eyJpIjoxLCJjIjoxfQ",
+                "node": {
+                  "name": "m1"
+                }
+              },
+              {
+                "cursor": "eyJpIjoyLCJjIjoxfQ",
+                "node": {
+                  "name": "m2"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "suffix": {
+            "edges": [
+              {
+                "cursor": "eyJpIjoxLCJjIjoxfQ",
+                "node": {
+                  "name": "m1"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "suffixAll": {
+            "edges": [
+              {
+                "cursor": "eyJpIjowLCJjIjoxfQ",
+                "node": {
+                  "name": "m0"
+                }
+              },
+              {
+                "cursor": "eyJpIjoxLCJjIjoxfQ",
+                "node": {
+                  "name": "m1"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 6, lines 143-152:
+//# upgrade --package P0 --upgrade-capability 1,1 --sender A
+created: object(6,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 8139600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 7, line 154:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 8, lines 156-179:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "friends": {
+            "edges": [
+              {
+                "cursor": "eyJpIjowLCJjIjoyfQ",
+                "node": {
+                  "name": "m0"
+                }
+              },
+              {
+                "cursor": "eyJpIjoxLCJjIjoyfQ",
+                "node": {
+                  "name": "m1"
+                }
+              },
+              {
+                "cursor": "eyJpIjoyLCJjIjoyfQ",
+                "node": {
+                  "name": "m2"
+                }
+              },
+              {
+                "cursor": "eyJpIjozLCJjIjoyfQ",
+                "node": {
+                  "name": "m3"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

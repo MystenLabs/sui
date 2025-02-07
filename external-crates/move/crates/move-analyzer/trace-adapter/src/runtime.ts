@@ -268,15 +268,16 @@ export class Runtime extends EventEmitter {
     /**
      * Start a trace viewing session and set up the initial state of the runtime.
      *
-     * @param source  path to the Move source file whose traces are to be viewed.
+     * @param openedFilePath path to the Move source file (or disassembled bytecode file)
+     * whose traces are to be viewed.
      * @param traceInfo  trace selected for viewing.
      * @throws Error with a descriptive error message if starting runtime has failed.
      *
      */
-    public async start(source: string, traceInfo: string, stopOnEntry: boolean): Promise<void> {
-        const pkgRoot = await findPkgRoot(source);
+    public async start(openedFilePath: string, traceInfo: string, stopOnEntry: boolean): Promise<void> {
+        const pkgRoot = await findPkgRoot(openedFilePath);
         if (!pkgRoot) {
-            throw new Error(`Cannot find package root for file: ${source}`);
+            throw new Error(`Cannot find package root for file: ${openedFilePath}`);
         }
         const manifest_path = path.join(pkgRoot, 'Move.toml');
 
@@ -286,6 +287,14 @@ export class Runtime extends EventEmitter {
         if (!pkg_name) {
             throw Error(`Cannot find package name in manifest file: ${manifest_path}`);
         }
+
+        const openedFileExt = path.extname(openedFilePath);
+        if (openedFileExt !== MOVE_FILE_EXT
+            && openedFileExt !== BCODE_FILE_EXT
+            && openedFileExt !== JSON_FILE_EXT) {
+            throw new Error(`File extension: ${openedFileExt} is not supported by trace debugger`);
+        }
+        const showDisassembly = openedFileExt === BCODE_FILE_EXT;
 
         // create file maps for all files in the `sources` directory, including both package source
         // files and source files for dependencies
@@ -335,6 +344,7 @@ export class Runtime extends EventEmitter {
                 currentEvent.optimizedSrcLines,
                 currentEvent.optimizedBcodeLines
             );
+        newFrame.showDisassembly = showDisassembly;
         this.frameStack = {
             frames: [newFrame],
             globals: new Map<number, RuntimeValueType>()

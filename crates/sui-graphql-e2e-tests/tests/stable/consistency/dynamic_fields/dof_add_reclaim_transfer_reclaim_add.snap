@@ -1,0 +1,220 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 18-57:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7600000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 59-62:
+//# programmable --sender A --inputs @A
+//> 0: Test::M1::child(Input(0));
+//> 1: Test::M1::parent(Input(0));
+//> 2: Test::M1::parent(Input(0));
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4924800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 64:
+//# run Test::M1::add_child --sender A --args object(2,1) object(2,0) 42
+created: object(3,0)
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+
+task 4, line 66:
+//# run Test::M1::reclaim_and_transfer_child --sender A --args object(2,1) 42 @A
+mutated: object(0,0), object(2,0), object(2,1)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
+
+task 5, line 68:
+//# run Test::M1::add_child --sender A --args object(2,2) object(2,0) 42
+created: object(5,0)
+mutated: object(0,0), object(2,0), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+
+task 6, line 70:
+//# run Test::M1::reclaim_and_transfer_child --sender A --args object(2,2) 42 @A
+mutated: object(0,0), object(2,0), object(2,2)
+deleted: object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
+
+task 7, line 72:
+//# run Test::M1::add_child --sender A --args object(2,1) object(2,0) 42
+created: object(3,0)
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+
+task 8, line 74:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 9, lines 76-156:
+//# run-graphql
+Response: {
+  "data": {
+    "latest": {
+      "version": 7,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "ICfYK9hpoZz2TvVoLEtiMG3hhlC9hZZKkiU4pl4iMT4YAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "KgAAAAAAAAA="
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
+                    "count": "0"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
+              "count": "0"
+            }
+          }
+        }
+      }
+    },
+    "owner_view": {
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "ICfYK9hpoZz2TvVoLEtiMG3hhlC9hZZKkiU4pl4iMT4YAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "KgAAAAAAAAA="
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
+                    "count": "0"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
+              "count": "0"
+            }
+          }
+        }
+      }
+    },
+    "v2": {
+      "version": 2,
+      "dynamicFields": {
+        "edges": []
+      },
+      "dynamicObjectField": null
+    },
+    "v3": {
+      "version": 3,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "ICfYK9hpoZz2TvVoLEtiMG3hhlC9hZZKkiU4pl4iMT4YAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "KgAAAAAAAAA="
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
+                    "count": "0"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
+              "count": "0"
+            }
+          }
+        }
+      }
+    },
+    "v4": {
+      "version": 4,
+      "dynamicFields": {
+        "edges": []
+      },
+      "dynamicObjectField": null
+    },
+    "v7": {
+      "version": 7,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "ICfYK9hpoZz2TvVoLEtiMG3hhlC9hZZKkiU4pl4iMT4YAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "KgAAAAAAAAA="
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
+                    "count": "0"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
+              "count": "0"
+            }
+          }
+        }
+      }
+    }
+  }
+}

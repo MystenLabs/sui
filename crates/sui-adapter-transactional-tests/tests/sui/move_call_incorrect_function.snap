@@ -1,0 +1,19 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, lines 8-15:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 16-18:
+//# run 0x242::M::create
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000242 }
+
+task 3, line 19:
+//# run Test::M::foo
+Error: Transaction Effects Status: Function Not Found.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'foo' in module Test::M"), command: Some(0) } }

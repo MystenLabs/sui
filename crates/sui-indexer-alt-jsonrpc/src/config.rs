@@ -6,13 +6,25 @@ use std::mem;
 use sui_default_config::DefaultConfig;
 use tracing::warn;
 
-use crate::api::transactions::TransactionsConfig;
+use crate::api::{objects::ObjectsConfig, transactions::TransactionsConfig};
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct RpcConfig {
+    /// Configuration for object-related RPC methods.
+    pub objects: ObjectsLayer,
+
     /// Configuration for transaction-related RPC methods.
     pub transactions: TransactionsLayer,
+
+    #[serde(flatten)]
+    pub extra: toml::Table,
+}
+
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
+pub struct ObjectsLayer {
+    pub max_multi_get_objects: Option<usize>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -33,6 +45,7 @@ impl RpcConfig {
     /// configure.
     pub fn example() -> Self {
         Self {
+            objects: ObjectsConfig::default().into(),
             transactions: TransactionsConfig::default().into(),
             extra: Default::default(),
         }
@@ -44,12 +57,32 @@ impl RpcConfig {
     }
 }
 
+impl ObjectsLayer {
+    pub fn finish(self, base: ObjectsConfig) -> ObjectsConfig {
+        check_extra("objects", self.extra);
+        ObjectsConfig {
+            max_multi_get_objects: self
+                .max_multi_get_objects
+                .unwrap_or(base.max_multi_get_objects),
+        }
+    }
+}
+
 impl TransactionsLayer {
     pub fn finish(self, base: TransactionsConfig) -> TransactionsConfig {
         check_extra("transactions", self.extra);
         TransactionsConfig {
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
+        }
+    }
+}
+
+impl From<ObjectsConfig> for ObjectsLayer {
+    fn from(config: ObjectsConfig) -> Self {
+        Self {
+            max_multi_get_objects: Some(config.max_multi_get_objects),
+            extra: Default::default(),
         }
     }
 }

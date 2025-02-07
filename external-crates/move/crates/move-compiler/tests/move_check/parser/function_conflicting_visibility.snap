@@ -1,0 +1,154 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:2:20
+  │
+2 │     public(friend) public(package) fun t0() {}
+  │     -------------- ^^^^^^^^^^^^^^^ Duplicate 'public' modifier
+  │     │               
+  │     'public' modifier previously given here
+
+error[E02016]: invalid visibility modifier
+   ┌─ tests/move_check/parser/function_conflicting_visibility.move:2:20
+   │
+ 2 │     public(friend) public(package) fun t0() {}
+   │                    ^^^^^^^^^^^^^^^ Cannot mix 'package' and 'friend' visibilities in the same module
+   ·
+11 │     public(friend) public(friend) fun s2() {}
+   │                    -------------- 'friend' visibility used here
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:2:20
+  │
+2 │     public(friend) public(package) fun t0() {}
+  │                    ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:3:21
+  │
+3 │     public(package) public(friend) fun t1() {}
+  │     --------------- ^^^^^^^^^^^^^^ Duplicate 'public' modifier
+  │     │                
+  │     'public' modifier previously given here
+
+error[E02016]: invalid visibility modifier
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:3:21
+  │
+3 │     public(package) public(friend) fun t1() {}
+  │                     ^^^^^^^^^^^^^^ Cannot mix 'friend' and 'package' visibilities in the same module
+4 │     public public(package) fun t2() {}
+  │            --------------- 'public(package)' visibility used here
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:4:12
+  │
+4 │     public public(package) fun t2() {}
+  │     ------ ^^^^^^^^^^^^^^^ Duplicate 'public' modifier
+  │     │       
+  │     'public' modifier previously given here
+
+error[E02016]: invalid visibility modifier
+   ┌─ tests/move_check/parser/function_conflicting_visibility.move:4:12
+   │
+ 4 │     public public(package) fun t2() {}
+   │            ^^^^^^^^^^^^^^^ Cannot mix 'package' and 'friend' visibilities in the same module
+   ·
+11 │     public(friend) public(friend) fun s2() {}
+   │                    -------------- 'friend' visibility used here
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:4:12
+  │
+4 │     public public(package) fun t2() {}
+  │            ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:5:21
+  │
+5 │     public(package) public fun t3() {}
+  │     --------------- ^^^^^^ Duplicate 'public' modifier
+  │     │                
+  │     'public' modifier previously given here
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:6:12
+  │
+6 │     public public(friend) fun t4() {}
+  │     ------ ^^^^^^^^^^^^^^ Duplicate 'public' modifier
+  │     │       
+  │     'public' modifier previously given here
+
+error[E02016]: invalid visibility modifier
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:6:12
+  │
+4 │     public public(package) fun t2() {}
+  │            --------------- 'public(package)' visibility used here
+5 │     public(package) public fun t3() {}
+6 │     public public(friend) fun t4() {}
+  │            ^^^^^^^^^^^^^^ Cannot mix 'friend' and 'package' visibilities in the same module
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:7:20
+  │
+7 │     public(friend) public fun t5() {}
+  │     -------------- ^^^^^^ Duplicate 'public' modifier
+  │     │               
+  │     'public' modifier previously given here
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:9:12
+  │
+9 │     public public fun s0() {}
+  │     ------ ^^^^^^ Duplicate 'public' modifier
+  │     │       
+  │     'public' modifier previously given here
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_check/parser/function_conflicting_visibility.move:10:21
+   │
+10 │     public(package) public(package) fun s1() {}
+   │     --------------- ^^^^^^^^^^^^^^^ Duplicate 'public' modifier
+   │     │                
+   │     'public' modifier previously given here
+
+error[E02016]: invalid visibility modifier
+   ┌─ tests/move_check/parser/function_conflicting_visibility.move:10:21
+   │
+10 │     public(package) public(package) fun s1() {}
+   │                     ^^^^^^^^^^^^^^^ Cannot mix 'package' and 'friend' visibilities in the same module
+11 │     public(friend) public(friend) fun s2() {}
+   │                    -------------- 'friend' visibility used here
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/function_conflicting_visibility.move:10:21
+   │
+10 │     public(package) public(package) fun s1() {}
+   │                     ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_check/parser/function_conflicting_visibility.move:11:20
+   │
+11 │     public(friend) public(friend) fun s2() {}
+   │     -------------- ^^^^^^^^^^^^^^ Duplicate 'public' modifier
+   │     │               
+   │     'public' modifier previously given here
+
+error[E02016]: invalid visibility modifier
+   ┌─ tests/move_check/parser/function_conflicting_visibility.move:11:20
+   │
+ 4 │     public public(package) fun t2() {}
+   │            --------------- 'public(package)' visibility used here
+   ·
+11 │     public(friend) public(friend) fun s2() {}
+   │                    ^^^^^^^^^^^^^^ Cannot mix 'friend' and 'package' visibilities in the same module

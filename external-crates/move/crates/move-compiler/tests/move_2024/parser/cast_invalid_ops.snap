@@ -1,0 +1,93 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01015]: ambiguous 'as'
+  ┌─ tests/move_2024/parser/cast_invalid_ops.move:4:9
+  │
+4 │         x + y as u32;
+  │         ^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E01015]: ambiguous 'as'
+  ┌─ tests/move_2024/parser/cast_invalid_ops.move:5:9
+  │
+5 │         x - y as u32;
+  │         ^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E01015]: ambiguous 'as'
+  ┌─ tests/move_2024/parser/cast_invalid_ops.move:6:9
+  │
+6 │         x * y as u32;
+  │         ^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E01015]: ambiguous 'as'
+  ┌─ tests/move_2024/parser/cast_invalid_ops.move:7:9
+  │
+7 │         x / y as u32;
+  │         ^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E01015]: ambiguous 'as'
+  ┌─ tests/move_2024/parser/cast_invalid_ops.move:8:9
+  │
+8 │         x % y as u32;
+  │         ^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E01015]: ambiguous 'as'
+  ┌─ tests/move_2024/parser/cast_invalid_ops.move:9:9
+  │
+9 │         x & y as u32;
+  │         ^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E01015]: ambiguous 'as'
+   ┌─ tests/move_2024/parser/cast_invalid_ops.move:10:9
+   │
+10 │         x | y as u32;
+   │         ^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E01015]: ambiguous 'as'
+   ┌─ tests/move_2024/parser/cast_invalid_ops.move:11:9
+   │
+11 │         x ^ y as u32;
+   │         ^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E01015]: ambiguous 'as'
+   ┌─ tests/move_2024/parser/cast_invalid_ops.move:12:9
+   │
+12 │         x << y as u32;
+   │         ^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E01015]: ambiguous 'as'
+   ┌─ tests/move_2024/parser/cast_invalid_ops.move:13:9
+   │
+13 │         x >> y as u32;
+   │         ^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E01015]: ambiguous 'as'
+   ┌─ tests/move_2024/parser/cast_invalid_ops.move:14:9
+   │
+14 │         !x as u32;
+   │         ^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/cast_invalid_ops.move:14:9
+   │
+14 │         !x as u32;
+   │         ^^
+   │         │
+   │         Invalid argument to 'as'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/cast_invalid_ops.move:14:10
+   │
+ 3 │     fun ops(x: u8, y: u8) {
+   │                -- Given: 'u8'
+   ·
+14 │         !x as u32;
+   │          ^
+   │          │
+   │          Invalid argument to '!'
+   │          Expected: 'bool'

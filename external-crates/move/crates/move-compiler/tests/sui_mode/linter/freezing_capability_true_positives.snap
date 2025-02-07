@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99008]: freezing potential capability
+   ┌─ tests/sui_mode/linter/freezing_capability_true_positives.move:21:9
+   │
+21 │         transfer::public_freeze_object(w);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The type 'a::test_true_positives::AdminCap' is potentially a capability based on its name
+   │
+   = Freezing a capability might lock out critical operations or otherwise open access to operations that otherwise should be restricted
+   = This warning can be suppressed with '#[allow(lint(freezing_capability))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99008]: freezing potential capability
+   ┌─ tests/sui_mode/linter/freezing_capability_true_positives.move:25:9
+   │
+25 │         transfer::public_freeze_object(w);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The type 'a::test_true_positives::UserCapability' is potentially a capability based on its name
+   │
+   = Freezing a capability might lock out critical operations or otherwise open access to operations that otherwise should be restricted
+   = This warning can be suppressed with '#[allow(lint(freezing_capability))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99008]: freezing potential capability
+   ┌─ tests/sui_mode/linter/freezing_capability_true_positives.move:29:9
+   │
+29 │         transfer::public_freeze_object(w);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The type 'a::test_true_positives::OwnerCapV2' is potentially a capability based on its name
+   │
+   = Freezing a capability might lock out critical operations or otherwise open access to operations that otherwise should be restricted
+   = This warning can be suppressed with '#[allow(lint(freezing_capability))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

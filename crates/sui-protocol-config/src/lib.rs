@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 73;
+const MAX_PROTOCOL_VERSION: u64 = 74;
 
 // Record history of protocol version allocations here:
 //
@@ -211,6 +211,11 @@ const MAX_PROTOCOL_VERSION: u64 = 73;
 // Version 73: Enable new marker table version.
 //             Enable consensus garbage collection and new commit rule for devnet.
 //             Enable zstd compression for consensus tonic network in testnet.
+//             Enable smart ancestor selection in mainnet.
+//             Enable probing for accepted rounds in round prober in mainnet
+// Version 74: Enable load_nitro_attestation move function in sui framework in devnet.
+//             Enable all gas costs for load_nitro_attestation.
+//
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -468,6 +473,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_group_ops_native_function_msm: bool,
 
+    // Enable nitro attestation.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation: bool,
+
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
     reject_mutable_random_on_entry_functions: bool,
@@ -646,6 +655,7 @@ pub enum PerObjectCongestionControlMode {
     TotalGasBudget,        // Use txn gas budget as execution cost.
     TotalTxCount,          // Use total txn count as execution cost.
     TotalGasBudgetWithCap, // Use txn gas budget as execution cost with a cap.
+    ExecutionTimeEstimate, // Use execution time estimate as execution cost.
 }
 
 impl PerObjectCongestionControlMode {
@@ -1220,6 +1230,12 @@ pub struct ProtocolConfig {
     vdf_verify_vdf_cost: Option<u64>,
     vdf_hash_to_input_cost: Option<u64>,
 
+    // nitro_attestation::load_nitro_attestation
+    nitro_attestation_parse_base_cost: Option<u64>,
+    nitro_attestation_parse_cost_per_byte: Option<u64>,
+    nitro_attestation_verify_base_cost: Option<u64>,
+    nitro_attestation_verify_cost_per_cert: Option<u64>,
+
     // Stdlib costs
     bcs_per_byte_serialized_cost: Option<u64>,
     bcs_legacy_min_output_size_cost: Option<u64>,
@@ -1785,6 +1801,9 @@ impl ProtocolConfig {
     pub fn consensus_zstd_compression(&self) -> bool {
         self.feature_flags.consensus_zstd_compression
     }
+    pub fn enable_nitro_attestation(&self) -> bool {
+        self.feature_flags.enable_nitro_attestation
+    }
 }
 
 #[cfg(not(msim))]
@@ -2218,6 +2237,12 @@ impl ProtocolConfig {
 
             vdf_verify_vdf_cost: None,
             vdf_hash_to_input_cost: None,
+
+            // nitro_attestation::verify_nitro_attestation
+            nitro_attestation_parse_base_cost: None,
+            nitro_attestation_parse_cost_per_byte: None,
+            nitro_attestation_verify_base_cost: None,
+            nitro_attestation_verify_cost_per_cert: None,
 
             bcs_per_byte_serialized_cost: None,
             bcs_legacy_min_output_size_cost: None,
@@ -3179,13 +3204,39 @@ impl ProtocolConfig {
                         // Assuming a round rate of max 15/sec, then using a gc depth of 60 allow blocks within a window of ~4 seconds
                         // to be included before be considered garbage collected.
                         cfg.consensus_gc_depth = Some(60);
-                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                     }
 
                     if chain != Chain::Mainnet {
                         // Enable zstd compression for consensus in testnet
                         cfg.feature_flags.consensus_zstd_compression = true;
                     }
+
+                    // Enable smart ancestor selection for mainnet
+                    cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                    // Enable probing for accepted rounds in round prober for mainnet
+                    cfg.feature_flags
+                        .consensus_round_prober_probe_accepted_rounds = true;
+
+                    // Increase congestion control budget.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalGasBudgetWithCap;
+                    cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(37_000_000);
+                    cfg.max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit =
+                        Some(7_400_000); // 20% of above
+                    cfg.max_txn_cost_overage_per_object_in_commit = Some(u64::MAX);
+                    cfg.gas_budget_based_txn_cost_absolute_cap_commit_count = Some(50);
+                    cfg.allowed_txn_cost_overage_burst_per_object_in_commit = Some(370_000_000);
+                }
+                74 => {
+                    // Enable nitro attestation verify native move function for devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_nitro_attestation = true;
+                    }
+                    cfg.nitro_attestation_parse_base_cost = Some(53);
+                    cfg.nitro_attestation_parse_cost_per_byte = Some(1);
+                    cfg.nitro_attestation_verify_base_cost = Some(49632);
+                    cfg.nitro_attestation_verify_cost_per_cert = Some(52369);
                 }
                 // Use this template when making changes:
                 //

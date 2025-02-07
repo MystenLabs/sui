@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02002]: invalid 'entry' function signature
+  ┌─ tests/sui_mode/entry_points/generic_obj_mut_ref_vector.move:5:32
+  │
+5 │     public entry fun no<T:key>(_: &mut vector<T>) {
+  │            -----               ^  -------------- 'entry' parameters must be primitives (by-value), vectors of primitives, objects (by-reference or by-value), vectors of objects, or 'Receiving' arguments (by-reference or by-value)
+  │            │                   │   
+  │            │                   Invalid 'entry' parameter type for parameter '_'
+  │            'no' was declared 'entry' here

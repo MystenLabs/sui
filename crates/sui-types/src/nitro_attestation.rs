@@ -376,15 +376,15 @@ impl CoseSign1 {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AttestationDocument {
-    module_id: String,
-    timestamp: u64,
-    digest: String,
-    pcrs: Vec<Vec<u8>>,
+    pub module_id: String,
+    pub timestamp: u64,
+    pub digest: String,
+    pub pcrs: Vec<Vec<u8>>,
     certificate: Vec<u8>,
     cabundle: Vec<Vec<u8>>,
-    public_key: Option<Vec<u8>>,
-    user_data: Option<Vec<u8>>,
-    nonce: Option<Vec<u8>>,
+    pub public_key: Option<Vec<u8>>,
+    pub user_data: Option<Vec<u8>>,
+    pub nonce: Option<Vec<u8>>,
 }
 
 impl AttestationDocument {
@@ -550,21 +550,6 @@ impl AttestationDocument {
     /// Get the length of the certificate chain.
     pub fn get_cert_chain_length(&self) -> usize {
         self.cabundle.len()
-    }
-
-    /// Get the PCR meansurements.
-    pub fn get_pcrs(&self) -> &[Vec<u8>] {
-        &self.pcrs
-    }
-
-    /// Get the user data.
-    pub fn get_user_data(&self) -> Option<Vec<u8>> {
-        self.user_data.clone()
-    }
-
-    /// Get the nonce.
-    pub fn get_nonce(&self) -> Option<Vec<u8>> {
-        self.nonce.clone()
     }
 }
 

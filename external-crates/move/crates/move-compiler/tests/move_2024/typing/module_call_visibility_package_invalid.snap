@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:10:52
+   │
+ 3 │     public(package) fun f_pkg_public() {}
+   │     --------------- A 'public(package)' function can only be called from the same address and package as module '0x42::mod_0' in package '<unknown package>'. This call is from address '0x54' in package '<unknown package>'
+   ·
+10 │     public(package) fun f_package_call_package() { mod_0::f_pkg_public() }
+   │                                                    ^^^^^^^^^^^^^^^^^^^^^ Invalid call to 'public(package)' visible function '0x42::mod_0::f_pkg_public'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:11:42
+   │
+ 3 │     public(package) fun f_pkg_public() {}
+   │     --------------- A 'public(package)' function can only be called from the same address and package as module '0x42::mod_0' in package '<unknown package>'. This call is from address '0x54' in package '<unknown package>'
+   ·
+11 │     public fun f_public_call_package() { mod_0::f_pkg_public() }
+   │                                          ^^^^^^^^^^^^^^^^^^^^^ Invalid call to 'public(package)' visible function '0x42::mod_0::f_pkg_public'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:12:36
+   │
+ 3 │     public(package) fun f_pkg_public() {}
+   │     --------------- A 'public(package)' function can only be called from the same address and package as module '0x42::mod_0' in package '<unknown package>'. This call is from address '0x54' in package '<unknown package>'
+   ·
+12 │     fun f_private_call_package() { mod_0::f_pkg_public() }
+   │                                    ^^^^^^^^^^^^^^^^^^^^^ Invalid call to 'public(package)' visible function '0x42::mod_0::f_pkg_public'

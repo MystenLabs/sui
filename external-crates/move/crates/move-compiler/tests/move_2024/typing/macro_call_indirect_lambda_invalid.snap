@@ -1,0 +1,86 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04031]: invalid usage of lambda
+  ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:3:12
+  │
+3 │         $f($x)
+  │            ^^ Lambdas can only be used directly as arguments to 'macro' functions
+
+error[E04031]: invalid usage of lambda
+  ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:7:17
+  │
+7 │         let f = |x| x + 1;
+  │                 ^^^^^^^^^ Lambdas can only be used directly as arguments to 'macro' functions
+
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:8:13
+  │
+8 │         let x = apply!(f, 1);
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04032]: unable to expand macro function
+  ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:8:24
+  │
+8 │         let x = apply!(f, 1);
+  │                        ^ Unable to bind lambda to parameter '$f'. The lambda must be passed directly
+
+error[E04030]: invalid usage of lambda type
+   ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:12:13
+   │
+12 │         let f: |u64| -> u64;
+   │             ^ Unexpected lambda type. Lambdas can only be used with 'macro' functions, as parameters or direct arguments
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:13:13
+   │
+13 │         let x = apply!(f, 1);
+   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:13:24
+   │
+13 │         let x = apply!(f, 1);
+   │                        ^ Unable to bind lambda to parameter '$f'. The lambda must be passed directly
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:17:13
+   │
+17 │         let x = apply!((0: |u64| -> u64), 1);
+   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:17:24
+   │
+17 │         let x = apply!((0: |u64| -> u64), 1);
+   │                        ^^^^^^^^^^^^^^^^^ Unable to bind lambda to parameter '$f'. The lambda must be passed directly
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:21:13
+   │
+21 │         let x = apply!(|x| x, |x| x);
+   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:21:17
+   │
+ 2 │     macro fun apply($f: |u64| -> u64, $x: u64): u64 {
+   │                                           --- Expected: 'u64'
+   ·
+21 │         let x = apply!(|x| x, |x| x);
+   │                 ^^^^^^^^^^^^^^^^^^^^
+   │                 │             │
+   │                 │             Given: '|_| -> _'
+   │                 Invalid call of 'a::m::apply'. Invalid argument for parameter '$x'

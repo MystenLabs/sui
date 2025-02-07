@@ -1,0 +1,28 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/naming/duplicate_use_fun_with_normal_use.move:8:37
+  │
+4 │     public fun foobar(_: &X) {}
+  │                           - 'use' function aliases create an implicit 'use fun' when their first argument is a type defined in that module
+  ·
+8 │     use a::m::{X, foobar, foobar as foobaz};
+  │                                     ^^^^^^ Duplicate 'use fun' for 'a::m::X.foobaz'
+9 │     use fun foobar as X.foobaz;
+  │                         ------ Previously declared here
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/naming/duplicate_use_fun_with_normal_use.move:19:41
+   │
+ 4 │     public fun foobar(_: &X) {}
+   │                           - 'use' function aliases create an implicit 'use fun' when their first argument is a type defined in that module
+   ·
+19 │         use a::m::{X, foobar, foobar as foobaz};
+   │                                         ^^^^^^ Duplicate 'use fun' for 'a::m::X.foobaz'
+20 │         use fun foobar as X.foobaz;
+   │                             ------ Previously declared here

@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02011]: invalid 'friend' declaration
+  ┌─ tests/move_check/naming/friend_decl_self.move:3:5
+  │
+3 │     friend Self;
+  │     ^^^^^^^^^^^^
+  │     │      │
+  │     │      Cannot declare the module itself as a friend
+  │     Invalid friend declaration
+
+error[E02011]: invalid 'friend' declaration
+  ┌─ tests/move_check/naming/friend_decl_self.move:9:5
+  │
+9 │     friend 0x43::M;
+  │     ^^^^^^^^^^^^^^^
+  │     │      │
+  │     │      Cannot declare the module itself as a friend
+  │     Invalid friend declaration

@@ -1,0 +1,126 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:10:37
+   │
+10 │     macro fun call_with_x($f: || -> X): X {
+   │                                     ^ The struct '0x42::m::X' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:10:41
+   │
+10 │     macro fun call_with_x($f: || -> X): X {
+   │                                         ^ The struct '0x42::m::X' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:11:9
+   │
+11 │         f();
+   │         ^ The function '0x42::m::f' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:16:9
+   │
+16 │         f();
+   │         ^ The function '0x42::m::f' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:21:9
+   │
+21 │         f();
+   │         ^ The function '0x42::m::f' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:26:9
+   │
+26 │         f();
+   │         ^ The function '0x42::m::f' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:27:25
+   │
+27 │         call_with_x!(|| X());
+   │                         ^ The struct '0x42::m::X' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:31:9
+   │
+31 │         f();
+   │         ^ The function '0x42::m::f' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:32:18
+   │
+32 │         call!(|| X());
+   │                  ^ The struct '0x42::m::X' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:33:20
+   │
+33 │         call!(|| Y<X>());
+   │                    ^ The struct '0x42::m::X' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:34:22
+   │
+34 │         call!(|| Y<Y<X>>());
+   │                      ^ The struct '0x42::m::X' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:38:9
+   │
+38 │         f();
+   │         ^ The function '0x42::m::f' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:39:25
+   │
+39 │         call_unders!(|| X());
+   │                         ^ The struct '0x42::m::X' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:40:27
+   │
+40 │         call_unders!(|| Y<X>());
+   │                           ^ The struct '0x42::m::X' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:41:29
+   │
+41 │         call_unders!(|| Y<Y<X>>());
+   │                             ^ The struct '0x42::m::X' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

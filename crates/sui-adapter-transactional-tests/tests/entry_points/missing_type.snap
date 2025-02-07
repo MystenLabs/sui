@@ -1,0 +1,38 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-15:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3876000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 17:
+//# run test::m::foo --type-args test::x::x
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: LINKER_ERROR, sub_status: None, message: Some("Cannot find ModuleId { address: test, name: Identifier(\"x\") } in data cache"), exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
+
+task 3, line 19:
+//# run test::m::foo --type-args test::m::SUI
+Error: Transaction Effects Status: Error for type argument at index 0: A type was not found in the module specified.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TypeArgumentError { argument_idx: 0, kind: TypeNotFound }, source: None, command: Some(0) } }
+
+task 4, line 21:
+//# run test::m::foo --type-args test::m::S
+Error: Transaction Effects Status: Type arity mismatch for Move function. Mismatch between the number of actual versus expected type arguments.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TypeArityMismatch, source: None, command: Some(0) } }
+
+task 5, line 23:
+//# run test::m::foo --type-args test::m::S<u64,u8>
+Error: Transaction Effects Status: Type arity mismatch for Move function. Mismatch between the number of actual versus expected type arguments.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TypeArityMismatch, source: None, command: Some(0) } }
+
+task 6, line 25:
+//# run test::m::foo --type-args test::m::S<signer>
+Error: Transaction Effects Status: Error for type argument at index 0: A type provided did not match the specified constraints.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TypeArgumentError { argument_idx: 0, kind: ConstraintNotSatisfied }, source: None, command: Some(0) } }

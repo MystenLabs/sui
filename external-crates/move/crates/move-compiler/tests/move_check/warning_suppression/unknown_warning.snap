@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/warning_suppression/unknown_warning.move:3:9
+  │
+3 │ #[allow(who_am_i)]
+  │         ^^^^^^^^ Unknown warning filter 'who_am_i'

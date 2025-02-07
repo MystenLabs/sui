@@ -1,0 +1,46 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_store_generic.move:11:9
+   │
+10 │     public fun t1<T: key + store>(s: T) {
+   │                            -----     - The type 'T' is not declared in the current module
+   │                            │          
+   │                            The object has 'store' so 'sui::transfer::public_transfer' can be called instead
+11 │         transfer::transfer(s, @0x100);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::transfer' is restricted to being called in the object's module
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_store_generic.move:15:9
+   │
+14 │     public fun t2<T: key + store>(s: T) {
+   │                            -----     - The type 'T' is not declared in the current module
+   │                            │          
+   │                            The object has 'store' so 'sui::transfer::public_freeze_object' can be called instead
+15 │         transfer::freeze_object(s);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::freeze_object' is restricted to being called in the object's module
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_store_generic.move:19:9
+   │
+18 │     public fun t3<T: key + store>(s: T) {
+   │                            -----     - The type 'T' is not declared in the current module
+   │                            │          
+   │                            The object has 'store' so 'sui::transfer::public_share_object' can be called instead
+19 │         transfer::share_object(s);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::share_object' is restricted to being called in the object's module
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_store_generic.move:23:9
+   │
+22 │     public fun t4<T: key + store>(p: &mut UID, s: Receiving<T>): T {
+   │                            -----                            - The type 'T' is not declared in the current module
+   │                            │                                 
+   │                            The object has 'store' so 'sui::transfer::public_receive' can be called instead
+23 │         transfer::receive(p, s)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::receive' is restricted to being called in the object's module

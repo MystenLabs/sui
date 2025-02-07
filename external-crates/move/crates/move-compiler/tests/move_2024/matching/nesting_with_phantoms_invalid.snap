@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/nesting_with_phantoms_invalid.move:20:51
+   │
+20 │     public struct PS<phantom T> { s: S , x: X, t: T}
+   │                              -                    ^ Phantom type parameter cannot be used as a field type
+   │                              │                     
+   │                              'T' declared here as phantom
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/nesting_with_phantoms_invalid.move:24:19
+   │
+22 │     public enum PE<phantom T> {
+   │                            - 'T' declared here as phantom
+23 │         One { s: S, x: X },
+24 │         Two(S, X, T),
+   │                   ^ Phantom type parameter cannot be used as a field type

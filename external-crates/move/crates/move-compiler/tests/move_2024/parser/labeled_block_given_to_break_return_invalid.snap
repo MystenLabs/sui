@@ -1,0 +1,66 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03015]: unbound label
+  ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:4:15
+  │
+4 │         break 'a: { 1 };
+  │               ^^ Invalid break. Unbound label 'a
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:4:17
+  │
+4 │         break 'a: { 1 };
+  │                 ^
+  │                 │
+  │                 Unexpected ':'
+  │                 Expected ';'
+
+error[E03015]: unbound label
+  ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:8:16
+  │
+8 │         return 'a: { 1 };
+  │                ^^ Invalid return. Unbound label 'a
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:8:18
+  │
+8 │         return 'a: { 1 };
+  │                  ^
+  │                  │
+  │                  Unexpected ':'
+  │                  Expected ';'
+
+error[E03015]: unbound label
+   ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:12:15
+   │
+12 │         break 'a: loop {};
+   │               ^^ Invalid break. Unbound label 'a
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:12:17
+   │
+12 │         break 'a: loop {};
+   │                 ^
+   │                 │
+   │                 Unexpected ':'
+   │                 Expected ';'
+
+error[E03015]: unbound label
+   ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:16:16
+   │
+16 │         return 'a: while (cond) { 1 };
+   │                ^^ Invalid return. Unbound label 'a
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:16:18
+   │
+16 │         return 'a: while (cond) { 1 };
+   │                  ^
+   │                  │
+   │                  Unexpected ':'
+   │                  Expected ';'

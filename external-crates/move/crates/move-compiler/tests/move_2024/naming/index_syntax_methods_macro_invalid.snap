@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02019]: invalid 'syntax' method type
+  ┌─ tests/move_2024/naming/index_syntax_methods_macro_invalid.move:6:7
+  │
+6 │     #[syntax(index)]
+  │       ^^^^^^^^^^^^^ Syntax attributes may not appear on macro definitions
+7 │     public macro fun borrow<$T>($s: &S<$T>, $i: u64): &mut u64 { abort 0 }
+  │            ----- This function is a macro
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/naming/index_syntax_methods_macro_invalid.move:16:7
+   │
+16 │     #[syntax(index)]
+   │       ^^^^^^^^^^^^^ Syntax attributes may not appear on macro definitions
+17 │     public macro fun borrow<$T>($s: &mut S<$T>, $i: u64): &u64 { abort 0 }
+   │            ----- This function is a macro
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/naming/index_syntax_methods_macro_invalid.move:26:7
+   │
+26 │     #[syntax(index)]
+   │       ^^^^^^^^^^^^^ Syntax attributes may not appear on macro definitions
+27 │     public macro fun borrow<$T>($s: &mut S<$T>, $i: u64): &u64 { abort 0 }
+   │            ----- This function is a macro
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/naming/index_syntax_methods_macro_invalid.move:30:7
+   │
+30 │     #[syntax(index)]
+   │       ^^^^^^^^^^^^^ Syntax attributes may not appear on macro definitions
+31 │     public macro fun borrow_mut<$T>($s: &mut S<$T>, $i: u64): &u64 { abort 0 }
+   │            ----- This function is a macro
