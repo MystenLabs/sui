@@ -32,7 +32,7 @@ mod tests {
 
     #[test]
     fn package_name_works() {
-        assert_eq!(package_name!(), "mysten-service",);
+        assert_eq!(package_name!(), "mysten-service");
     }
 
     #[test]
