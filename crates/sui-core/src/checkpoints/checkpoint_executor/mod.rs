@@ -770,8 +770,12 @@ impl CheckpointExecutor {
                     .await
                     .expect("Finalizing checkpoint cannot fail");
 
-                    self.commit_index_updates_and_enqueue_to_subscription_service(checkpoint_data)
+                    if let Some(checkpoint_data) = checkpoint_data {
+                        self.commit_index_updates_and_enqueue_to_subscription_service(
+                            checkpoint_data,
+                        )
                         .await;
+                    }
 
                     self.checkpoint_store
                         .insert_epoch_last_checkpoint(cur_epoch, checkpoint)
@@ -990,7 +994,7 @@ async fn handle_execution_effects(
                     )
                     .await
                     .expect("Finalizing checkpoint cannot fail");
-                    return (Some(checkpoint_acc), Some(checkpoint_data));
+                    return (Some(checkpoint_acc), checkpoint_data);
                 } else {
                     return (None, None);
                 }
@@ -1372,7 +1376,7 @@ async fn finalize_checkpoint(
     accumulator: Arc<StateAccumulator>,
     effects: Vec<TransactionEffects>,
     data_ingestion_dir: Option<PathBuf>,
-) -> SuiResult<(Accumulator, CheckpointData)> {
+) -> SuiResult<(Accumulator, Option<CheckpointData>)> {
     debug!("finalizing checkpoint");
     epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
 
@@ -1388,15 +1392,15 @@ async fn finalize_checkpoint(
     let checkpoint_acc =
         accumulator.accumulate_checkpoint(effects, checkpoint.sequence_number, epoch_store)?;
 
-    let checkpoint_data = load_checkpoint_data(
-        checkpoint,
-        object_cache_reader,
-        transaction_cache_reader,
-        checkpoint_store,
-        tx_digests,
-    )?;
+    let checkpoint_data = if state.rpc_index.is_some() || data_ingestion_dir.is_some() {
+        let checkpoint_data = load_checkpoint_data(
+            checkpoint,
+            object_cache_reader,
+            transaction_cache_reader,
+            checkpoint_store,
+            tx_digests,
+        )?;
 
-    if state.rpc_index.is_some() || data_ingestion_dir.is_some() {
         // Index the checkpoint. this is done out of order and is not written and committed to the
         // DB until later (committing must be done in-order)
         if let Some(rpc_index) = &state.rpc_index {
@@ -1410,7 +1414,11 @@ async fn finalize_checkpoint(
         if let Some(path) = data_ingestion_dir {
             store_checkpoint_locally(path, &checkpoint_data)?;
         }
-    }
+
+        Some(checkpoint_data)
+    } else {
+        None
+    };
 
     Ok((checkpoint_acc, checkpoint_data))
 }
