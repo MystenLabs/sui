@@ -84,11 +84,11 @@ mod compatibility_tests {
         for entry in manifest.values() {
             for package in &entry.packages {
                 // parse package.path/Move.toml
-                let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                let toml_path = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../..")
                     .join(&package.path);
                 let package_toml: SourceManifest =
-                    parse_move_manifest_from_file(&manifest_path).expect("Move.toml exists");
+                    parse_move_manifest_from_file(&toml_path).expect("Move.toml exists");
                 // check manifest name field is package.name
                 assert_eq!(package_toml.package.name.to_string(), package.name);
                 // check manifest published-at field is package.id
