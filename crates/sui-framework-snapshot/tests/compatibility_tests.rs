@@ -19,14 +19,14 @@ mod compatibility_tests {
             let framework = load_bytecode_snapshot(version).unwrap();
             let old_framework_store: BTreeMap<_, _> = framework
                 .into_iter()
-                .map(|package| (*package.id(), package.genesis_object()))
+                .map(|package| (package.id, package.genesis_object()))
                 .collect();
             for cur_package in BuiltInFramework::iter_system_packages() {
                 if compare_system_package(
                     &old_framework_store,
-                    cur_package.id(),
+                    &cur_package.id,
                     &cur_package.modules(),
-                    cur_package.dependencies().to_vec(),
+                    cur_package.dependencies.to_vec(),
                     &binary_config,
                 )
                 .await
@@ -34,8 +34,7 @@ mod compatibility_tests {
                 {
                     panic!(
                         "The current Sui framework {:?} is not compatible with version {:?}",
-                        cur_package.id(),
-                        version
+                        cur_package.id, version
                     );
                 }
             }
@@ -56,9 +55,9 @@ mod compatibility_tests {
         let latest_snapshot = load_bytecode_snapshot(*snapshots.keys().max().unwrap()).unwrap();
         // Turn them into BTreeMap for deterministic comparison.
         let latest_snapshot_ref: BTreeMap<_, _> =
-            latest_snapshot.iter().map(|p| (p.id(), p)).collect();
+            latest_snapshot.iter().map(|p| (&p.id, p)).collect();
         let current_framework: BTreeMap<_, _> = BuiltInFramework::iter_system_packages()
-            .map(|p| (p.id(), p))
+            .map(|p| (&p.id, p))
             .collect();
         assert_eq!(
                 latest_snapshot_ref,
