@@ -6,11 +6,13 @@ use std::{collections::BTreeMap, sync::LazyLock};
 use anyhow::{bail, Context};
 use sui_protocol_config::ProtocolVersion;
 
+#[derive(Debug)]
 pub struct FrameworkPackage {
     package_name: String,
     repo_path: String,
 }
 
+#[derive(Debug)]
 pub struct FrameworkVersion {
     git_revision: String,
     packages: Vec<FrameworkPackage>,
@@ -37,6 +39,12 @@ impl FrameworkVersion {
     /// Packages that are defined in this version of the framework
     pub fn packages(&self) -> &Vec<FrameworkPackage> {
         &self.packages
+    }
+}
+
+impl PartialEq for FrameworkVersion {
+    fn eq(&self, other: &Self) -> bool {
+        self.git_revision() == other.git_revision()
     }
 }
 
@@ -81,7 +89,7 @@ fn test_nonempty_version_table() {
 
 #[test]
 /// the hash for a specific version that we have one for is corretly returned
-fn test_exact() {
+fn test_exact_version() {
     let framework = framework_for_protocol(4.into()).unwrap();
     assert_eq!(
         framework.git_revision(),
@@ -92,37 +100,35 @@ fn test_exact() {
 
 #[test]
 /// we get the right hash for a version that we don't have an exact entry for
-fn test_hash_gap() {
+fn test_gap_version() {
     // versions 56 and 57 are missing in the manifest; version 55 should be returned
     assert_eq!(
-        framework_for_protocol(56.into()).unwrap().git_revision(),
-        framework_for_protocol(55.into()).unwrap().git_revision(),
+        framework_for_protocol(56.into()).unwrap(),
+        framework_for_protocol(55.into()).unwrap(),
     );
     assert_eq!(
-        framework_for_protocol(57.into()).unwrap().git_revision(),
-        framework_for_protocol(55.into()).unwrap().git_revision(),
+        framework_for_protocol(57.into()).unwrap(),
+        framework_for_protocol(55.into()).unwrap(),
     );
     // version 58 is present though!
     assert_ne!(
-        framework_for_protocol(58.into()).unwrap().git_revision(),
-        framework_for_protocol(55.into()).unwrap().git_revision(),
+        framework_for_protocol(58.into()).unwrap(),
+        framework_for_protocol(55.into()).unwrap(),
     );
 }
 
 #[test]
 /// we get the correct hash for the latest known protocol version
-fn test_hash_latest() {
+fn test_version_latest() {
     assert_eq!(
-        framework_for_protocol(ProtocolVersion::MAX)
-            .unwrap()
-            .git_revision(),
-        latest_framework().git_revision()
+        framework_for_protocol(ProtocolVersion::MAX).unwrap(),
+        latest_framework()
     );
 }
 
 #[test]
 /// we get an error if the protocol version is too small or too large
-fn test_hash_errors() {
+fn test_version_errors() {
     assert!(framework_for_protocol(0.into()).is_err());
     assert!(framework_for_protocol(ProtocolVersion::MAX + 1).is_err());
 }
