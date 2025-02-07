@@ -748,7 +748,7 @@ impl CoinReadApi {
         &self,
         owner: SuiAddress,
         coin_type: Option<String>,
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> SuiRpcResult<CoinPage> {
         Ok(self
@@ -782,7 +782,7 @@ impl CoinReadApi {
     pub async fn get_all_coins(
         &self,
         owner: SuiAddress,
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> SuiRpcResult<CoinPage> {
         Ok(self.api.http.get_all_coins(owner, cursor, limit).await?)

@@ -14297,6 +14297,7 @@ dependencies = [
  "async-trait",
  "axum 0.7.5",
  "backoff",
+ "base64 0.21.7",
  "bcs",
  "cached",
  "chrono",
