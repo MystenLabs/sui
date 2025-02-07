@@ -592,16 +592,16 @@ pub trait ExecutionCacheWrite: Send + Sync {
         tx_outputs: Arc<TransactionOutputs>,
         // TODO: Delete this parameter once table migration is complete.
         use_object_per_epoch_marker_table_v2: bool,
-    ) -> BoxFuture<'_, ()>;
+    );
 
     /// Attempt to acquire object locks for all of the owned input locks.
-    fn acquire_transaction_locks<'a>(
-        &'a self,
-        epoch_store: &'a AuthorityPerEpochStore,
-        owned_input_objects: &'a [ObjectRef],
+    fn acquire_transaction_locks(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
         signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> BoxFuture<'a, SuiResult>;
+    ) -> SuiResult;
 }
 
 pub trait CheckpointCache: Send + Sync {

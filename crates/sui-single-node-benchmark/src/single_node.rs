@@ -132,7 +132,6 @@ impl SingleValidator {
                 transaction.data().intent_message().value.clone(),
                 *transaction.digest(),
             )
-            .await
             .unwrap()
             .2;
         assert!(effects.status().is_ok());
@@ -312,7 +311,6 @@ impl SingleValidator {
                 self.get_validator().get_object_cache_reader().as_ref(),
                 &transactions,
             )
-            .await
             .unwrap();
     }
 }

@@ -238,9 +238,7 @@ impl AuthorityStorePruner {
         perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
         metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
 
-        let _locks = objects_lock_table
-            .acquire_locks(indirect_objects.into_keys())
-            .await;
+        let _locks = objects_lock_table.acquire_locks(indirect_objects.into_keys());
         if let Some(batch) = pruner_db_wb {
             batch.write()?;
         }

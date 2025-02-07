@@ -4,7 +4,7 @@ use super::*;
 use crate::rocks::iter::{Iter, RevIter};
 use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 use crate::rocks::util::{is_ref_count_value, reference_count_merge_operator};
-use crate::{reopen, retry_transaction, retry_transaction_forever};
+use crate::{reopen, retry_transaction};
 use rstest::rstest;
 use serde::Deserialize;
 
@@ -1247,26 +1247,6 @@ async fn test_retry_transaction() {
         tx1.commit()
     })
     // fails after hitting maximum number of retries
-    .unwrap_err();
-
-    // obviously we cannot verify that this never times out, this is more just a test to make sure
-    // the macro compiles as expected.
-    tokio::time::timeout(Duration::from_secs(1), async move {
-        retry_transaction_forever!({
-            let mut tx1 = db
-                .transaction_without_snapshot()
-                .expect("failed to initiate transaction");
-            tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
-                .unwrap();
-            db.insert(&key, &"1".to_string()).unwrap();
-            tx1.commit()
-        })
-        // fails after hitting maximum number of retries
-        .unwrap_err();
-        panic!("should never finish");
-    })
-    .await
-    // must timeout
     .unwrap_err();
 }
 
