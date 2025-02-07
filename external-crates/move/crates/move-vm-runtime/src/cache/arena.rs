@@ -51,6 +51,14 @@ impl Arena {
             Err(PartialVMError::new(StatusCode::PACKAGE_ARENA_LIMIT_REACHED))
         }
     }
+
+    pub fn alloc_item<T>(&self, item: T) -> PartialVMResult<*const T> {
+        if let Ok(value) = self.0.try_alloc(item) {
+            Ok(value)
+        } else {
+            Err(PartialVMError::new(StatusCode::PACKAGE_ARENA_LIMIT_REACHED))
+        }
+    }
 }
 
 // -----------------------------------------------

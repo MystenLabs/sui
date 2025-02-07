@@ -9,7 +9,7 @@
 
 use crate::{
     cache::identifier_interner::IdentifierKey,
-    jit::execution::ast::{Datatype, EnumType, Function, Module, Package, StructType, Type},
+    jit::execution::ast::{Datatype, DatatypeDescriptor, Function, Module, Package, Type},
     shared::{
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, VALUE_DEPTH_MAX,
@@ -30,14 +30,9 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 
-use move_binary_format::file_format::DatatypeTyParameter;
-use move_core_types::{annotated_value as A, identifier::Identifier, runtime_value as R};
 use move_vm_config::runtime::VMConfig;
-use parking_lot::RwLock;
 
 use std::{collections::BTreeMap, sync::Arc};
-
-use tracing::error;
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -57,26 +52,20 @@ use tracing::error;
 pub struct VMDispatchTables {
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) loaded_packages: BTreeMap<RuntimePackageId, Arc<Package>>,
+    /// Representation of runtime type depths. This is separate from the underlying packages to
+    /// avoid grabbing write-locks and toward the possibility these may change based on linkage
+    /// (e.g., type ugrades or similar).
+    pub type_depths: BTreeMap<RuntimePackageId, BTreeMap<IntraPackageKey, DepthFormula>>,
 }
 
-/// A `PackageVTable` is a collection of function pointers indexed by the module and function name
+/// A `PackageVTable` is a collection of pointers indexed by the module and name
 /// within the package.
 #[derive(Debug)]
 pub struct PackageVirtualTable {
+    /// Representation of runtime functions.
     pub functions: BTreeMap<IntraPackageKey, VMPointer<Function>>,
-    pub types: TypeInfoTable,
-}
-
-#[derive(Debug)]
-/// Representation of runtime types, including cached datatypes and cached instantiations.
-pub struct TypeInfoTable {
-    /// Types cached by intra-package key.
-    pub cached_types: BTreeMap<IntraPackageKey, Arc<CachedDatatype>>,
-    /// Type instanstiations, cached by intra-package key and then instantiation arguments.
-    /// Instances are held in an RwLock because serialization and deserialization may trigger
-    /// recoridng new instances.
-    pub cached_instantiations:
-        RwLock<BTreeMap<IntraPackageKey, BTreeMap<Vec<Type>, Arc<DatatypeInfo>>>>,
+    /// Representation of runtime types.
+    pub types: BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
 }
 
 /// runtime_address::module_name::function_name
@@ -90,33 +79,6 @@ pub struct VirtualTableKey {
 pub struct IntraPackageKey {
     pub module_name: IdentifierKey,
     pub member_name: IdentifierKey,
-}
-
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct CachedDatatype {
-    pub abilities: AbilitySet,
-    pub type_parameters: Vec<DatatypeTyParameter>,
-    pub name: Identifier,
-    pub defining_id: ModuleId,
-    pub runtime_id: ModuleId,
-    pub module_key: IdentifierKey,
-    pub member_key: IdentifierKey,
-    pub depth: Option<DepthFormula>,
-    pub datatype_info: Datatype,
-}
-
-//
-// Cache for data associated to a Struct, used for de/serialization and more
-//
-
-#[derive(Debug, Clone)]
-pub struct DatatypeInfo {
-    pub runtime_tag: Option<StructTag>,
-    pub defining_tag: Option<StructTag>,
-    pub layout: Option<R::MoveDatatypeLayout>,
-    pub annotated_layout: Option<A::MoveDatatypeLayout>,
-    pub node_count: Option<u64>,
-    pub annotated_node_count: Option<u64>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -141,8 +103,11 @@ pub struct DepthFormula {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-/// The VM API that it will use to resolve packages and functions during execution of the
-/// transaction.
+// ------------------------------------------------------------------------
+// The VM API that it will use to resolve packages and functions during execution of the
+// transaction.
+// ------------------------------------------------------------------------
+
 impl VMDispatchTables {
     /// Create a new RuntimeVTables instance.
     /// NOTE: This assumes linkage has already occured.
@@ -153,6 +118,7 @@ impl VMDispatchTables {
         Ok(Self {
             vm_config,
             loaded_packages,
+            type_depths: BTreeMap::new(),
         })
     }
 
@@ -183,183 +149,46 @@ impl VMDispatchTables {
         &self,
         vtable_key: &VirtualTableKey,
     ) -> PartialVMResult<VMPointer<Function>> {
-        let Some(result) = self
+        if let Some(result) = self
             .loaded_packages
             .get(&vtable_key.package_key)
             .map(|pkg| &pkg.vtable)
             .and_then(|vtable| vtable.functions.get(&vtable_key.inner_pkg_key))
-        else {
-            let string_interner = string_interner();
-            let module_name = string_interner
-                .resolve_string(&vtable_key.inner_pkg_key.module_name, "module name")?;
-            let member_name = string_interner
-                .resolve_string(&vtable_key.inner_pkg_key.member_name, "member name")?;
-            return Err(
+        {
+            Ok(result.ptr_clone())
+        } else {
+            Err(
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY).with_message(format!(
-                    "Function {module_name}::{member_name} not found in package {}",
-                    vtable_key.package_key
+                    "Could not find function {}",
+                    vtable_key.to_string()?
                 )),
-            );
-        };
-        Ok(result.ptr_clone())
+            )
+        }
     }
 
-    pub fn resolve_type(&self, key: &VirtualTableKey) -> PartialVMResult<Arc<CachedDatatype>> {
-        self.get_package(&key.package_key)
-            .and_then(|pkg| pkg.vtable.types.resolve_type_by_name(&key.inner_pkg_key))
+    pub fn resolve_type(
+        &self,
+        vtable_key: &VirtualTableKey,
+    ) -> PartialVMResult<VMPointer<DatatypeDescriptor>> {
+        if let Some(result) = self
+            .loaded_packages
+            .get(&vtable_key.package_key)
+            .map(|pkg| &pkg.vtable)
+            .and_then(|vtable| vtable.types.get(&vtable_key.inner_pkg_key))
+        {
+            Ok(result.ptr_clone())
+        } else {
+            Err(PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
+                .with_message(format!("Could not find type {}", vtable_key.to_string()?)))
+        }
     }
 }
 
+// ------------------------------------------------------------------------
 // Type-related functions over the VMDispatchTables.
+// ------------------------------------------------------------------------
+
 impl VMDispatchTables {
-    // -------------------------------------------
-    // Type Depth Computations
-    // -------------------------------------------
-    pub fn calculate_depth_of_type(
-        &self,
-        datatype: &VirtualTableKey,
-    ) -> PartialVMResult<DepthFormula> {
-        let mut depth_cache = BTreeMap::new();
-        let depth_formula =
-            self.calculate_depth_of_datatype_and_cache(datatype, &mut depth_cache)?;
-        for (cache_idx, depth) in depth_cache {
-            let tys = &self
-                .loaded_packages
-                .get(&cache_idx.package_key)
-                .ok_or_else(|| {
-                    PartialVMError::new(StatusCode::MISSING_DEPENDENCY).with_message(format!(
-                        "Package {} not found when looking up {cache_idx:?}",
-                        cache_idx.package_key
-                    ))
-                })?
-                .vtable
-                .types;
-            match Arc::get_mut(&mut tys.type_at(&cache_idx.inner_pkg_key)) {
-                Some(datatype) => {
-                    // This can happen if we race for filling in the depth of the datatype which is
-                    // fine as only one will win. However, if we race for filling in the depth of
-                    // the then the two depths must be the same.
-                    if let Some(prev_depth) = datatype.depth.as_ref() {
-                        if prev_depth != &depth {
-                            return Err(PartialVMError::new(
-                                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                            )
-                            .with_message(format!(
-                                "Depth calculation mismatch for {cache_idx:?}"
-                            )));
-                        }
-                    }
-                    datatype.depth = Some(depth);
-                }
-                None => {
-                    // we have pending references to the `Arc` which is impossible,
-                    // given the code that adds the `Arc` is above and no reference to
-                    // it should exist.
-                    // So in the spirit of not crashing we log the issue and move on leaving the
-                    // datatypes depth as `None` -- if we try to access it later we will treat this
-                    // as too deep.
-                    error!("Arc<Datatype> cannot have any live reference while publishing");
-                }
-            }
-        }
-        Ok(depth_formula)
-    }
-
-    fn calculate_depth_of_datatype_and_cache(
-        &self,
-        def_idx: &VirtualTableKey,
-        depth_cache: &mut BTreeMap<VirtualTableKey, DepthFormula>,
-    ) -> PartialVMResult<DepthFormula> {
-        let datatype = self.resolve_type(&def_idx.clone())?;
-        // If we've already computed this datatypes depth, no more work remains to be done.
-        if let Some(form) = &datatype.depth {
-            return Ok(form.clone());
-        }
-        if let Some(form) = depth_cache.get(def_idx) {
-            return Ok(form.clone());
-        }
-
-        let formulas = match &datatype.datatype_info {
-            // The depth of enum is calculated as the maximum depth of any of its variants.
-            Datatype::Enum(enum_type) => enum_type
-                .variants
-                .iter()
-                .flat_map(|variant_type| variant_type.fields.iter())
-                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, depth_cache))
-                .collect::<PartialVMResult<Vec<_>>>()?,
-            Datatype::Struct(struct_type) => struct_type
-                .fields
-                .iter()
-                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, depth_cache))
-                .collect::<PartialVMResult<Vec<_>>>()?,
-        };
-        let mut formula = DepthFormula::normalize(formulas);
-        // add 1 for the struct/variant itself
-        formula.add(1);
-        let prev = depth_cache.insert(def_idx.clone(), formula.clone());
-        if prev.is_some() {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Recursive type?".to_owned()),
-            );
-        }
-        Ok(formula)
-    }
-
-    fn calculate_depth_of_type_and_cache(
-        &self,
-        ty: &Type,
-        depth_cache: &mut BTreeMap<VirtualTableKey, DepthFormula>,
-    ) -> PartialVMResult<DepthFormula> {
-        Ok(match ty {
-            Type::Bool
-            | Type::U8
-            | Type::U64
-            | Type::U128
-            | Type::Address
-            | Type::Signer
-            | Type::U16
-            | Type::U32
-            | Type::U256 => DepthFormula::constant(1),
-            // we should not see the reference here, we could instead give an invariant violation
-            Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
-                let mut inner = self.calculate_depth_of_type_and_cache(ty, depth_cache)?;
-                // add 1 for the vector itself
-                inner.add(1);
-                inner
-            }
-            Type::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
-            Type::Datatype(cache_idx) => {
-                let datatype_formula =
-                    self.calculate_depth_of_datatype_and_cache(cache_idx, depth_cache)?;
-                debug_assert!(datatype_formula.terms.is_empty());
-                datatype_formula
-            }
-            Type::DatatypeInstantiation(inst) => {
-                let (cache_idx, ty_args) = &**inst;
-                let ty_arg_map = ty_args
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, ty)| {
-                        let var = idx as TypeParameterIndex;
-                        Ok((
-                            var,
-                            self.calculate_depth_of_type_and_cache(ty, depth_cache)?,
-                        ))
-                    })
-                    .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
-                let datatype_formula =
-                    self.calculate_depth_of_datatype_and_cache(cache_idx, depth_cache)?;
-
-                datatype_formula.subst(ty_arg_map)?
-            }
-        })
-    }
-
-    pub fn type_at(&self, idx: &VirtualTableKey) -> PartialVMResult<Arc<CachedDatatype>> {
-        self.resolve_type(&idx.clone())
-    }
-
     // -------------------------------------------
     // Helpers for loading and verification
     // -------------------------------------------
@@ -394,7 +223,8 @@ impl VMDispatchTables {
                 };
                 let struct_type = self
                     .resolve_type(&key)
-                    .map_err(|e| e.finish(Location::Undefined))?;
+                    .map_err(|e| e.finish(Location::Undefined))?
+                    .to_ref();
                 if struct_type.type_parameters.is_empty() && struct_tag.type_params.is_empty() {
                     Type::Datatype(key)
                 } else {
@@ -455,10 +285,10 @@ impl VMDispatchTables {
                 vec![false],
                 vec![self.abilities(ty)?],
             ),
-            Type::Datatype(idx) => Ok(self.type_at(idx)?.abilities),
+            Type::Datatype(idx) => Ok(self.resolve_type(idx)?.to_ref().abilities),
             Type::DatatypeInstantiation(inst) => {
                 let (idx, type_args) = &**inst;
-                let datatype_type = self.type_at(idx)?;
+                let datatype_type = self.resolve_type(idx)?.to_ref();
                 let declared_phantom_parameters = datatype_type
                     .type_parameters
                     .iter()
@@ -477,28 +307,149 @@ impl VMDispatchTables {
     }
 
     // -------------------------------------------
+    // Type Depth Computations
+    // -------------------------------------------
+    // These functions compute the depth of the specified type, plus cache the depth formula of any
+    // uncached subtypes they find along the way.
+
+    fn cached_type_depth(&self, datatype: &VirtualTableKey) -> Option<&DepthFormula> {
+        let package = self.type_depths.get(&datatype.package_key)?;
+        package.get(&datatype.inner_pkg_key)
+    }
+
+    pub fn calculate_depth_of_type(
+        &mut self,
+        datatype_name: &VirtualTableKey,
+    ) -> PartialVMResult<DepthFormula> {
+        let mut depth_cache = BTreeMap::new();
+        let depth_formula =
+            self.calculate_depth_of_datatype_and_cache(datatype_name, &mut depth_cache)?;
+        for (datatype_key, depth) in depth_cache {
+            match self
+                .type_depths
+                .entry(datatype_key.package_key)
+                .or_default()
+                .entry(datatype_key.inner_pkg_key)
+            {
+                std::collections::btree_map::Entry::Vacant(vacant_entry) => {
+                    vacant_entry.insert(depth);
+                }
+                std::collections::btree_map::Entry::Occupied(occupied_entry) => {
+                    // This could happen if we race for filling in the depth of the datatype which
+                    // is fine as only one will win. However, since a dispatch table should always
+                    // be in a single tear-off VM, this seems unlikely to happen.
+                    if occupied_entry.get() != &depth {
+                        return Err(PartialVMError::new(
+                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        )
+                        .with_message(format!(
+                            "Depth calculation mismatch for {}",
+                            datatype_key.to_string()?
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(depth_formula)
+    }
+
+    fn calculate_depth_of_datatype_and_cache(
+        &self,
+        datatype_name: &VirtualTableKey,
+        depth_cache: &mut BTreeMap<VirtualTableKey, DepthFormula>,
+    ) -> PartialVMResult<DepthFormula> {
+        // If we've already computed this datatypes depth, no more work remains to be done.
+        if let Some(form) = self.cached_type_depth(datatype_name) {
+            return Ok(form.clone());
+        }
+        if let Some(form) = depth_cache.get(datatype_name) {
+            return Ok(form.clone());
+        }
+
+        let datatype = self.resolve_type(&datatype_name.clone())?.to_ref();
+        let formulas = match datatype.datatype_info.to_ref() {
+            // The depth of enum is calculated as the maximum depth of any of its variants.
+            Datatype::Enum(enum_type) => enum_type
+                .variants
+                .iter()
+                .flat_map(|variant_type| variant_type.fields.iter())
+                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, depth_cache))
+                .collect::<PartialVMResult<Vec<_>>>()?,
+            Datatype::Struct(struct_type) => struct_type
+                .fields
+                .iter()
+                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, depth_cache))
+                .collect::<PartialVMResult<Vec<_>>>()?,
+        };
+        let mut formula = DepthFormula::normalize(formulas);
+        // add 1 for the struct/variant itself
+        formula.add(1);
+        let prev = depth_cache.insert(datatype_name.clone(), formula.clone());
+        if prev.is_some() {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Recursive type?".to_owned()),
+            );
+        }
+        Ok(formula)
+    }
+
+    fn calculate_depth_of_type_and_cache(
+        &self,
+        ty: &Type,
+        depth_cache: &mut BTreeMap<VirtualTableKey, DepthFormula>,
+    ) -> PartialVMResult<DepthFormula> {
+        Ok(match ty {
+            Type::Bool
+            | Type::U8
+            | Type::U64
+            | Type::U128
+            | Type::Address
+            | Type::Signer
+            | Type::U16
+            | Type::U32
+            | Type::U256 => DepthFormula::constant(1),
+            // we should not see the reference here, we could instead give an invariant violation
+            Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
+                let mut inner = self.calculate_depth_of_type_and_cache(ty, depth_cache)?;
+                // add 1 for the vector itself
+                inner.add(1);
+                inner
+            }
+            Type::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
+            Type::Datatype(cache_idx) => {
+                let datatype_formula =
+                    self.calculate_depth_of_datatype_and_cache(cache_idx, depth_cache)?;
+                debug_assert!(datatype_formula.terms.is_empty());
+                datatype_formula
+            }
+            Type::DatatypeInstantiation(inst) => {
+                let (cache_idx, ty_args) = &**inst;
+                let ty_arg_map = ty_args
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, ty)| {
+                        let var = idx as TypeParameterIndex;
+                        Ok((
+                            var,
+                            self.calculate_depth_of_type_and_cache(ty, depth_cache)?,
+                        ))
+                    })
+                    .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
+                let datatype_formula =
+                    self.calculate_depth_of_datatype_and_cache(cache_idx, depth_cache)?;
+
+                datatype_formula.subst(ty_arg_map)?
+            }
+        })
+    }
+
+    // -------------------------------------------
     // Type Translation Helpers
     // -------------------------------------------
     // Note that these are all "lazy": they only
     // fill out datatype information fields as
     // they are requested, not before.
-
-    fn read_cached_struct_tag(
-        &self,
-        key: &VirtualTableKey,
-        ty_args: &[Type],
-        tag_type: DatatypeTagType,
-    ) -> Option<StructTag> {
-        let pkg = self.get_package(&key.package_key).ok()?;
-        let info = &pkg
-            .vtable
-            .types
-            .get_instance_info(&key.inner_pkg_key, ty_args)?;
-        match tag_type {
-            DatatypeTagType::Runtime => info.runtime_tag.clone(),
-            DatatypeTagType::Defining => info.defining_tag.clone(),
-        }
-    }
 
     fn datatype_to_type_tag(
         &self,
@@ -506,49 +457,32 @@ impl VMDispatchTables {
         ty_args: &[Type],
         tag_type: DatatypeTagType,
     ) -> PartialVMResult<StructTag> {
-        if let Some(cached) = self.read_cached_struct_tag(datatype_name, ty_args, tag_type) {
-            return Ok(cached);
-        }
-
-        let ty_arg_tags = ty_args
+        let type_params = ty_args
             .iter()
             .map(|ty| self.type_to_type_tag_impl(ty, tag_type))
             .collect::<PartialVMResult<Vec<_>>>()?;
-        let datatype = self.type_at(datatype_name)?;
-        let pkg = self.get_package(&datatype_name.package_key)?;
+        let datatype = self.resolve_type(datatype_name)?.to_ref();
 
-        match tag_type {
-            DatatypeTagType::Runtime => {
-                let tag = StructTag {
-                    address: *datatype.runtime_id.address(),
-                    module: datatype.runtime_id.name().to_owned(),
-                    name: datatype.name.clone(),
-                    type_params: ty_arg_tags,
-                };
-                pkg.vtable.types.update_cache_instance(
-                    datatype_name.inner_pkg_key,
-                    ty_args,
-                    |info| info.runtime_tag = Some(tag.clone()),
-                );
-                Ok(tag)
-            }
+        let (address, module) = match tag_type {
+            DatatypeTagType::Runtime => (
+                *datatype.runtime_id.address(),
+                datatype.runtime_id.name().to_owned(),
+            ),
 
-            DatatypeTagType::Defining => {
-                let tag = StructTag {
-                    address: *datatype.defining_id.address(),
-                    module: datatype.defining_id.name().to_owned(),
-                    name: datatype.name.clone(),
-                    type_params: ty_arg_tags,
-                };
+            DatatypeTagType::Defining => (
+                *datatype.defining_id.address(),
+                datatype.defining_id.name().to_owned(),
+            ),
+        };
+        let name = datatype.name.clone();
 
-                pkg.vtable.types.update_cache_instance(
-                    datatype_name.inner_pkg_key,
-                    ty_args,
-                    |info| info.defining_tag = Some(tag.clone()),
-                );
-                Ok(tag)
-            }
-        }
+        let tag = StructTag {
+            address,
+            module,
+            name,
+            type_params,
+        };
+        Ok(tag)
     }
 
     fn type_to_type_tag_impl(
@@ -594,24 +528,9 @@ impl VMDispatchTables {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<runtime_value::MoveDatatypeLayout> {
-        let pkg = self.get_package(&datatype_name.package_key)?;
-
-        if let Some(type_info) = pkg
-            .vtable
-            .types
-            .get_instance_info(&datatype_name.inner_pkg_key, ty_args)
-        {
-            if let Some(node_count) = &type_info.node_count {
-                *count += *node_count
-            }
-            if let Some(layout) = &type_info.layout {
-                return Ok(layout.clone());
-            }
-        }
-
-        let count_before = *count;
-        let ty = self.type_at(datatype_name)?;
-        let type_layout = match ty.datatype_info {
+        let ty = self.resolve_type(datatype_name)?.to_ref();
+        // TODO(vm-rewrite): update this code
+        let type_layout = match ty.datatype_info.to_ref() {
             Datatype::Enum(ref einfo) => {
                 let mut variant_layouts = vec![];
                 for variant in einfo.variants.iter() {
@@ -646,15 +565,6 @@ impl VMDispatchTables {
                 ))
             }
         };
-
-        let field_node_count = *count - count_before;
-
-        pkg.vtable
-            .types
-            .update_cache_instance(datatype_name.inner_pkg_key, ty_args, |info| {
-                info.layout = Some(type_layout.clone());
-                info.node_count = Some(field_node_count);
-            });
         Ok(type_layout)
     }
 
@@ -664,19 +574,9 @@ impl VMDispatchTables {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
-        if *count
-            > self
-                .vm_config
-                .max_type_to_layout_nodes
-                .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES)
-        {
-            return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
-        }
-        if depth > VALUE_DEPTH_MAX {
-            return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
-        }
+        self.check_count_and_depth(count, &depth)?;
         *count += 1;
-        Ok(match ty {
+        let result = match ty {
             Type::Bool => runtime_value::MoveTypeLayout::Bool,
             Type::U8 => runtime_value::MoveTypeLayout::U8,
             Type::U16 => runtime_value::MoveTypeLayout::U16,
@@ -703,7 +603,9 @@ impl VMDispatchTables {
                         .with_message(format!("no type layout for {:?}", ty)),
                 );
             }
-        })
+        };
+        self.check_count_and_depth(count, &depth)?;
+        Ok(result)
     }
 
     fn datatype_to_fully_annotated_layout(
@@ -713,25 +615,10 @@ impl VMDispatchTables {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<annotated_value::MoveDatatypeLayout> {
-        let pkg = self.get_package(&datatype_name.package_key)?;
-        if let Some(datatype_info) = pkg
-            .vtable
-            .types
-            .get_instance_info(&datatype_name.inner_pkg_key, ty_args)
-        {
-            if let Some(annotated_node_count) = &datatype_info.annotated_node_count {
-                *count += *annotated_node_count
-            }
-            if let Some(layout) = &datatype_info.annotated_layout {
-                return Ok(layout.clone());
-            }
-        }
-
-        let count_before = *count;
-        let ty = self.type_at(datatype_name)?;
+        let ty = self.resolve_type(datatype_name)?.to_ref();
         let struct_tag =
             self.datatype_to_type_tag(datatype_name, ty_args, DatatypeTagType::Defining)?;
-        let type_layout = match &ty.datatype_info {
+        let type_layout = match ty.datatype_info.to_ref() {
             Datatype::Enum(enum_type) => {
                 let mut variant_layouts = BTreeMap::new();
                 for variant in enum_type.variants.iter() {
@@ -791,16 +678,6 @@ impl VMDispatchTables {
                 ))
             }
         };
-
-        let field_node_count = *count - count_before;
-
-        pkg.vtable
-            .types
-            .update_cache_instance(datatype_name.inner_pkg_key, ty_args, |info| {
-                info.annotated_layout = Some(type_layout.clone());
-                info.annotated_node_count = Some(field_node_count);
-            });
-
         Ok(type_layout)
     }
 
@@ -810,19 +687,9 @@ impl VMDispatchTables {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
-        if *count
-            > self
-                .vm_config
-                .max_type_to_layout_nodes
-                .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES)
-        {
-            return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
-        }
-        if depth > VALUE_DEPTH_MAX {
-            return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
-        }
+        self.check_count_and_depth(count, &depth)?;
         *count += 1;
-        Ok(match ty {
+        let result = match ty {
             Type::Bool => annotated_value::MoveTypeLayout::Bool,
             Type::U8 => annotated_value::MoveTypeLayout::U8,
             Type::U16 => annotated_value::MoveTypeLayout::U16,
@@ -849,7 +716,9 @@ impl VMDispatchTables {
                         .with_message(format!("no type layout for {:?}", ty)),
                 );
             }
-        })
+        };
+        self.check_count_and_depth(count, &depth)?;
+        Ok(result)
     }
 
     pub(crate) fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
@@ -899,114 +768,20 @@ impl VMDispatchTables {
         self.type_to_fully_annotated_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
     }
-}
 
-impl Default for PackageVirtualTable {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl PackageVirtualTable {
-    pub fn new() -> Self {
-        Self {
-            functions: BTreeMap::new(),
-            types: TypeInfoTable::new(),
+    fn check_count_and_depth(&self, count: &u64, depth: &u64) -> PartialVMResult<()> {
+        if *count
+            > self
+                .vm_config
+                .max_type_to_layout_nodes
+                .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES)
+        {
+            return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
         }
-    }
-}
-
-impl TypeInfoTable {
-    fn new() -> Self {
-        Self {
-            cached_types: BTreeMap::new(),
-            cached_instantiations: RwLock::new(BTreeMap::new()),
+        if *depth > VALUE_DEPTH_MAX {
+            return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
         }
-    }
-
-    pub fn cache_datatype(
-        &mut self,
-        key: IntraPackageKey,
-        datatype: CachedDatatype,
-    ) -> PartialVMResult<Arc<CachedDatatype>> {
-        let value = Arc::new(datatype);
-        match self.cached_types.insert(key, Arc::clone(&value)) {
-            Some(_) => Err(PartialVMError::new(StatusCode::DUPLICATE_TYPE_DEFINITION)
-                .with_message(format!("Duplicate key {} found in cache", key.to_string()?))),
-            None => Ok(value),
-        }
-    }
-
-    pub fn contains_cached_type(&self, key: &IntraPackageKey) -> bool {
-        self.cached_types.contains_key(key)
-    }
-
-    fn resolve_type_by_name(&self, key: &IntraPackageKey) -> PartialVMResult<Arc<CachedDatatype>> {
-        match self.cached_types.get(key) {
-            Some(datatype) => Ok(Arc::clone(datatype)),
-            None => Err(PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE)
-                .with_message(format!("Cannot find {} in cache", key.to_string()?,))),
-        }
-    }
-
-    pub fn type_at(&self, key: &IntraPackageKey) -> Arc<CachedDatatype> {
-        Arc::clone(self.cached_types.get(key).expect("Type should exist"))
-    }
-
-    /// Retrieve a type instantation's information.
-    fn get_instance_info(
-        &self,
-        key: &IntraPackageKey,
-        tyargs: &[Type],
-    ) -> Option<Arc<DatatypeInfo>> {
-        let instantiations = self.cached_instantiations.read();
-        let entry = instantiations.get(key)?;
-        let info = entry.get(tyargs)?;
-        Some(Arc::clone(info))
-    }
-
-    /// Get a (possibly new) type instantiation information record.
-    /// Invariant: This should only be called if the entry is not already in the instance cache.
-    fn update_cache_instance<F>(&self, key: IntraPackageKey, tyargs: &[Type], update: F)
-    where
-        F: FnOnce(&mut DatatypeInfo),
-    {
-        let mut instantiations = self.cached_instantiations.write();
-        let entry = instantiations.entry(key).or_default();
-        let info = if let Some(info) = entry.get_mut(tyargs) {
-            info
-        } else {
-            entry.entry(tyargs.to_vec()).or_default()
-        };
-        let info = Arc::make_mut(info);
-        update(info);
-    }
-}
-
-impl IntraPackageKey {
-    pub fn to_string(&self) -> PartialVMResult<String> {
-        let module_name = string_interner().resolve_string(&self.module_name, "module name")?;
-        let member_name = string_interner().resolve_string(&self.module_name, "member name")?;
-        Ok(format!("{}::{}", module_name, member_name))
-    }
-}
-
-impl Default for DatatypeInfo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl DatatypeInfo {
-    pub fn new() -> Self {
-        Self {
-            runtime_tag: None,
-            defining_tag: None,
-            layout: None,
-            annotated_layout: None,
-            node_count: None,
-            annotated_node_count: None,
-        }
+        Ok(())
     }
 }
 
@@ -1109,43 +884,41 @@ impl DepthFormula {
     }
 }
 
-impl CachedDatatype {
-    pub fn get_struct(&self) -> PartialVMResult<&StructType> {
-        match &self.datatype_info {
-            Datatype::Struct(struct_type) => Ok(struct_type),
-            x @ Datatype::Enum(_) => Err(PartialVMError::new(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            )
-            .with_message(format!("Expected struct type but got {:?}", x))),
-        }
-    }
+// ------------------------------------------------------------------------
+// Other Impls
+// ------------------------------------------------------------------------
 
-    pub fn get_enum(&self) -> PartialVMResult<&EnumType> {
-        match &self.datatype_info {
-            Datatype::Enum(enum_type) => Ok(enum_type),
-            x @ Datatype::Struct(_) => Err(PartialVMError::new(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            )
-            .with_message(format!("Expected enum type but got {:?}", x))),
-        }
-    }
-
-    pub fn datatype_key(&self) -> VirtualTableKey {
-        let module_name = self.module_key;
-        let member_name = self.member_key;
-        VirtualTableKey {
-            package_key: *self.runtime_id.address(),
-            inner_pkg_key: IntraPackageKey {
-                module_name,
-                member_name,
-            },
+impl PackageVirtualTable {
+    pub fn new() -> Self {
+        Self {
+            functions: BTreeMap::new(),
+            types: BTreeMap::new(),
         }
     }
 }
 
-impl CachedDatatype {
-    pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
-        self.type_parameters.iter().map(|param| &param.constraints)
+impl VirtualTableKey {
+    pub fn to_string(&self) -> PartialVMResult<String> {
+        let inner_name = self.inner_pkg_key.to_string()?;
+        Ok(format!("{}::{}", self.package_key, inner_name))
+    }
+}
+
+impl IntraPackageKey {
+    pub fn to_string(&self) -> PartialVMResult<String> {
+        let module_name = string_interner().resolve_string(&self.module_name, "module name")?;
+        let member_name = string_interner().resolve_string(&self.member_name, "member name")?;
+        Ok(format!("{}::{}", module_name, member_name))
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Default
+// -------------------------------------------------------------------------------------------------
+
+impl Default for PackageVirtualTable {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

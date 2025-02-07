@@ -138,7 +138,7 @@ fn load_package_internal_package_calls_only_with_types() {
     assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
     assert_eq!(l_pkg.runtime.storage_id, package_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
-    assert_eq!(l_pkg.runtime.vtable.types.cached_types.len(), 0);
+    assert_eq!(l_pkg.runtime.vtable.types.len(), 0);
 }
 
 #[test]

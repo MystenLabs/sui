@@ -192,7 +192,7 @@ impl MachineState {
         // a verification error cannot happen at runtime so change it into an invariant violation.
         let err = if err.status_type() == StatusType::Verification {
             error!("Verification error during runtime: {:?}", err);
-            let new_err = PartialVMError::new(StatusCode::VERIFICATION_ERROR);
+            let new_err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR);
             let new_err = match err.message() {
                 None => new_err.with_message("No message provided for core dump".to_owned()),
                 Some(msg) => new_err.with_message(msg.to_owned()),

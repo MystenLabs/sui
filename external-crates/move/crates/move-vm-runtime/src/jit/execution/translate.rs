@@ -6,7 +6,7 @@ use crate::{
     cache::arena::Arena,
     dbg_println,
     execution::{
-        dispatch_tables::{CachedDatatype, IntraPackageKey, PackageVirtualTable, VirtualTableKey},
+        dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
         values::Value,
     },
     jit::execution::ast::*,
@@ -203,13 +203,17 @@ fn module(
     dbg_println!("Loading module: {}", self_id);
 
     // Load module types
-    load_module_types(
+    let datatype_descriptors = load_module_types(
         package_context,
         link_context,
         package_context.runtime_id,
         package_id,
         &module.compiled_module,
     )?;
+    // NB: Note that this assumes the datatype descriptors will live at least as long as the
+    // vtable -- if that is not true, we _will_ segfault.
+    record_module_types_in_vtable(&mut package_context.vtable, &datatype_descriptors);
+
     dbg_println!("Module types loaded");
 
     // Initialize module data
@@ -217,8 +221,18 @@ fn module(
 
     let mut instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>> = BTreeMap::new();
 
-    let structs = structs(package_context, &module.compiled_module, &type_refs)?;
-    let enums = enums(package_context, &module.compiled_module, &type_refs)?;
+    let structs = structs(
+        package_context,
+        &module.compiled_module,
+        &type_refs,
+        &datatype_descriptors,
+    )?;
+    let enums = enums(
+        package_context,
+        &module.compiled_module,
+        &type_refs,
+        &datatype_descriptors,
+    )?;
 
     let struct_instantiations = struct_instantiations(
         &mut instantiation_signatures,
@@ -249,6 +263,7 @@ fn module(
     // Build and return the module
     Ok(Module {
         id: self_id,
+        datatype_descriptors,
         type_refs,
         structs,
         struct_instantiations,
@@ -266,6 +281,19 @@ fn module(
             .to_vec(),
         constants,
     })
+}
+
+fn record_module_types_in_vtable(
+    vtable: &mut PackageVirtualTable,
+    datatype_descriptors: &BTreeMap<IntraPackageKey, DatatypeDescriptor>,
+) {
+    for (key, descriptor) in datatype_descriptors {
+        let descriptor_ptr = VMPointer::from_ref(descriptor);
+        debug_assert!(
+            vtable.types.insert(*key, descriptor_ptr).is_none(),
+            "Double insert for datatype"
+        );
+    }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -293,13 +321,16 @@ fn structs(
     package_context: &mut PackageContext<'_>,
     module: &CompiledModule,
     type_refs: &[IntraPackageKey],
+    datatype_descriptors: &BTreeMap<IntraPackageKey, DatatypeDescriptor>,
 ) -> PartialVMResult<Vec<StructDef>> {
     module
         .struct_defs()
         .iter()
         .map(|struct_def| {
             let key = type_refs[struct_def.struct_handle.0 as usize];
-            let type_ = package_context.vtable.types.type_at(&key);
+            let Some(type_) = datatype_descriptors.get(&key) else {
+                panic!("did not find struct {}", key.to_string()?);
+            };
             let struct_type = type_.get_struct()?;
             let field_count = struct_type.fields.len() as u16;
             Ok(StructDef {
@@ -342,13 +373,16 @@ fn enums(
     package_context: &mut PackageContext<'_>,
     module: &CompiledModule,
     type_refs: &[IntraPackageKey],
+    datatype_descriptors: &BTreeMap<IntraPackageKey, DatatypeDescriptor>,
 ) -> PartialVMResult<Vec<EnumDef>> {
     module
         .enum_defs()
         .iter()
         .map(|enum_def| {
             let key = type_refs[enum_def.enum_handle.0 as usize];
-            let type_ = package_context.vtable.types.type_at(&key);
+            let Some(type_) = datatype_descriptors.get(&key) else {
+                panic!("did not find enum {}", key.to_string()?);
+            };
             let enum_type = type_.get_enum()?;
             let variant_count = enum_type.variants.len() as u16;
             let variants = enum_type
@@ -851,11 +885,11 @@ fn load_module_types(
     _package_uid: RuntimePackageId,
     package_id: PackageStorageId,
     module: &CompiledModule,
-) -> PartialVMResult<()> {
+) -> PartialVMResult<BTreeMap<IntraPackageKey, DatatypeDescriptor>> {
     let module_id = module.self_id();
     let module_name = string_interner().get_or_intern_ident_str(module_id.name())?;
 
-    let mut cached_types = vec![];
+    let mut datatype_descriptors = BTreeMap::new();
 
     for (idx, struct_def) in module.struct_defs().iter().enumerate() {
         let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
@@ -866,14 +900,6 @@ fn load_module_types(
             module_name,
             member_name,
         };
-
-        if package_context
-            .vtable
-            .types
-            .contains_cached_type(&struct_key)
-        {
-            debug_assert!(false, "Double-loading types");
-        }
 
         let struct_module_handle = module.module_handle_at(struct_handle.module);
         dbg_println!("Indexing type {:?} at {:?}", name, struct_module_handle);
@@ -909,26 +935,30 @@ fn load_module_types(
             .map(|f| make_type(module, &f.signature.0))
             .collect::<PartialVMResult<Vec<Type>>>()?;
 
-        package_context.vtable.types.cache_datatype(
-            struct_key,
-            CachedDatatype {
-                abilities: struct_handle.abilities,
-                type_parameters: struct_handle.type_parameters.clone(),
-                name: name.to_owned(),
-                defining_id,
-                runtime_id: module_id.clone(),
-                depth: None,
-                datatype_info: Datatype::Struct(StructType {
-                    fields,
-                    field_names,
-                    struct_def: StructDefinitionIndex(idx as u16),
-                }),
-                module_key: module_name,
-                member_key: member_name,
-            },
-        )?;
+        let struct_type = Datatype::Struct(StructType {
+            fields,
+            field_names,
+            struct_def: StructDefinitionIndex(idx as u16),
+        });
+        let datatype_info = VMPointer::new(package_context.package_arena.alloc_item(struct_type)?);
 
-        cached_types.push(struct_key);
+        let datatype_descriptor = DatatypeDescriptor {
+            abilities: struct_handle.abilities,
+            type_parameters: struct_handle.type_parameters.clone(),
+            name: name.to_owned(),
+            defining_id,
+            runtime_id: module_id.clone(),
+            datatype_info,
+            module_key: module_name,
+            member_key: member_name,
+        };
+        debug_assert!(
+            datatype_descriptors
+                .insert(struct_key, datatype_descriptor)
+                .is_none(),
+            "double-insert of datatype {}",
+            struct_key.to_string()?
+        );
     }
 
     for (idx, enum_def) in module.enum_defs().iter().enumerate() {
@@ -940,10 +970,6 @@ fn load_module_types(
             module_name,
             member_name,
         };
-
-        if package_context.vtable.types.contains_cached_type(&enum_key) {
-            continue;
-        }
 
         let enum_module_handle = module.module_handle_at(enum_handle.module);
         dbg_println!("Indexing type {:?} at {:?}", name, enum_module_handle);
@@ -985,27 +1011,31 @@ fn load_module_types(
             })
             .collect::<PartialVMResult<_>>()?;
 
-        package_context.vtable.types.cache_datatype(
-            enum_key,
-            CachedDatatype {
-                abilities: enum_handle.abilities,
-                type_parameters: enum_handle.type_parameters.clone(),
-                name: name.to_owned(),
-                defining_id,
-                runtime_id: module_id.clone(),
-                depth: None,
-                datatype_info: Datatype::Enum(EnumType {
-                    variants,
-                    enum_def: EnumDefinitionIndex(idx as u16),
-                }),
-                module_key: module_name,
-                member_key: member_name,
-            },
-        )?;
-        cached_types.push(enum_key);
-    }
+        let enum_type = Datatype::Enum(EnumType {
+            variants,
+            enum_def: EnumDefinitionIndex(idx as u16),
+        });
+        let datatype_info = VMPointer::new(package_context.package_arena.alloc_item(enum_type)?);
 
-    Ok(())
+        let datatype_descriptor = DatatypeDescriptor {
+            abilities: enum_handle.abilities,
+            type_parameters: enum_handle.type_parameters.clone(),
+            name: name.to_owned(),
+            defining_id,
+            runtime_id: module_id.clone(),
+            datatype_info,
+            module_key: module_name,
+            member_key: member_name,
+        };
+        debug_assert!(
+            datatype_descriptors
+                .insert(enum_key, datatype_descriptor)
+                .is_none(),
+            "double-insert of datatype {}",
+            enum_key.to_string()?
+        );
+    }
+    Ok(datatype_descriptors)
 }
 
 /// Convert a signature token type into its execution counterpart, including converting datatypes
