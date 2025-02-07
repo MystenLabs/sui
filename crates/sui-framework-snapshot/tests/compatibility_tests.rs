@@ -82,10 +82,11 @@ mod compatibility_tests {
     fn check_manifest_against_tomls() {
         let manifest = load_bytecode_snapshot_manifest();
         for entry in manifest.values() {
-            for package in &entry.packages {
+            for package in entry.packages.iter() {
                 // parse package.path/Move.toml
                 let toml_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../..")
+                    .join("..")
+                    .join("..")
                     .join(&package.path);
                 let package_toml: SourceManifest =
                     parse_move_manifest_from_file(&toml_path).expect("Move.toml exists");

@@ -984,7 +984,7 @@ fn create_genesis_objects(
             executor.as_ref(),
             genesis_ctx,
             &system_package.modules(),
-            system_package.dependencies.to_vec(),
+            system_package.dependencies,
             &protocol_config,
             metrics.clone(),
         )

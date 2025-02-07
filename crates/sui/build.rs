@@ -8,12 +8,12 @@ use std::{
 };
 use sui_framework_snapshot::{load_bytecode_snapshot_manifest, manifest_path};
 
-/// Output a file `OUT_DIR/version_table.rs` containing the contents of the manifest as a
+/// Output a file `OUT_DIR/framework_version_table.rs` containing the contents of the manifest as a
 /// rust literal of type `[(ProtocolVersion, FrameworkVersion)]`. This is included as the
 /// static [framework_versions::VERSION_TABLE]
 fn generate_framework_version_table() -> anyhow::Result<()> {
     let out_dir = env::var_os("OUT_DIR").unwrap();
-    let dest_path = Path::new(&out_dir).join("version_table.rs");
+    let dest_path = Path::new(&out_dir).join("framework_version_table.rs");
 
     let manifest = load_bytecode_snapshot_manifest();
     let manifest_path = manifest_path().to_string_lossy().into_owned();
@@ -30,7 +30,7 @@ fn generate_framework_version_table() -> anyhow::Result<()> {
         )?;
         writeln!(&mut file, "        git_revision: \"{hash}\".into(),")?;
         writeln!(&mut file, "        packages: [")?;
-        for package in &entry.packages {
+        for package in entry.packages.iter() {
             writeln!(
                 &mut file,
                 "          FrameworkPackage {{ package_name: \"{}\".into(), repo_path: \"{}\".into() }},",

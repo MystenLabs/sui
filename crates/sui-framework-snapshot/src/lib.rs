@@ -11,19 +11,19 @@ use sui_types::{
     SUI_SYSTEM_PACKAGE_ID,
 };
 
-pub type SnapshotManifest = BTreeMap<u64, SingleSnapshot>;
+pub type SnapshotManifest = BTreeMap<u64, Snapshot>;
 
 #[derive(Serialize, Deserialize)]
-pub struct SingleSnapshot {
+pub struct Snapshot {
     /// Git revision that this snapshot is taken on.
     pub git_revision: String,
 
     /// List of system packages in this version
-    pub packages: Vec<SinglePackage>,
+    pub packages: Vec<SnapshotPackage>,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SinglePackage {
+pub struct SnapshotPackage {
     /// Name of the package (e.g. "MoveStdLib")
     pub name: String,
     /// Path to the package in the monorepo (e.g. "crates/sui-framework/packages/move-stdlib")
@@ -32,14 +32,14 @@ pub struct SinglePackage {
     pub id: ObjectID,
 }
 
-impl SingleSnapshot {
+impl Snapshot {
     pub fn package_ids(&self) -> Vec<ObjectID> {
         self.packages.iter().map(|p| p.id).collect()
     }
 }
 
-impl From<&SystemPackageMetadata> for SinglePackage {
-    fn from(value: &SystemPackageMetadata) -> Self {
+impl SnapshotPackage {
+    pub fn from_system_package_metadata(value: &SystemPackageMetadata) -> Self {
         Self {
             name: value.name.clone(),
             path: value.path.clone(),
@@ -67,13 +67,13 @@ pub fn load_bytecode_snapshot_manifest() -> SnapshotManifest {
 pub fn update_bytecode_snapshot_manifest(
     git_revision: &str,
     version: u64,
-    files: Vec<SinglePackage>,
+    files: Vec<SnapshotPackage>,
 ) {
     let mut snapshot = load_bytecode_snapshot_manifest();
 
     snapshot.insert(
         version,
-        SingleSnapshot {
+        Snapshot {
             git_revision: git_revision.to_string(),
             packages: files,
         },

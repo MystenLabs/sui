@@ -5,7 +5,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use sui_framework::{BuiltInFramework, SystemPackage};
-use sui_framework_snapshot::update_bytecode_snapshot_manifest;
+use sui_framework_snapshot::{update_bytecode_snapshot_manifest, SnapshotPackage};
 use sui_protocol_config::ProtocolVersion;
 
 // Define the `GIT_REVISION` const
@@ -15,9 +15,9 @@ fn main() {
     // Always generate snapshot for the latest version.
     let version = ProtocolVersion::MAX.as_u64();
     let mut files = Vec::new();
-    for package in BuiltInFramework::iter_system_metadata() {
+    for package in BuiltInFramework::iter_system_package_metadata() {
         write_package_to_file(version, &package.compiled);
-        files.push(package.into());
+        files.push(SnapshotPackage::from_system_package_metadata(package));
     }
     update_bytecode_snapshot_manifest(GIT_REVISION, version, files);
 }

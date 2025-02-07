@@ -37,8 +37,7 @@ use move_package::{
     BuildConfig as MoveBuildConfig,
 };
 use move_package::{
-    resolution::resolution_graph::Package, source_package::parsed_manifest::OnChainInfo,
-    source_package::parsed_manifest::SourceManifest,
+    source_package::parsed_manifest::OnChainInfo, source_package::parsed_manifest::SourceManifest,
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;

@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs, Inc.packages
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
@@ -99,7 +99,7 @@ impl std::fmt::Debug for SystemPackage {
     }
 }
 
-macro_rules! define_system_metadata {
+macro_rules! define_system_package_metadata {
     ([$(($id:expr, $name: expr, $path:expr, $deps:expr)),* $(,)?]) => {{
         static PACKAGES: LazyLock<Vec<SystemPackageMetadata>> = LazyLock::new(|| {
             vec![
@@ -118,16 +118,12 @@ macro_rules! define_system_metadata {
 
 pub struct BuiltInFramework;
 impl BuiltInFramework {
-    pub fn iter_system_packages() -> impl Iterator<Item = &'static SystemPackage> {
-        BuiltInFramework::iter_system_metadata().map(|m| &m.compiled)
-    }
-
-    pub fn iter_system_metadata() -> impl Iterator<Item = &'static SystemPackageMetadata> {
+    pub fn iter_system_package_metadata() -> impl Iterator<Item = &'static SystemPackageMetadata> {
         // All system packages in the current build should be registered here, and this is the only
         // place we need to worry about if any of them changes.
         // TODO: Is it possible to derive dependencies from the bytecode instead of manually specifying them?
-        define_system_metadata!([
-            (MOVE_STDLIB_PACKAGE_ID, "MoveStdLib", "move-stdlib", []),
+        define_system_package_metadata!([
+            (MOVE_STDLIB_PACKAGE_ID, "MoveStdlib", "move-stdlib", []),
             (
                 SUI_FRAMEWORK_PACKAGE_ID,
                 "Sui",
@@ -166,6 +162,10 @@ impl BuiltInFramework {
 
     pub fn get_package_by_id(id: &ObjectID) -> &'static SystemPackage {
         Self::iter_system_packages().find(|s| &s.id == id).unwrap()
+    }
+
+    pub fn iter_system_packages() -> impl Iterator<Item = &'static SystemPackage> {
+        BuiltInFramework::iter_system_package_metadata().map(|m| &m.compiled)
     }
 
     pub fn genesis_move_packages() -> impl Iterator<Item = MovePackage> {
