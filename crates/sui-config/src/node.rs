@@ -1065,7 +1065,7 @@ fn default_check_system_overload_at_signing() -> bool {
 }
 
 fn default_max_transaction_manager_queue_length() -> usize {
-    100_000
+    20_000
 }
 
 fn default_max_transaction_manager_per_object_queue_length() -> usize {
