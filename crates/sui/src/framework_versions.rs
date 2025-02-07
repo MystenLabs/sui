@@ -45,7 +45,7 @@ pub fn latest_framework() -> &'static FrameworkVersion {
         .1
 }
 
-/// Return the best commit hash for the given protocol version. Returns an error if [version]
+/// Return the best commit hash for the given protocol version. Returns an error if `version`
 /// is newer than the maximum protocol version or older than the first known framework.
 pub fn framework_for_protocol(
     version: ProtocolVersion,

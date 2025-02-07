@@ -5550,9 +5550,7 @@ pub mod framework_injection {
     ) -> Option<SystemPackage> {
         let bytes = get_override_bytes(package_id, name)?;
         let dependencies = if is_system_package(*package_id) {
-            BuiltInFramework::get_package_by_id(package_id)
-                .dependencies()
-                .to_vec()
+            BuiltInFramework::get_package_by_id(package_id).dependencies
         } else {
             // Assume that entirely new injected packages depend on all existing system packages.
             BuiltInFramework::all_package_ids()
