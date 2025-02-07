@@ -232,7 +232,11 @@ where
             .with_label_values(&[&self.ks_name()])
             .start_timer();
         // copy from Map::multi_get
-        keys.into_iter().map(|key| self.do_get(key.borrow(), true)).collect()
+        let res = keys.into_iter().map(|key| self.do_get(key.borrow(), true)).collect::<Result<Vec<_>, Self::Error>>()?;
+        self.metrics.op_metrics.rocksdb_multiget_keys
+            .with_label_values(&[&self.ks_name()])
+            .observe(res.len() as f64);
+        Ok(res)
     }
 
     fn multi_contains_keys<J>(&self, keys: impl IntoIterator<Item=J>) -> Result<Vec<bool>, Self::Error>
@@ -246,9 +250,13 @@ where
             .with_label_values(&[&self.ks_name()])
             .start_timer();
         // copy from Map::multi_contains_key
-        keys.into_iter()
+        let res = keys.into_iter()
             .map(|key| self.contains_key(key.borrow()))
-            .collect()
+            .collect::<Result<Vec<_>, Self::Error>>()?;
+        self.metrics.op_metrics.rocksdb_multiget_keys
+            .with_label_values(&[&self.ks_name()])
+            .observe(res.len() as f64);
+        Ok(res)
     }
 
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error> {

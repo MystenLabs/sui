@@ -298,6 +298,7 @@ pub struct OperationMetrics {
     pub rocksdb_get_latency_seconds: HistogramVec,
     pub rocksdb_get_bytes: HistogramVec,
     pub rocksdb_multiget_latency_seconds: HistogramVec,
+    pub rocksdb_multiget_keys: HistogramVec,
     pub rocksdb_multiget_bytes: HistogramVec,
     pub rocksdb_put_latency_seconds: HistogramVec,
     pub rocksdb_put_bytes: HistogramVec,
@@ -364,6 +365,14 @@ impl OperationMetrics {
                 "Rocksdb multiget latency in seconds",
                 &["cf_name"],
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            rocksdb_multiget_keys: register_histogram_vec_with_registry!(
+                "rocksdb_multiget_keys",
+                "Number of keys in multi-get",
+                &["cf_name"],
+                prometheus::exponential_buckets(1.0, 2.0, 14).unwrap(),
                 registry,
             )
             .unwrap(),
