@@ -854,7 +854,6 @@ impl RpcExampleProvider {
         let limit = 3;
         let owner = SuiAddress::from(ObjectID::new(self.rng.gen()));
         let cursor = ObjectID::new(self.rng.gen());
-        let next = ObjectID::new(self.rng.gen());
         let coins = (0..3)
             .map(|_| Coin {
                 coin_type: "0x2::sui::SUI".to_string(),
@@ -868,7 +867,7 @@ impl RpcExampleProvider {
             .collect::<Vec<_>>();
         let page = CoinPage {
             data: coins,
-            next_cursor: Some(next),
+            next_cursor: Some("abcd".to_string()),
             has_next_page: true,
         };
 
@@ -956,11 +955,9 @@ impl RpcExampleProvider {
             })
             .collect::<Vec<_>>();
 
-        let next_cursor = coins.last().unwrap().coin_object_id;
-
         let page = CoinPage {
             data: coins,
-            next_cursor: Some(next_cursor),
+            next_cursor: Some("abcd".to_string()),
             has_next_page: true,
         };
 
