@@ -1391,6 +1391,14 @@ async fn finalize_checkpoint(
     debug!("finalizing checkpoint");
     epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
 
+    if state.is_fullnode(epoch_store) {
+        state.congestion_tracker.process_checkpoint_effects(
+            transaction_cache_reader,
+            &checkpoint,
+            &effects,
+        );
+    }
+
     // TODO remove once we no longer need to support this table for read RPC
     state
         .get_checkpoint_cache()
