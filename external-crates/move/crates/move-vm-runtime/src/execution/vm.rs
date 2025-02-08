@@ -337,7 +337,7 @@ impl<'extensions> MoveVM<'extensions> {
             .map_err(|err| err.finish(Location::Undefined))?;
 
         let return_values = interpreter::run(
-            &self.virtual_tables,
+            &mut self.virtual_tables,
             self.vm_config.clone(),
             &mut self.native_extensions,
             tracer,

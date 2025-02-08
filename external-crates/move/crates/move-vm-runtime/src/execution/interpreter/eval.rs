@@ -45,7 +45,7 @@ enum StepStatus {
 }
 
 struct RunContext<'vm_cache, 'native, 'native_lifetimes, 'tracer, 'trace_builder> {
-    vtables: &'vm_cache VMDispatchTables,
+    vtables: &'vm_cache mut VMDispatchTables,
     vm_config: Arc<VMConfig>,
     extensions: &'native mut NativeContextExtensions<'native_lifetimes>,
     // TODO: consider making this `Option<&mut VMTracer<'_>>` and passing it like that everywhere?
@@ -66,7 +66,7 @@ impl RunContext<'_, '_, '_, '_, '_> {
 /// calling `step`, until the call stack is empty.
 pub(super) fn run(
     start_state: MachineState,
-    vtables: &VMDispatchTables,
+    vtables: &mut VMDispatchTables,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,
     tracer: &mut Option<VMTracer<'_>>,
@@ -1207,7 +1207,7 @@ fn partial_error_to_error<T>(
     })
 }
 
-fn check_depth_of_type(run_context: &RunContext, ty: &Type) -> PartialVMResult<u64> {
+fn check_depth_of_type(run_context: &mut RunContext, ty: &Type) -> PartialVMResult<u64> {
     let Some(max_depth) = run_context
         .vm_config
         .runtime_limits_config
@@ -1219,7 +1219,7 @@ fn check_depth_of_type(run_context: &RunContext, ty: &Type) -> PartialVMResult<u
 }
 
 fn check_depth_of_type_impl(
-    run_context: &RunContext,
+    run_context: &mut RunContext,
     ty: &Type,
     current_depth: u64,
     max_depth: u64,

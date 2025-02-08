@@ -189,10 +189,9 @@ impl MachineState {
     /// Given an `VMStatus` generate a core dump if the error is an `InvariantViolation`. Uses the
     /// `current_frame` on the state to perform the core dump.
     pub fn maybe_core_dump(&self, err: VMError) -> VMError {
-        // a verification error cannot happen at runtime so change it into an invariant violation.
         let err = if err.status_type() == StatusType::Verification {
             error!("Verification error during runtime: {:?}", err);
-            let new_err = PartialVMError::new(StatusCode::VERIFICATION_ERROR);
+            let new_err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR);
             let new_err = match err.message() {
                 None => new_err.with_message("No message provided for core dump".to_owned()),
                 Some(msg) => new_err.with_message(msg.to_owned()),

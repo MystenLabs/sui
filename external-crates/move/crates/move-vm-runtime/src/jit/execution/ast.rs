@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::arena::Arena,
+    cache::{arena::Arena, identifier_interner::IdentifierKey},
     execution::{
         dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
         values::ConstantValue,
@@ -20,8 +20,8 @@ use crate::{
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        AbilitySet, CodeOffset, ConstantPoolIndex, EnumDefInstantiationIndex, EnumDefinitionIndex,
-        FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
+        AbilitySet, CodeOffset, ConstantPoolIndex, DatatypeTyParameter, EnumDefInstantiationIndex,
+        EnumDefinitionIndex, FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
         FunctionInstantiationIndex, LocalIndex, SignatureIndex, SignatureToken,
         StructDefInstantiationIndex, StructDefinitionIndex, VariantHandle, VariantHandleIndex,
         VariantInstantiationHandle, VariantInstantiationHandleIndex, VariantJumpTable,
@@ -45,6 +45,7 @@ pub struct Package {
 
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
+    // TODO(vm-rewrite): IdentifierKey
     pub loaded_modules: BinaryCache<Identifier, Module>,
 
     // NB: Package functions and code are allocated into this arena.
@@ -61,11 +62,13 @@ pub struct Module {
     #[allow(dead_code)]
     pub id: ModuleId,
 
-    ///
-    /// types as indexes into the package's vtable
-    ///
+    /// Types as indexes into the package's vtable
     #[allow(dead_code)]
     pub type_refs: Vec<IntraPackageKey>,
+
+    /// Descriptors for all of the datatypes defined in the module -- these are the enums and
+    /// structs defined in the module.
+    pub datatype_descriptors: BTreeMap<IntraPackageKey, DatatypeDescriptor>,
 
     /// struct references carry the index into the global vector of types.
     /// That is effectively an indirection over the ref table:
@@ -134,6 +137,7 @@ pub struct Function {
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
     pub module: ModuleId,
+    // TODO(vm-rewrite): IdentifierKey
     pub name: Identifier,
     pub locals_len: usize,
     pub jump_tables: Vec<VariantJumpTable>,
@@ -250,6 +254,20 @@ pub enum Type {
     U256,
 }
 
+// FIXME(vm-rewrite): This data is largely redundant
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DatatypeDescriptor {
+    pub abilities: AbilitySet,
+    pub type_parameters: Vec<DatatypeTyParameter>,
+    // TODO(vm-rewrite): IdentifierKey
+    pub name: Identifier,
+    pub defining_id: ModuleId,
+    pub runtime_id: ModuleId,
+    pub module_key: IdentifierKey,
+    pub member_key: IdentifierKey,
+    pub datatype_info: VMPointer<Datatype>,
+}
+
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Datatype {
     Enum(EnumType),
@@ -264,6 +282,7 @@ pub struct EnumType {
 
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct VariantType {
+    // TODO(vm-rewrite): IdentifierKey
     pub variant_name: Identifier,
     pub fields: Vec<Type>,
     pub field_names: Vec<Identifier>,
@@ -1129,6 +1148,68 @@ impl Type {
         }
     }
 }
+
+impl DatatypeDescriptor {
+    pub fn get_struct(&self) -> PartialVMResult<&StructType> {
+        match self.datatype_info.to_ref() {
+            Datatype::Struct(struct_type) => Ok(struct_type),
+            x @ Datatype::Enum(_) => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message(format!("Expected struct type but got {:?}", x))),
+        }
+    }
+
+    pub fn get_enum(&self) -> PartialVMResult<&EnumType> {
+        match self.datatype_info.to_ref() {
+            Datatype::Enum(enum_type) => Ok(enum_type),
+            x @ Datatype::Struct(_) => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message(format!("Expected enum type but got {:?}", x))),
+        }
+    }
+
+    pub fn datatype_key(&self) -> VirtualTableKey {
+        let module_name = self.module_key;
+        let member_name = self.member_key;
+        VirtualTableKey {
+            package_key: *self.runtime_id.address(),
+            inner_pkg_key: IntraPackageKey {
+                module_name,
+                member_name,
+            },
+        }
+    }
+
+    pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
+        self.type_parameters.iter().map(|param| &param.constraints)
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Equality
+// -------------------------------------------------------------------------------------------------
+
+impl PartialEq for Function {
+    fn eq(&self, other: &Self) -> bool {
+        self.file_format_version == other.file_format_version
+            && self.is_entry == other.is_entry
+            && self.index == other.index
+            && std::ptr::eq(self.code, other.code) // Compare raw pointers for equality
+            && self.parameters == other.parameters
+            && self.locals == other.locals
+            && self.return_ == other.return_
+            && self.type_parameters == other.type_parameters
+            && self.def_is_native == other.def_is_native
+            && self.module == other.module
+            && self.name == other.name
+            && self.locals_len == other.locals_len
+            && self.jump_tables == other.jump_tables
+    }
+}
+
+impl Eq for Function {}
 
 // -------------------------------------------------------------------------------------------------
 // Into
