@@ -69,19 +69,13 @@ pub(super) async fn latest_object(
     // object does exist, so the following calls should find a valid latest version for the object,
     // and that version is expected to have content, so if either of those things don't happen,
     // it's an internal error.
-    let stored = load_latest(ctx.loader(), object_id)
+    let o = load_latest(ctx.loader(), object_id)
         .await
         .context("Failed to load latest object")?
         .ok_or_else(|| internal_error!("Could not find latest content for live object"))?;
 
-    let Some(bytes) = &stored.serialized_object else {
-        rpc_bail!("No content found for live object")
-    };
-
-    let version = SequenceNumber::from_u64(stored.object_version as u64);
-
     Ok(SuiObjectResponse::new_with_data(
-        object(ctx, object_id, version, bytes, options).await?,
+        object(ctx, o, options).await?,
     ))
 }
 
@@ -110,21 +104,19 @@ pub(super) async fn past_object(
         }));
     };
 
+    let o: Object = bcs::from_bytes(&bytes).context("Failed to deserialize object")?;
+
     Ok(SuiPastObjectResponse::VersionFound(
-        object(ctx, object_id, version, bytes, options).await?,
+        object(ctx, o, options).await?,
     ))
 }
 
 /// Extract a representation of the object from its stored form, according to its response options.
 pub(crate) async fn object(
     ctx: &Context,
-    object_id: ObjectID,
-    version: SequenceNumber,
-    bytes: &[u8],
+    object: Object,
     options: &SuiObjectDataOptions,
 ) -> Result<SuiObjectData, RpcError> {
-    let object: Object = bcs::from_bytes(bytes).context("Failed to deserialize object")?;
-
     let type_ = options.show_type.then(|| ObjectType::from(&object));
     let owner = options.show_owner.then(|| object.owner().clone());
     let previous_transaction = options
@@ -153,8 +145,8 @@ pub(crate) async fn object(
         .context("Failed to deserialize object to BCS")?;
 
     Ok(SuiObjectData {
-        object_id,
-        version,
+        object_id: object.id(),
+        version: object.version(),
         digest: object.digest(),
         type_,
         owner,
