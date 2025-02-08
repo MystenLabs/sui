@@ -962,6 +962,9 @@ impl<K, V> DBMap<K, V> {
             .map(|r| r.map_err(|e| TypedStoreError::RocksDBError(e.into_string())))
             .collect();
         let entries = results?;
+        self.db_metrics.op_metrics.rocksdb_multiget_keys
+            .with_label_values(&[&self.cf_name()])
+            .observe(entries.len() as f64);
         let entry_size = entries
             .iter()
             .flatten()
@@ -1701,6 +1704,9 @@ impl<'a> DBTransaction<'a> {
         let results = self
             .transaction
             .multi_get_cf_opt(keys_bytes?, &db.opts.readopts());
+        db.db_metrics.op_metrics.rocksdb_multiget_keys
+            .with_label_values(&[&db.cf_name()])
+            .observe(results.len() as f64);
 
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
