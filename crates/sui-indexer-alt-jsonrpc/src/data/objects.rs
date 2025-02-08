@@ -6,8 +6,9 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Context as _;
 use async_graphql::dataloader::{DataLoader, Loader};
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
+use serde::de::DeserializeOwned;
 use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
-use sui_types::base_types::ObjectID;
+use sui_types::{base_types::ObjectID, object::Object};
 
 use super::{
     object_versions::LatestObjectVersionKey,
@@ -67,14 +68,14 @@ impl Loader<VersionedObjectKey> for Reader {
     }
 }
 
-/// Load the contents of the latest version of an object, if it exists. This function does not
-/// respect deletion and wrapping. If an object is deleted or wrapped, it may return the contents
-/// of the object before the deletion or wrapping, or it may return `None` if the object has been
-/// fully pruned from the versions table.
+/// Load the contents of an object from the store and deserialize it as an `Object`. This function
+/// does not respect deletion and wrapping. If an object is deleted or wrapped, it may return the
+/// contents of the object before the deletion or wrapping, or it may return `None` if the object
+/// has been fully pruned from the versions table.
 pub(crate) async fn load_latest(
     loader: &DataLoader<Reader>,
     object_id: ObjectID,
-) -> Result<Option<StoredObject>, anyhow::Error> {
+) -> Result<Option<Object>, anyhow::Error> {
     let Some(latest_version) = loader
         .load_one(LatestObjectVersionKey(object_id))
         .await
@@ -83,13 +84,34 @@ pub(crate) async fn load_latest(
         return Ok(None);
     };
 
-    let stored = loader
+    let Some(stored) = loader
         .load_one(VersionedObjectKey(
             object_id,
             latest_version.object_version as u64,
         ))
         .await
-        .context("Failed to load latest object")?;
+        .context("Failed to load latest object")?
+    else {
+        return Ok(None);
+    };
 
-    Ok(stored)
+    let bytes = stored.serialized_object.context("Content not found")?;
+    let object: Object =
+        bcs::from_bytes(&bytes).context("Failed to deserialize object contents")?;
+
+    Ok(Some(object))
+}
+
+/// Fetch the latest version of the object at ID `object_id`, and deserialize its contents as a
+/// Rust type `T`, assuming that it is a Move object (not a package).
+pub(crate) async fn load_latest_deserialized<T: DeserializeOwned>(
+    loader: &DataLoader<Reader>,
+    object_id: ObjectID,
+) -> Result<T, anyhow::Error> {
+    let object = load_latest(loader, object_id)
+        .await?
+        .context("No data found")?;
+
+    let move_object = object.data.try_as_move().context("Not a Move object")?;
+    Ok(bcs::from_bytes(move_object.contents()).context("Failed to deserialize Move value")?)
 }
