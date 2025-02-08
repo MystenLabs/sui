@@ -45,6 +45,7 @@ pub struct Package {
 
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
+    // TODO(vm-rewrite): IdentifierKey
     pub loaded_modules: BinaryCache<Identifier, Module>,
 
     // NB: Package functions and code are allocated into this arena.
@@ -136,6 +137,7 @@ pub struct Function {
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
     pub module: ModuleId,
+    // TODO(vm-rewrite): IdentifierKey
     pub name: Identifier,
     pub locals_len: usize,
     pub jump_tables: Vec<VariantJumpTable>,
@@ -257,6 +259,7 @@ pub enum Type {
 pub struct DatatypeDescriptor {
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
+    // TODO(vm-rewrite): IdentifierKey
     pub name: Identifier,
     pub defining_id: ModuleId,
     pub runtime_id: ModuleId,
@@ -279,6 +282,7 @@ pub struct EnumType {
 
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct VariantType {
+    // TODO(vm-rewrite): IdentifierKey
     pub variant_name: Identifier,
     pub fields: Vec<Type>,
     pub field_names: Vec<Identifier>,

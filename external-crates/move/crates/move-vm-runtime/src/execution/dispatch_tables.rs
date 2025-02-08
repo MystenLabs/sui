@@ -325,30 +325,16 @@ impl VMDispatchTables {
         let depth_formula =
             self.calculate_depth_of_datatype_and_cache(datatype_name, &mut depth_cache)?;
         for (datatype_key, depth) in depth_cache {
-            match self
+            let _prev_depth = self
                 .type_depths
                 .entry(datatype_key.package_key)
                 .or_default()
-                .entry(datatype_key.inner_pkg_key)
-            {
-                std::collections::btree_map::Entry::Vacant(vacant_entry) => {
-                    vacant_entry.insert(depth);
-                }
-                std::collections::btree_map::Entry::Occupied(occupied_entry) => {
-                    // This could happen if we race for filling in the depth of the datatype which
-                    // is fine as only one will win. However, since a dispatch table should always
-                    // be in a single tear-off VM, this seems unlikely to happen.
-                    if occupied_entry.get() != &depth {
-                        return Err(PartialVMError::new(
-                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        )
-                        .with_message(format!(
-                            "Depth calculation mismatch for {}",
-                            datatype_key.to_string()?
-                        )));
-                    }
-                }
-            }
+                .insert(datatype_key.inner_pkg_key, depth);
+            debug_assert!(
+                _prev_depth.is_none(),
+                "recomputed type depth formula for {}",
+                datatype_key.to_string()?
+            );
         }
         Ok(depth_formula)
     }

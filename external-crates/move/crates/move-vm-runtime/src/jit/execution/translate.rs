@@ -289,10 +289,8 @@ fn record_module_types_in_vtable(
 ) {
     for (key, descriptor) in datatype_descriptors {
         let descriptor_ptr = VMPointer::from_ref(descriptor);
-        debug_assert!(
-            vtable.types.insert(*key, descriptor_ptr).is_none(),
-            "Double insert for datatype"
-        );
+        let _prev = vtable.types.insert(*key, descriptor_ptr);
+        debug_assert!(_prev.is_none(), "Double insert for datatype");
     }
 }
 
@@ -328,9 +326,7 @@ fn structs(
         .iter()
         .map(|struct_def| {
             let key = type_refs[struct_def.struct_handle.0 as usize];
-            let Some(type_) = datatype_descriptors.get(&key) else {
-                panic!("did not find struct {}", key.to_string()?);
-            };
+            let type_ = &datatype_descriptors[&key];
             let struct_type = type_.get_struct()?;
             let field_count = struct_type.fields.len() as u16;
             Ok(StructDef {
@@ -380,9 +376,7 @@ fn enums(
         .iter()
         .map(|enum_def| {
             let key = type_refs[enum_def.enum_handle.0 as usize];
-            let Some(type_) = datatype_descriptors.get(&key) else {
-                panic!("did not find enum {}", key.to_string()?);
-            };
+            let type_ = &datatype_descriptors[&key];
             let enum_type = type_.get_enum()?;
             let variant_count = enum_type.variants.len() as u16;
             let variants = enum_type
@@ -952,10 +946,9 @@ fn load_module_types(
             module_key: module_name,
             member_key: member_name,
         };
+        let _prev = datatype_descriptors.insert(struct_key, datatype_descriptor);
         debug_assert!(
-            datatype_descriptors
-                .insert(struct_key, datatype_descriptor)
-                .is_none(),
+            _prev.is_none(),
             "double-insert of datatype {}",
             struct_key.to_string()?
         );
@@ -1027,10 +1020,9 @@ fn load_module_types(
             module_key: module_name,
             member_key: member_name,
         };
+        let _prev = datatype_descriptors.insert(enum_key, datatype_descriptor);
         debug_assert!(
-            datatype_descriptors
-                .insert(enum_key, datatype_descriptor)
-                .is_none(),
+            _prev.is_none(),
             "double-insert of datatype {}",
             enum_key.to_string()?
         );
