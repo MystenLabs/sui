@@ -14,7 +14,7 @@ use tonic::transport::Channel;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Config {
-    /// Set the concurrency limit applied to on requests inbound per connection.
+    /// Set the concurrency limit applied to inbound requests per connection.
     pub concurrency_limit_per_connection: Option<usize>,
 
     /// Set a timeout for all request handlers.
