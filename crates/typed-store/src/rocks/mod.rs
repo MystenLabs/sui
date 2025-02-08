@@ -950,11 +950,15 @@ impl<K, V> DBMap<K, V> {
             .into_iter()
             .map(|k| be_fix_int_ser(k.borrow()))
             .collect();
+        let keys_bytes = keys_bytes?;
+        if keys_bytes.is_empty() {
+            return Ok(vec![]);
+        }
         let results: Result<Vec<_>, TypedStoreError> = self
             .rocksdb
             .batched_multi_get_cf_opt(
                 &self.cf(),
-                keys_bytes?,
+                keys_bytes,
                 /*sorted_keys=*/ false,
                 &self.opts.readopts(),
             )
@@ -1700,6 +1704,10 @@ impl<'a> DBTransaction<'a> {
             .into_iter()
             .map(|k| Ok((&cf, be_fix_int_ser(k.borrow())?)))
             .collect();
+        let keys_bytes = keys_bytes?;
+        if keys_bytes.is_empty() {
+            return Ok(vec![]);
+        }
 
         let results = self
             .transaction
