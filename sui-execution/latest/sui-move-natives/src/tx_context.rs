@@ -157,33 +157,6 @@ pub fn epoch_timestamp_ms(
 }
 
 #[derive(Clone)]
-pub struct TxContextDigestCostParams {
-    pub tx_context_digest_cost_base: InternalGas,
-}
-pub fn digest(
-    context: &mut NativeContext,
-    ty_args: Vec<Type>,
-    args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
-
-    let tx_context_digest_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()
-        .tx_context_digest_cost_params
-        .clone();
-    native_charge_gas_early_exit!(
-        context,
-        tx_context_digest_cost_params.tx_context_digest_cost_base
-    );
-
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
-    let digest = transaction_context.move_digest_ref()?;
-    Ok(NativeResult::ok(context.gas_used(), smallvec![digest]))
-}
-
-#[derive(Clone)]
 pub struct TxContextSponsorCostParams {
     pub tx_context_sponsor_cost_base: InternalGas,
 }

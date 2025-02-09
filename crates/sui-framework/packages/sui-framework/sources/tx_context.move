@@ -42,10 +42,9 @@ native fun native_sender(): address;
 
 /// Return the transaction digest (hash of transaction inputs).
 /// Please do not use as a source of randomness.
-public fun digest(_self: &TxContext): &vector<u8> {
-    native_digest()
+public fun digest(self: &TxContext): &vector<u8> {
+    &self.tx_hash
 }
-native fun native_digest(): &vector<u8>;
 
 /// Return the current epoch
 public fun epoch(_self: &TxContext): u64 {
@@ -97,7 +96,7 @@ public fun new(
     // return an empty TxContext given all the info is held on the native side (call above)
     TxContext {
         sender: @0x0,
-        tx_hash: vector::empty(),
+        tx_hash,
         epoch: 0,
         epoch_timestamp_ms: 0,
         ids_created: 0,

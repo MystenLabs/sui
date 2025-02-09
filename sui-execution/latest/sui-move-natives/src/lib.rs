@@ -32,9 +32,8 @@ use self::{
         TransferFreezeObjectCostParams, TransferInternalCostParams, TransferShareObjectCostParams,
     },
     tx_context::{
-        TxContextDeriveIdCostParams, TxContextDigestCostParams, TxContextEpochCostParams,
-        TxContextEpochTimestampMsCostParams, TxContextFreshIdCostParams,
-        TxContextIdsCreatedCostParams, TxContextIncEpochCostParams,
+        TxContextDeriveIdCostParams, TxContextEpochCostParams, TxContextEpochTimestampMsCostParams,
+        TxContextFreshIdCostParams, TxContextIdsCreatedCostParams, TxContextIncEpochCostParams,
         TxContextIncEpochTimestampCostParams, TxContextReplaceCostParams,
         TxContextSenderCostParams, TxContextSponsorCostParams,
     },
@@ -124,7 +123,6 @@ pub struct NativesCostTable {
     pub tx_context_sender_cost_params: TxContextSenderCostParams,
     pub tx_context_epoch_cost_params: TxContextEpochCostParams,
     pub tx_context_epoch_timestamp_ms_cost_params: TxContextEpochTimestampMsCostParams,
-    pub tx_context_digest_cost_params: TxContextDigestCostParams,
     pub tx_context_sponsor_cost_params: TxContextSponsorCostParams,
     pub tx_context_ids_created_cost_params: TxContextIdsCreatedCostParams,
     pub tx_context_replace_cost_params: TxContextReplaceCostParams,
@@ -381,13 +379,6 @@ impl NativesCostTable {
                     protocol_config
                         .tx_context_epoch_timestamp_ms_cost_base()
                         .into()
-                } else {
-                    DEFAULT_UNUSED_ENTRY_COST.into()
-                },
-            },
-            tx_context_digest_cost_params: TxContextDigestCostParams {
-                tx_context_digest_cost_base: if protocol_config.move_native_context() {
-                    protocol_config.tx_context_digest_cost_base().into()
                 } else {
                     DEFAULT_UNUSED_ENTRY_COST.into()
                 },
@@ -1127,11 +1118,6 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "tx_context",
             "native_sender",
             make_native!(tx_context::sender),
-        ),
-        (
-            "tx_context",
-            "native_digest",
-            make_native!(tx_context::digest),
         ),
         (
             "tx_context",
