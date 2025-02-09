@@ -15,6 +15,8 @@ harness = false
 
 [dependencies]
 anyhow.workspace = true
+diesel = { workspace = true, features = ["chrono"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 prometheus.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -31,8 +33,6 @@ msim.workspace = true
 [dev-dependencies]
 async-trait.workspace = true
 datatest-stable.workspace = true
-diesel = { workspace = true, features = ["chrono"] }
-diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 reqwest.workspace = true
 serde_json.workspace = true
 telemetry-subscribers.workspace = true
