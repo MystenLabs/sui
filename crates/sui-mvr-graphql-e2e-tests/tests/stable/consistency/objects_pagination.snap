@@ -29,7 +29,7 @@ task 4, line 34:
 Checkpoint created: 1
 
 task 5, lines 36-64:
-//# run-graphql --cursors @{obj_2_0} @{obj_3_0}
+//# run-graphql --cursors bcs(@{obj_2_0},@{highest_checkpoint}) bcs(@{obj_3_0},@{highest_checkpoint})
 Response: {
   "data": {
     "one_of_these_will_yield_an_object": {
@@ -75,7 +75,7 @@ task 8, line 70:
 Checkpoint created: 2
 
 task 9, lines 72-100:
-//# run-graphql --cursors @{obj_2_0,1} @{obj_3_0,1}
+//# run-graphql --cursors bcs(@{obj_2_0},1) bcs(@{obj_3_0},1)
 Response: {
   "data": {
     "paginating_on_checkpoint_1": {
@@ -237,7 +237,7 @@ task 13, line 149:
 Checkpoint created: 3
 
 task 14, lines 151-213:
-//# run-graphql --cursors @{obj_6_0,2}
+//# run-graphql --cursors bcs(@{obj_6_0},2)
 Response: {
   "data": {
     "after_obj_6_0_at_checkpoint_2": {
@@ -521,7 +521,7 @@ task 22, line 229:
 Checkpoint created: 7
 
 task 23, lines 231-255:
-//# run-graphql --cursors @{obj_6_0,2}
+//# run-graphql --cursors bcs(@{obj_6_0},2)
 Response: {
   "data": null,
   "errors": [

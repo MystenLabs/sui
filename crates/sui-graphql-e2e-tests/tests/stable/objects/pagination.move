@@ -54,7 +54,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors @{obj_5_0}
+//# run-graphql --cursors bcs(@{obj_5_0},@{highest_checkpoint})
 {
   address(address: "@{A}") {
     # select the 2nd and 3rd objects
@@ -68,7 +68,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors @{obj_4_0}
+//# run-graphql --cursors bcs(@{obj_4_0},@{highest_checkpoint})
 {
   address(address: "@{A}") {
     # select 4th and last object
@@ -80,7 +80,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors @{obj_3_0}
+//# run-graphql --cursors bcs(@{obj_3_0},@{highest_checkpoint})
 {
   address(address: "@{A}") {
     # select 3rd and 4th object

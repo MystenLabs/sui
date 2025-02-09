@@ -91,7 +91,7 @@ Response: {
 }
 
 task 10, lines 57-69:
-//# run-graphql --cursors @{obj_5_0}
+//# run-graphql --cursors bcs(@{obj_5_0},@{highest_checkpoint})
 Response: {
   "data": {
     "address": {
@@ -103,7 +103,7 @@ Response: {
 }
 
 task 11, lines 71-81:
-//# run-graphql --cursors @{obj_4_0}
+//# run-graphql --cursors bcs(@{obj_4_0},@{highest_checkpoint})
 Response: {
   "data": {
     "address": {
@@ -122,7 +122,7 @@ Response: {
 }
 
 task 12, lines 83-93:
-//# run-graphql --cursors @{obj_3_0}
+//# run-graphql --cursors bcs(@{obj_3_0},@{highest_checkpoint})
 Response: {
   "data": {
     "address": {

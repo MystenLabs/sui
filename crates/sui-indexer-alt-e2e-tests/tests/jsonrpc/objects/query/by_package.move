@@ -101,7 +101,7 @@ module P::N {
   ]
 }
 
-//# run-jsonrpc --cursors @{obj_3_2,1}
+//# run-jsonrpc --cursors bcs(@{obj_3_2},1)
 {
   "method": "suix_getOwnedObjects",
   "params": [
