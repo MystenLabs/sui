@@ -1794,7 +1794,7 @@ fn use_funs(context: &mut Context, eufs: E::UseFuns) -> N::UseFuns {
         .flat_map(|e| explicit_use_fun(context, e))
         .collect();
     for (tn, method, nuf) in resolved_vec {
-        let methods = resolved.entry(tn.clone()).or_default();
+        let methods = resolved.entry(tn).or_default();
         let nuf_loc = nuf.loc;
         if let Err((_, prev)) = methods.add(method, nuf) {
             let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);
@@ -1899,7 +1899,7 @@ fn explicit_use_fun(
         loc,
         attributes,
         is_public,
-        tname: tn.clone(),
+        tname: tn,
         target_function,
         kind: N::UseFunKind::Explicit,
         used: is_public.is_some(), // suppress unused warning for public use funs
