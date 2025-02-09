@@ -11,19 +11,16 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, bail, Context};
-use diesel::{dsl, ExpressionMethods, QueryDsl};
-use diesel_async::RunQueryDsl;
+use anyhow::{bail, Context};
 use prometheus::Registry;
 use reqwest::Client;
 use serde_json::{json, Value};
 use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt_e2e_tests::OffchainCluster;
-use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, IndexerArgs};
+use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
 use sui_indexer_alt_jsonrpc::{
     config::RpcConfig, data::system_package_task::SystemPackageTaskArgs,
 };
-use sui_pg_db::{Db, DbArgs};
 use sui_transactional_test_runner::{
     create_adapter,
     offchain_state::{OffchainStateReader, TestResponse},
@@ -31,11 +28,9 @@ use sui_transactional_test_runner::{
     test_adapter::{OffChainConfig, SuiTestAdapter, PRE_COMPILED},
 };
 use tokio_util::sync::CancellationToken;
-use url::Url;
 
 struct OffchainReader {
-    db: Db,
-    rpc_url: Url,
+    cluster: Arc<OffchainCluster>,
     client: Client,
     queries: AtomicUsize,
 }
@@ -43,50 +38,22 @@ struct OffchainReader {
 datatest_stable::harness!(run_test, "tests", r".*\.move$");
 
 impl OffchainReader {
-    /// Wait indefinitely until all pipelines have caught up with `checkpoint`.
-    async fn wait_for_checkpoint(&self, checkpoint: u64) {
-        loop {
-            if matches!(self.latest_checkpoint().await, Ok(latest) if latest >= checkpoint) {
-                break;
-            } else {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
+    fn new(cluster: Arc<OffchainCluster>) -> Self {
+        Self {
+            cluster,
+            client: Client::new(),
+            queries: AtomicUsize::new(0),
         }
-    }
-
-    /// Return the lowest checkpoint that we have committed data for across all pipelines,
-    /// according to the watermarks table.
-    ///
-    /// NOTE: We exclude pipelines that we know correspond to pruners, because they usually lag
-    /// behind their committer counterparts.
-    async fn latest_checkpoint(&self) -> anyhow::Result<u64> {
-        let mut conn = self
-            .db
-            .connect()
-            .await
-            .context("Failed to connect to database")?;
-
-        // FIXME: It's not ideal that we have to enumerate pruners here -- if we forget to add one,
-        // tests will hang indefinitely. Hopefully, by moving these over to the framework's pruning
-        // support, we can avoid this complication.
-        const PRUNERS: &[&str] = &["coin_balance_buckets_pruner", "obj_info_pruner"];
-
-        let latest: Option<i64> = watermarks::table
-            .select(dsl::min(watermarks::checkpoint_hi_inclusive))
-            .filter(watermarks::pipeline.ne_all(PRUNERS))
-            .first(&mut conn)
-            .await?;
-
-        latest
-            .map(|latest| latest as u64)
-            .ok_or_else(|| anyhow!("No checkpoints recorded yet"))
     }
 }
 
 #[async_trait::async_trait]
 impl OffchainStateReader for OffchainReader {
     async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
-        let _ = tokio::time::timeout(base_timeout, self.wait_for_checkpoint(checkpoint)).await;
+        let _ = self
+            .cluster
+            .wait_for_checkpoint(checkpoint, base_timeout)
+            .await;
     }
 
     async fn wait_for_pruned_checkpoint(&self, _: u64, _: Duration) {
@@ -107,7 +74,7 @@ impl OffchainStateReader for OffchainReader {
 
         let response = self
             .client
-            .post(self.rpc_url.clone())
+            .post(self.cluster.rpc_url())
             .json(&query)
             .send()
             .await
@@ -130,7 +97,7 @@ impl OffchainStateReader for OffchainReader {
     }
 }
 
-async fn cluster(config: &OffChainConfig) -> OffchainCluster {
+async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
     let cancel = CancellationToken::new();
     let registry = Registry::new();
 
@@ -153,33 +120,19 @@ async fn cluster(config: &OffChainConfig) -> OffchainCluster {
 
     let rpc_config = RpcConfig::example();
 
-    OffchainCluster::new(
-        indexer_args,
-        client_args,
-        system_package_task_args,
-        indexer_config,
-        rpc_config,
-        &registry,
-        cancel,
+    Arc::new(
+        OffchainCluster::new(
+            indexer_args,
+            client_args,
+            system_package_task_args,
+            indexer_config,
+            rpc_config,
+            &registry,
+            cancel,
+        )
+        .await
+        .expect("Failed to create off-chain cluster"),
     )
-    .await
-    .expect("Failed to create off-chain cluster")
-}
-
-async fn reader(cluster: &OffchainCluster) -> Box<dyn OffchainStateReader> {
-    let db = Db::for_read(DbArgs {
-        database_url: cluster.db_url(),
-        ..Default::default()
-    })
-    .await
-    .expect("Failed to connect to database");
-
-    Box::new(OffchainReader {
-        db,
-        rpc_url: cluster.rpc_url(),
-        client: Client::new(),
-        queries: AtomicUsize::new(0),
-    })
 }
 
 #[cfg_attr(not(msim), tokio::main)]
@@ -197,12 +150,16 @@ async fn run_test(path: &Path) -> Result<(), Box<dyn Error>> {
 
     // configure access to the off-chain reader
     let c = cluster(adapter.offchain_config.as_ref().unwrap()).await;
-    adapter.with_offchain_reader(reader(&c).await);
+    adapter.with_offchain_reader(Box::new(OffchainReader::new(c.clone())));
 
     // run the tasks in the test
     run_tasks_with_adapter(path, adapter, output).await?;
 
     // clean-up the off-chain cluster
-    c.stopped().await;
+    Arc::try_unwrap(c)
+        .unwrap_or_else(|_| panic!("Failed to unwrap off-chain cluster"))
+        .stopped()
+        .await;
+
     Ok(())
 }
