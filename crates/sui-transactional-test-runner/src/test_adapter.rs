@@ -1274,7 +1274,7 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
     }
 }
 
-impl<'a> SuiTestAdapter {
+impl SuiTestAdapter {
     pub fn with_offchain_reader(&mut self, offchain_reader: Box<dyn OffchainStateReader>) {
         self.offchain_reader = Some(offchain_reader);
     }
