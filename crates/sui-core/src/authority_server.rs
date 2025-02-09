@@ -463,6 +463,8 @@ impl ValidatorService {
             metrics.signature_errors.inc();
         })?;
         drop(tx_verif_metrics_guard);
+        let signers: NonEmpty<_> = transaction.intent_message().value.signers();
+        self.handle_signers_traffic_req(signers).await?;
 
         let tx_digest = transaction.digest();
 
@@ -485,7 +487,7 @@ impl ValidatorService {
             return Err(error.into());
         }
 
-        Ok((tonic::Response::new(info), Weight::zero()))
+        Ok((tonic::Response::new(info), Weight::zero(), signers))
     }
 
     async fn handle_transaction_v2(
@@ -538,7 +540,8 @@ impl ValidatorService {
             metrics.signature_errors.inc();
         })?;
         drop(tx_verif_metrics_guard);
-
+        let signers: NonEmpty<_> = transaction.intent_message().value.signers();
+        self.handle_signers_traffic_req(signers).await?;
         // Enable Trace Propagation across spans/processes using tx_digest
         let tx_digest = transaction.digest();
         let span = error_span!("validator_state_process_tx_v2", ?tx_digest);
@@ -570,6 +573,7 @@ impl ValidatorService {
                     auxiliary_data: None, // We don't have any aux data generated presently
                 }),
                 Weight::zero(),
+                signers,
             ));
         }
 
@@ -598,6 +602,7 @@ impl ValidatorService {
                     .remove(0),
                 ),
                 spam_weight,
+                signers,
             )
         })
     }
@@ -616,7 +621,14 @@ impl ValidatorService {
         include_auxiliary_data: bool,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         wait_for_effects: bool,
-    ) -> Result<(Option<Vec<HandleCertificateResponseV3>>, Weight), tonic::Status> {
+    ) -> Result<
+        (
+            Option<Vec<HandleCertificateResponseV3>>,
+            Weight,
+            NonEmpty<SuiAddress>,
+        ),
+        tonic::Status,
+    > {
         // Validate if cert can be executed
         // Fullnode does not serve handle_certificate call.
         fp_ensure!(
@@ -697,14 +709,20 @@ impl ValidatorService {
             }
         }
 
-        let verified_certificates = {
+        let (verified_certificates, signers) = {
             let _timer = self.metrics.cert_verification_latency.start_timer();
-            epoch_store
+            let verified_certs = epoch_store
                 .signature_verifier
                 .multi_verify_certs(certificates.into())
                 .await
                 .into_iter()
-                .collect::<Result<Vec<_>, _>>()?
+                .collect::<Result<Vec<_>, _>>()?;
+            let signers = certificates
+                .iter()
+                .flat_map(|cert| cert.clone().intent_message().value.signers())
+                .collect::<NonEmpty<SuiAddress>>();
+            self.handle_signers_traffic_req(signers).await?;
+            (verified_certs, signers)
         };
         let consensus_transactions =
             NonEmpty::collect(verified_certificates.iter().map(|certificate| {
@@ -748,7 +766,7 @@ impl ValidatorService {
             None
         };
 
-        Ok((responses, weight))
+        Ok((responses, weight, signers))
     }
 
     async fn handle_submit_to_consensus(
@@ -868,7 +886,13 @@ impl ValidatorService {
     }
 }
 
-type WrappedServiceResponse<T> = Result<(tonic::Response<T>, Weight), tonic::Status>;
+struct ServiceResponse<T> {
+    response: tonic::Response<T>,
+    weight: Weight,
+    signers: NonEmpty<SuiAddress>,
+}
+
+type WrappedServiceResponse<T> = Result<ServiceResponse<T>, tonic::Status>;
 
 impl ValidatorService {
     async fn transaction_impl(
@@ -1301,9 +1325,25 @@ impl ValidatorService {
         }
     }
 
-    async fn handle_traffic_req(&self, client: Option<IpAddr>) -> Result<(), tonic::Status> {
+    async fn handle_ip_traffic_req(&self, client: Option<IpAddr>) -> Result<(), tonic::Status> {
         if let Some(traffic_controller) = &self.traffic_controller {
-            if !traffic_controller.check(&client, &None).await {
+            if !traffic_controller.check(&client, &None, &None).await {
+                // Entity in blocklist
+                Err(tonic::Status::from_error(SuiError::TooManyRequests.into()))
+            } else {
+                Ok(())
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn handle_signers_traffic_req(
+        &self,
+        signers: NonEmpty<SuiAddress>,
+    ) -> Result<(), tonic::Status> {
+        if let Some(traffic_controller) = &self.traffic_controller {
+            if !traffic_controller.check(&None, &None, &Some(signers)).await {
                 // Entity in blocklist
                 Err(tonic::Status::from_error(SuiError::TooManyRequests.into()))
             } else {
@@ -1319,11 +1359,16 @@ impl ValidatorService {
         client: Option<IpAddr>,
         wrapped_response: WrappedServiceResponse<T>,
     ) -> Result<tonic::Response<T>, tonic::Status> {
-        let (error, spam_weight, unwrapped_response) = match wrapped_response {
-            Ok((result, spam_weight)) => (None, spam_weight.clone(), Ok(result)),
+        let (error, spam_weight, signers, unwrapped_response) = match wrapped_response {
+            Ok(ServiceResponse {
+                response: result,
+                weight: spam_weight,
+                signers,
+            }) => (None, spam_weight.clone(), Some(signers), Ok(result)),
             Err(status) => (
                 Some(SuiError::from(status.clone())),
                 Weight::zero(),
+                None,
                 Err(status.clone()),
             ),
         };
@@ -1338,6 +1383,7 @@ impl ValidatorService {
                     (error_weight, error_type)
                 }),
                 spam_weight,
+                signers,
                 timestamp: SystemTime::now(),
             })
         }
@@ -1386,7 +1432,7 @@ macro_rules! handle_with_decoration {
         let client = $self.get_client_ip_addr(&$request, $self.client_id_source.as_ref().unwrap());
 
         // check if either IP is blocked, in which case return early
-        $self.handle_traffic_req(client.clone()).await?;
+        $self.handle_ip_traffic_req(client.clone()).await?;
 
         // handle traffic tallying
         let wrapped_response = $self.$func_name($request).await;
@@ -1401,7 +1447,6 @@ impl Validator for ValidatorService {
         request: tonic::Request<Transaction>,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let validator_service = self.clone();
-
         // Spawns a task which handles the transaction. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         spawn_monitored_task!(async move {
@@ -1418,7 +1463,6 @@ impl Validator for ValidatorService {
         request: tonic::Request<HandleTransactionRequestV2>,
     ) -> Result<tonic::Response<HandleTransactionResponseV2>, tonic::Status> {
         let validator_service = self.clone();
-
         // Spawns a task which handles the transaction. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         spawn_monitored_task!(async move {
