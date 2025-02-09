@@ -346,11 +346,11 @@ pub fn replace(
         tx_context_inc_epoch_cost_params.tx_context_inc_epoch_cost_base
     );
 
-    let sender: AccountAddress = pop_arg!(args, AccountAddress);
-    let tx_hash: Vec<u8> = pop_arg!(args, Vec<u8>);
-    let epoch: u64 = pop_arg!(args, u64);
-    let epoch_timestamp_ms: u64 = pop_arg!(args, u64);
     let ids_created: u64 = pop_arg!(args, u64);
+    let epoch_timestamp_ms: u64 = pop_arg!(args, u64);
+    let epoch: u64 = pop_arg!(args, u64);
+    let tx_hash: Vec<u8> = pop_arg!(args, Vec<u8>);
+    let sender: AccountAddress = pop_arg!(args, AccountAddress);
     let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
     transaction_context.replace(sender, tx_hash, epoch, epoch_timestamp_ms, ids_created);
 
