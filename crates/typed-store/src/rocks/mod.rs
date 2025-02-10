@@ -1711,7 +1711,7 @@ impl<'a> DBTransaction<'a> {
 
         let results = self
             .transaction
-            .multi_get_cf_opt(keys_bytes?, &db.opts.readopts());
+            .multi_get_cf_opt(keys_bytes, &db.opts.readopts());
         db.db_metrics.op_metrics.rocksdb_multiget_keys
             .with_label_values(&[&db.cf_name()])
             .observe(results.len() as f64);
