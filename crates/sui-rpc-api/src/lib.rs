@@ -24,7 +24,7 @@ pub mod types;
 
 pub use client::Client;
 pub use config::Config;
-pub use error::{Result, RpcServiceError};
+pub use error::{Result, RpcError};
 pub use metrics::RpcMetrics;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 pub use types::CheckpointResponse;

@@ -1,91 +1,92 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::http::StatusCode;
+use tonic::Code;
 
-pub type Result<T, E = RpcServiceError> = std::result::Result<T, E>;
+pub type Result<T, E = RpcError> = std::result::Result<T, E>;
 
-/// An internal RPC service error
+/// An error encountered while serving an RPC request.
 ///
 /// General error type used by top-level RPC service methods. The main purpose of this error type
 /// is to provide a convenient type for converting between internal errors and a response that
-/// needs to be sent to a calling client. This is done by converting this type into either an
-/// `axum::Response` or a `tonic::Status`.
+/// needs to be sent to a calling client.
 #[derive(Debug)]
-pub struct RpcServiceError {
-    status: StatusCode,
+pub struct RpcError {
+    code: Code,
     message: Option<String>,
 }
 
-impl RpcServiceError {
-    pub fn new<T: Into<String>>(status: StatusCode, message: T) -> Self {
+impl RpcError {
+    pub fn new<T: Into<String>>(code: Code, message: T) -> Self {
         Self {
-            status,
+            code,
             message: Some(message.into()),
         }
     }
 
     pub fn not_found() -> Self {
         Self {
-            status: StatusCode::NOT_FOUND,
+            code: Code::NotFound,
             message: None,
         }
     }
 }
 
-// Tell axum how to convert `AppError` into a response.
-impl axum::response::IntoResponse for RpcServiceError {
-    fn into_response(self) -> axum::response::Response {
-        match self.message {
-            Some(message) => (self.status, message).into_response(),
-            None => self.status.into_response(),
-        }
+impl From<RpcError> for tonic::Status {
+    fn from(value: RpcError) -> Self {
+        use prost::Message;
+
+        let status = crate::proto::google::rpc::Status {
+            code: value.code.into(),
+            message: value.message.unwrap_or_default(),
+            details: Default::default(),
+        };
+
+        let code = value.code;
+        let details = status.encode_to_vec().into();
+        let message = status.message;
+
+        tonic::Status::with_details(code, message, details)
     }
 }
 
-impl From<RpcServiceError> for tonic::Status {
-    fn from(value: RpcServiceError) -> Self {
-        tonic::Status::new(tonic::Code::Unknown, value.message.as_deref().unwrap_or(""))
-    }
-}
-
-impl From<sui_types::storage::error::Error> for RpcServiceError {
+impl From<sui_types::storage::error::Error> for RpcError {
     fn from(value: sui_types::storage::error::Error) -> Self {
         Self {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
+            code: Code::Internal,
             message: Some(value.to_string()),
         }
     }
 }
 
-impl From<anyhow::Error> for RpcServiceError {
+impl From<anyhow::Error> for RpcError {
     fn from(value: anyhow::Error) -> Self {
         Self {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
+            code: Code::Internal,
             message: Some(value.to_string()),
         }
     }
 }
 
-impl From<sui_types::sui_sdk_types_conversions::SdkTypeConversionError> for RpcServiceError {
+impl From<sui_types::sui_sdk_types_conversions::SdkTypeConversionError> for RpcError {
     fn from(value: sui_types::sui_sdk_types_conversions::SdkTypeConversionError) -> Self {
         Self {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
+            code: Code::Internal,
             message: Some(value.to_string()),
         }
     }
 }
 
-impl From<bcs::Error> for RpcServiceError {
+impl From<bcs::Error> for RpcError {
     fn from(value: bcs::Error) -> Self {
         Self {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
+            code: Code::Internal,
             message: Some(value.to_string()),
         }
     }
 }
 
-impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcServiceError {
+impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
     fn from(error: sui_types::quorum_driver_types::QuorumDriverError) -> Self {
         use itertools::Itertools;
         use sui_types::error::SuiError;
@@ -101,11 +102,9 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcServiceError
                     format!("Invalid user signature: {err}")
                 };
 
-                RpcServiceError::new(StatusCode::BAD_REQUEST, message)
+                RpcError::new(Code::InvalidArgument, message)
             }
-            QuorumDriverInternalError(err) => {
-                RpcServiceError::new(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-            }
+            QuorumDriverInternalError(err) => RpcError::new(Code::Internal, err.to_string()),
             ObjectsDoubleUsed { conflicting_txes } => {
                 let new_map = conflicting_txes
                     .into_iter()
@@ -121,12 +120,12 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcServiceError
                         "Failed to sign transaction by a quorum of validators because of locked objects. Conflicting Transactions:\n{new_map:#?}",  
                     );
 
-                RpcServiceError::new(StatusCode::CONFLICT, message)
+                RpcError::new(Code::FailedPrecondition, message)
             }
             TimeoutBeforeFinality | FailedWithTransientErrorAfterMaximumAttempts { .. } => {
                 // TODO add a Retry-After header
-                RpcServiceError::new(
-                    StatusCode::SERVICE_UNAVAILABLE,
+                RpcError::new(
+                    Code::Unavailable,
                     "timed-out before finality could be reached",
                 )
             }
@@ -167,15 +166,15 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcServiceError
                 let error_list = new_errors.join(", ");
                 let error_msg = format!("Transaction execution failed due to issues with transaction inputs, please review the errors and try again: {}.", error_list);
 
-                RpcServiceError::new(StatusCode::BAD_REQUEST, error_msg)
+                RpcError::new(Code::InvalidArgument, error_msg)
             }
-            TxAlreadyFinalizedWithDifferentUserSignatures => RpcServiceError::new(
-                StatusCode::CONFLICT,
+            TxAlreadyFinalizedWithDifferentUserSignatures => RpcError::new(
+                Code::Aborted,
                 "The transaction is already finalized but with different user signatures",
             ),
             SystemOverload { .. } | SystemOverloadRetryAfter { .. } => {
                 // TODO add a Retry-After header
-                RpcServiceError::new(StatusCode::SERVICE_UNAVAILABLE, "system is overloaded")
+                RpcError::new(Code::Unavailable, "system is overloaded")
             }
         }
     }

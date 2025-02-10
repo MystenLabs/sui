@@ -6,8 +6,8 @@ use crate::proto::node::v2alpha::CoinTreasury;
 use crate::proto::node::v2alpha::GetCoinInfoRequest;
 use crate::proto::node::v2alpha::GetCoinInfoResponse;
 use crate::Result;
+use crate::RpcError;
 use crate::RpcService;
-use crate::RpcServiceError;
 use sui_sdk_types::TypeTag;
 use sui_sdk_types::{ObjectId, StructTag};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
@@ -23,14 +23,14 @@ impl RpcService {
             .reader
             .inner()
             .indexes()
-            .ok_or_else(RpcServiceError::not_found)?;
+            .ok_or_else(RpcError::not_found)?;
 
-        let coin_type_proto = request.coin_type.ok_or_else(|| {
-            RpcServiceError::new(axum::http::StatusCode::BAD_REQUEST, "missing coin_type")
-        })?;
+        let coin_type_proto = request
+            .coin_type
+            .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "missing coin_type"))?;
         let coin_type = TypeTag::try_from(&coin_type_proto).map_err(|e| {
-            RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
+            RpcError::new(
+                tonic::Code::InvalidArgument,
                 format!("invalid coin_type: {e}"),
             )
         })?;
@@ -38,8 +38,8 @@ impl RpcService {
         let coin_type = if let TypeTag::Struct(struct_tag) = coin_type {
             *struct_tag
         } else {
-            return Err(RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
+            return Err(RpcError::new(
+                tonic::Code::InvalidArgument,
                 "invalid coin_type",
             ));
         };
@@ -60,8 +60,8 @@ impl RpcService {
             .map(sui_types::coin::CoinMetadata::try_from)
             .transpose()
             .map_err(|_| {
-                RpcServiceError::new(
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                RpcError::new(
+                    tonic::Code::Internal,
                     format!("Unable to read object {coin_metadata_object_id} for coin type {core_coin_type} as CoinMetadata"),
                 )
             })?
@@ -84,8 +84,8 @@ impl RpcService {
             .map(sui_types::coin::TreasuryCap::try_from)
             .transpose()
             .map_err(|_| {
-                RpcServiceError::new(
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                RpcError::new(
+                    tonic::Code::Internal,
                     format!("Unable to read object {treasury_object_id} for coin type {core_coin_type} as TreasuryCap"),
                 )
             })?
@@ -118,8 +118,8 @@ impl std::fmt::Display for CoinNotFoundError {
 
 impl std::error::Error for CoinNotFoundError {}
 
-impl From<CoinNotFoundError> for crate::RpcServiceError {
+impl From<CoinNotFoundError> for crate::RpcError {
     fn from(value: CoinNotFoundError) -> Self {
-        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
+        Self::new(tonic::Code::NotFound, value.to_string())
     }
 }

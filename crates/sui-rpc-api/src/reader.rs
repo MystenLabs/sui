@@ -364,8 +364,8 @@ impl std::fmt::Display for TransactionNotFoundError {
 
 impl std::error::Error for TransactionNotFoundError {}
 
-impl From<TransactionNotFoundError> for crate::RpcServiceError {
+impl From<TransactionNotFoundError> for crate::RpcError {
     fn from(value: TransactionNotFoundError) -> Self {
-        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
+        Self::new(tonic::Code::NotFound, value.to_string())
     }
 }

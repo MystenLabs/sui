@@ -7,8 +7,8 @@ use crate::proto::node::v2alpha::ListDynamicFieldsResponse;
 use crate::types::GetObjectOptions;
 use crate::types::ObjectResponse;
 use crate::Result;
+use crate::RpcError;
 use crate::RpcService;
-use crate::RpcServiceError;
 use sui_sdk_types::ObjectId;
 use sui_sdk_types::TypeTag;
 use sui_sdk_types::Version;
@@ -88,9 +88,9 @@ impl std::fmt::Display for ObjectNotFoundError {
 
 impl std::error::Error for ObjectNotFoundError {}
 
-impl From<ObjectNotFoundError> for crate::RpcServiceError {
+impl From<ObjectNotFoundError> for crate::RpcError {
     fn from(value: ObjectNotFoundError) -> Self {
-        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
+        Self::new(tonic::Code::NotFound, value.to_string())
     }
 }
 
@@ -103,20 +103,15 @@ impl RpcService {
             .reader
             .inner()
             .indexes()
-            .ok_or_else(RpcServiceError::not_found)?;
+            .ok_or_else(RpcError::not_found)?;
 
         let parent: ObjectId = request
             .parent
             .as_ref()
-            .ok_or_else(|| {
-                RpcServiceError::new(axum::http::StatusCode::BAD_REQUEST, "missing parent")
-            })?
+            .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "missing parent"))?
             .try_into()
             .map_err(|e| {
-                RpcServiceError::new(
-                    axum::http::StatusCode::BAD_REQUEST,
-                    format!("invalid parent: {e}"),
-                )
+                RpcError::new(tonic::Code::InvalidArgument, format!("invalid parent: {e}"))
             })?;
 
         let page_size = request

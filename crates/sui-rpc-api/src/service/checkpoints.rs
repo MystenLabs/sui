@@ -28,8 +28,8 @@ impl RpcService {
             Some(checkpoint_id @ CheckpointId::SequenceNumber(s)) => {
                 let oldest_checkpoint = self.reader.inner().get_lowest_available_checkpoint()?;
                 if s < oldest_checkpoint {
-                    return Err(crate::RpcServiceError::new(
-                        axum::http::StatusCode::GONE,
+                    return Err(crate::RpcError::new(
+                        tonic::Code::NotFound,
                         "Old checkpoints have been pruned",
                     ));
                 }
@@ -99,8 +99,8 @@ impl RpcService {
                     .inner()
                     .get_lowest_available_checkpoint_objects()?;
                 if s < oldest_checkpoint {
-                    return Err(crate::RpcServiceError::new(
-                        axum::http::StatusCode::GONE,
+                    return Err(crate::RpcError::new(
+                        tonic::Code::NotFound,
                         "Old checkpoints have been pruned",
                     ));
                 }
@@ -333,8 +333,8 @@ impl std::fmt::Display for CheckpointNotFoundError {
 
 impl std::error::Error for CheckpointNotFoundError {}
 
-impl From<CheckpointNotFoundError> for crate::RpcServiceError {
+impl From<CheckpointNotFoundError> for crate::RpcError {
     fn from(value: CheckpointNotFoundError) -> Self {
-        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
+        Self::new(tonic::Code::NotFound, value.to_string())
     }
 }
