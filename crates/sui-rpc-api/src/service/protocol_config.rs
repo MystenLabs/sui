@@ -49,9 +49,9 @@ impl std::fmt::Display for ProtocolNotFoundError {
 
 impl std::error::Error for ProtocolNotFoundError {}
 
-impl From<ProtocolNotFoundError> for crate::RpcServiceError {
+impl From<ProtocolNotFoundError> for crate::RpcError {
     fn from(value: ProtocolNotFoundError) -> Self {
-        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
+        Self::new(tonic::Code::NotFound, value.to_string())
     }
 }
 

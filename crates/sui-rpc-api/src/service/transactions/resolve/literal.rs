@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use super::NormalizedPackage;
 use crate::Result;
-use crate::RpcServiceError;
+use crate::RpcError;
 use move_binary_format::normalized::Type;
 use sui_sdk_transaction_builder::unresolved::Value;
 use sui_sdk_types::Command;
@@ -43,8 +43,8 @@ fn determine_literal_type(
         match maybe_type {
             Some(literal_type) if literal_type == &ty => {}
             Some(_) => {
-                return Err(RpcServiceError::new(
-                    axum::http::StatusCode::BAD_REQUEST,
+                return Err(RpcError::new(
+                    tonic::Code::InvalidArgument,
                     "unable to resolve literal as it is used as multiple different types across commands",
                 ))
             }
@@ -76,8 +76,8 @@ fn determine_literal_type(
                         sui_types::sui_sdk_types_conversions::type_tag_sdk_to_core(ty.clone())?;
                     set_type(&mut literal_type, ty.into())?;
                 } else {
-                    return Err(RpcServiceError::new(
-                        axum::http::StatusCode::BAD_REQUEST,
+                    return Err(RpcError::new(
+                        tonic::Code::InvalidArgument,
                         "unable to resolve literal as an unknown type",
                     ));
                 }
@@ -90,8 +90,8 @@ fn determine_literal_type(
             | (Command::Upgrade(_), _)
             | (Command::MergeCoins(_), _)
             | (Command::SplitCoins(_), None) => {
-                return Err(RpcServiceError::new(
-                    axum::http::StatusCode::BAD_REQUEST,
+                return Err(RpcError::new(
+                    tonic::Code::InvalidArgument,
                     "invalid use of literal",
                 ));
             }
@@ -100,8 +100,8 @@ fn determine_literal_type(
             (Command::MakeMoveVector(_), None)
             | (Command::Publish(_), _)
             | (Command::MoveCall(_), None) => {
-                return Err(RpcServiceError::new(
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                return Err(RpcError::new(
+                    tonic::Code::Internal,
                     "error determining type of literal",
                 ));
             }
@@ -109,8 +109,8 @@ fn determine_literal_type(
     }
 
     literal_type.ok_or_else(|| {
-        RpcServiceError::new(
-            axum::http::StatusCode::BAD_REQUEST,
+        RpcError::new(
+            tonic::Code::InvalidArgument,
             "unable to determine type of literal",
         )
     })
@@ -170,8 +170,8 @@ fn resolve_literal_to_type(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Re
         | Type::Struct { .. }
         | Type::TypeParameter(_)
         | Type::Reference(_)
-        | Type::MutableReference(_) => Err(RpcServiceError::new(
-            axum::http::StatusCode::BAD_REQUEST,
+        | Type::MutableReference(_) => Err(RpcError::new(
+            tonic::Code::InvalidArgument,
             format!("literal cannot be resolved into type {type_}"),
         )),
     }
@@ -181,14 +181,14 @@ fn resolve_as_bool(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
     let b: bool = match value {
         Value::Bool(b) => *b,
         Value::String(s) => s.parse().map_err(|e| {
-            RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
+            RpcError::new(
+                tonic::Code::InvalidArgument,
                 format!("literal cannot be resolved as bool: {e}"),
             )
         })?,
         Value::Null | Value::Number(_) | Value::Array(_) => {
-            return Err(RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
+            return Err(RpcError::new(
+                tonic::Code::InvalidArgument,
                 "literal cannot be resolved into type bool",
             ))
         }
@@ -207,8 +207,8 @@ where
 {
     let n: T = match value {
         Value::Number(n) => T::try_from(*n).map_err(|e| {
-            RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
+            RpcError::new(
+                tonic::Code::InvalidArgument,
                 format!(
                     "literal cannot be resolved as {}: {e}",
                     std::any::type_name::<T>()
@@ -217,8 +217,8 @@ where
         })?,
 
         Value::String(s) => s.parse().map_err(|e| {
-            RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
+            RpcError::new(
+                tonic::Code::InvalidArgument,
                 format!(
                     "literal cannot be resolved as {}: {e}",
                     std::any::type_name::<T>()
@@ -227,8 +227,8 @@ where
         })?,
 
         Value::Null | Value::Bool(_) | Value::Array(_) => {
-            return Err(RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
+            return Err(RpcError::new(
+                tonic::Code::InvalidArgument,
                 format!(
                     "literal cannot be resolved into type {}",
                     std::any::type_name::<T>()
@@ -246,14 +246,14 @@ fn resolve_as_address(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
     let address = match value {
         // parse as ObjectID to handle the case where 0x is present or missing
         Value::String(s) => s.parse::<ObjectID>().map_err(|e| {
-            RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
+            RpcError::new(
+                tonic::Code::InvalidArgument,
                 format!("literal cannot be resolved as bool: {e}"),
             )
         })?,
         Value::Null | Value::Bool(_) | Value::Number(_) | Value::Array(_) => {
-            return Err(RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
+            return Err(RpcError::new(
+                tonic::Code::InvalidArgument,
                 "literal cannot be resolved into type address",
             ))
         }
@@ -270,8 +270,8 @@ fn resolve_as_string(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
             bcs::serialize_into(buf, s)?;
         }
         Value::Bool(_) | Value::Null | Value::Number(_) | Value::Array(_) => {
-            return Err(RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
+            return Err(RpcError::new(
+                tonic::Code::InvalidArgument,
                 "literal cannot be resolved into string",
             ))
         }
@@ -314,8 +314,8 @@ fn resolve_as_vector(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Result<(
             }
         }
         Value::Bool(_) | Value::Number(_) | Value::String(_) | Value::Null => {
-            return Err(RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
+            return Err(RpcError::new(
+                tonic::Code::InvalidArgument,
                 format!("literal cannot be resolved into type Vector<{type_}>"),
             ));
         }

@@ -347,8 +347,7 @@ async fn resolve_transaction_insufficient_gas() {
         .await
         .unwrap_err();
 
-    //TODO fix return error code to be more descriptive
-    assert_eq!(error.code(), tonic::Code::Unknown);
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
     assert_contains(error.message(), "unable to select sufficient gas");
 }
 

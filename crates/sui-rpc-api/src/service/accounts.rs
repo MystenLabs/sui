@@ -5,8 +5,8 @@ use crate::proto::node::v2alpha::AccountObject;
 use crate::proto::node::v2alpha::ListAccountObjectsRequest;
 use crate::proto::node::v2alpha::ListAccountObjectsResponse;
 use crate::Result;
+use crate::RpcError;
 use crate::RpcService;
-use crate::RpcServiceError;
 use sui_sdk_types::Address;
 use sui_sdk_types::Version;
 use sui_sdk_types::{ObjectId, StructTag};
@@ -22,20 +22,15 @@ impl RpcService {
             .reader
             .inner()
             .indexes()
-            .ok_or_else(RpcServiceError::not_found)?;
+            .ok_or_else(RpcError::not_found)?;
 
         let owner: Address = request
             .owner
             .as_ref()
-            .ok_or_else(|| {
-                RpcServiceError::new(axum::http::StatusCode::BAD_REQUEST, "missing owner")
-            })?
+            .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "missing owner"))?
             .try_into()
             .map_err(|e| {
-                RpcServiceError::new(
-                    axum::http::StatusCode::BAD_REQUEST,
-                    format!("invalid parent: {e}"),
-                )
+                RpcError::new(tonic::Code::InvalidArgument, format!("invalid parent: {e}"))
             })?;
 
         let page_size = request
