@@ -3,11 +3,11 @@
 
 use crate::{
     execution::{
-        dispatch_tables::{count_type_nodes, subst, VMDispatchTables, VirtualTableKey},
+        dispatch_tables::{TypeNodeCount, VMDispatchTables, VirtualTableKey},
         interpreter::{locals::MachineHeap, set_err_info},
         values::values_impl::{self as values, VMValueCast, Value},
     },
-    jit::execution::ast::{CallType, Constant, Function, Module, Type},
+    jit::execution::ast::{ArenaType, CallType, Constant, Function, Module, Type, TypeSubst},
     shared::{
         constants::{
             CALL_STACK_SIZE_LIMIT, MAX_TYPE_INSTANTIATION_NODES, OPERAND_STACK_SIZE_LIMIT,
@@ -29,7 +29,7 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 
-use std::{cmp::min, fmt::Write, sync::Arc};
+use std::{cmp::min, fmt::Write};
 use tracing::error;
 
 use super::locals::StackFrame;
@@ -87,7 +87,7 @@ pub(crate) struct CallStack {
 // needs.
 #[derive(Debug)]
 pub(crate) struct ModuleDefinitionResolver {
-    module: Arc<Module>,
+    module: VMPointer<Module>,
 }
 
 /// A `Frame` is the execution context for a function. It holds the locals of the function and
@@ -219,7 +219,7 @@ impl MachineState {
         frame: &CallFrame,
     ) -> PartialVMResult<()> {
         // Print out the function name with type arguments.
-        let _func_ptr = frame.function;
+        let _func_ptr = &frame.function;
         let func = frame.function();
 
         debug_write!(buf, "    [{}] ", idx)?;
@@ -444,8 +444,7 @@ impl CallStack {
     ) -> PartialVMResult<Self> {
         let mut heap = MachineHeap::new();
 
-        let fun_ref = function.to_ref();
-        let stack_frame = heap.allocate_stack_frame(args, fun_ref.local_count())?;
+        let stack_frame = heap.allocate_stack_frame(args, function.local_count())?;
         let current_frame = CallFrame {
             pc: 0,
             stack_frame,
@@ -471,10 +470,9 @@ impl CallStack {
         ty_args: Vec<Type>,
         args: Vec<Value>,
     ) -> VMResult<()> {
-        let fun_ref = function.to_ref();
         let stack_frame = self
             .heap
-            .allocate_stack_frame(args, fun_ref.local_count())
+            .allocate_stack_frame(args, function.local_count())
             .map_err(|err| set_err_info!(&self.current_frame, err))?;
         let new_frame = CallFrame {
             pc: 0,
@@ -566,16 +564,16 @@ impl ModuleDefinitionResolver {
         let loaded_module = &*self.module;
         let func_inst = loaded_module.function_instantiation_at(idx.0);
         let instantiation: Vec<_> = loaded_module
-            .instantiation_signature_at(func_inst.instantiation_idx)?
+            .instantiation_signature_at(func_inst.instantiation_idx)
             .iter()
-            .map(|ty| subst(ty, type_params))
+            .map(|ty| ty.subst(type_params))
             .collect::<PartialVMResult<_>>()?;
 
         // Check if the function instantiation over all generics is larger
         // than MAX_TYPE_INSTANTIATION_NODES.
         let mut sum_nodes = 1u64;
         for ty in type_params.iter().chain(instantiation.iter()) {
-            sum_nodes = sum_nodes.saturating_add(count_type_nodes(ty));
+            sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
             }
@@ -605,8 +603,7 @@ impl ModuleDefinitionResolver {
     ) -> PartialVMResult<Type> {
         let loaded_module = &*self.module;
         let struct_inst = loaded_module.struct_instantiation_at(idx.0);
-        let instantiation =
-            loaded_module.instantiation_signature_at(struct_inst.instantiation_idx)?;
+        let instantiation = loaded_module.instantiation_signature_at(struct_inst.instantiation_idx);
         self.instantiate_type_common(&struct_inst.def, instantiation, ty_args)
     }
 
@@ -618,15 +615,14 @@ impl ModuleDefinitionResolver {
         let loaded_module = &*self.module;
         let handle = loaded_module.variant_instantiation_handle_at(vidx);
         let enum_inst = loaded_module.enum_instantiation_at(handle.enum_def);
-        let instantiation =
-            loaded_module.instantiation_signature_at(enum_inst.instantiation_idx)?;
+        let instantiation = loaded_module.instantiation_signature_at(enum_inst.instantiation_idx);
         self.instantiate_type_common(&enum_inst.def, instantiation, ty_args)
     }
 
     fn instantiate_type_common(
         &self,
         gt_idx: &VirtualTableKey,
-        type_params: &[Type],
+        type_params: &[ArenaType],
         ty_args: &[Type],
     ) -> PartialVMResult<Type> {
         // Before instantiating the type, count the # of nodes of all type arguments plus
@@ -634,8 +630,14 @@ impl ModuleDefinitionResolver {
         // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
         // This prevents constructing larger and larger types via datatype instantiation.
         let mut sum_nodes = 1u64;
-        for ty in ty_args.iter().chain(type_params.iter()) {
-            sum_nodes = sum_nodes.saturating_add(count_type_nodes(ty));
+        for ty in type_params.iter() {
+            sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
+            if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
+                return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
+            }
+        }
+        for ty in ty_args.iter() {
+            sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
             }
@@ -645,12 +647,12 @@ impl ModuleDefinitionResolver {
             gt_idx.clone(),
             type_params
                 .iter()
-                .map(|ty| subst(ty, ty_args))
+                .map(|ty| ty.subst(ty_args))
                 .collect::<PartialVMResult<_>>()?,
         ))))
     }
 
-    fn single_type_at(&self, idx: SignatureIndex) -> &Type {
+    fn single_type_at(&self, idx: SignatureIndex) -> &ArenaType {
         self.module.single_type_at(idx)
     }
 
@@ -661,9 +663,9 @@ impl ModuleDefinitionResolver {
     ) -> PartialVMResult<Type> {
         let ty = self.single_type_at(idx);
         if !ty_args.is_empty() {
-            subst(ty, ty_args)
+            ty.subst(ty_args)
         } else {
-            Ok(ty.clone())
+            Ok(ty.to_type())
         }
     }
 

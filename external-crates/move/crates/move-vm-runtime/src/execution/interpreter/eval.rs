@@ -255,7 +255,7 @@ fn step(
                     None,
                 )
             });
-            call_function(state, run_context, gas_meter, *function, vec![])?;
+            call_function(state, run_context, gas_meter, function.ptr_clone(), vec![])?;
             Ok(StepStatus::Running)
         }
         _ => {
@@ -447,7 +447,7 @@ fn op_step_impl(
         Bytecode::LdConst(idx) => {
             let constant = state.call_stack.current_frame.resolver.constant_at(*idx);
             gas_meter.charge_ld_const(NumBytes::new(constant.size))?;
-            let val = constant.value.clone().to_value();
+            let val = constant.value.to_value();
             gas_meter.charge_ld_const_after_deserialization(&val)?;
             state.push_operand(val)?
         }
@@ -930,7 +930,7 @@ fn call_type_to_function(
     call_type: &CallType,
 ) -> PartialVMResult<VMPointer<Function>> {
     match call_type {
-        CallType::Direct(ptr) => Ok(*ptr),
+        CallType::Direct(ptr) => Ok(ptr.ptr_clone()),
         CallType::Virtual(vtable_key) => run_context.vtables.resolve_function(vtable_key),
     }
 }

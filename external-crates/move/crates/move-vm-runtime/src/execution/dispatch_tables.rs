@@ -9,7 +9,9 @@
 
 use crate::{
     cache::identifier_interner::IdentifierKey,
-    jit::execution::ast::{Datatype, DatatypeDescriptor, Function, Module, Package, Type},
+    jit::execution::ast::{
+        ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeSubst,
+    },
     shared::{
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, VALUE_DEPTH_MAX,
@@ -129,7 +131,10 @@ impl VMDispatchTables {
         })
     }
 
-    pub fn resolve_loaded_module(&self, runtime_id: &ModuleId) -> PartialVMResult<Arc<Module>> {
+    pub fn resolve_loaded_module(
+        &self,
+        runtime_id: &ModuleId,
+    ) -> PartialVMResult<VMPointer<Module>> {
         let (package, module_id) = runtime_id.into();
         let package = self.loaded_packages.get(package).ok_or_else(|| {
             PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
@@ -138,7 +143,7 @@ impl VMDispatchTables {
         package
             .loaded_modules
             .get(module_id)
-            .cloned()
+            .map(|module| VMPointer::from_ref(module))
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
                     .with_message(format!("Module {} not found", module_id))
@@ -382,34 +387,34 @@ impl VMDispatchTables {
 
     fn calculate_depth_of_type_and_cache(
         &self,
-        ty: &Type,
+        ty: &ArenaType,
         depth_cache: &mut BTreeMap<VirtualTableKey, DepthFormula>,
     ) -> PartialVMResult<DepthFormula> {
         Ok(match ty {
-            Type::Bool
-            | Type::U8
-            | Type::U64
-            | Type::U128
-            | Type::Address
-            | Type::Signer
-            | Type::U16
-            | Type::U32
-            | Type::U256 => DepthFormula::constant(1),
+            ArenaType::Bool
+            | ArenaType::U8
+            | ArenaType::U64
+            | ArenaType::U128
+            | ArenaType::Address
+            | ArenaType::Signer
+            | ArenaType::U16
+            | ArenaType::U32
+            | ArenaType::U256 => DepthFormula::constant(1),
             // we should not see the reference here, we could instead give an invariant violation
-            Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
+            ArenaType::Vector(ty) | ArenaType::Reference(ty) | ArenaType::MutableReference(ty) => {
                 let mut inner = self.calculate_depth_of_type_and_cache(ty, depth_cache)?;
                 // add 1 for the vector itself
                 inner.add(1);
                 inner
             }
-            Type::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
-            Type::Datatype(cache_idx) => {
+            ArenaType::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
+            ArenaType::Datatype(cache_idx) => {
                 let datatype_formula =
                     self.calculate_depth_of_datatype_and_cache(cache_idx, depth_cache)?;
                 debug_assert!(datatype_formula.terms.is_empty());
                 datatype_formula
             }
-            Type::DatatypeInstantiation(inst) => {
+            ArenaType::DatatypeInstantiation(inst) => {
                 let (cache_idx, ty_args) = &**inst;
                 let ty_arg_map = ty_args
                     .iter()
@@ -523,7 +528,7 @@ impl VMDispatchTables {
                     let field_tys = variant
                         .fields
                         .iter()
-                        .map(|ty| subst(ty, ty_args))
+                        .map(|ty| checked_subst(ty, ty_args))
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     let field_layouts = field_tys
                         .iter()
@@ -539,7 +544,7 @@ impl VMDispatchTables {
                 let field_tys = sinfo
                     .fields
                     .iter()
-                    .map(|ty| subst(ty, ty_args))
+                    .map(|ty| checked_subst(ty, ty_args))
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let field_layouts = field_tys
                     .iter()
@@ -621,7 +626,7 @@ impl VMDispatchTables {
                         .iter()
                         .zip(variant.fields.iter())
                         .map(|(n, ty)| {
-                            let ty = subst(ty, ty_args)?;
+                            let ty = checked_subst(ty, ty_args)?;
                             let l =
                                 self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
                             Ok(annotated_value::MoveFieldLayout::new(n.clone(), l))
@@ -652,9 +657,9 @@ impl VMDispatchTables {
                 let field_layouts = struct_type
                     .field_names
                     .iter()
-                    .zip(&struct_type.fields)
+                    .zip(struct_type.fields.iter())
                     .map(|(n, ty)| {
-                        let ty = subst(ty, ty_args)?;
+                        let ty = checked_subst(ty, ty_args)?;
                         let l = self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
                         Ok(annotated_value::MoveFieldLayout::new(n.clone(), l))
                     })
@@ -721,6 +726,13 @@ impl VMDispatchTables {
     ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
         let mut count = 0;
         self.type_to_type_layout_impl(ty, &mut count, 1)
+    }
+
+    pub(crate) fn arena_type_to_fully_annotated_layout(
+        &self,
+        ty: &ArenaType,
+    ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
+        self.type_to_fully_annotated_layout(&ty.to_type())
     }
 
     pub(crate) fn type_to_fully_annotated_layout(
@@ -915,16 +927,22 @@ impl Default for PackageVirtualTable {
 // Return an instantiated type given a generic and an instantiation.
 // Stopgap to avoid a recursion that is either taking too long or using too
 // much memory
-pub fn subst(ty: &Type, ty_args: &[Type]) -> PartialVMResult<Type> {
+pub fn checked_subst(ty: &ArenaType, ty_args: &[Type]) -> PartialVMResult<Type> {
     // Before instantiating the type, count the # of nodes of all type arguments plus
     // existing type instantiation.
     // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
     // This prevents constructing larger and larger types via datatype instantiation.
-    if let Type::DatatypeInstantiation(inst) = ty {
-        let (_, datatype_inst) = &**inst;
+    if let ArenaType::DatatypeInstantiation(inst) = ty {
+        let (_, type_params) = &**inst;
         let mut sum_nodes = 1u64;
-        for ty in ty_args.iter().chain(datatype_inst.iter()) {
-            sum_nodes = sum_nodes.saturating_add(count_type_nodes(ty));
+        for ty in type_params.iter() {
+            sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
+            if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
+                return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
+            }
+        }
+        for ty in ty_args.iter() {
+            sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
             }
@@ -933,24 +951,38 @@ pub fn subst(ty: &Type, ty_args: &[Type]) -> PartialVMResult<Type> {
     ty.subst(ty_args)
 }
 
-pub fn count_type_nodes(ty: &Type) -> u64 {
-    let mut todo = vec![ty];
-    let mut result = 0;
-    while let Some(ty) = todo.pop() {
-        match ty {
-            Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
-                result += 1;
-                todo.push(ty);
-            }
-            Type::DatatypeInstantiation(struct_inst) => {
-                let (_, ty_args) = &**struct_inst;
-                result += 1;
-                todo.extend(ty_args.iter())
-            }
-            _ => {
-                result += 1;
+pub trait TypeNodeCount {
+    fn count_type_nodes(&self) -> u64;
+}
+
+// Macro that generates the implementations.
+macro_rules! impl_count_type_nodes {
+    ($ty:ident) => {
+        impl TypeNodeCount for $ty {
+            fn count_type_nodes(&self) -> u64 {
+                let mut todo = vec![self];
+                let mut result = 0;
+                while let Some(ty) = todo.pop() {
+                    match ty {
+                        $ty::Vector(ty) | $ty::Reference(ty) | $ty::MutableReference(ty) => {
+                            result += 1;
+                            todo.push(ty);
+                        }
+                        $ty::DatatypeInstantiation(struct_inst) => {
+                            let (_, ty_args) = &**struct_inst;
+                            result += 1;
+                            todo.extend(ty_args.iter())
+                        }
+                        _ => {
+                            result += 1;
+                        }
+                    }
+                }
+                result
             }
         }
-    }
-    result
+    };
 }
+
+impl_count_type_nodes!(Type);
+impl_count_type_nodes!(ArenaType);

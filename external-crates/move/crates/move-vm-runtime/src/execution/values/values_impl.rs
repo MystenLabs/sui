@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,
     shared::{
         views::{ValueView, ValueVisitor},
@@ -204,7 +205,7 @@ pub struct Variant {
 pub struct VariantRef(VMPointer<Container>);
 
 /// Constant representation of a Move value.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ConstantValue {
     U8(u8),
     U16(u16),
@@ -214,25 +215,24 @@ pub enum ConstantValue {
     U256(u256::U256),
     Bool(bool),
     Address(AccountAddress),
-
     Container(ConstantContainer),
 }
 
 /// A container is a collection of constant values. It is used to represent data structures like a
 /// Move vector or struct.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ConstantContainer {
-    Vec(Vec<ConstantValue>),
-    Struct(Vec<ConstantValue>),
-    VecU8(Vec<u8>),
-    VecU64(Vec<u64>),
-    VecU128(Vec<u128>),
-    VecBool(Vec<bool>),
-    VecAddress(Vec<AccountAddress>),
-    VecU16(Vec<u16>),
-    VecU32(Vec<u32>),
-    VecU256(Vec<u256::U256>),
-    Variant(VariantTag, Vec<ConstantValue>),
+    Vec(ArenaVec<ConstantValue>),
+    Struct(ArenaVec<ConstantValue>),
+    VecU8(ArenaVec<u8>),
+    VecU64(ArenaVec<u64>),
+    VecU128(ArenaVec<u128>),
+    VecBool(ArenaVec<bool>),
+    VecAddress(ArenaVec<AccountAddress>),
+    VecU16(ArenaVec<u16>),
+    VecU32(ArenaVec<u32>),
+    VecU256(ArenaVec<u256::U256>),
+    Variant(VariantTag, ArenaVec<ConstantValue>),
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -441,7 +441,8 @@ impl Reference {
 // Constants.
 
 impl Value {
-    pub fn to_constant_value(self) -> PartialVMResult<ConstantValue> {
+    /// Allocates the constant in the provided arena
+    pub fn to_constant_value(self, arena: &Arena) -> PartialVMResult<ConstantValue> {
         match self {
             Value::Invalid => Err(PartialVMError::new(
                 StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
@@ -460,44 +461,54 @@ impl Value {
             Value::U256(value) => Ok(ConstantValue::U256(*value)),
             Value::Bool(value) => Ok(ConstantValue::Bool(value)),
             Value::Address(value) => Ok(ConstantValue::Address(*value)),
-            Value::Container(container) => container.to_constant_value(),
+            Value::Container(container) => container.to_constant_value(arena),
         }
     }
 }
 
 impl Container {
-    pub fn to_constant_value(self) -> PartialVMResult<ConstantValue> {
+    /// Allocates the constant in the provided arena
+    pub fn to_constant_value(self, arena: &Arena) -> PartialVMResult<ConstantValue> {
+        macro_rules! alloc_vec {
+            ($values:expr) => {
+                arena.alloc_vec($values.into_iter())?
+            };
+        }
+
         let constant_container = match self {
             Container::Vec(values) => {
                 let constants = values
                     .into_iter()
-                    .map(|v| v.to_constant_value())
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .map(|v| v.to_constant_value(arena))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                let constants = arena.alloc_vec(constants.into_iter())?;
                 ConstantContainer::Vec(constants)
             }
             Container::Struct(values) => {
                 let constants = values
                     .into_iter()
-                    .map(|v| v.to_constant_value())
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .map(|v| v.to_constant_value(arena))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                let constants = arena.alloc_vec(constants.into_iter())?;
                 ConstantContainer::Struct(constants)
             }
             // TODO: auto-gen this?
-            Container::VecU8(values) => ConstantContainer::VecU8(values.clone()),
-            Container::VecU64(values) => ConstantContainer::VecU64(values.clone()),
-            Container::VecU128(values) => ConstantContainer::VecU128(values.clone()),
-            Container::VecBool(values) => ConstantContainer::VecBool(values.clone()),
-            Container::VecAddress(values) => ConstantContainer::VecAddress(values.clone()),
-            Container::VecU16(values) => ConstantContainer::VecU16(values.clone()),
-            Container::VecU32(values) => ConstantContainer::VecU32(values.clone()),
-            Container::VecU256(values) => ConstantContainer::VecU256(values.clone()),
+            Container::VecU8(values) => ConstantContainer::VecU8(alloc_vec!(values)),
+            Container::VecU64(values) => ConstantContainer::VecU64(alloc_vec!(values)),
+            Container::VecU128(values) => ConstantContainer::VecU128(alloc_vec!(values)),
+            Container::VecBool(values) => ConstantContainer::VecBool(alloc_vec!(values)),
+            Container::VecAddress(values) => ConstantContainer::VecAddress(alloc_vec!(values)),
+            Container::VecU16(values) => ConstantContainer::VecU16(alloc_vec!(values)),
+            Container::VecU32(values) => ConstantContainer::VecU32(alloc_vec!(values)),
+            Container::VecU256(values) => ConstantContainer::VecU256(alloc_vec!(values)),
             Container::Variant(variant) => {
                 let (tag, values) = *variant;
-                let values = values
+                let constants = values
                     .into_iter()
-                    .map(|v| v.to_constant_value())
-                    .collect::<Result<Vec<_>, _>>()?;
-                ConstantContainer::Variant(tag, values)
+                    .map(|v| v.to_constant_value(arena))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                let constants = arena.alloc_vec(constants.into_iter())?;
+                ConstantContainer::Variant(tag, constants)
             }
         };
         Ok(ConstantValue::Container(constant_container))
@@ -505,17 +516,18 @@ impl Container {
 }
 
 impl ConstantValue {
-    pub fn to_value(self) -> Value {
+    /// Performs a deep copy of the constant value
+    pub fn to_value(&self) -> Value {
         match self {
             // TODO: auto-gen this?
-            ConstantValue::U8(value) => Value::U8(value),
-            ConstantValue::U16(value) => Value::U16(value),
-            ConstantValue::U32(value) => Value::U32(value),
-            ConstantValue::U64(value) => Value::U64(value),
-            ConstantValue::U128(value) => Value::U128(Box::new(value)),
-            ConstantValue::U256(value) => Value::U256(Box::new(value)),
-            ConstantValue::Bool(value) => Value::Bool(value),
-            ConstantValue::Address(value) => Value::Address(Box::new(value)),
+            ConstantValue::U8(value) => Value::U8(*value),
+            ConstantValue::U16(value) => Value::U16(*value),
+            ConstantValue::U32(value) => Value::U32(*value),
+            ConstantValue::U64(value) => Value::U64(*value),
+            ConstantValue::U128(value) => Value::U128(Box::new(*value)),
+            ConstantValue::U256(value) => Value::U256(Box::new(*value)),
+            ConstantValue::Bool(value) => Value::Bool(*value),
+            ConstantValue::Address(value) => Value::Address(Box::new(*value)),
             ConstantValue::Container(container) => {
                 Value::Container(Box::new(ConstantContainer::to_container(container)))
             }
@@ -524,11 +536,18 @@ impl ConstantValue {
 }
 
 impl ConstantContainer {
-    pub fn to_container(self) -> Container {
+    /// Performs a deep copy of the constant value
+    pub fn to_container(&self) -> Container {
+        macro_rules! clone_vec {
+            ($vec:expr) => {
+                $vec.iter().map(|v| *v).collect()
+            };
+        }
+
         match self {
             ConstantContainer::Vec(values) => {
                 let container_values = values
-                    .into_iter()
+                    .iter()
                     .map(ConstantValue::to_value)
                     .map(Box::new)
                     .collect::<Vec<_>>();
@@ -536,28 +555,28 @@ impl ConstantContainer {
             }
             ConstantContainer::Struct(values) => {
                 let container_values = values
-                    .into_iter()
+                    .iter()
                     .map(ConstantValue::to_value)
                     .collect::<Vec<_>>();
                 let struct_ = FixedSizeVec::from_vec(container_values);
                 Container::Struct(struct_)
             }
             // TODO: auto-gen this?
-            ConstantContainer::VecU8(values) => Container::VecU8(values),
-            ConstantContainer::VecU64(values) => Container::VecU64(values),
-            ConstantContainer::VecU128(values) => Container::VecU128(values),
-            ConstantContainer::VecBool(values) => Container::VecBool(values),
-            ConstantContainer::VecAddress(values) => Container::VecAddress(values),
-            ConstantContainer::VecU16(values) => Container::VecU16(values),
-            ConstantContainer::VecU32(values) => Container::VecU32(values),
-            ConstantContainer::VecU256(values) => Container::VecU256(values),
+            ConstantContainer::VecU8(values) => Container::VecU8(clone_vec!(values)),
+            ConstantContainer::VecU64(values) => Container::VecU64(clone_vec!(values)),
+            ConstantContainer::VecU128(values) => Container::VecU128(clone_vec!(values)),
+            ConstantContainer::VecBool(values) => Container::VecBool(clone_vec!(values)),
+            ConstantContainer::VecAddress(values) => Container::VecAddress(clone_vec!(values)),
+            ConstantContainer::VecU16(values) => Container::VecU16(clone_vec!(values)),
+            ConstantContainer::VecU32(values) => Container::VecU32(clone_vec!(values)),
+            ConstantContainer::VecU256(values) => Container::VecU256(clone_vec!(values)),
             ConstantContainer::Variant(tag, values) => {
                 let container_values = values
-                    .into_iter()
+                    .iter()
                     .map(ConstantValue::to_value)
                     .collect::<Vec<_>>();
                 let variant_ = FixedSizeVec::from_vec(container_values);
-                Container::Variant(Box::new((tag, variant_)))
+                Container::Variant(Box::new((*tag, variant_)))
             }
         }
     }
@@ -631,7 +650,7 @@ impl Container {
 impl Reference {
     pub fn equals(&self, other: &Reference) -> PartialVMResult<bool> {
         if let Reference::Global(other) = other {
-            return self.equals(&Reference::Container(other.value));
+            return self.equals(&Reference::Container(other.value.ptr_clone()));
         }
         // TODO: auto-gen this?
         match_reference_impls!(self; other;
@@ -639,7 +658,7 @@ impl Reference {
                 Ok(VMPointer::ptr_eq(ref_1, ref_2) || ref_1.to_ref().equals(ref_2.to_ref())?)
             };
             global g_ref, ctor => {
-                Reference::Container(g_ref.value).equals(ctor)
+                Reference::Container(g_ref.value.ptr_clone()).equals(ctor)
             };
             prim prim_ref_1, prim_ref_2 => {
                 Ok(VMPointer::ptr_eq(prim_ref_1, prim_ref_2) || prim_ref_1.to_ref() == prim_ref_2.to_ref())
@@ -670,7 +689,7 @@ impl FixedSizeVec {
 // -------------------------------------------------------------------------------------------------
 // Read Ref
 // -------------------------------------------------------------------------------------------------
-// Implementation for the Move operation `write_ref`
+// Implementation for the Move operation `read_ref`
 
 impl Reference {
     pub fn read_ref(self) -> PartialVMResult<Value> {

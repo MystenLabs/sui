@@ -3,20 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::arena::Arena,
+    cache::arena::{Arena, ArenaBox, ArenaVec},
     dbg_println,
     execution::{
         dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
         values::Value,
     },
-    jit::execution::ast::*,
-    jit::optimization::ast as input,
+    jit::{execution::ast::*, optimization::ast as input},
     natives::functions::NativeFunctions,
     shared::{
-        binary_cache::BinaryCache,
         linkage_context::LinkageContext,
         types::{PackageStorageId, RuntimePackageId},
-        vm_pointer::{self, VMPointer},
+        unique_map,
+        vm_pointer::VMPointer,
     },
     string_interner,
 };
@@ -29,7 +28,7 @@ use move_binary_format::{
     },
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
-use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 struct PackageContext<'natives> {
     pub natives: &'natives NativeFunctions,
@@ -39,11 +38,7 @@ struct PackageContext<'natives> {
     pub runtime_id: RuntimePackageId,
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
-    pub loaded_modules: BinaryCache<Identifier, Module>,
-
-    // NB: this is needed for the bytecode verifier. If we update the bytecode verifier we should
-    // be able to remove this.
-    pub compiled_modules: BinaryCache<Identifier, CompiledModule>,
+    pub loaded_modules: BTreeMap<Identifier, Module>,
 
     // NB: All things except for types are allocated into this arena.
     pub package_arena: Arena,
@@ -53,11 +48,11 @@ struct PackageContext<'natives> {
 struct FunctionContext<'pkg_ctxt, 'natives> {
     package_context: &'pkg_ctxt PackageContext<'natives>,
     module: &'pkg_ctxt CompiledModule,
-    single_signature_token_map: BTreeMap<SignatureIndex, Type>,
+    single_signature_token_map: BTreeMap<SignatureIndex, ArenaBox<ArenaType>>,
 }
 
 impl PackageContext<'_> {
-    fn insert_and_make_module_function_vtable(
+    fn insert_vtable_functions(
         &mut self,
         module_name: Identifier,
         vtable: impl IntoIterator<Item = (Identifier, VMPointer<Function>)>,
@@ -88,7 +83,18 @@ impl PackageContext<'_> {
         self.vtable
             .functions
             .get(&vtable_entry.inner_pkg_key)
-            .map(|f| VMPointer::new(f.to_ref()))
+            .map(|f| f.ptr_clone())
+    }
+
+    fn arena_vec<T>(
+        &self,
+        items: impl ExactSizeIterator<Item = T>,
+    ) -> PartialVMResult<ArenaVec<T>> {
+        self.package_arena.alloc_vec(items)
+    }
+
+    fn arena_box<T>(&self, item: T) -> PartialVMResult<ArenaBox<T>> {
+        self.package_arena.alloc_box(item)
     }
 }
 
@@ -125,8 +131,7 @@ pub fn package(
         natives,
         storage_id,
         runtime_id,
-        loaded_modules: BinaryCache::new(),
-        compiled_modules: BinaryCache::new(),
+        loaded_modules: BTreeMap::new(),
         package_arena: Arena::new(),
         vtable: PackageVirtualTable::new(),
         type_origin_table,
@@ -148,7 +153,7 @@ pub fn package(
         if !immediate_dependencies.all(|dep| {
             package_context
                 .loaded_modules
-                .contains(&dep.name().to_owned())
+                .contains_key(&dep.name().to_owned())
         }) {
             package_modules.insert(0, input_module);
             continue;
@@ -161,13 +166,10 @@ pub fn package(
             &mut input_module,
         )?;
 
-        package_context
+        assert!(package_context
             .loaded_modules
-            .insert(loaded_module.id.name().to_owned(), loaded_module)?;
-        package_context.compiled_modules.insert(
-            input_module.compiled_module.self_id().name().to_owned(),
-            input_module.compiled_module,
-        )?;
+            .insert(loaded_module.id.name().to_owned(), loaded_module)
+            .is_none());
     }
 
     let PackageContext {
@@ -175,7 +177,6 @@ pub fn package(
         natives: _,
         runtime_id,
         loaded_modules,
-        compiled_modules: _,
         package_arena,
         vtable,
         type_origin_table: _,
@@ -203,62 +204,53 @@ fn module(
     dbg_println!("Loading module: {}", self_id);
 
     // Load module types
-    let datatype_descriptors = load_module_types(
+    let (datatype_descriptors, descriptor_map) = load_module_types(
         package_context,
         link_context,
         package_context.runtime_id,
         package_id,
         &module.compiled_module,
     )?;
+
+    let cmodule = &module.compiled_module;
+
     // NB: Note that this assumes the datatype descriptors will live at least as long as the
     // vtable -- if that is not true, we _will_ segfault.
-    record_module_types_in_vtable(&mut package_context.vtable, &datatype_descriptors);
+    record_module_types_in_vtable(&mut package_context.vtable, &descriptor_map);
 
     dbg_println!("Module types loaded");
 
     // Initialize module data
-    let type_refs = initialize_type_refs(&module.compiled_module)?;
+    let type_refs = initialize_type_refs(package_context, &cmodule)?;
 
-    let mut instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>> = BTreeMap::new();
+    let (instantiation_signatures, _signature_map) = cache_signatures(package_context, &cmodule)?;
 
-    let structs = structs(
-        package_context,
-        &module.compiled_module,
-        &type_refs,
-        &datatype_descriptors,
-    )?;
-    let enums = enums(
-        package_context,
-        &module.compiled_module,
-        &type_refs,
-        &datatype_descriptors,
-    )?;
+    let structs = structs(package_context, &cmodule, &type_refs, &descriptor_map)?;
+    let enums = enums(package_context, &cmodule, &type_refs, &descriptor_map)?;
 
-    let struct_instantiations = struct_instantiations(
-        &mut instantiation_signatures,
-        &module.compiled_module,
-        &structs,
-    )?;
-    let enum_instantiations = enum_instantiations(
-        &mut instantiation_signatures,
-        &module.compiled_module,
-        &enums,
-    )?;
+    let struct_instantiations = struct_instantiations(package_context, &cmodule, &structs)?;
+    let enum_instantiations = enum_instantiations(package_context, &cmodule, &enums)?;
 
     // Process functions and function instantiations
     // Function loading is effectful; they all go into the arena.
-    let single_signature_token_map = functions(package_context, module)?;
-    let function_instantiations = function_instantiations(
-        package_context,
-        &mut instantiation_signatures,
-        &module.compiled_module,
-    )?;
+    let (functions, single_signature_token_map) = functions(package_context, module)?;
+    let function_instantiations = function_instantiations(package_context, &cmodule)?;
 
     // Process field handles and instantiations
-    let field_handles = field_handles(&module.compiled_module, &structs);
-    let field_instantiations = field_instantiations(&module.compiled_module, &field_handles);
+    let field_handles = field_handles(package_context, &cmodule, &structs)?;
+    let field_instantiations = field_instantiations(package_context, &cmodule, &field_handles)?;
 
-    let constants = constants(&module.compiled_module)?;
+    let constants = constants(package_context, &cmodule)?;
+
+    let variant_handles =
+        package_context.arena_vec(module.compiled_module.variant_handles().iter().cloned())?;
+    let variant_instantiation_handles = package_context.arena_vec(
+        module
+            .compiled_module
+            .variant_instantiation_handles()
+            .iter()
+            .cloned(),
+    )?;
 
     // Build and return the module
     Ok(Module {
@@ -269,27 +261,24 @@ fn module(
         struct_instantiations,
         enums,
         enum_instantiations,
+        functions,
         function_instantiations,
         field_handles,
         field_instantiations,
         single_signature_token_map,
         instantiation_signatures,
-        variant_handles: module.compiled_module.variant_handles().to_vec(),
-        variant_instantiation_handles: module
-            .compiled_module
-            .variant_instantiation_handles()
-            .to_vec(),
+        variant_handles,
+        variant_instantiation_handles,
         constants,
     })
 }
 
 fn record_module_types_in_vtable(
     vtable: &mut PackageVirtualTable,
-    datatype_descriptors: &BTreeMap<IntraPackageKey, DatatypeDescriptor>,
+    datatype_descriptors: &BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
 ) {
     for (key, descriptor) in datatype_descriptors {
-        let descriptor_ptr = VMPointer::from_ref(descriptor);
-        let _prev = vtable.types.insert(*key, descriptor_ptr);
+        let _prev = vtable.types.insert(*key, descriptor.ptr_clone());
         debug_assert!(_prev.is_none(), "Double insert for datatype");
     }
 }
@@ -297,8 +286,11 @@ fn record_module_types_in_vtable(
 // -------------------------------------------------------------------------------------------------
 // Type Definitions Translation
 
-fn initialize_type_refs(module: &CompiledModule) -> PartialVMResult<Vec<IntraPackageKey>> {
-    module
+fn initialize_type_refs(
+    context: &mut PackageContext<'_>,
+    module: &CompiledModule,
+) -> PartialVMResult<ArenaVec<IntraPackageKey>> {
+    let type_refs = module
         .datatype_handles()
         .iter()
         .map(|datatype_handle| {
@@ -312,16 +304,17 @@ fn initialize_type_refs(module: &CompiledModule) -> PartialVMResult<Vec<IntraPac
                 member_name: struct_name.to_owned(),
             })
         })
-        .collect()
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    context.arena_vec(type_refs.into_iter())
 }
 
 fn structs(
-    package_context: &mut PackageContext<'_>,
+    context: &mut PackageContext<'_>,
     module: &CompiledModule,
     type_refs: &[IntraPackageKey],
-    datatype_descriptors: &BTreeMap<IntraPackageKey, DatatypeDescriptor>,
-) -> PartialVMResult<Vec<StructDef>> {
-    module
+    datatype_descriptors: &BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
+) -> PartialVMResult<ArenaVec<StructDef>> {
+    let struct_defs = module
         .struct_defs()
         .iter()
         .map(|struct_def| {
@@ -332,20 +325,21 @@ fn structs(
             Ok(StructDef {
                 field_count,
                 idx: VirtualTableKey {
-                    package_key: package_context.runtime_id,
+                    package_key: context.runtime_id,
                     inner_pkg_key: key,
                 },
             })
         })
-        .collect()
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    context.arena_vec(struct_defs.into_iter())
 }
 
 fn struct_instantiations(
-    instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
+    context: &mut PackageContext<'_>,
     module: &CompiledModule,
     structs: &[StructDef],
-) -> PartialVMResult<Vec<StructInstantiation>> {
-    module
+) -> PartialVMResult<ArenaVec<StructInstantiation>> {
+    let struct_insts = module
         .struct_instantiations()
         .iter()
         .map(|struct_inst| {
@@ -354,7 +348,6 @@ fn struct_instantiations(
             let field_count = struct_def.field_count;
 
             let instantiation_idx = struct_inst.type_parameters;
-            cache_signatures(instantiation_signatures, module, instantiation_idx)?;
 
             Ok(StructInstantiation {
                 field_count,
@@ -362,16 +355,17 @@ fn struct_instantiations(
                 instantiation_idx,
             })
         })
-        .collect()
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    context.arena_vec(struct_insts.into_iter())
 }
 
 fn enums(
-    package_context: &mut PackageContext<'_>,
+    context: &mut PackageContext<'_>,
     module: &CompiledModule,
     type_refs: &[IntraPackageKey],
-    datatype_descriptors: &BTreeMap<IntraPackageKey, DatatypeDescriptor>,
-) -> PartialVMResult<Vec<EnumDef>> {
-    module
+    datatype_descriptors: &BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
+) -> PartialVMResult<ArenaVec<EnumDef>> {
+    let enum_defs = module
         .enum_defs()
         .iter()
         .map(|enum_def| {
@@ -386,35 +380,36 @@ fn enums(
                 .map(|(tag, variant_type)| VariantDef {
                     tag: tag as u16,
                     field_count: variant_type.fields.len() as u16,
-                    field_types: variant_type.fields.clone(),
-                })
-                .collect();
+                    field_types: VMPointer::from_ref(&variant_type.fields),
+                });
+            let variants = context.arena_vec(variants)?;
             Ok(EnumDef {
                 variant_count,
                 variants,
                 idx: VirtualTableKey {
-                    package_key: package_context.runtime_id,
+                    package_key: context.runtime_id,
                     inner_pkg_key: key,
                 },
             })
         })
-        .collect()
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    context.arena_vec(enum_defs.into_iter())
 }
 
 fn enum_instantiations(
-    instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
+    context: &mut PackageContext<'_>,
     module: &CompiledModule,
     enums: &[EnumDef],
-) -> PartialVMResult<Vec<EnumInstantiation>> {
-    module
+) -> PartialVMResult<ArenaVec<EnumInstantiation>> {
+    let enum_insts = module
         .enum_instantiations()
         .iter()
         .map(|enum_inst| {
             let def = enum_inst.def.0 as usize;
             let enum_def = &enums[def];
-            let variant_count_map = enum_def.variants.iter().map(|v| v.field_count).collect();
+            let variant_count_map =
+                context.arena_vec(enum_def.variants.iter().map(|v| v.field_count))?;
             let instantiation_idx = enum_inst.type_parameters;
-            cache_signatures(instantiation_signatures, module, instantiation_idx)?;
 
             Ok(EnumInstantiation {
                 variant_count_map,
@@ -422,11 +417,15 @@ fn enum_instantiations(
                 instantiation_idx,
             })
         })
-        .collect()
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    context.arena_vec(enum_insts.into_iter())
 }
 
-fn constants(module: &CompiledModule) -> PartialVMResult<Vec<Constant>> {
-    module
+fn constants(
+    context: &mut PackageContext<'_>,
+    module: &CompiledModule,
+) -> PartialVMResult<ArenaVec<Constant>> {
+    let constants = module
         .constant_pool()
         .iter()
         .map(|constant| {
@@ -436,60 +435,71 @@ fn constants(module: &CompiledModule) -> PartialVMResult<Vec<Constant>> {
                         "Verifier failed to verify the deserialization of constants".to_owned(),
                     )
                 })?
-                .to_constant_value()?;
-            let type_ = make_type(module, &constant.type_)?;
+                .to_constant_value(&context.package_arena)?;
+            let type_ = make_arena_type(context, module, &constant.type_)?;
             let size = constant.data.len() as u64;
             let const_ = Constant { value, type_, size };
             Ok(const_)
         })
-        .collect()
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    context.arena_vec(constants.into_iter())
 }
 
-fn field_handles(module: &CompiledModule, structs: &[StructDef]) -> Vec<FieldHandle> {
-    module
-        .field_handles()
-        .iter()
-        .map(|f_handle| {
-            let def_idx = f_handle.owner;
-            let owner = structs[def_idx.0 as usize].idx.clone();
-            let offset = f_handle.field as usize;
-            FieldHandle { offset, owner }
-        })
-        .collect()
+fn field_handles(
+    context: &mut PackageContext<'_>,
+    module: &CompiledModule,
+    structs: &[StructDef],
+) -> PartialVMResult<ArenaVec<FieldHandle>> {
+    let field_handles = module.field_handles().iter().map(|f_handle| {
+        let def_idx = f_handle.owner;
+        let owner = structs[def_idx.0 as usize].idx.clone();
+        let offset = f_handle.field as usize;
+        FieldHandle { offset, owner }
+    });
+    context.arena_vec(field_handles.into_iter())
 }
 
 fn field_instantiations(
+    context: &mut PackageContext<'_>,
     module: &CompiledModule,
     field_handles: &[FieldHandle],
-) -> Vec<FieldInstantiation> {
-    module
-        .field_instantiations()
-        .iter()
-        .map(|f_inst| {
-            let fh_idx = f_inst.handle;
-            let owner = field_handles[fh_idx.0 as usize].owner.clone();
-            let offset = field_handles[fh_idx.0 as usize].offset;
+) -> PartialVMResult<ArenaVec<FieldInstantiation>> {
+    let field_instantiations = module.field_instantiations().iter().map(|f_inst| {
+        let fh_idx = f_inst.handle;
+        let owner = field_handles[fh_idx.0 as usize].owner.clone();
+        let offset = field_handles[fh_idx.0 as usize].offset;
 
-            FieldInstantiation { offset, owner }
-        })
-        .collect()
+        FieldInstantiation { offset, owner }
+    });
+    context.arena_vec(field_instantiations.into_iter())
 }
 
 fn cache_signatures(
-    instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
+    context: &mut PackageContext<'_>,
     module: &CompiledModule,
-    instantiation_idx: SignatureIndex,
-) -> PartialVMResult<()> {
-    if let btree_map::Entry::Vacant(e) = instantiation_signatures.entry(instantiation_idx) {
-        let instantiation = module
-            .signature_at(instantiation_idx)
-            .0
-            .iter()
-            .map(|ty| make_type(module, ty))
-            .collect::<Result<Vec<_>, _>>()?;
-        e.insert(instantiation);
-    }
-    Ok(())
+) -> PartialVMResult<(
+    ArenaVec<ArenaVec<ArenaType>>,
+    BTreeMap<SignatureIndex, VMPointer<ArenaVec<ArenaType>>>,
+)> {
+    let signatures = module
+        .signatures()
+        .iter()
+        .map(|sig| {
+            let tys = sig
+                .0
+                .iter()
+                .map(|ty| make_arena_type(context, module, ty))
+                .collect::<PartialVMResult<Vec<_>>>()?;
+            context.arena_vec(tys.into_iter())
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    let signatures = context.arena_vec(signatures.into_iter())?;
+    let signature_map = signatures
+        .iter()
+        .enumerate()
+        .map(|(ndx, entry)| (SignatureIndex::new(ndx as u16), VMPointer::from_ref(entry)))
+        .collect::<BTreeMap<_, _>>();
+    Ok((signatures, signature_map))
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -497,8 +507,11 @@ fn cache_signatures(
 
 fn functions(
     package_context: &mut PackageContext,
-    module: &mut input::Module,
-) -> PartialVMResult<BTreeMap<SignatureIndex, Type>> {
+    module: &input::Module,
+) -> PartialVMResult<(
+    ArenaVec<Function>,
+    BTreeMap<SignatureIndex, ArenaBox<ArenaType>>,
+)> {
     let input::Module {
         compiled_module: module,
         functions: optimized_fns,
@@ -513,24 +526,25 @@ fn functions(
         .enumerate()
         .map(|(ndx, fun)| {
             let findex = FunctionDefinitionIndex(ndx as TableIndex);
-            alloc_function(package_context, findex, fun, module)
+            alloc_function(package_context, module, findex, fun)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
-    let loaded_functions = package_context
-        .package_arena
-        .alloc_slice(prealloc_functions.into_iter())?;
 
-    package_context.insert_and_make_module_function_vtable(
-        self_id,
-        vm_pointer::mut_to_ref_slice(loaded_functions)
+    let mut loaded_functions = package_context.arena_vec(prealloc_functions.into_iter())?;
+
+    let fun_map = unique_map(
+        loaded_functions
             .iter()
-            .map(|function| {
-                (
-                    function.name.clone(),
-                    VMPointer::new(function as *const Function),
-                )
-            }),
-    )?;
+            .map(|fun| (fun.name.clone(), VMPointer::from_ref(fun))),
+    )
+    .map_err(|key| {
+        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(format!(
+            "Duplicate function key {}::{}",
+            package_context.storage_id, key,
+        ))
+    })?;
+
+    package_context.insert_vtable_functions(self_id, fun_map)?;
 
     let mut module_context = FunctionContext {
         package_context,
@@ -538,14 +552,16 @@ fn functions(
         single_signature_token_map: BTreeMap::new(),
     };
 
-    for (alloc, _) in vm_pointer::to_mut_ref_slice(loaded_functions)
-        .iter_mut()
-        .zip(module.function_defs())
-    {
-        let Some(opt_fun) = optimized_fns.remove(&alloc.index) else {
+    let mut optimized_fns = optimized_fns.clone();
+
+    for fun in loaded_functions.iter_mut() {
+        let Some(opt_fun) = optimized_fns.remove(&fun.index) else {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    "failed to find module function in optimized function list".to_string(),
+                    format!(
+                        "failed to find function {}::{} in optimized function list",
+                        package_context.storage_id, fun.name
+                    ),
                 ),
             );
         };
@@ -554,7 +570,7 @@ fn functions(
             code: opt_code,
         } = opt_fun;
         if let Some(opt_code) = opt_code {
-            alloc.code = code(&mut module_context, opt_code.code)?;
+            fun.code = code(&mut module_context, opt_code.code)?;
         }
     }
 
@@ -563,38 +579,37 @@ fn functions(
         ..
     } = module_context;
 
-    Ok(single_signature_token_map)
+    Ok((loaded_functions, single_signature_token_map))
 }
 
 fn function_instantiations(
     package_context: &mut PackageContext,
-    instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
     module: &CompiledModule,
-) -> PartialVMResult<Vec<FunctionInstantiation>> {
+) -> PartialVMResult<ArenaVec<FunctionInstantiation>> {
     dbg_println!(flag: function_list_sizes, "handle size: {}", module.function_handles().len());
 
-    module
+    let fun_insts = module
         .function_instantiations()
         .iter()
         .map(|func_inst| {
             let handle = call(package_context, module, func_inst.handle)?;
 
             let instantiation_idx = func_inst.type_parameters;
-            cache_signatures(instantiation_signatures, module, instantiation_idx)?;
 
             Ok(FunctionInstantiation {
                 handle,
                 instantiation_idx,
             })
         })
-        .collect()
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    package_context.arena_vec(fun_insts.into_iter())
 }
 
 fn alloc_function(
     context: &PackageContext,
+    module: &CompiledModule,
     index: FunctionDefinitionIndex,
     def: &FunctionDefinition,
-    module: &CompiledModule,
 ) -> PartialVMResult<Function> {
     let handle = module.function_handle_at(def.function);
     let name = module.identifier_at(handle.name).to_owned();
@@ -616,34 +631,43 @@ fn alloc_function(
         .signature_at(handle.parameters)
         .0
         .iter()
-        .map(|tok| make_type(module, tok))
+        .map(|tok| make_arena_type(context, module, tok))
         .collect::<PartialVMResult<Vec<_>>>()?;
+    let parameters = context.arena_vec(parameters.into_iter())?;
     // Native functions do not have a code unit
     let (locals_len, locals, jump_tables) = match &def.code {
-        Some(code) => (
-            parameters.len() + module.signature_at(code.locals).0.len(),
-            module
-                .signature_at(code.locals)
-                .0
-                .iter()
-                .map(|tok| make_type(module, tok))
-                .collect::<PartialVMResult<Vec<_>>>()?,
-            code.jump_tables.clone(),
-        ),
-        None => (0, vec![], vec![]),
+        Some(code) => {
+            let locals_len = parameters.len() + module.signature_at(code.locals).0.len();
+            let locals = context.arena_vec(
+                module
+                    .signature_at(code.locals)
+                    .0
+                    .iter()
+                    .map(|tok| make_arena_type(context, module, tok))
+                    .collect::<PartialVMResult<Vec<_>>>()?
+                    .into_iter(),
+            )?;
+            let jump_tables = context
+                .package_arena
+                .alloc_vec(code.jump_tables.clone().into_iter())?;
+            (locals_len, locals, jump_tables)
+        }
+        None => (0, ArenaVec::empty(), ArenaVec::empty()),
     };
     let return_ = module
         .signature_at(handle.return_)
         .0
         .iter()
-        .map(|tok| make_type(module, tok))
+        .map(|tok| make_arena_type(context, module, tok))
         .collect::<PartialVMResult<Vec<_>>>()?;
-    let type_parameters = handle.type_parameters.clone();
+    let return_ = context.arena_vec(return_.into_iter())?;
+    let type_parameters = context.arena_vec(handle.type_parameters.clone().into_iter())?;
     let fun = Function {
         file_format_version: module.version(),
         index,
         is_entry,
-        code: vm_pointer::null_ptr(),
+        // replaced in the next step of compilation
+        code: ArenaVec::empty(),
         parameters,
         locals,
         return_,
@@ -658,19 +682,20 @@ fn alloc_function(
     Ok(fun)
 }
 
+// [ALLOC] Bytecode result is allocated in the arena
 fn code(
     context: &mut FunctionContext,
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
-) -> PartialVMResult<*const [Bytecode]> {
+) -> PartialVMResult<ArenaVec<Bytecode>> {
     let function_bytecode = flatten_and_renumber_blocks(blocks);
-    let result: *mut [Bytecode] = context.package_context.package_arena.alloc_slice(
+    let result = context.package_context.package_arena.alloc_vec(
         function_bytecode
             .iter()
             .map(|bc| bytecode(context, bc))
             .collect::<PartialVMResult<Vec<Bytecode>>>()?
             .into_iter(),
     )?;
-    Ok(result as *const [Bytecode])
+    Ok(result)
 }
 
 fn flatten_and_renumber_blocks(
@@ -731,8 +756,12 @@ fn bytecode(
         input::Bytecode::BrFalse(n) => Bytecode::BrFalse(*n),
         input::Bytecode::Branch(n) => Bytecode::Branch(*n),
 
-        input::Bytecode::LdU256(n) => Bytecode::LdU256(n.clone()),
-        input::Bytecode::LdU128(n) => Bytecode::LdU128(n.clone()),
+        input::Bytecode::LdU256(n) => {
+            Bytecode::LdU256(context.package_context.arena_box(*n.clone())?)
+        }
+        input::Bytecode::LdU128(n) => {
+            Bytecode::LdU128(context.package_context.arena_box(*n.clone())?)
+        }
         input::Bytecode::LdU16(n) => Bytecode::LdU16(*n),
         input::Bytecode::LdU32(n) => Bytecode::LdU32(*n),
         input::Bytecode::LdU64(n) => Bytecode::LdU64(*n),
@@ -879,11 +908,14 @@ fn load_module_types(
     _package_uid: RuntimePackageId,
     package_id: PackageStorageId,
     module: &CompiledModule,
-) -> PartialVMResult<BTreeMap<IntraPackageKey, DatatypeDescriptor>> {
+) -> PartialVMResult<(
+    ArenaVec<DatatypeDescriptor>,
+    BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
+)> {
     let module_id = module.self_id();
     let module_name = string_interner().get_or_intern_ident_str(module_id.name())?;
 
-    let mut datatype_descriptors = BTreeMap::new();
+    let mut datatype_descriptors = vec![];
 
     for (idx, struct_def) in module.struct_defs().iter().enumerate() {
         let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
@@ -919,6 +951,7 @@ fn load_module_types(
                 .map(|f| module.identifier_at(f.name).to_owned())
                 .collect(),
         };
+        let field_names = package_context.arena_vec(field_names.into_iter())?;
 
         let StructFieldInformation::Declared(fields) = &struct_def.field_information else {
             unreachable!("native structs have been removed");
@@ -926,8 +959,9 @@ fn load_module_types(
 
         let fields = fields
             .iter()
-            .map(|f| make_type(module, &f.signature.0))
-            .collect::<PartialVMResult<Vec<Type>>>()?;
+            .map(|f| make_arena_type(package_context, module, &f.signature.0))
+            .collect::<PartialVMResult<Vec<ArenaType>>>()?;
+        let fields = package_context.arena_vec(fields.into_iter())?;
 
         let struct_type = Datatype::Struct(StructType {
             fields,
@@ -936,9 +970,12 @@ fn load_module_types(
         });
         let datatype_info = VMPointer::new(package_context.package_arena.alloc_item(struct_type)?);
 
+        let type_parameters =
+            package_context.arena_vec(struct_handle.type_parameters.iter().cloned())?;
+
         let datatype_descriptor = DatatypeDescriptor {
             abilities: struct_handle.abilities,
-            type_parameters: struct_handle.type_parameters.clone(),
+            type_parameters,
             name: name.to_owned(),
             defining_id,
             runtime_id: module_id.clone(),
@@ -946,12 +983,7 @@ fn load_module_types(
             module_key: module_name,
             member_key: member_name,
         };
-        let _prev = datatype_descriptors.insert(struct_key, datatype_descriptor);
-        debug_assert!(
-            _prev.is_none(),
-            "double-insert of datatype {}",
-            struct_key.to_string()?
-        );
+        let _prev = datatype_descriptors.push(datatype_descriptor);
     }
 
     for (idx, enum_def) in module.enum_defs().iter().enumerate() {
@@ -986,33 +1018,41 @@ fn load_module_types(
             .iter()
             .enumerate()
             .map(|(variant_tag, variant_def)| {
+                let fields = variant_def
+                    .fields
+                    .iter()
+                    .map(|f| make_arena_type(package_context, module, &f.signature.0))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                let fields = package_context.arena_vec(fields.into_iter())?;
+
+                let field_names = variant_def
+                    .fields
+                    .iter()
+                    .map(|f| module.identifier_at(f.name).to_owned());
+                let field_names = package_context.arena_vec(field_names)?;
+
                 Ok(VariantType {
                     variant_name: module.identifier_at(variant_def.variant_name).to_owned(),
-                    fields: variant_def
-                        .fields
-                        .iter()
-                        .map(|f| make_type(module, &f.signature.0))
-                        .collect::<PartialVMResult<_>>()?,
-                    field_names: variant_def
-                        .fields
-                        .iter()
-                        .map(|f| module.identifier_at(f.name).to_owned())
-                        .collect(),
+                    fields,
+                    field_names,
                     enum_def: EnumDefinitionIndex(idx as u16),
                     variant_tag: variant_tag as u16,
                 })
             })
             .collect::<PartialVMResult<_>>()?;
+        let variants = package_context.arena_vec(variants.into_iter())?;
 
         let enum_type = Datatype::Enum(EnumType {
             variants,
             enum_def: EnumDefinitionIndex(idx as u16),
         });
         let datatype_info = VMPointer::new(package_context.package_arena.alloc_item(enum_type)?);
+        let type_parameters =
+            package_context.arena_vec(enum_handle.type_parameters.iter().cloned())?;
 
         let datatype_descriptor = DatatypeDescriptor {
             abilities: enum_handle.abilities,
-            type_parameters: enum_handle.type_parameters.clone(),
+            type_parameters,
             name: name.to_owned(),
             defining_id,
             runtime_id: module_id.clone(),
@@ -1020,37 +1060,53 @@ fn load_module_types(
             module_key: module_name,
             member_key: member_name,
         };
-        let _prev = datatype_descriptors.insert(enum_key, datatype_descriptor);
-        debug_assert!(
-            _prev.is_none(),
-            "double-insert of datatype {}",
-            enum_key.to_string()?
-        );
+        let _prev = datatype_descriptors.push(datatype_descriptor);
     }
-    Ok(datatype_descriptors)
+
+    let datatype_descriptors = package_context.arena_vec(datatype_descriptors.into_iter())?;
+
+    let datatype_map = datatype_descriptors
+        .iter()
+        .map(|descriptor| {
+            let name = IntraPackageKey {
+                module_name: descriptor.module_key,
+                member_name: descriptor.member_key,
+            };
+            (name, VMPointer::from_ref(descriptor))
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    Ok((datatype_descriptors, datatype_map))
 }
 
 /// Convert a signature token type into its execution counterpart, including converting datatypes
 /// into their VTable entry keys.
-pub fn make_type(module: &CompiledModule, tok: &SignatureToken) -> PartialVMResult<Type> {
+// [ALLOC] Resultant type is allocated in the arena
+fn make_arena_type(
+    context: &PackageContext,
+    module: &CompiledModule,
+    tok: &SignatureToken,
+) -> PartialVMResult<ArenaType> {
     let res = match tok {
-        SignatureToken::Bool => Type::Bool,
-        SignatureToken::U8 => Type::U8,
-        SignatureToken::U16 => Type::U16,
-        SignatureToken::U32 => Type::U32,
-        SignatureToken::U64 => Type::U64,
-        SignatureToken::U128 => Type::U128,
-        SignatureToken::U256 => Type::U256,
-        SignatureToken::Address => Type::Address,
-        SignatureToken::Signer => Type::Signer,
-        SignatureToken::TypeParameter(idx) => Type::TyParam(*idx),
-        SignatureToken::Vector(inner_tok) => Type::Vector(Box::new(make_type(module, inner_tok)?)),
+        SignatureToken::Bool => ArenaType::Bool,
+        SignatureToken::U8 => ArenaType::U8,
+        SignatureToken::U16 => ArenaType::U16,
+        SignatureToken::U32 => ArenaType::U32,
+        SignatureToken::U64 => ArenaType::U64,
+        SignatureToken::U128 => ArenaType::U128,
+        SignatureToken::U256 => ArenaType::U256,
+        SignatureToken::Address => ArenaType::Address,
+        SignatureToken::Signer => ArenaType::Signer,
+        SignatureToken::TypeParameter(idx) => ArenaType::TyParam(*idx),
+        SignatureToken::Vector(inner_tok) => {
+            ArenaType::Vector(context.arena_box(make_arena_type(context, module, inner_tok)?)?)
+        }
         SignatureToken::Reference(inner_tok) => {
-            Type::Reference(Box::new(make_type(module, inner_tok)?))
+            ArenaType::Reference(context.arena_box(make_arena_type(context, module, inner_tok)?)?)
         }
-        SignatureToken::MutableReference(inner_tok) => {
-            Type::MutableReference(Box::new(make_type(module, inner_tok)?))
-        }
+        SignatureToken::MutableReference(inner_tok) => ArenaType::MutableReference(
+            context.arena_box(make_arena_type(context, module, inner_tok)?)?,
+        ),
         SignatureToken::Datatype(sh_idx) => {
             let datatype_handle = module.datatype_handle_at(*sh_idx);
             let datatype_name = string_interner()
@@ -1066,14 +1122,15 @@ pub fn make_type(module: &CompiledModule, tok: &SignatureToken) -> PartialVMResu
                     member_name: datatype_name.to_owned(),
                 },
             };
-            Type::Datatype(cache_idx)
+            ArenaType::Datatype(cache_idx)
         }
         SignatureToken::DatatypeInstantiation(inst) => {
             let (sh_idx, tys) = &**inst;
             let type_parameters: Vec<_> = tys
                 .iter()
-                .map(|tok| make_type(module, tok))
+                .map(|tok| make_arena_type(context, module, tok))
                 .collect::<PartialVMResult<_>>()?;
+            let type_parameters = context.arena_vec(type_parameters.into_iter())?;
             let datatype_handle = module.datatype_handle_at(*sh_idx);
             let datatype_name = string_interner()
                 .get_or_intern_ident_str(module.identifier_at(datatype_handle.name))?;
@@ -1088,7 +1145,7 @@ pub fn make_type(module: &CompiledModule, tok: &SignatureToken) -> PartialVMResu
                     member_name: datatype_name.to_owned(),
                 },
             };
-            Type::DatatypeInstantiation(Box::new((cache_idx, type_parameters)))
+            ArenaType::DatatypeInstantiation(context.arena_box((cache_idx, type_parameters))?)
         }
     };
     Ok(res)
@@ -1114,9 +1171,14 @@ fn check_vector_type(
             }
             Some(sig_token) => sig_token,
         };
-        context
-            .single_signature_token_map
-            .insert(*signature_index, make_type(context.module, ty)?);
+        context.single_signature_token_map.insert(
+            *signature_index,
+            context.package_context.arena_box(make_arena_type(
+                context.package_context,
+                context.module,
+                ty,
+            )?)?,
+        );
     }
     Ok(())
 }

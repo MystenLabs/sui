@@ -1,4 +1,3 @@
-// Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -43,7 +42,7 @@ fn cache_package_internal_package_calls_only_no_types() {
     // Verify that we've loaded the package correctly
     let result = result.unwrap();
     let l_pkg = result.first_key_value().unwrap().1;
-    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.loaded_modules.len(), 3);
     assert_eq!(l_pkg.runtime.storage_id, package_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
 }
@@ -62,7 +61,7 @@ fn cache_package_internal_package_calls_only_with_types() {
     // Verify that we've loaded the package correctly
     let result = result.unwrap();
     let l_pkg = result.first_key_value().unwrap().1;
-    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.loaded_modules.len(), 3);
     assert_eq!(l_pkg.runtime.storage_id, package_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
 }
@@ -82,12 +81,12 @@ fn cache_package_external_package_calls_no_types() {
     // Verify that we've loaded the packages correctly
     let results = result.unwrap();
     let l_pkg = results.get(&package1_address).unwrap();
-    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 2);
+    assert_eq!(l_pkg.runtime.loaded_modules.len(), 2);
     assert_eq!(l_pkg.runtime.storage_id, package1_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 2);
 
     let l_pkg = results.get(&package2_address).unwrap();
-    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 1);
+    assert_eq!(l_pkg.runtime.loaded_modules.len(), 1);
     assert_eq!(l_pkg.runtime.storage_id, package2_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 1);
 }
@@ -115,7 +114,7 @@ fn load_package_internal_package_calls_only_no_types() {
     let l_pkg = result.unwrap();
     assert_eq!(l_pkg.len(), 1);
     let l_pkg = l_pkg.get(&package_address).unwrap();
-    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.loaded_modules.len(), 3);
     assert_eq!(l_pkg.runtime.storage_id, package_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
 }
@@ -135,7 +134,7 @@ fn load_package_internal_package_calls_only_with_types() {
     let l_pkg = result.unwrap();
     assert_eq!(l_pkg.len(), 1);
     let l_pkg = l_pkg.get(&package_address).unwrap();
-    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.loaded_modules.len(), 3);
     assert_eq!(l_pkg.runtime.storage_id, package_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
     assert_eq!(l_pkg.runtime.vtable.types.len(), 0);
@@ -156,7 +155,7 @@ fn load_package_external_package_calls_no_types() {
     let l_pkg = result.unwrap();
     assert_eq!(l_pkg.len(), 2);
     let l_pkg = l_pkg.get(&package2_address).unwrap();
-    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 1);
+    assert_eq!(l_pkg.runtime.loaded_modules.len(), 1);
     assert_eq!(l_pkg.runtime.storage_id, package2_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 1);
 

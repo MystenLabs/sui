@@ -29,13 +29,13 @@ impl<T> VMPointer<T> {
     }
 
     #[inline]
-    pub fn to_ref<'a>(self) -> &'a T {
-        to_ref(self.ptr_clone().0)
+    pub fn to_ref<'a>(&self) -> &'a T {
+        to_ref(self.0)
     }
 
     #[inline]
-    pub fn to_mut_ref<'a>(self) -> &'a mut T {
-        to_mut_ref(self.ptr_clone().0)
+    pub fn to_mut_ref<'a>(&self) -> &'a mut T {
+        to_mut_ref(self.0)
     }
 
     #[inline]
@@ -122,15 +122,6 @@ impl<T: PartialEq> PartialEq for VMPointer<T> {
 // VMPointer equality first checks pointer equality, then full equality
 impl<T: Eq> Eq for VMPointer<T> {}
 
-impl<T> Clone for VMPointer<T> {
-    #[allow(clippy::non_canonical_clone_impl)]
-    fn clone(&self) -> Self {
-        self.ptr_clone()
-    }
-}
-
-impl<T> Copy for VMPointer<T> {}
-
 impl<T> From<Box<T>> for VMPointer<T> {
     fn from(boxed: Box<T>) -> Self {
         // Use `Box::into_raw` to extract the raw pointer from the box.
@@ -156,5 +147,13 @@ impl<T: Ord> Ord for VMPointer<T> {
 impl<T: std::hash::Hash> std::hash::Hash for VMPointer<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.to_ref().hash(state)
+    }
+}
+
+impl<T> std::ops::Deref for VMPointer<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.to_ref()
     }
 }

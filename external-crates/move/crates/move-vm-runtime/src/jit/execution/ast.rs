@@ -2,17 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::Arena, identifier_interner::IdentifierKey},
+    cache::{
+        arena::{Arena, ArenaBox, ArenaVec},
+        identifier_interner::IdentifierKey,
+    },
     execution::{
         dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
         values::ConstantValue,
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
     shared::{
-        binary_cache::BinaryCache,
         constants::TYPE_DEPTH_MAX,
         types::{PackageStorageId, RuntimePackageId},
-        vm_pointer::{self, VMPointer},
+        vm_pointer::VMPointer,
     },
     string_interner,
 };
@@ -36,8 +38,9 @@ use move_core_types::{
 use std::collections::BTreeMap;
 
 // -------------------------------------------------------------------------------------------------
-// Types
+// Package / Module Type Definitions
 // -------------------------------------------------------------------------------------------------
+
 /// Representation of a loaded package.
 pub struct Package {
     pub storage_id: PackageStorageId,
@@ -46,7 +49,7 @@ pub struct Package {
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
     // TODO(vm-rewrite): IdentifierKey
-    pub loaded_modules: BinaryCache<Identifier, Module>,
+    pub loaded_modules: BTreeMap<Identifier, Module>,
 
     // NB: Package functions and code are allocated into this arena.
     pub package_arena: Arena,
@@ -64,19 +67,24 @@ pub struct Module {
 
     /// Types as indexes into the package's vtable
     #[allow(dead_code)]
-    pub type_refs: Vec<IntraPackageKey>,
+    pub type_refs: ArenaVec<IntraPackageKey>,
+
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub functions: ArenaVec<Function>,
 
     /// Descriptors for all of the datatypes defined in the module -- these are the enums and
     /// structs defined in the module.
-    pub datatype_descriptors: BTreeMap<IntraPackageKey, DatatypeDescriptor>,
+    pub datatype_descriptors: ArenaVec<DatatypeDescriptor>,
 
     /// struct references carry the index into the global vector of types.
     /// That is effectively an indirection over the ref table:
     /// the instruction carries an index into this table which contains the index into the
     /// glabal table of types. No instantiation of generic types is saved into the global table.
-    pub structs: Vec<StructDef>,
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub structs: ArenaVec<StructDef>,
     /// materialized instantiations, whether partial or not
-    pub struct_instantiations: Vec<StructInstantiation>,
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub struct_instantiations: ArenaVec<StructInstantiation>,
 
     /// enum references carry the index into the global vector of types.
     /// That is effectively an indirection over the ref table:
@@ -84,39 +92,49 @@ pub struct Module {
     /// glabal table of types. No instantiation of generic types is saved into the global table.
     /// Note that variants are not carried in the global table as these should stay in sync with the
     /// enum type.
-    pub enums: Vec<EnumDef>,
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub enums: ArenaVec<EnumDef>,
     /// materialized instantiations
-    pub enum_instantiations: Vec<EnumInstantiation>,
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub enum_instantiations: ArenaVec<EnumInstantiation>,
 
-    pub variant_handles: Vec<VariantHandle>,
-    pub variant_instantiation_handles: Vec<VariantInstantiationHandle>,
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub variant_handles: ArenaVec<VariantHandle>,
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub variant_instantiation_handles: ArenaVec<VariantInstantiationHandle>,
 
     /// materialized instantiations, whether partial or not
-    pub function_instantiations: Vec<FunctionInstantiation>,
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub function_instantiations: ArenaVec<FunctionInstantiation>,
 
     /// fields as a pair of index, first to the type, second to the field position in that type
-    pub field_handles: Vec<FieldHandle>,
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub field_handles: ArenaVec<FieldHandle>,
     /// materialized instantiations, whether partial or not
-    pub field_instantiations: Vec<FieldInstantiation>,
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub field_instantiations: ArenaVec<FieldInstantiation>,
 
     /// a map of single-token signature indices to type.
     /// Single-token signatures are usually indexed by the `SignatureIndex` in bytecode. For example,
     /// `VecMutBorrow(SignatureIndex)`, the `SignatureIndex` maps to a single `SignatureToken`, and
     /// hence, a single type.
-    pub single_signature_token_map: BTreeMap<SignatureIndex, Type>,
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub single_signature_token_map: BTreeMap<SignatureIndex, ArenaBox<ArenaType>>,
 
-    /// a map from signatures in instantiations to the `Vec<Type>` that reperesent it.
-    pub instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>>,
+    /// a map from signatures in instantiations to the `ArenaVec<ArenaType>` that reperesent it.
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub instantiation_signatures: ArenaVec<ArenaVec<ArenaType>>,
 
     /// constant references carry an index into a global vector of values.
-    pub constants: Vec<Constant>,
+    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    pub constants: ArenaVec<Constant>,
 }
 
 // A runtime constant
 #[derive(Debug)]
 pub struct Constant {
     pub value: ConstantValue,
-    pub type_: Type,
+    pub type_: ArenaType,
     // Size of constant -- used for gas charging.
     pub size: u64,
 }
@@ -129,18 +147,18 @@ pub struct Function {
     pub file_format_version: u32,
     pub is_entry: bool,
     pub index: FunctionDefinitionIndex,
-    pub code: *const [Bytecode],
-    pub parameters: Vec<Type>,
-    pub locals: Vec<Type>,
-    pub return_: Vec<Type>,
-    pub type_parameters: Vec<AbilitySet>,
+    pub code: ArenaVec<Bytecode>,
+    pub parameters: ArenaVec<ArenaType>,
+    pub locals: ArenaVec<ArenaType>,
+    pub return_: ArenaVec<ArenaType>,
+    pub type_parameters: ArenaVec<AbilitySet>,
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
     pub module: ModuleId,
     // TODO(vm-rewrite): IdentifierKey
     pub name: Identifier,
     pub locals_len: usize,
-    pub jump_tables: Vec<VariantJumpTable>,
+    pub jump_tables: ArenaVec<VariantJumpTable>,
 }
 
 //
@@ -208,7 +226,7 @@ pub struct EnumDef {
     // enum variant count
     #[allow(unused)]
     pub variant_count: u16,
-    pub variants: Vec<VariantDef>,
+    pub variants: ArenaVec<VariantDef>,
     // `ModuelCache::types` global table index
     pub idx: VirtualTableKey,
 }
@@ -216,7 +234,7 @@ pub struct EnumDef {
 #[derive(Debug)]
 pub struct EnumInstantiation {
     // enum variant count
-    pub variant_count_map: Vec<u16>,
+    pub variant_count_map: ArenaVec<u16>,
     // `ModuelCache::types` global table index
     pub def: VirtualTableKey,
     pub instantiation_idx: SignatureIndex,
@@ -228,7 +246,73 @@ pub struct VariantDef {
     pub tag: u16,
     pub field_count: u16,
     #[allow(unused)]
-    pub field_types: Vec<Type>,
+    pub field_types: VMPointer<ArenaVec<ArenaType>>,
+}
+
+// -------------------------------------------------------------------------------------------------
+// Runtime Type representation
+// -------------------------------------------------------------------------------------------------
+
+#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum ArenaType {
+    Bool,
+    U8,
+    U64,
+    U128,
+    Address,
+    Signer,
+    Vector(ArenaBox<ArenaType>),
+    Datatype(VirtualTableKey),
+    DatatypeInstantiation(ArenaBox<(VirtualTableKey, ArenaVec<ArenaType>)>),
+    Reference(ArenaBox<ArenaType>),
+    MutableReference(ArenaBox<ArenaType>),
+    TyParam(u16),
+    U16,
+    U32,
+    U256,
+}
+
+// FIXME(vm-rewrite): This data is largely redundant
+#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DatatypeDescriptor {
+    pub abilities: AbilitySet,
+    pub type_parameters: ArenaVec<DatatypeTyParameter>,
+    // TODO(vm-rewrite): IdentifierKey
+    pub name: Identifier,
+    pub defining_id: ModuleId,
+    pub runtime_id: ModuleId,
+    pub module_key: IdentifierKey,
+    pub member_key: IdentifierKey,
+    pub datatype_info: VMPointer<Datatype>,
+}
+
+#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Datatype {
+    Enum(EnumType),
+    Struct(StructType),
+}
+
+#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct EnumType {
+    pub variants: ArenaVec<VariantType>,
+    pub enum_def: EnumDefinitionIndex,
+}
+
+#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct VariantType {
+    // TODO(vm-rewrite): IdentifierKey
+    pub variant_name: Identifier,
+    pub fields: ArenaVec<ArenaType>,
+    pub field_names: ArenaVec<Identifier>,
+    pub enum_def: EnumDefinitionIndex,
+    pub variant_tag: VariantTag,
+}
+
+#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct StructType {
+    pub fields: ArenaVec<ArenaType>,
+    pub field_names: ArenaVec<Identifier>,
+    pub struct_def: StructDefinitionIndex,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -254,49 +338,6 @@ pub enum Type {
     U256,
 }
 
-// FIXME(vm-rewrite): This data is largely redundant
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DatatypeDescriptor {
-    pub abilities: AbilitySet,
-    pub type_parameters: Vec<DatatypeTyParameter>,
-    // TODO(vm-rewrite): IdentifierKey
-    pub name: Identifier,
-    pub defining_id: ModuleId,
-    pub runtime_id: ModuleId,
-    pub module_key: IdentifierKey,
-    pub member_key: IdentifierKey,
-    pub datatype_info: VMPointer<Datatype>,
-}
-
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum Datatype {
-    Enum(EnumType),
-    Struct(StructType),
-}
-
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct EnumType {
-    pub variants: Vec<VariantType>,
-    pub enum_def: EnumDefinitionIndex,
-}
-
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct VariantType {
-    // TODO(vm-rewrite): IdentifierKey
-    pub variant_name: Identifier,
-    pub fields: Vec<Type>,
-    pub field_names: Vec<Identifier>,
-    pub enum_def: EnumDefinitionIndex,
-    pub variant_tag: VariantTag,
-}
-
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct StructType {
-    pub fields: Vec<Type>,
-    pub field_names: Vec<Identifier>,
-    pub struct_def: StructDefinitionIndex,
-}
-
 // -------------------------------------------------------------------------------------------------
 // Bytecode
 // -------------------------------------------------------------------------------------------------
@@ -306,7 +347,7 @@ pub struct StructType {
 ///
 /// Bytecodes operate on a stack machine and each bytecode has side effect on the stack and the
 /// instruction stream.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub enum Bytecode {
     /// Pop and discard the value at the top of the stack.
     /// The value on the stack must be an copyable type.
@@ -360,7 +401,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```... -> ..., u128_value```
-    LdU128(Box<u128>),
+    LdU128(ArenaBox<u128>),
     /// Convert the value at the top of the stack into u8.
     ///
     /// Stack transition:
@@ -744,7 +785,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```... -> ..., u256_value```
-    LdU256(Box<move_core_types::u256::U256>),
+    LdU256(ArenaBox<move_core_types::u256::U256>),
     /// Convert the value at the top of the stack into u16.
     ///
     /// Stack transition:
@@ -835,18 +876,12 @@ impl Module {
         self.field_instantiations[idx.0 as usize].offset
     }
 
-    pub fn single_type_at(&self, idx: SignatureIndex) -> &Type {
+    pub fn single_type_at(&self, idx: SignatureIndex) -> &ArenaType {
         self.single_signature_token_map.get(&idx).unwrap()
     }
 
-    pub fn instantiation_signature_at(
-        &self,
-        idx: SignatureIndex,
-    ) -> Result<&Vec<Type>, PartialVMError> {
-        self.instantiation_signatures.get(&idx).ok_or_else(|| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Instantiation signature not found".to_string())
-        })
+    pub fn instantiation_signature_at(&self, idx: SignatureIndex) -> &[ArenaType] {
+        &self.instantiation_signatures[idx.0 as usize]
     }
 
     pub fn enum_at(&self, idx: EnumDefinitionIndex) -> VirtualTableKey {
@@ -927,7 +962,7 @@ impl Function {
     }
 
     pub fn code(&self) -> &[Bytecode] {
-        vm_pointer::ref_slice(self.code)
+        &self.code
     }
 
     pub fn jump_tables(&self) -> &[VariantJumpTable] {
@@ -981,64 +1016,34 @@ impl Function {
     }
 }
 
-impl Type {
-    fn clone_impl(&self, depth: usize) -> PartialVMResult<Type> {
-        self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), depth)
-    }
-
-    fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
-    where
-        F: Fn(u16, usize) -> PartialVMResult<Type> + Copy,
-    {
-        if depth > TYPE_DEPTH_MAX {
-            return Err(PartialVMError::new(StatusCode::VM_MAX_TYPE_DEPTH_REACHED));
-        }
-        let res = match self {
-            Type::TyParam(idx) => subst(*idx, depth)?,
-            Type::Bool => Type::Bool,
-            Type::U8 => Type::U8,
-            Type::U16 => Type::U16,
-            Type::U32 => Type::U32,
-            Type::U64 => Type::U64,
-            Type::U128 => Type::U128,
-            Type::U256 => Type::U256,
-            Type::Address => Type::Address,
-            Type::Signer => Type::Signer,
-            Type::Vector(ty) => Type::Vector(Box::new(ty.apply_subst(subst, depth + 1)?)),
-            Type::Reference(ty) => Type::Reference(Box::new(ty.apply_subst(subst, depth + 1)?)),
-            Type::MutableReference(ty) => {
-                Type::MutableReference(Box::new(ty.apply_subst(subst, depth + 1)?))
-            }
-            Type::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
-            Type::DatatypeInstantiation(def_inst) => {
+impl ArenaType {
+    /// Convert to a runtime type by performing a deep copy
+    pub fn to_type(&self) -> Type {
+        match self {
+            ArenaType::TyParam(idx) => Type::TyParam(*idx),
+            ArenaType::Bool => Type::Bool,
+            ArenaType::U8 => Type::U8,
+            ArenaType::U16 => Type::U16,
+            ArenaType::U32 => Type::U32,
+            ArenaType::U64 => Type::U64,
+            ArenaType::U128 => Type::U128,
+            ArenaType::U256 => Type::U256,
+            ArenaType::Address => Type::Address,
+            ArenaType::Signer => Type::Signer,
+            ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type())),
+            ArenaType::Reference(ty) => Type::Reference(Box::new(ty.to_type())),
+            ArenaType::MutableReference(ty) => Type::MutableReference(Box::new(ty.to_type())),
+            ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+            ArenaType::DatatypeInstantiation(def_inst) => {
                 let (def_idx, instantiation) = &**def_inst;
-                let mut inst = vec![];
-                for ty in instantiation {
-                    inst.push(ty.apply_subst(subst, depth + 1)?)
-                }
+                let inst = instantiation.into_iter().map(|ty| ty.to_type()).collect();
                 Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
             }
-        };
-        Ok(res)
+        }
     }
+}
 
-    pub fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
-        self.apply_subst(
-            |idx, depth| match ty_args.get(idx as usize) {
-                Some(ty) => ty.clone_impl(depth),
-                None => Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!(
-                            "type substitution failed: index out of bounds -- len {} got {}",
-                            ty_args.len(),
-                            idx
-                        )),
-                ),
-            },
-            1,
-        )
-    }
-
+impl Type {
     #[allow(deprecated)]
     const LEGACY_BASE_MEMORY_SIZE: AbstractMemorySize = AbstractMemorySize::new(1);
 
@@ -1188,6 +1193,93 @@ impl DatatypeDescriptor {
 }
 
 // -------------------------------------------------------------------------------------------------
+// Type Substitution
+// -------------------------------------------------------------------------------------------------
+
+// Our shared trait.
+pub trait TypeSubst {
+    fn clone_impl(&self, depth: usize) -> PartialVMResult<Type>;
+    fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
+    where
+        F: Fn(u16, usize) -> PartialVMResult<Type> + Copy;
+    fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type>;
+}
+
+// Macro that generates the implementations.
+macro_rules! impl_deep_subst {
+    ($ty:ident) => {
+        impl TypeSubst for $ty {
+            fn clone_impl(&self, depth: usize) -> PartialVMResult<Type> {
+                self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), depth)
+            }
+
+            fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
+            where
+                F: Fn(u16, usize) -> PartialVMResult<Type> + Copy,
+            {
+                if depth > TYPE_DEPTH_MAX {
+                    return Err(PartialVMError::new(
+                        StatusCode::VM_MAX_TYPE_DEPTH_REACHED,
+                    ));
+                }
+                let res = match self {
+                    $ty::TyParam(idx) => subst(*idx, depth)?,
+                    $ty::Bool => Type::Bool,
+                    $ty::U8 => Type::U8,
+                    $ty::U16 => Type::U16,
+                    $ty::U32 => Type::U32,
+                    $ty::U64 => Type::U64,
+                    $ty::U128 => Type::U128,
+                    $ty::U256 => Type::U256,
+                    $ty::Address => Type::Address,
+                    $ty::Signer => Type::Signer,
+                    $ty::Vector(ty) => {
+                        Type::Vector(Box::new(ty.apply_subst(subst, depth + 1)?))
+                    }
+                    $ty::Reference(ty) => {
+                        Type::Reference(Box::new(ty.apply_subst(subst, depth + 1)?))
+                    }
+                    $ty::MutableReference(ty) => {
+                        Type::MutableReference(Box::new(ty.apply_subst(subst, depth + 1)?))
+                    }
+                    $ty::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+                    $ty::DatatypeInstantiation(def_inst) => {
+                        let (def_idx, instantiation) = &**def_inst;
+                        let inst = instantiation
+                            .iter()
+                            .map(|ty| ty.apply_subst(subst, depth + 1))
+                            .collect::<PartialVMResult<Vec<_>>>()?;
+                        Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
+                    }
+                };
+                Ok(res)
+            }
+
+            fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
+                self.apply_subst(
+                    |idx, depth| match ty_args.get(idx as usize) {
+                        Some(ty) => ty.clone_impl(depth),
+                        None => Err(PartialVMError::new(
+                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        )
+                        .with_message(format!(
+                            "type substitution failed: index out of bounds -- len {} got {}",
+                            ty_args.len(),
+                            idx
+                        ))),
+                    },
+                    1,
+                )
+            }
+        }
+    };
+}
+
+// Now generate the implementations for both types.
+impl_deep_subst!(Type);
+impl_deep_subst!(ArenaType);
+
+// -------------------------------------------------------------------------------------------------
 // Equality
 // -------------------------------------------------------------------------------------------------
 
@@ -1196,7 +1288,7 @@ impl PartialEq for Function {
         self.file_format_version == other.file_format_version
             && self.is_entry == other.is_entry
             && self.index == other.index
-            && std::ptr::eq(self.code, other.code) // Compare raw pointers for equality
+            && self.code == other.code // Compare raw pointers for equality
             && self.parameters == other.parameters
             && self.locals == other.locals
             && self.return_ == other.return_
@@ -1321,8 +1413,8 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::LdU16(a) => write!(f, "LdU16({})", a),
             Bytecode::LdU32(a) => write!(f, "LdU32({})", a),
             Bytecode::LdU64(a) => write!(f, "LdU64({})", a),
-            Bytecode::LdU128(a) => write!(f, "LdU128({})", a),
-            Bytecode::LdU256(a) => write!(f, "LdU256({})", a),
+            Bytecode::LdU128(a) => write!(f, "LdU128({})", **a),
+            Bytecode::LdU256(a) => write!(f, "LdU256({})", **a),
             Bytecode::CastU8 => write!(f, "CastU8"),
             Bytecode::CastU16 => write!(f, "CastU16"),
             Bytecode::CastU32 => write!(f, "CastU32"),
