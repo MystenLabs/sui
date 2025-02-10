@@ -173,7 +173,6 @@ mod checked {
         // too make Rust's borrow checker happy.
         // TODO: Use some Rust magic to avoid this?
         if let Some(trace_builder) = trace_builder_opt {
-            let trace_builder = trace_builder;
             execute_command_internal::<Mode>(context, mode_results, command, Some(trace_builder))
         } else {
             execute_command_internal::<Mode>(context, mode_results, command, None)
