@@ -535,7 +535,7 @@ impl Operations {
     fn process_balance_change(
         gas_owner: SuiAddress,
         gas_used: i128,
-        balance_changes: Vec<(BalanceChange, Currency)>,
+        balance_changes: &Vec<(BalanceChange, Currency)>,
         status: Option<OperationStatus>,
         balances: HashMap<(SuiAddress, Currency), i128>,
     ) -> impl Iterator<Item = Operation> {
@@ -613,18 +613,56 @@ impl Operations {
         }
     }
 
-    /// Compute total balance-changes for operations
-    fn total_balance_change(operations: &Vec<Operation>) -> i128 {
-        operations.iter().fold(0, |mut acc, operation| {
-            if operation.type_ == OperationType::SuiBalanceChange
-                || operation.type_ == OperationType::Gas
+    /// Compare initial balance_changes to new_operations and make sure
+    /// the balance-changes stay the same after updating the operations
+    fn validate_operations(
+        initial_balance_changes: &Vec<(BalanceChange, Currency)>,
+        new_operations: &Vec<Operation>,
+    ) -> Result<(), anyhow::Error> {
+        let balances: HashMap<(SuiAddress, Currency), i128> = HashMap::new();
+        let mut initial_balances =
+            initial_balance_changes
+                .iter()
+                .fold(balances, |mut balances, (balance_change, ccy)| {
+                    if let Owner::AddressOwner(owner) = balance_change.owner {
+                        *balances.entry((owner, ccy.clone())).or_default() += balance_change.amount;
+                    }
+                    balances
+                });
+
+        let mut new_balances = HashMap::new();
+        for op in new_operations.clone() {
+            if let Some(Amount {
+                currency, value, ..
+            }) = op.amount
             {
-                if let Some(amount) = &operation.amount {
-                    acc += amount.value;
+                if let Some(account) = op.account {
+                    let balance_change = new_balances
+                        .remove(&(account.address, currency.clone()))
+                        .unwrap_or(0)
+                        + value;
+                    new_balances.insert((account.address, currency), balance_change);
                 }
             }
-            acc
-        })
+        }
+
+        for ((address, currency), amount_expected) in new_balances {
+            let new_amount = initial_balances.remove(&(address, currency)).unwrap_or(0);
+            if new_amount != amount_expected {
+                return Err(anyhow!(
+                    "Expected {} balance-change for {} but got {}",
+                    amount_expected,
+                    address,
+                    new_amount
+                ));
+            }
+        }
+        if !initial_balances.is_empty() {
+            return Err(anyhow!(
+                "Expected every item in initial_balances to be mapped"
+            ));
+        }
+        Ok(())
     }
 
     /// If GasCoin is transferred as a part of transferObjects, operations need to be
@@ -636,13 +674,13 @@ impl Operations {
         data: SuiTransactionBlockData,
         new_gas_owner: SuiAddress,
         gas_used: i128,
+        initial_balance_changes: &Vec<(BalanceChange, Currency)>,
     ) -> Result<Vec<Operation>, anyhow::Error> {
         let tx = data.transaction();
         let prev_gas_owner = data.gas_data().owner;
         let mut operations = vec![];
         if Self::is_gascoin_transfer(tx) && prev_gas_owner != new_gas_owner {
             operations = coin_change_operations.collect();
-            let original_total_balance_change = Self::total_balance_change(&operations);
             Self::add_missing_gas_owner(&mut operations, prev_gas_owner);
             Self::add_missing_gas_owner(&mut operations, new_gas_owner);
             for operation in &mut operations {
@@ -676,11 +714,7 @@ impl Operations {
                     }
                 }
             }
-            if Self::total_balance_change(&operations) != original_total_balance_change {
-                return Err(anyhow!(
-                    "Total balance-change does not match before and after updating operations",
-                ));
-            }
+            Self::validate_operations(&initial_balance_changes, &operations)?;
         }
         Ok(operations)
     }
@@ -791,7 +825,7 @@ impl Operations {
         let mut coin_change_operations = Self::process_balance_change(
             gas_owner,
             gas_used,
-            balance_changes,
+            &balance_changes,
             status,
             accounted_balances.clone(),
         );
@@ -803,6 +837,7 @@ impl Operations {
             tx.data,
             gas_owner,
             gas_used,
+            &balance_changes,
         )?;
 
         let ops: Operations = ops
