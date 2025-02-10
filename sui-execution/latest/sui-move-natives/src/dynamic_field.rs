@@ -33,9 +33,7 @@ const E_FIELD_TYPE_MISMATCH: u64 = 2;
 const E_BCS_SERIALIZATION_FAILURE: u64 = 3;
 
 macro_rules! get_or_fetch_object {
-    ($context:ident, 
-     $object_runtime:ident,
-     $ty_args:ident, $parent:ident, $child_id:ident, $ty_cost_per_byte:expr) => {{
+    ($context:ident, $object_runtime:ident, $ty_args:ident, $parent:ident, $child_id:ident, $ty_cost_per_byte:expr) => {{
         let child_ty = $ty_args.pop().unwrap();
         native_charge_gas_early_exit!(
             $context,
@@ -289,11 +287,13 @@ pub fn borrow_child_object(
     // NB: We need to borrow the runtime and grab the mutable reference and then pass this into
     // `get_or_fetch_object` so that the lifetime of the returned object is tied to the lifetime of
     // the runtime reference we are creating here and the borrow checker will be happy with us.
-    let object_runtime: &NativeContextMut<'_, ObjectRuntime<'_>> = context.extensions().get();
-    let object_runtime_mut: &mut ObjectRuntime = &mut object_runtime.borrow_mut();
+    let object_runtime: &mut ObjectRuntime = &mut context
+        .extensions()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow_mut();
     let global_value_result = get_or_fetch_object!(
         context,
-        object_runtime_mut,
+        object_runtime,
         ty_args,
         parent,
         child_id,
@@ -363,11 +363,13 @@ pub fn remove_child_object(
     // NB: We need to borrow the runtime and grab the mutable reference and then pass this into
     // `get_or_fetch_object` so that the lifetime of the returned object is tied to the lifetime of
     // the runtime reference we are creating here and the borrow checker will be happy with us.
-    let object_runtime: &NativeContextMut<'_, ObjectRuntime<'_>> = context.extensions().get();
-    let object_runtime_mut: &mut ObjectRuntime = &mut object_runtime.borrow_mut();
+    let object_runtime: &mut ObjectRuntime = &mut context
+        .extensions()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow_mut();
     let global_value_result = get_or_fetch_object!(
         context,
-        object_runtime_mut,
+        object_runtime,
         ty_args,
         parent,
         child_id,
@@ -429,7 +431,10 @@ pub fn has_child_object(
     let child_id = pop_arg!(args, AccountAddress).into();
     let parent = pop_arg!(args, AccountAddress).into();
     let has_child = {
-        let object_runtime: &mut ObjectRuntime = &mut context.extensions().get::<NativeContextMut<ObjectRuntime>>().borrow_mut();
+        let object_runtime: &mut ObjectRuntime = &mut context
+            .extensions()
+            .get::<NativeContextMut<ObjectRuntime>>()
+            .borrow_mut();
         object_runtime.child_object_exists(parent, child_id)?
     };
 
@@ -502,8 +507,15 @@ pub fn has_child_object_with_ty(
     );
 
     let has_child = {
-        let object_runtime: &mut ObjectRuntime = &mut context.extensions().get::<NativeContextMut<ObjectRuntime>>().borrow_mut();
-        object_runtime.child_object_exists_and_has_type(parent, child_id, &MoveObjectType::from(tag))?
+        let object_runtime: &mut ObjectRuntime = &mut context
+            .extensions()
+            .get::<NativeContextMut<ObjectRuntime>>()
+            .borrow_mut();
+        object_runtime.child_object_exists_and_has_type(
+            parent,
+            child_id,
+            &MoveObjectType::from(tag),
+        )?
     };
 
     Ok(NativeResult::ok(

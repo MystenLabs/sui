@@ -119,7 +119,7 @@ mod checked {
                         .native_extensions
                         .get::<NativeContextMut<ObjectRuntime>>();
                 // We still need to record the loaded child objects for replay
-                let loaded_runtime_objects = object_runtime.get().loaded_runtime_objects();
+                let loaded_runtime_objects = object_runtime.borrow().loaded_runtime_objects();
                 // we do not save the wrapped objects since on error, they should not be modified
                 drop(context);
                 state_view.save_loaded_runtime_objects(loaded_runtime_objects);
@@ -135,10 +135,10 @@ mod checked {
         // We still need to record the loaded child objects for replay
         // Record the objects loaded at runtime (dynamic fields + received) for
         // storage rebate calculation.
-        let loaded_runtime_objects = object_runtime.get().loaded_runtime_objects();
+        let loaded_runtime_objects = object_runtime.borrow().loaded_runtime_objects();
         // We record what objects were contained in at the start of the transaction
         // for expensive invariant checks
-        let wrapped_object_containers = object_runtime.get().wrapped_object_containers();
+        let wrapped_object_containers = object_runtime.borrow().wrapped_object_containers();
 
         // apply changes
         let finished = context.finish::<Mode>();

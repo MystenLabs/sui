@@ -73,8 +73,6 @@ mod checked {
     // Better days have arrived!
     impl<'state, 'a> ModuleResolver for SuiDataStore<'state, 'a> {
         type Error = PartialVMError;
-        // TODO(vm-rewrite): We can optimize this to take advantage of bulk-get a bit more if we desire.
-        // However it's unlikely to be a bottleneck.
         fn get_packages_static<const N: usize>(
             &self,
             ids: [AccountAddress; N],
@@ -89,8 +87,6 @@ mod checked {
             Ok(packages)
         }
 
-        // TODO(vm-rewrite): We can optimize this to take advantage of bulk-get a bit more if we desire.
-        // However it's unlikely to be a bottleneck.
         fn get_packages(
             &self,
             ids: &[AccountAddress],

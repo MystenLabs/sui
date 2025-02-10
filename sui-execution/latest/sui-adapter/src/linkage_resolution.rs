@@ -63,7 +63,7 @@ pub struct LinkageConfig {
 }
 
 /// Unifiers. These are used to determine how to unify two packages.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConflictResolution {
     /// An exact constraint unifies as follows:
     /// 1. Exact(a) ~ Exact(b) ==> Exact(a), iff a == b
@@ -75,7 +75,12 @@ pub enum ConflictResolution {
     AtLeast(SequenceNumber, ObjectID),
 }
 
-pub type ResolvedLinkage = BTreeMap<ObjectID, ObjectID>;
+#[derive(Debug)]
+pub struct ResolvedLinkage {
+    pub linkage: BTreeMap<ObjectID, ObjectID>,
+    pub reverse_linkage: BTreeMap<ObjectID, ObjectID>,
+    pub versions: BTreeMap<ObjectID, SequenceNumber>,
+}
 
 #[derive(Debug)]
 pub struct PerCommandLinkage {
@@ -99,21 +104,25 @@ pub trait LinkageAnalysis {
     ) -> Result<ResolvedLinkage, ExecutionError>;
 
     // Generate a linkage for the type tag
-    fn generate_type_linkage(
+    fn type_linkage(
         &mut self,
         ids: &[ObjectID],
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError>;
+
+    fn publication_linkage(
+        &mut self,
+        linkage: &LinkageContext,
+        store: &dyn PackageStore,
+    ) -> Result<ResolvedLinkage, ExecutionError>;
 }
+
+type ResolutionTable = BTreeMap<ObjectID, ConflictResolution>;
 
 pub fn linkage_analysis_for_protocol_config(
     protocol_config: &ProtocolConfig,
 ) -> Box<dyn LinkageAnalysis> {
     Box::new(PerCommandLinkage::new(to_binary_config(protocol_config)))
-}
-
-pub fn into_linkage_context(linkage: ResolvedLinkage) -> LinkageContext {
-    LinkageContext::new(linkage.into_iter().map(|(k, v)| (*k, *v)).collect())
 }
 
 impl LinkageAnalysis for PerCommandLinkage {
@@ -125,12 +134,20 @@ impl LinkageAnalysis for PerCommandLinkage {
         self.add_command(command, store)
     }
 
-    fn generate_type_linkage(
+    fn type_linkage(
         &mut self,
         ids: &[ObjectID],
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError> {
         self.internal.generate_type_tag_linkage(ids, store)
+    }
+
+    fn publication_linkage(
+        &mut self,
+        linkage: &LinkageContext,
+        store: &dyn PackageStore,
+    ) -> Result<ResolvedLinkage, ExecutionError> {
+        self.internal.publication_linkage(linkage, store)
     }
 }
 
@@ -143,12 +160,20 @@ impl LinkageAnalysis for UnifiedLinkage {
         self.add_command(command, store)
     }
 
-    fn generate_type_linkage(
+    fn type_linkage(
         &mut self,
         ids: &[ObjectID],
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError> {
         self.internal.generate_type_tag_linkage(ids, store)
+    }
+
+    fn publication_linkage(
+        &mut self,
+        linkage: &LinkageContext,
+        store: &dyn PackageStore,
+    ) -> Result<ResolvedLinkage, ExecutionError> {
+        self.internal.publication_linkage(linkage, store)
     }
 }
 
@@ -207,6 +232,33 @@ impl LinkageConfig {
         } else {
             ConflictResolution::at_least
         }
+    }
+}
+
+impl ResolvedLinkage {
+    pub fn from_resolution_table(resolution_table: ResolutionTable) -> Self {
+        let mut linkage = BTreeMap::new();
+        let mut reverse_linkage = BTreeMap::new();
+        let mut versions = BTreeMap::new();
+        for (runtime_id, resolution) in resolution_table {
+            match resolution {
+                ConflictResolution::Exact(version, object_id)
+                | ConflictResolution::AtLeast(version, object_id) => {
+                    linkage.insert(runtime_id, object_id);
+                    reverse_linkage.insert(object_id, runtime_id);
+                    versions.insert(runtime_id, version);
+                }
+            }
+        }
+        Self {
+            linkage,
+            reverse_linkage,
+            versions,
+        }
+    }
+
+    pub fn linkage_context(&self) -> LinkageContext {
+        LinkageContext::new(self.linkage.iter().map(|(k, v)| (**k, **v)).collect())
     }
 }
 
@@ -301,13 +353,17 @@ impl PerCommandLinkage {
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError> {
         let mut unification_table = BTreeMap::new();
-        self.internal
-            .add_command(command, store, &mut unification_table)
+        Ok(ResolvedLinkage::from_resolution_table(
+            self.internal
+                .add_command(command, store, &mut unification_table)?,
+        ))
     }
 }
 
 impl UnifiedLinkage {
-    pub fn new(binary_config: BinaryConfig) -> Self {
+    pub fn new(
+        binary_config: BinaryConfig,
+    ) -> Self {
         Self {
             internal: PTBLinkageMetadata {
                 all_packages: BTreeMap::new(),
@@ -323,8 +379,10 @@ impl UnifiedLinkage {
         command: &Command,
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError> {
-        self.internal
-            .add_command(command, store, &mut self.unification_table)
+        Ok(ResolvedLinkage::from_resolution_table(
+            self.internal
+                .add_command(command, store, &mut self.unification_table)?,
+        ))
     }
 }
 
@@ -359,13 +417,33 @@ impl PTBLinkageMetadata {
             }
         }
 
-        Ok(unification_table
-            .iter()
-            .map(|(k, v)| match v {
-                ConflictResolution::Exact(_, object_id)
-                | ConflictResolution::AtLeast(_, object_id) => (*k, *object_id),
-            })
-            .collect())
+        Ok(ResolvedLinkage::from_resolution_table(unification_table))
+    }
+
+    pub fn publication_linkage(
+        &mut self,
+        linkage: &LinkageContext,
+        store: &dyn PackageStore,
+    ) -> Result<ResolvedLinkage, ExecutionError> {
+        let mut unification_table = BTreeMap::new();
+        for (runtime_id, package_id) in linkage.linkage_table.iter() {
+            let package = PTBLinkageMetadata::get_package(
+                &mut self.all_packages,
+                &ObjectID::from(*package_id),
+                store,
+            )?;
+
+            assert_eq!(*package.id(), *package_id);
+            assert_eq!(*package.original_package_id(), *runtime_id);
+
+            self.add_and_unify(
+                &ObjectID::from(*runtime_id),
+                store,
+                &mut unification_table,
+                ConflictResolution::exact,
+            )?;
+        }
+        Ok(ResolvedLinkage::from_resolution_table(unification_table))
     }
 }
 
@@ -382,8 +460,8 @@ impl PTBLinkageMetadata {
         &mut self,
         command: &Command,
         store: &dyn PackageStore,
-        unification_table: &mut BTreeMap<ObjectID, ConflictResolution>,
-    ) -> Result<ResolvedLinkage, ExecutionError> {
+        unification_table: &mut ResolutionTable,
+    ) -> Result<ResolutionTable, ExecutionError> {
         match command {
             Command::MoveCall(programmable_move_call) => {
                 let pkg = Self::get_package(
@@ -475,7 +553,10 @@ impl PTBLinkageMetadata {
                     .into_iter()
                     .map(|id| {
                         let pkg = Self::get_package(&mut self.all_packages, id, store)?;
-                        Ok((pkg.original_package_id(), pkg.id()))
+                        Ok((
+                            pkg.original_package_id(),
+                            ConflictResolution::Exact(pkg.version(), pkg.id()),
+                        ))
                     })
                     .collect();
             }
@@ -484,20 +565,14 @@ impl PTBLinkageMetadata {
             | Command::MergeCoins(_, _) => (),
         };
 
-        Ok(unification_table
-            .iter()
-            .map(|(k, v)| match v {
-                ConflictResolution::Exact(_, object_id)
-                | ConflictResolution::AtLeast(_, object_id) => (*k, *object_id),
-            })
-            .collect())
+        Ok(unification_table.clone())
     }
 
     fn add_type_input(
         &mut self,
         ty: &TypeInput,
         store: &dyn PackageStore,
-        unification_table: &mut BTreeMap<ObjectID, ConflictResolution>,
+        unification_table: &mut ResolutionTable,
     ) -> Result<(), ExecutionError> {
         let mut stack = vec![ty];
         while let Some(ty) = stack.pop() {
@@ -582,7 +657,7 @@ impl PTBLinkageMetadata {
         &mut self,
         object_id: &ObjectID,
         store: &dyn PackageStore,
-        unification_table: &mut BTreeMap<ObjectID, ConflictResolution>,
+        unification_table: &mut ResolutionTable,
         resolution_fn: fn(&MovePackage) -> ConflictResolution,
     ) -> Result<(), ExecutionError> {
         let package = Self::get_package(&mut self.all_packages, object_id, store)?;

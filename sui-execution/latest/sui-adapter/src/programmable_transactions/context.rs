@@ -23,7 +23,7 @@ mod checked {
         UsageKind,
     };
     use crate::gas_charger::GasCharger;
-    use crate::linkage_resolution::{into_linkage_context, LinkageAnalysis, ResolvedLinkage};
+    use crate::linkage_resolution::{LinkageAnalysis, ResolvedLinkage};
     use crate::programmable_transactions::datastore::{PackageStore, SuiDataStore};
     use move_binary_format::{
         errors::{Location, VMError, VMResult},
@@ -84,9 +84,9 @@ mod checked {
         pub gas_charger: &'a mut GasCharger,
         /// Additional transfers not from the Move runtime
         additional_transfers: Vec<(/* new owner */ SuiAddress, ObjectValue)>,
-        /// TODO(vm-rewrite): see about removing this
-        /// Newly published packages
-        pub new_packages: Vec<MovePackage>,
+        /// Newly published packages. This is needed for resolving any values created from newly
+        /// published package init functions.
+        new_packages: Vec<MovePackage>,
         /// User events are claimed after each Move call
         user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
         // runtime data
@@ -125,8 +125,6 @@ mod checked {
         /// The specified linkage for this linked context.
         /// This is a mapping of runtime_id -> storage_id
         pub linkage: ResolvedLinkage,
-        /// A "reverse" linkage of storage_id -> runtime_id
-        pub reverse_linkage: BTreeMap<ObjectID, ObjectID>,
     }
 
     impl<'ctx, 'vm, 'state, 'a> LinkedContext<'ctx, 'vm, 'state, 'a> {
@@ -136,18 +134,13 @@ mod checked {
         ) -> VMResult<Self> {
             let vm_instance = ctx.vm.make_vm_with_native_extensions(
                 SuiDataStore::new(&ctx.state_view.as_sui_resolver(), &ctx.new_packages),
-                into_linkage_context(linkage.clone()),
+                linkage.linkage_context(),
                 ctx.native_extensions.clone(),
             )?;
-            let reverse_linkage = linkage
-                .iter()
-                .map(|(k, v)| (*v, *k))
-                .collect::<BTreeMap<_, _>>();
             Ok(Self {
                 ctx,
                 linkage,
                 vm_instance,
-                reverse_linkage,
             })
         }
 
@@ -156,15 +149,10 @@ mod checked {
             vm_instance: MoveVM<'state>,
             linkage: ResolvedLinkage,
         ) -> Self {
-            let reverse_linkage = linkage
-                .iter()
-                .map(|(k, v)| (*v, *k))
-                .collect::<BTreeMap<_, _>>();
             Self {
                 ctx,
                 linkage,
                 vm_instance,
-                reverse_linkage,
             }
         }
 
@@ -173,7 +161,6 @@ mod checked {
                 vm_instance,
                 ctx: _,
                 linkage: _,
-                reverse_linkage: _,
             } = self;
             vm_instance.into_extensions()
         }
@@ -183,11 +170,11 @@ mod checked {
         //---------------------------------------------------------------------------
 
         pub fn runtime_id_for_storage_id(&self, storage_id: &ObjectID) -> Option<ObjectID> {
-            self.reverse_linkage.get(storage_id).copied()
+            self.linkage.reverse_linkage.get(storage_id).copied()
         }
 
         pub fn storage_id_for_runtime_id(&self, runtime_id: &ObjectID) -> Option<ObjectID> {
-            self.linkage.get(runtime_id).copied()
+            self.linkage.linkage.get(runtime_id).copied()
         }
 
         //---------------------------------------------------------------------------
@@ -280,7 +267,7 @@ mod checked {
                 .vm_instance
                 .extensions()
                 .get::<NativeContextMut<ObjectRuntime>>()
-                .get_mut();
+                .borrow_mut();
             let events = object_runtime.take_user_events();
             let num_events = self.ctx.user_events.len() + events.len();
             let max_events = self.ctx.protocol_config.max_num_event_emit();
@@ -639,24 +626,22 @@ mod checked {
             let serialized_package = pkg.into_serialized_move_package();
             let new_packages = [pkg];
             let data_store = SuiDataStore::new(&self.ctx.state_view, &new_packages);
-            // Linkage is exactly what is specified in the package's linkage
-            let linkage: ResolvedLinkage = serialized_package
-                .linkage_table
-                .iter()
-                .map(|(k, v)| (ObjectID::from(*k), ObjectID::from(*v)))
-                .collect();
 
             let (_, vm) = self
                 .ctx
                 .vm
                 .validate_package(
-                    data_store,
+                    &data_store,
                     runtime_id,
                     serialized_package,
                     self.ctx.gas_charger.move_gas_status_mut(),
                     self.vm_instance.extensions().clone(),
                 )
                 .map_err(|e| self.convert_vm_error(e))?;
+            let linkage = self
+                .ctx
+                .linkage_analyzer
+                .publication_linkage(vm.linkage_context(), &data_store)?;
             let [pkg] = new_packages;
             Ok((
                 LinkedContext::new_with_vm_instance(self.ctx, vm, linkage),
@@ -738,7 +723,7 @@ mod checked {
                 .vm_instance
                 .extensions()
                 .get::<NativeContextMut<ObjectRuntime>>()
-                .get_mut();
+                .borrow_mut();
             object_runtime
                 .new_id(object_id)
                 .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?;
@@ -751,7 +736,7 @@ mod checked {
                 .vm_instance
                 .extensions()
                 .get::<NativeContextMut<ObjectRuntime>>()
-                .get_mut();
+                .borrow_mut();
             object_runtime
                 .delete_id(object_id)
                 .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
@@ -1479,7 +1464,7 @@ mod checked {
             .flat_map(|tag| tag.all_addresses())
             .map(ObjectID::from)
             .collect();
-        linkage_analyzer.generate_type_linkage(&tags, store)
+        linkage_analyzer.type_linkage(&tags, store)
     }
 
     fn identity_linkage_for_struct_tags<'a>(
@@ -1492,7 +1477,7 @@ mod checked {
             .flat_map(|tag| tag.all_addresses())
             .map(ObjectID::from)
             .collect();
-        linkage_analyzer.generate_type_linkage(&tags, store)
+        linkage_analyzer.type_linkage(&tags, store)
     }
 
     // NB: The typetag must be defining ID based
@@ -1503,7 +1488,7 @@ mod checked {
         data_store: &(impl PackageStore + ModuleResolver),
     ) -> SuiResult<(MoveVM<'a>, ResolvedLinkage)> {
         let resolved_linkage = identity_linkage_for_type_tags(linkage_analyzer, tags, data_store)?;
-        let linkage_context = into_linkage_context(resolved_linkage.clone());
+        let linkage_context = resolved_linkage.linkage_context();
         runtime
             .make_vm(data_store, linkage_context.clone())
             .map_err(|_| {
@@ -1520,11 +1505,8 @@ mod checked {
         tags: impl IntoIterator<Item = &'b StructTag>,
         data_store: &(impl PackageStore + ModuleResolver),
     ) -> SuiResult<MoveVM<'a>> {
-        let linkage_context = into_linkage_context(identity_linkage_for_struct_tags(
-            linkage_analyzer,
-            tags,
-            data_store,
-        )?);
+        let linkage_context =
+            identity_linkage_for_struct_tags(linkage_analyzer, tags, data_store)?.linkage_context();
         runtime.make_vm(data_store, linkage_context).map_err(|_| {
             ExecutionError::from_kind(ExecutionErrorKind::VMVerificationOrDeserializationError)
                 .into()

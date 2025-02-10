@@ -23,7 +23,7 @@ use crate::linkage_resolution::ResolvedLinkage;
 
 pub(crate) fn convert_vm_error(
     error: VMError,
-    linkage: &ResolvedLinkage,
+    resolution_linkage: &ResolvedLinkage,
     state_view: &impl ModuleResolver,
     protocol_config: &ProtocolConfig,
 ) -> ExecutionError {
@@ -39,7 +39,10 @@ pub(crate) fn convert_vm_error(
             ExecutionFailureStatus::VMInvariantViolation
         }
         (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
-            let storage_id = linkage.get(&ObjectID::from(*id.address())).map(|a| **a);
+            let storage_id = resolution_linkage
+                .linkage
+                .get(&ObjectID::from(*id.address()))
+                .map(|a| **a);
 
             let abort_location_id = if protocol_config.resolve_abort_locations_to_package_id() {
                 storage_id.unwrap_or_else(|| *id.address())
@@ -82,7 +85,10 @@ pub(crate) fn convert_vm_error(
                             "Move should set the location on all execution errors. Error {error}"
                         );
                         let (function, instruction) = offset.unwrap_or((0, 0));
-                        let storage_id = linkage.get(&ObjectID::from(*id.address())).map(|a| **a);
+                        let storage_id = resolution_linkage
+                            .linkage
+                            .get(&ObjectID::from(*id.address()))
+                            .map(|a| **a);
 
                         let function_name = storage_id.and_then(|storage_id| {
                             load_module_function_name(
