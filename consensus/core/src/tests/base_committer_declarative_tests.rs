@@ -105,6 +105,50 @@ async fn direct_skip() {
 }
 
 #[tokio::test]
+async fn direct_undecided() {
+    telemetry_subscribers::init_for_testing();
+    let context = Arc::new(Context::new_for_test(4).0);
+    let dag_state = Arc::new(RwLock::new(DagState::new(
+        context.clone(),
+        Arc::new(MemStore::new()),
+    )));
+    let committer = BaseCommitterBuilder::new(context.clone(), dag_state.clone()).build();
+
+    // Round 3 is a leader round
+    // D3 is an elected leader for wave 1
+    // Round 4 is a voting round
+    // Round 5 is a decision round (acknowledge)
+    let dag_str = "DAG {
+        Round 0 : { 4 },
+        Round 1 : { },
+        Round 2 : { },
+        Round 3 : { * },
+        Round 4 : { 
+            A -> [D3],
+            B -> [D3],
+            C -> [],
+            D -> [], 
+        },
+        Round 5 : { * },
+        }";
+
+    let (_, dag_builder) = parse_dag(dag_str).expect("a DAG should be valid");
+    dag_builder.persist_all_blocks(dag_state.clone());
+
+    let leader_round = committer.leader_round(1);
+    tracing::info!("Leader round at wave 1: {leader_round}");
+    let leader = committer
+        .elect_leader(leader_round)
+        .expect("there should be a leader at wave 1");
+    let leader_status = committer.try_direct_decide(leader);
+    if let LeaderStatus::Undecided(_) = leader_status {
+        tracing::info!("Undecided: {leader_status}");
+    } else {
+        panic!("Expected a undecided leader, got {leader_status}");
+    }
+}
+
+#[tokio::test]
 async fn indirect_commit() {
     telemetry_subscribers::init_for_testing();
     let context = Arc::new(Context::new_for_test(4).0);
