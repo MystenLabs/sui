@@ -13,6 +13,7 @@ sui-types.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-verifier-meter.workspace = true
+move-trace-format.workspace = true
 move-vm-config.workspace = true
 
 sui-adapter-latest = { path = "latest/sui-adapter" }

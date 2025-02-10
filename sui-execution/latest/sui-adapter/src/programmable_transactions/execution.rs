@@ -23,6 +23,7 @@ mod checked {
         language_storage::{ModuleId, TypeTag},
         u256::U256,
     };
+    use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::{
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
@@ -76,6 +77,7 @@ mod checked {
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
+        trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
         let mut timings = vec![];
         let result = execute_inner::<Mode>(
@@ -87,6 +89,7 @@ mod checked {
             tx_context,
             gas_charger,
             pt,
+            trace_builder_opt,
         );
 
         match result {
@@ -104,6 +107,7 @@ mod checked {
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
+        mut trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         let ProgrammableTransaction { inputs, commands } = pt;
         let mut context = ExecutionContext::new(
@@ -119,7 +123,12 @@ mod checked {
         let mut mode_results = Mode::empty_results();
         for (idx, command) in commands.into_iter().enumerate() {
             let start = Instant::now();
-            if let Err(err) = execute_command::<Mode>(&mut context, &mut mode_results, command) {
+            if let Err(err) = execute_command::<Mode>(
+                &mut context,
+                &mut mode_results,
+                command,
+                &mut trace_builder_opt,
+            ) {
                 let object_runtime: &ObjectRuntime = context.object_runtime();
                 // We still need to record the loaded child objects for replay
                 let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
@@ -157,6 +166,26 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         mode_results: &mut Mode::ExecutionResults,
         command: Command,
+        trace_builder_opt: &mut Option<&mut MoveTraceBuilder>,
+    ) -> Result<(), ExecutionError> {
+        // This function is executed in a loop which makes passing `Option<&mut MoveTraceBuilder>`
+        // as an argument impossible. Instead, we "rebuild" a value of this type here
+        // too make Rust's borrow checker happy.
+        // TODO: Use some Rust magic to avoid this?
+        if let Some(trace_builder) = trace_builder_opt {
+            let trace_builder = trace_builder;
+            execute_command_internal::<Mode>(context, mode_results, command, Some(trace_builder))
+        } else {
+            execute_command_internal::<Mode>(context, mode_results, command, None)
+        }
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    fn execute_command_internal<Mode: ExecutionMode>(
+        context: &mut ExecutionContext<'_, '_, '_>,
+        mode_results: &mut Mode::ExecutionResults,
+        command: Command,
+        trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let mut argument_updates = Mode::empty_arguments();
         let results = match command {
@@ -357,6 +386,7 @@ mod checked {
                     loaded_type_arguments,
                     arguments,
                     /* is_init */ false,
+                    trace_builder_opt,
                 );
 
                 context.linkage_view.reset_linkage();
@@ -391,6 +421,7 @@ mod checked {
         type_arguments: Vec<Type>,
         arguments: Vec<Argument>,
         is_init: bool,
+        trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         // check that the function is either an entry function or a valid public function
         let LoadedFunctionInfo {
@@ -420,6 +451,7 @@ mod checked {
             type_arguments,
             tx_context_kind,
             serialized_arguments,
+            trace_builder_opt,
         )?;
         assert_invariant!(
             by_mut_ref.len() == mutable_reference_outputs.len(),
@@ -821,6 +853,7 @@ mod checked {
         type_arguments: Vec<Type>,
         tx_context_kind: TxContextKind,
         mut serialized_arguments: Vec<Vec<u8>>,
+        trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<SerializedReturnValues, ExecutionError> {
         match tx_context_kind {
             TxContextKind::None => (),
@@ -829,14 +862,24 @@ mod checked {
             }
         }
         // script visibility checked manually for entry points
-        let mut result = context
-            .execute_function_bypass_visibility(
+        let mut result = if trace_builder_opt.is_some() {
+            context.execute_function_bypass_visibility(
                 module_id,
                 function,
                 type_arguments,
                 serialized_arguments,
+                trace_builder_opt,
             )
-            .map_err(|e| context.convert_vm_error(e))?;
+        } else {
+            context.execute_function_bypass_visibility(
+                module_id,
+                function,
+                type_arguments,
+                serialized_arguments,
+                None,
+            )
+        }
+        .map_err(|e| context.convert_vm_error(e))?;
 
         // When this function is used during publishing, it
         // may be executed several times, with objects being
@@ -951,6 +994,7 @@ mod checked {
                 vec![],
                 vec![],
                 /* is_init */ true,
+                None, // TODO: add tracing for init functions?
             )?;
 
             assert_invariant!(
