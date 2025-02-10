@@ -77,7 +77,8 @@ mod checked {
         pt: ProgrammableTransaction,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         let ProgrammableTransaction { inputs, commands } = pt;
-        let mut linkage_resolver = linkage_analysis_for_protocol_config(protocol_config);
+        let mut linkage_resolver =
+            linkage_analysis_for_protocol_config::<Mode>(protocol_config, &state_view)?;
         let mut context = ExecutionContext::new(
             protocol_config,
             metrics,
@@ -353,7 +354,7 @@ mod checked {
             arguments,
         } = move_call;
 
-        let Some(runtime_id) = context.runtime_id_for_storage_id(&package) else {
+        let Some(runtime_id) = context.linkage.resolve_to_runtime_id(&package) else {
             invariant_violation!("Package should be in the linkage table");
         };
 
@@ -531,7 +532,6 @@ mod checked {
         })
     }
 
-    // TODO(vm-rewrite): Need to figure out a better VM instance story here and for upgrade.
     /// Publish Move modules and call the init functions.  Returns an `UpgradeCap` for the newly
     /// published package on success.
     fn execute_move_publish<Mode: ExecutionMode>(
@@ -999,7 +999,6 @@ mod checked {
         return_value_kinds: Vec<ValueKind>,
     }
 
-    // TODO(vm-rewrite): Update this to utilize the information that we already have in the VM.
     /// Checks that the function to be called is either
     /// - an entry function
     /// - a public function that does not return references

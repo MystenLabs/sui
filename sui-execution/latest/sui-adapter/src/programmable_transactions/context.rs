@@ -166,18 +166,6 @@ mod checked {
         }
 
         //---------------------------------------------------------------------------
-        // Package Resolution
-        //---------------------------------------------------------------------------
-
-        pub fn runtime_id_for_storage_id(&self, storage_id: &ObjectID) -> Option<ObjectID> {
-            self.linkage.reverse_linkage.get(storage_id).copied()
-        }
-
-        pub fn storage_id_for_runtime_id(&self, runtime_id: &ObjectID) -> Option<ObjectID> {
-            self.linkage.linkage.get(runtime_id).copied()
-        }
-
-        //---------------------------------------------------------------------------
         // Type Resolution
         //---------------------------------------------------------------------------
 
@@ -222,6 +210,7 @@ mod checked {
         ) -> Result<TypeTag, ExecutionError> {
             self.ctx
                 .linkage_analyzer
+                .resolver()
                 .runtime_type_tag(type_tag, &SuiDataStore::new(&self.ctx.state_view, &[]))
         }
 
@@ -654,6 +643,7 @@ mod checked {
             let linkage = self
                 .ctx
                 .linkage_analyzer
+                .resolver()
                 .publication_linkage(vm.linkage_context(), &data_store)?;
             let [pkg] = new_packages;
             Ok((
@@ -1477,7 +1467,7 @@ mod checked {
             .flat_map(|tag| tag.all_addresses())
             .map(ObjectID::from)
             .collect();
-        linkage_analyzer.type_linkage(&tags, store)
+        linkage_analyzer.resolver().type_linkage(&tags, store)
     }
 
     fn identity_linkage_for_struct_tags<'a>(
@@ -1490,7 +1480,7 @@ mod checked {
             .flat_map(|tag| tag.all_addresses())
             .map(ObjectID::from)
             .collect();
-        linkage_analyzer.type_linkage(&tags, store)
+        linkage_analyzer.resolver().type_linkage(&tags, store)
     }
 
     // NB: The typetag must be defining ID based
