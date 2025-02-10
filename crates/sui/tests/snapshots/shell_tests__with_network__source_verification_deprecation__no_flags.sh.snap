@@ -33,16 +33,16 @@ cat dependency/sources/dependency.move | sed 's#0#1#g' > dependency.move
 mv dependency.move dependency/sources/dependency.move
 
 echo "=== try to publish with modified dep (should succeed) ===" | tee /dev/stderr
-sui client --client.config $CONFIG publish "example" \
-  --json | jq '.effects.status'
+UPGRADE_CAP=$(sui client --client.config $CONFIG publish "example" \
+  --json | jq -r '.objectChanges[] | select(.objectType == "0x2::package::UpgradeCap") | .objectId')
 
 echo "=== try to upgrade with modified dep (should succeed) ===" | tee /dev/stderr
 sui client --client.config $CONFIG upgrade --upgrade-capability $UPGRADE_CAP example \
   --json | jq '.effects.status'
 
 ----- results -----
-success: false
-exit_code: 5
+success: true
+exit_code: 0
 ----- stdout -----
 === munge Move.toml files ===
 === publish dependency ===
@@ -56,10 +56,10 @@ exit_code: 5
 }
 === modify dependency ===
 === try to publish with modified dep (should succeed) ===
+=== try to upgrade with modified dep (should succeed) ===
 {
   "status": "success"
 }
-=== try to upgrade with modified dep (should succeed) ===
 
 ----- stderr -----
 === munge Move.toml files ===
@@ -88,4 +88,3 @@ Skipping dependency verification
 INCLUDING DEPENDENCY dependency
 BUILDING example
 Skipping dependency verification
-jq: parse error: Invalid numeric literal at line 1, column 6
