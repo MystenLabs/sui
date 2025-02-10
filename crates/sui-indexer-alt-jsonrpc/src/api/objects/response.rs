@@ -104,7 +104,7 @@ pub(super) async fn past_object(
         }));
     };
 
-    let o: Object = bcs::from_bytes(&bytes).context("Failed to deserialize object")?;
+    let o: Object = bcs::from_bytes(bytes).context("Failed to deserialize object")?;
 
     Ok(SuiPastObjectResponse::VersionFound(
         object(ctx, o, options).await?,

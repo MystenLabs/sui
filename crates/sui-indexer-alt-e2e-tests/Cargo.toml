@@ -36,8 +36,12 @@ msim.workspace = true
 [dev-dependencies]
 async-trait.workspace = true
 datatest-stable.workspace = true
+jsonrpsee.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
 telemetry-subscribers.workspace = true
 
+move-core-types.workspace = true
+
+sui-move-build.workspace = true
 sui-transactional-test-runner.workspace = true

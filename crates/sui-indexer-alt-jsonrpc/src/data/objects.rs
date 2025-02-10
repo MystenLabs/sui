@@ -11,6 +11,7 @@ use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
 use sui_types::{base_types::ObjectID, object::Object};
 
 use super::{
+    object_info::LatestObjectInfoKey,
     object_versions::LatestObjectVersionKey,
     reader::{ReadError, Reader},
 };
@@ -103,7 +104,8 @@ pub(crate) async fn load_latest(
 }
 
 /// Fetch the latest version of the object at ID `object_id`, and deserialize its contents as a
-/// Rust type `T`, assuming that it is a Move object (not a package).
+/// Rust type `T`, assuming that it is a Move object (not a package). This function does not
+/// respect deletion and wrapping, see [load_latest] for more information.
 pub(crate) async fn load_latest_deserialized<T: DeserializeOwned>(
     loader: &DataLoader<Reader>,
     object_id: ObjectID,
@@ -113,5 +115,30 @@ pub(crate) async fn load_latest_deserialized<T: DeserializeOwned>(
         .context("No data found")?;
 
     let move_object = object.data.try_as_move().context("Not a Move object")?;
-    Ok(bcs::from_bytes(move_object.contents()).context("Failed to deserialize Move value")?)
+    bcs::from_bytes(move_object.contents()).context("Failed to deserialize Move value")
+}
+
+/// Load the latest contents of an object from the store as long as the object is live (not deleted
+/// or wrapped) and deserialize it as an `Object`.
+pub(crate) async fn load_live(
+    loader: &DataLoader<Reader>,
+    object_id: ObjectID,
+) -> Result<Option<Object>, anyhow::Error> {
+    let Some(obj_info) = loader
+        .load_one(LatestObjectInfoKey(object_id))
+        .await
+        .context("Failed to fetch object info")?
+    else {
+        return Ok(None);
+    };
+
+    // If the latest object info record has no owner, the object is not live (it is wrapped or
+    // deleted).
+    if obj_info.owner_id.is_none() {
+        return Ok(None);
+    }
+
+    Ok(Some(load_latest(loader, object_id).await?.context(
+        "Failed to find content for latest version of live object",
+    )?))
 }
