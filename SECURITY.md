@@ -166,7 +166,7 @@ _If you find a bug or vulnerability, report it using the [HackenProof dashboard]
 
 **Where can I get technical questions answered?**
 
-_Sui and HackenProof will be conducting Office Hours to answer questions. A date will be announced on Twitter by [@SuiNetwork](https://twitter.com/suinetwork). If you are not able to attend, you can email questions to info@hackenproof.com._ with questions regarding the Bug Bounty Program.
+_Sui and HackenProof will be conducting Office Hours to answer questions. A date will be announced on Twitter by [@SuiNetwork](https://x.com/suinetwork). If you are not able to attend, you can email questions to info@hackenproof.com._ with questions regarding the Bug Bounty Program.
 
 For additional security concerns/questions/comments outside the scope of the HackenProof Bug Bounty Program, reach out to Sui's Community [Discord](https://discord.gg/sui), [Forums](https://forums.sui.io/), or e-mail us at _security@sui.io_
 
