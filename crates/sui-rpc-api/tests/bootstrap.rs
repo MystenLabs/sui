@@ -4,7 +4,6 @@
 use prost_types::FileDescriptorSet;
 use protox::prost::Message as _;
 use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
 
 #[test]
@@ -12,15 +11,16 @@ fn bootstrap() {
     let root_dir = PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
     let proto_dir = root_dir.join("proto");
     let proto_ext = std::ffi::OsStr::new("proto");
-    let proto_files = fs::read_dir(&proto_dir).and_then(|dir| {
-        dir.filter_map(|entry| {
+    let proto_files = walkdir::WalkDir::new(&proto_dir)
+        .into_iter()
+        .filter_map(|entry| {
             (|| {
                 let entry = entry?;
-                if entry.file_type()?.is_dir() {
+                if entry.file_type().is_dir() {
                     return Ok(None);
                 }
 
-                let path = entry.path();
+                let path = entry.into_path();
                 if path.extension() != Some(proto_ext) {
                     return Ok(None);
                 }
@@ -29,12 +29,8 @@ fn bootstrap() {
             })()
             .transpose()
         })
-        .collect::<Result<Vec<_>, _>>()
-    });
-    let proto_files = match proto_files {
-        Ok(files) => files,
-        Err(error) => panic!("failed to list proto files: {}", error),
-    };
+        .collect::<Result<Vec<_>, walkdir::Error>>()
+        .unwrap();
 
     let out_dir = root_dir.join("src").join("proto").join("generated");
 
@@ -54,7 +50,7 @@ fn bootstrap() {
         .out_dir(&out_dir)
         .compile_fds(fds)
     {
-        panic!("failed to compile `sui` protos: {}", error);
+        panic!("failed to compile protos: {}", error);
     }
 
     // Generate fds to expose via reflection

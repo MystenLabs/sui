@@ -6,7 +6,7 @@ package sui.node.v2;
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
-import "sui.types.proto";
+import "sui/types/types.proto";
 
 //
 // RPC Node interface

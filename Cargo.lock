@@ -15247,6 +15247,7 @@ dependencies = [
  "tower 0.4.13",
  "tracing",
  "url",
+ "walkdir",
 ]
 
 [[package]]
