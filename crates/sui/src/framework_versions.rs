@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, sync::LazyLock};
 
-use anyhow::{bail, Context};
+use anyhow::Context;
 use sui_protocol_config::ProtocolVersion;
 
 /// Static mapping from protocol versions to the metadata for the framework
@@ -57,11 +57,11 @@ pub fn latest_framework() -> &'static FrameworkVersion {
 pub fn framework_for_protocol(
     version: ProtocolVersion,
 ) -> anyhow::Result<(&'static FrameworkVersion, ProtocolVersion)> {
-    Ok(VERSION_TABLE
+    let (protocol, framework) = VERSION_TABLE
         .range(..=version)
         .next_back()
-        .context(format!("Unrecognized protocol version {version:?}"))?
-        .1)
+        .context(format!("Unrecognized protocol version {version:?}"))?;
+    Ok((framework, *protocol))
 }
 
 #[test]
@@ -73,11 +73,12 @@ fn test_nonempty_version_table() {
 #[test]
 /// the hash for a specific version that we have one for is correctly returned
 fn test_exact_version() {
-    let framework = framework_for_protocol(4.into()).unwrap();
+    let (framework, protocol) = framework_for_protocol(4.into()).unwrap();
     assert_eq!(
         framework.git_revision,
         "f5d26f1b3ae89f68cb66f3a007e90065e5286905"
     );
+    assert_eq!(protocol, 4.into());
     assert!(framework.packages.iter().any(|p| p.package_name == "Sui"));
 }
 
@@ -104,7 +105,11 @@ fn test_gap_version() {
 /// we get the correct hash for the latest known protocol version
 fn test_version_latest() {
     assert_eq!(
-        framework_for_protocol(ProtocolVersion::MAX).unwrap(),
+        framework_for_protocol(ProtocolVersion::MAX).unwrap().0,
+        latest_framework()
+    );
+    assert_eq!(
+        framework_for_protocol(ProtocolVersion::MAX + 1).unwrap().0,
         latest_framework()
     );
 }
@@ -113,5 +118,4 @@ fn test_version_latest() {
 /// we get an error if the protocol version is too small or too large
 fn test_version_errors() {
     assert!(framework_for_protocol(0.into()).is_err());
-    assert!(framework_for_protocol(ProtocolVersion::MAX + 1).is_err());
 }
