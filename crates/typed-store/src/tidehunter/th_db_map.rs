@@ -233,6 +233,9 @@ where
             .start_timer();
         // copy from Map::multi_get
         let res = keys.into_iter().map(|key| self.do_get(key.borrow(), true)).collect::<Result<Vec<_>, Self::Error>>()?;
+        if res.is_empty() {
+            return Ok(vec![]);
+        }
         self.metrics.op_metrics.rocksdb_multiget_keys
             .with_label_values(&[&self.ks_name()])
             .observe(res.len() as f64);
@@ -253,6 +256,9 @@ where
         let res = keys.into_iter()
             .map(|key| self.contains_key(key.borrow()))
             .collect::<Result<Vec<_>, Self::Error>>()?;
+        if res.is_empty() {
+            return Ok(vec![]);
+        }
         self.metrics.op_metrics.rocksdb_multiget_keys
             .with_label_values(&[&self.ks_name()])
             .observe(res.len() as f64);
