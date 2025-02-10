@@ -1,0 +1,66 @@
+
+ô
+google/rpc/error_details.proto
+google.rpcgoogle/protobuf/duration.proto"π
+	ErrorInfo
+reason (	Rreason
+domain (	Rdomain?
+metadata (2#.google.rpc.ErrorInfo.MetadataEntryRmetadata;
+MetadataEntry
+key (	Rkey
+value (	Rvalue:8"G
+	RetryInfo:
+retry_delay (2.google.protobuf.DurationR
+retryDelay"H
+	DebugInfo#
+stack_entries (	RstackEntries
+detail (	Rdetail"õ
+QuotaFailureB
+
+violations (2".google.rpc.QuotaFailure.ViolationR
+violationsG
+	Violation
+subject (	Rsubject 
+description (	Rdescription"Ω
+PreconditionFailureI
+
+violations (2).google.rpc.PreconditionFailure.ViolationR
+violations[
+	Violation
+type (	Rtype
+subject (	Rsubject 
+description (	Rdescription"å
+
+BadRequestP
+field_violations (2%.google.rpc.BadRequest.FieldViolationRfieldViolations´
+FieldViolation
+field (	Rfield 
+description (	Rdescription
+reason (	RreasonI
+localized_message (2.google.rpc.LocalizedMessageRlocalizedMessage"O
+RequestInfo
+
+request_id (	R	requestId!
+serving_data (	RservingData"ê
+ResourceInfo#
+resource_type (	RresourceType#
+resource_name (	RresourceName
+owner (	Rowner 
+description (	Rdescription"o
+Help+
+links (2.google.rpc.Help.LinkRlinks:
+Link 
+description (	Rdescription
+url (	Rurl"D
+LocalizedMessage
+locale (	Rlocale
+message (	RmessageBl
+com.google.rpcBErrorDetailsProtoPZ?google.golang.org/genproto/googleapis/rpc/errdetails;errdetails¢RPCbproto3
+ì
+google/rpc/status.proto
+google.rpcgoogle/protobuf/any.proto"f
+Status
+code (Rcode
+message (	Rmessage.
+details (2.google.protobuf.AnyRdetailsBa
+com.google.rpcBStatusProtoPZ7google.golang.org/genproto/googleapis/rpc/status;status¯¢RPCbproto3

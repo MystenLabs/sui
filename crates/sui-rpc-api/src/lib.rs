@@ -100,7 +100,12 @@ impl RpcService {
             let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
 
             let reflection_v1 = tonic_reflection::server::Builder::configure()
-                .register_encoded_file_descriptor_set(crate::proto::google::FILE_DESCRIPTOR_SET)
+                .register_encoded_file_descriptor_set(
+                    crate::proto::google::protobuf::FILE_DESCRIPTOR_SET,
+                )
+                .register_encoded_file_descriptor_set(
+                    crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
+                )
                 .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::node::v2::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(
@@ -111,7 +116,12 @@ impl RpcService {
                 .unwrap();
 
             let reflection_v1alpha = tonic_reflection::server::Builder::configure()
-                .register_encoded_file_descriptor_set(crate::proto::google::FILE_DESCRIPTOR_SET)
+                .register_encoded_file_descriptor_set(
+                    crate::proto::google::protobuf::FILE_DESCRIPTOR_SET,
+                )
+                .register_encoded_file_descriptor_set(
+                    crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
+                )
                 .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::node::v2::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(
