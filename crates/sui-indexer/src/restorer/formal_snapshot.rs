@@ -65,7 +65,6 @@ impl IndexerFormalSnapshotRestorer {
             restore_config.start_epoch,
             &remote_store_config,
             &local_store_config,
-            usize::MAX,
             NonZeroUsize::new(restore_config.object_store_concurrent_limit).unwrap(),
             m.clone(),
             true, // skip_reset_local_store

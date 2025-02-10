@@ -737,7 +737,6 @@ impl SuiNode {
             genesis.objects(),
             &db_checkpoint_config,
             config.clone(),
-            config.indirect_objects_threshold,
             archive_readers,
             validator_tx_finalizer,
             chain_identifier,
@@ -1062,7 +1061,6 @@ impl SuiNode {
                     db_checkpoint_config
                         .prune_and_compact_before_upload
                         .unwrap_or(true),
-                    config.indirect_objects_threshold,
                     config.authority_store_pruning_config.clone(),
                     prometheus_registry,
                     state_snapshot_enabled,

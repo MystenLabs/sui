@@ -12,7 +12,6 @@ use sui_types::effects::TransactionEffects;
 use sui_types::storage::{FullObjectKey, MarkerValue};
 use tracing::error;
 use typed_store::metrics::SamplingInterval;
-use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBMapTableConfigMap, DBOptions,
     MetricConf,
@@ -21,8 +20,7 @@ use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
 use crate::authority::authority_store_types::{
-    get_store_object_pair, try_construct_object, ObjectContentDigest, StoreData,
-    StoreMoveObjectWrapper, StoreObject, StoreObjectPair, StoreObjectValue, StoreObjectWrapper,
+    get_store_object, try_construct_object, StoreObject, StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store::rocksdb::compaction_filter::Decision;
@@ -33,7 +31,6 @@ pub(crate) const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
 const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB";
 const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
 const ENV_VAR_EVENTS_BLOCK_CACHE_SIZE: &str = "EVENTS_BLOCK_CACHE_MB";
-const ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE: &str = "INDIRECT_OBJECTS_BLOCK_CACHE_MB";
 
 /// Options to apply to every column family of the `perpetual` DB.
 #[derive(Default)]
@@ -57,8 +54,7 @@ impl AuthorityPerpetualTablesOptions {
 pub struct AuthorityPerpetualTables {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions.
-    /// State is represented by `StoreObject` enum, which is either a move module, a move object, or
-    /// a pointer to an object stored in the `indirect_move_objects` table.
+    /// State is represented by `StoreObject` enum, which is either a move module or a move object.
     ///
     /// Note that while this map can store all versions of an object, we will eventually
     /// prune old object versions from the db.
@@ -69,8 +65,6 @@ pub struct AuthorityPerpetualTables {
     /// been written out, and which must be retried. But, they cannot be retried unless their input
     /// objects are still accessible!
     pub(crate) objects: DBMap<ObjectKey, StoreObjectWrapper>,
-
-    pub(crate) indirect_move_objects: DBMap<ObjectContentDigest, StoreMoveObjectWrapper>,
 
     /// This is a map between object references of currently active objects that can be mutated.
     ///
@@ -182,10 +176,6 @@ impl AuthorityPerpetualTables {
                 objects_table_config(db_options.clone(), db_options_override.compaction_filter),
             ),
             (
-                "indirect_move_objects".to_string(),
-                indirect_move_objects_table_config(db_options.clone()),
-            ),
-            (
                 "owned_object_transaction_locks".to_string(),
                 owned_object_transaction_locks_table_config(db_options.clone()),
             ),
@@ -244,14 +234,7 @@ impl AuthorityPerpetualTables {
         object_key: &ObjectKey,
         store_object: StoreObjectValue,
     ) -> Result<Object, SuiError> {
-        let indirect_object = match store_object.data {
-            StoreData::IndirectObject(ref metadata) => self
-                .indirect_move_objects
-                .get(&metadata.digest)?
-                .map(|o| o.migrate().into_inner()),
-            _ => None,
-        };
-        try_construct_object(object_key, store_object, indirect_object)
+        try_construct_object(object_key, store_object)
     }
 
     // Constructs `sui_types::object::Object` from `StoreObjectWrapper`.
@@ -474,7 +457,6 @@ impl AuthorityPerpetualTables {
     pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
         // TODO: Add new tables that get added to the db automatically
         self.objects.unsafe_clear()?;
-        self.indirect_move_objects.unsafe_clear()?;
         self.live_owned_object_markers.unsafe_clear()?;
         self.executed_effects.unsafe_clear()?;
         self.events.unsafe_clear()?;
@@ -510,7 +492,7 @@ impl AuthorityPerpetualTables {
 
     pub fn insert_object_test_only(&self, object: Object) -> SuiResult {
         let object_reference = object.compute_object_reference();
-        let StoreObjectPair(wrapper, _indirect_object) = get_store_object_pair(object, usize::MAX);
+        let wrapper = get_store_object(object);
         let mut wb = self.objects.batch();
         wb.insert_batch(
             &self.objects,
@@ -719,21 +701,4 @@ fn events_table_config(db_options: DBOptions) -> DBOptions {
     db_options
         .optimize_for_write_throughput()
         .optimize_for_read(read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024))
-}
-
-fn indirect_move_objects_table_config(mut db_options: DBOptions) -> DBOptions {
-    db_options = db_options
-        .optimize_for_write_throughput()
-        .optimize_for_point_lookup(
-            read_size_from_env(ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(512),
-        );
-    db_options.options.set_merge_operator(
-        "refcount operator",
-        reference_count_merge_operator,
-        reference_count_merge_operator,
-    );
-    db_options
-        .options
-        .set_compaction_filter("empty filter", empty_compaction_filter);
-    db_options
 }

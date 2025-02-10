@@ -214,7 +214,6 @@ impl<'a> TestAuthorityBuilder<'a> {
                     perpetual_tables,
                     &genesis_committee,
                     genesis,
-                    0,
                 )
                 .await
                 .unwrap()
@@ -350,7 +349,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             genesis.objects(),
             &DBCheckpointConfig::default(),
             config.clone(),
-            usize::MAX,
             ArchiveReaderBalancer::default(),
             None,
             chain_identifier,
