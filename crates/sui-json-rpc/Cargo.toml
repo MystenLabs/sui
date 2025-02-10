@@ -11,6 +11,7 @@ arc-swap.workspace = true
 backoff.workspace = true
 chrono.workspace = true
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 jsonrpsee.workspace = true
 hyper.workspace = true
 http-body = "0.4"
@@ -58,6 +59,7 @@ mysten-service.workspace = true
 shared-crypto.workspace = true
 typed-store-error.workspace = true
 cached.workspace = true
+im.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

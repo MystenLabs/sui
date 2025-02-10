@@ -4,14 +4,14 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 
-use sui_json_rpc_types::ProtocolConfigResponse;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
     SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
+use sui_json_rpc_types::{ProtocolConfigResponse, ZkLoginIntentScope, ZkLoginVerifyResult};
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::sui_serde::BigInt;
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
@@ -148,4 +148,14 @@ pub trait ReadApi {
     /// Return the first four bytes of the chain's genesis checkpoint digest.
     #[method(name = "getChainIdentifier")]
     async fn get_chain_identifier(&self) -> RpcResult<String>;
+
+    /// Verify a zklogin signature
+    #[method(name = "verifyZkLoginSignature")]
+    async fn verify_zklogin_signature(
+        &self,
+        bytes: String,
+        signature: String,
+        intent_scope: ZkLoginIntentScope,
+        author: SuiAddress,
+    ) -> RpcResult<ZkLoginVerifyResult>;
 }

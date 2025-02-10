@@ -3015,6 +3015,52 @@
       ]
     },
     {
+      "name": "sui_verifyZkLoginSignature",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Verify a zklogin signature",
+      "params": [
+        {
+          "name": "bytes",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "signature",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "intent_scope",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ZkLoginIntentScope"
+          }
+        },
+        {
+          "name": "author",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "ZkLoginVerifyResult",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ZkLoginVerifyResult"
+        }
+      }
+    },
+    {
       "name": "suix_getAllBalances",
       "tags": [
         {
@@ -11276,6 +11322,13 @@
           }
         }
       },
+      "ZkLoginIntentScope": {
+        "type": "string",
+        "enum": [
+          "TransactionData",
+          "PersonalMessage"
+        ]
+      },
       "ZkLoginProof": {
         "description": "The struct for zk login proof.",
         "type": "object",
@@ -11315,6 +11368,26 @@
             "$ref": "#/components/schemas/Base64"
           }
         ]
+      },
+      "ZkLoginVerifyResult": {
+        "type": "object",
+        "required": [
+          "errors",
+          "success"
+        ],
+        "properties": {
+          "errors": {
+            "description": "The errors field captures any verification error",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "success": {
+            "description": "The boolean result of the verification. If true, errors should be empty.",
+            "type": "boolean"
+          }
+        }
       }
     }
   }
