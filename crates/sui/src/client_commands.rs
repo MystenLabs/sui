@@ -1749,7 +1749,7 @@ fn check_dep_verification_flags(
         }
 
         (true, false) => {
-            eprintln!("{}: Dependency sources are no longer verificed automatically during publication and upgrade, \
+            eprintln!("{}: Dependency sources are no longer verified automatically during publication and upgrade, \
                 so the `--skip-dependency-verification` flag is no longer necessary.",
                 "[Warning]".bold().yellow());
             Ok(verify_dependencies)
