@@ -56,3 +56,4 @@ sui-sdk-types = { workspace = true, features = ["proptest"] }
 test-strategy = "0.4.0"
 proptest.workspace = true
 paste = "1.0.15"
+walkdir.workspace = true
