@@ -4,6 +4,7 @@ version = "0.0.1"
 authors = ["Move Core Contributors"]
 description = "Move Trace Format"
 license = "Apache-2.0"
+publish = false
 edition = "2021"
 
 [dependencies]
