@@ -10,7 +10,7 @@ edition = "2021"
 workspace = true
 
 [[test]]
-name = "tests"
+name = "transactional_tests"
 harness = false
 
 [dependencies]
