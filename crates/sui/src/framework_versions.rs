@@ -53,6 +53,7 @@ pub fn latest_framework() -> &'static FrameworkVersion {
 /// 1. the framework did not change when `version` was released, or
 /// 2. this binary is older than the requested version and therefore doesn't know about the latest
 ///    framework version
+///
 /// You can distinguish these cases by comparing `version` with [ProtocolVersion::MAX].
 pub fn framework_for_protocol(
     version: ProtocolVersion,
