@@ -4,7 +4,6 @@
 mod response_ext;
 pub use response_ext::ResponseExt;
 
-pub use reqwest;
 use tap::Pipe;
 use tonic::metadata::MetadataMap;
 

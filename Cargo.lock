@@ -15226,7 +15226,6 @@ dependencies = [
  "prost-types 0.13.3",
  "protox",
  "rand 0.8.5",
- "reqwest 0.12.9",
  "roaring",
  "serde",
  "serde_json",
