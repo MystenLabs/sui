@@ -591,6 +591,7 @@ impl CheckpointExecutor {
         let tx_manager = self.tx_manager.clone();
         let accumulator = self.accumulator.clone();
         let state = self.state.clone();
+        let subscription_service_enabled = self.subscription_service_checkpoint_sender.is_some();
 
         epoch_store.notify_synced_checkpoint(*checkpoint.sequence_number());
 
@@ -609,6 +610,7 @@ impl CheckpointExecutor {
                     local_execution_timeout_sec,
                     &metrics,
                     data_ingestion_dir.clone(),
+                    subscription_service_enabled,
                 )
                 .await
                 {
@@ -682,6 +684,7 @@ impl CheckpointExecutor {
             self.accumulator.clone(),
             self.config.local_execution_timeout_sec,
             self.config.data_ingestion_dir.clone(),
+            self.subscription_service_checkpoint_sender.is_some(),
         )
         .await;
     }
@@ -766,12 +769,17 @@ impl CheckpointExecutor {
                         self.accumulator.clone(),
                         effects,
                         self.config.data_ingestion_dir.clone(),
+                        self.subscription_service_checkpoint_sender.is_some(),
                     )
                     .await
                     .expect("Finalizing checkpoint cannot fail");
 
-                    self.commit_index_updates_and_enqueue_to_subscription_service(checkpoint_data)
+                    if let Some(checkpoint_data) = checkpoint_data {
+                        self.commit_index_updates_and_enqueue_to_subscription_service(
+                            checkpoint_data,
+                        )
                         .await;
+                    }
 
                     self.checkpoint_store
                         .insert_epoch_last_checkpoint(cur_epoch, checkpoint)
@@ -811,6 +819,7 @@ async fn execute_checkpoint(
     local_execution_timeout_sec: u64,
     metrics: &Arc<CheckpointExecutorMetrics>,
     data_ingestion_dir: Option<PathBuf>,
+    subscription_service_enabled: bool,
 ) -> SuiResult<(
     Vec<TransactionDigest>,
     Option<Accumulator>,
@@ -856,6 +865,7 @@ async fn execute_checkpoint(
         metrics,
         prepare_start,
         data_ingestion_dir,
+        subscription_service_enabled,
     )
     .await?;
 
@@ -881,6 +891,7 @@ async fn handle_execution_effects(
     accumulator: Arc<StateAccumulator>,
     local_execution_timeout_sec: u64,
     data_ingestion_dir: Option<PathBuf>,
+    subscription_service_enabled: bool,
 ) -> (Option<Accumulator>, Option<CheckpointData>) {
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
@@ -987,10 +998,11 @@ async fn handle_execution_effects(
                         accumulator.clone(),
                         effects,
                         data_ingestion_dir,
+                        subscription_service_enabled,
                     )
                     .await
                     .expect("Finalizing checkpoint cannot fail");
-                    return (Some(checkpoint_acc), Some(checkpoint_data));
+                    return (Some(checkpoint_acc), checkpoint_data);
                 } else {
                     return (None, None);
                 }
@@ -1274,6 +1286,7 @@ async fn execute_transactions(
     metrics: &Arc<CheckpointExecutorMetrics>,
     prepare_start: Instant,
     data_ingestion_dir: Option<PathBuf>,
+    subscription_service_enabled: bool,
 ) -> SuiResult<(Option<Accumulator>, Option<CheckpointData>)> {
     let effects_digests: HashMap<_, _> = execution_digests
         .iter()
@@ -1346,6 +1359,7 @@ async fn execute_transactions(
         state_accumulator,
         local_execution_timeout_sec,
         data_ingestion_dir,
+        subscription_service_enabled,
     )
     .await;
 
@@ -1372,7 +1386,8 @@ async fn finalize_checkpoint(
     accumulator: Arc<StateAccumulator>,
     effects: Vec<TransactionEffects>,
     data_ingestion_dir: Option<PathBuf>,
-) -> SuiResult<(Accumulator, CheckpointData)> {
+    subscription_service_enabled: bool,
+) -> SuiResult<(Accumulator, Option<CheckpointData>)> {
     debug!("finalizing checkpoint");
     epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
 
@@ -1388,15 +1403,18 @@ async fn finalize_checkpoint(
     let checkpoint_acc =
         accumulator.accumulate_checkpoint(effects, checkpoint.sequence_number, epoch_store)?;
 
-    let checkpoint_data = load_checkpoint_data(
-        checkpoint,
-        object_cache_reader,
-        transaction_cache_reader,
-        checkpoint_store,
-        tx_digests,
-    )?;
+    let checkpoint_data = if subscription_service_enabled
+        || state.rpc_index.is_some()
+        || data_ingestion_dir.is_some()
+    {
+        let checkpoint_data = load_checkpoint_data(
+            checkpoint,
+            object_cache_reader,
+            transaction_cache_reader,
+            checkpoint_store,
+            tx_digests,
+        )?;
 
-    if state.rpc_index.is_some() || data_ingestion_dir.is_some() {
         // Index the checkpoint. this is done out of order and is not written and committed to the
         // DB until later (committing must be done in-order)
         if let Some(rpc_index) = &state.rpc_index {
@@ -1410,7 +1428,11 @@ async fn finalize_checkpoint(
         if let Some(path) = data_ingestion_dir {
             store_checkpoint_locally(path, &checkpoint_data)?;
         }
-    }
+
+        Some(checkpoint_data)
+    } else {
+        None
+    };
 
     Ok((checkpoint_acc, checkpoint_data))
 }
