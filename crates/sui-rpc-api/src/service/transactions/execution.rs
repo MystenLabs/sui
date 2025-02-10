@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rest::transactions::SimulateTransactionQueryParameters;
-use crate::rest::transactions::TransactionSimulationResponse;
 use crate::types::EffectsFinality;
 use crate::types::ExecuteTransactionOptions;
 use crate::types::ExecuteTransactionResponse;
+use crate::types::SimulateTransactionQueryParameters;
+use crate::types::TransactionSimulationResponse;
 use crate::Result;
 use crate::RpcService;
 use crate::RpcServiceError;
@@ -129,7 +129,7 @@ impl RpcService {
     }
 
     pub fn simulate_transaction(
-        self,
+        &self,
         parameters: &SimulateTransactionQueryParameters,
         transaction: Transaction,
     ) -> Result<TransactionSimulationResponse> {

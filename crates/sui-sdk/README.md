@@ -130,7 +130,7 @@ async fn main() -> Result<(), anyhow::Error> {
       .coin_read_api()
       .get_all_balances(active_address)
       .await?;
-   println!("The balances for all coins owned by address: {active_address} are {}", total_balance);
+   println!("The balances for all coins owned by address: {active_address} are {:#?}", total_balance);
    Ok(())
 }
 ```

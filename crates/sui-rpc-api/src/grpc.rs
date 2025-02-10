@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::proto::types::Bcs;
 use http::{Request, Response};
 use std::{convert::Infallible, pin::Pin, sync::Arc};
 use tap::Pipe;
@@ -394,4 +395,166 @@ fn apply_checkpont_options(
     }
 
     checkpoint
+}
+
+#[tonic::async_trait]
+impl crate::proto::node::v2alpha::node_service_server::NodeService for crate::RpcService {
+    async fn get_coin_info(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::GetCoinInfoRequest>,
+    ) -> Result<tonic::Response<crate::proto::node::v2alpha::GetCoinInfoResponse>, tonic::Status>
+    {
+        self.get_coin_info(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn list_dynamic_fields(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::ListDynamicFieldsRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::ListDynamicFieldsResponse>,
+        tonic::Status,
+    > {
+        self.list_dynamic_fields(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn list_account_objects(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::ListAccountObjectsRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::ListAccountObjectsResponse>,
+        tonic::Status,
+    > {
+        self.list_account_objects(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn get_protocol_config(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::GetProtocolConfigRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::GetProtocolConfigResponse>,
+        tonic::Status,
+    > {
+        self.get_protocol_config(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn get_gas_info(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::GetGasInfoRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::GetGasInfoResponse>,
+        tonic::Status,
+    > {
+        self.get_gas_info(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn simulate_transaction(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::SimulateTransactionRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::SimulateTransactionResponse>,
+        tonic::Status,
+    > {
+        let request = request.into_inner();
+        let parameters = crate::types::SimulateTransactionQueryParameters {
+            balance_changes: request
+                .options
+                .and_then(|options| options.balance_changes)
+                .unwrap_or(false),
+            input_objects: false,
+            output_objects: false,
+        };
+        let transaction = if let Some(bcs) = request.transaction_bcs {
+            bcs::from_bytes(bcs.bcs()).map_err(|_| {
+                tonic::Status::new(tonic::Code::InvalidArgument, "invalid transaction bcs")
+            })?
+        } else {
+            return Err(tonic::Status::new(
+                tonic::Code::InvalidArgument,
+                "`transaction_bcs` must be provided",
+            ));
+        };
+
+        let response = self.simulate_transaction(&parameters, transaction)?;
+
+        let balance_changes = response.balance_changes.map(|balance_changes| {
+            crate::proto::node::v2::BalanceChanges {
+                balance_changes: balance_changes.into_iter().map(Into::into).collect(),
+            }
+        });
+        let response = crate::proto::node::v2alpha::SimulateTransactionResponse {
+            effects_bcs: Some(Bcs::serialize(&response.effects).unwrap()),
+            events_bcs: response
+                .events
+                .map(|events| Bcs::serialize(&events))
+                .transpose()
+                .unwrap(),
+            balance_changes,
+        };
+        Ok(tonic::Response::new(response))
+    }
+
+    async fn resolve_transaction(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::ResolveTransactionRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::ResolveTransactionResponse>,
+        tonic::Status,
+    > {
+        let request = request.into_inner();
+        let simulate_parameters = crate::types::SimulateTransactionQueryParameters {
+            balance_changes: request
+                .simulate_options
+                .and_then(|options| options.balance_changes)
+                .unwrap_or(false),
+            input_objects: false,
+            output_objects: false,
+        };
+        let parameters = crate::types::ResolveTransactionQueryParameters {
+            simulate: request.simulate.unwrap_or(false),
+            simulate_transaction_parameters: simulate_parameters,
+        };
+        let unresolved_transaction = serde_json::from_str(request.unresolved_transaction())
+            .map_err(|_| {
+                tonic::Status::new(
+                    tonic::Code::InvalidArgument,
+                    "invalid unresolved_transaction",
+                )
+            })?;
+
+        let response = self.resolve_transaction(parameters, unresolved_transaction)?;
+
+        let simulation = response.simulation.map(|simulation| {
+            let balance_changes = simulation.balance_changes.map(|balance_changes| {
+                crate::proto::node::v2::BalanceChanges {
+                    balance_changes: balance_changes.into_iter().map(Into::into).collect(),
+                }
+            });
+            crate::proto::node::v2alpha::SimulateTransactionResponse {
+                effects_bcs: Some(Bcs::serialize(&simulation.effects).unwrap()),
+                events_bcs: simulation
+                    .events
+                    .map(|events| Bcs::serialize(&events))
+                    .transpose()
+                    .unwrap(),
+                balance_changes,
+            }
+        });
+
+        let response = crate::proto::node::v2alpha::ResolveTransactionResponse {
+            transaction_bcs: Some(Bcs::serialize(&response.transaction).unwrap()),
+            simulation,
+        };
+
+        Ok(tonic::Response::new(response))
+    }
 }

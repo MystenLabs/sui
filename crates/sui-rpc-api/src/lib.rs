@@ -4,7 +4,6 @@
 use mysten_network::callback::CallbackLayer;
 use proto::node::v2alpha::subscription_service_server::SubscriptionServiceServer;
 use reader::StateReader;
-use rest::build_rest_router;
 use std::sync::Arc;
 use subscription::SubscriptionServiceHandle;
 use sui_types::storage::RpcStateReader;
@@ -19,7 +18,6 @@ mod metrics;
 pub mod proto;
 mod reader;
 mod response;
-pub mod rest;
 mod service;
 pub mod subscription;
 pub mod types;
@@ -91,9 +89,13 @@ impl RpcService {
     pub async fn into_router(self) -> axum::Router {
         let metrics = self.metrics.clone();
 
-        let mut router = {
+        let router = {
             let node_service =
                 crate::proto::node::v2::node_service_server::NodeServiceServer::new(self.clone());
+            let node_service_alpha =
+                crate::proto::node::v2alpha::node_service_server::NodeServiceServer::new(
+                    self.clone(),
+                );
 
             let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -101,6 +103,9 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(crate::proto::google::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::node::v2::FILE_DESCRIPTOR_SET)
+                .register_encoded_file_descriptor_set(
+                    crate::proto::node::v2alpha::FILE_DESCRIPTOR_SET,
+                )
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
                 .build_v1()
                 .unwrap();
@@ -109,6 +114,9 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(crate::proto::google::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::node::v2::FILE_DESCRIPTOR_SET)
+                .register_encoded_file_descriptor_set(
+                    crate::proto::node::v2alpha::FILE_DESCRIPTOR_SET,
+                )
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
                 .build_v1alpha()
                 .unwrap();
@@ -117,18 +125,23 @@ impl RpcService {
                 S::NAME
             }
 
-            health_reporter
-                .set_service_status(
-                    service_name(&node_service),
-                    tonic_health::ServingStatus::Serving,
-                )
-                .await;
+            for service_name in [
+                service_name(&node_service),
+                service_name(&node_service_alpha),
+                service_name(&reflection_v1),
+                service_name(&reflection_v1alpha),
+            ] {
+                health_reporter
+                    .set_service_status(service_name, tonic_health::ServingStatus::Serving)
+                    .await;
+            }
 
             let mut services = grpc::Services::new()
                 .add_service(health_service)
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha)
-                .add_service(node_service);
+                .add_service(node_service)
+                .add_service(node_service_alpha);
 
             if let Some(subscription_service_handle) = self.subscription_service_handle.clone() {
                 services = services
@@ -138,12 +151,8 @@ impl RpcService {
             services.into_router()
         };
 
-        if self.config.enable_experimental_rest_api() {
-            router = router.merge(build_rest_router(self.clone()));
-        }
-
         let health_endpoint = axum::Router::new()
-            .route("/health", axum::routing::get(rest::health::health))
+            .route("/health", axum::routing::get(service::health::health))
             .with_state(self.clone());
 
         router

@@ -150,7 +150,7 @@ macro_rules! retry_transaction {
             distributions::{Distribution, Uniform},
             rngs::ThreadRng,
         };
-        use tokio::time::{sleep, Duration};
+        use std::time::Duration;
         use tracing::{error, info};
 
         let mut retries = 0;
@@ -181,7 +181,7 @@ macro_rules! retry_transaction {
                             "transaction write conflict detected, sleeping"
                         );
                     }
-                    sleep(delay).await;
+                    std::thread::sleep(delay);
                 }
                 _ => break status,
             }

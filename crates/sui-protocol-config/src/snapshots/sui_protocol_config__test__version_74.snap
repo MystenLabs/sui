@@ -46,6 +46,7 @@ feature_flags:
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   enable_group_ops_native_function_msm: true
+  enable_nitro_attestation: true
   reject_mutable_random_on_entry_functions: true
   per_object_congestion_control_mode: TotalGasBudgetWithCap
   consensus_choice: Mysticeti
@@ -301,6 +302,10 @@ check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
 vdf_verify_vdf_cost: 1500
 vdf_hash_to_input_cost: 100
+nitro_attestation_parse_base_cost: 2650
+nitro_attestation_parse_cost_per_byte: 50
+nitro_attestation_verify_base_cost: 2481600
+nitro_attestation_verify_cost_per_cert: 2618450
 bcs_per_byte_serialized_cost: 2
 bcs_legacy_min_output_size_cost: 1
 bcs_failure_cost: 52

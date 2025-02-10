@@ -4,9 +4,6 @@
 mod response_ext;
 pub use response_ext::ResponseExt;
 
-pub mod sdk;
-use sdk::BoxError;
-
 pub use reqwest;
 use tap::Pipe;
 use tonic::metadata::MetadataMap;
@@ -26,6 +23,7 @@ use sui_types::object::Object;
 use sui_types::transaction::Transaction;
 
 pub type Result<T, E = tonic::Status> = std::result::Result<T, E>;
+pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 use tonic::transport::channel::ClientTlsConfig;
 use tonic::Status;

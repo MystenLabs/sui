@@ -52,12 +52,14 @@ impl StateReader {
             .map(|committee| (*committee).clone().into())
     }
 
-    pub fn get_system_state_summary(&self) -> Result<super::rest::system::SystemStateSummary> {
+    pub fn get_system_state_summary(
+        &self,
+    ) -> Result<sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary> {
         use sui_types::sui_system_state::SuiSystemStateTrait;
 
         let system_state = sui_types::sui_system_state::get_sui_system_state(self.inner())
             .map_err(StorageError::custom)?;
-        let summary = system_state.into_sui_system_state_summary().into();
+        let summary = system_state.into_sui_system_state_summary();
 
         Ok(summary)
     }
@@ -70,7 +72,6 @@ impl StateReader {
         sui_sdk_types::TransactionEffects,
         Option<sui_sdk_types::TransactionEvents>,
     )> {
-        use super::rest::transactions::TransactionNotFoundError;
         use sui_types::effects::TransactionEffectsAPI;
 
         let transaction_digest = digest.into();
@@ -144,6 +145,7 @@ impl StateReader {
         })
     }
 
+    #[allow(unused)]
     pub fn checkpoint_iter(
         &self,
         direction: Direction,
@@ -152,6 +154,7 @@ impl StateReader {
         CheckpointIter::new(self.clone(), direction, start)
     }
 
+    #[allow(unused)]
     pub fn transaction_iter(
         &self,
         direction: Direction,
@@ -184,6 +187,7 @@ pub struct CheckpointTransactionsIter {
 }
 
 impl CheckpointTransactionsIter {
+    #[allow(unused)]
     pub fn new(
         reader: StateReader,
         direction: Direction,
@@ -284,6 +288,7 @@ impl Iterator for CheckpointTransactionsIter {
     }
 }
 
+#[allow(unused)]
 pub struct CursorInfo {
     pub checkpoint: CheckpointSequenceNumber,
     pub timestamp_ms: u64,
@@ -302,6 +307,7 @@ pub struct CheckpointIter {
 }
 
 impl CheckpointIter {
+    #[allow(unused)]
     pub fn new(reader: StateReader, direction: Direction, start: CheckpointSequenceNumber) -> Self {
         Self {
             reader,
@@ -344,5 +350,22 @@ impl Iterator for CheckpointIter {
         };
 
         Some(Ok((checkpoint, contents)))
+    }
+}
+
+#[derive(Debug)]
+pub struct TransactionNotFoundError(pub sui_sdk_types::TransactionDigest);
+
+impl std::fmt::Display for TransactionNotFoundError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Transaction {} not found", self.0)
+    }
+}
+
+impl std::error::Error for TransactionNotFoundError {}
+
+impl From<TransactionNotFoundError> for crate::RpcServiceError {
+    fn from(value: TransactionNotFoundError) -> Self {
+        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
     }
 }

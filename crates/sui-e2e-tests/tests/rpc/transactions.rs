@@ -1,26 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::stake_with_validator;
 use sui_macros::sim_test;
-use sui_rpc_api::client::sdk::Client;
 use sui_rpc_api::proto::node::v2::node_service_client::NodeServiceClient;
 use sui_rpc_api::proto::node::v2::{
     GetTransactionOptions, GetTransactionRequest, GetTransactionResponse,
 };
-use sui_rpc_api::rest::transactions::ListTransactionsCursorParameters;
 use test_cluster::TestClusterBuilder;
-
-use crate::{stake_with_validator, transfer_coin};
 
 #[sim_test]
 async fn get_transaction() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let transaction_digest = stake_with_validator(&test_cluster).await;
-
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
-
-    let _transaction = client.get_transaction(&transaction_digest).await.unwrap();
 
     let mut grpc_client = NodeServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
@@ -129,21 +122,4 @@ async fn get_transaction() {
 
     // ensure we can convert proto GetTransactionResponse type to rust TransactionResponse
     sui_rpc_api::types::TransactionResponse::try_from(&response).unwrap();
-}
-
-#[sim_test]
-async fn list_transactions() {
-    let test_cluster = TestClusterBuilder::new().build().await;
-
-    let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
-
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
-
-    let transactions = client
-        .list_transactions(&ListTransactionsCursorParameters::default())
-        .await
-        .unwrap()
-        .into_inner();
-
-    assert!(!transactions.is_empty());
 }

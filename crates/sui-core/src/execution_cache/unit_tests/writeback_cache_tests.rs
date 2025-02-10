@@ -12,7 +12,6 @@ use std::{
     time::{Duration, Instant},
 };
 use sui_framework::BuiltInFramework;
-use sui_macros::{register_fail_point_async, sim_test};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
     base_types::{random_object_ref, SuiAddress},
@@ -24,6 +23,7 @@ use sui_types::{
     effects::{TestEffectsBuilder, TransactionEffectsAPI},
     event::Event,
 };
+use tokio::sync::RwLock;
 
 use super::*;
 use crate::{
@@ -348,8 +348,7 @@ impl Scenario {
         assert!(self.transactions.insert(tx), "transaction is not unique");
 
         self.cache()
-            .write_transaction_outputs(1 /* epoch */, outputs.clone(), true)
-            .await;
+            .write_transaction_outputs(1 /* epoch */, outputs.clone(), true);
 
         self.count_action();
         tx
@@ -365,9 +364,9 @@ impl Scenario {
         Ok(res)
     }
 
-    pub async fn clear_state_end_of_epoch(&self) {
-        let execution_guard = tokio::sync::RwLock::new(1u64);
-        let lock = execution_guard.write().await;
+    pub fn clear_state_end_of_epoch(&self) {
+        let execution_guard = RwLock::new(1u64);
+        let lock = execution_guard.try_write().unwrap();
         self.cache().clear_state_end_of_epoch(&lock);
     }
 
@@ -853,10 +852,7 @@ async fn test_write_transaction_outputs_is_sync() {
         let outputs = s.take_outputs();
         // assert that write_transaction_outputs is sync in non-simtest, which causes the
         // fail_point_async! macros above to be elided
-        s.cache
-            .write_transaction_outputs(1, outputs)
-            .now_or_never()
-            .unwrap();
+        s.cache.write_transaction_outputs(1, outputs);
     })
     .await;
 }
@@ -868,7 +864,7 @@ async fn test_missing_reverts_panic() {
     Scenario::iterate(|mut s| async move {
         s.with_created(&[1]);
         s.do_tx().await;
-        s.clear_state_end_of_epoch().await;
+        s.clear_state_end_of_epoch();
     })
     .await;
 }
@@ -911,7 +907,7 @@ async fn test_revert_state_update_created() {
         s.assert_live(&[1]);
 
         s.cache().revert_state_update(&tx1);
-        s.clear_state_end_of_epoch().await;
+        s.clear_state_end_of_epoch();
 
         s.assert_not_exists(&[1]);
     })
@@ -933,7 +929,7 @@ async fn test_revert_state_update_mutated() {
         let tx = s.do_tx().await;
 
         s.cache().revert_state_update(&tx);
-        s.clear_state_end_of_epoch().await;
+        s.clear_state_end_of_epoch();
 
         let version_after_revert = s.cache().get_object(&s.obj_id(1)).unwrap().version();
         assert_eq!(v1, version_after_revert);
@@ -953,7 +949,7 @@ async fn test_invalidate_package_cache_on_revert() {
         s.assert_packages(&[2]);
 
         s.cache().revert_state_update(&tx1);
-        s.clear_state_end_of_epoch().await;
+        s.clear_state_end_of_epoch();
 
         assert!(s
             .cache()
@@ -964,16 +960,9 @@ async fn test_invalidate_package_cache_on_revert() {
     .await;
 }
 
-#[sim_test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_concurrent_readers() {
     telemetry_subscribers::init_for_testing();
-
-    register_fail_point_async("write_object_entry", || async {
-        tokio::task::yield_now().await;
-    });
-    register_fail_point_async("write_marker_entry", || async {
-        tokio::task::yield_now().await;
-    });
 
     let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
     let cache = s.cache.clone();
@@ -1008,11 +997,11 @@ async fn test_concurrent_readers() {
         tokio::task::spawn(async move {
             for (tx1, tx2, _, _) in txns {
                 println!("writing tx1");
-                cache.write_transaction_outputs(1, tx1).await;
+                cache.write_transaction_outputs(1, tx1);
 
                 barrier.wait().await;
                 println!("writing tx2");
-                cache.write_transaction_outputs(1, tx2).await;
+                cache.write_transaction_outputs(1, tx2);
             }
         })
     };
@@ -1090,16 +1079,12 @@ async fn test_concurrent_lockers() {
         tokio::task::spawn(async move {
             let mut results = Vec::new();
             for (tx1, _, a_ref, b_ref) in txns {
-                results.push(
-                    cache
-                        .acquire_transaction_locks(
-                            &epoch_store,
-                            &[a_ref, b_ref],
-                            *tx1.digest(),
-                            Some(tx1.clone()),
-                        )
-                        .await,
-                );
+                results.push(cache.acquire_transaction_locks(
+                    &epoch_store,
+                    &[a_ref, b_ref],
+                    *tx1.digest(),
+                    Some(tx1.clone()),
+                ));
                 barrier.wait().await;
             }
             results
@@ -1114,16 +1099,12 @@ async fn test_concurrent_lockers() {
         tokio::task::spawn(async move {
             let mut results = Vec::new();
             for (_, tx2, a_ref, b_ref) in txns {
-                results.push(
-                    cache
-                        .acquire_transaction_locks(
-                            &epoch_store,
-                            &[a_ref, b_ref],
-                            *tx2.digest(),
-                            Some(tx2.clone()),
-                        )
-                        .await,
-                );
+                results.push(cache.acquire_transaction_locks(
+                    &epoch_store,
+                    &[a_ref, b_ref],
+                    *tx2.digest(),
+                    Some(tx2.clone()),
+                ));
                 barrier.wait().await;
             }
             results
@@ -1173,16 +1154,12 @@ async fn test_concurrent_lockers_same_tx() {
         tokio::task::spawn(async move {
             let mut results = Vec::new();
             for (tx1, a_ref, b_ref) in txns {
-                results.push(
-                    cache
-                        .acquire_transaction_locks(
-                            &epoch_store,
-                            &[a_ref, b_ref],
-                            *tx1.digest(),
-                            Some(tx1.clone()),
-                        )
-                        .await,
-                );
+                results.push(cache.acquire_transaction_locks(
+                    &epoch_store,
+                    &[a_ref, b_ref],
+                    *tx1.digest(),
+                    Some(tx1.clone()),
+                ));
                 barrier.wait().await;
             }
             results
@@ -1197,16 +1174,12 @@ async fn test_concurrent_lockers_same_tx() {
         tokio::task::spawn(async move {
             let mut results = Vec::new();
             for (tx1, a_ref, b_ref) in txns {
-                results.push(
-                    cache
-                        .acquire_transaction_locks(
-                            &epoch_store,
-                            &[a_ref, b_ref],
-                            *tx1.digest(),
-                            Some(tx1.clone()),
-                        )
-                        .await,
-                );
+                results.push(cache.acquire_transaction_locks(
+                    &epoch_store,
+                    &[a_ref, b_ref],
+                    *tx1.digest(),
+                    Some(tx1.clone()),
+                ));
                 barrier.wait().await;
             }
             results
@@ -1255,10 +1228,7 @@ async fn latest_object_cache_race_test() {
                     Owner::AddressOwner(owner),
                 );
 
-                cache
-                    .write_object_entry(&object_id, version, object.into())
-                    .now_or_never()
-                    .unwrap();
+                cache.write_object_entry(&object_id, version, object.into());
 
                 version = version.next();
             }

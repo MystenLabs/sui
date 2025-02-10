@@ -748,7 +748,7 @@ impl CoinReadApi {
         &self,
         owner: SuiAddress,
         coin_type: Option<String>,
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> SuiRpcResult<CoinPage> {
         Ok(self
@@ -782,7 +782,7 @@ impl CoinReadApi {
     pub async fn get_all_coins(
         &self,
         owner: SuiAddress,
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> SuiRpcResult<CoinPage> {
         Ok(self.api.http.get_all_coins(owner, cursor, limit).await?)
@@ -824,7 +824,7 @@ impl CoinReadApi {
             ),
             move |(mut data, cursor, has_next_page, coin_type)| async move {
                 if let Some(item) = data.pop() {
-                    Some((item, (data, cursor, /* has_next_page */ true, coin_type)))
+                    Some((item, (data, cursor, has_next_page, coin_type)))
                 } else if has_next_page {
                     let page = self
                         .get_coins(owner, coin_type.clone(), cursor, Some(100))
