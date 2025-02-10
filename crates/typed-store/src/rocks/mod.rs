@@ -4,7 +4,6 @@ pub mod errors;
 pub(crate) mod iter;
 pub(crate) mod keys;
 pub(crate) mod safe_iter;
-pub mod util;
 pub(crate) mod values;
 
 use self::{iter::Iter, keys::Keys, values::Values};
@@ -1540,46 +1539,6 @@ impl DBBatch {
             .rocksdb_batch_put_bytes
             .with_label_values(&[&db.cf])
             .observe(total as f64);
-        Ok(self)
-    }
-
-    /// merges a range of (key, value) pairs given as an iterator
-    pub fn merge_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
-        &mut self,
-        db: &DBMap<K, V>,
-        new_vals: impl IntoIterator<Item = (J, U)>,
-    ) -> Result<&mut Self, TypedStoreError> {
-        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
-            return Err(TypedStoreError::CrossDBBatch);
-        }
-
-        new_vals
-            .into_iter()
-            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
-                let k_buf = be_fix_int_ser(k.borrow())?;
-                let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
-                self.batch.merge_cf(&db.cf(), k_buf, v_buf);
-                Ok(())
-            })?;
-        Ok(self)
-    }
-
-    /// similar to `merge_batch` but allows merge with partial values
-    pub fn partial_merge_batch<J: Borrow<K>, K: Serialize, V: Serialize, B: AsRef<[u8]>>(
-        &mut self,
-        db: &DBMap<K, V>,
-        new_vals: impl IntoIterator<Item = (J, B)>,
-    ) -> Result<&mut Self, TypedStoreError> {
-        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
-            return Err(TypedStoreError::CrossDBBatch);
-        }
-        new_vals
-            .into_iter()
-            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
-                let k_buf = be_fix_int_ser(k.borrow())?;
-                self.batch.merge_cf(&db.cf(), k_buf, v);
-                Ok(())
-            })?;
         Ok(self)
     }
 }
