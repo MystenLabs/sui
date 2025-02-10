@@ -146,6 +146,7 @@ pub struct IngestionConfig {
         long,
         default_value_t = true,
         default_missing_value = "true",
+        action = clap::ArgAction::Set,
         num_args = 0..=1,
         require_equals = false,
     )]
