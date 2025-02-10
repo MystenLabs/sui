@@ -26,7 +26,7 @@ cargo run --bin sui-tool -- anemo ping --server-name "$SERVER_NAME" "$ADDRESS"
 
 ### call
 
-`sui-tool` has been preconfigured to support RPC calls using [RON (Rusty Object Notation)](https://crates.io/crates/ron) for the following servivces:
+`sui-tool` has been preconfigured to support RPC calls using [RON (Rusty Object Notation)](https://crates.io/crates/ron) for the following services:
 - Narwhal: `PrimaryToPrimary` and `WorkerToWorker`
 - Sui: `Discovery` and `StateSync`
 
