@@ -37,14 +37,12 @@ fn build_system_packages() {
     let packages_path = Path::new(CRATE_ROOT).join("packages");
 
     let bridge_path = packages_path.join("bridge");
-    let deepbook_path = packages_path.join("deepbook");
     let sui_system_path = packages_path.join("sui-system");
     let sui_framework_path = packages_path.join("sui-framework");
     let move_stdlib_path = packages_path.join("move-stdlib");
 
     build_packages(
         &bridge_path,
-        &deepbook_path,
         &sui_system_path,
         &sui_framework_path,
         &move_stdlib_path,
@@ -79,7 +77,6 @@ fn check_diff(checked_in: &Path, built: &Path) {
 
 fn build_packages(
     bridge_path: &Path,
-    deepbook_path: &Path,
     sui_system_path: &Path,
     sui_framework_path: &Path,
     stdlib_path: &Path,
@@ -96,13 +93,11 @@ fn build_packages(
     debug_assert!(!config.test_mode);
     build_packages_with_move_config(
         bridge_path,
-        deepbook_path,
         sui_system_path,
         sui_framework_path,
         stdlib_path,
         out_dir,
         "bridge",
-        "deepbook",
         "sui-system",
         "sui-framework",
         "move-stdlib",
@@ -112,13 +107,11 @@ fn build_packages(
 
 fn build_packages_with_move_config(
     bridge_path: &Path,
-    deepbook_path: &Path,
     sui_system_path: &Path,
     sui_framework_path: &Path,
     stdlib_path: &Path,
     out_dir: &Path,
     bridge_dir: &str,
-    deepbook_dir: &str,
     system_dir: &str,
     framework_dir: &str,
     stdlib_dir: &str,
@@ -148,14 +141,6 @@ fn build_packages_with_move_config(
     }
     .build(sui_system_path)
     .unwrap();
-    let deepbook_pkg = BuildConfig {
-        config: config.clone(),
-        run_bytecode_verifier: true,
-        print_diags_to_stderr: false,
-        chain_id: None, // Framework pkg addr is agnostic to chain, resolves from Move.toml
-    }
-    .build(deepbook_path)
-    .unwrap();
     let bridge_pkg = BuildConfig {
         config,
         run_bytecode_verifier: true,
@@ -168,7 +153,6 @@ fn build_packages_with_move_config(
     let move_stdlib = stdlib_pkg.get_stdlib_modules();
     let sui_system = system_pkg.get_sui_system_modules();
     let sui_framework = framework_pkg.get_sui_framework_modules();
-    let deepbook = deepbook_pkg.get_deepbook_modules();
     let bridge = bridge_pkg.get_bridge_modules();
 
     let compiled_packages_dir = out_dir.join(COMPILED_PACKAGES_DIR);
@@ -178,8 +162,6 @@ fn build_packages_with_move_config(
     let sui_framework_members =
         serialize_modules_to_file(sui_framework, &compiled_packages_dir.join(framework_dir))
             .unwrap();
-    let deepbook_members =
-        serialize_modules_to_file(deepbook, &compiled_packages_dir.join(deepbook_dir)).unwrap();
     let bridge_members =
         serialize_modules_to_file(bridge, &compiled_packages_dir.join(bridge_dir)).unwrap();
     let stdlib_members =
@@ -190,10 +172,6 @@ fn build_packages_with_move_config(
     let mut files_to_write = BTreeMap::new();
     relocate_docs(
         &stdlib_pkg.package.compiled_docs.unwrap(),
-        &mut files_to_write,
-    );
-    relocate_docs(
-        &deepbook_pkg.package.compiled_docs.unwrap(),
         &mut files_to_write,
     );
     relocate_docs(
@@ -217,7 +195,6 @@ fn build_packages_with_move_config(
     let published_api = [
         sui_system_members.join("\n"),
         sui_framework_members.join("\n"),
-        deepbook_members.join("\n"),
         bridge_members.join("\n"),
         stdlib_members.join("\n"),
     ]
