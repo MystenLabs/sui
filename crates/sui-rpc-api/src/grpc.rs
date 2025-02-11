@@ -235,8 +235,8 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         };
         let mut signatures: Vec<sui_sdk_types::UserSignature> = Vec::new();
 
-        if let Some(proto_signatures) = request.signatures {
-            let from_proto_signatures = proto_signatures
+        if !request.signatures.is_empty() {
+            let from_proto_signatures = request
                 .signatures
                 .iter()
                 .map(TryInto::try_into)
@@ -251,9 +251,9 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
             signatures.extend(from_proto_signatures);
         }
 
-        if let Some(signatures_bytes) = request.signatures_bytes {
-            let from_bytes_signatures = signatures_bytes
-                .signatures
+        if !request.signatures_bytes.is_empty() {
+            let from_bytes_signatures = request
+                .signatures_bytes
                 .iter()
                 .map(|bytes| sui_sdk_types::UserSignature::from_bytes(bytes))
                 .collect::<Result<Vec<_>, _>>()
@@ -373,17 +373,18 @@ fn apply_checkpont_options(
             transaction.events_bcs = None;
         }
         if !options.input_objects() {
-            transaction.input_objects = None;
+            transaction.input_objects_old = None;
+            transaction.input_objects.clear();
         }
         if !options.output_objects() {
-            transaction.output_objects = None;
+            transaction.output_objects_old = None;
+            transaction.output_objects.clear();
         }
 
         for object in transaction
             .input_objects
             .iter_mut()
             .chain(transaction.output_objects.iter_mut())
-            .flat_map(|objects| objects.objects.iter_mut())
         {
             if !options.object() {
                 object.object = None;
@@ -486,11 +487,10 @@ impl crate::proto::node::v2alpha::node_service_server::NodeService for crate::Rp
 
         let response = self.simulate_transaction(&parameters, transaction)?;
 
-        let balance_changes = response.balance_changes.map(|balance_changes| {
-            crate::proto::node::v2::BalanceChanges {
-                balance_changes: balance_changes.into_iter().map(Into::into).collect(),
-            }
-        });
+        let balance_changes = response
+            .balance_changes
+            .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
+            .unwrap_or_default();
         let response = crate::proto::node::v2alpha::SimulateTransactionResponse {
             effects_bcs: Some(Bcs::serialize(&response.effects).unwrap()),
             events_bcs: response
@@ -534,11 +534,10 @@ impl crate::proto::node::v2alpha::node_service_server::NodeService for crate::Rp
         let response = self.resolve_transaction(parameters, unresolved_transaction)?;
 
         let simulation = response.simulation.map(|simulation| {
-            let balance_changes = simulation.balance_changes.map(|balance_changes| {
-                crate::proto::node::v2::BalanceChanges {
-                    balance_changes: balance_changes.into_iter().map(Into::into).collect(),
-                }
-            });
+            let balance_changes = simulation
+                .balance_changes
+                .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
+                .unwrap_or_default();
             crate::proto::node::v2alpha::SimulateTransactionResponse {
                 effects_bcs: Some(Bcs::serialize(&simulation.effects).unwrap()),
                 events_bcs: simulation

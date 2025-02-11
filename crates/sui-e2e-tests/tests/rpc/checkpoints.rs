@@ -210,6 +210,8 @@ async fn get_full_checkpoint() {
         events_bcs,
         input_objects,
         output_objects,
+        input_objects_old,
+        output_objects_old,
     } in transactions
     {
         assert!(digest.is_some());
@@ -222,8 +224,10 @@ async fn get_full_checkpoint() {
         }
         assert!(events.is_none());
         assert!(events_bcs.is_none());
-        assert!(input_objects.is_none());
-        assert!(output_objects.is_none());
+        assert!(input_objects.is_empty());
+        assert!(output_objects.is_empty());
+        assert!(input_objects_old.is_none());
+        assert!(output_objects_old.is_none());
     }
     // Ensure we found the transaction we used for picking the checkpoint to test against
     assert!(found_transaction);
@@ -266,6 +270,8 @@ async fn get_full_checkpoint() {
         events_bcs,
         input_objects,
         output_objects,
+        input_objects_old,
+        output_objects_old,
     } in transactions
     {
         assert!(digest.is_some());
@@ -278,8 +284,10 @@ async fn get_full_checkpoint() {
         }
         assert!(events.is_none());
         assert!(events_bcs.is_none());
-        assert!(input_objects.is_none());
-        assert!(output_objects.is_none());
+        assert!(input_objects.is_empty());
+        assert!(output_objects.is_empty());
+        assert!(input_objects_old.is_none());
+        assert!(output_objects_old.is_none());
     }
     // Ensure we found the transaction we used for picking the checkpoint to test against
     assert!(found_transaction);
@@ -324,6 +332,8 @@ async fn get_full_checkpoint() {
         events_bcs,
         input_objects,
         output_objects,
+        input_objects_old,
+        output_objects_old,
     } in transactions
     {
         assert!(digest.is_some());
@@ -336,8 +346,10 @@ async fn get_full_checkpoint() {
             assert!(events.is_some());
             assert!(events_bcs.is_some());
         }
-        assert!(input_objects.is_some());
-        assert!(output_objects.is_some());
+        assert!(!input_objects.is_empty());
+        assert!(!output_objects.is_empty());
+        assert!(input_objects_old.is_some());
+        assert!(output_objects_old.is_some());
 
         for FullCheckpointObject {
             object_id,
@@ -345,14 +357,7 @@ async fn get_full_checkpoint() {
             digest,
             object,
             object_bcs,
-        } in input_objects
-            .iter()
-            .flat_map(|objects| objects.objects.iter())
-            .chain(
-                output_objects
-                    .iter()
-                    .flat_map(|objects| objects.objects.iter()),
-            )
+        } in input_objects.iter().chain(output_objects.iter())
         {
             assert!(object_id.is_some());
             assert!(version.is_some());

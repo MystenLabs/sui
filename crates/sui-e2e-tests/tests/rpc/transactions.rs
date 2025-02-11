@@ -41,8 +41,8 @@ async fn get_transaction() {
     assert!(digest.is_some());
     assert!(transaction.is_none());
     assert!(transaction_bcs.is_none());
-    assert!(signatures.is_none());
-    assert!(signatures_bytes.is_none());
+    assert!(signatures.is_empty());
+    assert!(signatures_bytes.is_empty());
     assert!(effects.is_none());
     assert!(effects_bcs.is_none());
     assert!(events.is_none());
@@ -75,8 +75,8 @@ async fn get_transaction() {
     assert!(digest.is_some());
     assert!(transaction.is_none());
     assert!(transaction_bcs.is_none());
-    assert!(signatures.is_none());
-    assert!(signatures_bytes.is_none());
+    assert!(signatures.is_empty());
+    assert!(signatures_bytes.is_empty());
     assert!(effects.is_none());
     assert!(effects_bcs.is_none());
     assert!(events.is_none());
@@ -111,8 +111,8 @@ async fn get_transaction() {
     assert!(digest.is_some());
     assert!(transaction.is_some());
     assert!(transaction_bcs.is_some());
-    assert!(signatures.is_some());
-    assert!(signatures_bytes.is_some());
+    assert!(!signatures.is_empty());
+    assert!(!signatures_bytes.is_empty());
     assert!(effects.is_some());
     assert!(effects_bcs.is_some());
     assert!(events.is_some());

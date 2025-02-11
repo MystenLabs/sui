@@ -50,7 +50,7 @@ async fn execute_transaction_transfer() {
     ];
     expected.sort_by_key(|e| e.address);
 
-    let mut actual = response.balance_changes.unwrap();
+    let mut actual = response.balance_changes;
     actual.sort_by_key(|e| e.address);
 
     assert_eq!(actual, expected);

@@ -207,8 +207,8 @@ impl Client {
                 crate::proto::types::Bcs::serialize(&transaction.inner().intent_message.value)
                     .map_err(|e| Status::from_error(e.into()))?,
             ),
-            signatures: None,
-            signatures_bytes: Some(crate::proto::node::v2::UserSignaturesBytes { signatures }),
+            signatures: Vec::new(),
+            signatures_bytes: signatures,
 
             options: Some(crate::proto::node::v2::ExecuteTransactionOptions {
                 effects: Some(false),
@@ -236,7 +236,7 @@ pub struct TransactionExecutionResponse {
 
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
-    pub balance_changes: Option<Vec<sui_sdk_types::BalanceChange>>,
+    pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from the bcs fields in `GetCheckpointResponse`
@@ -314,15 +314,11 @@ fn checkpoint_data_try_from_proto(
                     .transpose()
                     .map_err(TryFromProtoError::from_error)?;
                 let input_objects = input_objects
-                    .ok_or_else(|| TryFromProtoError::missing("input_objects"))?
-                    .objects
                     .into_iter()
                     .map(|object| object_try_from_proto(object.object_bcs))
                     .collect::<Result<_, TryFromProtoError>>()?;
 
                 let output_objects = output_objects
-                    .ok_or_else(|| TryFromProtoError::missing("output_objects"))?
-                    .objects
                     .into_iter()
                     .map(|object| object_try_from_proto(object.object_bcs))
                     .collect::<Result<_, TryFromProtoError>>()?;
@@ -381,14 +377,9 @@ fn execute_transaction_response_try_from_proto(
         .map_err(TryFromProtoError::from_error)?;
 
     let balance_changes = balance_changes
-        .map(|balance_changes| {
-            balance_changes
-                .balance_changes
-                .iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()
-        })
-        .transpose()?;
+        .iter()
+        .map(TryInto::try_into)
+        .collect::<Result<_, _>>()?;
 
     TransactionExecutionResponse {
         finality,

@@ -159,7 +159,7 @@ pub struct SimulateTransactionRequest {
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct SimulateTransactionOptions {
-    /// Include the `BalanceChanges` in the response.
+    /// Include the `BalanceChange`s in the response.
     ///
     /// Defaults to `false` if not included.
     #[prost(bool, optional, tag = "8")]
@@ -171,8 +171,8 @@ pub struct SimulateTransactionResponse {
     pub effects_bcs: ::core::option::Option<super::super::types::Bcs>,
     #[prost(message, optional, tag = "5")]
     pub events_bcs: ::core::option::Option<super::super::types::Bcs>,
-    #[prost(message, optional, tag = "6")]
-    pub balance_changes: ::core::option::Option<super::v2::BalanceChanges>,
+    #[prost(message, repeated, tag = "6")]
+    pub balance_changes: ::prost::alloc::vec::Vec<super::v2::BalanceChange>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolveTransactionRequest {
