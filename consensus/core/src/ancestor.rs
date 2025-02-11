@@ -6,7 +6,7 @@ use std::sync::Arc;
 use consensus_config::AuthorityIndex;
 use tracing::info;
 
-use crate::{context::Context, leader_scoring::ReputationScores, round_prober::QuorumRound};
+use crate::{context::Context, leader_scoring::ReputationScores, round_tracker::QuorumRound};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum AncestorState {
@@ -61,7 +61,7 @@ pub(crate) struct AncestorStateManager {
 
 impl AncestorStateManager {
     // Number of quorum round updates for which an ancestor is locked in the EXCLUDE state
-    // Chose 10 updates as that should be ~50 seconds of waiting with the current round prober
+    // Chose 10 updates as that should be ~50 seconds of waiting with the current round tracker
     // interval of 5s
     #[cfg(not(test))]
     const STATE_LOCK_QUORUM_ROUND_UPDATES: u32 = 10;

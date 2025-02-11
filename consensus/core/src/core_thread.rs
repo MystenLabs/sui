@@ -21,14 +21,14 @@ use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
 use crate::{
-    block::{BlockRef, Round, VerifiedBlock},
+    block::{BlockRef, ExtendedBlock, Round, VerifiedBlock},
     commit::CertifiedCommits,
     context::Context,
     core::Core,
     core_thread::CoreError::Shutdown,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    round_prober::QuorumRound,
+    round_tracker::QuorumRound,
     BlockAPI as _,
 };
 
@@ -47,6 +47,7 @@ enum CoreThreadCommand {
     NewBlock(Round, oneshot::Sender<()>, bool),
     /// Request missing blocks that need to be synced.
     GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),
+    UpdatePeerAcceptedRounds(ExtendedBlock, oneshot::Sender<()>),
 }
 
 #[derive(Error, Debug)]
@@ -75,6 +76,11 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError>;
 
     async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError>;
+
+    async fn set_peer_accepted_rounds_from_block(
+        &self,
+        extended_block: ExtendedBlock,
+    ) -> Result<(), CoreError>;
 
     /// Informs the core whether consumer of produced blocks exists.
     /// This is only used by core to decide if it should propose new blocks.
@@ -136,9 +142,9 @@ impl CoreThread {
                             let missing_block_refs = self.core.add_blocks(blocks)?;
                             sender.send(missing_block_refs).ok();
                         }
-                        CoreThreadCommand::CheckBlockRefs(blocks, sender) => {
-                            let _scope = monitored_scope("CoreThread::loop::find_excluded_blocks");
-                            let missing_block_refs = self.core.check_block_refs(blocks)?;
+                        CoreThreadCommand::CheckBlockRefs(block_refs, sender) => {
+                            let _scope = monitored_scope("CoreThread::loop::check_block_refs");
+                            let missing_block_refs = self.core.check_block_refs(block_refs)?;
                             sender.send(missing_block_refs).ok();
                         }
                         CoreThreadCommand::AddCertifiedCommits(commits, sender) => {
@@ -154,6 +160,11 @@ impl CoreThread {
                         CoreThreadCommand::GetMissing(sender) => {
                             let _scope = monitored_scope("CoreThread::loop::get_missing");
                             sender.send(self.core.get_missing_blocks()).ok();
+                        }
+                        CoreThreadCommand::UpdatePeerAcceptedRounds(extended_block, sender) => {
+                            let _scope = monitored_scope("CoreThread::loop::update_peer_accepted_rounds");
+                            let _ = self.core.update_peer_accepted_rounds(extended_block);
+                            sender.send(()).ok();
                         }
                     }
                 }
@@ -353,6 +364,19 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         receiver.await.map_err(|e| Shutdown(e.to_string()))
     }
 
+    async fn set_peer_accepted_rounds_from_block(
+        &self,
+        extended_block: ExtendedBlock,
+    ) -> Result<(), CoreError> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(CoreThreadCommand::UpdatePeerAcceptedRounds(
+            extended_block,
+            sender,
+        ))
+        .await;
+        receiver.await.map_err(|e| Shutdown(e.to_string()))
+    }
+
     fn set_subscriber_exists(&self, exists: bool) -> Result<(), CoreError> {
         self.tx_subscriber_exists
             .send(exists)
@@ -462,6 +486,13 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
         Ok(result)
     }
 
+    async fn set_peer_accepted_rounds_from_block(
+        &self,
+        _extended_block: ExtendedBlock,
+    ) -> Result<(), CoreError> {
+        todo!()
+    }
+
     fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
         todo!()
     }
@@ -499,6 +530,7 @@ mod test {
         core::CoreSignals,
         dag_state::DagState,
         leader_schedule::LeaderSchedule,
+        round_tracker::PeerRoundTracker,
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
         CommitConsumer,
@@ -536,6 +568,7 @@ mod test {
             context.clone(),
             dag_state.clone(),
         ));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let core = Core::new(
             context.clone(),
             leader_schedule,
@@ -547,6 +580,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         let (core_dispatcher, handle) =
