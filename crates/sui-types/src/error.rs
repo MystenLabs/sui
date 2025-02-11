@@ -678,6 +678,9 @@ pub enum SuiError {
 
     #[error("Enclave attestation failed: {0}")]
     AttestationFailedToVerify(String),
+
+    #[error("Invalid admin request: {0}")]
+    InvalidAdminRequest(String),
 }
 
 #[repr(u64)]
