@@ -586,6 +586,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .map_err(|e| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
@@ -619,6 +620,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .expect("ConsensusCommitPrologue cannot fail");
                 Ok((Mode::empty_results(), vec![]))
@@ -632,6 +634,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .expect("ConsensusCommitPrologueV2 cannot fail");
                 Ok((Mode::empty_results(), vec![]))
@@ -645,6 +648,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .expect("ConsensusCommitPrologueV3 cannot fail");
                 Ok((Mode::empty_results(), vec![]))
@@ -677,6 +681,7 @@ mod checked {
                                 gas_charger,
                                 protocol_config,
                                 metrics,
+                                trace_builder_opt,
                             )
                             .map_err(|e| (e, vec![]))?;
                             return Ok((Mode::empty_results(), vec![]));
@@ -722,6 +727,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .map_err(|e| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
@@ -735,6 +741,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .map_err(|e| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
@@ -890,6 +897,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let params = AdvanceEpochParams {
             epoch: change_epoch.epoch,
@@ -911,7 +919,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             advance_epoch_pt,
-            &mut None,
+            trace_builder_opt,
         );
 
         #[cfg(msim)]
@@ -941,7 +949,7 @@ mod checked {
                     tx_ctx,
                     gas_charger,
                     advance_epoch_safe_mode_pt,
-                    &mut None,
+                    trace_builder_opt,
                 )
                 .map_err(|(e, _)| e)
                 .expect("Advance epoch with safe mode must succeed");
@@ -963,6 +971,7 @@ mod checked {
                 gas_charger,
                 protocol_config,
                 metrics,
+                trace_builder_opt,
             );
         } else {
             process_system_packages(
@@ -973,6 +982,7 @@ mod checked {
                 gas_charger,
                 protocol_config,
                 metrics,
+                trace_builder_opt,
             );
         }
         Ok(())
@@ -986,6 +996,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) {
         let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
@@ -1012,7 +1023,7 @@ mod checked {
                     tx_ctx,
                     gas_charger,
                     publish_pt,
-                    &mut None,
+                    trace_builder_opt,
                 )
                 .map_err(|(e, _)| e)
                 .expect("System Package Publish must succeed");
@@ -1055,6 +1066,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -1082,7 +1094,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             pt,
-            &mut None,
+            trace_builder_opt,
         )
         .map_err(|(e, _)| e)?;
         Ok(())
@@ -1195,6 +1207,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -1226,7 +1239,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             pt,
-            &mut None,
+            trace_builder_opt,
         )
         .map_err(|(e, _)| e)?;
         Ok(())
@@ -1263,6 +1276,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -1295,7 +1309,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             pt,
-            &mut None,
+            trace_builder_opt,
         )
         .map_err(|(e, _)| e)?;
         Ok(())

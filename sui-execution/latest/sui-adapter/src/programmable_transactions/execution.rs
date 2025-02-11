@@ -370,9 +370,13 @@ mod checked {
                 context.linkage_view.reset_linkage();
                 return_values?
             }
-            Command::Publish(modules, dep_ids) => {
-                execute_move_publish::<Mode>(context, &mut argument_updates, modules, dep_ids)?
-            }
+            Command::Publish(modules, dep_ids) => execute_move_publish::<Mode>(
+                context,
+                &mut argument_updates,
+                modules,
+                dep_ids,
+                trace_builder_opt,
+            )?,
             Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
                 execute_move_upgrade::<Mode>(
                     context,
@@ -528,6 +532,7 @@ mod checked {
         argument_updates: &mut Mode::ArgumentUpdates,
         module_bytes: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         assert_invariant!(
             !module_bytes.is_empty(),
@@ -564,8 +569,9 @@ mod checked {
         // the last package we pushed is the one we are verifying and running the init from
         context.linkage_view.set_linkage(&package)?;
         context.write_package(package);
-        let res = publish_and_verify_modules(context, runtime_id, &modules)
-            .and_then(|_| init_modules::<Mode>(context, argument_updates, &modules));
+        let res = publish_and_verify_modules(context, runtime_id, &modules).and_then(|_| {
+            init_modules::<Mode>(context, argument_updates, &modules, trace_builder_opt)
+        });
         context.linkage_view.reset_linkage();
         if res.is_err() {
             context.pop_package();
@@ -947,6 +953,7 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         modules: &[CompiledModule],
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let modules_to_init = modules.iter().filter_map(|module| {
             for fdef in &module.function_defs {
@@ -972,7 +979,7 @@ mod checked {
                 vec![],
                 vec![],
                 /* is_init */ true,
-                &mut None, // TODO: add tracing for init functions?
+                trace_builder_opt,
             )?;
 
             assert_invariant!(
