@@ -13,6 +13,9 @@ pub struct BenchmarkConfig {
     /// The file contains a list of JSON RPC requests that are collected from Grafana,
     /// and will be run concurrently by the JSON RPC benchmark runner.
     pub json_rpc_file_path: Option<String>,
+    /// Optional duration for JSON RPC benchmark pagination window.
+    /// This is for handling conversion to new pagination cursors on `alt` stack.
+    pub pagination_window: Option<Duration>,
 }
 
 impl Default for BenchmarkConfig {
@@ -20,6 +23,7 @@ impl Default for BenchmarkConfig {
         Self {
             concurrency: 50,
             duration: Duration::from_secs(30),
+            pagination_window: None,
             json_rpc_file_path: None,
         }
     }

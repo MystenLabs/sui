@@ -10,9 +10,11 @@ edition = "2021"
 anyhow.workspace = true
 chrono.workspace = true
 clap = { workspace = true, features = ["derive"] }
+chrono = { workspace = true, features = ["serde"] }
 dashmap.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
+phf = { version = "0.11", features = ["macros"] }
 rand.workspace = true
 reqwest.workspace = true
 serde.workspace = true

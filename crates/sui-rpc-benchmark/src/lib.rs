@@ -54,6 +54,8 @@ pub enum Command {
         duration_secs: u64,
         #[clap(long, default_value = "requests.jsonl")]
         requests_file: String,
+        #[clap(long, default_value = "600")]
+        pagination_window_secs: u64,
     },
     /// Benchmark GraphQL queries
     #[clap(name = "graphql")]
@@ -89,6 +91,7 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
                 concurrency,
                 duration: Duration::from_secs(duration_secs),
                 json_rpc_file_path: None,
+                pagination_window: None,
             };
             let query_executor = QueryExecutor::new(&db_url, enriched_queries, config).await?;
             let result = query_executor.run().await?;
@@ -110,9 +113,17 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
             concurrency,
             duration_secs,
             requests_file,
+            pagination_window_secs,
         } => {
             info!("Running JSON RPC benchmark against {endpoint} with concurrency={concurrency} duration_secs={duration_secs} requests_file={requests_file}");
-            json_rpc::run_benchmark(&endpoint, &requests_file, concurrency, duration_secs).await?;
+            json_rpc::run_benchmark(
+                &endpoint,
+                &requests_file,
+                concurrency,
+                duration_secs,
+                pagination_window_secs,
+            )
+            .await?;
             Ok(())
         }
         Command::GraphQL { endpoint } => {
