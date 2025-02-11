@@ -4005,13 +4005,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
     // ============== TEST 1 ================ //
     // Publish package A
     let package_path = temp_dir.path().join("tree_shaking").join("A");
-    let (package_a_id, cap) = publish_package(
-        package_path,
-        context,
-        rgp,
-        gas_obj_id,
-    )
-    .await?;
+    let (package_a_id, cap) = publish_package(package_path, context, rgp, gas_obj_id).await?;
 
     // fetch linkage table of A
     let move_pkg_a = fetch_move_packages(&client, vec![package_a_id]).await?;
@@ -4022,13 +4016,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
     // ============== TEST 2 ================ //
     // Publish package B_depends_on_A and check the linkage table
     let package_path = temp_dir.path().join("tree_shaking").join("B_depends_on_A");
-    let (package_b_id, _) = publish_package(
-        package_path,
-        context,
-        rgp,
-        gas_obj_id,
-    )
-    .await?;
+    let (package_b_id, _) = publish_package(package_path, context, rgp, gas_obj_id).await?;
 
     // get linkage table of package B_depends_on_A
     let move_pkg_b = fetch_move_packages(&client, vec![package_b_id]).await?;
@@ -4042,13 +4030,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         .path()
         .join("tree_shaking")
         .join("B_depends_on_A_but_no_code_references_A");
-    let (package_b_1_id, _) = publish_package(
-        package_path,
-        context,
-        rgp,
-        gas_obj_id,
-    )
-    .await?;
+    let (package_b_1_id, _) = publish_package(package_path, context, rgp, gas_obj_id).await?;
 
     // get linkage table of package B_depends_on_A_but_no_code_references_A
     let move_pkg_b_1 = fetch_move_packages(&client, vec![package_b_1_id]).await?;
@@ -4064,13 +4046,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         .path()
         .join("tree_shaking")
         .join("C_depends_on_B_which_depends_on_A");
-    let (package_c_id, _) = publish_package(
-        package_path,
-        context,
-        rgp,
-        gas_obj_id,
-    )
-    .await?;
+    let (package_c_id, _) = publish_package(package_path, context, rgp, gas_obj_id).await?;
 
     // get linkage table of package C
     let move_pkg_c = fetch_move_packages(&client, vec![package_c_id]).await?;
@@ -4092,13 +4068,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         .path()
         .join("tree_shaking")
         .join("C_depends_on_B_but_no_code_references_B");
-    let (package_c_1_id, _) = publish_package(
-        package_path,
-        context,
-        rgp,
-        gas_obj_id,
-    )
-    .await?;
+    let (package_c_1_id, _) = publish_package(package_path, context, rgp, gas_obj_id).await?;
 
     // get linkage table of package C
     let move_pkg_c_1 = fetch_move_packages(&client, vec![package_c_1_id]).await?;
@@ -4157,13 +4127,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         .path()
         .join("tree_shaking")
         .join("D_depends_on_A_v1_but_no_code_references_A");
-    let (package_d_id, _) = publish_package(
-        package_path,
-        context,
-        rgp,
-        gas_obj_id,
-    )
-    .await?;
+    let (package_d_id, _) = publish_package(package_path, context, rgp, gas_obj_id).await?;
 
     // fetch linkage table of D
     let move_pkg_d = fetch_move_packages(&client, vec![package_d_id]).await?;
@@ -4175,13 +4139,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         .path()
         .join("tree_shaking")
         .join("D_depends_on_A_v1");
-    let (package_d_1_id, _) = publish_package(
-        package_path,
-        context,
-        rgp,
-        gas_obj_id,
-    )
-    .await?;
+    let (package_d_1_id, _) = publish_package(package_path, context, rgp, gas_obj_id).await?;
 
     // fetch linkage table of D
     let move_pkg_d_1 = fetch_move_packages(&client, vec![package_d_1_id]).await?;

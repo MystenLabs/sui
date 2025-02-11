@@ -954,7 +954,8 @@ impl SuiClientCommands {
                     )?;
                 }
 
-                let (upgrade_policy, mut compiled_package) = upgrade_result.map_err(|e| anyhow!("{e}"))?;
+                let (upgrade_policy, mut compiled_package) =
+                    upgrade_result.map_err(|e| anyhow!("{e}"))?;
 
                 let compiled_modules =
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
@@ -3170,7 +3171,12 @@ async fn filter_deps(
         }
     }
 
-    referenced_modules.extend(compiled_package.bytecode_deps.iter().map(|x| ObjectID::from(*x.1.address())));
+    referenced_modules.extend(
+        compiled_package
+            .bytecode_deps
+            .iter()
+            .map(|x| ObjectID::from(*x.1.address())),
+    );
 
     // get on-chain linkage table for every package that this to be published package depends on
     let published_deps_ids: Vec<ObjectID> = compiled_package
