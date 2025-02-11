@@ -39,7 +39,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     leader_schedule::LeaderSchedule,
-    round_prober::QuorumRound,
+    round_tracker::{PeerRoundTracker, QuorumRound},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction::TransactionConsumer,
     universal_committer::{
@@ -109,6 +109,11 @@ pub(crate) struct Core {
     // information to decide whether to include that authority block in the next
     // proposal or not.
     ancestor_state_manager: AncestorStateManager,
+    // The round tracker will keep track of the highest received and accepted rounds
+    // from all authorities. It will use this information to then calculate the
+    // quorum rounds periodically which is used across other components to make
+    // decisions about block proposals.
+    round_tracker: Arc<RwLock<PeerRoundTracker>>,
 }
 
 impl Core {
@@ -123,6 +128,7 @@ impl Core {
         block_signer: ProtocolKeyPair,
         dag_state: Arc<RwLock<DagState>>,
         sync_last_known_own_block: bool,
+        round_tracker: Arc<RwLock<PeerRoundTracker>>,
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
         let number_of_leaders = context
@@ -187,6 +193,7 @@ impl Core {
             dag_state,
             last_known_proposed_round: min_propose_round,
             ancestor_state_manager,
+            round_tracker,
         }
         .recover()
     }
@@ -391,6 +398,24 @@ impl Core {
             );
         }
         Ok(missing_block_refs)
+    }
+
+    pub(crate) fn update_peer_accepted_rounds(
+        &mut self,
+        extended_block: ExtendedBlock,
+    ) -> ConsensusResult<()> {
+        let _scope = monitored_scope("Core::update_peer_accepted_rounds");
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::update_peer_accepted_rounds"])
+            .start_timer();
+
+        self.round_tracker.write().update_from_block(extended_block);
+
+        Ok(())
     }
 
     /// If needed, signals a new clock round and sets up leader timeout.
@@ -706,10 +731,17 @@ impl Core {
             .with_label_values(&[&force.to_string()])
             .inc();
 
-        Some(ExtendedBlock {
+        let extended_block = ExtendedBlock {
             block: verified_block,
             excluded_ancestors,
-        })
+        };
+
+        // Update round tracker with our own highest accepted blocks
+        self.round_tracker
+            .write()
+            .update_from_block(extended_block.clone());
+
+        Some(extended_block)
     }
 
     /// Runs commit rule to attempt to commit additional blocks from the DAG. If any `certified_commits` are provided, then
@@ -1429,6 +1461,7 @@ impl CoreTextFixture {
 
         let block_signer = signers.remove(own_index.value()).1;
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let core = Core::new(
             context,
             leader_schedule,
@@ -1440,6 +1473,7 @@ impl CoreTextFixture {
             block_signer,
             dag_state,
             sync_last_known_own_block,
+            round_tracker,
         );
 
         Self {
@@ -1546,6 +1580,7 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1557,6 +1592,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         // New round should be 5
@@ -1668,6 +1704,7 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1679,6 +1716,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         // Clock round should have advanced to 5 during recovery because
@@ -1757,6 +1795,7 @@ mod test {
             leader_schedule.clone(),
         );
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1768,6 +1807,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         // Send some transactions
@@ -1862,6 +1902,7 @@ mod test {
             leader_schedule.clone(),
         );
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1873,6 +1914,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         let mut expected_ancestors = BTreeSet::new();
@@ -2006,6 +2048,7 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2017,6 +2060,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         let last_commit = store
@@ -2157,6 +2201,7 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2168,6 +2213,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
+            round_tracker,
         );
         // We set the last known round to 4 so we avoid creating new blocks until then - otherwise it will crash as the already created DAG contains blocks for this
         // authority.
@@ -2227,6 +2273,7 @@ mod test {
             leader_schedule.clone(),
         );
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2238,6 +2285,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
+            round_tracker,
         );
 
         // No new block should have been produced
@@ -2527,6 +2575,7 @@ mod test {
             leader_schedule.clone(),
         );
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2538,6 +2587,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
+            round_tracker,
         );
 
         // No new block should have been produced
@@ -2773,6 +2823,7 @@ mod test {
             leader_schedule.clone(),
         );
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2784,6 +2835,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
+            round_tracker,
         );
 
         // No new block should have been produced
@@ -2859,6 +2911,7 @@ mod test {
             leader_schedule.clone(),
         );
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2871,6 +2924,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         // There is no proposal during recovery because there is no subscriber.
@@ -2924,6 +2978,7 @@ mod test {
             leader_schedule.clone(),
         );
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2936,6 +2991,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         // There is no proposal during recovery because there is no subscriber.
@@ -3317,6 +3373,7 @@ mod test {
             leader_schedule.clone(),
         );
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -3328,6 +3385,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
+            round_tracker,
         );
 
         // No new block should have been produced

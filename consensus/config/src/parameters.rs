@@ -59,6 +59,10 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_propagation_delay_stop_proposal_threshold")]
     pub propagation_delay_stop_proposal_threshold: u32,
 
+    /// Interval in milliseconds to update quorum rounds of peers.
+    #[serde(default = "Parameters::default_quorum_round_update_interval_ms")]
+    pub quorum_round_update_interval_ms: u64,
+
     /// The number of rounds of blocks to be kept in the Dag state cache per authority. The larger
     /// the number the more the blocks that will be kept in memory allowing minimising any potential
     /// disk access.
@@ -159,6 +163,14 @@ impl Parameters {
         }
     }
 
+    pub(crate) fn default_quorum_round_update_interval_ms() -> u64 {
+        if cfg!(msim) {
+            1000
+        } else {
+            5000
+        }
+    }
+
     pub(crate) fn default_dag_state_cached_rounds() -> u32 {
         if cfg!(msim) {
             // Exercise reading blocks from store.
@@ -202,6 +214,7 @@ impl Default for Parameters {
             round_prober_request_timeout_ms: Parameters::default_round_prober_request_timeout_ms(),
             propagation_delay_stop_proposal_threshold:
                 Parameters::default_propagation_delay_stop_proposal_threshold(),
+            quorum_round_update_interval_ms: Parameters::default_quorum_round_update_interval_ms(),
             dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),
             commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
