@@ -34,6 +34,7 @@ use move_compiler::{
     sui_mode::{self},
     Compiler,
 };
+use move_core_types::account_address::AccountAddress;
 use move_disassembler::disassembler::Disassembler;
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
@@ -464,6 +465,28 @@ impl CompiledPackage {
                     self.compiled_package_info.package_name
                 )
             })
+    }
+
+    /// Returns all modules that are referenced in the source code by the root package and its
+    /// transitive dependencies
+    pub fn get_referenced_modules_ids(&self) -> BTreeSet<AccountAddress> {
+        let mut referenced_modules: BTreeSet<AccountAddress> = BTreeSet::new();
+        let modules_map = self.root_modules_map();
+        let mut module_to_visit: Vec<_> =
+            modules_map.get_map().iter().map(|x| x.0.clone()).collect();
+
+        while let Some(module_id) = module_to_visit.pop() {
+            let compiled_module = modules_map.get_module(&module_id);
+
+            if let Ok(m) = compiled_module {
+                for dep in m.immediate_dependencies() {
+                    if referenced_modules.insert(*dep.address()) {
+                        module_to_visit.push(dep);
+                    }
+                }
+            }
+        }
+        referenced_modules
     }
 
     #[allow(unused)]
