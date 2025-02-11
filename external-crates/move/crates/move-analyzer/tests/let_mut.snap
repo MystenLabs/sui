@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == let_mut.move ========================================================
 -- test 0 -------------------
 use line: 3, use_ndx: 1
@@ -30,4 +33,3 @@ Def: 'v', line: 4, def char: 16
 TypeDef: no info
 On Hover:
 let mut v: u64
-

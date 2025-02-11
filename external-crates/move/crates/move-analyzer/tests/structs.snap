@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == structs.move ========================================================
 -- test 0 -------------------
 use line: 3, use_ndx: 0
@@ -184,4 +187,3 @@ TypeDef: no info
 On Hover:
 Move2024::structs::Positional
 0: u64
-

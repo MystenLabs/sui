@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == param_hints.move ========================================================
 -- test 0 -------------------
 INLAY PARAM HINT: first_param

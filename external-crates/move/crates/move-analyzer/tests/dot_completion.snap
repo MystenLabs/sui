@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == dot.move ========================================================
 -- test 0 -------------------
 use line: 15, use_col: 10
@@ -204,4 +207,3 @@ Method 'zip_map_ref!()'
     INSERT TEXT: 'zip_map_ref!(${1:v2}, |${2}, ${3}| ${4})'
     TARGET     : '(vector::zip_map_ref)'
     TYPE       : 'fun <$T1, $T2, $U>(&vector<$T1>, &vector<$T2>, |&$T1, &$T2| -> $U): vector<$U>'
-

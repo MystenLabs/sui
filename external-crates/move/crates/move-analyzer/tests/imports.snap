@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == M9.move ========================================================
 -- test 0 -------------------
 use line: 2, use_ndx: 0
@@ -110,4 +113,3 @@ On Hover:
 public struct Symbols::M2::SomeOtherStruct has drop {
 	some_field: u64
 }
-

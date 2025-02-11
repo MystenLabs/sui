@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == int_match.move ========================================================
 -- test 0 -------------------
 use line: 5, use_ndx: 0
@@ -579,4 +582,3 @@ Def: 'num2', line: 23, def char: 36
 TypeDef: no info
 On Hover:
 num2: &mut u64
-

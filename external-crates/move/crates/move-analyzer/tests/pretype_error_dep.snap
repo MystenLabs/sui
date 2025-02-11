@@ -1,3 +1,6 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
 == M1.move ========================================================
 -- test 0 -------------------
 use line: 3, use_ndx: 0
@@ -41,4 +44,3 @@ Def: 'foo', line: 6, def char: 15
 TypeDef: no info
 On Hover:
 public fun PreTypeErrorDep::M1::foo(): u64
-
