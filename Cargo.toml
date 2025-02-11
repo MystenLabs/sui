@@ -496,7 +496,7 @@ tap = "1.0.1"
 tar = "0.4.40"
 tempfile = "3.3.0"
 test-fuzz = "3.0.4"
-tidehunter = {git = "https://github.com/andll/tidehunter.git", rev = "7a1bc194cddf01732cb78a0286b8e10cebc036a0", version = "0.1.0"}
+tidehunter = {git = "https://github.com/andll/tidehunter.git", rev = "72f416ebd8858a00851c86a2648ff83aab58ac0a", version = "0.1.0"}
 #tidehunter = {path = "/Users/andrey/dev/tidehunter", version = "0.1.0"}
 thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
