@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -15,16 +16,21 @@ pub struct BenchmarkConfig {
     pub json_rpc_file_path: Option<String>,
     /// Optional duration for JSON RPC benchmark pagination window.
     /// This is for handling conversion to new pagination cursors on `alt` stack.
-    pub pagination_window: Option<Duration>,
+    pub json_rpc_pagination_window: Option<Duration>,
+    /// List of methods to skip during benchmark.
+    /// These methods will not be sent to the JSON RPC server.
+    pub json_rpc_methods_to_skip: HashSet<String>,
 }
 
 impl Default for BenchmarkConfig {
     fn default() -> Self {
+        let json_rpc_methods_to_skip = HashSet::from_iter(["suix_getAllCoins".to_string()]);
         Self {
             concurrency: 50,
             duration: Duration::from_secs(30),
-            pagination_window: None,
             json_rpc_file_path: None,
+            json_rpc_pagination_window: None,
+            json_rpc_methods_to_skip,
         }
     }
 }
