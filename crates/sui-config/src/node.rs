@@ -852,8 +852,8 @@ pub struct AuthorityStorePruningConfig {
     pub epoch_db_pruning_period_secs: u64,
     /// number of epochs to keep the latest version of objects for.
     /// Note that a zero value corresponds to an aggressive pruner.
-    /// This mode is experimental and needs to be used with caution.
-    /// Use `u64::MAX` to disable the pruner for the objects.
+    /// Use `u64::MAX` to disable the pruner for the objects,
+    /// or set it to a lower value store a limited objects history locally.
     #[serde(default)]
     pub num_epochs_to_retain: u64,
     /// pruner's runtime interval used for aggressive mode
@@ -874,7 +874,7 @@ pub struct AuthorityStorePruningConfig {
     )]
     pub periodic_compaction_threshold_days: Option<usize>,
     /// number of epochs to keep the latest version of transactions and effects for
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default = "default_num_epochs_to_retain_for_checkpoints", skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
     /// disables object tombstone pruning. We don't serialize it if it is the default value, false.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -914,6 +914,10 @@ fn default_periodic_compaction_threshold_days() -> Option<usize> {
     Some(1)
 }
 
+fn default_num_epochs_to_retain_for_checkpoints() -> Option<u64> {
+    Some(2)
+}
+
 impl Default for AuthorityStorePruningConfig {
     fn default() -> Self {
         Self {
@@ -924,7 +928,7 @@ impl Default for AuthorityStorePruningConfig {
             max_checkpoints_in_batch: default_max_checkpoints_in_batch(),
             max_transactions_in_batch: default_max_transactions_in_batch(),
             periodic_compaction_threshold_days: None,
-            num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
+            num_epochs_to_retain_for_checkpoints: default_num_epochs_to_retain_for_checkpoints(),
             killswitch_tombstone_pruning: false,
             smooth: true,
             enable_compaction_filter: cfg!(test) || cfg!(msim),
