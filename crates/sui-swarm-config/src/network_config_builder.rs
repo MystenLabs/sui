@@ -617,7 +617,7 @@ mod test {
                 kind,
                 signer,
                 genesis_digest,
-                None,
+                &mut None,
             );
 
         assert_eq!(&effects, genesis.effects());
