@@ -10,15 +10,15 @@ use super::{
 };
 use crate::data::{self, DbConnection, QueryExecutor};
 use crate::query;
+use crate::server::watermark_task::Watermark;
 use crate::{data::Db, error::Error};
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use cursor::EvLookup;
-use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use lookups::{add_bounds, select_emit_module, select_event_type, select_sender};
 use sui_indexer::models::{events::StoredEvent, transactions::StoredTransaction};
-use sui_indexer::schema::{checkpoints, events};
+use sui_indexer::schema::events;
 use sui_types::base_types::ObjectID;
 use sui_types::Identifier;
 use sui_types::{
@@ -134,10 +134,18 @@ impl Event {
         db: &Db,
         page: Page<Cursor>,
         filter: EventFilter,
-        checkpoint_viewed_at: u64,
+        watermark: &Watermark,
     ) -> Result<Connection<String, Event>, Error> {
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+        let Watermark {
+            hi_cp,
+            hi_tx,
+            lo_tx,
+            ..
+        } = watermark;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(*hi_cp);
+        let tx_lo = *lo_tx as i64;
+        let tx_hi = *hi_tx as i64;
 
         // Construct tx and ev sequence number query with table-relevant filters, if they exist. The
         // resulting query will look something like `SELECT tx_sequence_number,
@@ -156,17 +164,11 @@ impl Event {
             }
         };
 
-        use checkpoints::dsl;
         let (prev, next, results) = db
             .execute(move |conn| async move {
-                let tx_hi: i64 = conn.first(move || {
-                    dsl::checkpoints.select(dsl::network_total_transactions)
-                        .filter(dsl::sequence_number.eq(checkpoint_viewed_at as i64))
-                }).await?;
-
                 let (prev, next, mut events): (bool, bool, Vec<StoredEvent>) =
                     if let Some(filter_query) =  query_constraint {
-                        let query = add_bounds(filter_query, &filter.transaction_digest, &page, tx_hi);
+                        let query = add_bounds(filter_query, &filter.transaction_digest, &page, tx_lo, tx_hi);
 
                         let (prev, next, results) =
                             page.paginate_raw_query::<EvLookup>(conn, checkpoint_viewed_at, query).await?;
@@ -200,7 +202,7 @@ impl Event {
                     } else {
                         // No filter is provided so we add bounds to the basic `SELECT * FROM
                         // events` query and call it a day.
-                        let query = add_bounds(query!("SELECT * FROM events"), &filter.transaction_digest, &page, tx_hi);
+                        let query = add_bounds(query!("SELECT * FROM events"), &filter.transaction_digest, &page, tx_lo, tx_hi);
                         let (prev, next, events_iter) = page.paginate_raw_query::<StoredEvent>(conn, checkpoint_viewed_at, query).await?;
                         let events = events_iter.collect::<Vec<StoredEvent>>();
                         (prev, next, events)
