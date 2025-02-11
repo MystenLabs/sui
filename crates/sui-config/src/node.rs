@@ -874,7 +874,10 @@ pub struct AuthorityStorePruningConfig {
     )]
     pub periodic_compaction_threshold_days: Option<usize>,
     /// number of epochs to keep the latest version of transactions and effects for
-    #[serde(default = "default_num_epochs_to_retain_for_checkpoints", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default = "default_num_epochs_to_retain_for_checkpoints",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
     /// disables object tombstone pruning. We don't serialize it if it is the default value, false.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
