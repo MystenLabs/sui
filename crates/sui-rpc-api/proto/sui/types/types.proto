@@ -1406,33 +1406,17 @@ message UserSignature {
   }
 }
 
-// Flag use to disambiguate the signature schemes supported by Sui.
-//
-// Note: the enum values defined by this proto message do not match their BCS
-// serialized values. See
-// [enum.SignatureScheme](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/enum.SignatureScheme.html)
-// for a mapping to their canonical serialized format.
-enum SignatureScheme {
-  SIGNATURE_SCHEME_UNKNOWN = 0;
-  SIGNATURE_SCHEME_ED25519 = 1;
-  SIGNATURE_SCHEME_SECP256K1 = 2;
-  SIGNATURE_SCHEME_SECP256R1 = 3;
-  SIGNATURE_SCHEME_MULTISIG = 4;
-  SIGNATURE_SCHEME_BLS12381 = 5;
-  SIGNATURE_SCHEME_ZKLOGIN = 6;
-  SIGNATURE_SCHEME_PASSKEY = 7;
-}
-
 // A basic signature.
 //
 // Can either be an ed25519, secp256k1, or secp256r1 signature with
 // corresponding public key.
 message SimpleSignature {
-  // Required. Signature scheme of the signature and public key.
-  optional SignatureScheme scheme = 1;
-  // Required. Signature bytes.
+  // The signature scheme of the signautre and public key, which should be an
+  // enum value of [sui.types.SignatureScheme][sui.types.SignatureScheme]
+  optional int32 scheme = 1;
+  // Signature bytes.
   optional bytes signature = 2;
-  // Required. Public key bytes.
+  // Public key bytes.
   optional bytes public_key = 3;
 }
 

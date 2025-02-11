@@ -495,11 +495,6 @@ impl TryFrom<&super::SignatureScheme> for sui_sdk_types::SignatureScheme {
         use super::SignatureScheme::*;
 
         match value {
-            Unknown => {
-                return Err(TryFromProtoError::missing(
-                    "unknown SignatureScheme variant",
-                ))
-            }
             Ed25519 => Self::Ed25519,
             Secp256k1 => Self::Secp256k1,
             Secp256r1 => Self::Secp256r1,
@@ -546,6 +541,7 @@ impl TryFrom<&super::SimpleSignature> for sui_sdk_types::SimpleSignature {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::SimpleSignature) -> Result<Self, Self::Error> {
+        use super::SignatureScheme;
         use super::SignatureScheme::*;
         use sui_sdk_types::{Ed25519PublicKey, Ed25519Signature};
         use sui_sdk_types::{
@@ -560,8 +556,13 @@ impl TryFrom<&super::SimpleSignature> for sui_sdk_types::SimpleSignature {
             .public_key
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("public_key"))?;
+        let scheme = value
+            .scheme
+            .ok_or_else(|| TryFromProtoError::missing("scheme"))?
+            .pipe(SignatureScheme::try_from)
+            .map_err(TryFromProtoError::from_error)?;
 
-        match value.scheme() {
+        match scheme {
             Ed25519 => Self::Ed25519 {
                 signature: Ed25519Signature::from_bytes(signature)?,
                 public_key: Ed25519PublicKey::from_bytes(public_key)?,
@@ -574,7 +575,7 @@ impl TryFrom<&super::SimpleSignature> for sui_sdk_types::SimpleSignature {
                 signature: Secp256r1Signature::from_bytes(signature)?,
                 public_key: Secp256r1PublicKey::from_bytes(public_key)?,
             },
-            Unknown | Multisig | Bls12381 | Zklogin | Passkey => {
+            Multisig | Bls12381 | Zklogin | Passkey => {
                 return Err(TryFromProtoError::from_error(
                     "invalid or unknown signature scheme",
                 ))
