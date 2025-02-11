@@ -17,12 +17,14 @@ pub async fn run_benchmark(
     concurrency: usize,
     duration_secs: u64,
     pagination_window_secs: u64,
+    methods_to_skip: Vec<String>,
 ) -> Result<()> {
     let config = BenchmarkConfig {
         concurrency,
         duration: Duration::from_secs(duration_secs),
         json_rpc_file_path: Some(file_path.to_string()),
-        pagination_window: Some(Duration::from_secs(pagination_window_secs)),
+        json_rpc_pagination_window: Some(Duration::from_secs(pagination_window_secs)),
+        json_rpc_methods_to_skip: methods_to_skip.into_iter().collect(),
     };
 
     info!("Loading JSON RPC requests from {}", file_path);

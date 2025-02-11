@@ -8,7 +8,6 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
-chrono.workspace = true
 clap = { workspace = true, features = ["derive"] }
 chrono = { workspace = true, features = ["serde"] }
 dashmap.workspace = true

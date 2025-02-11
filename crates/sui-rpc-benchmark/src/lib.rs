@@ -5,6 +5,7 @@ pub mod config;
 pub mod direct;
 pub mod json_rpc;
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -56,6 +57,8 @@ pub enum Command {
         requests_file: String,
         #[clap(long, default_value = "600")]
         pagination_window_secs: u64,
+        #[clap(long, value_delimiter = ',', default_value = "suix_getAllCoins")]
+        methods_to_skip: Vec<String>,
     },
     /// Benchmark GraphQL queries
     #[clap(name = "graphql")]
@@ -91,7 +94,8 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
                 concurrency,
                 duration: Duration::from_secs(duration_secs),
                 json_rpc_file_path: None,
-                pagination_window: None,
+                json_rpc_pagination_window: None,
+                json_rpc_methods_to_skip: HashSet::new(),
             };
             let query_executor = QueryExecutor::new(&db_url, enriched_queries, config).await?;
             let result = query_executor.run().await?;
@@ -114,6 +118,7 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
             duration_secs,
             requests_file,
             pagination_window_secs,
+            methods_to_skip,
         } => {
             info!("Running JSON RPC benchmark against {endpoint} with concurrency={concurrency} duration_secs={duration_secs} requests_file={requests_file}");
             json_rpc::run_benchmark(
@@ -122,6 +127,7 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
                 concurrency,
                 duration_secs,
                 pagination_window_secs,
+                methods_to_skip,
             )
             .await?;
             Ok(())

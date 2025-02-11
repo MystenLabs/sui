@@ -1,6 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
+
+use super::request_loader::JsonRpcRequestLine;
+use crate::config::BenchmarkConfig;
 /// This module implements the JSON RPC benchmark runner.
 /// The main function is `run_queries`, which runs the queries concurrently
 /// and records the overall and per-method stats.
@@ -8,16 +16,9 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use phf::phf_map;
 use serde_json::Value;
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
 use sui_indexer_alt_framework::task::TrySpawnStreamExt;
 use tokio::time::timeout;
-
-use super::request_loader::JsonRpcRequestLine;
-use crate::config::BenchmarkConfig;
+use tracing::info;
 
 /// static map of method names to the index of their cursor parameter
 static METHOD_CURSOR_POSITIONS: phf::Map<&'static str, usize> = phf_map! {
@@ -174,14 +175,20 @@ pub async fn run_queries(
     let concurrency = config.concurrency;
     let shared_stats = Arc::new(Mutex::new(JsonRpcStats::new()));
     let pagination_window = config
-        .pagination_window
+        .json_rpc_pagination_window
         .ok_or_else(|| anyhow::anyhow!("pagination_window must be set for JSON RPC benchmark"))?;
     let pagination_state = Arc::new(Mutex::new(PaginationCursorState::with_window_size(
         pagination_window,
     )));
     let client = reqwest::Client::new();
     let endpoint = endpoint.to_owned();
-    let requests = requests.to_vec();
+
+    info!("Skipping methods: {:?}", config.json_rpc_methods_to_skip);
+    let requests: Vec<_> = requests
+        .iter()
+        .filter(|r| !config.json_rpc_methods_to_skip.contains(&r.method))
+        .cloned()
+        .collect();
     let stats = shared_stats.clone();
 
     let stream = futures::stream::iter(requests.into_iter().map(move |mut request_line| {
