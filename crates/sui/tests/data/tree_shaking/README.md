@@ -1,4 +1,4 @@
-These packages are part of the tree shaking algorithm
+These packages are part of the tree shaking algorithm tests
 - if a dependency is added to the manifest, but it is not referenced in the code it needs to be removed
 
 Edge cases
