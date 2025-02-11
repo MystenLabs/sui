@@ -13,7 +13,7 @@ impl IngestionClientTrait for RpcClient {
                 FetchError::NotFound
             } else {
                 FetchError::Transient {
-                    reason: "io_error",
+                    reason: "get_full_checkpoint",
                     error: anyhow!(e),
                 }
             }

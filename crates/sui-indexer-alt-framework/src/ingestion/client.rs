@@ -171,9 +171,8 @@ impl IngestionClient {
                         })?
                     }
                     FetchData::CheckPointData(data) => {
-                        self.metrics
-                            .total_ingested_bytes
-                            .inc_by(size_of_val(&data) as u64);
+                        // We are not recording size metric for Checkpoint data (from RPC client).
+                        // TODO: Record the metric when we have a good way to get the size information
                         data
                     }
                 })
