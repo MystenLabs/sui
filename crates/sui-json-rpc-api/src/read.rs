@@ -149,13 +149,17 @@ pub trait ReadApi {
     #[method(name = "getChainIdentifier")]
     async fn get_chain_identifier(&self) -> RpcResult<String>;
 
-    /// Verify a zklogin signature
+    /// Verify a zklogin signature for the given bytes, intent scope and author.
     #[method(name = "verifyZkLoginSignature")]
     async fn verify_zklogin_signature(
         &self,
+        /// The Base64 string of bcs bytes for raw transaction data or personal message indicated by intent_scope.
         bytes: String,
+        /// The Base64 string of the zklogin signature to verify.
         signature: String,
+        /// The intent scope, either transaction data or personal message. Used to parse bytes.
         intent_scope: ZkLoginIntentScope,
+        /// The author of the signature.
         author: SuiAddress,
     ) -> RpcResult<ZkLoginVerifyResult>;
 }
