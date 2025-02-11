@@ -8080,12 +8080,9 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "enum-compat-util",
- "getrandom 0.2.15",
  "move-binary-format",
  "move-core-types",
  "move-proc-macros",
- "proptest",
- "proptest-derive 0.5.1",
  "ref-cast",
  "serde",
  "serde_json",

@@ -8,6 +8,7 @@ exclude = [
     "external-crates/move/crates/bytecode-verifier-tests",
     "external-crates/move/crates/bytecode-verifier-prop-tests",
     "external-crates/move/crates/bytecode-verifier-transactional-tests",
+    "external-crates/move/crates/enum-compat-util",
     "external-crates/move/crates/invalid-mutations",
     "external-crates/move/crates/language-benchmarks",
     "external-crates/move/crates/module-generation",
@@ -36,12 +37,14 @@ exclude = [
     "external-crates/move/crates/move-ir-types",
     "external-crates/move/crates/move-model",
     "external-crates/move/crates/move-package",
+    "external-crates/move/crates/move-proc-macros",
     "external-crates/move/crates/move-prover-test-utils",
     "external-crates/move/crates/move-stackless-bytecode",
     "external-crates/move/crates/move-stdlib",
     "external-crates/move/crates/move-stdlib-natives",
     "external-crates/move/crates/move-symbol-pool",
     "external-crates/move/crates/move-transactional-test-runner",
+    "external-crates/move/crates/move-trace-format",    
     "external-crates/move/crates/move-unit-test",
     "external-crates/move/crates/move-vm-config",
     "external-crates/move/crates/move-vm-integration-tests",
@@ -350,7 +353,6 @@ flate2 = "1.0.28"
 fs_extra = "1.3.0"
 futures = "0.3.28"
 futures-core = "0.3.21"
-getrandom = "0.2.9"
 git-version = "0.3.5"
 glob = "0.3.1"
 governor = "0.6.0"
@@ -433,7 +435,6 @@ quote = "1.0.23"
 rand = "0.8.5"
 rayon = "1.5.3"
 rcgen = "0.13"
-ref-cast = "1.0.6"
 regex = "1.7.1"
 reqwest = { version = "0.12", default-features = false, features = [
     "http2",
@@ -546,7 +547,6 @@ unescape = "0.1.0"
 ureq = "2.9.1"
 url = "2.3.1"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
-variant_count = "1.1.0"
 walkdir = "2.5.0"
 webpki = { version = "0.102", package = "rustls-webpki", features = [
     "alloc",
@@ -588,7 +588,6 @@ move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 move-proc-macros = { path = "external-crates/move/crates/move-proc-macros" }
 enum-compat-util = { path = "external-crates/move/crates/enum-compat-util" }
-
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "69d496c71fb37e3d22fe85e5bbfd4256d61422b9" }
 fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "69d496c71fb37e3d22fe85e5bbfd4256d61422b9" }
