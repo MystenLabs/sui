@@ -216,6 +216,7 @@ const MAX_PROTOCOL_VERSION: u64 = 74;
 // Version 74: Enable load_nitro_attestation move function in sui framework in devnet.
 //             Enable all gas costs for load_nitro_attestation.
 //             Enable zstd compression for consensus tonic network in mainnet.
+//             Enable the new commit rule for devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3240,6 +3241,10 @@ impl ProtocolConfig {
 
                     // Enable zstd compression for consensus in mainnet
                     cfg.feature_flags.consensus_zstd_compression = true;
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

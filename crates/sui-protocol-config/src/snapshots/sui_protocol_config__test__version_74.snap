@@ -76,6 +76,7 @@ feature_flags:
   consensus_smart_ancestor_selection: true
   consensus_round_prober_probe_accepted_rounds: true
   native_charging_v2: true
+  consensus_linearize_subdag_v2: true
   convert_type_argument_error: true
   variant_nodes: true
   consensus_zstd_compression: true
