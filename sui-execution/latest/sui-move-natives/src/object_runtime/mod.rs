@@ -3,6 +3,8 @@
 
 pub(crate) mod object_store;
 
+use crate::object_runtime::object_store::ChildObjectEffectV1;
+
 use self::object_store::{ChildObjectEffectV0, ChildObjectEffects, ObjectResult};
 use super::get_object_id;
 use better_any::{Tid, TidAble};
@@ -454,7 +456,9 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn finish(mut self) -> Result<RuntimeResults, ExecutionError> {
         let loaded_child_objects = self.loaded_runtime_objects();
-        let child_effects = self.child_object_store.take_effects();
+        let child_effects = self.child_object_store.take_effects().map_err(|e| {
+            ExecutionError::invariant_violation(format!("Failed to take child object effects: {e}"))
+        })?;
         self.state.finish(loaded_child_objects, child_effects)
     }
 
@@ -623,6 +627,9 @@ impl ObjectRuntimeState {
             ChildObjectEffects::V0(child_object_effects) => {
                 self.apply_child_object_effects_v0(loaded_child_objects, child_object_effects)
             }
+            ChildObjectEffects::V1(child_object_effects) => {
+                self.apply_child_object_effects_v1(loaded_child_objects, child_object_effects)
+            }
         }
     }
 
@@ -670,6 +677,27 @@ impl ObjectRuntimeState {
                     }
                 }
             }
+        }
+    }
+
+    fn apply_child_object_effects_v1(
+        &mut self,
+        loaded_child_objects: &mut BTreeMap<ObjectID, LoadedRuntimeObject>,
+        child_object_effects: BTreeMap<ObjectID, ChildObjectEffectV1>,
+    ) {
+        for (child, child_object_effect) in child_object_effects {
+            let ChildObjectEffectV1 {
+                owner: parent,
+                ty,
+                final_value,
+                value_changed,
+            } = child_object_effect;
+
+            if let Some(loaded_child) = loaded_child_objects.get_mut(&child) {
+                loaded_child.is_modified = true;
+            }
+
+            todo!()
         }
     }
 }

@@ -25,11 +25,16 @@ use sui_types::{
     storage::ChildObjectResolver,
 };
 
+pub(super) struct ValueFingerprint {
+    original: Option<Value>,
+}
+
 pub(super) struct ChildObject {
     pub(super) owner: ObjectID,
     pub(super) ty: Type,
     pub(super) move_type: MoveObjectType,
     pub(super) value: GlobalValue,
+    pub(super) fingerprint: ValueFingerprint,
 }
 
 pub(crate) struct ActiveChildObject<'a> {
@@ -54,10 +59,21 @@ pub(crate) struct ChildObjectEffectV0 {
     pub(super) effect: Op<Value>,
 }
 
+#[derive(Debug)]
+pub(crate) struct ChildObjectEffectV1 {
+    pub(super) owner: ObjectID,
+    pub(super) ty: Type,
+    pub(super) final_value: Option<Value>,
+    pub(super) value_changed: bool,
+}
+
+#[derive(Debug)]
 pub(crate) enum ChildObjectEffects {
     // In this version, we accurately track mutations via WriteRef to the child object, or
     // references rooted in the child object.
     V0(BTreeMap<ObjectID, ChildObjectEffectV0>),
+    // In this version, we instead check always return the value, and report if it changed.
+    V1(BTreeMap<ObjectID, ChildObjectEffectV1>),
 }
 
 struct Inner<'a> {
@@ -305,12 +321,13 @@ impl<'a> Inner<'a> {
         child_ty_layout: &R::MoveTypeLayout,
         child_ty_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: &MoveObjectType,
-    ) -> PartialVMResult<ObjectResult<(Type, GlobalValue)>> {
+    ) -> PartialVMResult<ObjectResult<(Type, GlobalValue, ValueFingerprint)>> {
         let obj = match self.get_or_fetch_object_from_store(parent, child)? {
             None => {
                 return Ok(ObjectResult::Loaded((
                     child_ty.clone(),
                     GlobalValue::none(),
+                    ValueFingerprint::none(),
                 )))
             }
             Some(obj) => obj,
@@ -319,7 +336,7 @@ impl<'a> Inner<'a> {
         if obj.type_() != child_move_type {
             return Ok(ObjectResult::MismatchedType);
         }
-        // generate a GlobalValue
+        // deserialize the value
         let obj_contents = obj.contents();
         let v = match Value::simple_deserialize(obj_contents, child_ty_layout) {
             Some(v) => v,
@@ -329,6 +346,17 @@ impl<'a> Inner<'a> {
                 ),
             ),
         };
+        // save a fingerprint
+        let fingerprint = if todo!("protocol config gate") {
+            ValueFingerprint::for_value(&v).map_err(|e| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("Failed to fingerprint value for object {child}. Error: {e}"),
+                )
+            })?
+        } else {
+            ValueFingerprint::none()
+        };
+        // generate a global value
         let global_value =
             match GlobalValue::cached(v) {
                 Ok(gv) => gv,
@@ -355,7 +383,11 @@ impl<'a> Inner<'a> {
                 }
             }
         }
-        Ok(ObjectResult::Loaded((child_ty.clone(), global_value)))
+        Ok(ObjectResult::Loaded((
+            child_ty.clone(),
+            global_value,
+            fingerprint,
+        )))
     }
 }
 
@@ -501,7 +533,7 @@ impl<'a> ChildObjectStore<'a> {
         let store_entries_count = self.store.len() as u64;
         let child_object = match self.store.entry(child) {
             btree_map::Entry::Vacant(e) => {
-                let (ty, value) = match self.inner.fetch_object_impl(
+                let (ty, value, fingerprint) = match self.inner.fetch_object_impl(
                     parent,
                     child,
                     child_ty,
@@ -540,6 +572,7 @@ impl<'a> ChildObjectStore<'a> {
                     ty,
                     move_type: child_move_type,
                     value,
+                    fingerprint,
                 })
             }
             btree_map::Entry::Occupied(e) => {
@@ -582,7 +615,10 @@ impl<'a> ChildObjectStore<'a> {
                 ));
         };
 
-        let mut value = if let Some(ChildObject { value, .. }) = self.store.remove(&child) {
+        let (mut value, fingerprint) = if let Some(ChildObject {
+            value, fingerprint, ..
+        }) = self.store.remove(&child)
+        {
             if value.exists()? {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -595,9 +631,9 @@ impl<'a> ChildObjectStore<'a> {
                         ),
                 );
             }
-            value
+            (value, fingerprint)
         } else {
-            GlobalValue::none()
+            (GlobalValue::none(), ValueFingerprint::none())
         };
         if let Err((e, _)) = value.move_to(child_value) {
             return Err(
@@ -611,6 +647,7 @@ impl<'a> ChildObjectStore<'a> {
             ty: child_ty.clone(),
             move_type: child_move_type,
             value,
+            fingerprint,
         };
         self.store.insert(child, child_object);
         Ok(())
@@ -715,22 +752,48 @@ impl<'a> ChildObjectStore<'a> {
     }
 
     // retrieve the `Op` effects for the child objects
-    pub(super) fn take_effects(&mut self) -> ChildObjectEffects {
-        let v0_effects = std::mem::take(&mut self.store)
-            .into_iter()
-            .filter_map(|(id, child_object)| {
-                let ChildObject {
-                    owner,
-                    ty,
-                    move_type: _,
-                    value,
-                } = child_object;
-                let effect = value.into_effect()?;
-                let child_effect = ChildObjectEffectV0 { owner, ty, effect };
-                Some((id, child_effect))
-            })
-            .collect();
-        ChildObjectEffects::V0(v0_effects)
+    pub(super) fn take_effects(&mut self) -> PartialVMResult<ChildObjectEffects> {
+        if todo!("protocol config gate") {
+            let v1_effects = std::mem::take(&mut self.store)
+                .into_iter()
+                .map(|(id, child_object)| {
+                    let ChildObject {
+                        owner,
+                        ty,
+                        move_type: _,
+                        value,
+                        fingerprint,
+                    } = child_object;
+                    let final_value = value.into_value();
+                    let value_changed = fingerprint.value_has_changed(&final_value)?;
+                    let child_effect = ChildObjectEffectV1 {
+                        owner,
+                        ty,
+                        final_value,
+                        value_changed,
+                    };
+                    Ok((id, child_effect))
+                })
+                .collect::<PartialVMResult<_>>()?;
+            Ok(ChildObjectEffects::V1(v1_effects))
+        } else {
+            let v0_effects = std::mem::take(&mut self.store)
+                .into_iter()
+                .filter_map(|(id, child_object)| {
+                    let ChildObject {
+                        owner,
+                        ty,
+                        move_type: _,
+                        value,
+                        fingerprint: _,
+                    } = child_object;
+                    let effect = value.into_effect()?;
+                    let child_effect = ChildObjectEffectV0 { owner, ty, effect };
+                    Some((id, child_effect))
+                })
+                .collect();
+            Ok(ChildObjectEffects::V0(v0_effects))
+        }
     }
 
     pub(super) fn all_active_objects(&self) -> impl Iterator<Item = ActiveChildObject<'_>> {
@@ -756,6 +819,26 @@ impl<'a> ChildObjectStore<'a> {
                 move_type: &child_object.move_type,
                 copied_value: copied_child_value,
             }
+        })
+    }
+}
+
+impl ValueFingerprint {
+    fn none() -> Self {
+        Self { original: None }
+    }
+
+    fn for_value(original: &Value) -> PartialVMResult<Self> {
+        Ok(Self {
+            original: Some(original.copy_value()?),
+        })
+    }
+
+    fn value_has_changed(&self, final_value: &Option<Value>) -> PartialVMResult<bool> {
+        Ok(match (&self.original, final_value) {
+            (None, None) => false,
+            (None, Some(_)) | (Some(_), None) => true,
+            (Some(original), Some(final_value)) => original.equals(final_value)?,
         })
     }
 }
