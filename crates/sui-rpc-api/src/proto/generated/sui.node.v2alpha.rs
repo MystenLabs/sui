@@ -155,15 +155,7 @@ pub struct SimulateTransactionRequest {
     #[prost(message, optional, tag = "2")]
     pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
     #[prost(message, optional, tag = "3")]
-    pub options: ::core::option::Option<SimulateTransactionOptions>,
-}
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct SimulateTransactionOptions {
-    /// Include the `BalanceChange`s in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "8")]
-    pub balance_changes: ::core::option::Option<bool>,
+    pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SimulateTransactionResponse {
@@ -180,10 +172,8 @@ pub struct ResolveTransactionRequest {
     /// Json unresolved transaction type
     #[prost(string, optional, tag = "1")]
     pub unresolved_transaction: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(bool, optional, tag = "2")]
-    pub simulate: ::core::option::Option<bool>,
     #[prost(message, optional, tag = "3")]
-    pub simulate_options: ::core::option::Option<SimulateTransactionOptions>,
+    pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolveTransactionResponse {
@@ -1011,12 +1001,12 @@ pub mod node_service_server {
     }
 }
 /// Request message for SubscriptionService.SubscribeCheckpoints
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SubscribeCheckpointsRequest {
-    /// Optional. Options for specifiying which parts of the
+    /// Optional. Mask for specifiying which parts of the
     /// SubscribeCheckpointsResponse should be returned.
-    #[prost(message, optional, tag = "1")]
-    pub options: ::core::option::Option<super::v2::GetFullCheckpointOptions>,
+    #[prost(message, optional, tag = "3")]
+    pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
 /// Response message for SubscriptionService.SubscribeCheckpoints
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1131,7 +1121,7 @@ pub mod subscription_service_client {
         /// event the subscription terminates (either by the client/server or by the
         /// connection breaking), clients will be able to reinitailize a subscription
         /// and then leverage other APIs (e.g.
-        /// sui.node.v1.NodeService.GetFullCheckpoint) in order to request data for
+        /// sui.node.v2.NodeService.GetFullCheckpoint) in order to request data for
         /// the checkpoints they missed.
         pub async fn subscribe_checkpoints(
             &mut self,
@@ -1198,7 +1188,7 @@ pub mod subscription_service_server {
         /// event the subscription terminates (either by the client/server or by the
         /// connection breaking), clients will be able to reinitailize a subscription
         /// and then leverage other APIs (e.g.
-        /// sui.node.v1.NodeService.GetFullCheckpoint) in order to request data for
+        /// sui.node.v2.NodeService.GetFullCheckpoint) in order to request data for
         /// the checkpoints they missed.
         async fn subscribe_checkpoints(
             &self,

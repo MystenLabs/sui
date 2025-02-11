@@ -3,7 +3,7 @@
 
 use crate::proto::types::Bcs;
 use http::{Request, Response};
-use std::{convert::Infallible, pin::Pin, sync::Arc};
+use std::{convert::Infallible, pin::Pin};
 use tap::Pipe;
 use tonic::{
     body::{boxed, BoxBody},
@@ -91,7 +91,13 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
             .try_into()
             .map_err(|_| tonic::Status::new(tonic::Code::InvalidArgument, "invalid object_id"))?;
         let version = request.version;
-        let options = request.options.unwrap_or_default().into();
+        let options = if let Some(read_mask) = request.read_mask {
+            crate::types::GetObjectOptions::from_read_mask(read_mask)
+        } else if let Some(options) = request.options {
+            options.into()
+        } else {
+            Default::default()
+        };
 
         self.get_object(object_id, version, options)
             .map(Into::into)
@@ -118,7 +124,13 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
                 tonic::Status::new(tonic::Code::InvalidArgument, "invalid transaction_digest")
             })?;
 
-        let options = request.options.unwrap_or_default().into();
+        let options = if let Some(read_mask) = request.read_mask {
+            crate::types::GetTransactionOptions::from_read_mask(read_mask)
+        } else if let Some(options) = request.options {
+            options.into()
+        } else {
+            Default::default()
+        };
 
         self.get_transaction(transaction_digest, &options)
             .map(Into::into)
@@ -152,7 +164,13 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
             (None, None) => None,
         };
 
-        let options = request.options.unwrap_or_default().into();
+        let options = if let Some(read_mask) = request.read_mask {
+            crate::types::GetCheckpointOptions::from_read_mask(read_mask)
+        } else if let Some(options) = request.options {
+            options.into()
+        } else {
+            Default::default()
+        };
 
         self.get_checkpoint(checkpoint, options)
             .map(Into::into)
@@ -192,7 +210,13 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
             }
         };
 
-        let options = request.options.unwrap_or_default().into();
+        let options = if let Some(read_mask) = request.read_mask {
+            crate::types::GetFullCheckpointOptions::from_read_mask(read_mask)
+        } else if let Some(options) = request.options {
+            options.into()
+        } else {
+            Default::default()
+        };
 
         self.get_full_checkpoint(checkpoint, &options)
             .map(Into::into)
@@ -300,7 +324,7 @@ impl crate::proto::node::v2alpha::subscription_service_server::SubscriptionServi
         &self,
         request: tonic::Request<crate::proto::node::v2alpha::SubscribeCheckpointsRequest>,
     ) -> Result<tonic::Response<Self::SubscribeCheckpointsStream>, tonic::Status> {
-        let options = request.into_inner().options.unwrap_or_default();
+        let read_mask = request.into_inner().read_mask.unwrap_or_default();
 
         let Some(mut receiver) = self.register_subscription().await else {
             return Err(tonic::Status::unavailable(
@@ -315,7 +339,7 @@ impl crate::proto::node::v2alpha::subscription_service_server::SubscriptionServi
                     break;
                 };
 
-                let checkpoint = apply_checkpont_options(&options, Arc::unwrap_or_clone(checkpoint));
+                let checkpoint = apply_checkpoint_read_mask(&read_mask, &checkpoint);
                 let response = SubscribeCheckpointsResponse {
                     cursor: Some(cursor),
                     checkpoint: Some(checkpoint),
@@ -333,69 +357,101 @@ impl crate::proto::node::v2alpha::subscription_service_server::SubscriptionServi
 //
 // This function assumes that the provided checkpoint has all fields populated and that applying
 // the requested options is a matter of removing the data that the request didn't ask for.
-fn apply_checkpont_options(
-    options: &crate::proto::node::v2::GetFullCheckpointOptions,
-    mut checkpoint: crate::proto::node::v2::GetFullCheckpointResponse,
+fn apply_checkpoint_read_mask(
+    read_mask: &prost_types::FieldMask,
+    checkpoint: &crate::proto::node::v2::GetFullCheckpointResponse,
 ) -> crate::proto::node::v2::GetFullCheckpointResponse {
-    if !options.summary() {
-        checkpoint.summary = None;
-    }
-    if !options.summary_bcs() {
-        checkpoint.summary_bcs = None;
-    }
-    if !options.signature() {
-        checkpoint.signature = None;
-    }
-    if !options.contents() {
-        checkpoint.contents = None;
-    }
-    if !options.contents_bcs() {
-        checkpoint.contents_bcs = None;
-    }
+    let mut response = crate::proto::node::v2::GetFullCheckpointResponse::default();
 
-    for transaction in checkpoint.transactions.iter_mut() {
-        if !options.transaction() {
-            transaction.transaction = None;
-        }
-        if !options.transaction_bcs() {
-            transaction.transaction_bcs = None;
-        }
-        if !options.effects() {
-            transaction.effects = None;
-        }
-        if !options.effects_bcs() {
-            transaction.effects_bcs = None;
-        }
-        if !options.events() {
-            transaction.events = None;
-        }
-        if !options.events_bcs() {
-            transaction.events_bcs = None;
-        }
-        if !options.input_objects() {
-            transaction.input_objects_old = None;
-            transaction.input_objects.clear();
-        }
-        if !options.output_objects() {
-            transaction.output_objects_old = None;
-            transaction.output_objects.clear();
-        }
+    for path in &read_mask.paths {
+        let mut components = path.split('.');
+        let Some(component) = components.next() else {
+            continue;
+        };
 
-        for object in transaction
-            .input_objects
-            .iter_mut()
-            .chain(transaction.output_objects.iter_mut())
-        {
-            if !options.object() {
-                object.object = None;
+        match component {
+            "sequence_number" => response.sequence_number = checkpoint.sequence_number,
+            "digest" => response.digest = checkpoint.digest.clone(),
+            "summary" => response.summary = checkpoint.summary.clone(),
+            "summary_bcs" => response.summary_bcs = checkpoint.summary_bcs.clone(),
+            "signature" => response.signature = checkpoint.signature.clone(),
+            "contents" => response.contents = checkpoint.contents.clone(),
+            "contents_bcs" => response.contents_bcs = checkpoint.contents_bcs.clone(),
+            "transactions" => {
+                let Some(component) = components.next() else {
+                    response.transactions = checkpoint.transactions.clone();
+                    continue;
+                };
+                if response.transactions.len() != checkpoint.transactions.len() {
+                    response.transactions = vec![Default::default(); checkpoint.transactions.len()];
+                }
+
+                for (src, dst) in checkpoint
+                    .transactions
+                    .iter()
+                    .zip(response.transactions.iter_mut())
+                {
+                    match component {
+                        "digest" => dst.digest = src.digest.clone(),
+                        "transaction" => dst.transaction = src.transaction.clone(),
+                        "transaction_bcs" => dst.transaction_bcs = src.transaction_bcs.clone(),
+                        "effects" => dst.effects = src.effects.clone(),
+                        "effects_bcs" => dst.effects_bcs = src.effects_bcs.clone(),
+                        "events" => dst.events = src.events.clone(),
+                        "events_bcs" => dst.events_bcs = src.events_bcs.clone(),
+                        "input_objects" => {
+                            let Some(component) = components.clone().next() else {
+                                dst.input_objects = src.input_objects.clone();
+                                continue;
+                            };
+                            if dst.input_objects.len() != src.input_objects.len() {
+                                dst.input_objects =
+                                    vec![Default::default(); src.input_objects.len()];
+                            }
+
+                            for (src, dst) in
+                                src.input_objects.iter().zip(dst.input_objects.iter_mut())
+                            {
+                                match component {
+                                    "object" => dst.object = src.object.clone(),
+                                    "object_bcs" => dst.object_bcs = src.object_bcs.clone(),
+                                    // Ignore unknown field
+                                    _ => {}
+                                }
+                            }
+                        }
+                        "output_objects" => {
+                            let Some(component) = components.clone().next() else {
+                                dst.output_objects = src.output_objects.clone();
+                                continue;
+                            };
+                            if dst.output_objects.len() != src.output_objects.len() {
+                                dst.output_objects =
+                                    vec![Default::default(); src.output_objects.len()];
+                            }
+
+                            for (src, dst) in
+                                src.output_objects.iter().zip(dst.output_objects.iter_mut())
+                            {
+                                match component {
+                                    "object" => dst.object = src.object.clone(),
+                                    "object_bcs" => dst.object_bcs = src.object_bcs.clone(),
+                                    // Ignore unknown field
+                                    _ => {}
+                                }
+                            }
+                        }
+                        // Ignore unknown field
+                        _ => {}
+                    }
+                }
             }
-            if !options.object_bcs() {
-                object.object_bcs = None;
-            }
+            // Ignore unknown field
+            _ => {}
         }
     }
 
-    checkpoint
+    response
 }
 
 #[tonic::async_trait]
@@ -466,11 +522,9 @@ impl crate::proto::node::v2alpha::node_service_server::NodeService for crate::Rp
         tonic::Status,
     > {
         let request = request.into_inner();
+        //TODO use provided read_mask
         let parameters = crate::types::SimulateTransactionQueryParameters {
-            balance_changes: request
-                .options
-                .and_then(|options| options.balance_changes)
-                .unwrap_or(false),
+            balance_changes: false,
             input_objects: false,
             output_objects: false,
         };
@@ -511,25 +565,29 @@ impl crate::proto::node::v2alpha::node_service_server::NodeService for crate::Rp
         tonic::Status,
     > {
         let request = request.into_inner();
+        let read_mask = request.read_mask.unwrap_or_default();
+        //TODO use provided read_mask
         let simulate_parameters = crate::types::SimulateTransactionQueryParameters {
-            balance_changes: request
-                .simulate_options
-                .and_then(|options| options.balance_changes)
-                .unwrap_or(false),
+            balance_changes: false,
             input_objects: false,
             output_objects: false,
         };
         let parameters = crate::types::ResolveTransactionQueryParameters {
-            simulate: request.simulate.unwrap_or(false),
+            simulate: read_mask
+                .paths
+                .iter()
+                .any(|path| path.starts_with("simulation")),
             simulate_transaction_parameters: simulate_parameters,
         };
-        let unresolved_transaction = serde_json::from_str(request.unresolved_transaction())
-            .map_err(|_| {
-                tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "invalid unresolved_transaction",
-                )
-            })?;
+        let unresolved_transaction = serde_json::from_str(
+            &request.unresolved_transaction.unwrap_or_default(),
+        )
+        .map_err(|_| {
+            tonic::Status::new(
+                tonic::Code::InvalidArgument,
+                "invalid unresolved_transaction",
+            )
+        })?;
 
         let response = self.resolve_transaction(parameters, unresolved_transaction)?;
 

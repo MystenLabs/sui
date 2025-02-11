@@ -137,6 +137,7 @@ async fn get_checkpoint() {
             sequence_number: Some(sequence_number.unwrap()),
             digest: Some(digest.clone().unwrap()),
             options: None,
+            read_mask: None,
         })
         .await
         .unwrap_err();
@@ -401,6 +402,7 @@ async fn get_full_checkpoint() {
             sequence_number: Some(sequence_number.unwrap()),
             digest: Some(digest.clone().unwrap()),
             options: None,
+            read_mask: None,
         })
         .await
         .unwrap_err();
@@ -420,8 +422,14 @@ async fn subscribe_checkpoint() {
         .await
         .unwrap();
 
+    let request = SubscribeCheckpointsRequest {
+        read_mask: Some(prost_types::FieldMask {
+            paths: vec!["sequence_number".to_owned()],
+        }),
+    };
+
     let mut stream = client
-        .subscribe_checkpoints(SubscribeCheckpointsRequest::default())
+        .subscribe_checkpoints(request)
         .await
         .unwrap()
         .into_inner();

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod response_ext;
+use prost_types::FieldMask;
 pub use response_ext::ResponseExt;
 
 use tap::Pipe;
@@ -99,6 +100,12 @@ impl Client {
                 contents: Some(false),
                 contents_bcs: Some(false),
             }),
+            read_mask: Some(FieldMask {
+                paths: ["summary_bcs", "signature"]
+                    .into_iter()
+                    .map(ToOwned::to_owned)
+                    .collect(),
+            }),
         };
 
         let (
@@ -143,6 +150,21 @@ impl Client {
                 object: Some(false),
                 object_bcs: Some(true),
             }),
+            read_mask: Some(FieldMask {
+                paths: [
+                    "summary_bcs",
+                    "signature",
+                    "contents_bcs",
+                    "transactions.transaction_bcs",
+                    "transactions.effects_bcs",
+                    "transactions.events_bcs",
+                    "transactions.input_objects.object_bcs",
+                    "transactions.output_objects.object_bcs",
+                ]
+                .into_iter()
+                .map(ToOwned::to_owned)
+                .collect(),
+            }),
         };
 
         let (metadata, response, _extentions) = self
@@ -181,6 +203,9 @@ impl Client {
                 object: Some(false),
                 object_bcs: Some(true),
             }),
+            read_mask: Some(FieldMask {
+                paths: ["object_bcs"].into_iter().map(ToOwned::to_owned).collect(),
+            }),
         };
 
         let (metadata, GetObjectResponse { object_bcs, .. }, _extentions) =
@@ -216,6 +241,12 @@ impl Client {
                 events: Some(false),
                 events_bcs: Some(true),
                 ..(parameters.to_owned().into())
+            }),
+            read_mask: Some(FieldMask {
+                paths: ["effects_bcs", "events_bcs", "balance_changes"]
+                    .into_iter()
+                    .map(ToOwned::to_owned)
+                    .collect(),
             }),
         };
 

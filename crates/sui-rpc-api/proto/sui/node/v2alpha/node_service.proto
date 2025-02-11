@@ -7,6 +7,7 @@ syntax = "proto3";
 
 package sui.node.v2alpha;
 
+import "google/protobuf/field_mask.proto";
 import "sui/node/v2/node_service.proto";
 import "sui/types/types.proto";
 
@@ -160,14 +161,7 @@ message GetGasInfoResponse {
 
 message SimulateTransactionRequest {
   optional sui.types.Bcs transaction_bcs = 2;
-  optional SimulateTransactionOptions options = 3;
-}
-
-message SimulateTransactionOptions {
-  // Include the `BalanceChange`s in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool balance_changes = 8;
+  optional google.protobuf.FieldMask read_mask = 3;
 }
 
 message SimulateTransactionResponse {
@@ -180,8 +174,7 @@ message ResolveTransactionRequest {
   // TODO FIX TYPE
   // Json unresolved transaction type
   optional string unresolved_transaction = 1;
-  optional bool simulate = 2;
-  optional SimulateTransactionOptions simulate_options = 3;
+  optional google.protobuf.FieldMask read_mask = 3;
 }
 
 message ResolveTransactionResponse {

@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use prost_types::FieldMask;
+
 /// Chain ID of the current chain
 pub const X_SUI_CHAIN_ID: &str = "x-sui-chain-id";
 
@@ -107,6 +109,20 @@ impl GetObjectOptions {
     pub fn include_object_bcs(&self) -> bool {
         self.object_bcs.unwrap_or(false)
     }
+
+    pub fn from_read_mask(read_mask: FieldMask) -> Self {
+        let mut options = Self::default();
+
+        for path in read_mask.paths {
+            match path.as_str() {
+                "object" => options.object = Some(true),
+                "object_bcs" => options.object_bcs = Some(true),
+                _ => {}
+            }
+        }
+
+        options
+    }
 }
 
 #[serde_with::serde_as]
@@ -187,6 +203,23 @@ impl GetCheckpointOptions {
 
     pub fn include_contents_bcs(&self) -> bool {
         self.contents_bcs.unwrap_or(false)
+    }
+
+    pub fn from_read_mask(read_mask: FieldMask) -> Self {
+        let mut options = Self::default();
+
+        for path in read_mask.paths {
+            match path.as_str() {
+                "summary" => options.summary = Some(true),
+                "summary_bcs" => options.summary_bcs = Some(true),
+                "signature" => options.signature = Some(true),
+                "contents" => options.contents = Some(true),
+                "contents_bcs" => options.contents_bcs = Some(true),
+                _ => {}
+            }
+        }
+
+        options
     }
 }
 
@@ -319,6 +352,26 @@ impl GetTransactionOptions {
     pub fn include_events_bcs(&self) -> bool {
         self.events_bcs.unwrap_or(false)
     }
+
+    pub fn from_read_mask(read_mask: FieldMask) -> Self {
+        let mut options = Self::default();
+
+        for path in read_mask.paths {
+            match path.as_str() {
+                "transaction" => options.transaction = Some(true),
+                "transaction_bcs" => options.transaction_bcs = Some(true),
+                "effects" => options.effects = Some(true),
+                "effects_bcs" => options.effects_bcs = Some(true),
+                "events" => options.events = Some(true),
+                "events_bcs" => options.events_bcs = Some(true),
+                "signatures" => options.signatures = Some(true),
+                "signatures_bytes" => options.signatures_bytes = Some(true),
+                _ => {}
+            }
+        }
+
+        options
+    }
 }
 
 /// Options for the execute transaction endpoint
@@ -382,6 +435,23 @@ impl ExecuteTransactionOptions {
 
     pub fn include_output_objects(&self) -> bool {
         false
+    }
+
+    pub fn from_read_mask(read_mask: FieldMask) -> Self {
+        let mut options = Self::default();
+
+        for path in read_mask.paths {
+            match path.as_str() {
+                "effects" => options.effects = Some(true),
+                "effects_bcs" => options.effects_bcs = Some(true),
+                "events" => options.events = Some(true),
+                "events_bcs" => options.events_bcs = Some(true),
+                "balance_changes" => options.balance_changes = Some(true),
+                _ => {}
+            }
+        }
+
+        options
     }
 }
 
@@ -589,6 +659,45 @@ impl GetFullCheckpointOptions {
             || self.include_events_bcs()
             || self.include_input_objects()
             || self.include_output_objects()
+    }
+
+    pub fn from_read_mask(read_mask: FieldMask) -> Self {
+        let mut options = Self::default();
+
+        for path in read_mask.paths {
+            match path.as_str() {
+                "summary" => options.summary = Some(true),
+                "summary_bcs" => options.summary_bcs = Some(true),
+                "signature" => options.signature = Some(true),
+                "contents" => options.contents = Some(true),
+                "contents_bcs" => options.contents_bcs = Some(true),
+                "transactions.transaction" => options.transaction = Some(true),
+                "transactions.transaction_bcs" => options.transaction_bcs = Some(true),
+                "transactions.effects" => options.effects = Some(true),
+                "transactions.effects_bcs" => options.effects_bcs = Some(true),
+                "transactions.events" => options.events = Some(true),
+                "transactions.events_bcs" => options.events_bcs = Some(true),
+                "transactions.input_objects.object" => {
+                    options.input_objects = Some(true);
+                    options.object = Some(true);
+                }
+                "transactions.input_objects.object_bcs" => {
+                    options.input_objects = Some(true);
+                    options.object_bcs = Some(true);
+                }
+                "transactions.output_objects.object" => {
+                    options.output_objects = Some(true);
+                    options.object = Some(true);
+                }
+                "transactions.output_objects.object_bcs" => {
+                    options.output_objects = Some(true);
+                    options.object_bcs = Some(true);
+                }
+                _ => {}
+            }
+        }
+
+        options
     }
 }
 

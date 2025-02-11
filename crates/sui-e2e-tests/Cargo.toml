@@ -69,6 +69,7 @@ shared-crypto.workspace = true
 sui-sdk-types.workspace = true
 sui-sdk-transaction-builder.workspace = true
 tonic.workspace = true
+prost-types.workspace = true
 
 passkey-types.workspace = true
 passkey-client.workspace = true
