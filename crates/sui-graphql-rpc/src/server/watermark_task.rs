@@ -182,23 +182,35 @@ impl Watermark {
     /// table to get the `min_tx_sequence_number` for that lower bound.
     #[allow(clippy::type_complexity)]
     pub(crate) async fn query(db: &Db) -> Result<Option<Watermark>, Error> {
-        use checkpoints::dsl as c;
-        use watermarks::dsl as w;
+        let (reader_lo_to_tx, cp_hi_to_timestamp) = diesel::alias!(
+            checkpoints as reader_lo_to_tx,
+            checkpoints as cp_hi_to_timestamp
+        );
 
         let Some(result): Option<(i64, i64, i64, i64, i64, Option<i64>)> = db
             .execute(move |conn| {
-                async {
+                async move {
                     conn.result(move || {
-                        w::watermarks
-                            .inner_join(c::checkpoints.on(w::reader_lo.eq(c::sequence_number)))
-                            .filter(w::pipeline.eq("checkpoints"))
+                        watermarks::table
+                            // Join for reader_lo -> checkpoints (as cp_reader) to get min_tx_sequence_number
+                            .inner_join(
+                                reader_lo_to_tx.on(watermarks::reader_lo
+                                    .eq(reader_lo_to_tx.field(checkpoints::sequence_number))),
+                            )
+                            // Join for checkpoint_hi_inclusive -> checkpoints (as cp_hi) to get
+                            // timestamp_ms of cp_hi
+                            .inner_join(
+                                cp_hi_to_timestamp.on(watermarks::checkpoint_hi_inclusive
+                                    .eq(cp_hi_to_timestamp.field(checkpoints::sequence_number))),
+                            )
+                            .filter(watermarks::pipeline.eq("checkpoints"))
                             .select((
-                                c::epoch,
-                                c::timestamp_ms,
-                                w::checkpoint_hi_inclusive,
-                                w::tx_hi,
-                                w::reader_lo,
-                                c::min_tx_sequence_number,
+                                watermarks::epoch_hi_inclusive,
+                                cp_hi_to_timestamp.field(checkpoints::timestamp_ms),
+                                watermarks::checkpoint_hi_inclusive,
+                                watermarks::tx_hi,
+                                watermarks::reader_lo,
+                                reader_lo_to_tx.field(checkpoints::min_tx_sequence_number),
                             ))
                     })
                     .await
@@ -224,10 +236,10 @@ impl Watermark {
                 lo_tx: lo_tx as u64,
             }))
         } else {
-            return Err(Error::Internal(
+            Err(Error::Internal(
                 "Expected entry for tx lower bound and min_tx_sequence_number to be non-null"
                     .to_string(),
-            ));
+            ))
         }
     }
 }

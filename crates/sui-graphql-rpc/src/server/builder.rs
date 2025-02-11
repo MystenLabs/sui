@@ -1148,6 +1148,10 @@ pub mod tests {
     pub async fn test_health_check() {
         let cluster = prep_executor_cluster().await;
 
+        cluster
+            .wait_for_checkpoint_catchup(6, Duration::from_secs(60))
+            .await;
+
         let url = format!(
             "http://{}:{}/health",
             cluster.graphql_connection_config.host, cluster.graphql_connection_config.port
