@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[deprecated]
 module deepbook::clob_v2 {
     use std::type_name::{Self, TypeName};
 

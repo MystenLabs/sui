@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[deprecated]
 module deepbook::order_query {
     use std::option::{some, none};
     use deepbook::critbit::CritbitTree;
