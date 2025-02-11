@@ -39,9 +39,7 @@ fn run_test_impl(path: &Path) -> anyhow::Result<()> {
     let base_output = String::from_utf8(buffer)?;
     let cleaned_output = regex.replacen(&base_output, 0, r"$1$2");
 
-    let test_name = path.file_stem().unwrap().to_str().unwrap();
     insta_assert! {
-        name: test_name,
         input_path: path,
         contents: cleaned_output,
     };

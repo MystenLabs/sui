@@ -522,9 +522,7 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
         } => hint_test_suite(project, file_tests),
     }?;
 
-    let test_name = test_path.file_stem().unwrap().to_str().unwrap();
     insta_assert! {
-        name: test_name,
         input_path: test_path,
         contents: output,
     };
