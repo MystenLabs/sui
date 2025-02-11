@@ -57,12 +57,15 @@ pub struct GetTransactionRequest {
     /// Required. The digest of the requested transaction.
     #[prost(message, optional, tag = "1")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. Options for specifying which parts of the `GetTransactionResponse`
-    /// should be returned.
+    /// DEPRECATED To be removed in the next release
     #[prost(message, optional, tag = "3")]
     pub options: ::core::option::Option<GetTransactionOptions>,
+    /// Optional. Mask for specifying which parts of the `GetTransactionResponse`
+    /// should be returned.
+    #[prost(message, optional, tag = "4")]
+    pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
-/// Options for which parts of the `GetTransactionResponse` should be returned.
+/// DEPRECATED To be removed in the next release
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetTransactionOptions {
     /// Include the `sui.types.Transaction` message in the response.
@@ -168,10 +171,15 @@ pub struct GetObjectRequest {
     /// the object is returned.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
-    /// Optional. Options for specifying which parts of the `GetObjectResponse` should be returned.
+    /// DEPRECATED To be removed in the next release
     #[prost(message, optional, tag = "3")]
     pub options: ::core::option::Option<GetObjectOptions>,
+    /// Optional. Mask for specifying which parts of the `GetObjectResponse`
+    /// should be returned.
+    #[prost(message, optional, tag = "4")]
+    pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
+/// DEPRECATED To be removed in the next release
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetObjectOptions {
     /// Include the `sui.types.Object` message in the response.
@@ -219,12 +227,15 @@ pub struct GetCheckpointRequest {
     /// Optional. The digest of the requested checkpoint.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. Options for specifying which parts of the `GetCheckpointResponse`
-    /// should be returned.
+    /// DEPRECATED To be removed in the next release
     #[prost(message, optional, tag = "3")]
     pub options: ::core::option::Option<GetCheckpointOptions>,
+    /// Optional. Mask for specifying which parts of the `GetCheckpointResponse`
+    /// should be returned.
+    #[prost(message, optional, tag = "4")]
+    pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
-/// Options for which parts of the `GetCheckpointResponse` should be returned.
+/// DEPRECATED To be removed in the next release
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetCheckpointOptions {
     /// Include the `sui.types.CheckpointSummary` in the response.
@@ -298,12 +309,15 @@ pub struct GetFullCheckpointRequest {
     /// Optional. The digest of the requested checkpoint.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. Options for specifying which parts of the
-    /// `GetFullCheckpointResponse` should be returned.
+    /// DEPRECATED To be removed in the next release
     #[prost(message, optional, tag = "3")]
     pub options: ::core::option::Option<GetFullCheckpointOptions>,
+    /// Optional. Mask for specifying which parts of the `GetFullCheckpointResponse`
+    /// should be returned.
+    #[prost(message, optional, tag = "4")]
+    pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
-/// Options for which parts of the `GetFullCheckpointResponse` should be returned.
+/// DEPRECATED To be removed in the next release
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetFullCheckpointOptions {
     /// Include the `sui.types.CheckpointSummary` in the response.
@@ -512,11 +526,15 @@ pub struct ExecuteTransactionRequest {
     /// transaction, encoded as bytes.
     #[prost(bytes = "bytes", repeated, tag = "4")]
     pub signatures_bytes: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
-    /// Optional. Options for specifying which parts of the
-    /// `ExecuteTransactionResponse` should be returned.
+    /// DEPRECATED To be removed in the next release
     #[prost(message, optional, tag = "5")]
     pub options: ::core::option::Option<ExecuteTransactionOptions>,
+    /// Optional. Mask for specifying which parts of the
+    /// `ExecuteTransactionResponse` should be returned.
+    #[prost(message, optional, tag = "6")]
+    pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
+/// DEPRECATED To be removed in the next release
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct ExecuteTransactionOptions {
     /// Include the `sui.types.TransactionEffects` message in the response.
@@ -626,7 +644,7 @@ pub mod node_service_client {
     )]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
-    /// Service for reading data from a Sui Full node.
+    /// Service for reading data from a Sui Fullnode.
     #[derive(Debug, Clone)]
     pub struct NodeServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -1052,7 +1070,7 @@ pub mod node_service_server {
             tonic::Status,
         >;
     }
-    /// Service for reading data from a Sui Full node.
+    /// Service for reading data from a Sui Fullnode.
     #[derive(Debug)]
     pub struct NodeServiceServer<T> {
         inner: Arc<T>,

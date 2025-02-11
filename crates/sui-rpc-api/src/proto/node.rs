@@ -231,6 +231,7 @@ impl GetObjectRequest {
             object_id: Some(object_id.into()),
             version: None,
             options: None,
+            read_mask: None,
         }
     }
 
@@ -431,6 +432,7 @@ impl GetCheckpointRequest {
             sequence_number: None,
             digest: None,
             options: None,
+            read_mask: None,
         }
     }
 
@@ -439,6 +441,7 @@ impl GetCheckpointRequest {
             sequence_number: None,
             digest: Some(digest.into()),
             options: None,
+            read_mask: None,
         }
     }
 
@@ -447,6 +450,7 @@ impl GetCheckpointRequest {
             sequence_number: Some(sequence_number),
             digest: None,
             options: None,
+            read_mask: None,
         }
     }
 
@@ -629,6 +633,7 @@ impl GetTransactionRequest {
         Self {
             digest: Some(digest.into()),
             options: None,
+            read_mask: None,
         }
     }
 
@@ -968,6 +973,7 @@ impl GetFullCheckpointRequest {
             sequence_number: None,
             digest: None,
             options: None,
+            read_mask: None,
         }
     }
 
@@ -976,6 +982,7 @@ impl GetFullCheckpointRequest {
             sequence_number: None,
             digest: Some(digest.into()),
             options: None,
+            read_mask: None,
         }
     }
 
@@ -984,6 +991,7 @@ impl GetFullCheckpointRequest {
             sequence_number: Some(sequence_number),
             digest: None,
             options: None,
+            read_mask: None,
         }
     }
 

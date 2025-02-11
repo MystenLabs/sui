@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use prost_types::FieldMask;
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -20,10 +21,16 @@ fn build_resolve_request(
     transaction: &unresolved::Transaction,
     simulate: bool,
 ) -> ResolveTransactionRequest {
+    let read_mask = if simulate {
+        Some(FieldMask {
+            paths: vec!["simulation".to_string()],
+        })
+    } else {
+        None
+    };
     ResolveTransactionRequest {
         unresolved_transaction: Some(serde_json::to_string(transaction).unwrap()),
-        simulate: Some(simulate),
-        simulate_options: None,
+        read_mask,
     }
 }
 
