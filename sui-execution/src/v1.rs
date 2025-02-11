@@ -81,7 +81,7 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        _trace_builder_opt: Option<&mut MoveTraceBuilder>,
+        _trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,

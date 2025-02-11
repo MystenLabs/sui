@@ -81,7 +81,7 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        trace_builder_opt: Option<&mut MoveTraceBuilder>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -146,7 +146,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
-                None,
+                &mut None,
             )
         } else {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
@@ -164,7 +164,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
-                None,
+                &mut None,
             )
         };
         (inner_temp_store, gas_status, effects, result)

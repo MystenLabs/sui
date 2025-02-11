@@ -964,7 +964,7 @@ mod checked {
             function_name: &IdentStr,
             ty_args: Vec<Type>,
             args: Vec<impl Borrow<[u8]>>,
-            tracer: Option<&mut MoveTraceBuilder>,
+            tracer: &mut Option<MoveTraceBuilder>,
         ) -> VMResult<SerializedReturnValues> {
             let gas_status = self.gas_charger.move_gas_status_mut();
             let mut data_store = SuiDataStore::new(&self.linkage_view, &self.new_packages);
@@ -976,7 +976,7 @@ mod checked {
                 &mut data_store,
                 gas_status,
                 &mut self.native_extensions,
-                tracer,
+                tracer.as_mut(),
             )
         }
 

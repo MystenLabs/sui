@@ -220,7 +220,7 @@ impl SingleValidator {
                 kind,
                 signer,
                 *executable.digest(),
-                None,
+                &mut None,
             );
         assert!(effects.status().is_ok());
         store.commit_objects(inner_temp_store);

@@ -42,7 +42,7 @@ pub trait Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        trace_builder_opt: Option<&mut MoveTraceBuilder>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,

@@ -93,7 +93,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
-        trace_builder_opt: Option<&mut MoveTraceBuilder>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -265,7 +265,7 @@ mod checked {
             tx_context,
             &mut gas_charger,
             pt,
-            None,
+            &mut None,
         )
         .map_err(|(e, _)| e)?;
         temporary_store.update_object_version_and_prev_tx();
@@ -285,7 +285,7 @@ mod checked {
         deny_cert: bool,
         contains_deleted_input: bool,
         cancelled_objects: Option<(Vec<ObjectID>, SequenceNumber)>,
-        trace_builder_opt: Option<&mut MoveTraceBuilder>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -572,7 +572,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        trace_builder_opt: Option<&mut MoveTraceBuilder>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
         let result = match transaction_kind {
             TransactionKind::ChangeEpoch(change_epoch) => {
@@ -911,7 +911,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             advance_epoch_pt,
-            None,
+            &mut None,
         );
 
         #[cfg(msim)]
@@ -941,7 +941,7 @@ mod checked {
                     tx_ctx,
                     gas_charger,
                     advance_epoch_safe_mode_pt,
-                    None,
+                    &mut None,
                 )
                 .map_err(|(e, _)| e)
                 .expect("Advance epoch with safe mode must succeed");
@@ -1012,7 +1012,7 @@ mod checked {
                     tx_ctx,
                     gas_charger,
                     publish_pt,
-                    None,
+                    &mut None,
                 )
                 .map_err(|(e, _)| e)
                 .expect("System Package Publish must succeed");
@@ -1082,7 +1082,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             pt,
-            None,
+            &mut None,
         )
         .map_err(|(e, _)| e)?;
         Ok(())
@@ -1226,7 +1226,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             pt,
-            None,
+            &mut None,
         )
         .map_err(|(e, _)| e)?;
         Ok(())
@@ -1295,7 +1295,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             pt,
-            None,
+            &mut None,
         )
         .map_err(|(e, _)| e)?;
         Ok(())

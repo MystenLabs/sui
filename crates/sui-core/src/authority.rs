@@ -1688,7 +1688,7 @@ impl AuthorityState {
                 kind,
                 signer,
                 tx_digest,
-                None,
+                &mut None,
             );
 
         fail_point_if!("cp_execution_nondeterminism", || {
@@ -1881,7 +1881,7 @@ impl AuthorityState {
                 kind,
                 signer,
                 transaction_digest,
-                None,
+                &mut None,
             );
         let tx_digest = *effects.transaction_digest();
 
@@ -2072,7 +2072,7 @@ impl AuthorityState {
                 kind,
                 signer,
                 transaction.digest(),
-                None,
+                &mut None,
             );
 
         Ok(SimulateTransactionResult {
