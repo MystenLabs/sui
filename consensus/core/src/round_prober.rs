@@ -361,7 +361,7 @@ mod test {
     use super::QuorumRound;
     use crate::{
         block::BlockRef,
-        commit::{CertifiedCommit, CommitRange},
+        commit::{CertifiedCommits, CommitRange},
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
         dag_state::DagState,
@@ -420,7 +420,7 @@ mod test {
 
         async fn add_certified_commits(
             &self,
-            _commit: Vec<CertifiedCommit>,
+            _commits: CertifiedCommits,
         ) -> Result<BTreeSet<BlockRef>, CoreError> {
             unimplemented!()
         }

@@ -207,6 +207,26 @@ impl Deref for TrustedCommit {
     }
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct CertifiedCommits {
+    commits: Vec<CertifiedCommit>,
+    votes: Vec<VerifiedBlock>,
+}
+
+impl CertifiedCommits {
+    pub(crate) fn new(commits: Vec<CertifiedCommit>, votes: Vec<VerifiedBlock>) -> Self {
+        Self { commits, votes }
+    }
+
+    pub(crate) fn commits(&self) -> &[CertifiedCommit] {
+        &self.commits
+    }
+
+    pub(crate) fn votes(&self) -> &[VerifiedBlock] {
+        &self.votes
+    }
+}
+
 /// A commit that has been synced and certified by a quorum of authorities. It has to be noted that it is expected
 /// in the majority of the cases the `votes` vector to be empty as during the sync commit process we expect to certify
 /// the tip of the fetched commits from an authority which inherently certifies the previous commits.
@@ -214,30 +234,18 @@ impl Deref for TrustedCommit {
 pub(crate) struct CertifiedCommit {
     commit: Arc<TrustedCommit>,
     blocks: Vec<VerifiedBlock>,
-    #[allow(unused)]
-    votes: Vec<VerifiedBlock>,
 }
 
 impl CertifiedCommit {
-    pub(crate) fn new_certified(
-        commit: TrustedCommit,
-        blocks: Vec<VerifiedBlock>,
-        votes: Vec<VerifiedBlock>,
-    ) -> Self {
+    pub(crate) fn new_certified(commit: TrustedCommit, blocks: Vec<VerifiedBlock>) -> Self {
         Self {
             commit: Arc::new(commit),
             blocks,
-            votes,
         }
     }
 
     pub fn blocks(&self) -> &[VerifiedBlock] {
         &self.blocks
-    }
-
-    #[allow(unused)]
-    pub fn votes(&self) -> &[VerifiedBlock] {
-        &self.votes
     }
 }
 

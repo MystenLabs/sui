@@ -22,7 +22,7 @@ use tracing::warn;
 
 use crate::{
     block::{BlockRef, Round, VerifiedBlock},
-    commit::CertifiedCommit,
+    commit::CertifiedCommits,
     context::Context,
     core::Core,
     core_thread::CoreError::Shutdown,
@@ -40,7 +40,7 @@ enum CoreThreadCommand {
     /// Checks if block refs exist locally and sync missing ones.
     CheckBlockRefs(Vec<BlockRef>, oneshot::Sender<BTreeSet<BlockRef>>),
     /// Add committed sub dag blocks for processing and acceptance.
-    AddCertifiedCommits(Vec<CertifiedCommit>, oneshot::Sender<BTreeSet<BlockRef>>),
+    AddCertifiedCommits(CertifiedCommits, oneshot::Sender<BTreeSet<BlockRef>>),
     /// Called when the min round has passed or the leader timeout occurred and a block should be produced.
     /// When the command is called with `force = true`, then the block will be created for `round` skipping
     /// any checks (ex leader existence of previous round). More information can be found on the `Core` component.
@@ -69,7 +69,7 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
 
     async fn add_certified_commits(
         &self,
-        commits: Vec<CertifiedCommit>,
+        commits: CertifiedCommits,
     ) -> Result<BTreeSet<BlockRef>, CoreError>;
 
     async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError>;
@@ -325,9 +325,9 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
 
     async fn add_certified_commits(
         &self,
-        commits: Vec<CertifiedCommit>,
+        commits: CertifiedCommits,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
-        for commit in &commits {
+        for commit in commits.commits() {
             for block in commit.blocks() {
                 self.highest_received_rounds[block.author()]
                     .fetch_max(block.round(), Ordering::AcqRel);
@@ -446,7 +446,7 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
 
     async fn add_certified_commits(
         &self,
-        _commits: Vec<CertifiedCommit>,
+        _commits: CertifiedCommits,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
         todo!()
     }

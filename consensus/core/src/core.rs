@@ -31,7 +31,9 @@ use crate::{
         Slot, VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
-    commit::{CertifiedCommit, CommitAPI, CommittedSubDag, DecidedLeader, Decision},
+    commit::{
+        CertifiedCommit, CertifiedCommits, CommitAPI, CommittedSubDag, DecidedLeader, Decision,
+    },
     commit_observer::CommitObserver,
     context::Context,
     dag_state::DagState,
@@ -312,23 +314,23 @@ impl Core {
     #[tracing::instrument(skip_all)]
     pub(crate) fn add_certified_commits(
         &mut self,
-        commits: Vec<CertifiedCommit>,
+        certified_commits: CertifiedCommits,
     ) -> ConsensusResult<BTreeSet<BlockRef>> {
         let _scope = monitored_scope("Core::add_certified_commits");
 
         // We want to enable the commit process logic when GC is enabled.
         if self.dag_state.read().gc_enabled() {
-            let commits = self
-                .validate_certified_commits(commits)
+            let certified_commits = self
+                .validate_certified_commits(certified_commits)
                 .expect("Certified commits validation failed");
             
             // Accept the certified commit votes. This is optimistically done to increase the chances of having votes available when this node
             // will need to sync commits to other nodes.
             self.block_manager
-                .try_accept_blocks(commits.iter().flat_map(|c| c.blocks()).cloned().collect());
+                .try_accept_blocks(certified_commits.votes().to_vec());
 
             // Try to commit the new blocks. Take into account the trusted commit that has been provided.
-            self.try_commit(commits)?;
+            self.try_commit(certified_commits.commits().to_vec())?;
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
@@ -342,7 +344,8 @@ impl Core {
         }
 
         // If GC is not enabled then process blocks as usual.
-        let blocks = commits
+        let blocks = certified_commits
+            .commits()
             .iter()
             .flat_map(|commit| commit.blocks())
             .cloned()
@@ -432,11 +435,12 @@ impl Core {
     /// Keeps only the certified commits that have a commit index > last commit index. It also ensures that the first commit in the list is the next one in line, otherwise it panics.
     fn validate_certified_commits(
         &mut self,
-        commits: Vec<CertifiedCommit>,
-    ) -> ConsensusResult<Vec<CertifiedCommit>> {
+        certified_commits: CertifiedCommits,
+    ) -> ConsensusResult<CertifiedCommits> {
         // Filter out the commits that have been already locally committed and keep only anything that is above the last committed index.
         let last_commit_index = self.dag_state.read().last_commit_index();
-        let commits = commits
+        let commits = certified_commits
+            .commits()
             .iter()
             .filter(|commit| {
                 if commit.index() > last_commit_index {
@@ -463,7 +467,7 @@ impl Core {
             }
         }
 
-        Ok(commits)
+        Ok(CertifiedCommits::new(commits, certified_commits.votes().to_vec()).commits())
     }
 
     // Attempts to create a new block, persist and propose it to all peers.
