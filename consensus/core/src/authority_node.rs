@@ -30,6 +30,7 @@ use crate::{
         NetworkManager,
     },
     round_prober::{RoundProber, RoundProberHandle},
+    round_tracker::{PeerRoundTracker, QuorumRoundManager, QuorumRoundManagerHandle},
     storage::rocksdb_store::RocksDBStore,
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
@@ -157,6 +158,7 @@ where
     subscriber: Option<Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>>,
     network_manager: N,
     sync_last_known_own_block: bool,
+    quorum_round_manager_handle: QuorumRoundManagerHandle,
 }
 
 impl<N> AuthorityNode<N>
@@ -264,6 +266,8 @@ where
             leader_schedule.clone(),
         );
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+
         let core = Core::new(
             context.clone(),
             leader_schedule,
@@ -278,6 +282,7 @@ where
             protocol_keypair,
             dag_state.clone(),
             sync_last_known_own_block,
+            round_tracker.clone(),
         );
 
         let (core_dispatcher, core_thread_handle) =
@@ -316,12 +321,20 @@ where
                     core_dispatcher.clone(),
                     dag_state.clone(),
                     network_client.clone(),
+                    round_tracker.clone(),
                 )
                 .start(),
             )
         } else {
             None
         };
+
+        let quorum_round_manager_handle = QuorumRoundManager::new(
+            context.clone(),
+            core_dispatcher.clone(),
+            round_tracker.clone(),
+        )
+        .start();
 
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
@@ -372,6 +385,7 @@ where
             subscriber,
             network_manager,
             sync_last_known_own_block,
+            quorum_round_manager_handle,
         }
     }
 
@@ -413,6 +427,8 @@ where
             .node_metrics
             .uptime
             .observe(self.start_time.elapsed().as_secs_f64());
+
+        self.quorum_round_manager_handle.stop().await;
     }
 
     pub(crate) fn transaction_client(&self) -> Arc<TransactionClient> {
@@ -428,8 +444,11 @@ where
 mod tests {
     #![allow(non_snake_case)]
 
-    use std::collections::BTreeMap;
-    use std::{collections::BTreeSet, sync::Arc, time::Duration};
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        sync::Arc,
+        time::Duration,
+    };
 
     use consensus_config::{local_committee_and_keys, Parameters};
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
@@ -441,8 +460,11 @@ mod tests {
     use typed_store::DBMetrics;
 
     use super::*;
-    use crate::block::GENESIS_ROUND;
-    use crate::{block::BlockAPI as _, transaction::NoopTransactionVerifier, CommittedSubDag};
+    use crate::{
+        block::{BlockAPI as _, GENESIS_ROUND},
+        transaction::NoopTransactionVerifier,
+        CommittedSubDag,
+    };
 
     #[rstest]
     #[tokio::test]

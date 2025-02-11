@@ -211,7 +211,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         let missing_ancestors = self
             .core_dispatcher
-            .add_blocks(vec![verified_block])
+            .add_blocks(vec![verified_block.clone()])
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
         if !missing_ancestors.is_empty() {
@@ -244,6 +244,14 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             );
             excluded_ancestors.truncate(excluded_ancestors_limit);
         }
+
+        self.core_dispatcher
+            .set_peer_accepted_rounds_from_block(ExtendedBlock {
+                block: verified_block,
+                excluded_ancestors: excluded_ancestors.clone(),
+            })
+            .await
+            .map_err(|_| ConsensusError::Shutdown)?;
 
         self.context
             .metrics
@@ -682,9 +690,17 @@ async fn make_recv_future<T: Clone>(
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::BTreeSet, sync::Arc, time::Duration};
+
+    use async_trait::async_trait;
+    use bytes::Bytes;
+    use consensus_config::AuthorityIndex;
+    use parking_lot::{Mutex, RwLock};
+    use tokio::{sync::broadcast, time::sleep};
+
     use crate::{
         authority_service::AuthorityService,
-        block::{BlockAPI, BlockRef, SignedBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, BlockRef, ExtendedBlock, SignedBlock, TestBlock, VerifiedBlock},
         commit::CommitRange,
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
@@ -692,21 +708,12 @@ mod tests {
         dag_state::DagState,
         error::ConsensusResult,
         network::{BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkService},
-        round_prober::QuorumRound,
+        round_tracker::QuorumRound,
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
         test_dag_builder::DagBuilder,
         Round,
     };
-    use async_trait::async_trait;
-    use bytes::Bytes;
-    use consensus_config::AuthorityIndex;
-    use parking_lot::{Mutex, RwLock};
-    use std::collections::BTreeSet;
-    use std::sync::Arc;
-    use std::time::Duration;
-    use tokio::sync::broadcast;
-    use tokio::time::sleep;
 
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
@@ -748,6 +755,13 @@ mod tests {
 
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
             Ok(Default::default())
+        }
+
+        async fn set_peer_accepted_rounds_from_block(
+            &self,
+            _extended_block: ExtendedBlock,
+        ) -> Result<(), CoreError> {
+            todo!()
         }
 
         fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {

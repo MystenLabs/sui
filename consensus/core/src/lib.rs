@@ -37,6 +37,7 @@ mod universal_committer;
 #[path = "tests/randomized_tests.rs"]
 mod randomized_tests;
 mod round_prober;
+mod round_tracker;
 #[cfg(test)]
 mod test_dag;
 #[cfg(test)]
