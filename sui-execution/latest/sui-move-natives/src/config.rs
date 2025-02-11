@@ -28,7 +28,7 @@ pub struct ConfigReadSettingImplCostParams {
     pub config_read_setting_impl_cost_per_byte: Option<InternalGas>,
 }
 
-#[instrument(level = "trace", skip_all, err)]
+#[instrument(level = "trace", skip_all)]
 pub fn read_setting_impl(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
