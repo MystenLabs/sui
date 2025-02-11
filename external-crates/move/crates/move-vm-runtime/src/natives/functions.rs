@@ -264,6 +264,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
         self.vtables.type_to_runtime_type_tag(ty)
     }
 
+    // XXX(vm-rewrite): Need to properly handle defining IDs here.
     pub fn type_tag_to_type_layout(
         &self,
         ty: &TypeTag,
@@ -277,6 +278,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
         }
     }
 
+    // XXX(vm-rewrite): Need to properly handle defining IDs here.
     pub fn type_tag_to_annotated_type_layout(
         &self,
         ty: &TypeTag,

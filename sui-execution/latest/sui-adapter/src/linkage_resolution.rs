@@ -623,7 +623,9 @@ impl PTBLinkageResolver {
                 }
             }
             Command::Upgrade(_, deps, _, _) | Command::Publish(_, deps) => {
-                let mut resolution_table = ResolutionTable::empty();
+                let mut resolution_table = self
+                    .linkage_config
+                    .resolution_table_with_native_packages(&mut self.all_packages, store)?;
                 for id in deps.into_iter() {
                     let pkg = Self::get_package(&mut self.all_packages, id, store)?;
                     resolution_table.resolution_table.insert(

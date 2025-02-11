@@ -8,7 +8,7 @@ use move_cli::base::{
 };
 use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
-use move_vm_runtime::native_extensions::NativeContextExtensions;
+use move_vm_runtime::natives::extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::{cell::RefCell, collections::BTreeMap, path::Path, sync::Arc};
 use sui_move_build::decorate_warnings;

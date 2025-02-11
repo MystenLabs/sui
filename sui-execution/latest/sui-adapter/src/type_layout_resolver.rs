@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::execution_value::SuiResolver;
-use crate::linkage_resolution::UnifiedLinkage;
+use crate::linkage_resolution::{LinkageAnalysis, UnifiedLinkage};
 use crate::programmable_transactions::context::vm_for_struct_tags;
 use crate::programmable_transactions::datastore::SuiDataStore;
 use move_core_types::annotated_value as A;
@@ -66,7 +66,18 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
             });
         };
 
-        match vm.annotated_type_layout(&TypeTag::Struct(Box::new(struct_tag.clone()))) {
+        let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
+        let Ok(runtime_tag) = self
+            .linkage_resolver
+            .resolver()
+            .runtime_type_tag(&type_tag, &data_store)
+        else {
+            return Err(SuiError::FailObjectLayout {
+                st: format!("{}", struct_tag),
+            });
+        };
+
+        match vm.annotated_type_layout(&runtime_tag) {
             Ok(A::MoveTypeLayout::Struct(s)) => Ok(A::MoveDatatypeLayout::Struct(s)),
             Ok(A::MoveTypeLayout::Enum(e)) => Ok(A::MoveDatatypeLayout::Enum(e)),
             _ => Err(SuiError::FailObjectLayout {

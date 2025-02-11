@@ -178,13 +178,13 @@ async fn test_publish_duplicate_modules() {
         .await
         .unwrap()
         .1;
-    assert_eq!(
+    assert!(matches!(
         result.status(),
         &ExecutionStatus::Failure {
-            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            error: ExecutionFailureStatus::DuplicateModuleName { .. },
             command: Some(0)
         }
-    )
+    ));
 }
 
 #[tokio::test]

@@ -348,14 +348,17 @@ impl MovePackage {
             (dep, info)
         }));
 
-        let module_map = BTreeMap::from_iter(modules.iter().map(|module| {
+        let mut module_map = BTreeMap::new();
+        for module in modules.iter() {
             let name = module.name().to_string();
             let mut bytes = Vec::new();
             module
                 .serialize_with_version(module.version, &mut bytes)
                 .unwrap();
-            (name, bytes)
-        }));
+            if let Some(_) = module_map.insert(name, bytes) {
+                panic!("Duplicate module {} in system package", module.self_id());
+            }
+        }
 
         Self::new(
             storage_id,
@@ -398,7 +401,13 @@ impl MovePackage {
                 VERSION_6
             };
             module.serialize_with_version(version, &mut bytes).unwrap();
-            module_map.insert(name, bytes);
+            if let Some(_) = module_map.insert(name, bytes) {
+                return Err(ExecutionError::from_kind(
+                    ExecutionErrorKind::DuplicateModuleName {
+                        duplicate_module_name: module.self_id().to_string(),
+                    },
+                ));
+            }
         }
 
         immediate_dependencies.remove(&self_id);

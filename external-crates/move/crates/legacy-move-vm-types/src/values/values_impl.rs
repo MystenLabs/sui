@@ -4088,7 +4088,22 @@ pub mod prop {
                 .collect::<Vec<_>>()
                 .prop_map(move |vals| Value::struct_(Struct::pack(vals)))
                 .boxed(),
+            L::Enum(enum_layout) => pick_variant_layout((**enum_layout).clone())
+                .prop_flat_map(move |(tag, variant_layout)| {
+                    let v = variant_layout
+                        .into_iter()
+                        .map(move |l| value_strategy_with_layout(&l))
+                        .collect::<Vec<_>>();
+                    v.prop_map(move |vals| Value::variant(Variant::pack(tag as u16, vals)))
+                })
+                .boxed(),
         }
+    }
+
+    fn pick_variant_layout(
+        enum_layout: MoveEnumLayout,
+    ) -> impl Strategy<Value = (u16, Vec<MoveTypeLayout>)> {
+        (0..enum_layout.0.len()).prop_map(move |tag| (tag as u16, enum_layout.0[tag].clone()))
     }
 
     pub fn layout_strategy() -> impl Strategy<Value = MoveTypeLayout> {
@@ -4110,7 +4125,7 @@ pub mod prop {
             prop_oneof![
                 1 => inner.clone().prop_map(|layout| L::Vector(Box::new(layout))),
                 1 => vec(inner, 0..1).prop_map(|f_layouts| {
-                     L::Struct(MoveStructLayout::new(f_layouts))}),
+                     L::Struct(Box::new(MoveStructLayout::new(f_layouts)))}),
             ]
         })
     }
