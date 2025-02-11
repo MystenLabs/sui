@@ -4,10 +4,9 @@
 
 use anyhow::anyhow;
 use codespan_reporting::{diagnostic::Severity, term::termcolor::Buffer};
-use move_command_line_common::testing::EXP_EXT;
+use move_command_line_common::insta_assert;
 use move_compiler::{diagnostics::warning_filters::WarningFiltersBuilder, shared::PackagePaths};
 use move_model::{model::GlobalEnv, options::ModelBuilderOptions, run_model_builder_with_options};
-use move_prover_test_utils::{baseline_test::verify_or_update_baseline, extract_test_directives};
 use move_stackless_bytecode::{
     borrow_analysis::BorrowAnalysisProcessor,
     clean_and_optimize::CleanAndOptimizeProcessor,
@@ -23,7 +22,25 @@ use move_stackless_bytecode::{
     print_targets_for_test,
     reaching_def_analysis::ReachingDefProcessor,
 };
-use std::path::Path;
+use regex::Regex;
+use std::{fs::File, io::Read, path::Path};
+
+// Extracts lines out of some text file where each line starts with `start` which can be a regular
+// expressions. Returns the list of such lines with `start` stripped. Use as in
+// `extract_test_directives(file, "// dep:")`.
+fn extract_test_directives(path: &Path, start: &str) -> anyhow::Result<Vec<String>> {
+    let rex = Regex::new(&format!("(?m)^{}(?P<ann>.*?)$", start)).unwrap();
+    let mut content = String::new();
+    let mut file = File::open(path)?;
+    file.read_to_string(&mut content)?;
+    let mut at = 0;
+    let mut res = vec![];
+    while let Some(cap) = rex.captures(&content[at..]) {
+        res.push(cap.name("ann").unwrap().as_str().trim().to_string());
+        at += cap.get(0).unwrap().end();
+    }
+    Ok(res)
+}
 
 fn get_tested_transformation_pipeline(
     dir_name: &str,
@@ -174,8 +191,12 @@ fn test_runner(path: &Path) -> datatest_stable::Result<()> {
         }
         text
     };
-    let baseline_path = path.with_extension(EXP_EXT);
-    verify_or_update_baseline(baseline_path.as_path(), &out)?;
+    let test_name = path.file_stem().unwrap().to_str().unwrap();
+    insta_assert! {
+        name: test_name,
+        input_path: path,
+        contents: out,
+    };
     Ok(())
 }
 

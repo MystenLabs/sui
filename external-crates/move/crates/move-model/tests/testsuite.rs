@@ -4,10 +4,9 @@
 
 use codespan_reporting::{diagnostic::Severity, term::termcolor::Buffer};
 use move_binary_format::file_format::{FunctionDefinitionIndex, StructDefinitionIndex};
-use move_command_line_common::testing::EXP_EXT;
+use move_command_line_common::insta_assert;
 use move_compiler::{diagnostics::warning_filters::WarningFiltersBuilder, shared::PackagePaths};
 use move_model::{run_bytecode_model_builder, run_model_builder};
-use move_prover_test_utils::baseline_test::verify_or_update_baseline;
 use std::path::Path;
 
 fn test_runner(path: &Path) -> datatest_stable::Result<()> {
@@ -63,8 +62,12 @@ fn test_runner(path: &Path) -> datatest_stable::Result<()> {
 
         "All good, no errors!".to_string()
     };
-    let baseline_path = path.with_extension(EXP_EXT);
-    verify_or_update_baseline(baseline_path.as_path(), &diags)?;
+    let test_name = path.file_stem().unwrap().to_str().unwrap();
+    insta_assert! {
+        name: test_name,
+        input_path: path,
+        contents: diags,
+    };
     Ok(())
 }
 
