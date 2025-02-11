@@ -3,6 +3,8 @@
 
 extern crate move_ir_types;
 
+use petgraph::prelude::{Dfs, DiGraphMap};
+
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
@@ -74,7 +76,7 @@ pub mod test_utils {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push(relative_path);
 
-        BuildConfig::new_for_testing().build(&path).unwrap()
+        BuildConfig::new_for_testing().build(&path, false).unwrap()
     }
 }
 
@@ -182,13 +184,14 @@ impl BuildConfig {
 
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
-    pub fn build(self, path: &Path) -> SuiResult<CompiledPackage> {
+    pub fn build(self, path: &Path, with_unpublished_deps: bool) -> SuiResult<CompiledPackage> {
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let chain_id = self.chain_id.clone();
         let resolution_graph = self.resolution_graph(path, chain_id.clone())?;
         build_from_resolution_graph(
             resolution_graph,
+            with_unpublished_deps,
             run_bytecode_verifier,
             print_diags_to_stderr,
             chain_id,
@@ -252,6 +255,7 @@ pub fn set_sui_flavor(build_config: &mut MoveBuildConfig) -> Option<String> {
 
 pub fn build_from_resolution_graph(
     resolution_graph: ResolvedGraph,
+    with_unpublished_deps: bool,
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
     chain_id: Option<String>,
@@ -292,9 +296,9 @@ pub fn build_from_resolution_graph(
     }
 
     let result = if print_diags_to_stderr {
-        BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
+        BuildConfig::compile_package(resolution_graph.clone(), &mut std::io::stderr())
     } else {
-        BuildConfig::compile_package(resolution_graph, &mut std::io::sink())
+        BuildConfig::compile_package(resolution_graph.clone(), &mut std::io::sink())
     };
     // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
     // format to include anyhow's error context chain.
@@ -306,11 +310,12 @@ pub fn build_from_resolution_graph(
         }
         Ok((package, fn_info)) => (package, fn_info),
     };
-    let compiled_modules = package.root_modules_map();
+
     if run_bytecode_verifier {
         let verifier_config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
             .verifier_config(/* signing_limits */ None);
 
+        let compiled_modules = package.root_modules_map();
         for m in compiled_modules.iter_modules() {
             move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
                 SuiError::ModuleVerificationFailure {
@@ -321,12 +326,18 @@ pub fn build_from_resolution_graph(
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
-    Ok(CompiledPackage {
+
+    // Tree shake the package's dependencies to remove any that are not used by the package.
+    let mut package = CompiledPackage {
         package,
         published_at,
         dependency_ids,
         bytecode_deps,
-    })
+    };
+    // this will only modify the dependency_ids.published field to remove any unnecessary package
+    // dependencies
+    package.tree_shake(with_unpublished_deps, &resolution_graph);
+    Ok(package)
 }
 
 impl CompiledPackage {
@@ -607,6 +618,80 @@ impl CompiledPackage {
             error: error_message.join("\n"),
         })
     }
+
+    pub fn published_dependency_ids(&self) -> Vec<ObjectID> {
+        self.dependency_ids.published.values().cloned().collect()
+    }
+
+    /// Tree-shake the package's dependencies to remove any that are not referenced in source code.
+    pub fn tree_shake(&mut self, with_unpublished_deps: bool, resolution_graph: &ResolvedGraph) {
+        // 1) Start from the root modules (or all modules if with_unpublished_deps is true as we need to
+        // include modules with 0x0 address)
+        // 2) Next, find the immediate dependencies for each root module and store the package name in the
+        // used_immediate_packages set. This basically prunes the packages that are not used based on
+        // the modules information;
+        // 3) Next, for each package from used_immediate_packages se , we need to
+        // find all the transitive dependencies. Those trans dependencies need to be included in the
+        // final list of package dependencies!
+        // 4) We union the used_immediate_packages and the transitive dependencies to get the final
+        // list of dependencies that this package needs.
+        // 5) Finally, filter out packages that are not in the union above from the
+        // dependency_ids.published field
+
+        // #1
+        let root_modules = if with_unpublished_deps {
+            &self
+                .package
+                .all_compiled_units_with_source()
+                .filter(|m| m.unit.address.into_inner() == AccountAddress::ZERO)
+                .map(|x| x.unit.clone())
+                .collect::<Vec<_>>()
+        } else {
+            &self
+                .package
+                .root_modules()
+                .map(|x| x.unit.clone())
+                .collect::<Vec<_>>()
+        };
+
+        // #2
+        let mut pkgs_to_keep: BTreeSet<Symbol> = BTreeSet::new();
+        let module_to_pkg_name = &self
+            .package
+            .all_modules()
+            .map(|m| (m.unit.module.self_id(), m.unit.package_name))
+            .collect::<BTreeMap<_, _>>();
+        let mut used_immediate_packages: BTreeSet<Symbol> = BTreeSet::new();
+
+        for module in root_modules.iter() {
+            let immediate_deps = module.module.immediate_dependencies();
+            for dep in immediate_deps {
+                if let Some(pkg_name) = module_to_pkg_name.get(&dep) {
+                    used_immediate_packages.insert(pkg_name.expect(&format!(
+                        "Package {} should exist but could not find it in the package table.",
+                        dep.name()
+                    )));
+                }
+            }
+        }
+
+        // #3
+        for pkg in &used_immediate_packages {
+            pkgs_to_keep.extend(get_transitive_dependencies(
+                &resolution_graph.graph.package_graph,
+                pkg,
+            ));
+        }
+
+        // #4
+        pkgs_to_keep.extend(used_immediate_packages);
+        pkgs_to_keep.extend(self.bytecode_deps.iter().map(|(name, _)| *name));
+
+        // #5
+        self.dependency_ids
+            .published
+            .retain(|pkg_name, _| pkgs_to_keep.contains(pkg_name));
+    }
 }
 
 impl Default for BuildConfig {
@@ -798,4 +883,23 @@ pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<
     Err(SuiError::ModulePublishFailure {
         error: error_messages.join("\n"),
     })
+}
+
+/// Return the transitive dependencies of a node in a directed graph
+pub fn get_transitive_dependencies<N, E>(graph: &DiGraphMap<N, E>, start: &N) -> BTreeSet<N>
+where
+    N: Ord + Copy + Eq + std::hash::Hash,
+{
+    let mut visited = BTreeSet::new();
+    let mut dfs = Dfs::new(graph, *start);
+
+    // Skip the start node itself
+    dfs.next(graph);
+
+    // Visit all reachable nodes
+    while let Some(n) = dfs.next(graph) {
+        visited.insert(n);
+    }
+
+    visited
 }

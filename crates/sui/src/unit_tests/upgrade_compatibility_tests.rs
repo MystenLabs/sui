@@ -187,7 +187,7 @@ fn get_packages(name: &str) -> (Vec<CompiledModule>, CompiledPackage, PathBuf) {
     path.push(format!("{}_v1", name));
 
     let mods_v1 = BuildConfig::new_for_testing()
-        .build(&path)
+        .build(&path, false)
         .unwrap()
         .into_modules();
 
@@ -195,7 +195,7 @@ fn get_packages(name: &str) -> (Vec<CompiledModule>, CompiledPackage, PathBuf) {
     path.push("src/unit_tests/fixtures/upgrade_errors/");
     path.push(format!("{}_v2", name));
 
-    let pkg_v2 = BuildConfig::new_for_testing().build(&path).unwrap();
+    let pkg_v2 = BuildConfig::new_for_testing().build(&path, false).unwrap();
 
     (mods_v1, pkg_v2, path)
 }

@@ -10,7 +10,7 @@ use crate::{
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
     fs,
     path::{Path, PathBuf},
@@ -72,7 +72,7 @@ use sui_types::{
     gas_coin::GasCoin,
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
-    move_package::{MovePackage, UpgradeCap},
+    move_package::UpgradeCap,
     object::Owner,
     parse_sui_type_tag,
     signature::GenericSignature,
@@ -954,7 +954,8 @@ impl SuiClientCommands {
                     )?;
                 }
 
-                let (upgrade_policy, mut compiled_package) = upgrade_result.map_err(|e| anyhow!("{e}"))?;
+                let (upgrade_policy, compiled_package) =
+                    upgrade_result.map_err(|e| anyhow!("{e}"))?;
 
                 let compiled_modules =
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
@@ -963,7 +964,7 @@ impl SuiClientCommands {
                     compiled_package.get_package_digest(with_unpublished_dependencies);
 
                 // filter out dependencies that are not referenced in the source code.
-                filter_deps(&client, &mut compiled_package).await?;
+                // find_pkg_dependencies(&client, &mut compiled_package).await?;
 
                 let dep_ids = compiled_package
                     .dependency_ids
@@ -1088,12 +1089,9 @@ impl SuiClientCommands {
                     )?;
                 }
 
-                let mut compiled_package = compiled_result?;
+                let compiled_package = compile_result?;
                 let compiled_modules =
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
-
-                // filter out dependencies that are not referenced in the source code.
-                filter_deps(&client, &mut compiled_package).await?;
 
                 let tx_kind = client
                     .transaction_builder()
@@ -1725,7 +1723,7 @@ impl SuiClientCommands {
                     print_diags_to_stderr: true,
                     chain_id: Some(chain_id),
                 }
-                .build(&package_path)?;
+                .build(&package_path, false)?;
 
                 let client = context.get_client().await?;
                 BytecodeSourceVerifier::new(client.read_api())
@@ -1795,6 +1793,7 @@ fn compile_package_simple(
 
     Ok(build_from_resolution_graph(
         resolution_graph,
+        false,
         false,
         false,
         chain_id,
@@ -1872,7 +1871,7 @@ pub(crate) async fn upgrade_package(
     Ok((upgrade_policy, compiled_package))
 }
 
-pub async fn compile_package(
+pub(crate) async fn compile_package(
     read_api: &ReadApi,
     build_config: MoveBuildConfig,
     package_path: &Path,
@@ -1897,6 +1896,7 @@ pub async fn compile_package(
     };
     let compiled_package = build_from_resolution_graph(
         resolution_graph,
+        with_unpublished_dependencies,
         run_bytecode_verifier,
         print_diags_to_stderr,
         chain_id,
@@ -3113,102 +3113,6 @@ async fn check_protocol_version_and_warn(client: &SuiClient) -> Result<(), anyho
             .bold()
         );
     }
-
-    Ok(())
-}
-
-/// Fetch move packages based on the provided package IDs.
-pub async fn fetch_move_packages(
-    client: &SuiClient,
-    package_ids: Vec<ObjectID>,
-) -> Result<Vec<MovePackage>, anyhow::Error> {
-    let objects = client
-        .read_api()
-        .multi_get_object_with_options(package_ids, SuiObjectDataOptions::bcs_lossless())
-        .await
-        .map_err(|e| anyhow!("{e}"))?;
-
-    objects
-        .into_iter()
-        .map(|o| {
-            let o = o.into_object().map_err(|e| anyhow!("{e}"))?;
-            let Some(SuiRawData::Package(p)) = o.bcs else {
-                bail!("Expected SuiRawData::Package but got something else");
-            };
-            p.to_move_package(u64::MAX /* safe as this comes from the network */)
-                .map_err(|e| anyhow!("{e}"))
-        })
-        .collect()
-}
-
-/// Filter dependencies of the package based only on referenced modules in the source code.
-///
-/// In a nutshell, if a dep package is not referenced by any module in the compiled package,
-/// it is removed.
-/// To preserve backward compatibility with packages published before
-/// tree shaking was implemented, the algorithm will fetch all on-chain packages that are
-/// dependencies of the package to be published and use the linkage table to ensure that packages
-/// that are needed are not filtered out.
-async fn filter_deps(
-    client: &SuiClient,
-    compiled_package: &mut CompiledPackage,
-) -> Result<(), anyhow::Error> {
-    // // Keep a map of pkg name and the original package ID (the runtime ID)
-    let pkg_name_to_orig_id: BTreeMap<_, _> = compiled_package
-        .package
-        .deps_compiled_units
-        .iter()
-        .map(|(pkg_name, module)| (pkg_name, ObjectID::from(module.unit.address.into_inner())))
-        .collect();
-
-    let modules_map = compiled_package.package.root_modules_map();
-    let mut referenced_modules: BTreeSet<ObjectID> = BTreeSet::new();
-    let mut module_to_visit: Vec<_> = modules_map.get_map().iter().map(|x| x.0.clone()).collect();
-
-    while !module_to_visit.is_empty() {
-        let module_id = module_to_visit.pop().unwrap();
-        let compiled_module = modules_map.get_module(&module_id);
-
-        if let Ok(m) = compiled_module {
-            for dep in m.immediate_dependencies() {
-                if referenced_modules.insert(ObjectID::from(*dep.address())) {
-                    module_to_visit.push(dep);
-                }
-            }
-        }
-    }
-
-    // get on-chain linkage table for every package that this to be published package depends on
-    let published_deps_ids: Vec<ObjectID> = compiled_package
-        .dependency_ids
-        .published
-        .clone()
-        .into_values()
-        .collect();
-
-    let linkage_table_for_all_deps = fetch_move_packages(&client, published_deps_ids).await?;
-    let linkage_table_ids = linkage_table_for_all_deps
-        .iter()
-        .map(|pkg| {
-            let linkage_table = pkg.linkage_table();
-            linkage_table.keys().cloned().collect::<Vec<_>>()
-        })
-        .flatten()
-        .collect::<Vec<_>>();
-
-    // remove all deps that are not either in the linkage table of all deps or directly referenced
-    // in the source code of this package that was compiled
-    compiled_package
-        .dependency_ids
-        .published
-        .retain(|pkg_name, id| {
-            linkage_table_ids.contains(id)
-                || referenced_modules.contains(id)
-                || pkg_name_to_orig_id // for pkg upgrades, we need to cross reference the package
-                    // name & referenced modules addresses
-                    .get(pkg_name)
-                    .is_some_and(|orig_id| referenced_modules.contains(orig_id))
-        });
 
     Ok(())
 }

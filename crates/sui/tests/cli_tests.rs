@@ -31,8 +31,8 @@ use std::path::Path;
 use std::{fs, io};
 use sui::{
     client_commands::{
-        estimate_gas_budget, fetch_move_packages, Opts, OptsWithGas, SuiClientCommandResult,
-        SuiClientCommands, SwitchResponse,
+        estimate_gas_budget, Opts, OptsWithGas, SuiClientCommandResult, SuiClientCommands,
+        SwitchResponse,
     },
     sui_commands::{parse_host_port, SuiCommand},
 };
@@ -44,7 +44,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     get_new_package_obj_from_response, OwnedObjectRef, SuiExecutionStatus, SuiObjectData,
     SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiTransactionBlockDataAPI, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -58,6 +59,7 @@ use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::error::SuiObjectResponseError;
+use sui_types::move_package::MovePackage;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -4002,6 +4004,9 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         )
     })?;
 
+    let skip_dependency_verification = true;
+    let with_unpublished_dependencies = true;
+
     // ============== TEST 1 ================ //
     // Publish package A
     let package_path = temp_dir.path().join("tree_shaking").join("A");
@@ -4010,13 +4015,14 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
+        skip_dependency_verification,
+        with_unpublished_dependencies,
     )
     .await?;
 
     // fetch linkage table of A
-    let move_pkg_a = fetch_move_packages(&client, vec![package_a_id]).await?;
-    let linkage_table_a = move_pkg_a.get(0).unwrap().linkage_table();
+    let move_pkg_a = fetch_move_packages(&client, vec![package_a_id]).await;
+    let linkage_table_a = move_pkg_a.first().unwrap().linkage_table();
     // A has no deps, linkage table should be empty!
     assert!(linkage_table_a.is_empty());
 
@@ -4028,13 +4034,14 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
+        skip_dependency_verification,
+        with_unpublished_dependencies,
     )
     .await?;
 
     // get linkage table of package B_depends_on_A
-    let move_pkg_b = fetch_move_packages(&client, vec![package_b_id]).await?;
-    let linkage_table_b = move_pkg_b.get(0).unwrap().linkage_table();
+    let move_pkg_b = fetch_move_packages(&client, vec![package_b_id]).await;
+    let linkage_table_b = move_pkg_b.first().unwrap().linkage_table();
     // B depends on A, so the linkage table should contain A's object ID
     assert!(linkage_table_b.contains_key(&package_a_id));
 
@@ -4049,13 +4056,14 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
+        skip_dependency_verification,
+        with_unpublished_dependencies,
     )
     .await?;
 
     // get linkage table of package B_depends_on_A_but_no_code_references_A
-    let move_pkg_b_1 = fetch_move_packages(&client, vec![package_b_1_id]).await?;
-    let linkage_table_b_1 = move_pkg_b_1.get(0).unwrap().linkage_table();
+    let move_pkg_b_1 = fetch_move_packages(&client, vec![package_b_1_id]).await;
+    let linkage_table_b_1 = move_pkg_b_1.first().unwrap().linkage_table();
     // B_no_code_reference_to_A depends on A in the manifest, but no code is referenced, so the linkage table should be
     // empty
     assert!(linkage_table_b_1.is_empty());
@@ -4072,12 +4080,13 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
+        skip_dependency_verification,
+        with_unpublished_dependencies,
     )
     .await?;
 
     // get linkage table of package C
-    let move_pkg_c = fetch_move_packages(&client, vec![package_c_id]).await?;
+    let move_pkg_c = fetch_move_packages(&client, vec![package_c_id]).await;
 
     let linkage_table_c = move_pkg_c
         .iter()
@@ -4101,12 +4110,13 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
+        skip_dependency_verification,
+        with_unpublished_dependencies,
     )
     .await?;
 
     // get linkage table of package C
-    let move_pkg_c_1 = fetch_move_packages(&client, vec![package_c_1_id]).await?;
+    let move_pkg_c_1 = fetch_move_packages(&client, vec![package_c_1_id]).await;
     let linkage_table_c_1 = move_pkg_c_1
         .iter()
         .flat_map(|x| x.linkage_table())
@@ -4138,6 +4148,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         build_config,
         skip_dependency_verification: false,
+        verify_deps: false,
         verify_compatibility: true,
         with_unpublished_dependencies: false,
     }
@@ -4166,13 +4177,14 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
+        skip_dependency_verification,
+        with_unpublished_dependencies,
     )
     .await?;
 
     // fetch linkage table of D
-    let move_pkg_d = fetch_move_packages(&client, vec![package_d_id]).await?;
-    let linkage_table_d = move_pkg_d.get(0).unwrap().linkage_table();
+    let move_pkg_d = fetch_move_packages(&client, vec![package_d_id]).await;
+    let linkage_table_d = move_pkg_d.first().unwrap().linkage_table();
     // D depends on A_v1, but no code references A, so the linkage table should be empty
     assert!(linkage_table_d.is_empty());
 
@@ -4185,12 +4197,13 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
+        skip_dependency_verification,
+        with_unpublished_dependencies,
     )
     .await?;
 
     // fetch linkage table of D
-    let move_pkg_d_1 = fetch_move_packages(&client, vec![package_d_1_id]).await?;
+    let move_pkg_d_1 = fetch_move_packages(&client, vec![package_d_1_id]).await;
     let linkage_table_d_1 = move_pkg_d_1
         .iter()
         .flat_map(|x| x.linkage_table())
@@ -4203,15 +4216,87 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         .get(&package_a_id)
         .is_some_and(|x| x.upgraded_id == package_a_v1.reference.object_id));
 
+    // ============== TEST 7 ================ //
+    // pkg E has multiple deps (A_v1, B_depends_on_A) but without being referenced in the source
+    // code. We test the dependency on this package and check the linkage table.
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("E_depends_on_A_v1_and_on_B_depends_on_A_but_no_code_references_to_A_or_B");
+    // publish with tree shaking and check again the linkage table. It should be empty
+    let (package_e_id, _) = publish_package(
+        package_path,
+        context,
+        rgp,
+        gas_obj_id,
+        skip_dependency_verification,
+        with_unpublished_dependencies,
+    )
+    .await?;
+    let move_pkg_e = fetch_move_packages(&client, vec![package_e_id]).await;
+    let linkage_table_e = move_pkg_e.first().unwrap().linkage_table();
+    // E depends on A_v1, and on B, which depends on A, but no code references A or B, so the
+    // linkage table should be empty
+    assert!(linkage_table_e.is_empty());
+
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("E_depends_on_A_v1_and_on_B_depends_on_A_and_code_references_A");
+    let (package_e_id, _) = publish_package(
+        package_path,
+        context,
+        rgp,
+        gas_obj_id,
+        skip_dependency_verification,
+        with_unpublished_dependencies,
+    )
+    .await?;
+    let move_pkg_e = fetch_move_packages(&client, vec![package_e_id]).await;
+    let linkage_table_e = move_pkg_e.first().unwrap().linkage_table();
+    // E depends on A_v1, and on B, which depends on A, and code references A so the linkage table
+    // should have A
+    assert!(linkage_table_e.contains_key(&package_a_id));
+
+    // ============== TEST 8 ================ //
+    // bytecode deps without source code
+
+    // we delete the sources folder from pkg A and setup A as bytecode dep for package F
+    let pkg_a_path = temp_dir.path().join("tree_shaking").join("A");
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    BuildConfig::default().build(&pkg_a_path, false).unwrap();
+    fs::remove_dir_all(pkg_a_path.join("sources"))?;
+
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("F_depends_on_A_as_bytecode_dep");
+    let (package_f_id, _) = publish_package(
+        package_path,
+        context,
+        rgp,
+        gas_obj_id,
+        skip_dependency_verification,
+        with_unpublished_dependencies,
+    )
+    .await?;
+    let move_pkg_f = fetch_move_packages(&client, vec![package_f_id]).await;
+    let linkage_table_f = move_pkg_f.first().unwrap().linkage_table();
+    // F depends on A as a bytecode dep, so the linkage table should not be empty
+    assert!(linkage_table_f.contains_key(&package_a_id));
+
     Ok(())
 }
 
+/// Publishes a package and returns the package object id and the upgrade capability object id
+/// Note that this sets the `Move.lock` file to be written to the root of the package path.
 async fn publish_package(
     package_path: PathBuf,
     context: &mut WalletContext,
     rgp: u64,
     gas_obj_id: ObjectID,
     skip_dependency_verification: bool,
+    with_unpublished_dependencies: bool,
 ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
     let mut build_config = BuildConfig::new_for_testing().config;
     let move_lock_path = package_path.clone().join("Move.lock");
@@ -4220,7 +4305,8 @@ async fn publish_package(
         package_path: package_path.clone(),
         build_config: build_config.clone(),
         skip_dependency_verification,
-        with_unpublished_dependencies: false,
+        verify_deps: false,
+        with_unpublished_dependencies,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
@@ -4260,4 +4346,28 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> 
         }
     }
     Ok(())
+}
+
+/// Fetch move packages based on the provided package IDs.
+pub async fn fetch_move_packages(
+    client: &SuiClient,
+    package_ids: Vec<ObjectID>,
+) -> Vec<MovePackage> {
+    let objects = client
+        .read_api()
+        .multi_get_object_with_options(package_ids, SuiObjectDataOptions::bcs_lossless())
+        .await
+        .unwrap();
+
+    objects
+        .into_iter()
+        .map(|o| {
+            let o = o.into_object().unwrap();
+            let Some(SuiRawData::Package(p)) = o.bcs else {
+                panic!("Expected package");
+            };
+            p.to_move_package(u64::MAX /* safe as this pkg comes from the network */)
+                .unwrap()
+        })
+        .collect()
 }
