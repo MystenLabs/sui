@@ -15329,7 +15329,7 @@ dependencies = [
  "futures",
  "parking_lot 0.12.3",
  "rand 0.8.5",
- "reqwest 0.12.5",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "sui-indexer-alt-framework",
