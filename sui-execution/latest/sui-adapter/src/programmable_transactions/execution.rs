@@ -29,6 +29,8 @@ mod checked {
     };
     use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
     use serde::{de::DeserializeSeed, Deserialize};
+    use std::cell::RefCell;
+    use std::rc::Rc;
     use std::time::Instant;
     use std::{
         collections::{BTreeMap, BTreeSet},
@@ -44,8 +46,9 @@ mod checked {
     use sui_types::type_input::TypeInput;
     use sui_types::{
         base_types::{
-            MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
-            RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+            MoveLegacyTxContext, MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind,
+            RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME,
+            TX_CONTEXT_STRUCT_NAME,
         },
         coin::Coin,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},
@@ -73,7 +76,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         vm: &MoveVM,
         state_view: &mut dyn ExecutionState,
-        tx_context: &mut TxContext,
+        tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
@@ -101,7 +104,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         vm: &MoveVM,
         state_view: &mut dyn ExecutionState,
-        tx_context: &mut TxContext,
+        tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
@@ -536,7 +539,7 @@ mod checked {
             // do not calculate or substitute id for predefined packages
             (*modules[0].self_id().address()).into()
         } else {
-            let id = context.tx_context.fresh_id();
+            let id = context.tx_context.borrow_mut().fresh_id();
             substitute_package_id(&mut modules, id)?;
             id
         };
@@ -649,7 +652,7 @@ mod checked {
         substitute_package_id(&mut modules, runtime_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
-        let storage_id = context.tx_context.fresh_id();
+        let storage_id = context.tx_context.borrow_mut().fresh_id();
 
         let dependencies = fetch_packages(context, &dep_ids)?;
         let package = context.upgrade_package(
@@ -825,7 +828,7 @@ mod checked {
         match tx_context_kind {
             TxContextKind::None => (),
             TxContextKind::Mutable | TxContextKind::Immutable => {
-                serialized_arguments.push(context.tx_context.to_vec());
+                serialized_arguments.push(context.tx_context.borrow().to_bcs_legacy_context());
             }
         }
         // script visibility checked manually for entry points
@@ -849,12 +852,12 @@ mod checked {
             let Some((_, ctx_bytes, _)) = result.mutable_reference_outputs.pop() else {
                 invariant_violation!("Missing TxContext in reference outputs");
             };
-            let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).map_err(|e| {
+            let updated_ctx: MoveLegacyTxContext = bcs::from_bytes(&ctx_bytes).map_err(|e| {
                 ExecutionError::invariant_violation(format!(
                     "Unable to deserialize TxContext bytes. {e}"
                 ))
             })?;
-            context.tx_context.update_state(updated_ctx)?;
+            context.tx_context.borrow_mut().update_state(updated_ctx)?;
         }
         Ok(result)
     }

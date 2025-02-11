@@ -779,6 +779,7 @@ impl LocalExec {
                 transaction_kind.clone(),
                 tx_info.sender,
                 *tx_digest,
+                None,
             );
 
         if let Err(err) = self.pretty_print_for_tracing(
@@ -851,6 +852,7 @@ impl LocalExec {
                             tx_info.sender,
                             tx_info.sender_signed_data.digest(),
                             skip_checks,
+                            tx_info.sponsor,
                         )
                         .3
                         .unwrap_or_default(),
@@ -939,6 +941,7 @@ impl LocalExec {
             kind,
             signer,
             *executable.digest(),
+            pre_run_sandbox.transaction_info.sponsor,
         );
 
         let effects =
@@ -1476,6 +1479,14 @@ impl LocalExec {
 
         let raw_tx_bytes = tx_info.clone().raw_transaction;
         let orig_tx: SenderSignedData = bcs::from_bytes(&raw_tx_bytes).unwrap();
+        let sponsor = {
+            let gas_sponsor = orig_tx.transaction_data().gas_owner();
+            if gas_sponsor == sender {
+                None
+            } else {
+                Some(gas_sponsor)
+            }
+        };
         let input_objs = orig_tx
             .transaction_data()
             .input_objects()
@@ -1524,6 +1535,7 @@ impl LocalExec {
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),
             sender,
+            sponsor,
             modified_at_versions,
             input_objects: input_objs,
             shared_object_refs,
@@ -1560,6 +1572,14 @@ impl LocalExec {
             .transaction_data()
             .sender();
         let orig_tx = dp.node_state_dump.sender_signed_data.clone();
+        let sponsor = {
+            let gas_sponsor = orig_tx.transaction_data().gas_owner();
+            if gas_sponsor == sender {
+                None
+            } else {
+                Some(gas_sponsor)
+            }
+        };
         let effects = dp.node_state_dump.computed_effects.clone();
         let effects = SuiTransactionBlockEffects::try_from(effects).unwrap();
         // Config objects don't show up in the node state dump so they need to be provided.
@@ -1613,6 +1633,7 @@ impl LocalExec {
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),
             sender,
+            sponsor,
             modified_at_versions,
             input_objects: input_objs,
             shared_object_refs,

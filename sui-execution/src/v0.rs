@@ -80,6 +80,7 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
+        sponsor: Option<SuiAddress>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -103,6 +104,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
+                sponsor,
             );
         // note: old versions do not report timings.
         (inner_temp_store, gas_status, effects, vec![], result)
@@ -124,6 +126,7 @@ impl executor::Executor for Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         skip_all_checks: bool,
+        sponsor: Option<SuiAddress>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -146,6 +149,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
+                sponsor,
             )
         } else {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
@@ -163,6 +167,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
+                sponsor,
             )
         }
     }
@@ -172,10 +177,21 @@ impl executor::Executor for Executor {
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        tx_context: &mut TxContext,
+        epoch_id: EpochId,
+        epoch_timestamp_ms: u64,
+        transaction_digest: &TransactionDigest,
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
+        let tx_context = &mut TxContext::new_from_components(
+            &SuiAddress::default(),
+            transaction_digest,
+            &epoch_id,
+            epoch_timestamp_ms,
+            1, // expose in the API if needed
+            None,
+            protocol_config.move_native_context(),
+        );
         execute_genesis_state_update(
             store,
             protocol_config,

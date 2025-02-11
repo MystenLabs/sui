@@ -150,6 +150,7 @@ impl EpochState {
                 kind,
                 signer,
                 tx_digest,
+                None,
             );
         Ok((inner_temp_store, gas_status, effects, result))
     }

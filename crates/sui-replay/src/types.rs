@@ -39,6 +39,7 @@ pub struct OnChainTransactionInfo {
     pub tx_digest: TransactionDigest,
     pub sender_signed_data: SenderSignedData,
     pub sender: SuiAddress,
+    pub sponsor: Option<SuiAddress>,
     pub input_objects: Vec<InputObjectKind>,
     pub kind: TransactionKind,
     pub modified_at_versions: Vec<(ObjectID, SequenceNumber)>,

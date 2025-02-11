@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
-use std::{collections::HashSet, sync::Arc};
-
 use move_binary_format::CompiledModule;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
+use std::{cell::RefCell, collections::HashSet, path::PathBuf, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
 use sui_types::{
@@ -80,6 +78,7 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
+        sponsor: Option<SuiAddress>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -102,6 +101,7 @@ impl executor::Executor for Executor {
             metrics,
             enable_expensive_checks,
             certificate_deny_set,
+            sponsor,
         )
     }
 
@@ -121,6 +121,7 @@ impl executor::Executor for Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         skip_all_checks: bool,
+        sponsor: Option<SuiAddress>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -143,6 +144,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
+                sponsor,
             )
         } else {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
@@ -160,6 +162,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
+                sponsor,
             )
         };
         (inner_temp_store, gas_status, effects, result)
@@ -170,10 +173,22 @@ impl executor::Executor for Executor {
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        tx_context: &mut TxContext,
+        epoch_id: EpochId,
+        epoch_timestamp_ms: u64,
+        transaction_digest: &TransactionDigest,
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
+        let tx_context = TxContext::new_from_components(
+            &SuiAddress::default(),
+            transaction_digest,
+            &epoch_id,
+            epoch_timestamp_ms,
+            1, // expose in the API if needed
+            None,
+            protocol_config.move_native_context(),
+        );
+        let tx_context = Rc::new(RefCell::new(tx_context));
         execute_genesis_state_update(
             store,
             protocol_config,
