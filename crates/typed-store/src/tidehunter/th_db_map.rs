@@ -424,7 +424,6 @@ fn thdb_config() -> Config {
     config.unload_jitter_pct = 30;
     config.max_dirty_keys = 1024;
     config.max_maps = 8; // 8Gb of mapped space
-    config.direct_io = true;
     config
 }
 
