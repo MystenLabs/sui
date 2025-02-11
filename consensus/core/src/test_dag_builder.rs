@@ -274,7 +274,7 @@ impl DagBuilder {
             .into_iter()
             .map(|(sub_dag, commit)| {
                 let certified_commit =
-                    CertifiedCommit::new_certified(commit, sub_dag.blocks.clone(), vec![]);
+                    CertifiedCommit::new_certified(commit, sub_dag.blocks.clone());
                 (sub_dag, certified_commit)
             })
             .collect()

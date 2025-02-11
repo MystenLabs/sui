@@ -432,7 +432,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 self.context
                     .metrics
                     .node_metrics
-                    .fetch_commits_skip_uncertified
+                    .commit_sync_fetch_commits_handler_uncertified_skipped
                     .inc();
                 commits.pop();
             }
@@ -696,7 +696,7 @@ mod tests {
     use crate::{
         authority_service::AuthorityService,
         block::{BlockAPI, BlockRef, SignedBlock, TestBlock, VerifiedBlock},
-        commit::{CertifiedCommit, CommitRange},
+        commit::{CertifiedCommits, CommitRange},
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -755,7 +755,7 @@ mod tests {
 
         async fn add_certified_commits(
             &self,
-            _commits: Vec<CertifiedCommit>,
+            _commits: CertifiedCommits,
         ) -> Result<BTreeSet<BlockRef>, CoreError> {
             todo!()
         }

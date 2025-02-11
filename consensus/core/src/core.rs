@@ -31,7 +31,7 @@ use crate::{
         Slot, VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
-    commit::{CertifiedCommit, CommitAPI, CommittedSubDag, DecidedLeader},
+    commit::{CertifiedCommit, CertifiedCommits, CommitAPI, CommittedSubDag, DecidedLeader},
     commit_observer::CommitObserver,
     context::Context,
     dag_state::DagState,
@@ -312,19 +312,19 @@ impl Core {
     #[tracing::instrument(skip_all)]
     pub(crate) fn add_certified_commits(
         &mut self,
-        commits: Vec<CertifiedCommit>,
+        certified_commits: CertifiedCommits,
     ) -> ConsensusResult<BTreeSet<BlockRef>> {
         let _scope = monitored_scope("Core::add_certified_commits");
 
         // We want to enable the commit process logic when GC is enabled.
         if self.dag_state.read().gc_enabled() {
-            // Accept the certified commit votes. This is optimisticallyd done to increase the chances of having votes available when this node
+            // Accept the certified commit votes. This is optimistically done to increase the chances of having votes available when this node
             // will need to sync commits to other nodes.
             self.block_manager
-                .try_accept_blocks(commits.iter().flat_map(|c| c.blocks()).cloned().collect());
+                .try_accept_blocks(certified_commits.votes().to_vec());
 
             // Try to commit the new blocks. Take into account the trusted commit that has been provided.
-            self.try_commit(commits)?;
+            self.try_commit(certified_commits.commits().to_vec())?;
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
@@ -338,7 +338,8 @@ impl Core {
         }
 
         // If GC is not enabled then process blocks as usual.
-        let blocks = commits
+        let blocks = certified_commits
+            .commits()
             .iter()
             .flat_map(|commit| commit.blocks())
             .cloned()
