@@ -122,13 +122,13 @@ pub struct GetTransactionResponse {
     pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
     /// Optional. List of user signatures that are used to authorize the
     /// execution of this transaction.
-    #[prost(message, optional, tag = "4")]
-    pub signatures: ::core::option::Option<UserSignatures>,
+    #[prost(message, repeated, tag = "4")]
+    pub signatures: ::prost::alloc::vec::Vec<super::super::types::UserSignature>,
     /// Optional. List of
     /// [UserSignature](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.UserSignature.html>)s
     /// encoded as bytes.
-    #[prost(message, optional, tag = "11")]
-    pub signatures_bytes: ::core::option::Option<UserSignaturesBytes>,
+    #[prost(bytes = "bytes", repeated, tag = "11")]
+    pub signatures_bytes: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
     /// Optional. The `TransactionEffects` for this transaction.
     #[prost(message, optional, tag = "5")]
     pub effects: ::core::option::Option<super::super::types::TransactionEffects>,
@@ -156,18 +156,6 @@ pub struct GetTransactionResponse {
     /// The Unix timestamp of the checkpoint that includes this transaction.
     #[prost(message, optional, tag = "10")]
     pub timestamp: ::core::option::Option<::prost_types::Timestamp>,
-}
-/// List of `UserSignature`s used to authorize a transaction.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UserSignatures {
-    #[prost(message, repeated, tag = "1")]
-    pub signatures: ::prost::alloc::vec::Vec<super::super::types::UserSignature>,
-}
-/// List of `UserSignature`s used to authorize a transaction encoded as bytes.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UserSignaturesBytes {
-    #[prost(bytes = "bytes", repeated, tag = "1")]
-    pub signatures: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
 }
 /// Request message for `NodeService.GetObject`.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -464,14 +452,21 @@ pub struct FullCheckpointTransaction {
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "8")]
     pub events_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. Set of input objects used during the execution of this transaction.
+    /// DEPRECATED To be removed in the next release
     #[prost(message, optional, tag = "11")]
-    pub input_objects: ::core::option::Option<FullCheckpointObjects>,
-    /// Optional. Set of output objects produced from the execution of this transaction.
+    pub input_objects_old: ::core::option::Option<FullCheckpointObjects>,
+    /// DEPRECATED To be removed in the next release
     #[prost(message, optional, tag = "12")]
-    pub output_objects: ::core::option::Option<FullCheckpointObjects>,
+    pub output_objects_old: ::core::option::Option<FullCheckpointObjects>,
+    /// Optional. Set of input objects used during the execution of this transaction.
+    #[prost(message, repeated, tag = "13")]
+    pub input_objects: ::prost::alloc::vec::Vec<FullCheckpointObject>,
+    /// Optional. Set of output objects produced from the execution of this transaction.
+    #[prost(message, repeated, tag = "14")]
+    pub output_objects: ::prost::alloc::vec::Vec<FullCheckpointObject>,
 }
 /// Set of objects used by or produced from a transaction.
+/// TODO remove next release
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FullCheckpointObjects {
     #[prost(message, repeated, tag = "1")]
@@ -511,12 +506,12 @@ pub struct ExecuteTransactionRequest {
     pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
     /// Optional. Set of `UserSiganture`s authorizing the execution of the provided
     /// transaction.
-    #[prost(message, optional, tag = "3")]
-    pub signatures: ::core::option::Option<UserSignatures>,
+    #[prost(message, repeated, tag = "3")]
+    pub signatures: ::prost::alloc::vec::Vec<super::super::types::UserSignature>,
     /// Optional. Set of `UserSiganture`s authorizing the execution of the provided
     /// transaction, encoded as bytes.
-    #[prost(message, optional, tag = "4")]
-    pub signatures_bytes: ::core::option::Option<UserSignaturesBytes>,
+    #[prost(bytes = "bytes", repeated, tag = "4")]
+    pub signatures_bytes: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
     /// Optional. Options for specifying which parts of the
     /// `ExecuteTransactionResponse` should be returned.
     #[prost(message, optional, tag = "5")]
@@ -544,7 +539,7 @@ pub struct ExecuteTransactionOptions {
     /// Defaults to `false` if not included.
     #[prost(bool, optional, tag = "7")]
     pub events_bcs: ::core::option::Option<bool>,
-    /// Include the `BalanceChanges` in the response.
+    /// Include the `BalanceChange`s in the response.
     ///
     /// Defaults to `false` if not included.
     #[prost(bool, optional, tag = "8")]
@@ -578,8 +573,11 @@ pub struct ExecuteTransactionResponse {
     #[prost(message, optional, tag = "5")]
     pub events_bcs: ::core::option::Option<super::super::types::Bcs>,
     /// Optional. Set of balance change events as a result of this transaction.
-    #[prost(message, optional, tag = "6")]
-    pub balance_changes: ::core::option::Option<BalanceChanges>,
+    ///
+    /// This set of events are calculated by analyzing all input and output `Coin`
+    /// type objects.
+    #[prost(message, repeated, tag = "6")]
+    pub balance_changes: ::prost::alloc::vec::Vec<BalanceChange>,
 }
 /// The delta, or change, in balance for an address for a particular `Coin` type.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -593,15 +591,6 @@ pub struct BalanceChange {
     /// The amount or change in balance.
     #[prost(message, optional, tag = "3")]
     pub amount: ::core::option::Option<super::super::types::I128>,
-}
-/// Set of `BalanceChange`s that occurred as the result of a transaction.
-///
-/// This set of events are calculated by analyzing all input and output `Coin`
-/// type objects.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct BalanceChanges {
-    #[prost(message, repeated, tag = "4")]
-    pub balance_changes: ::prost::alloc::vec::Vec<BalanceChange>,
 }
 /// Indicates the finality of the executed transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]

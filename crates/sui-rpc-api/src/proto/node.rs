@@ -1013,13 +1013,13 @@ impl From<crate::types::TransactionResponse> for GetTransactionResponse {
             timestamp_ms,
         }: crate::types::TransactionResponse,
     ) -> Self {
-        let signatures = signatures.map(|signatures| UserSignatures {
-            signatures: signatures.into_iter().map(Into::into).collect(),
-        });
+        let signatures = signatures
+            .map(|signatures| signatures.into_iter().map(Into::into).collect())
+            .unwrap_or_default();
 
-        let signatures_bytes = signatures_bytes.map(|signatures| UserSignaturesBytes {
-            signatures: signatures.into_iter().map(Into::into).collect(),
-        });
+        let signatures_bytes = signatures_bytes
+            .map(|signatures| signatures.into_iter().map(Into::into).collect())
+            .unwrap_or_default();
 
         Self {
             digest: Some(digest.into()),
@@ -1064,23 +1064,26 @@ impl TryFrom<&GetTransactionResponse> for crate::types::TransactionResponse {
         let transaction_bcs = transaction_bcs.as_ref().map(Into::into);
 
         let signatures = signatures
-            .as_ref()
-            .map(|signatures| {
-                signatures
-                    .signatures
-                    .iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .transpose()?;
+            .iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, _>>()?;
 
-        let signatures_bytes = signatures_bytes.as_ref().map(|signatures| {
-            signatures
-                .signatures
-                .iter()
-                .map(|bytes| bytes.to_vec())
-                .collect()
-        });
+        let signatures = if signatures.is_empty() {
+            None
+        } else {
+            Some(signatures)
+        };
+
+        let signatures_bytes = signatures_bytes
+            .iter()
+            .map(|bytes| bytes.to_vec())
+            .collect::<Vec<_>>();
+
+        let signatures_bytes = if signatures_bytes.is_empty() {
+            None
+        } else {
+            Some(signatures_bytes)
+        };
 
         let effects = effects.as_ref().map(TryInto::try_into).transpose()?;
         let effects_bcs = effects_bcs.as_ref().map(Into::into);
@@ -1334,12 +1337,18 @@ impl From<crate::types::FullCheckpointTransaction> for FullCheckpointTransaction
             output_objects,
         }: crate::types::FullCheckpointTransaction,
     ) -> Self {
-        let input_objects = input_objects.map(|objects| FullCheckpointObjects {
+        let input_objects_old = input_objects.clone().map(|objects| FullCheckpointObjects {
             objects: objects.into_iter().map(Into::into).collect(),
         });
-        let output_objects = output_objects.map(|objects| FullCheckpointObjects {
+        let output_objects_old = output_objects.clone().map(|objects| FullCheckpointObjects {
             objects: objects.into_iter().map(Into::into).collect(),
         });
+        let input_objects = input_objects
+            .map(|objects| objects.into_iter().map(Into::into).collect())
+            .unwrap_or_default();
+        let output_objects = output_objects
+            .map(|objects| objects.into_iter().map(Into::into).collect())
+            .unwrap_or_default();
         Self {
             digest: Some(digest.into()),
             transaction: transaction.map(Into::into),
@@ -1350,6 +1359,8 @@ impl From<crate::types::FullCheckpointTransaction> for FullCheckpointTransaction
             events_bcs: events_bcs.map(Into::into),
             input_objects,
             output_objects,
+            input_objects_old,
+            output_objects_old,
         }
     }
 }
@@ -1368,6 +1379,8 @@ impl TryFrom<&FullCheckpointTransaction> for crate::types::FullCheckpointTransac
             events_bcs,
             input_objects,
             output_objects,
+            input_objects_old: _,
+            output_objects_old: _,
         }: &FullCheckpointTransaction,
     ) -> Result<Self, Self::Error> {
         let digest = digest
@@ -1385,26 +1398,24 @@ impl TryFrom<&FullCheckpointTransaction> for crate::types::FullCheckpointTransac
         let events_bcs = events_bcs.as_ref().map(Into::into);
 
         let input_objects = input_objects
-            .as_ref()
-            .map(|objects| {
-                objects
-                    .objects
-                    .iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<_, _>>()
-            })
-            .transpose()?;
+            .iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, _>>()?;
+        let input_objects = if input_objects.is_empty() {
+            None
+        } else {
+            Some(input_objects)
+        };
 
         let output_objects = output_objects
-            .as_ref()
-            .map(|objects| {
-                objects
-                    .objects
-                    .iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<_, _>>()
-            })
-            .transpose()?;
+            .iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, _>>()?;
+        let output_objects = if output_objects.is_empty() {
+            None
+        } else {
+            Some(output_objects)
+        };
 
         Self {
             digest,
@@ -1436,9 +1447,9 @@ impl From<crate::types::ExecuteTransactionResponse> for ExecuteTransactionRespon
             balance_changes,
         }: crate::types::ExecuteTransactionResponse,
     ) -> Self {
-        let balance_changes = balance_changes.map(|balance_changes| BalanceChanges {
-            balance_changes: balance_changes.into_iter().map(Into::into).collect(),
-        });
+        let balance_changes = balance_changes
+            .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
+            .unwrap_or_default();
         Self {
             finality: Some(finality.into()),
             effects: effects.map(Into::into),
@@ -1475,15 +1486,14 @@ impl TryFrom<&ExecuteTransactionResponse> for crate::types::ExecuteTransactionRe
         let events_bcs = events_bcs.as_ref().map(Into::into);
 
         let balance_changes = balance_changes
-            .as_ref()
-            .map(|balance_changes| {
-                balance_changes
-                    .balance_changes
-                    .iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<_, _>>()
-            })
-            .transpose()?;
+            .iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, _>>()?;
+        let balance_changes = if balance_changes.is_empty() {
+            None
+        } else {
+            Some(balance_changes)
+        };
 
         Self {
             finality,

@@ -194,12 +194,12 @@ message GetTransactionResponse {
 
   // Optional. List of user signatures that are used to authorize the
   // execution of this transaction.
-  optional UserSignatures signatures = 4;
+  repeated sui.types.UserSignature signatures = 4;
 
   // Optional. List of
   // [UserSignature](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.UserSignature.html)s
   // encoded as bytes.
-  optional UserSignaturesBytes signatures_bytes = 11;
+  repeated bytes signatures_bytes = 11;
 
   // Optional. The `TransactionEffects` for this transaction.
   optional sui.types.TransactionEffects effects = 5;
@@ -227,16 +227,6 @@ message GetTransactionResponse {
 
   // The Unix timestamp of the checkpoint that includes this transaction.
   optional google.protobuf.Timestamp timestamp = 10;
-}
-
-// List of `UserSignature`s used to authorize a transaction.
-message UserSignatures {
-  repeated sui.types.UserSignature signatures = 1;
-}
-
-// List of `UserSignature`s used to authorize a transaction encoded as bytes.
-message UserSignaturesBytes {
-  repeated bytes signatures = 1;
 }
 
 // Request message for `NodeService.GetObject`.
@@ -519,14 +509,21 @@ message FullCheckpointTransaction {
   // for this transaction encoded as BCS bytes.
   optional sui.types.Bcs events_bcs = 8;
 
+  // DEPRECATED To be removed in the next release
+  optional FullCheckpointObjects input_objects_old = 11;
+
+  // DEPRECATED To be removed in the next release
+  optional FullCheckpointObjects output_objects_old = 12;
+
   // Optional. Set of input objects used during the execution of this transaction.
-  optional FullCheckpointObjects input_objects = 11;
+  repeated FullCheckpointObject input_objects = 13;
 
   // Optional. Set of output objects produced from the execution of this transaction.
-  optional FullCheckpointObjects output_objects = 12;
+  repeated FullCheckpointObject output_objects = 14;
 }
 
 // Set of objects used by or produced from a transaction.
+// TODO remove next release
 message FullCheckpointObjects {
   repeated FullCheckpointObject objects = 1;
 }
@@ -563,11 +560,11 @@ message ExecuteTransactionRequest {
 
   // Optional. Set of `UserSiganture`s authorizing the execution of the provided
   // transaction.
-  optional UserSignatures signatures = 3;
+  repeated sui.types.UserSignature signatures = 3;
 
   // Optional. Set of `UserSiganture`s authorizing the execution of the provided
   // transaction, encoded as bytes.
-  optional UserSignaturesBytes signatures_bytes = 4;
+  repeated bytes signatures_bytes = 4;
 
   // Optional. Options for specifying which parts of the
   // `ExecuteTransactionResponse` should be returned.
@@ -595,7 +592,7 @@ message ExecuteTransactionOptions {
   // Defaults to `false` if not included.
   optional bool events_bcs = 7;
 
-  // Include the `BalanceChanges` in the response.
+  // Include the `BalanceChange`s in the response.
   //
   // Defaults to `false` if not included.
   optional bool balance_changes = 8;
@@ -628,7 +625,10 @@ message ExecuteTransactionResponse {
   optional sui.types.Bcs events_bcs = 5;
 
   // Optional. Set of balance change events as a result of this transaction.
-  optional BalanceChanges balance_changes = 6;
+  //
+  // This set of events are calculated by analyzing all input and output `Coin`
+  // type objects.
+  repeated BalanceChange balance_changes = 6;
 }
 
 // The delta, or change, in balance for an address for a particular `Coin` type.
@@ -641,14 +641,6 @@ message BalanceChange {
 
   // The amount or change in balance.
   optional sui.types.I128 amount = 3;
-}
-
-// Set of `BalanceChange`s that occurred as the result of a transaction.
-//
-// This set of events are calculated by analyzing all input and output `Coin`
-// type objects.
-message BalanceChanges {
-  repeated BalanceChange balance_changes = 4;
 }
 
 // Indicates the finality of the executed transaction.

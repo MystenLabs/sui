@@ -164,7 +164,7 @@ message SimulateTransactionRequest {
 }
 
 message SimulateTransactionOptions {
-  // Include the `BalanceChanges` in the response.
+  // Include the `BalanceChange`s in the response.
   //
   // Defaults to `false` if not included.
   optional bool balance_changes = 8;
@@ -173,7 +173,7 @@ message SimulateTransactionOptions {
 message SimulateTransactionResponse {
   optional sui.types.Bcs effects_bcs = 3;
   optional sui.types.Bcs events_bcs = 5;
-  optional sui.node.v2.BalanceChanges balance_changes = 6;
+  repeated sui.node.v2.BalanceChange balance_changes = 6;
 }
 
 message ResolveTransactionRequest {
