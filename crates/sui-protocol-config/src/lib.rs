@@ -215,7 +215,7 @@ const MAX_PROTOCOL_VERSION: u64 = 74;
 //             Enable probing for accepted rounds in round prober in mainnet
 // Version 74: Enable load_nitro_attestation move function in sui framework in devnet.
 //             Enable all gas costs for load_nitro_attestation.
-//
+//             Enable zstd compression for consensus tonic network in mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3237,6 +3237,9 @@ impl ProtocolConfig {
                     cfg.nitro_attestation_parse_cost_per_byte = Some(50);
                     cfg.nitro_attestation_verify_base_cost = Some(49632 * 50);
                     cfg.nitro_attestation_verify_cost_per_cert = Some(52369 * 50);
+
+                    // Enable zstd compression for consensus in mainnet
+                    cfg.feature_flags.consensus_zstd_compression = true;
                 }
                 // Use this template when making changes:
                 //
