@@ -242,7 +242,7 @@ async fn indirect_commit() {
     };
 
     let leader_status_wave1_indirect =
-        committer.try_indirect_decide(leader, vec![leader_status_wave_2].iter());
+        committer.try_indirect_decide(leader, [leader_status_wave_2].iter());
 
     if let LeaderStatus::Commit(committed) = leader_status_wave1_indirect {
         tracing::info!("Indirect committed leader at wave 1: {committed}");
