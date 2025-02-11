@@ -1433,7 +1433,19 @@ impl CheckpointBuilder {
                 self.epoch_store
                     .record_epoch_first_checkpoint_creation_time_metric();
             }
-            let last_checkpoint_of_epoch = details.last_of_epoch && index == chunks_count - 1;
+
+            let isolate_change_epoch_txn = self
+                .epoch_store
+                .protocol_config()
+                .isolate_change_epoch_txn();
+
+            let last_checkpoint_of_epoch = if isolate_change_epoch_txn {
+                assert_eq!(chunks_count, 1);
+                assert!(transactions.is_empty());
+                details.last_of_epoch
+            } else {
+                details.last_of_epoch && index == chunks_count - 1
+            };
 
             let sequence_number = last_checkpoint
                 .as_ref()

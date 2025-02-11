@@ -3131,11 +3131,15 @@ impl AuthorityPerEpochStore {
             let should_write_random_checkpoint =
                 randomness_round.is_some() || (dkg_failed && !randomness_roots.is_empty());
 
+            let isolate_change_epoch_txn = self.protocol_config().isolate_change_epoch_txn();
+
             let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
                 roots: checkpoint_roots,
                 details: PendingCheckpointInfo {
                     timestamp_ms: consensus_commit_info.timestamp,
-                    last_of_epoch: final_round && !should_write_random_checkpoint,
+                    last_of_epoch: final_round
+                        && !should_write_random_checkpoint
+                        && !isolate_change_epoch_txn,
                     checkpoint_height,
                 },
             });
@@ -3146,8 +3150,20 @@ impl AuthorityPerEpochStore {
                     roots: randomness_roots.into_iter().collect(),
                     details: PendingCheckpointInfo {
                         timestamp_ms: consensus_commit_info.timestamp,
-                        last_of_epoch: final_round,
+                        last_of_epoch: final_round && !isolate_change_epoch_txn,
                         checkpoint_height: checkpoint_height + 1,
+                    },
+                });
+                self.write_pending_checkpoint(&mut output, &pending_checkpoint)?;
+            }
+
+            if final_round && isolate_change_epoch_txn {
+                let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
+                    roots: Vec::new(),
+                    details: PendingCheckpointInfo {
+                        timestamp_ms: consensus_commit_info.timestamp,
+                        last_of_epoch: true,
+                        checkpoint_height: checkpoint_height + 2,
                     },
                 });
                 self.write_pending_checkpoint(&mut output, &pending_checkpoint)?;

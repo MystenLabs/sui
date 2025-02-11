@@ -621,6 +621,11 @@ struct FeatureFlags {
     // If true, enable zstd compression for consensus tonic network.
     #[serde(skip_serializing_if = "is_false")]
     consensus_zstd_compression: bool,
+
+    // If true, change epoch transaction goes in a separate checkpoint
+    // with no other transactions.
+    #[serde(skip_serializing_if = "is_false")]
+    isolate_change_epoch_txn: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1803,6 +1808,10 @@ impl ProtocolConfig {
     }
     pub fn enable_nitro_attestation(&self) -> bool {
         self.feature_flags.enable_nitro_attestation
+    }
+
+    pub fn isolate_change_epoch_txn(&self) -> bool {
+        self.feature_flags.isolate_change_epoch_txn
     }
 }
 
@@ -3237,6 +3246,8 @@ impl ProtocolConfig {
                     cfg.nitro_attestation_parse_cost_per_byte = Some(50);
                     cfg.nitro_attestation_verify_base_cost = Some(49632 * 50);
                     cfg.nitro_attestation_verify_cost_per_cert = Some(52369 * 50);
+
+                    cfg.feature_flags.isolate_change_epoch_txn = true;
                 }
                 // Use this template when making changes:
                 //
