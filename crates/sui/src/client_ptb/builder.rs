@@ -960,7 +960,7 @@ impl<'a> PTBBuilder<'a> {
                 let compiled_package = compile_package(
                     self.reader,
                     build_config.clone(),
-                    &package_path,
+                    package_path,
                     false, /* with_unpublished_dependencies */
                     false, /* skip_dependency_verification */
                 )

@@ -3158,8 +3158,7 @@ async fn filter_deps(
     let mut referenced_modules: BTreeSet<ObjectID> = BTreeSet::new();
     let mut module_to_visit: Vec<_> = modules_map.get_map().iter().map(|x| x.0.clone()).collect();
 
-    while !module_to_visit.is_empty() {
-        let module_id = module_to_visit.pop().unwrap();
+    while let Some(module_id) = module_to_visit.pop() {
         let compiled_module = modules_map.get_module(&module_id);
 
         if let Ok(m) = compiled_module {
@@ -3186,14 +3185,13 @@ async fn filter_deps(
         .into_values()
         .collect();
 
-    let linkage_table_for_all_deps = fetch_move_packages(&client, published_deps_ids).await?;
+    let linkage_table_for_all_deps = fetch_move_packages(client, published_deps_ids).await?;
     let linkage_table_ids = linkage_table_for_all_deps
         .iter()
-        .map(|pkg| {
+        .flat_map(|pkg| {
             let linkage_table = pkg.linkage_table();
             linkage_table.keys().cloned().collect::<Vec<_>>()
         })
-        .flatten()
         .collect::<Vec<_>>();
 
     // remove all deps that are not either in the linkage table of all deps or directly referenced
