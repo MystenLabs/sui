@@ -4009,7 +4009,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
 
     // fetch linkage table of A
     let move_pkg_a = fetch_move_packages(&client, vec![package_a_id]).await?;
-    let linkage_table_a = move_pkg_a.get(0).unwrap().linkage_table();
+    let linkage_table_a = move_pkg_a.first().unwrap().linkage_table();
     // A has no deps, linkage table should be empty!
     assert!(linkage_table_a.is_empty());
 
@@ -4020,7 +4020,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
 
     // get linkage table of package B_depends_on_A
     let move_pkg_b = fetch_move_packages(&client, vec![package_b_id]).await?;
-    let linkage_table_b = move_pkg_b.get(0).unwrap().linkage_table();
+    let linkage_table_b = move_pkg_b.first().unwrap().linkage_table();
     // B depends on A, so the linkage table should contain A's object ID
     assert!(linkage_table_b.contains_key(&package_a_id));
 
@@ -4034,7 +4034,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
 
     // get linkage table of package B_depends_on_A_but_no_code_references_A
     let move_pkg_b_1 = fetch_move_packages(&client, vec![package_b_1_id]).await?;
-    let linkage_table_b_1 = move_pkg_b_1.get(0).unwrap().linkage_table();
+    let linkage_table_b_1 = move_pkg_b_1.first().unwrap().linkage_table();
     // B_no_code_reference_to_A depends on A in the manifest, but no code is referenced, so the linkage table should be
     // empty
     assert!(linkage_table_b_1.is_empty());
@@ -4131,7 +4131,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
 
     // fetch linkage table of D
     let move_pkg_d = fetch_move_packages(&client, vec![package_d_id]).await?;
-    let linkage_table_d = move_pkg_d.get(0).unwrap().linkage_table();
+    let linkage_table_d = move_pkg_d.first().unwrap().linkage_table();
     // D depends on A_v1, but no code references A, so the linkage table should be empty
     assert!(linkage_table_d.is_empty());
 
