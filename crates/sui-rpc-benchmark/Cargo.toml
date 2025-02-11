@@ -8,9 +8,13 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+bb8 = "0.9.0"
+bb8-postgres = "0.9.0"
 clap = { workspace = true, features = ["derive"] }
+chrono = { workspace = true, features = ["serde"] }
 dashmap.workspace = true
 futures.workspace = true
+phf = { version = "0.11", features = ["macros"] }
 rand.workspace = true
 reqwest.workspace = true
 serde.workspace = true
@@ -20,8 +24,6 @@ telemetry-subscribers.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-postgres = "0.7.12"
-bb8 = "0.9.0"
-bb8-postgres = "0.9.0"
 
 [[bin]]
 name = "sui-rpc-benchmark"
