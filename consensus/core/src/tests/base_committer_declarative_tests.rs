@@ -27,8 +27,8 @@ async fn direct_commit() {
     // Round 5 is a decision round (acknowledge)
     let dag_str = "DAG {
         Round 0 : { 4 },
-        Round 1 : { },
-        Round 2 : { },
+        Round 1 : { * },
+        Round 2 : { * },
         Round 3 : { * },
         Round 4 : { 
             A -> [D3],
@@ -76,8 +76,8 @@ async fn direct_skip() {
     // Round 5 is a decision round (acknowledge)
     let dag_str = "DAG {
         Round 0 : { 4 },
-        Round 1 : { },
-        Round 2 : { },
+        Round 1 : { * },
+        Round 2 : { * },
         Round 3 : { * },
         Round 4 : { 
             A -> [D3],
@@ -120,8 +120,8 @@ async fn direct_undecided() {
     // Round 5 is a decision round (acknowledge)
     let dag_str = "DAG {
         Round 0 : { 4 },
-        Round 1 : { },
-        Round 2 : { },
+        Round 1 : { * },
+        Round 2 : { * },
         Round 3 : { * },
         Round 4 : { 
             A -> [D3],
@@ -171,8 +171,8 @@ async fn indirect_commit() {
     // Round 8 is a decision round (acknowledge)
     let dag_str = "DAG {
         Round 0 : { 4 },
-        Round 1 : { },
-        Round 2 : { },
+        Round 1 : { * },
+        Round 2 : { * },
         Round 3 : { * },
         Round 4 : { 
             A -> [D3],
@@ -268,8 +268,8 @@ async fn indirect_skip() {
     // that only f+1 validators connect to the leader of wave 2
     let dag_str = "DAG {
         Round 0 : { 4 },
-        Round 1 : { },
-        Round 2 : { },
+        Round 1 : { * },
+        Round 2 : { * },
         Round 3 : { * },
         Round 4 : { * },
         Round 5 : { * },
