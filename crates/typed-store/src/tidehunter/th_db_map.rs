@@ -306,7 +306,7 @@ where
     }
 
     fn unbounded_iter(&'a self) -> Self::Iterator {
-        Box::new(self.db.unordered_iterator(self.ks).map(|r| {
+        Box::new(self.db.iterator(self.ks).map(|r| {
             let (k, v) = r.unwrap();
             let key = self.deserialize_key(&k);
             let value = self.deserialize_value(&v);
@@ -351,13 +351,14 @@ where
         let Bound::Included(end) = end else {
             panic!("Only included bounds currently implemented");
         };
-        let start = self.serialize_key(start).into();
-        let end = self.serialize_key(end).into();
+        let start = self.serialize_key(start);
+        let end = self.serialize_key(end);
 
+        let mut iterator = self.db.iterator(self.ks);
+        iterator.set_lower_bound(start);
+        iterator.set_upper_bound(end);
         Box::new(
-            self.db
-                .range_ordered_iterator(self.ks, start..end)
-                .map(|r| {
+                iterator.map(|r| {
                     let (k, v) = r.unwrap();
                     let key = self.deserialize_key(&k);
                     let value = self.deserialize_value(&v);

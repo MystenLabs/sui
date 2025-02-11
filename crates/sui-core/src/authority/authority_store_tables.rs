@@ -12,7 +12,7 @@ use sui_types::effects::TransactionEffects;
 use sui_types::storage::MarkerValue;
 use tidehunter::key_shape::{KeyShapeBuilder, KeySpaceConfig};
 use tidehunter::minibytes::Bytes;
-use tidehunter::wal::WalPosition;
+use tidehunter::WalPosition;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
     default_db_options, read_size_from_env, DBMapTableConfigMap, DBOptions,
