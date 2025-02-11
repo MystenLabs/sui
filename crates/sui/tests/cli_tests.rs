@@ -4010,7 +4010,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
     )
     .await?;
 
@@ -4028,7 +4027,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
     )
     .await?;
 
@@ -4049,7 +4047,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
     )
     .await?;
 
@@ -4072,7 +4069,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
     )
     .await?;
 
@@ -4101,7 +4097,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
     )
     .await?;
 
@@ -4138,6 +4133,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         build_config,
         skip_dependency_verification: false,
+        verify_deps: false,
         verify_compatibility: true,
         with_unpublished_dependencies: false,
     }
@@ -4166,7 +4162,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
     )
     .await?;
 
@@ -4185,7 +4180,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        false, /* skip dep verif */
     )
     .await?;
 
@@ -4211,7 +4205,6 @@ async fn publish_package(
     context: &mut WalletContext,
     rgp: u64,
     gas_obj_id: ObjectID,
-    skip_dependency_verification: bool,
 ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
     let mut build_config = BuildConfig::new_for_testing().config;
     let move_lock_path = package_path.clone().join("Move.lock");
@@ -4219,7 +4212,8 @@ async fn publish_package(
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
         build_config: build_config.clone(),
-        skip_dependency_verification,
+        skip_dependency_verification: false,
+        verify_deps: false,
         with_unpublished_dependencies: false,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
