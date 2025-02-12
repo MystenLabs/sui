@@ -14,7 +14,7 @@ module deepbook::clob_v2 {
     use sui::table::{Self, Table, contains, borrow_mut};
 
     use deepbook::critbit::{Self, CritbitTree, borrow_mut_leaf_by_index, remove_leaf_by_index, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf};
-    use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
+    use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, account_owner};
     use deepbook::math::Self as clob_math;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
@@ -302,7 +302,8 @@ module deepbook::clob_v2 {
     }
 
     public fun create_account(ctx: &mut TxContext): AccountCap {
-        mint_account_cap(ctx)
+        
+        abort 1337
     }
 
     public fun create_pool<BaseAsset, QuoteAsset>(
