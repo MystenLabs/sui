@@ -623,6 +623,10 @@ struct FeatureFlags {
     // If true, enable zstd compression for consensus tonic network.
     #[serde(skip_serializing_if = "is_false")]
     consensus_zstd_compression: bool,
+
+    // If true, enables the optimizations for child object mutations, removing unnecessary mutations
+    #[serde(skip_serializing_if = "is_false")]
+    optimize_child_object_mutations: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1805,6 +1809,10 @@ impl ProtocolConfig {
     }
     pub fn enable_nitro_attestation(&self) -> bool {
         self.feature_flags.enable_nitro_attestation
+    }
+
+    pub fn optimize_child_object_mutations(&self) -> bool {
+        self.feature_flags.optimize_child_object_mutations
     }
 }
 
@@ -3252,6 +3260,7 @@ impl ProtocolConfig {
                         // to be included before be considered garbage collected.
                         cfg.consensus_gc_depth = Some(60);
                     }
+                    cfg.feature_flags.optimize_child_object_mutations = true;
                 }
                 // Use this template when making changes:
                 //

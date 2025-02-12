@@ -713,10 +713,12 @@ impl ObjectRuntimeState {
                     Some(v) => {
                         // if it was changed, it should not also have been transferred
                         debug_assert!(!self.transfers.contains_key(&child));
-                        // either it was new or it was loaded (but not both)
+                        // loaded ==> !new
+                        // but if it was not loaded, it might not have been new (e.g. input or
+                        // wrapped)
                         debug_assert!(
-                            self.new_ids.contains(&child)
-                                ^ loaded_child_objects.contains_key(&child)
+                            !loaded_child_objects.contains_key(&child)
+                                || !self.new_ids.contains(&child)
                         );
                         self.transfers
                             .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));

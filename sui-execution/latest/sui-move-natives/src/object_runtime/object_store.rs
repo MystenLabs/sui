@@ -27,10 +27,13 @@ use sui_types::{
 
 pub(super) struct ObjectFingerprint(Option<ObjectFingerprint_>);
 
-struct ObjectFingerprint_ {
-    original_owner: ObjectID,
-    original_type: MoveObjectType,
-    original_value: Value,
+enum ObjectFingerprint_ {
+    Empty,
+    Original {
+        owner: ObjectID,
+        ty: MoveObjectType,
+        value: Value,
+    },
 }
 
 pub(super) struct ChildObject {
@@ -327,12 +330,15 @@ impl<'a> Inner<'a> {
         child_ty_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: &MoveObjectType,
     ) -> PartialVMResult<ObjectResult<(Type, GlobalValue, ObjectFingerprint)>> {
+        // we copy the reference to the protocol config ahead of time for lifetime reasons
+        let protocol_config = self.protocol_config;
+        // retrieve the object from storage if it exists
         let obj = match self.get_or_fetch_object_from_store(parent, child)? {
             None => {
                 return Ok(ObjectResult::Loaded((
                     child_ty.clone(),
                     GlobalValue::none(),
-                    ObjectFingerprint::none(),
+                    ObjectFingerprint::none(protocol_config),
                 )))
             }
             Some(obj) => obj,
@@ -352,15 +358,14 @@ impl<'a> Inner<'a> {
             ),
         };
         // save a fingerprint
-        let fingerprint = if todo!("protocol config gate") {
-            ObjectFingerprint::for_object(&parent, &child_move_type, &v).map_err(|e| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!("Failed to fingerprint value for object {child}. Error: {e}"),
-                )
-            })?
-        } else {
-            ObjectFingerprint::none()
-        };
+        let fingerprint =
+            ObjectFingerprint::original(protocol_config, &parent, child_move_type, &v).map_err(
+                |e| {
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                        format!("Failed to fingerprint value for object {child}. Error: {e}"),
+                    )
+                },
+            )?;
         // generate a global value
         let global_value =
             match GlobalValue::cached(v) {
@@ -638,7 +643,8 @@ impl<'a> ChildObjectStore<'a> {
             }
             (value, fingerprint)
         } else {
-            (GlobalValue::none(), ObjectFingerprint::none())
+            let fingerprint = ObjectFingerprint::none(self.inner.protocol_config);
+            (GlobalValue::none(), fingerprint)
         };
         if let Err((e, _)) = value.move_to(child_value) {
             return Err(
@@ -758,7 +764,7 @@ impl<'a> ChildObjectStore<'a> {
 
     // retrieve the `Op` effects for the child objects
     pub(super) fn take_effects(&mut self) -> PartialVMResult<ChildObjectEffects> {
-        if todo!("protocol config gate") {
+        if self.inner.protocol_config.optimize_child_object_mutations() {
             let v1_effects = std::mem::take(&mut self.store)
                 .into_iter()
                 .map(|(id, child_object)| {
@@ -830,20 +836,29 @@ impl<'a> ChildObjectStore<'a> {
 }
 
 impl ObjectFingerprint {
-    fn none() -> Self {
-        Self(None)
+    fn none(protocol_config: &ProtocolConfig) -> Self {
+        if !protocol_config.optimize_child_object_mutations() {
+            Self(None)
+        } else {
+            Self(Some(ObjectFingerprint_::Empty))
+        }
     }
 
-    fn for_object(
+    fn original(
+        protocol_config: &ProtocolConfig,
         original_owner: &ObjectID,
         original_type: &MoveObjectType,
         original_value: &Value,
     ) -> PartialVMResult<Self> {
-        Ok(Self(Some(ObjectFingerprint_ {
-            original_owner: *original_owner,
-            original_type: original_type.clone(),
-            original_value: original_value.copy_value()?,
-        })))
+        Ok(if !protocol_config.optimize_child_object_mutations() {
+            Self(None)
+        } else {
+            Self(Some(ObjectFingerprint_::Original {
+                owner: *original_owner,
+                ty: original_type.clone(),
+                value: original_value.copy_value()?,
+            }))
+        })
     }
 
     fn object_has_changed(
@@ -852,20 +867,31 @@ impl ObjectFingerprint {
         final_type: &MoveObjectType,
         final_value: &Option<Value>,
     ) -> PartialVMResult<bool> {
-        Ok(match (&self.0, final_value) {
-            (None, None) => false,
-            (None, Some(_)) | (Some(_), None) => true,
-            (Some(original), Some(final_value)) => {
-                let ObjectFingerprint_ {
-                    original_owner,
-                    original_type,
-                    original_value,
-                } = original;
+        use ObjectFingerprint_ as F;
+        let Some(inner) = &self.0 else {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    "Object fingerprint not enabled, yet we were asked for the changes".to_string(),
+                ),
+            );
+        };
+        Ok(match (inner, final_value) {
+            (F::Empty, None) => false,
+            (F::Empty, Some(_)) | (F::Original { .. }, None) => true,
+            (
+                F::Original {
+                    owner: original_owner,
+                    ty: original_type,
+                    value: original_value,
+                },
+                Some(final_value),
+            ) => {
                 // owner changed or value changed.
                 // For the value, we must first check if the types are the same before comparing the
                 // values
-                original_owner != final_owner
-                    || !(original_type == final_type && original_value.equals(final_value)?)
+                !(original_owner == final_owner
+                    && original_type == final_type
+                    && original_value.equals(final_value)?)
             }
         })
     }
