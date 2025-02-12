@@ -8,8 +8,6 @@ module deepbook::custodian_v2 {
     use sui::table::{Self, Table};
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
-    #[test_only]
-    const EUserBalanceDoesNotExist: u64 = 1;
     const EAdminAccountCapRequired: u64 = 2;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -172,64 +170,5 @@ module deepbook::custodian_v2 {
             );
         };
         table::borrow_mut(&mut custodian.account_balances, owner)
-    }
-
-    #[test_only]
-    fun borrow_account_balance<T>(
-        custodian: &Custodian<T>,
-        owner: address,
-    ): &Account<T> {
-        assert!(
-            table::contains(&custodian.account_balances, owner),
-            EUserBalanceDoesNotExist
-        );
-        table::borrow(&custodian.account_balances, owner)
-    }
-
-    #[test_only]
-    use sui::test_scenario::{Self, Scenario, take_shared, take_from_sender, ctx};
-    #[test_only]
-    use sui::coin::{mint_for_testing};
-    #[test_only]
-    use sui::test_utils::{assert_eq, destroy};
-
-    #[test_only]
-    public struct USD {}
-
-    #[test_only]
-    public(package) fun assert_user_balance<T>(
-        custodian: &Custodian<T>,
-        owner: address,
-        available_balance: u64,
-        locked_balance: u64,
-    ) {
-        let user_balance = borrow_account_balance<T>(custodian, owner);
-        assert!(balance::value(&user_balance.available_balance) == available_balance);
-        assert!(balance::value(&user_balance.locked_balance) == locked_balance)
-    }
-
-    #[test_only]
-    fun setup_test(
-        scenario: &mut Scenario,
-    ) {
-        transfer::share_object<Custodian<USD>>(new<USD>(test_scenario::ctx(scenario)));
-    }
-
-    #[test_only]
-    public(package) fun test_increase_user_available_balance<T>(
-        custodian: &mut Custodian<T>,
-        owner: address,
-        quantity: u64,
-    ) {
-        increase_user_available_balance<T>(custodian, owner, balance::create_for_testing(quantity));
-    }
-
-    #[test_only]
-    public(package) fun deposit<T>(
-        custodian: &mut Custodian<T>,
-        coin: Coin<T>,
-        owner: address,
-    ) {
-        increase_user_available_balance<T>(custodian, owner, coin::into_balance(coin));
     }
 }
