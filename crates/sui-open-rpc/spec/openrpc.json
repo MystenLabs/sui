@@ -3015,6 +3015,56 @@
       ]
     },
     {
+      "name": "sui_verifyZkLoginSignature",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Verify a zklogin signature for the given bytes, intent scope and author.",
+      "params": [
+        {
+          "name": "bytes",
+          "description": "The Base64 string of bcs bytes for raw transaction data or personal message indicated by intent_scope.",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "signature",
+          "description": "The Base64 string of the zklogin signature to verify.",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "intent_scope",
+          "description": "The intent scope, either transaction data or personal message. Used to parse bytes.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ZkLoginIntentScope"
+          }
+        },
+        {
+          "name": "author",
+          "description": "The author of the signature.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "ZkLoginVerifyResult",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ZkLoginVerifyResult"
+        }
+      }
+    },
+    {
       "name": "suix_getAllBalances",
       "tags": [
         {
@@ -11276,6 +11326,13 @@
           }
         }
       },
+      "ZkLoginIntentScope": {
+        "type": "string",
+        "enum": [
+          "TransactionData",
+          "PersonalMessage"
+        ]
+      },
       "ZkLoginProof": {
         "description": "The struct for zk login proof.",
         "type": "object",
@@ -11315,6 +11372,26 @@
             "$ref": "#/components/schemas/Base64"
           }
         ]
+      },
+      "ZkLoginVerifyResult": {
+        "type": "object",
+        "required": [
+          "errors",
+          "success"
+        ],
+        "properties": {
+          "errors": {
+            "description": "The errors field captures any verification error",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "success": {
+            "description": "The boolean result of the verification. If true, errors should be empty.",
+            "type": "boolean"
+          }
+        }
       }
     }
   }

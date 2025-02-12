@@ -12,6 +12,8 @@ use crate::errors::IndexerError;
 use crate::indexer_reader::IndexerReader;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_api::{ReadApiServer, QUERY_MAX_RESULT_LIMIT};
+use sui_json_rpc_types::ZkLoginIntentScope;
+use sui_json_rpc_types::ZkLoginVerifyResult;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, ProtocolConfigResponse, SuiEvent,
     SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
@@ -19,6 +21,7 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::sui_serde::BigInt;
@@ -230,6 +233,16 @@ impl ReadApiServer for ReadApi {
 
     async fn get_chain_identifier(&self) -> RpcResult<String> {
         self.get_chain_identifier().await.map(|id| id.to_string())
+    }
+
+    async fn verify_zklogin_signature(
+        &self,
+        _bytes: String,
+        _signature: String,
+        _intent_scope: ZkLoginIntentScope,
+        _author: SuiAddress,
+    ) -> RpcResult<ZkLoginVerifyResult> {
+        todo!()
     }
 }
 
