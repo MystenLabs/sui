@@ -690,14 +690,45 @@ impl ObjectRuntimeState {
                 owner: parent,
                 ty,
                 final_value,
-                value_changed,
+                object_changed,
             } = child_object_effect;
 
             if let Some(loaded_child) = loaded_child_objects.get_mut(&child) {
                 loaded_child.is_modified = true;
             }
 
-            todo!()
+            if object_changed {
+                match final_value {
+                    None => {
+                        // was transferred so not actually deleted
+                        if self.transfers.contains_key(&child) {
+                            debug_assert!(!self.deleted_ids.contains(&child));
+                        }
+                        // ID was deleted too was deleted so mark as deleted
+                        if self.deleted_ids.contains(&child) {
+                            debug_assert!(!self.transfers.contains_key(&child));
+                            debug_assert!(!self.new_ids.contains(&child));
+                        }
+                    }
+                    Some(v) => {
+                        // if it was changed, it should not also have been transferred
+                        debug_assert!(!self.transfers.contains_key(&child));
+                        // either it was new or it was loaded (but not both)
+                        debug_assert!(
+                            self.new_ids.contains(&child)
+                                ^ loaded_child_objects.contains_key(&child)
+                        );
+                        self.transfers
+                            .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
+                    }
+                }
+            } else {
+                // the object was not changed
+                // it should not have been created, transferred, or deleted
+                debug_assert!(!self.new_ids.contains(&child));
+                debug_assert!(!self.deleted_ids.contains(&child));
+                debug_assert!(!self.transfers.contains_key(&child));
+            }
         }
     }
 }

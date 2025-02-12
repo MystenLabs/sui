@@ -25,8 +25,12 @@ use sui_types::{
     storage::ChildObjectResolver,
 };
 
-pub(super) struct ValueFingerprint {
-    original: Option<Value>,
+pub(super) struct ObjectFingerprint(Option<ObjectFingerprint_>);
+
+struct ObjectFingerprint_ {
+    original_owner: ObjectID,
+    original_type: MoveObjectType,
+    original_value: Value,
 }
 
 pub(super) struct ChildObject {
@@ -34,7 +38,7 @@ pub(super) struct ChildObject {
     pub(super) ty: Type,
     pub(super) move_type: MoveObjectType,
     pub(super) value: GlobalValue,
-    pub(super) fingerprint: ValueFingerprint,
+    pub(super) fingerprint: ObjectFingerprint,
 }
 
 pub(crate) struct ActiveChildObject<'a> {
@@ -64,7 +68,8 @@ pub(crate) struct ChildObjectEffectV1 {
     pub(super) owner: ObjectID,
     pub(super) ty: Type,
     pub(super) final_value: Option<Value>,
-    pub(super) value_changed: bool,
+    // True if the value or the owner has changed
+    pub(super) object_changed: bool,
 }
 
 #[derive(Debug)]
@@ -321,13 +326,13 @@ impl<'a> Inner<'a> {
         child_ty_layout: &R::MoveTypeLayout,
         child_ty_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: &MoveObjectType,
-    ) -> PartialVMResult<ObjectResult<(Type, GlobalValue, ValueFingerprint)>> {
+    ) -> PartialVMResult<ObjectResult<(Type, GlobalValue, ObjectFingerprint)>> {
         let obj = match self.get_or_fetch_object_from_store(parent, child)? {
             None => {
                 return Ok(ObjectResult::Loaded((
                     child_ty.clone(),
                     GlobalValue::none(),
-                    ValueFingerprint::none(),
+                    ObjectFingerprint::none(),
                 )))
             }
             Some(obj) => obj,
@@ -348,13 +353,13 @@ impl<'a> Inner<'a> {
         };
         // save a fingerprint
         let fingerprint = if todo!("protocol config gate") {
-            ValueFingerprint::for_value(&v).map_err(|e| {
+            ObjectFingerprint::for_object(&parent, &child_move_type, &v).map_err(|e| {
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                     format!("Failed to fingerprint value for object {child}. Error: {e}"),
                 )
             })?
         } else {
-            ValueFingerprint::none()
+            ObjectFingerprint::none()
         };
         // generate a global value
         let global_value =
@@ -633,7 +638,7 @@ impl<'a> ChildObjectStore<'a> {
             }
             (value, fingerprint)
         } else {
-            (GlobalValue::none(), ValueFingerprint::none())
+            (GlobalValue::none(), ObjectFingerprint::none())
         };
         if let Err((e, _)) = value.move_to(child_value) {
             return Err(
@@ -760,17 +765,18 @@ impl<'a> ChildObjectStore<'a> {
                     let ChildObject {
                         owner,
                         ty,
-                        move_type: _,
+                        move_type,
                         value,
                         fingerprint,
                     } = child_object;
                     let final_value = value.into_value();
-                    let value_changed = fingerprint.value_has_changed(&final_value)?;
+                    let object_changed =
+                        fingerprint.object_has_changed(&owner, &move_type, &final_value)?;
                     let child_effect = ChildObjectEffectV1 {
                         owner,
                         ty,
                         final_value,
-                        value_changed,
+                        object_changed,
                     };
                     Ok((id, child_effect))
                 })
@@ -823,22 +829,44 @@ impl<'a> ChildObjectStore<'a> {
     }
 }
 
-impl ValueFingerprint {
+impl ObjectFingerprint {
     fn none() -> Self {
-        Self { original: None }
+        Self(None)
     }
 
-    fn for_value(original: &Value) -> PartialVMResult<Self> {
-        Ok(Self {
-            original: Some(original.copy_value()?),
-        })
+    fn for_object(
+        original_owner: &ObjectID,
+        original_type: &MoveObjectType,
+        original_value: &Value,
+    ) -> PartialVMResult<Self> {
+        Ok(Self(Some(ObjectFingerprint_ {
+            original_owner: *original_owner,
+            original_type: original_type.clone(),
+            original_value: original_value.copy_value()?,
+        })))
     }
 
-    fn value_has_changed(&self, final_value: &Option<Value>) -> PartialVMResult<bool> {
-        Ok(match (&self.original, final_value) {
+    fn object_has_changed(
+        &self,
+        final_owner: &ObjectID,
+        final_type: &MoveObjectType,
+        final_value: &Option<Value>,
+    ) -> PartialVMResult<bool> {
+        Ok(match (&self.0, final_value) {
             (None, None) => false,
             (None, Some(_)) | (Some(_), None) => true,
-            (Some(original), Some(final_value)) => original.equals(final_value)?,
+            (Some(original), Some(final_value)) => {
+                let ObjectFingerprint_ {
+                    original_owner,
+                    original_type,
+                    original_value,
+                } = original;
+                // owner changed or value changed.
+                // For the value, we must first check if the types are the same before comparing the
+                // values
+                original_owner != final_owner
+                    || !(original_type == final_type && original_value.equals(final_value)?)
+            }
         })
     }
 }
