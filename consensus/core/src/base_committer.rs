@@ -19,6 +19,10 @@ use crate::{
 #[path = "tests/base_committer_tests.rs"]
 mod base_committer_tests;
 
+#[cfg(test)]
+#[path = "tests/base_committer_declarative_tests.rs"]
+mod base_committer_declarative_tests;
+
 pub(crate) struct BaseCommitterOptions {
     /// TODO: Re-evaluate if we want this to be configurable after running experiments.
     /// The length of a wave (minimum 3)
