@@ -10,17 +10,21 @@ use diesel::{
     },
     pg::Pg,
     query_builder::{BoxedSelectStatement, FromClause, QueryFragment},
-    sql_types::BigInt,
+    sql_types::BigInt as SqlBigInt,
     AppearsOnTable, Column, Expression, ExpressionMethods, QueryDsl, QuerySource,
 };
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use sui_indexer_alt_schema::schema::{
     tx_affected_addresses, tx_affected_objects, tx_calls, tx_digests,
 };
-use sui_json_rpc_types::{Page as PageResponse, TransactionFilter};
+use sui_json_rpc_types::{Page as PageResponse, SuiTransactionBlockResponseOptions};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
-    messages_checkpoint::{CheckpointContents, CheckpointSummary},
+    messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber, CheckpointSummary},
+    sui_serde::{BigInt, Readable},
 };
 
 use crate::{
@@ -30,6 +34,44 @@ use crate::{
 };
 
 use super::{error::Error, Context, TransactionsConfig};
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
+#[serde(
+    rename_all = "camelCase",
+    rename = "TransactionBlockResponseQuery",
+    default
+)]
+pub(crate) struct SuiTransactionBlockResponseQuery {
+    /// If None, no filter will be applied.
+    pub filter: Option<TransactionFilter>,
+    /// Configures which fields to include in the response, by default only digest is included.
+    pub options: Option<SuiTransactionBlockResponseOptions>,
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+pub(crate) enum TransactionFilter {
+    /// Query by checkpoint.
+    Checkpoint(
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "Readable<BigInt<u64>, _>")]
+        CheckpointSequenceNumber,
+    ),
+    /// Query by move function.
+    MoveFunction {
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    },
+    /// Query for transactions that touch this object.
+    AffectedObject(ObjectID),
+    /// Query by sender address.
+    FromAddress(SuiAddress),
+    /// Query by sender and recipient address.
+    FromAndToAddress { from: SuiAddress, to: SuiAddress },
+    /// Query transactions that have a given address as sender or recipient.
+    FromOrToAddress { addr: SuiAddress },
+}
 
 type Cursor = JsonCursor<u64>;
 type Digests = PageResponse<TransactionDigest, String>;
@@ -74,22 +116,6 @@ pub(super) async fn transactions(
         }
 
         Some(F::FromOrToAddress { addr }) => tx_affected_addresses(ctx, &page, None, *addr).await,
-
-        Some(F::TransactionKind(_) | F::TransactionKindIn(_)) => {
-            unsupported("TransactionKind filter is not supported")
-        }
-
-        Some(F::InputObject(_)) => {
-            unsupported("InputObject filter is not supported, please use AffectedObject instead.")
-        }
-
-        Some(F::ChangedObject(_)) => {
-            unsupported("ChangedObject filter is not supported, please use AffectedObject instead.")
-        }
-
-        Some(F::ToAddress(_)) => {
-            unsupported("ToAddress filter is not supported, please use FromOrToAddress instead.")
-        }
     }
 }
 
@@ -312,10 +338,10 @@ where
     TX: Copy + Send + Sync + 'q,
     TX: ValidGrouping<()> + QueryFragment<Pg>,
     TX: Column<Table = QS> + AppearsOnTable<QS>,
-    TX: ExpressionMethods + Expression<SqlType = BigInt>,
+    TX: ExpressionMethods + Expression<SqlType = SqlBigInt>,
     TX::IsAggregate: MixedAggregates<Never, Output = No>,
 {
-    query = query.filter(tx_sequence_number.ge(sql::<BigInt>(&format!(
+    query = query.filter(tx_sequence_number.ge(sql::<SqlBigInt>(&format!(
         r#"COALESCE(
             (
                 SELECT
@@ -420,8 +446,4 @@ fn from_digests(limit: i64, mut rows: Vec<(i64, Vec<u8>)>) -> Result<Digests, Rp
         next_cursor,
         has_next_page,
     })
-}
-
-fn unsupported<T>(msg: &'static str) -> Result<T, RpcError<Error>> {
-    Err(invalid_params(Error::Unsupported(msg)))
 }

@@ -22,7 +22,4 @@ pub(super) enum Error {
         .1.to_canonical_display(/* with_prefix */ true),
     )]
     PrunedObject(TransactionDigest, ObjectID, u64),
-
-    #[error("{0}")]
-    Unsupported(&'static str),
 }

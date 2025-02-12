@@ -4,15 +4,12 @@
 use futures::future;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use serde::{Deserialize, Serialize};
-use sui_json_rpc_types::{
-    Page, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-    SuiTransactionBlockResponseQuery,
-};
+use sui_json_rpc_types::{Page, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::digests::TransactionDigest;
 
-use self::error::Error;
+use self::{error::Error, filter::SuiTransactionBlockResponseQuery};
 
 use crate::{
     context::Context,
