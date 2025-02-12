@@ -823,6 +823,10 @@ impl AuthorityPerEpochStore {
             epoch_id
         );
         let epoch_start_configuration = Arc::new(epoch_start_configuration);
+        assert!(
+            epoch_start_configuration.use_version_assignment_tables_v3(),
+            "use_version_assignment_tables_v3 must be already be enabled for DataQuarantining"
+        );
         info!("epoch flags: {:?}", epoch_start_configuration.flags());
         metrics.current_epoch.set(epoch_id as i64);
         metrics
