@@ -252,10 +252,10 @@ impl<'extensions> MoveVM<'extensions> {
         let (package_key, module_id) = runtime_id.clone().into();
         let string_interner = string_interner();
         let module_name = string_interner
-            .get_identifier(&module_id)
+            .get_or_intern_identifier(&module_id)
             .map_err(|err| err.finish(Location::Undefined))?;
         let member_name = string_interner
-            .get_ident_str(function_name)
+            .get_or_intern_ident_str(function_name)
             .map_err(|err| err.finish(Location::Undefined))?;
         let vtable_key = VirtualTableKey {
             package_key,
@@ -264,11 +264,6 @@ impl<'extensions> MoveVM<'extensions> {
                 member_name,
             },
         };
-        // FIXME: remove
-        // let _loaded_module = self
-        //     .virtual_tables
-        //     .resolve_loaded_module(runtime_id)
-        //     .map_err(|err| err.finish(Location::Undefined))?;
         let function = self
             .virtual_tables
             .resolve_function(&vtable_key)

@@ -22,12 +22,8 @@ use crate::{
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        AbilitySet, CodeOffset, ConstantPoolIndex, DatatypeTyParameter, EnumDefInstantiationIndex,
-        EnumDefinitionIndex, FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
-        FunctionInstantiationIndex, LocalIndex, SignatureIndex, SignatureToken,
-        StructDefInstantiationIndex, StructDefinitionIndex, VariantHandle, VariantHandleIndex,
-        VariantInstantiationHandle, VariantInstantiationHandleIndex, VariantJumpTable,
-        VariantJumpTableIndex, VariantTag,
+        AbilitySet, CodeOffset, DatatypeTyParameter, FunctionDefinitionIndex, LocalIndex,
+        SignatureToken, VariantTag,
     },
     file_format_common::Opcodes,
 };
@@ -99,9 +95,7 @@ pub struct Module {
     pub enum_instantiations: ArenaVec<EnumInstantiation>,
 
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
-    pub variant_handles: ArenaVec<VariantHandle>,
-    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
-    pub variant_instantiation_handles: ArenaVec<VariantInstantiationHandle>,
+    pub variant_instantiations: ArenaVec<VariantInstantiation>,
 
     /// materialized instantiations, whether partial or not
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
@@ -113,13 +107,6 @@ pub struct Module {
     /// materialized instantiations, whether partial or not
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
     pub field_instantiations: ArenaVec<FieldInstantiation>,
-
-    /// a map of single-token signature indices to type.
-    /// Single-token signatures are usually indexed by the `SignatureIndex` in bytecode. For example,
-    /// `VecMutBorrow(SignatureIndex)`, the `SignatureIndex` maps to a single `SignatureToken`, and
-    /// hence, a single type.
-    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
-    pub single_signature_token_map: BTreeMap<SignatureIndex, ArenaBox<ArenaType>>,
 
     /// a map from signatures in instantiations to the `ArenaVec<ArenaType>` that reperesent it.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
@@ -152,6 +139,7 @@ pub struct Function {
     pub locals: ArenaVec<ArenaType>,
     pub return_: ArenaVec<ArenaType>,
     pub type_parameters: ArenaVec<AbilitySet>,
+    // TODO(vm-rewrite): This field probably leaks
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
     pub module: ModuleId,
@@ -160,6 +148,9 @@ pub struct Function {
     pub locals_len: usize,
     pub jump_tables: ArenaVec<VariantJumpTable>,
 }
+
+// A variant jump table -- note that these are only full at the moment.
+pub type VariantJumpTable = ArenaVec<CodeOffset>;
 
 //
 // Internal structures that are saved at the proper index in the proper tables to access
@@ -179,36 +170,62 @@ pub enum CallType {
     Virtual(VirtualTableKey),
 }
 
-// A function instantiation.
-#[derive(Debug)]
-pub struct FunctionInstantiation {
-    // index to `ModuleCache::functions` global table if a in-package call otherwise a virtual call
-    pub handle: CallType,
-    pub instantiation_idx: SignatureIndex,
-}
+// -----------------------------------------------
+// Datatypes
+// -----------------------------------------------
 
 #[derive(Debug)]
 pub struct StructDef {
-    // struct field count
-    pub field_count: u16,
-    // `ModuelCache::structs` global table index
-    pub idx: VirtualTableKey,
+    pub def_vtable_key: VirtualTableKey,
+    pub abilities: AbilitySet,
+    pub type_parameters: ArenaVec<DatatypeTyParameter>,
+    pub fields: ArenaVec<ArenaType>,
+    pub field_names: ArenaVec<Identifier>,
+}
+
+#[derive(Debug)]
+pub struct EnumDef {
+    pub def_vtable_key: VirtualTableKey,
+    pub abilities: AbilitySet,
+    pub type_parameters: ArenaVec<DatatypeTyParameter>,
+    #[allow(unused)]
+    pub variant_count: u16,
+    pub variants: ArenaVec<VariantDef>,
+}
+
+#[derive(Debug)]
+pub struct VariantDef {
+    pub variant_tag: VariantTag,
+    // TODO(vm-rewrite): IdentifierKey
+    pub variant_name: Identifier,
+    pub fields: ArenaVec<ArenaType>,
+    pub field_names: ArenaVec<Identifier>,
+    pub enum_def: VMPointer<EnumDef>,
+}
+
+// -----------------------------------------------
+// Instantiations
+// -----------------------------------------------
+
+// A function instantiation.
+#[derive(Debug)]
+pub struct FunctionInstantiation {
+    pub handle: CallType,
+    pub instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
 #[derive(Debug)]
 pub struct StructInstantiation {
     // struct field count
     pub field_count: u16,
-    // `ModuleCache::structs` global table index. It is the generic type.
     pub def: VirtualTableKey,
-    pub instantiation_idx: SignatureIndex,
+    pub instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
 // A field handle. The offset is the only used information when operating on a field
 #[derive(Debug)]
 pub struct FieldHandle {
     pub offset: usize,
-    // `ModuelCache::structs` global table index. It is the generic type.
     pub owner: VirtualTableKey,
 }
 
@@ -216,44 +233,30 @@ pub struct FieldHandle {
 #[derive(Debug)]
 pub struct FieldInstantiation {
     pub offset: usize,
-    // `ModuleCache::structs` global table index. It is the generic type.
     #[allow(unused)]
     pub owner: VirtualTableKey,
-}
-
-#[derive(Debug)]
-pub struct EnumDef {
-    // enum variant count
-    #[allow(unused)]
-    pub variant_count: u16,
-    pub variants: ArenaVec<VariantDef>,
-    // `ModuelCache::types` global table index
-    pub idx: VirtualTableKey,
 }
 
 #[derive(Debug)]
 pub struct EnumInstantiation {
     // enum variant count
     pub variant_count_map: ArenaVec<u16>,
-    // `ModuelCache::types` global table index
     pub def: VirtualTableKey,
-    pub instantiation_idx: SignatureIndex,
+    pub instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
+// A variant instantiation.
 #[derive(Debug)]
-pub struct VariantDef {
-    #[allow(unused)]
-    pub tag: u16,
-    pub field_count: u16,
-    #[allow(unused)]
-    pub field_types: VMPointer<ArenaVec<ArenaType>>,
+pub struct VariantInstantiation {
+    pub enum_inst: VMPointer<EnumInstantiation>,
+    pub variant_tag: u16,
 }
 
 // -------------------------------------------------------------------------------------------------
 // Runtime Type representation
 // -------------------------------------------------------------------------------------------------
 
-#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Debug)]
 pub enum ArenaType {
     Bool,
     U8,
@@ -272,47 +275,19 @@ pub enum ArenaType {
     U256,
 }
 
-// FIXME(vm-rewrite): This data is largely redundant
-#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Debug)]
 pub struct DatatypeDescriptor {
-    pub abilities: AbilitySet,
-    pub type_parameters: ArenaVec<DatatypeTyParameter>,
     // TODO(vm-rewrite): IdentifierKey
     pub name: Identifier,
     pub defining_id: ModuleId,
     pub runtime_id: ModuleId,
-    pub module_key: IdentifierKey,
-    pub member_key: IdentifierKey,
-    pub datatype_info: VMPointer<Datatype>,
+    pub datatype_info: ArenaBox<Datatype>,
 }
 
-#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Debug)]
 pub enum Datatype {
-    Enum(EnumType),
-    Struct(StructType),
-}
-
-#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct EnumType {
-    pub variants: ArenaVec<VariantType>,
-    pub enum_def: EnumDefinitionIndex,
-}
-
-#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct VariantType {
-    // TODO(vm-rewrite): IdentifierKey
-    pub variant_name: Identifier,
-    pub fields: ArenaVec<ArenaType>,
-    pub field_names: ArenaVec<Identifier>,
-    pub enum_def: EnumDefinitionIndex,
-    pub variant_tag: VariantTag,
-}
-
-#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct StructType {
-    pub fields: ArenaVec<ArenaType>,
-    pub field_names: ArenaVec<Identifier>,
-    pub struct_def: StructDefinitionIndex,
+    Enum(VMPointer<EnumDef>),
+    Struct(VMPointer<StructDef>),
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -347,7 +322,6 @@ pub enum Type {
 ///
 /// Bytecodes operate on a stack machine and each bytecode has side effect on the stack and the
 /// instruction stream.
-#[derive(Eq, PartialEq)]
 pub enum Bytecode {
     /// Pop and discard the value at the top of the stack.
     /// The value on the stack must be an copyable type.
@@ -426,7 +400,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```... -> ..., value```
-    LdConst(ConstantPoolIndex),
+    LdConst(VMPointer<Constant>),
     /// Push `true` onto the stack.
     ///
     /// Stack transition:
@@ -480,7 +454,7 @@ pub enum Bytecode {
     /// The VTableKey must be resolved in the current package context to resolve it to a function
     /// that can be executed.
     VirtualCall(VirtualTableKey),
-    CallGeneric(FunctionInstantiationIndex),
+    CallGeneric(VMPointer<FunctionInstantiation>),
     /// Create an instance of the type specified via `DatatypeHandleIndex` and push it on the stack.
     /// The values of the fields of the struct, in the order they appear in the struct declaration,
     /// must be pushed on the stack. All fields must be provided.
@@ -490,8 +464,8 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., field(1)_value, field(2)_value, ..., field(n)_value -> ..., instance_value```
-    Pack(StructDefinitionIndex),
-    PackGeneric(StructDefInstantiationIndex),
+    Pack(VMPointer<StructDef>),
+    PackGeneric(VMPointer<StructInstantiation>),
     /// Destroy an instance of a type and push the values bound to each field on the
     /// stack.
     ///
@@ -504,8 +478,8 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., instance_value -> ..., field(1)_value, field(2)_value, ..., field(n)_value```
-    Unpack(StructDefinitionIndex),
-    UnpackGeneric(StructDefInstantiationIndex),
+    Unpack(VMPointer<StructDef>),
+    UnpackGeneric(VMPointer<StructInstantiation>),
     /// Read a reference. The reference is on the stack, it is consumed and the value read is
     /// pushed on the stack.
     ///
@@ -555,7 +529,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., reference -> ..., field_reference```
-    MutBorrowField(FieldHandleIndex),
+    MutBorrowField(VMPointer<FieldHandle>),
     /// Load a mutable reference to a field identified by `FieldInstantiationIndex`.
     /// The top of the stack must be a mutable reference to a type that contains the field
     /// definition.
@@ -563,21 +537,21 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., reference -> ..., field_reference```
-    MutBorrowFieldGeneric(FieldInstantiationIndex),
+    MutBorrowFieldGeneric(VMPointer<FieldInstantiation>),
     /// Load an immutable reference to a field identified by `FieldHandleIndex`.
     /// The top of the stack must be a reference to a type that contains the field definition.
     ///
     /// Stack transition:
     ///
     /// ```..., reference -> ..., field_reference```
-    ImmBorrowField(FieldHandleIndex),
+    ImmBorrowField(VMPointer<FieldHandle>),
     /// Load an immutable reference to a field identified by `FieldInstantiationIndex`.
     /// The top of the stack must be a reference to a type that contains the field definition.
     ///
     /// Stack transition:
     ///
     /// ```..., reference -> ..., field_reference```
-    ImmBorrowFieldGeneric(FieldInstantiationIndex),
+    ImmBorrowFieldGeneric(VMPointer<FieldInstantiation>),
     /// Add the 2 u64 at the top of the stack and pushes the result on the stack.
     /// The operation aborts the transaction in case of overflow.
     ///
@@ -723,51 +697,51 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., e1, e2, ..., eN -> ..., vec[e1, e2, ..., eN]```
-    VecPack(SignatureIndex, u64),
+    VecPack(VMPointer<ArenaType>, u64),
     /// Return the length of the vector,
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., u64_value```
-    VecLen(SignatureIndex),
+    VecLen(VMPointer<ArenaType>),
     /// Acquire an immutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecImmBorrow(SignatureIndex),
+    VecImmBorrow(VMPointer<ArenaType>),
     /// Acquire a mutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecMutBorrow(SignatureIndex),
+    VecMutBorrow(VMPointer<ArenaType>),
     /// Add an element to the end of the vector.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, element -> ...```
-    VecPushBack(SignatureIndex),
+    VecPushBack(VMPointer<ArenaType>),
     /// Pop an element from the end of vector. Aborts if the vector is empty.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., element```
-    VecPopBack(SignatureIndex),
+    VecPopBack(VMPointer<ArenaType>),
     /// Destroy the vector and unpack a statically known number of elements onto the stack. Aborts
     /// if the vector does not have a length N.
     ///
     /// Stack transition:
     ///
     /// ```..., vec[e1, e2, ..., eN] -> ..., e1, e2, ..., eN```
-    VecUnpack(SignatureIndex, u64),
+    VecUnpack(VMPointer<ArenaType>, u64),
     /// Swaps the elements at two indices in the vector. Abort the execution if any of the indice
     /// is out of bounds.
     ///
     /// ```..., vector_reference, u64_value(1), u64_value(2) -> ...```
-    VecSwap(SignatureIndex),
+    VecSwap(VMPointer<ArenaType>),
     /// Push a U16 constant onto the stack.
     ///
     /// Stack transition:
@@ -813,8 +787,8 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., field(1)_value, field(2)_value, ..., field(n)_value -> ..., variant_value```
-    PackVariant(VariantHandleIndex),
-    PackVariantGeneric(VariantInstantiationHandleIndex),
+    PackVariant(VMPointer<VariantDef>),
+    PackVariantGeneric(VMPointer<VariantInstantiation>),
     /// Destroy a variant value specified by the `VariantHandleIndex` and push the values bound to
     /// each variant field on the stack.
     ///
@@ -828,19 +802,19 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., instance_value -> ..., field(1)_value, field(2)_value, ..., field(n)_value```
-    UnpackVariant(VariantHandleIndex),
-    UnpackVariantImmRef(VariantHandleIndex),
-    UnpackVariantMutRef(VariantHandleIndex),
-    UnpackVariantGeneric(VariantInstantiationHandleIndex),
-    UnpackVariantGenericImmRef(VariantInstantiationHandleIndex),
-    UnpackVariantGenericMutRef(VariantInstantiationHandleIndex),
+    UnpackVariant(VMPointer<VariantDef>),
+    UnpackVariantImmRef(VMPointer<VariantDef>),
+    UnpackVariantMutRef(VMPointer<VariantDef>),
+    UnpackVariantGeneric(VMPointer<VariantInstantiation>),
+    UnpackVariantGenericImmRef(VMPointer<VariantInstantiation>),
+    UnpackVariantGenericMutRef(VMPointer<VariantInstantiation>),
     /// Branch on the tag value of the enum value reference that is on the top of the value stack,
     /// and jumps to the matching code offset for that tag within the `CodeUnit`. Code offsets are
     /// relative to the start of the instruction stream.
     ///
     /// Stack transition:
     /// ```..., enum_value_ref -> ...```
-    VariantSwitch(VariantJumpTableIndex),
+    VariantSwitch(VMPointer<VariantJumpTable>),
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -849,7 +823,7 @@ pub enum Bytecode {
 
 impl Module {
     pub fn struct_at(&self, idx: StructDefinitionIndex) -> VirtualTableKey {
-        self.structs[idx.0 as usize].idx.clone()
+        self.structs[idx.0 as usize].def_vtable_key.clone()
     }
 
     pub fn struct_instantiation_at(&self, idx: u16) -> &StructInstantiation {
@@ -885,7 +859,7 @@ impl Module {
     }
 
     pub fn enum_at(&self, idx: EnumDefinitionIndex) -> VirtualTableKey {
-        self.enums[idx.0 as usize].idx.clone()
+        self.enums[idx.0 as usize].def_vtable_key.clone()
     }
 
     pub fn enum_instantiation_at(&self, idx: EnumDefInstantiationIndex) -> &EnumInstantiation {
@@ -1039,6 +1013,36 @@ impl ArenaType {
                 let inst = instantiation.into_iter().map(|ty| ty.to_type()).collect();
                 Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
             }
+        }
+    }
+}
+
+impl DatatypeDescriptor {
+    pub fn new(
+        name: Identifier,
+        defining_id: ModuleId,
+        runtime_id: ModuleId,
+        datatype_info: ArenaBox<Datatype>,
+    ) -> Self {
+        Self {
+            name,
+            defining_id,
+            runtime_id,
+            datatype_info,
+        }
+    }
+
+    pub fn qualified_name(&self) -> VirtualTableKey {
+        match self.datatype_info.as_ref() {
+            Datatype::Enum(ptr) => ptr.to_ref().def_vtable_key.clone(),
+            Datatype::Struct(ptr) => ptr.to_ref().def_vtable_key.clone(),
+        }
+    }
+
+    pub fn intra_package_name(&self) -> IntraPackageKey {
+        match self.datatype_info.as_ref() {
+            Datatype::Enum(ptr) => ptr.to_ref().def_vtable_key.inner_pkg_key.clone(),
+            Datatype::Struct(ptr) => ptr.to_ref().def_vtable_key.inner_pkg_key.clone(),
         }
     }
 }
@@ -1431,10 +1435,10 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::VirtualCall(vtable_key) => {
                 let string_interner = string_interner();
                 let module_name = string_interner
-                    .resolve_string(&vtable_key.inner_pkg_key.module_name, "module name")
+                    .resolve_ident(&vtable_key.inner_pkg_key.module_name, "module name")
                     .expect("Failed to find interned string");
                 let member_name = string_interner
-                    .resolve_string(&vtable_key.inner_pkg_key.member_name, "member name")
+                    .resolve_ident(&vtable_key.inner_pkg_key.member_name, "member name")
                     .expect("Failed to find interned string");
                 write!(
                     f,
@@ -1517,10 +1521,10 @@ impl std::fmt::Debug for CallType {
             CallType::Virtual(vtable_key) => {
                 let string_interner = string_interner();
                 let module_name = string_interner
-                    .resolve_string(&vtable_key.inner_pkg_key.module_name, "module name")
+                    .resolve_ident(&vtable_key.inner_pkg_key.module_name, "module name")
                     .expect("Failed to find interned string");
                 let member_name = string_interner
-                    .resolve_string(&vtable_key.inner_pkg_key.member_name, "member name")
+                    .resolve_ident(&vtable_key.inner_pkg_key.member_name, "member name")
                     .expect("Failed to find interned string");
                 write!(
                     f,
