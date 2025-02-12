@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::{bail, Context};
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
 use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
@@ -193,13 +193,27 @@ impl FullCluster {
         self.offchain.latest_checkpoint().await
     }
 
-    /// Waits until the indexer has caught up to the given checkpoint, or the timeout is reached.
+    /// Waits until the indexer has caught up to the given `checkpoint`, or the `timeout` is
+    /// reached (an error).
     pub async fn wait_for_checkpoint(
         &self,
         checkpoint: u64,
         timeout: Duration,
     ) -> Result<(), Elapsed> {
         self.offchain.wait_for_checkpoint(checkpoint, timeout).await
+    }
+
+    /// Waits until the indexer's pruner has caught up to the given `checkpoint`, for the given
+    /// `pipeline`, or the `timeout` is reached (an error).
+    pub async fn wait_for_pruner(
+        &self,
+        pipeline: &str,
+        checkpoint: u64,
+        timeout: Duration,
+    ) -> Result<(), Elapsed> {
+        self.offchain
+            .wait_for_pruner(pipeline, checkpoint, timeout)
+            .await
     }
 
     /// Triggers cancellation of all downstream services, waits for them to stop, cleans up the
@@ -312,16 +326,36 @@ impl OffchainCluster {
             .into_iter()
             .collect();
 
-        for pipeline in &self.pipelines {
-            if !latest.contains_key(*pipeline) {
-                return Ok(None);
-            }
+        if latest.len() != self.pipelines.len() {
+            return Ok(None);
         }
 
         Ok(latest.into_values().min().map(|l| l as u64))
     }
 
-    /// Waits until the indexer has caught up to the given checkpoint, or the timeout is reached.
+    /// Returns the latest checkpoint that the pruner is willing to prune up to for the given
+    /// `pipeline`.
+    pub async fn latest_pruner_checkpoint(&self, pipeline: &str) -> anyhow::Result<Option<u64>> {
+        use watermarks::dsl as w;
+
+        let mut conn = self
+            .db
+            .connect()
+            .await
+            .context("Failed to connect to database")?;
+
+        let latest: Option<i64> = w::watermarks
+            .select(w::reader_lo)
+            .filter(w::pipeline.eq(pipeline))
+            .first(&mut conn)
+            .await
+            .optional()?;
+
+        Ok(latest.map(|l| l as u64))
+    }
+
+    /// Waits until the indexer has caught up to the given `checkpoint`, or the `timeout` is
+    /// reached (an error).
     pub async fn wait_for_checkpoint(
         &self,
         checkpoint: u64,
@@ -332,11 +366,30 @@ impl OffchainCluster {
                 if matches!(self.latest_checkpoint().await, Ok(Some(l)) if l >= checkpoint) {
                     break;
                 } else {
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_millis(200)).await;
                 }
             }
         })
         .await
+    }
+
+    /// Waits until the indexer's pruner has caught up to the given `checkpoint`, for the given
+    /// `pipeline`, or the `timeout` is reached (an error).
+    pub async fn wait_for_pruner(
+        &self,
+        pipeline: &str,
+        checkpoint: u64,
+        timeout: Duration,
+    ) -> Result<(), Elapsed> {
+        tokio::time::timeout(timeout, async move {
+            loop {
+                if matches!(self.latest_pruner_checkpoint(pipeline).await, Ok(Some(l)) if l >= checkpoint) {
+                    break;
+                } else {
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                }
+            }
+        }).await
     }
 
     /// Triggers cancellation of all downstream services, waits for them to stop, and cleans up the

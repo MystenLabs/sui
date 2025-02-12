@@ -15,7 +15,7 @@ use anyhow::{bail, Context};
 use prometheus::Registry;
 use reqwest::Client;
 use serde_json::{json, Value};
-use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::config::{IndexerConfig, Merge, PrunerLayer};
 use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
 use sui_indexer_alt_jsonrpc::{
@@ -113,10 +113,15 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
     // that rely on this behaviour will always fail, but this is better than flaky behavior.
     let system_package_task_args = SystemPackageTaskArgs::default();
 
-    // The example config includes every pipeline, and we configure its consistent range using the
+    // The test config includes every pipeline, we configure its consistent range using the
     // off-chain config that was passed in.
-    let mut indexer_config = IndexerConfig::example();
-    indexer_config.consistency.retention = Some(config.snapshot_config.snapshot_min_lag as u64);
+    let indexer_config = IndexerConfig::for_test().merge(IndexerConfig {
+        consistency: PrunerLayer {
+            retention: Some(config.snapshot_config.snapshot_min_lag as u64),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 
     let rpc_config = RpcConfig::example();
 
