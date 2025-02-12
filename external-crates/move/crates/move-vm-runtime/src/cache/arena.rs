@@ -8,6 +8,8 @@ use move_core_types::vm_status::StatusCode;
 
 use bumpalo::Bump;
 
+use crate::shared::vm_pointer::VMPointer;
+
 // -------------------------------------------------------------------------------------------------
 // Types - Arenas for Cache Allocations
 // -------------------------------------------------------------------------------------------------
@@ -106,6 +108,14 @@ impl<T> ArenaVec<T> {
     /// initialize a `vec![]` memory slot until a `push` occurs, so you must never do that.
     pub(crate) fn empty() -> Self {
         ArenaVec(std::mem::ManuallyDrop::new(vec![]))
+    }
+
+    /// Returns a vector of stable pointers to the elements of the vector
+    pub fn to_ptrs(&self) -> Vec<VMPointer<T>> {
+        self.0
+            .iter()
+            .map(|val_ref| VMPointer::from_ref(val_ref))
+            .collect()
     }
 }
 

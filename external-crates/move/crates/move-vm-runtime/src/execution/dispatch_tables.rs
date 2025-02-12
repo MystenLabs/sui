@@ -214,10 +214,10 @@ impl VMDispatchTables {
                 let package_key = struct_tag.address;
                 let string_interner = string_interner();
                 let module_name = string_interner
-                    .get_identifier(&struct_tag.module)
+                    .resolve_identifier(&struct_tag.module)
                     .map_err(|e| e.finish(Location::Undefined))?;
                 let member_name = string_interner
-                    .get_identifier(&struct_tag.name)
+                    .resolve_identifier(&struct_tag.name)
                     .map_err(|e| e.finish(Location::Undefined))?;
                 let key = VirtualTableKey {
                     package_key,
@@ -896,6 +896,27 @@ impl PackageVirtualTable {
 }
 
 impl VirtualTableKey {
+    pub fn new(package_key: RuntimePackageId, inner_pkg_key: IntraPackageKey) -> Self {
+        Self {
+            package_key,
+            inner_pkg_key,
+        }
+    }
+
+    pub fn from_parts(
+        package_key: RuntimePackageId,
+        module_name: IdentifierKey,
+        member_name: IdentifierKey,
+    ) -> Self {
+        Self {
+            package_key,
+            inner_pkg_key: IntraPackageKey {
+                module_name,
+                member_name,
+            },
+        }
+    }
+
     pub fn to_string(&self) -> PartialVMResult<String> {
         let inner_name = self.inner_pkg_key.to_string()?;
         Ok(format!("{}::{}", self.package_key, inner_name))
@@ -904,8 +925,8 @@ impl VirtualTableKey {
 
 impl IntraPackageKey {
     pub fn to_string(&self) -> PartialVMResult<String> {
-        let module_name = string_interner().resolve_string(&self.module_name, "module name")?;
-        let member_name = string_interner().resolve_string(&self.member_name, "member name")?;
+        let module_name = string_interner().resolve_ident(&self.module_name, "module name")?;
+        let member_name = string_interner().resolve_ident(&self.member_name, "member name")?;
         Ok(format!("{}::{}", module_name, member_name))
     }
 }

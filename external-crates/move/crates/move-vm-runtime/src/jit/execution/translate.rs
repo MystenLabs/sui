@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::arena::{Arena, ArenaBox, ArenaVec},
+    cache::{
+        arena::{Arena, ArenaBox, ArenaVec},
+        identifier_interner::IdentifierInterner,
+    },
     dbg_println,
     execution::{
         dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
@@ -22,13 +25,16 @@ use crate::{
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        CompiledModule, EnumDefinitionIndex, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandleIndex, SignatureIndex, SignatureToken, StructDefinitionIndex,
-        StructFieldInformation, TableIndex,
+        self as FF, CompiledModule, FunctionDefinition, FunctionDefinitionIndex,
+        FunctionHandleIndex, SignatureIndex, SignatureToken, StructFieldInformation, TableIndex,
     },
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+// -------------------------------------------------------------------------------------------------
+// Translation Context and Definitions
+// -------------------------------------------------------------------------------------------------
 
 struct PackageContext<'natives> {
     pub natives: &'natives NativeFunctions,
@@ -48,7 +54,21 @@ struct PackageContext<'natives> {
 struct FunctionContext<'pkg_ctxt, 'natives> {
     package_context: &'pkg_ctxt PackageContext<'natives>,
     module: &'pkg_ctxt CompiledModule,
-    single_signature_token_map: BTreeMap<SignatureIndex, ArenaBox<ArenaType>>,
+    definitions: Definitions,
+}
+
+struct Definitions {
+    structs: Vec<VMPointer<StructDef>>,
+    struct_instantiations: Vec<VMPointer<StructInstantiation>>,
+    enums: Vec<VMPointer<EnumDef>>,
+    enum_instantiations: Vec<VMPointer<EnumInstantiation>>,
+    variants: Vec<VMPointer<VariantDef>>,
+    variant_instantiations: Vec<VMPointer<VariantInstantiation>>,
+    field_handles: Vec<VMPointer<FieldHandle>>,
+    field_instantiations: Vec<VMPointer<FieldInstantiation>>,
+    function_instantiations: Vec<VMPointer<FunctionInstantiation>>,
+    signatures: Vec<VMPointer<ArenaVec<ArenaType>>>,
+    constants: Vec<VMPointer<Constant>>,
 }
 
 impl PackageContext<'_> {
@@ -79,6 +99,26 @@ impl PackageContext<'_> {
         Ok(())
     }
 
+    fn insert_vtable_datatypes(
+        &mut self,
+        datatype_descriptors: Vec<VMPointer<DatatypeDescriptor>>,
+    ) -> PartialVMResult<()> {
+        for ptr in datatype_descriptors.into_iter() {
+            let name = ptr.to_ref().intra_package_name();
+            if self.vtable.types.insert(name, ptr).is_some() {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!(
+                            "Duplicate key {}::{}",
+                            self.storage_id,
+                            name.to_string()?
+                        )),
+                );
+            }
+        }
+        Ok(())
+    }
+
     fn try_resolve_function(&self, vtable_entry: &VirtualTableKey) -> Option<VMPointer<Function>> {
         self.vtable
             .functions
@@ -98,8 +138,37 @@ impl PackageContext<'_> {
     }
 }
 
+impl FunctionContext<'_, '_> {
+    fn get_vec_type(
+        &self,
+        signature_index: &SignatureIndex,
+    ) -> PartialVMResult<VMPointer<ArenaType>> {
+        let Some(tys) = self.definitions.signatures.get(signature_index.0 as usize) else {
+            return Err(
+                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
+                    "could not find the signature for a vector-related bytecode \
+                        in the signature table"
+                        .to_owned(),
+                ),
+            );
+        };
+        if !tys.to_ref().len() == 1 {
+            return Err(
+                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
+                    "the type argument for vector-related bytecode \
+                        expects one and only one signature token"
+                        .to_owned(),
+                ),
+            );
+        };
+        let ty = VMPointer::from_ref(&tys.to_ref()[0]);
+        Ok(ty)
+    }
+}
+
 // -------------------------------------------------------------------------------------------------
 // Package Translation
+// -------------------------------------------------------------------------------------------------
 
 pub fn package(
     natives: &NativeFunctions,
@@ -195,62 +264,62 @@ pub fn package(
 // Module Translation
 
 fn module(
-    package_context: &mut PackageContext<'_>,
-    link_context: &LinkageContext,
+    context: &mut PackageContext<'_>,
+    _link_context: &LinkageContext,
     package_id: PackageStorageId,
     module: &mut input::Module,
 ) -> PartialVMResult<Module> {
     let self_id = module.compiled_module.self_id();
     dbg_println!("Loading module: {}", self_id);
 
-    // Load module types
-    let (datatype_descriptors, descriptor_map) = load_module_types(
-        package_context,
-        link_context,
-        package_context.runtime_id,
-        package_id,
-        &module.compiled_module,
-    )?;
-
     let cmodule = &module.compiled_module;
 
-    // NB: Note that this assumes the datatype descriptors will live at least as long as the
-    // vtable -- if that is not true, we _will_ segfault.
-    record_module_types_in_vtable(&mut package_context.vtable, &descriptor_map);
+    // Initialize module data
+    let type_refs = initialize_type_refs(context, &cmodule)?;
 
+    let (structs, enums, datatype_descriptors) = datatypes(context, &package_id, &cmodule)?;
+    let instantiation_signatures = cache_signatures(context, &cmodule)?;
     dbg_println!("Module types loaded");
 
-    // Initialize module data
-    let type_refs = initialize_type_refs(package_context, &cmodule)?;
+    let sig_pointers = instantiation_signatures
+        .iter()
+        .map(|sig| VMPointer::from_ref(sig))
+        .collect::<Vec<_>>();
 
-    let instantiation_signatures = cache_signatures(package_context, &cmodule)?;
+    context.insert_vtable_datatypes(datatype_descriptors.to_ptrs())?;
 
-    let structs = structs(package_context, &cmodule, &type_refs, &descriptor_map)?;
-    let enums = enums(package_context, &cmodule, &type_refs, &descriptor_map)?;
+    let struct_instantiations = struct_instantiations(context, &cmodule, &structs, &sig_pointers)?;
+    let enum_instantiations = enum_instantiations(context, &cmodule, &enums, &sig_pointers)?;
 
-    let struct_instantiations = struct_instantiations(package_context, &cmodule, &structs)?;
-    let enum_instantiations = enum_instantiations(package_context, &cmodule, &enums)?;
-
-    // Process functions and function instantiations
-    // Function loading is effectful; they all go into the arena.
-    let (functions, single_signature_token_map) = functions(package_context, module)?;
-    let function_instantiations = function_instantiations(package_context, &cmodule)?;
+    // Process function instantiations
+    let function_instantiations = function_instantiations(context, &cmodule, &sig_pointers)?;
 
     // Process field handles and instantiations
-    let field_handles = field_handles(package_context, &cmodule, &structs)?;
-    let field_instantiations = field_instantiations(package_context, &cmodule, &field_handles)?;
+    let field_handles = field_handles(context, &cmodule, &structs)?;
+    let field_instantiations = field_instantiations(context, &cmodule, &field_handles)?;
 
-    let constants = constants(package_context, &cmodule)?;
+    let constants = constants(context, &cmodule)?;
 
-    let variant_handles =
-        package_context.arena_vec(module.compiled_module.variant_handles().iter().cloned())?;
-    let variant_instantiation_handles = package_context.arena_vec(
-        module
-            .compiled_module
-            .variant_instantiation_handles()
-            .iter()
-            .cloned(),
-    )?;
+    let variant_handles = variant_handles(&cmodule, &enums);
+    let variant_instantiations = variant_instantiations(context, &cmodule, &enum_instantiations)?;
+
+    let definitions = Definitions {
+        variants: variant_handles,
+        structs: structs.to_ptrs(),
+        struct_instantiations: struct_instantiations.to_ptrs(),
+        enums: enums.to_ptrs(),
+        enum_instantiations: enum_instantiations.to_ptrs(),
+        variant_instantiations: variant_instantiations.to_ptrs(),
+        field_handles: field_handles.to_ptrs(),
+        field_instantiations: field_instantiations.to_ptrs(),
+        function_instantiations: function_instantiations.to_ptrs(),
+        constants: constants.to_ptrs(),
+        signatures: instantiation_signatures.to_ptrs(),
+    };
+
+    // Function loading is effectful; they all go into the arena. This happens last because it
+    // relies on the definitions above to rewrite the bytecode appropriately.
+    let functions = functions(context, module, definitions)?;
 
     // Build and return the module
     Ok(Module {
@@ -265,26 +334,15 @@ fn module(
         function_instantiations,
         field_handles,
         field_instantiations,
-        single_signature_token_map,
         instantiation_signatures,
-        variant_handles,
-        variant_instantiation_handles,
+        variant_instantiations,
         constants,
     })
 }
 
-fn record_module_types_in_vtable(
-    vtable: &mut PackageVirtualTable,
-    datatype_descriptors: &BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
-) {
-    for (key, descriptor) in datatype_descriptors {
-        let _prev = vtable.types.insert(*key, descriptor.ptr_clone());
-        debug_assert!(_prev.is_none(), "Double insert for datatype");
-    }
-}
-
 // -------------------------------------------------------------------------------------------------
-// Type Definitions Translation
+// Type Reference Translation
+// -------------------------------------------------------------------------------------------------
 
 fn initialize_type_refs(
     context: &mut PackageContext<'_>,
@@ -308,170 +366,236 @@ fn initialize_type_refs(
     context.arena_vec(type_refs.into_iter())
 }
 
+// -------------------------------------------------------------------------------------------------
+// Datatype Translation
+// -------------------------------------------------------------------------------------------------
+
+/// Loads strucks and enums, returning them and their datatype descriptors (for vtable entry).
+fn datatypes(
+    context: &mut PackageContext,
+    package_id: &PackageStorageId,
+    module: &CompiledModule,
+) -> PartialVMResult<(
+    ArenaVec<StructDef>,
+    ArenaVec<EnumDef>,
+    ArenaVec<DatatypeDescriptor>,
+)> {
+    fn resolve_member_name(
+        ident_interner: &IdentifierInterner,
+        name: &VirtualTableKey,
+    ) -> PartialVMResult<Identifier> {
+        ident_interner.resolve_ident(&name.inner_pkg_key.member_name, "datatype name")
+    }
+
+    // NB: It is the responsibility of the adapter to determine the correct type origin table,
+    // and pass a full and complete representation of it in with the package.
+    fn defining_id(
+        context: &PackageContext,
+        ident_interner: &IdentifierInterner,
+        package_id: &PackageStorageId,
+        name: &VirtualTableKey,
+    ) -> PartialVMResult<ModuleId> {
+        let defining_address = context
+            .type_origin_table
+            .get(&name.inner_pkg_key)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::LOOKUP_FAILED).with_message(format!(
+                    "Type origin not found for type {}",
+                    name.to_string().expect("No name")
+                ))
+            })?;
+        dbg_println!("Package ID: {:?}", package_id);
+        dbg_println!("Defining Address: {:?}", defining_address);
+        let module_id =
+            ident_interner.resolve_ident(&name.inner_pkg_key.module_name, "module name")?;
+        Ok(ModuleId::new(*defining_address, module_id))
+    }
+
+    let structs: ArenaVec<StructDef> = structs(context, package_id, module)?;
+    let enums: ArenaVec<EnumDef> = enums(context, package_id, module)?;
+
+    let runtime_id = module.self_id();
+    let interner = string_interner();
+
+    let struct_descriptors = structs
+        .iter()
+        .map(|struct_| {
+            let name = resolve_member_name(&interner, &struct_.def_vtable_key)?;
+            let defining_id = defining_id(context, &interner, package_id, &struct_.def_vtable_key)?;
+            let runtime_id = runtime_id.clone();
+            let datatype_info =
+                context.arena_box(Datatype::Struct(VMPointer::from_ref(struct_)))?;
+            let descriptor = DatatypeDescriptor::new(name, defining_id, runtime_id, datatype_info);
+            Ok(descriptor)
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
+
+    let enum_descriptors = enums
+        .iter()
+        .map(|enum_| {
+            let name = resolve_member_name(&interner, &enum_.def_vtable_key)?;
+            let defining_id = defining_id(context, &interner, package_id, &enum_.def_vtable_key)?;
+            let runtime_id = runtime_id.clone();
+            let datatype_info = context.arena_box(Datatype::Enum(VMPointer::from_ref(enum_)))?;
+            let descriptor = DatatypeDescriptor::new(name, defining_id, runtime_id, datatype_info);
+            Ok(descriptor)
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
+
+    let datatype_descriptors = struct_descriptors
+        .into_iter()
+        .chain(enum_descriptors.into_iter())
+        .collect::<Vec<_>>();
+    let datatype_descriptors = context.arena_vec(datatype_descriptors.into_iter())?;
+
+    Ok((structs, enums, datatype_descriptors))
+}
+
 fn structs(
     context: &mut PackageContext<'_>,
+    package_id: &PackageStorageId,
     module: &CompiledModule,
-    type_refs: &[IntraPackageKey],
-    datatype_descriptors: &BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
 ) -> PartialVMResult<ArenaVec<StructDef>> {
+    let ident_interner = string_interner();
+    let module_name = ident_interner.get_or_intern_ident_str(module.self_id().name())?;
+
     let struct_defs = module
         .struct_defs()
         .iter()
         .map(|struct_def| {
-            let key = type_refs[struct_def.struct_handle.0 as usize];
-            let type_ = &datatype_descriptors[&key];
-            let struct_type = type_.get_struct()?;
-            let field_count = struct_type.fields.len() as u16;
-            Ok(StructDef {
-                field_count,
-                idx: VirtualTableKey {
-                    package_key: context.runtime_id,
-                    inner_pkg_key: key,
-                },
-            })
+            let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
+
+            let name = module.identifier_at(struct_handle.name);
+            let member_name = ident_interner.get_or_intern_ident_str(name)?;
+            let def_vtable_key = VirtualTableKey::from_parts(*package_id, module_name, member_name);
+
+            let abilities = struct_handle.abilities;
+
+            let struct_module_handle = module.module_handle_at(struct_handle.module);
+            dbg_println!("Indexing type {:?} at {:?}", name, struct_module_handle);
+
+            let StructFieldInformation::Declared(fields) = &struct_def.field_information else {
+                unreachable!("native structs have been removed");
+            };
+
+            let fields = fields
+                .iter()
+                .map(|f| make_arena_type(context, module, &f.signature.0))
+                .collect::<PartialVMResult<Vec<ArenaType>>>()?;
+            let fields = context.arena_vec(fields.into_iter())?;
+
+            let field_names = match &struct_def.field_information {
+                StructFieldInformation::Native => vec![],
+                StructFieldInformation::Declared(field_info) => field_info
+                    .iter()
+                    .map(|f| module.identifier_at(f.name).to_owned())
+                    .collect(),
+            };
+            let field_names = context.arena_vec(field_names.into_iter())?;
+
+            let type_parameters =
+                context.arena_vec(struct_handle.type_parameters.iter().cloned())?;
+
+            let struct_ = StructDef {
+                def_vtable_key,
+                type_parameters,
+                abilities,
+                fields,
+                field_names,
+            };
+            Ok(struct_)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
     context.arena_vec(struct_defs.into_iter())
 }
 
-fn struct_instantiations(
-    context: &mut PackageContext<'_>,
-    module: &CompiledModule,
-    structs: &[StructDef],
-) -> PartialVMResult<ArenaVec<StructInstantiation>> {
-    let struct_insts = module
-        .struct_instantiations()
-        .iter()
-        .map(|struct_inst| {
-            let def = struct_inst.def.0 as usize;
-            let struct_def = &structs[def];
-            let field_count = struct_def.field_count;
-
-            let instantiation_idx = struct_inst.type_parameters;
-
-            Ok(StructInstantiation {
-                field_count,
-                def: struct_def.idx.clone(),
-                instantiation_idx,
-            })
-        })
-        .collect::<PartialVMResult<Vec<_>>>()?;
-    context.arena_vec(struct_insts.into_iter())
-}
-
 fn enums(
     context: &mut PackageContext<'_>,
+    package_id: &PackageStorageId,
     module: &CompiledModule,
-    type_refs: &[IntraPackageKey],
-    datatype_descriptors: &BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
 ) -> PartialVMResult<ArenaVec<EnumDef>> {
+    // We do this in two passes:
+    // 1. We make each outer EnumDef and place it in an ArenaVec so its location is fixed.
+    // 2. We generate the variants with backpointers to the enum def.
+
+    let ident_interner = string_interner();
+    let module_name = ident_interner.get_or_intern_ident_str(module.self_id().name())?;
+
     let enum_defs = module
         .enum_defs()
         .iter()
         .map(|enum_def| {
-            let key = type_refs[enum_def.enum_handle.0 as usize];
-            let type_ = &datatype_descriptors[&key];
-            let enum_type = type_.get_enum()?;
-            let variant_count = enum_type.variants.len() as u16;
-            let variants = enum_type
-                .variants
-                .iter()
-                .enumerate()
-                .map(|(tag, variant_type)| VariantDef {
-                    tag: tag as u16,
-                    field_count: variant_type.fields.len() as u16,
-                    field_types: VMPointer::from_ref(&variant_type.fields),
-                });
-            let variants = context.arena_vec(variants)?;
-            Ok(EnumDef {
+            let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
+
+            let name = module.identifier_at(enum_handle.name);
+            let member_name = ident_interner.get_or_intern_ident_str(name)?;
+            let def_vtable_key = VirtualTableKey::from_parts(*package_id, module_name, member_name);
+
+            let enum_module_handle = module.module_handle_at(enum_handle.module);
+            dbg_println!("Indexing type {:?} at {:?}", name, enum_module_handle);
+
+            let abilities = enum_handle.abilities;
+
+            let type_parameters = context.arena_vec(enum_handle.type_parameters.iter().cloned())?;
+
+            let variant_count = enum_def.variants.len() as u16;
+
+            // Initialize the EnumDef
+            let enum_ = EnumDef {
+                def_vtable_key,
+                abilities,
+                type_parameters,
                 variant_count,
-                variants,
-                idx: VirtualTableKey {
-                    package_key: context.runtime_id,
-                    inner_pkg_key: key,
-                },
+                variants: ArenaVec::empty(),
+            };
+            Ok(enum_)
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    let mut enum_defs = context.arena_vec(enum_defs.into_iter())?;
+
+    debug_assert!(module.enum_defs().len() == enum_defs.len());
+
+    for (module_defn, enum_) in module.enum_defs().iter().zip(enum_defs.iter_mut()) {
+        let enum_def = VMPointer::from_ref(enum_ as &EnumDef);
+        let variants: Vec<VariantDef> = module_defn
+            .variants
+            .iter()
+            .enumerate()
+            .map(|(variant_tag, variant_def)| {
+                let variant_tag = variant_tag as u16;
+                let variant_name = module.identifier_at(variant_def.variant_name).into();
+
+                let fields = variant_def
+                    .fields
+                    .iter()
+                    .map(|f| make_arena_type(context, module, &f.signature.0))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                let fields = context.arena_vec(fields.into_iter())?;
+
+                let field_names = variant_def
+                    .fields
+                    .iter()
+                    .map(|f| module.identifier_at(f.name).to_owned());
+                let field_names = context.arena_vec(field_names)?;
+
+                let variant = VariantDef {
+                    variant_tag,
+                    variant_name,
+                    fields,
+                    field_names,
+                    enum_def: enum_def.ptr_clone(),
+                };
+
+                Ok(variant)
             })
-        })
-        .collect::<PartialVMResult<Vec<_>>>()?;
-    context.arena_vec(enum_defs.into_iter())
-}
+            .collect::<PartialVMResult<_>>()?;
+        let variants = context.arena_vec(variants.into_iter())?;
 
-fn enum_instantiations(
-    context: &mut PackageContext<'_>,
-    module: &CompiledModule,
-    enums: &[EnumDef],
-) -> PartialVMResult<ArenaVec<EnumInstantiation>> {
-    let enum_insts = module
-        .enum_instantiations()
-        .iter()
-        .map(|enum_inst| {
-            let def = enum_inst.def.0 as usize;
-            let enum_def = &enums[def];
-            let variant_count_map =
-                context.arena_vec(enum_def.variants.iter().map(|v| v.field_count))?;
-            let instantiation_idx = enum_inst.type_parameters;
+        // Tie the knot
+        enum_.variants = variants;
+    }
 
-            Ok(EnumInstantiation {
-                variant_count_map,
-                def: enum_def.idx.clone(),
-                instantiation_idx,
-            })
-        })
-        .collect::<PartialVMResult<Vec<_>>>()?;
-    context.arena_vec(enum_insts.into_iter())
-}
-
-fn constants(
-    context: &mut PackageContext<'_>,
-    module: &CompiledModule,
-) -> PartialVMResult<ArenaVec<Constant>> {
-    let constants = module
-        .constant_pool()
-        .iter()
-        .map(|constant| {
-            let value = Value::deserialize_constant(constant)
-                .ok_or_else(|| {
-                    PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                        "Verifier failed to verify the deserialization of constants".to_owned(),
-                    )
-                })?
-                .to_constant_value(&context.package_arena)?;
-            let type_ = make_arena_type(context, module, &constant.type_)?;
-            let size = constant.data.len() as u64;
-            let const_ = Constant { value, type_, size };
-            Ok(const_)
-        })
-        .collect::<PartialVMResult<Vec<_>>>()?;
-    context.arena_vec(constants.into_iter())
-}
-
-fn field_handles(
-    context: &mut PackageContext<'_>,
-    module: &CompiledModule,
-    structs: &[StructDef],
-) -> PartialVMResult<ArenaVec<FieldHandle>> {
-    let field_handles = module.field_handles().iter().map(|f_handle| {
-        let def_idx = f_handle.owner;
-        let owner = structs[def_idx.0 as usize].idx.clone();
-        let offset = f_handle.field as usize;
-        FieldHandle { offset, owner }
-    });
-    context.arena_vec(field_handles.into_iter())
-}
-
-fn field_instantiations(
-    context: &mut PackageContext<'_>,
-    module: &CompiledModule,
-    field_handles: &[FieldHandle],
-) -> PartialVMResult<ArenaVec<FieldInstantiation>> {
-    let field_instantiations = module.field_instantiations().iter().map(|f_inst| {
-        let fh_idx = f_inst.handle;
-        let owner = field_handles[fh_idx.0 as usize].owner.clone();
-        let offset = field_handles[fh_idx.0 as usize].offset;
-
-        FieldInstantiation { offset, owner }
-    });
-    context.arena_vec(field_instantiations.into_iter())
+    Ok(enum_defs)
 }
 
 fn cache_signatures(
@@ -497,15 +621,188 @@ fn cache_signatures(
 }
 
 // -------------------------------------------------------------------------------------------------
+// Handle Translation
+// -------------------------------------------------------------------------------------------------
+
+fn field_handles(
+    context: &mut PackageContext<'_>,
+    module: &CompiledModule,
+    structs: &[StructDef],
+) -> PartialVMResult<ArenaVec<FieldHandle>> {
+    let field_handles = module.field_handles().iter().map(|f_handle| {
+        let def_idx = f_handle.owner;
+        let owner = structs[def_idx.0 as usize].def_vtable_key.clone();
+        let offset = f_handle.field as usize;
+        FieldHandle { offset, owner }
+    });
+    context.arena_vec(field_handles.into_iter())
+}
+
+/// [SAFETY] This assumes the elements in `enums` are stable and will not move.
+/// NB: This returns a vector of pointers, as we do not need to store these -- they are already
+/// fixed in the arena under the EnumDefs provided.
+fn variant_handles(module: &CompiledModule, enums: &[EnumDef]) -> Vec<VMPointer<VariantDef>> {
+    module
+        .variant_handles()
+        .iter()
+        .map(|variant_handle| {
+            let FF::VariantHandle { enum_def, variant } = variant_handle;
+            let enum_ = &enums[enum_def.0 as usize];
+            let variant_ = &enum_.variants[*variant as usize];
+            VMPointer::from_ref(variant_)
+        })
+        .collect::<Vec<_>>()
+}
+
+// -------------------------------------------------------------------------------------------------
+// Instantiation Translation
+// -------------------------------------------------------------------------------------------------
+
+fn struct_instantiations(
+    context: &mut PackageContext<'_>,
+    module: &CompiledModule,
+    structs: &[StructDef],
+    signatures: &[VMPointer<ArenaVec<ArenaType>>],
+) -> PartialVMResult<ArenaVec<StructInstantiation>> {
+    let struct_insts = module
+        .struct_instantiations()
+        .iter()
+        .map(|struct_inst| {
+            let def = struct_inst.def.0 as usize;
+            let struct_def = &structs[def];
+            let field_count = struct_def.fields.len() as u16;
+
+            let instantiation = signatures[struct_inst.type_parameters.0 as usize].ptr_clone();
+
+            Ok(StructInstantiation {
+                field_count,
+                def: struct_def.def_vtable_key.clone(),
+                instantiation,
+            })
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    context.arena_vec(struct_insts.into_iter())
+}
+
+fn enum_instantiations(
+    context: &mut PackageContext<'_>,
+    module: &CompiledModule,
+    enums: &[EnumDef],
+    signatures: &[VMPointer<ArenaVec<ArenaType>>],
+) -> PartialVMResult<ArenaVec<EnumInstantiation>> {
+    let enum_insts = module
+        .enum_instantiations()
+        .iter()
+        .map(|enum_inst| {
+            let def = enum_inst.def.0 as usize;
+            let enum_def = &enums[def];
+            let variant_count_map =
+                context.arena_vec(enum_def.variants.iter().map(|v| v.fields.len() as u16))?;
+            let instantiation = signatures[enum_inst.type_parameters.0 as usize].ptr_clone();
+
+            Ok(EnumInstantiation {
+                variant_count_map,
+                def: enum_def.def_vtable_key.clone(),
+                instantiation,
+            })
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    context.arena_vec(enum_insts.into_iter())
+}
+
+fn function_instantiations(
+    package_context: &mut PackageContext,
+    module: &CompiledModule,
+    signatures: &[VMPointer<ArenaVec<ArenaType>>],
+) -> PartialVMResult<ArenaVec<FunctionInstantiation>> {
+    dbg_println!(flag: function_list_sizes, "handle size: {}", module.function_handles().len());
+
+    let fun_insts = module
+        .function_instantiations()
+        .iter()
+        .map(|fun_inst| {
+            let handle = call(package_context, module, fun_inst.handle)?;
+            let instantiation = signatures[fun_inst.type_parameters.0 as usize].ptr_clone();
+
+            Ok(FunctionInstantiation {
+                handle,
+                instantiation,
+            })
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    package_context.arena_vec(fun_insts.into_iter())
+}
+
+fn field_instantiations(
+    context: &mut PackageContext<'_>,
+    module: &CompiledModule,
+    field_handles: &[FieldHandle],
+) -> PartialVMResult<ArenaVec<FieldInstantiation>> {
+    let field_instantiations = module.field_instantiations().iter().map(|f_inst| {
+        let fh_idx = f_inst.handle;
+        let owner = field_handles[fh_idx.0 as usize].owner.clone();
+        let offset = field_handles[fh_idx.0 as usize].offset;
+
+        FieldInstantiation { offset, owner }
+    });
+    context.arena_vec(field_instantiations.into_iter())
+}
+
+/// [SAFETY] This assumes the elements in `enum_instantiations` are stable and will not move.
+fn variant_instantiations(
+    context: &mut PackageContext<'_>,
+    module: &CompiledModule,
+    enum_instantiations: &[EnumInstantiation],
+) -> PartialVMResult<ArenaVec<VariantInstantiation>> {
+    let variant_insts = module.variant_instantiation_handles().iter().map(|v_inst| {
+        let FF::VariantInstantiationHandle { enum_def, variant } = v_inst;
+        let enum_inst = VMPointer::from_ref(&enum_instantiations[enum_def.0 as usize]);
+        let variant_tag = *variant;
+        VariantInstantiation {
+            enum_inst,
+            variant_tag,
+        }
+    });
+    context.arena_vec(variant_insts.into_iter())
+}
+
+// -------------------------------------------------------------------------------------------------
+// Constant Translation
+// -------------------------------------------------------------------------------------------------
+
+fn constants(
+    context: &mut PackageContext<'_>,
+    module: &CompiledModule,
+) -> PartialVMResult<ArenaVec<Constant>> {
+    let constants = module
+        .constant_pool()
+        .iter()
+        .map(|constant| {
+            let value = Value::deserialize_constant(constant)
+                .ok_or_else(|| {
+                    PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
+                        "Verifier failed to verify the deserialization of constants".to_owned(),
+                    )
+                })?
+                .to_constant_value(&context.package_arena)?;
+            let type_ = make_arena_type(context, module, &constant.type_)?;
+            let size = constant.data.len() as u64;
+            let const_ = Constant { value, type_, size };
+            Ok(const_)
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    context.arena_vec(constants.into_iter())
+}
+
+// -------------------------------------------------------------------------------------------------
 // Function Translation
+// -------------------------------------------------------------------------------------------------
 
 fn functions(
     package_context: &mut PackageContext,
     module: &input::Module,
-) -> PartialVMResult<(
-    ArenaVec<Function>,
-    BTreeMap<SignatureIndex, ArenaBox<ArenaType>>,
-)> {
+    definitions: Definitions,
+) -> PartialVMResult<ArenaVec<Function>> {
     let input::Module {
         compiled_module: module,
         functions: optimized_fns,
@@ -543,7 +840,7 @@ fn functions(
     let mut module_context = FunctionContext {
         package_context,
         module,
-        single_signature_token_map: BTreeMap::new(),
+        definitions,
     };
 
     let mut optimized_fns = optimized_fns.clone();
@@ -564,39 +861,14 @@ fn functions(
             code: opt_code,
         } = opt_fun;
         if let Some(opt_code) = opt_code {
-            fun.code = code(&mut module_context, opt_code.code)?;
+            let jump_table_ptrs = fun.jump_tables.to_ptrs();
+            fun.code = code(&mut module_context, &jump_table_ptrs, opt_code.code)?;
         }
     }
 
-    let FunctionContext {
-        single_signature_token_map,
-        ..
-    } = module_context;
+    let FunctionContext { .. } = module_context;
 
-    Ok((loaded_functions, single_signature_token_map))
-}
-
-fn function_instantiations(
-    package_context: &mut PackageContext,
-    module: &CompiledModule,
-) -> PartialVMResult<ArenaVec<FunctionInstantiation>> {
-    dbg_println!(flag: function_list_sizes, "handle size: {}", module.function_handles().len());
-
-    let fun_insts = module
-        .function_instantiations()
-        .iter()
-        .map(|func_inst| {
-            let handle = call(package_context, module, func_inst.handle)?;
-
-            let instantiation_idx = func_inst.type_parameters;
-
-            Ok(FunctionInstantiation {
-                handle,
-                instantiation_idx,
-            })
-        })
-        .collect::<PartialVMResult<Vec<_>>>()?;
-    package_context.arena_vec(fun_insts.into_iter())
+    Ok(loaded_functions)
 }
 
 fn alloc_function(
@@ -605,6 +877,18 @@ fn alloc_function(
     index: FunctionDefinitionIndex,
     def: &FunctionDefinition,
 ) -> PartialVMResult<Function> {
+    fn jump_table(
+        context: &PackageContext,
+        table: &FF::VariantJumpTable,
+    ) -> PartialVMResult<VariantJumpTable> {
+        match &table.jump_table {
+            FF::JumpTableInner::Full(items) => {
+                let jump_table = context.arena_vec(items.clone().into_iter())?;
+                Ok(jump_table)
+            }
+        }
+    }
+
     let handle = module.function_handle_at(def.function);
     let name = module.identifier_at(handle.name).to_owned();
     let module_id = module.self_id();
@@ -641,9 +925,12 @@ fn alloc_function(
                     .collect::<PartialVMResult<Vec<_>>>()?
                     .into_iter(),
             )?;
-            let jump_tables = context
-                .package_arena
-                .alloc_vec(code.jump_tables.clone().into_iter())?;
+            let jump_tables = code
+                .jump_tables
+                .iter()
+                .map(|table| jump_table(context, table))
+                .collect::<PartialVMResult<Vec<_>>>()?;
+            let jump_tables = context.package_arena.alloc_vec(jump_tables.into_iter())?;
             (locals_len, locals, jump_tables)
         }
         None => (0, ArenaVec::empty(), ArenaVec::empty()),
@@ -679,13 +966,14 @@ fn alloc_function(
 // [ALLOC] Bytecode result is allocated in the arena
 fn code(
     context: &mut FunctionContext,
+    jump_tables: &[VMPointer<VariantJumpTable>],
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
 ) -> PartialVMResult<ArenaVec<Bytecode>> {
     let function_bytecode = flatten_and_renumber_blocks(blocks);
     let result = context.package_context.package_arena.alloc_vec(
         function_bytecode
-            .iter()
-            .map(|bc| bytecode(context, bc))
+            .into_iter()
+            .map(|bc| bytecode(context, jump_tables, bc))
             .collect::<PartialVMResult<Vec<Bytecode>>>()?
             .into_iter(),
     )?;
@@ -728,12 +1016,13 @@ fn flatten_and_renumber_blocks(
 
 fn bytecode(
     context: &mut FunctionContext,
-    bytecode: &input::Bytecode,
+    jump_tables: &[VMPointer<VariantJumpTable>],
+    bytecode: input::Bytecode,
 ) -> PartialVMResult<Bytecode> {
     let bytecode = match bytecode {
         // Calls -- these get compiled to something more-direct here
         input::Bytecode::Call(ndx) => {
-            let call_type = call(context.package_context, context.module, *ndx)?;
+            let call_type = call(context.package_context, context.module, ndx)?;
             match call_type {
                 CallType::Direct(func) => Bytecode::DirectCall(func),
                 CallType::Virtual(vtable) => Bytecode::VirtualCall(vtable),
@@ -741,48 +1030,78 @@ fn bytecode(
         }
 
         // For now, generic calls retain an index so we can look up their signature as well.
-        input::Bytecode::CallGeneric(ndx) => Bytecode::CallGeneric(*ndx),
+        input::Bytecode::CallGeneric(ndx) => {
+            let generic_ptr = &context.definitions.function_instantiations[ndx.0 as usize];
+            Bytecode::CallGeneric(generic_ptr.ptr_clone())
+        }
 
         // Standard Codes
         input::Bytecode::Pop => Bytecode::Pop,
         input::Bytecode::Ret => Bytecode::Ret,
-        input::Bytecode::BrTrue(n) => Bytecode::BrTrue(*n),
-        input::Bytecode::BrFalse(n) => Bytecode::BrFalse(*n),
-        input::Bytecode::Branch(n) => Bytecode::Branch(*n),
+        input::Bytecode::BrTrue(n) => Bytecode::BrTrue(n),
+        input::Bytecode::BrFalse(n) => Bytecode::BrFalse(n),
+        input::Bytecode::Branch(n) => Bytecode::Branch(n),
 
-        input::Bytecode::LdU256(n) => {
-            Bytecode::LdU256(context.package_context.arena_box(*n.clone())?)
-        }
-        input::Bytecode::LdU128(n) => {
-            Bytecode::LdU128(context.package_context.arena_box(*n.clone())?)
-        }
-        input::Bytecode::LdU16(n) => Bytecode::LdU16(*n),
-        input::Bytecode::LdU32(n) => Bytecode::LdU32(*n),
-        input::Bytecode::LdU64(n) => Bytecode::LdU64(*n),
-        input::Bytecode::LdU8(n) => Bytecode::LdU8(*n),
+        input::Bytecode::LdU256(n) => Bytecode::LdU256(context.package_context.arena_box(*n)?),
+        input::Bytecode::LdU128(n) => Bytecode::LdU128(context.package_context.arena_box(*n)?),
+        input::Bytecode::LdU16(n) => Bytecode::LdU16(n),
+        input::Bytecode::LdU32(n) => Bytecode::LdU32(n),
+        input::Bytecode::LdU64(n) => Bytecode::LdU64(n),
+        input::Bytecode::LdU8(n) => Bytecode::LdU8(n),
 
-        input::Bytecode::LdConst(ndx) => Bytecode::LdConst(*ndx),
+        input::Bytecode::LdConst(ndx) => {
+            let const_ptr = &context.definitions.constants[ndx.0 as usize];
+            Bytecode::LdConst(const_ptr.ptr_clone())
+        }
         input::Bytecode::LdTrue => Bytecode::LdTrue,
         input::Bytecode::LdFalse => Bytecode::LdFalse,
 
-        input::Bytecode::CopyLoc(ndx) => Bytecode::CopyLoc(*ndx),
-        input::Bytecode::MoveLoc(ndx) => Bytecode::MoveLoc(*ndx),
-        input::Bytecode::StLoc(ndx) => Bytecode::StLoc(*ndx),
+        input::Bytecode::CopyLoc(ndx) => Bytecode::CopyLoc(ndx),
+        input::Bytecode::MoveLoc(ndx) => Bytecode::MoveLoc(ndx),
+        input::Bytecode::StLoc(ndx) => Bytecode::StLoc(ndx),
         input::Bytecode::ReadRef => Bytecode::ReadRef,
         input::Bytecode::WriteRef => Bytecode::WriteRef,
         input::Bytecode::FreezeRef => Bytecode::FreezeRef,
-        input::Bytecode::MutBorrowLoc(ndx) => Bytecode::MutBorrowLoc(*ndx),
-        input::Bytecode::ImmBorrowLoc(ndx) => Bytecode::ImmBorrowLoc(*ndx),
+        input::Bytecode::MutBorrowLoc(ndx) => Bytecode::MutBorrowLoc(ndx),
+        input::Bytecode::ImmBorrowLoc(ndx) => Bytecode::ImmBorrowLoc(ndx),
 
         // Structs and Fields
-        input::Bytecode::Pack(ndx) => Bytecode::Pack(*ndx),
-        input::Bytecode::PackGeneric(ndx) => Bytecode::PackGeneric(*ndx),
-        input::Bytecode::Unpack(ndx) => Bytecode::Unpack(*ndx),
-        input::Bytecode::UnpackGeneric(ndx) => Bytecode::UnpackGeneric(*ndx),
-        input::Bytecode::MutBorrowField(ndx) => Bytecode::MutBorrowField(*ndx),
-        input::Bytecode::MutBorrowFieldGeneric(ndx) => Bytecode::MutBorrowFieldGeneric(*ndx),
-        input::Bytecode::ImmBorrowField(ndx) => Bytecode::ImmBorrowField(*ndx),
-        input::Bytecode::ImmBorrowFieldGeneric(ndx) => Bytecode::ImmBorrowFieldGeneric(*ndx),
+        input::Bytecode::Pack(ndx) => {
+            let struct_ptr = &context.definitions.structs[ndx.0 as usize];
+            Bytecode::Pack(struct_ptr.ptr_clone())
+        }
+        input::Bytecode::Unpack(ndx) => {
+            let struct_ptr = &context.definitions.structs[ndx.0 as usize];
+            Bytecode::Unpack(struct_ptr.ptr_clone())
+        }
+
+        input::Bytecode::PackGeneric(ndx) => {
+            let struct_inst_ptr = &context.definitions.struct_instantiations[ndx.0 as usize];
+            Bytecode::PackGeneric(struct_inst_ptr.ptr_clone())
+        }
+        input::Bytecode::UnpackGeneric(ndx) => {
+            let struct_inst_ptr = &context.definitions.struct_instantiations[ndx.0 as usize];
+            Bytecode::UnpackGeneric(struct_inst_ptr.ptr_clone())
+        }
+
+        input::Bytecode::MutBorrowField(ndx) => {
+            let field_ptr = &context.definitions.field_handles[ndx.0 as usize];
+            Bytecode::MutBorrowField(field_ptr.ptr_clone())
+        }
+
+        input::Bytecode::ImmBorrowField(ndx) => {
+            let field_ptr = &context.definitions.field_handles[ndx.0 as usize];
+            Bytecode::ImmBorrowField(field_ptr.ptr_clone())
+        }
+
+        input::Bytecode::MutBorrowFieldGeneric(ndx) => {
+            let field_inst_ptr = &context.definitions.field_instantiations[ndx.0 as usize];
+            Bytecode::MutBorrowFieldGeneric(field_inst_ptr.ptr_clone())
+        }
+        input::Bytecode::ImmBorrowFieldGeneric(ndx) => {
+            let field_inst_ptr = &context.definitions.field_instantiations[ndx.0 as usize];
+            Bytecode::ImmBorrowFieldGeneric(field_inst_ptr.ptr_clone())
+        }
 
         // Math Operations
         input::Bytecode::Add => Bytecode::Add,
@@ -816,52 +1135,78 @@ fn bytecode(
 
         // Vectors
         input::Bytecode::VecPack(si, size) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecPack(*si, *size)
+            let ty_ptr = context.get_vec_type(&si)?;
+            Bytecode::VecPack(ty_ptr, size)
         }
         input::Bytecode::VecLen(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecLen(*si)
+            let ty_ptr = context.get_vec_type(&si)?;
+            Bytecode::VecLen(ty_ptr)
         }
         input::Bytecode::VecImmBorrow(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecImmBorrow(*si)
+            let ty_ptr = context.get_vec_type(&si)?;
+            Bytecode::VecImmBorrow(ty_ptr)
         }
         input::Bytecode::VecMutBorrow(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecMutBorrow(*si)
+            let ty_ptr = context.get_vec_type(&si)?;
+            Bytecode::VecMutBorrow(ty_ptr)
         }
         input::Bytecode::VecPushBack(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecPushBack(*si)
+            let ty_ptr = context.get_vec_type(&si)?;
+            Bytecode::VecPushBack(ty_ptr)
         }
         input::Bytecode::VecPopBack(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecPopBack(*si)
+            let ty_ptr = context.get_vec_type(&si)?;
+            Bytecode::VecPopBack(ty_ptr)
         }
         input::Bytecode::VecUnpack(si, size) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecUnpack(*si, *size)
+            let ty_ptr = context.get_vec_type(&si)?;
+            Bytecode::VecUnpack(ty_ptr, size)
         }
         input::Bytecode::VecSwap(si) => {
-            check_vector_type(context, si)?;
-            Bytecode::VecSwap(*si)
+            let ty_ptr = context.get_vec_type(&si)?;
+            Bytecode::VecSwap(ty_ptr)
         }
 
         // Enums and Variants
-        input::Bytecode::PackVariant(ndx) => Bytecode::PackVariant(*ndx),
-        input::Bytecode::PackVariantGeneric(ndx) => Bytecode::PackVariantGeneric(*ndx),
-        input::Bytecode::UnpackVariant(ndx) => Bytecode::UnpackVariant(*ndx),
-        input::Bytecode::UnpackVariantImmRef(ndx) => Bytecode::UnpackVariantImmRef(*ndx),
-        input::Bytecode::UnpackVariantMutRef(ndx) => Bytecode::UnpackVariantMutRef(*ndx),
-        input::Bytecode::UnpackVariantGeneric(ndx) => Bytecode::UnpackVariantGeneric(*ndx),
+        input::Bytecode::PackVariant(ndx) => {
+            let variant_ptr = &context.definitions.variants[ndx.0 as usize];
+            Bytecode::PackVariant(variant_ptr.ptr_clone())
+        }
+        input::Bytecode::UnpackVariant(ndx) => {
+            let variant_ptr = &context.definitions.variants[ndx.0 as usize];
+            Bytecode::UnpackVariant(variant_ptr.ptr_clone())
+        }
+
+        input::Bytecode::PackVariantGeneric(ndx) => {
+            let variant_inst_ptr = &context.definitions.variant_instantiations[ndx.0 as usize];
+            Bytecode::PackVariantGeneric(variant_inst_ptr.ptr_clone())
+        }
+        input::Bytecode::UnpackVariantGeneric(ndx) => {
+            let variant_inst_ptr = &context.definitions.variant_instantiations[ndx.0 as usize];
+            Bytecode::UnpackVariantGeneric(variant_inst_ptr.ptr_clone())
+        }
+
+        input::Bytecode::UnpackVariantImmRef(ndx) => {
+            let variant_ptr = &context.definitions.variants[ndx.0 as usize];
+            Bytecode::UnpackVariantImmRef(variant_ptr.ptr_clone())
+        }
+        input::Bytecode::UnpackVariantMutRef(ndx) => {
+            let variant_ptr = &context.definitions.variants[ndx.0 as usize];
+            Bytecode::UnpackVariantMutRef(variant_ptr.ptr_clone())
+        }
+
         input::Bytecode::UnpackVariantGenericImmRef(ndx) => {
-            Bytecode::UnpackVariantGenericImmRef(*ndx)
+            let variant_inst_ptr = &context.definitions.variant_instantiations[ndx.0 as usize];
+            Bytecode::UnpackVariantGenericImmRef(variant_inst_ptr.ptr_clone())
         }
         input::Bytecode::UnpackVariantGenericMutRef(ndx) => {
-            Bytecode::UnpackVariantGenericMutRef(*ndx)
+            let variant_inst_ptr = &context.definitions.variant_instantiations[ndx.0 as usize];
+            Bytecode::UnpackVariantGenericMutRef(variant_inst_ptr.ptr_clone())
         }
-        input::Bytecode::VariantSwitch(ndx) => Bytecode::VariantSwitch(*ndx),
+        input::Bytecode::VariantSwitch(ndx) => {
+            let jump_table = &jump_tables[ndx.0 as usize];
+            Bytecode::VariantSwitch(jump_table.ptr_clone())
+        }
     };
     Ok(bytecode)
 }
@@ -895,183 +1240,7 @@ fn call(
 
 // -------------------------------------------------------------------------------------------------
 // Type Translation
-
-fn load_module_types(
-    package_context: &mut PackageContext<'_>,
-    _link_context: &LinkageContext,
-    _package_uid: RuntimePackageId,
-    package_id: PackageStorageId,
-    module: &CompiledModule,
-) -> PartialVMResult<(
-    ArenaVec<DatatypeDescriptor>,
-    BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
-)> {
-    let module_id = module.self_id();
-    let module_name = string_interner().get_or_intern_ident_str(module_id.name())?;
-
-    let mut datatype_descriptors = vec![];
-
-    for (idx, struct_def) in module.struct_defs().iter().enumerate() {
-        let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
-        let name = module.identifier_at(struct_handle.name);
-
-        let member_name = string_interner().get_or_intern_ident_str(name)?;
-        let struct_key = IntraPackageKey {
-            module_name,
-            member_name,
-        };
-
-        let struct_module_handle = module.module_handle_at(struct_handle.module);
-        dbg_println!("Indexing type {:?} at {:?}", name, struct_module_handle);
-        // NB: It is the responsibility of the adapter to determine the correct type origin table,
-        // and pass a full and complete representation of it in with the package.
-        let defining_address = package_context
-            .type_origin_table
-            .get(&struct_key)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::LOOKUP_FAILED).with_message(format!(
-                    "Type origin not found for type {:?} in module {:?}",
-                    name, module_id
-                ))
-            })?;
-        dbg_println!("Package ID: {:?}", package_id);
-        dbg_println!("Defining Address: {:?}", defining_address);
-        let defining_id = ModuleId::new(*defining_address, module_id.name().to_owned());
-
-        let field_names = match &struct_def.field_information {
-            StructFieldInformation::Native => vec![],
-            StructFieldInformation::Declared(field_info) => field_info
-                .iter()
-                .map(|f| module.identifier_at(f.name).to_owned())
-                .collect(),
-        };
-        let field_names = package_context.arena_vec(field_names.into_iter())?;
-
-        let StructFieldInformation::Declared(fields) = &struct_def.field_information else {
-            unreachable!("native structs have been removed");
-        };
-
-        let fields = fields
-            .iter()
-            .map(|f| make_arena_type(package_context, module, &f.signature.0))
-            .collect::<PartialVMResult<Vec<ArenaType>>>()?;
-        let fields = package_context.arena_vec(fields.into_iter())?;
-
-        let struct_type = Datatype::Struct(StructType {
-            fields,
-            field_names,
-            struct_def: StructDefinitionIndex(idx as u16),
-        });
-        let datatype_info = VMPointer::new(package_context.package_arena.alloc_item(struct_type)?);
-
-        let type_parameters =
-            package_context.arena_vec(struct_handle.type_parameters.iter().cloned())?;
-
-        let datatype_descriptor = DatatypeDescriptor {
-            abilities: struct_handle.abilities,
-            type_parameters,
-            name: name.to_owned(),
-            defining_id,
-            runtime_id: module_id.clone(),
-            datatype_info,
-            module_key: module_name,
-            member_key: member_name,
-        };
-        datatype_descriptors.push(datatype_descriptor);
-    }
-
-    for (idx, enum_def) in module.enum_defs().iter().enumerate() {
-        let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
-        let name = module.identifier_at(enum_handle.name);
-
-        let member_name = string_interner().get_or_intern_ident_str(name)?;
-        let enum_key = IntraPackageKey {
-            module_name,
-            member_name,
-        };
-
-        let enum_module_handle = module.module_handle_at(enum_handle.module);
-        dbg_println!("Indexing type {:?} at {:?}", name, enum_module_handle);
-        // NB: It is the responsibility of the adapter to determine the correct type origin table,
-        // and pass a full and complete representation of it in with the package.
-        let defining_address = package_context
-            .type_origin_table
-            .get(&enum_key)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::LOOKUP_FAILED).with_message(format!(
-                    "Type origin not found for type {:?} in module {:?}",
-                    name, module_id
-                ))
-            })?;
-        dbg_println!("Package ID: {:?}", package_id);
-        dbg_println!("Enum Defining Address: {:?}", defining_address);
-        let defining_id = ModuleId::new(*defining_address, module_id.name().to_owned());
-
-        let variants: Vec<VariantType> = enum_def
-            .variants
-            .iter()
-            .enumerate()
-            .map(|(variant_tag, variant_def)| {
-                let fields = variant_def
-                    .fields
-                    .iter()
-                    .map(|f| make_arena_type(package_context, module, &f.signature.0))
-                    .collect::<PartialVMResult<Vec<_>>>()?;
-                let fields = package_context.arena_vec(fields.into_iter())?;
-
-                let field_names = variant_def
-                    .fields
-                    .iter()
-                    .map(|f| module.identifier_at(f.name).to_owned());
-                let field_names = package_context.arena_vec(field_names)?;
-
-                Ok(VariantType {
-                    variant_name: module.identifier_at(variant_def.variant_name).to_owned(),
-                    fields,
-                    field_names,
-                    enum_def: EnumDefinitionIndex(idx as u16),
-                    variant_tag: variant_tag as u16,
-                })
-            })
-            .collect::<PartialVMResult<_>>()?;
-        let variants = package_context.arena_vec(variants.into_iter())?;
-
-        let enum_type = Datatype::Enum(EnumType {
-            variants,
-            enum_def: EnumDefinitionIndex(idx as u16),
-        });
-        let datatype_info = VMPointer::new(package_context.package_arena.alloc_item(enum_type)?);
-        let type_parameters =
-            package_context.arena_vec(enum_handle.type_parameters.iter().cloned())?;
-
-        let datatype_descriptor = DatatypeDescriptor {
-            abilities: enum_handle.abilities,
-            type_parameters,
-            name: name.to_owned(),
-            defining_id,
-            runtime_id: module_id.clone(),
-            datatype_info,
-            module_key: module_name,
-            member_key: member_name,
-        };
-        datatype_descriptors.push(datatype_descriptor);
-    }
-
-    let datatype_descriptors = package_context.arena_vec(datatype_descriptors.into_iter())?;
-
-    let datatype_map = datatype_descriptors
-        .iter()
-        .map(|descriptor| {
-            let name = IntraPackageKey {
-                module_name: descriptor.module_key,
-                member_name: descriptor.member_key,
-            };
-            (name, VMPointer::from_ref(descriptor))
-        })
-        .collect::<BTreeMap<_, _>>();
-
-    Ok((datatype_descriptors, datatype_map))
-}
+// -------------------------------------------------------------------------------------------------
 
 /// Convert a signature token type into its execution counterpart, including converting datatypes
 /// into their VTable entry keys.
@@ -1143,36 +1312,4 @@ fn make_arena_type(
         }
     };
     Ok(res)
-}
-
-fn check_vector_type(
-    context: &mut FunctionContext,
-    signature_index: &SignatureIndex,
-) -> PartialVMResult<()> {
-    if !context
-        .single_signature_token_map
-        .contains_key(signature_index)
-    {
-        let ty = match context.module.signature_at(*signature_index).0.first() {
-            None => {
-                return Err(
-                    PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                        "the type argument for vector-related bytecode \
-                        expects one and only one signature token"
-                            .to_owned(),
-                    ),
-                );
-            }
-            Some(sig_token) => sig_token,
-        };
-        context.single_signature_token_map.insert(
-            *signature_index,
-            context.package_context.arena_box(make_arena_type(
-                context.package_context,
-                context.module,
-                ty,
-            )?)?,
-        );
-    }
-    Ok(())
 }
