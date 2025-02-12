@@ -712,8 +712,9 @@ impl<C: NetworkClient> Inner<C> {
         for serialized in serialized_blocks {
             let block: SignedBlock =
                 bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
-            // The block signature needs to be verified.
-            self.block_verifier.verify(&block)?;
+            // Only block signatures need to be verified, to verify commit votes.
+            // But the blocks will be sent to Core, so they need to be fully verified.
+            self.block_verifier.verify_and_vote(&block)?;
             for vote in block.commit_votes() {
                 if *vote == end_commit_ref {
                     stake_aggregator.add(block.author(), &self.context.committee);

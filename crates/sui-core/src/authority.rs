@@ -935,7 +935,7 @@ impl AuthorityState {
     /// This is a private method and should be kept that way. It doesn't check whether
     /// the provided transaction is a system transaction, and hence can only be called internally.
     #[instrument(level = "trace", skip_all)]
-    async fn handle_transaction_impl(
+    fn handle_transaction_impl(
         &self,
         transaction: VerifiedTransaction,
         sign: bool,
@@ -996,9 +996,7 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        let signed = self
-            .handle_transaction_impl(transaction, true, epoch_store)
-            .await;
+        let signed = self.handle_transaction_impl(transaction, true, epoch_store);
         match signed {
             Ok(Some(s)) => {
                 if self.is_validator(epoch_store) {
@@ -1032,7 +1030,7 @@ impl AuthorityState {
     /// When Ok, returns None if the transaction has not been executed, and returns
     /// (TransactionEffects, TransactionEvents) if the transaction has been executed.
     #[instrument(level = "trace", skip_all)]
-    pub async fn handle_transaction_v2(
+    pub(crate) fn vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
@@ -1062,10 +1060,7 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        match self
-            .handle_transaction_impl(transaction, false, epoch_store)
-            .await
-        {
+        match self.handle_transaction_impl(transaction, false, epoch_store) {
             Ok(Some(_)) => {
                 panic!("handle_transaction_impl should not return a signed transaction")
             }

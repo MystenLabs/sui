@@ -623,7 +623,7 @@ mod tests {
         storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
-        CommitDigest, Round,
+        CommitDigest, Round, TransactionIndex,
     };
 
     #[tokio::test]
@@ -1045,8 +1045,8 @@ mod tests {
     }
 
     impl BlockVerifier for TestBlockVerifier {
-        fn verify(&self, _block: &SignedBlock) -> ConsensusResult<()> {
-            Ok(())
+        fn verify_and_vote(&self, _block: &SignedBlock) -> ConsensusResult<Vec<TransactionIndex>> {
+            Ok(vec![])
         }
 
         fn check_ancestors(
