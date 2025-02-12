@@ -29,6 +29,7 @@ use tokio::time::sleep;
 
 use std::path::Path;
 use std::{fs, io};
+use sui::client_commands::{compile_package, dry_run_or_execute_or_serialize};
 use sui::{
     client_commands::{
         estimate_gas_budget, fetch_move_packages, Opts, OptsWithGas, SuiClientCommandResult,
@@ -4155,9 +4156,68 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         .get(&package_a_id)
         .is_some_and(|x| x.upgraded_id == package_a_v1.reference.object_id));
 
+    // ============== TEST 7 ================ //
+    // pkg E has multiple deps (A_v1, B_depends_on_A) but without being referenced in the source
+    // code. We test the dependency on this package and check the linkage table.
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("E_depends_on_A_v1_and_on_B_depends_on_A_but_no_code_references_to_A_or_B");
+    // publish without tree shaking so we will have A_v1 and B in the linkage table
+    let package_e_id =
+        publish_package_without_tree_shaking(package_path.clone(), context, rgp, gas_obj_id)
+            .await?;
+
+    let move_pkg_e = fetch_move_packages(&client, vec![package_e_id]).await?;
+    let linkage_table_e = move_pkg_e.first().unwrap().linkage_table();
+    // E depends on A_v1, and on B, which depends on A, but no code references A or B, so the
+    // linkage table should not be empty as we're not doing any tree shaking
+    assert!(linkage_table_e.contains_key(&package_a_id));
+    assert!(linkage_table_e.contains_key(&package_b_id));
+
+    // publish with tree shaking and check again the linkage table. It should be empty
+    let (package_e_id, _) = publish_package(package_path, context, rgp, gas_obj_id).await?;
+    let move_pkg_e = fetch_move_packages(&client, vec![package_e_id]).await?;
+    let linkage_table_e = move_pkg_e.first().unwrap().linkage_table();
+    // E depends on A_v1, and on B, which depends on A, but no code references A or B, so the
+    // linkage table should not be empty as we're not doing any tree shaking
+    assert!(linkage_table_e.is_empty());
+
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("E_depends_on_A_v1_and_on_B_depends_on_A_and_code_references_A");
+    let (package_e_id, _) = publish_package(package_path, context, rgp, gas_obj_id).await?;
+    let move_pkg_e = fetch_move_packages(&client, vec![package_e_id]).await?;
+    let linkage_table_e = move_pkg_e.first().unwrap().linkage_table();
+    // E depends on A_v1, and on B, which depends on A, and code references A so the linkage table
+    // should have A
+    assert!(linkage_table_e.contains_key(&package_a_id));
+
+    // ============== TEST 8 ================ //
+    // bytecode deps without source code
+
+    // we delete the sources folder from pkg A and setup A as bytecode dep for package F
+    let pkg_a_path = temp_dir.path().join("tree_shaking").join("A");
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    BuildConfig::default().build(&pkg_a_path).unwrap();
+    fs::remove_dir_all(pkg_a_path.join("sources"))?;
+
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("F_depends_on_A_as_bytecode_dep");
+    let (package_f_id, _) = publish_package(package_path, context, rgp, gas_obj_id).await?;
+    let move_pkg_f = fetch_move_packages(&client, vec![package_f_id]).await?;
+    let linkage_table_f = move_pkg_f.first().unwrap().linkage_table();
+    // F depends on A as a bytecode dep, so the linkage table should not be empty
+    assert!(linkage_table_f.contains_key(&package_a_id));
+
     Ok(())
 }
 
+/// Publishes a package and returns the package object id and the upgrade capability object id
+/// Note that this sets the `Move.lock` file to be written to the root of the package path.
 async fn publish_package(
     package_path: PathBuf,
     context: &mut WalletContext,
@@ -4197,6 +4257,51 @@ async fn publish_package(
         .unwrap();
 
     Ok((package_a.reference.object_id, cap.reference.object_id))
+}
+
+// This function is used to publish a package without tree shaking, such that we can publish a
+// number of packages that include manifest dependencies despite not referring the code, to ensure
+// we test this edge case.
+async fn publish_package_without_tree_shaking(
+    package_path: PathBuf,
+    context: &mut WalletContext,
+    rgp: u64,
+    gas_obj_id: ObjectID,
+) -> Result<ObjectID, anyhow::Error> {
+    let sender = context.active_address().unwrap();
+    let client = context.get_client().await?;
+    let build_config = BuildConfig::new_for_testing().config;
+    let compiled_package =
+        compile_package(client.read_api(), build_config, &package_path, false, false).await?;
+    let compiled_modules = compiled_package.get_package_bytes(false);
+
+    let tx_kind = client
+        .transaction_builder()
+        .publish_tx_kind(
+            sender,
+            compiled_modules,
+            compiled_package.published_dependency_ids(),
+        )
+        .await?;
+    let opts = OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH);
+    let resp =
+        dry_run_or_execute_or_serialize(sender, tx_kind, context, None, None, opts.gas, opts.rest)
+            .await?;
+
+    let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    let package_a = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+
+    Ok(package_a.reference.object_id)
 }
 
 // Recursively copy a directory and all its contents

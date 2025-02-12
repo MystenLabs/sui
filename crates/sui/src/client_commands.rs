@@ -964,7 +964,7 @@ impl SuiClientCommands {
                     compiled_package.get_package_digest(with_unpublished_dependencies);
 
                 // filter out dependencies that are not referenced in the source code.
-                filter_deps(&client, &mut compiled_package).await?;
+                find_pkg_dependencies(&client, &mut compiled_package).await?;
 
                 let dep_ids = compiled_package
                     .dependency_ids
@@ -1094,7 +1094,7 @@ impl SuiClientCommands {
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
 
                 // filter out dependencies that are not referenced in the source code.
-                filter_deps(&client, &mut compiled_package).await?;
+                find_pkg_dependencies(&client, &mut compiled_package).await?;
 
                 let tx_kind = client
                     .transaction_builder()
@@ -2894,7 +2894,7 @@ pub async fn max_gas_budget(client: &SuiClient) -> Result<u64, anyhow::Error> {
 /// This basically extracts the logical code for each command that deals with dry run, executing,
 /// or serializing a transaction and puts it in a function to reduce code duplication.
 // TODO (stefan): Add gas_price option for all commands and remove it from this function
-pub(crate) async fn dry_run_or_execute_or_serialize(
+pub async fn dry_run_or_execute_or_serialize(
     signer: SuiAddress,
     tx_kind: TransactionKind,
     context: &mut WalletContext,
@@ -3128,25 +3128,26 @@ pub async fn fetch_move_packages(
             let Some(SuiRawData::Package(p)) = o.bcs else {
                 bail!("Expected SuiRawData::Package but got something else");
             };
-            p.to_move_package(u64::MAX /* safe as this comes from the network */)
+            p.to_move_package(u64::MAX /* safe as this pkg comes from the network */)
                 .map_err(|e| anyhow!("{e}"))
         })
         .collect()
 }
 
-/// Filter dependencies of the package based only on referenced modules in the source code.
+/// Find dependencies of the package based only on referenced modules in the source code. This
+/// function mutates directly the `compiled_package.dependency_ids.published` field to only keep
+/// the referenced dependencies that are needed!
 ///
 /// In a nutshell, if a dep package is not referenced by any module in the compiled package,
 /// it is removed.
-/// To preserve backward compatibility with packages published before
-/// tree shaking was implemented, the algorithm will fetch all on-chain packages that are
-/// dependencies of the package to be published and use the linkage table to ensure that packages
-/// that are needed are not filtered out.
-async fn filter_deps(
+///
+/// The algorithm tries to preserve the invariant that the package's published linkage table
+/// by including all of its dependencies linkage tables.
+async fn find_pkg_dependencies(
     client: &SuiClient,
     compiled_package: &mut CompiledPackage,
 ) -> Result<(), anyhow::Error> {
-    // // Keep a map of pkg name and the original package ID (the runtime ID)
+    // // Keep a map from pkg name to the original package ID (the runtime ID)
     let pkg_name_to_orig_id: BTreeMap<_, _> = compiled_package
         .package
         .deps_compiled_units
@@ -3154,21 +3155,12 @@ async fn filter_deps(
         .map(|(pkg_name, module)| (pkg_name, ObjectID::from(module.unit.address.into_inner())))
         .collect();
 
-    let modules_map = compiled_package.package.root_modules_map();
-    let mut referenced_modules: BTreeSet<ObjectID> = BTreeSet::new();
-    let mut module_to_visit: Vec<_> = modules_map.get_map().iter().map(|x| x.0.clone()).collect();
-
-    while let Some(module_id) = module_to_visit.pop() {
-        let compiled_module = modules_map.get_module(&module_id);
-
-        if let Ok(m) = compiled_module {
-            for dep in m.immediate_dependencies() {
-                if referenced_modules.insert(ObjectID::from(*dep.address())) {
-                    module_to_visit.push(dep);
-                }
-            }
-        }
-    }
+    let mut referenced_modules: BTreeSet<ObjectID> = compiled_package
+        .package
+        .get_referenced_modules_ids()
+        .into_iter()
+        .map(|x| x.into())
+        .collect();
 
     referenced_modules.extend(
         compiled_package
@@ -3178,15 +3170,9 @@ async fn filter_deps(
     );
 
     // get on-chain linkage table for every package that this to be published package depends on
-    let published_deps_ids: Vec<ObjectID> = compiled_package
-        .dependency_ids
-        .published
-        .clone()
-        .into_values()
-        .collect();
-
-    let linkage_table_for_all_deps = fetch_move_packages(client, published_deps_ids).await?;
-    let linkage_table_ids = linkage_table_for_all_deps
+    let published_deps_packages =
+        fetch_move_packages(client, compiled_package.published_dependency_ids()).await?;
+    let linkage_table_ids = published_deps_packages
         .iter()
         .flat_map(|pkg| {
             let linkage_table = pkg.linkage_table();

@@ -24,6 +24,6 @@ Tests projects are established as following
      - linkage table should be empty
 - D_depends_on_A_v1 is a normal package that depends on A v1, and source code references A.
      - linkage table should contain package A's ID (and the related upgrade info)
-- D_depends_on_A_v1_but_no_code_references_B is a package that depends on A v1, but source code does not reference any code from A.
+- D_depends_on_A_v1_but_no_code_references_B is a package that depends on A v1, but source code does not reference any code from A or from B.
      - linkage table should be empty
 
