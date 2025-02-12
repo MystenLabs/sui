@@ -275,8 +275,8 @@ async fn indirect_skip() {
         Round 5 : { * },
         Round 6 : { * },
         Round 7 : { 
-            A -> [C6],
-            B -> [C6],
+            A -> [*],
+            B -> [*],
             C -> [-C6],
             D -> [-C6], 
         },
