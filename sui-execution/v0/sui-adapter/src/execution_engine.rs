@@ -68,6 +68,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
+        sponsor: Option<SuiAddress>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -79,6 +80,7 @@ mod checked {
         let mut transaction_dependencies = input_objects.transaction_dependencies();
         let mut temporary_store =
             TemporaryStore::new(store, input_objects, transaction_digest, protocol_config);
+        let gas_price = gas_status.gas_price();
         let mut gas_charger =
             GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
 
@@ -87,6 +89,8 @@ mod checked {
             &transaction_digest,
             epoch_id,
             epoch_timestamp_ms,
+            gas_price,
+            sponsor,
         );
 
         let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));

@@ -707,6 +707,8 @@ fn create_genesis_context(
         &SuiAddress::default(),
         &genesis_transaction_digest,
         epoch_data,
+        1,
+        None,
     )
 }
 
@@ -940,6 +942,7 @@ fn create_genesis_transaction(
                 kind,
                 signer,
                 genesis_digest,
+                None,
             );
         assert!(inner_temp_store.input_objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());

@@ -80,6 +80,7 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
+        sponsor: Option<SuiAddress>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -102,6 +103,7 @@ impl executor::Executor for Executor {
             metrics,
             enable_expensive_checks,
             certificate_deny_set,
+            sponsor,
         )
     }
 
@@ -121,6 +123,7 @@ impl executor::Executor for Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         skip_all_checks: bool,
+        sponsor: Option<SuiAddress>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -143,6 +146,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
+                sponsor,
             )
         } else {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
@@ -160,6 +164,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
+                sponsor,
             )
         };
         (inner_temp_store, gas_status, effects, result)

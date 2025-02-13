@@ -967,8 +967,9 @@ pub fn move_utf8_str_layout() -> A::MoveStructLayout {
 // However we cannot remove the Move type and so this struct is going to
 // be the Rust equivalent to the Move `TxContext` for legacy usages.
 //
-// `TxContext` in Rust (see below) is going to be purely used in Rust and can
-// evolve as needed without worrying any compatibility with Move.
+// `TxContext` in Rust (later in this file) is going to be purely
+// a Rust concept/struct and can evolve without any compatibility issues
+// with Move.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct MoveLegacyTxContext {
     /// Signer/sender of the transaction
@@ -996,7 +997,9 @@ impl From<&TxContext> for MoveLegacyTxContext {
 }
 
 // Information about the transaction context.
-// This struct is not related to Move and can evolve as needed/required.
+// This struct is not related to the Move `TxContext` and can evolve as needed/required.
+// It is attached to the NativeContextExtensions and retrieved by the Move API (native
+// functions) to provide information about the transaction.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TxContext {
     /// Signer/sender of the transaction
@@ -1009,6 +1012,10 @@ pub struct TxContext {
     epoch_timestamp_ms: CheckpointTimestamp,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
+    // gas price passed to transaction as input
+    gas_price: u64,
+    // address of the sponsor if any
+    sponsor: Option<AccountAddress>,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -1022,12 +1029,20 @@ pub enum TxContextKind {
 }
 
 impl TxContext {
-    pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch_data: &EpochData) -> Self {
+    pub fn new(
+        sender: &SuiAddress,
+        digest: &TransactionDigest,
+        epoch_data: &EpochData,
+        gas_price: u64,
+        sponsor: Option<SuiAddress>,
+    ) -> Self {
         Self::new_from_components(
             sender,
             digest,
             &epoch_data.epoch_id(),
             epoch_data.epoch_start_timestamp(),
+            gas_price,
+            sponsor,
         )
     }
 
@@ -1036,6 +1051,8 @@ impl TxContext {
         digest: &TransactionDigest,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        gas_price: u64,
+        sponsor: Option<SuiAddress>,
     ) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
@@ -1043,6 +1060,8 @@ impl TxContext {
             epoch: *epoch_id,
             epoch_timestamp_ms,
             ids_created: 0,
+            gas_price,
+            sponsor: sponsor.map(|s| AccountAddress::new(s.0)),
         }
     }
 
@@ -1117,20 +1136,6 @@ impl TxContext {
         }
         self.ids_created = other.ids_created;
         Ok(())
-    }
-
-    // Generate a random TxContext for testing.
-    pub fn random_for_testing_only() -> Self {
-        Self::new(
-            &SuiAddress::random_for_testing_only(),
-            &TransactionDigest::random(),
-            &EpochData::new_test(),
-        )
-    }
-
-    /// Generate a TxContext for testing with a specific sender.
-    pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
-        Self::new(sender, &TransactionDigest::random(), &EpochData::new_test())
     }
 }
 

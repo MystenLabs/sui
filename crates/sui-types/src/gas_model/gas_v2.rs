@@ -408,6 +408,10 @@ mod checked {
             self.gas_budget
         }
 
+        fn gas_price(&self) -> u64 {
+            self.gas_price
+        }
+
         fn storage_gas_units(&self) -> u64 {
             self.per_object_storage
                 .iter()
