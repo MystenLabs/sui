@@ -1,6 +1,6 @@
 ---
 name: Sui doc content issue or request
-about: Creates an issue for Sui documentation
+about: Create an issue for Sui documentation
 title: 'Sui doc content issue or request'
 labels: doc-issue
 assignees: 'ronny-mysten'
