@@ -971,11 +971,7 @@ impl<'a> PTBBuilder<'a> {
 
                 let res = self.ptb.publish_upgradeable(
                     compiled_modules,
-                    compiled_package
-                        .dependency_ids
-                        .published
-                        .into_values()
-                        .collect(),
+                    compiled_package.get_published_dependencies_ids(),
                 );
                 self.last_command = Some(res);
             }

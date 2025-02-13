@@ -633,20 +633,20 @@ impl CompiledPackage {
         })
     }
 
-    pub fn published_dependency_ids(&self) -> Vec<ObjectID> {
+    pub fn get_published_dependencies_ids(&self) -> Vec<ObjectID> {
         self.dependency_ids.published.values().cloned().collect()
     }
 
     /// Tree-shake the package's dependencies to remove any that are not referenced in source code.
     pub fn tree_shake(&mut self, with_unpublished_deps: bool, resolution_graph: &ResolvedGraph) {
-        // 1) Start from the root modules (or all modules if with_unpublished_deps is true as we need to
-        // include modules with 0x0 address)
-        // 2) Next, find the immediate dependencies for each root module and store the package name in the
-        // used_immediate_packages set. This basically prunes the packages that are not used based on
-        // the modules information;
-        // 3) Next, for each package from used_immediate_packages se , we need to
-        // find all the transitive dependencies. Those trans dependencies need to be included in the
-        // final list of package dependencies!
+        // 1) Start from the root modules (or all modules if with_unpublished_deps is true as we
+        // need to include modules with 0x0 address)
+        // 2) Next, find the immediate dependencies for each root module and store the package name
+        // in the used_immediate_packages set. This basically prunes the packages that are not used
+        // based on the modules information.
+        // 3) Next, for each package from used_immediate_packages set, we need to find all the
+        // transitive dependencies. Those trans dependencies need to be included in the final list
+        // of package dependencies!
         // 4) We union the used_immediate_packages and the transitive dependencies to get the final
         // list of dependencies that this package needs.
         // 5) Finally, filter out packages that are not in the union above from the

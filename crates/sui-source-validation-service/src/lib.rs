@@ -170,9 +170,7 @@ pub async fn verify_package(
         print_diags_to_stderr: false,
         chain_id: Some(chain_id),
     };
-    let compiled_package = build_config.build(
-        package_path.as_ref(),
-    )?;
+    let compiled_package = build_config.build(package_path.as_ref())?;
 
     BytecodeSourceVerifier::new(client.read_api())
         .verify(&compiled_package, ValidationMode::root())

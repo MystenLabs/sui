@@ -1527,7 +1527,6 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency_with_non_zero_address");
     let build_config = BuildConfig::new_for_testing().config;
-    let config = build_config.config;
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
@@ -4005,8 +4004,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         )
     })?;
 
-    let skip_dependency_verification = true;
-    let with_unpublished_dependencies = true;
+    let with_unpublished_dependencies = false;
 
     // ============== TEST 1 ================ //
     // Publish package A
@@ -4016,7 +4014,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        skip_dependency_verification,
         with_unpublished_dependencies,
     )
     .await?;
@@ -4035,7 +4032,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        skip_dependency_verification,
         with_unpublished_dependencies,
     )
     .await?;
@@ -4057,7 +4053,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        skip_dependency_verification,
         with_unpublished_dependencies,
     )
     .await?;
@@ -4081,7 +4076,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        skip_dependency_verification,
         with_unpublished_dependencies,
     )
     .await?;
@@ -4111,7 +4105,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        skip_dependency_verification,
         with_unpublished_dependencies,
     )
     .await?;
@@ -4178,7 +4171,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        skip_dependency_verification,
         with_unpublished_dependencies,
     )
     .await?;
@@ -4198,7 +4190,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        skip_dependency_verification,
         with_unpublished_dependencies,
     )
     .await?;
@@ -4230,7 +4221,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        skip_dependency_verification,
         with_unpublished_dependencies,
     )
     .await?;
@@ -4249,7 +4239,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        skip_dependency_verification,
         with_unpublished_dependencies,
     )
     .await?;
@@ -4265,7 +4254,7 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
     // we delete the sources folder from pkg A and setup A as bytecode dep for package F
     let pkg_a_path = temp_dir.path().join("tree_shaking").join("A");
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    BuildConfig::default().build(&pkg_a_path, false).unwrap();
+    BuildConfig::default().build(&pkg_a_path).unwrap();
     fs::remove_dir_all(pkg_a_path.join("sources"))?;
 
     let package_path = temp_dir
@@ -4286,6 +4275,25 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
     // F depends on A as a bytecode dep, so the linkage table should not be empty
     assert!(linkage_table_f.contains_key(&package_a_id));
 
+    // ============== TEST 9 ================ //
+    // test with a package and with unpublished deps
+    let package_path = temp_dir
+        .path()
+        .join("tree_shaking")
+        .join("H_depends_on_G_unpublished");
+
+    let (package_h_id, _) =
+        publish_package(package_path.clone(), context, rgp, gas_obj_id, true).await?;
+    let move_pkg_h = fetch_move_packages(&client, vec![package_h_id]).await;
+    let linkage_table_h = move_pkg_h.first().unwrap().linkage_table();
+    // H depends on G, which is unpublished, so the linkage table should be empty as G will be
+    // included in H during publishing
+    assert!(linkage_table_h.is_empty());
+
+    // try publish package H but `with_unpublished_dependencies` is false
+    let resp = publish_package(package_path, context, rgp, gas_obj_id, false).await;
+    assert!(resp.is_err());
+
     Ok(())
 }
 
@@ -4296,7 +4304,6 @@ async fn publish_package(
     context: &mut WalletContext,
     rgp: u64,
     gas_obj_id: ObjectID,
-    skip_dependency_verification: bool,
     with_unpublished_dependencies: bool,
 ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
     let mut build_config = BuildConfig::new_for_testing().config;
@@ -4305,7 +4312,7 @@ async fn publish_package(
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
         build_config: build_config.clone(),
-        skip_dependency_verification,
+        skip_dependency_verification: false,
         verify_deps: false,
         with_unpublished_dependencies,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),

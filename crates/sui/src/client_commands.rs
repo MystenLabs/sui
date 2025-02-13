@@ -962,16 +962,7 @@ impl SuiClientCommands {
                 let package_id = compiled_package.published_at.clone()?;
                 let package_digest =
                     compiled_package.get_package_digest(with_unpublished_dependencies);
-
-                // filter out dependencies that are not referenced in the source code.
-                // find_pkg_dependencies(&client, &mut compiled_package).await?;
-
-                let dep_ids = compiled_package
-                    .dependency_ids
-                    .published
-                    .clone()
-                    .into_values()
-                    .collect::<Vec<_>>();
+                let dep_ids = compiled_package.get_published_dependencies_ids();
 
                 if verify_compatibility {
                     check_compatibility(
@@ -1092,18 +1083,11 @@ impl SuiClientCommands {
                 let compiled_package = compile_result?;
                 let compiled_modules =
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
+                let dep_ids = compiled_package.get_published_dependencies_ids();
 
                 let tx_kind = client
                     .transaction_builder()
-                    .publish_tx_kind(
-                        sender,
-                        compiled_modules,
-                        compiled_package
-                            .dependency_ids
-                            .published
-                            .into_values()
-                            .collect(),
-                    )
+                    .publish_tx_kind(sender, compiled_modules, dep_ids)
                     .await?;
                 let result = dry_run_or_execute_or_serialize(
                     sender, tx_kind, context, None, None, opts.gas, opts.rest,
