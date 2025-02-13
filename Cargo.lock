@@ -14046,6 +14046,7 @@ dependencies = [
  "sui-field-count",
  "sui-indexer-alt-metrics",
  "sui-pg-db",
+ "sui-sql-macro",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
@@ -14095,6 +14096,7 @@ dependencies = [
  "sui-package-resolver",
  "sui-pg-db",
  "sui-protocol-config",
+ "sui-sql-macro",
  "sui-types",
  "telemetry-subscribers",
  "thiserror 1.0.69",
@@ -15471,6 +15473,15 @@ dependencies = [
  "tower-http 0.5.2",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "sui-sql-macro"
+version = "1.44.0"
+dependencies = [
+ "quote 1.0.37",
+ "syn 1.0.107",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

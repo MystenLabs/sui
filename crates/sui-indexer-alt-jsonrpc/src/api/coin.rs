@@ -4,17 +4,9 @@
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Context as _;
-use futures::future;
-use sui_types::object::Object;
-
-use super::rpc_module::RpcModule;
-use crate::context::Context;
-use crate::data::objects::load_latest;
-use crate::error::{invalid_params, InternalContext, RpcError};
-use crate::paginate::{BcsCursor, Cursor as _, Page};
-use diesel::dsl::sql;
 use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Bool, Bytea, SmallInt};
+use diesel::sql_types::Bool;
+use futures::future;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use move_core_types::language_storage::TypeTag;
 use serde::{Deserialize, Serialize};
@@ -23,10 +15,21 @@ use sui_indexer_alt_schema::schema::coin_balance_buckets;
 use sui_json_rpc_types::{Balance, Coin, Page as PageResponse};
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
+use sui_sql_macro::sql;
+use sui_types::object::Object;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GAS,
 };
+
+use crate::{
+    context::Context,
+    data::objects::load_latest,
+    error::{invalid_params, InternalContext, RpcError},
+    paginate::{BcsCursor, Cursor as _, Page},
+};
+
+use super::rpc_module::RpcModule;
 
 #[open_rpc(namespace = "suix", tag = "Coin API")]
 #[rpc(server, namespace = "suix")]
@@ -248,15 +251,12 @@ async fn filter_coins(
 
     // If the cursor is specified, we filter by it.
     if let Some(c) = cursor {
-        query = query.filter(
-            sql::<Bool>(r"(candidates.coin_balance_bucket, candidates.cp_sequence_number, candidates.object_id) < (")
-                .bind::<SmallInt, _>(c.coin_balance_bucket as i16)
-                .sql(", ")
-                .bind::<BigInt, _>(c.cp_sequence_number as i64)
-                .sql(", ")
-                .bind::<Bytea, _>(c.object_id.clone())
-                .sql(")")
-        );
+        query = query.filter(sql!(as Bool,
+            "(candidates.coin_balance_bucket, candidates.cp_sequence_number, candidates.object_id) < ({SmallInt}, {BigInt}, {Bytea})",
+            c.coin_balance_bucket as i16,
+            c.cp_sequence_number as i64,
+            c.object_id.clone(),
+        ));
     }
 
     // Finally we order by coin_balance_bucket, then by cp_sequence_number, and then by object_id.
