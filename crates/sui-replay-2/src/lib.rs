@@ -40,6 +40,9 @@ pub enum ReplayCommand {
         /// denied.
         #[arg(long, short, num_args = 2..)]
         config_objects: Option<Vec<String>>,
+        // Enable tracing for tests
+        #[arg(long = "trace-execution", default_value = None)]
+        trace_execution: Option<Option<String>>,
     },
 }
 

@@ -13,7 +13,13 @@ clap = { version = "4.1.4", features = ["derive"] }
 chrono.workspace = true
 cynic.workspace = true
 cynic-codegen.workspace = true
+move-binary-format.workspace = true
+move-bytecode-source-map.workspace = true
+move-command-line-common.workspace = true
 move-core-types.workspace = true
+move-disassembler.workspace = true
+move-ir-types.workspace = true
+move-trace-format.workspace = true
 prometheus.workspace = true
 sui-execution.workspace = true
 sui-graphql-client.workspace = true
@@ -27,3 +33,9 @@ tracing.workspace = true
 
 [build-dependencies]
 sui-graphql-client-build = { git = "https://github.com/mystenlabs/sui-rust-sdk", package = "sui-graphql-client-build",  rev ="322d14b9baf24a5abbf263ea97bdc592c4e57936" }
+
+[features]
+tracing = [
+    "sui-types/tracing",
+    "sui-execution/tracing",
+]
