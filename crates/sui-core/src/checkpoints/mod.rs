@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
+use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::watch;
@@ -266,6 +267,17 @@ impl CheckpointStore {
         sequence_number: CheckpointSequenceNumber,
     ) -> Result<Option<CheckpointSummary>, TypedStoreError> {
         self.locally_computed_checkpoints.get(&sequence_number)
+    }
+
+    pub fn multi_get_locally_computed_checkpoints(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Result<Vec<Option<CheckpointSummary>>, TypedStoreError> {
+        let checkpoints = self
+            .locally_computed_checkpoints
+            .multi_get(sequence_numbers)?;
+
+        Ok(checkpoints)
     }
 
     pub fn get_sequence_number_by_contents_digest(
@@ -1319,6 +1331,29 @@ impl CheckpointBuilder {
             signatures.len()
         );
 
+        let mut end_of_epoch_observation_keys: Option<Vec<_>> = if details.last_of_epoch {
+            Some(
+                transactions
+                    .iter()
+                    .flat_map(|tx| {
+                        if let TransactionKind::ProgrammableTransaction(ptb) =
+                            tx.transaction_data().kind()
+                        {
+                            itertools::Either::Left(
+                                ptb.commands
+                                    .iter()
+                                    .map(ExecutionTimeObservationKey::from_command),
+                            )
+                        } else {
+                            itertools::Either::Right(std::iter::empty())
+                        }
+                    })
+                    .collect(),
+            )
+        } else {
+            None
+        };
+
         let chunks = self.split_checkpoint_chunks(all_effects_and_transaction_sizes, signatures)?;
         let chunks_count = chunks.len();
 
@@ -1365,6 +1400,8 @@ impl CheckpointBuilder {
                         &mut effects,
                         &mut signatures,
                         sequence_number,
+                        std::mem::take(&mut end_of_epoch_observation_keys).expect("end_of_epoch_observation_keys must be populated for the last checkpoint"),
+                        last_checkpoint_seq.unwrap_or_default(),
                     )
                     .await?;
 
@@ -1499,6 +1536,10 @@ impl CheckpointBuilder {
         checkpoint_effects: &mut Vec<TransactionEffects>,
         signatures: &mut Vec<Vec<GenericSignature>>,
         checkpoint: CheckpointSequenceNumber,
+        end_of_epoch_observation_keys: Vec<ExecutionTimeObservationKey>,
+        // This may be less than `checkpoint - 1` if the end-of-epoch PendingCheckpoint produced
+        // >1 checkpoint.
+        last_checkpoint: CheckpointSequenceNumber,
         // TODO: Check whether we must use anyhow::Result or can we use SuiResult.
     ) -> anyhow::Result<SuiSystemState> {
         let (system_state, effects) = self
@@ -1508,6 +1549,8 @@ impl CheckpointBuilder {
                 epoch_total_gas_cost,
                 checkpoint,
                 epoch_start_timestamp_ms,
+                end_of_epoch_observation_keys,
+                last_checkpoint,
             )
             .await?;
         checkpoint_effects.push(effects);

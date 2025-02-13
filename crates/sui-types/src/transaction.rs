@@ -12,7 +12,7 @@ use crate::crypto::{
 };
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
-use crate::execution::SharedInput;
+use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{
@@ -34,7 +34,7 @@ use crate::{
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
-use itertools::Either;
+use itertools::{Either, Itertools};
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use nonempty::{nonempty, NonEmpty};
@@ -44,13 +44,14 @@ use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::iter::once;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
     iter,
 };
 use strum::IntoStaticStr;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use tap::Pipe;
 use tracing::trace;
 
@@ -236,6 +237,35 @@ impl AuthenticatorStateExpire {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub enum StoredExecutionTimeObservations {
+    V1(Vec<(ExecutionTimeObservationKey, Vec<(AuthorityName, Duration)>)>),
+}
+
+impl StoredExecutionTimeObservations {
+    pub fn unwrap_v1(self) -> Vec<(ExecutionTimeObservationKey, Vec<(AuthorityName, Duration)>)> {
+        match self {
+            Self::V1(observations) => observations,
+        }
+    }
+
+    pub fn filter_and_sort_v1<P>(&self, predicate: P) -> Self
+    where
+        P: FnMut(&&(ExecutionTimeObservationKey, Vec<(AuthorityName, Duration)>)) -> bool,
+    {
+        match self {
+            Self::V1(observations) => Self::V1(
+                observations
+                    .iter()
+                    .filter(predicate)
+                    .sorted_by_key(|(key, _)| key)
+                    .cloned()
+                    .collect(),
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct AuthenticatorStateUpdate {
     /// Epoch of the authenticator state update transaction
     pub epoch: u64,
@@ -317,6 +347,7 @@ pub enum EndOfEpochTransactionKind {
     DenyListStateCreate,
     BridgeStateCreate(ChainIdentifier),
     BridgeCommitteeInit(SequenceNumber),
+    StoreExecutionTimeObservations(StoredExecutionTimeObservations),
 }
 
 impl EndOfEpochTransactionKind {
@@ -372,6 +403,12 @@ impl EndOfEpochTransactionKind {
         Self::BridgeCommitteeInit(bridge_shared_version)
     }
 
+    pub fn new_store_execution_time_observations(
+        estimates: StoredExecutionTimeObservations,
+    ) -> Self {
+        Self::StoreExecutionTimeObservations(estimates)
+    }
+
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             Self::ChangeEpoch(_) => {
@@ -404,6 +441,13 @@ impl EndOfEpochTransactionKind {
                     mutable: true,
                 },
             ],
+            Self::StoreExecutionTimeObservations(_) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                }]
+            }
         }
     }
 
@@ -435,6 +479,9 @@ impl EndOfEpochTransactionKind {
                 ]
                 .into_iter(),
             ),
+            Self::StoreExecutionTimeObservations(_) => {
+                Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
+            }
         }
     }
 
@@ -478,6 +525,15 @@ impl EndOfEpochTransactionKind {
                 if !config.should_try_to_finalize_bridge_committee() {
                     return Err(UserInputError::Unsupported(
                         "should not try to finalize committee yet".to_string(),
+                    ));
+                }
+            }
+            Self::StoreExecutionTimeObservations(_) => {
+                if config.per_object_congestion_control_mode()
+                    != PerObjectCongestionControlMode::ExecutionTimeEstimate
+                {
+                    return Err(UserInputError::Unsupported(
+                        "execution time estimation not enabled".to_string(),
                     ));
                 }
             }
