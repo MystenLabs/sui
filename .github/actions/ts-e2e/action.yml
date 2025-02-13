@@ -1,9 +1,9 @@
 name: Detect Changes in Turbo Workspace
-description: Run e2e tests with specified branch
+description: Run E2E tests with specified branch
 
 inputs:
   ref:
-    description: 'The branch to checkout and run e2e tests on'
+    description: 'The branch to checkout and run E2E tests on'
     required: true
 
 runs:
@@ -27,12 +27,12 @@ runs:
       shell: bash
 
     - name: cargo build
-      if: env.s3_file_exist == '' # if empty, we have not built and uploaded this binary to s3 yet
+      if: env.s3_file_exist == '' # if empty, we have not built and uploaded this binary to S3 yet
       run: cargo build --bin sui
       shell: bash
 
-    - name: Dowload from S3
-      if: env.s3_file_exist != '' # only download if the s3 file exists
+    - name: Download from S3
+      if: env.s3_file_exist != '' # only download if the S3 file exists
       working-directory: ./target/debug
       run: |
         mkdir -p $PWD/target/debug
@@ -45,10 +45,10 @@ runs:
       with:
         clean: false
 
-    - name: Install Nodejs
+    - name: Install Node.js
       uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
       with:
-        node-version: '18'
+        node-version: 18
         cache: 'pnpm'
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
@@ -60,11 +60,11 @@ runs:
         echo "VITE_SUI_BIN=$PWD/target/debug/sui" >> $GITHUB_ENV
       shell: bash
 
-    - name: Run TS SDK e2e tests
+    - name: Run TS SDK E2E tests
       run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui test:e2e'
       shell: bash
 
-    - name: Run TS SDK GraphQL compatibility e2e tests
+    - name: Run TS SDK GraphQL compatibility E2E tests
       if: (!contains(fromJSON('["testnet", "devnet"]'), inputs.ref))
       run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/graphql-transport test:e2e'
       shell: bash
