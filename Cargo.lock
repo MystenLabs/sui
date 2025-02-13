@@ -8104,15 +8104,10 @@ dependencies = [
 name = "move-trace-format"
 version = "0.0.1"
 dependencies = [
- "anyhow",
- "enum-compat-util",
  "move-binary-format",
  "move-core-types",
- "move-proc-macros",
- "ref-cast",
  "serde",
  "serde_json",
- "variant_count",
 ]
 
 [[package]]
@@ -12876,6 +12871,7 @@ dependencies = [
  "move-bytecode-verifier-meter",
  "move-core-types",
  "move-package",
+ "move-trace-format",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -13694,6 +13690,7 @@ dependencies = [
  "move-bytecode-verifier-v0",
  "move-bytecode-verifier-v1",
  "move-bytecode-verifier-v2",
+ "move-trace-format",
  "move-vm-config",
  "move-vm-runtime",
  "move-vm-runtime-v0",
