@@ -263,6 +263,36 @@ pub fn build_from_resolution_graph(
 
     // collect bytecode dependencies as these are not returned as part of core
     // `CompiledPackage`
+    let bytecode_deps = collect_bytecode_deps(&resolution_graph)?;
+
+    // compile!
+    let result = if print_diags_to_stderr {
+        BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
+    } else {
+        BuildConfig::compile_package(resolution_graph, &mut std::io::sink())
+    };
+
+    let (package, fn_info) = result.map_err(|error| SuiError::ModuleBuildFailure {
+        // Use [Debug] formatting to capture [anyhow] error context
+        error: format!("{:?}", error),
+    })?;
+
+    if run_bytecode_verifier {
+        verify_bytecode(&package, &fn_info)?;
+    }
+
+    Ok(CompiledPackage {
+        package,
+        published_at,
+        dependency_ids,
+        bytecode_deps,
+    })
+}
+
+/// Returns the deps from `resolution_graph` that have no source code
+fn collect_bytecode_deps(
+    resolution_graph: &ResolvedGraph,
+) -> SuiResult<Vec<(Symbol, CompiledModule)>> {
     let mut bytecode_deps = vec![];
     for (name, pkg) in resolution_graph.package_table.iter() {
         if !pkg
@@ -293,46 +323,26 @@ pub fn build_from_resolution_graph(
             bytecode_deps.push((*name, module));
         }
     }
+    Ok(bytecode_deps)
+}
 
-    let result = if print_diags_to_stderr {
-        BuildConfig::compile_package(&resolution_graph, &mut std::io::stderr())
-    } else {
-        BuildConfig::compile_package(&resolution_graph, &mut std::io::sink())
-    };
-    // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
-    // format to include anyhow's error context chain.
-    let (package, fn_info) = match result {
-        Err(error) => {
-            return Err(SuiError::ModuleBuildFailure {
-                error: format!("{:?}", error),
-            })
-        }
-        Ok((package, fn_info)) => (package, fn_info),
-    };
+/// Check that the compiled modules in `package` are valid
+fn verify_bytecode(package: &MoveCompiledPackage, fn_info: &FnInfoMap) -> SuiResult<()> {
+    let compiled_modules = package.root_modules_map();
+    let verifier_config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
+        .verifier_config(/* signing_limits */ None);
 
-    if run_bytecode_verifier {
-        let verifier_config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
-            .verifier_config(/* signing_limits */ None);
-
-        let compiled_modules = package.root_modules_map();
-        for m in compiled_modules.iter_modules() {
-            move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
-                SuiError::ModuleVerificationFailure {
-                    error: err.to_string(),
-                }
-            })?;
-            sui_bytecode_verifier::sui_verify_module_unmetered(m, &fn_info, &verifier_config)?;
-        }
-        // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
+    for m in compiled_modules.iter_modules() {
+        move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
+            SuiError::ModuleVerificationFailure {
+                error: err.to_string(),
+            }
+        })?;
+        sui_bytecode_verifier::sui_verify_module_unmetered(m, fn_info, &verifier_config)?;
     }
+    // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
 
-    Ok(CompiledPackage {
-        package,
-        published_at,
-        dependency_ids,
-        bytecode_deps,
-        dependency_graph: resolution_graph.graph,
-    })
+    Ok(())
 }
 
 impl CompiledPackage {
