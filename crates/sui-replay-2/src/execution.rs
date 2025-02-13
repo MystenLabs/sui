@@ -6,12 +6,18 @@ use crate::{
     errors::ReplayError,
     replay_txn_data::ReplayTransaction,
 };
+use move_binary_format::CompiledModule;
+use move_bytecode_source_map::utils::serialize_to_json_string;
+use move_command_line_common::files::MOVE_BYTECODE_EXTENSION;
 use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
-use std::{collections::HashSet, path::PathBuf, sync::Arc};
+use move_disassembler::disassembler::Disassembler;
+use move_ir_types::location::Spanned;
+use move_trace_format::format::MoveTraceBuilder;
+use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc};
 use sui_execution::Executor;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
@@ -19,12 +25,20 @@ use sui_types::{
     error::SuiResult,
     gas::SuiGasStatus,
     metrics::LimitsMetrics,
-    object::Object,
+    object::{Data, Object},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
     transaction::CheckedInputObjects,
 };
 use tracing::info;
+
+const DEFAULT_TRACE_OUTPUT_DIR: &str = "replay";
+
+const TRACE_FILE_NAME: &str = "trace.json";
+
+const BCODE_DIR: &str = "bytecode";
+
+const SOURCE_DIR: &str = "source";
 
 pub struct ReplayExecutor {
     protocol_config: ProtocolConfig,
@@ -35,6 +49,7 @@ pub struct ReplayExecutor {
 pub fn execute_transaction_to_effects(
     txn: ReplayTransaction,
     env: &ReplayEnvironment,
+    trace_execution: Option<Option<String>>,
 ) -> Result<(), ReplayError> {
     // TODO: Hook up...
     let certificate_deny_set = HashSet::new();
@@ -57,6 +72,11 @@ pub fn execute_transaction_to_effects(
         env,
         epoch: txn.epoch,
     };
+    let mut trace_builder_opt = if trace_execution.is_some() {
+        Some(MoveTraceBuilder::new())
+    } else {
+        None
+    };
     let (_inner_store, gas_status, effects, _execution_timing, result) =
         txn.executor.executor.execute_transaction_to_effects(
             &store,
@@ -72,10 +92,159 @@ pub fn execute_transaction_to_effects(
             txn.kind,
             txn.sender,
             txn.digest,
+            &mut trace_builder_opt,
         );
     info!("Transaction executed: {:?}", result);
     info!("Effects: {:?}", effects);
     info!("Gas status: {:?}", gas_status);
+
+    if let Some(trace_builder) = trace_builder_opt {
+        // unwrap is safe if trace_builder_opt.is_some() holds
+        let output_path = get_trace_output_path(trace_execution.unwrap())?;
+        save_trace_output(&output_path, trace_builder, env)?;
+    }
+    Ok(())
+}
+
+/// Gets the path to store trace output (either the default one './replay' or user-specified).
+/// Upon success, the path will exist in the file system.
+fn get_trace_output_path(trace_execution: Option<String>) -> Result<PathBuf, ReplayError> {
+    match trace_execution {
+        Some(p) => {
+            let path = PathBuf::from(p);
+            if !path.exists() {
+                return Err(ReplayError::TracingError {
+                    err: format!(
+                        "User-specified path to store trace output does not exist: {:?}",
+                        path
+                    ),
+                });
+            }
+            if !path.is_dir() {
+                return Err(ReplayError::TracingError {
+                    err: format!(
+                        "User-specified path to store trace output is not a directory: {:?}",
+                        path
+                    ),
+                });
+            }
+            Ok(path)
+        }
+        None => {
+            let current_dir = env::current_dir().map_err(|e| ReplayError::TracingError {
+                err: format!("Failed to get current directory: {:?}", e),
+            })?;
+            let path = current_dir.join(DEFAULT_TRACE_OUTPUT_DIR);
+            if path.exists() {
+                return Err(ReplayError::TracingError {
+                    err: format!(
+                        "Default path to store trace output already exists: {:?}",
+                        path
+                    ),
+                });
+            }
+            fs::create_dir(&path).map_err(|e| ReplayError::TracingError {
+                err: format!("Failed to create default trace output directory: {:?}", e),
+            })?;
+            Ok(path)
+        }
+    }
+}
+
+/// Saves the trace and additional metadata needed needed to analyze the trace.
+fn save_trace_output(
+    output_path: &PathBuf,
+    trace_builder: MoveTraceBuilder,
+    env: &ReplayEnvironment,
+) -> Result<(), ReplayError> {
+    let trace = trace_builder.into_trace();
+    let json = trace.to_json();
+    let trace_file_path = output_path.join(TRACE_FILE_NAME);
+    fs::write(&trace_file_path, json.to_string().as_bytes()).map_err(|e| {
+        ReplayError::TracingError {
+            err: format!(
+                "Failed to write trace output to {:?}: {:?}",
+                trace_file_path, e
+            ),
+        }
+    })?;
+    let bcode_dir = output_path.join(BCODE_DIR);
+    fs::create_dir(&bcode_dir).map_err(|e| ReplayError::TracingError {
+        err: format!(
+            "Failed to create bytecode output directory '{:?}': {:?}",
+            bcode_dir, e
+        ),
+    })?;
+    for (obj_id, obj) in env.package_objects.iter() {
+        if let Data::Package(pkg) = &obj.data {
+            let pkg_addr = format!("{:?}", obj_id);
+            let bcode_pkg_dir = bcode_dir.join(&pkg_addr);
+            fs::create_dir(&bcode_pkg_dir).map_err(|e| ReplayError::TracingError {
+                err: format!("Failed to create bytecode package directory: {:?}", e),
+            })?;
+            for (mod_name, serialized_mod) in pkg.serialized_module_map() {
+                let compiled_mod = CompiledModule::deserialize_with_defaults(&serialized_mod)
+                    .map_err(|e| ReplayError::TracingError {
+                        err: format!(
+                            "Failed to deserialize module {:?} in package {}: {:?}",
+                            mod_name, &pkg_addr, e
+                        ),
+                    })?;
+                let d = Disassembler::from_module(&compiled_mod, Spanned::unsafe_no_loc(()).loc)
+                    .map_err(|e| ReplayError::TracingError {
+                        err: format!(
+                            "Failed to create disassembler for module {:?} in package {}: {:?}",
+                            mod_name, &pkg_addr, e
+                        ),
+                    })?;
+                let (disassemble_string, bcode_map) =
+                    d.disassemble_with_source_map()
+                        .map_err(|e| ReplayError::TracingError {
+                            err: format!(
+                                "Failed to disassemble module {:?} in package {}: {:?}",
+                                mod_name, &pkg_addr, e
+                            ),
+                        })?;
+                let bcode_map_json = serialize_to_json_string(&bcode_map).map_err(|e| {
+                    ReplayError::TracingError {
+                        err: format!(
+                            "Failed to serialize bytecode source map for module {:?} in package {}: {:?}",
+                            mod_name, &pkg_addr, e
+                        ),
+                    }
+                })?;
+                fs::write(
+                    bcode_pkg_dir.join(format!("{}.{}", mod_name, MOVE_BYTECODE_EXTENSION)),
+                    disassemble_string,
+                )
+                .map_err(|e| ReplayError::TracingError {
+                    err: format!(
+                        "Failed to write disassembled bytecode for module {:?} in package {}: {:?}",
+                        mod_name, &pkg_addr, e
+                    ),
+                })?;
+                fs::write(
+                    bcode_pkg_dir.join(format!("{}.json", mod_name)),
+                    bcode_map_json,
+                )
+                .map_err(|e| ReplayError::TracingError {
+                    err: format!(
+                        "Failed to write bytecode source map for module {:?} in package {}: {:?}",
+                        mod_name, &pkg_addr, e
+                    ),
+                })?;
+            }
+        }
+    }
+    // create empty sources directory as a known placeholder for the users
+    // to put optional source files there
+    let src_dir = output_path.join(SOURCE_DIR);
+    fs::create_dir(&src_dir).map_err(|e| ReplayError::TracingError {
+        err: format!(
+            "Failed to create source output directory '{:?}': {:?}",
+            src_dir, e
+        ),
+    })?;
 
     Ok(())
 }
