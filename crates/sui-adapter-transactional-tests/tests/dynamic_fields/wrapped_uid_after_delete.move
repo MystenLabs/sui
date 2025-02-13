@@ -5,7 +5,7 @@
 // as this uses a different code path
 // test remove with the wrong value type
 
-//# init --addresses a=0x0 --accounts A --protocol-version 73
+//# init --addresses a=0x0 --accounts A
 
 //# publish
 module a::m {

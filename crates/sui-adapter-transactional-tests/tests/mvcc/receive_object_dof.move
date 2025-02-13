@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses tto=0x0 --accounts A --protocol-version 73
+//# init --addresses tto=0x0 --accounts A
 
 //# publish
 module tto::M1 {

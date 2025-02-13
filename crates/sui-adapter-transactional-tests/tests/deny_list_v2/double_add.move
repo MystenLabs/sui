@@ -4,7 +4,7 @@
 // This test verifies double adding an address to the deny list does not panic and still
 // ensures the correct behavior when removing
 
-//# init --accounts A B --addresses test=0x0 --protocol-version 73
+//# init --accounts A B --addresses test=0x0
 
 //# publish --sender A
 module test::regulated_coin {

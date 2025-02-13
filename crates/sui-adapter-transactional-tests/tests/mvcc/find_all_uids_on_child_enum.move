@@ -3,7 +3,7 @@
 
 // tests finding UIDs for dynamic field access on a child object (non-input) that is an enm
 
-//# init --addresses test=0x0 --accounts A --protocol-version 73
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 
