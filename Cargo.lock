@@ -2752,6 +2752,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "consensus-simtests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "consensus-config",
+ "consensus-core",
+ "mysten-metrics",
+ "mysten-network",
+ "parking_lot 0.12.3",
+ "prometheus",
+ "rand 0.8.5",
+ "sui-config",
+ "sui-macros",
+ "sui-protocol-config",
+ "sui-simulator",
+ "telemetry-subscribers",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing",
+ "typed-store",
+]
+
+[[package]]
 name = "console"
 version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
