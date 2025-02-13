@@ -156,7 +156,7 @@ Create an <code><a href="../deepbook/custodian.md#deepbook_custodian_AccountCap"
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> TxContext): <a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">AccountCap</a> {
-    <a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">AccountCap</a> { id: object::new(ctx) }
+    <b>abort</b> 1337
 }
 </code></pre>
 
