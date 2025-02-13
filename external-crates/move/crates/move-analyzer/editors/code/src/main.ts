@@ -144,3 +144,8 @@ export async function activate(extensionContext: Readonly<vscode.ExtensionContex
 
     context.registerOnDidChangeConfiguration();
 }
+
+export async function deactivate(extensionContext: Readonly<vscode.ExtensionContext>): Promise<void> {
+    const context = new Context(extensionContext);
+    return context.stopClient();
+}
