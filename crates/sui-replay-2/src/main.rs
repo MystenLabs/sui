@@ -25,6 +25,7 @@ async fn main() {
             show_effects: _,
             verify: _,
             config_objects: _,
+            trace_execution,
         } => {
             //
             // create DataStore
@@ -49,8 +50,8 @@ async fn main() {
 
             //
             // replay transaction
-            execution::execute_transaction_to_effects(replay_txn, &env)
-                .unwrap_or_else(|e| panic!("Error running a transaction {:?}", e));
+            execution::execute_transaction_to_effects(replay_txn, &env, trace_execution)
+                .unwrap_or_else(|e| panic!("Error running a transaction: {:?}", e));
             debug!("After Execution: {:?}", env);
         }
     }

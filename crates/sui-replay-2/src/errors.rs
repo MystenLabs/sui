@@ -105,4 +105,7 @@ pub enum ReplayError {
     DateTimeConversionError,
     #[error("Failed to parse integer: {0}")]
     ParseIntConversionError(#[from] ParseIntError),
+
+    #[error("Tracing error: {}", err)]
+    TracingError { err: String },
 }
