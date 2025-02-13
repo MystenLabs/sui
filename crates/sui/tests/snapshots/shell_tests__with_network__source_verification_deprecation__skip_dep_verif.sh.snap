@@ -16,15 +16,15 @@ do
     && mv Move.toml $i
 done
 
-echo "=== publish dependency ===" | tee /dev/stderr
+echo "=== publish dependency (should warn about deprecation) ===" | tee /dev/stderr
 sui client --client.config $CONFIG publish "dependency" --skip-dependency-verification \
   --json | jq '.effects.status'
 
-echo "=== publish package v0 (should NOT warn) ===" | tee /dev/stderr
+echo "=== publish package v0 (should warn about deprecation) ===" | tee /dev/stderr
 UPGRADE_CAP=$(sui client --client.config $CONFIG publish "example" --skip-dependency-verification \
   --json | jq -r '.objectChanges[] | select(.objectType == "0x2::package::UpgradeCap") | .objectId')
 
-echo "=== upgrade package (should NOT warn) ===" | tee /dev/stderr
+echo "=== upgrade package (should warn about deprecation) ===" | tee /dev/stderr
 sui client --client.config $CONFIG upgrade --upgrade-capability $UPGRADE_CAP example --skip-dependency-verification \
   --json | jq '.effects.status'
 
@@ -45,12 +45,12 @@ success: true
 exit_code: 0
 ----- stdout -----
 === munge Move.toml files ===
-=== publish dependency ===
+=== publish dependency (should warn about deprecation) ===
 {
   "status": "success"
 }
-=== publish package v0 (should NOT warn) ===
-=== upgrade package (should NOT warn) ===
+=== publish package v0 (should warn about deprecation) ===
+=== upgrade package (should warn about deprecation) ===
 {
   "status": "success"
 }
@@ -63,23 +63,28 @@ exit_code: 0
 
 ----- stderr -----
 === munge Move.toml files ===
-=== publish dependency ===
+=== publish dependency (should warn about deprecation) ===
+[Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
 BUILDING dependency
 Skipping dependency verification
-=== publish package v0 (should NOT warn) ===
+=== publish package v0 (should warn about deprecation) ===
+[Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
 INCLUDING DEPENDENCY dependency
 BUILDING example
 Skipping dependency verification
-=== upgrade package (should NOT warn) ===
+=== upgrade package (should warn about deprecation) ===
+[Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
 INCLUDING DEPENDENCY dependency
 BUILDING example
 Skipping dependency verification
 === modify dependency ===
 === try to publish with modified dep (should succeed) ===
+[Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
 INCLUDING DEPENDENCY dependency
 BUILDING example
 Skipping dependency verification
 === try to upgrade with modified dep (should succeed) ===
+[Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
 INCLUDING DEPENDENCY dependency
 BUILDING example
 Skipping dependency verification
