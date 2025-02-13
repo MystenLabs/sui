@@ -181,7 +181,7 @@ pub(super) async fn owned_objects(
     }
 
     let mut results: Vec<(Vec<u8>, i64)> = ctx
-        .reader()
+        .pg_reader()
         .connect()
         .await
         .context("Failed to connect to the database")?

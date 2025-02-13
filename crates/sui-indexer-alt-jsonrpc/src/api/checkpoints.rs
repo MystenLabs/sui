@@ -65,7 +65,7 @@ impl RpcModule for Checkpoints {
 /// Load a checkpoint and prepare it for presentation as a JSON-RPC response.
 async fn response(ctx: &Context, seq: u64) -> Result<Checkpoint, RpcError<Error>> {
     let stored: StoredCheckpoint = ctx
-        .loader()
+        .pg_loader()
         .load_one(CheckpointKey(seq))
         .await
         .context("Failed to load checkpoint")?

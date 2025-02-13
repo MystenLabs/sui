@@ -217,6 +217,7 @@ pub async fn start_rpc(
         objects,
         transactions,
         name_service,
+        bigtable_config,
         extra: _,
     } = rpc_config.finish();
 
@@ -227,7 +228,7 @@ pub async fn start_rpc(
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
 
-    let context = Context::new(db_args, rpc.metrics(), registry).await?;
+    let context = Context::new(db_args, bigtable_config, rpc.metrics(), registry).await?;
 
     let system_package_task = SystemPackageTask::new(
         context.clone(),

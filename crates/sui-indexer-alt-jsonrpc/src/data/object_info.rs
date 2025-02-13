@@ -11,7 +11,8 @@ use diesel::{ExpressionMethods, QueryDsl};
 use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 use sui_types::base_types::ObjectID;
 
-use super::reader::{ReadError, Reader};
+use super::pg_reader::PgReader;
+use crate::data::read_error::ReadError;
 
 /// Key for fetching the latest object info record for an object. This record corresponds to the
 /// last time the object's ownership information changed.
@@ -19,7 +20,7 @@ use super::reader::{ReadError, Reader};
 pub(crate) struct LatestObjectInfoKey(pub ObjectID);
 
 #[async_trait::async_trait]
-impl Loader<LatestObjectInfoKey> for Reader {
+impl Loader<LatestObjectInfoKey> for PgReader {
     type Value = StoredObjInfo;
     type Error = Arc<ReadError>;
 

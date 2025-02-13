@@ -10,14 +10,15 @@ use async_graphql::dataloader::Loader;
 use diesel::{ExpressionMethods, QueryDsl};
 use sui_indexer_alt_schema::{checkpoints::StoredCheckpoint, schema::kv_checkpoints};
 
-use super::reader::{ReadError, Reader};
+use super::pg_reader::PgReader;
+use super::read_error::ReadError;
 
 /// Key for fetching a checkpoint's content by its sequence number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct CheckpointKey(pub u64);
 
 #[async_trait::async_trait]
-impl Loader<CheckpointKey> for Reader {
+impl Loader<CheckpointKey> for PgReader {
     type Value = StoredCheckpoint;
     type Error = Arc<ReadError>;
 
