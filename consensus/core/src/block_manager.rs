@@ -146,10 +146,23 @@ impl BlockManager {
 
     /// Tries to find the provided block_refs in DagState and BlockManager,
     /// and returns missing block refs.
-    pub(crate) fn try_find_blocks(&mut self, mut block_refs: Vec<BlockRef>) -> BTreeSet<BlockRef> {
+    pub(crate) fn try_find_blocks(&mut self, block_refs: Vec<BlockRef>) -> BTreeSet<BlockRef> {
         let _s = monitored_scope("BlockManager::try_find_blocks");
+        let gc_round = self.dag_state.read().gc_round();
+
+        // No need to fetch blocks that are <= gc_round as they won't get processed anyways and they'll get skipped.
+        // So keep only the ones above.
+        let mut block_refs = block_refs
+            .into_iter()
+            .filter(|block_ref| block_ref.round > gc_round)
+            .collect::<Vec<_>>();
+
+        if block_refs.is_empty() {
+            return BTreeSet::new();
+        }
 
         block_refs.sort_by_key(|b| b.round);
+
         debug!(
             "Trying to find blocks: {}",
             block_refs.iter().map(|b| b.to_string()).join(",")
