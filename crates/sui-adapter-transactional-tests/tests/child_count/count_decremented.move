@@ -4,7 +4,7 @@
 // DEPRECATED child count no longer tracked
 // tests various ways of "removing" a child decrements the count
 
-//# init --addresses test=0x0 --accounts A B
+//# init --addresses test=0x0 --accounts A B --protocol-version 73
 
 //# publish
 

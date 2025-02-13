@@ -7,7 +7,7 @@
 // Undeny the address will restore the original behavior.
 // This behavior only gets triggered after an epoch change.
 
-//# init --accounts A B --addresses test=0x0
+//# init --accounts A B --addresses test=0x0 --protocol-version 73
 
 //# publish --sender A
 module test::regulated_coin {

@@ -693,43 +693,79 @@ impl ObjectRuntimeState {
                 object_changed,
             } = child_object_effect;
 
-            if let Some(loaded_child) = loaded_child_objects.get_mut(&child) {
-                loaded_child.is_modified = true;
-            }
-
             if object_changed {
+                if let Some(loaded_child) = loaded_child_objects.get_mut(&child) {
+                    loaded_child.is_modified = true;
+                }
+
                 match final_value {
                     None => {
-                        // was transferred so not actually deleted
-                        if self.transfers.contains_key(&child) {
-                            debug_assert!(!self.deleted_ids.contains(&child));
-                        }
-                        // ID was deleted too was deleted so mark as deleted
-                        if self.deleted_ids.contains(&child) {
-                            debug_assert!(!self.transfers.contains_key(&child));
-                            debug_assert!(!self.new_ids.contains(&child));
-                        }
+                        // Value was changed and is no longer present, it may have been wrapped,
+                        // transferred, or deleted.
+
+                        // If it was transferred, it should not have been deleted
+                        // transferred ==> !deleted
+                        debug_assert!(
+                            !self.transfers.contains_key(&child)
+                                || !self.deleted_ids.contains(&child)
+                        );
+                        // If it was deleted, it should not have been transferred. Additionally,
+                        // if it was deleted, it should no longer be marked as new.
+                        // deleted ==> !transferred and !new
+                        debug_assert!(
+                            !self.deleted_ids.contains(&child)
+                                || (!self.transfers.contains_key(&child)
+                                    && !self.new_ids.contains(&child))
+                        );
                     }
                     Some(v) => {
-                        // if it was changed, it should not also have been transferred
-                        debug_assert!(!self.transfers.contains_key(&child));
+                        // Value was changed (or the owner was changed)
+
+                        // It is still a dynamic field so it should not be transferred or deleted
+                        debug_assert!(
+                            !self.transfers.contains_key(&child)
+                                && !self.deleted_ids.contains(&child)
+                        );
+                        // If it was loaded, it must have been new. But keep in mind if it was not
+                        // loaded, it is not necessarily new since it could have been
+                        // input/wrapped/received
                         // loaded ==> !new
-                        // but if it was not loaded, it might not have been new (e.g. input or
-                        // wrapped)
                         debug_assert!(
                             !loaded_child_objects.contains_key(&child)
                                 || !self.new_ids.contains(&child)
                         );
+                        // Mark the mutation of the new value and/or parent.
                         self.transfers
                             .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
                     }
                 }
             } else {
-                // the object was not changed
-                // it should not have been created, transferred, or deleted
-                debug_assert!(!self.new_ids.contains(&child));
-                debug_assert!(!self.deleted_ids.contains(&child));
-                debug_assert!(!self.transfers.contains_key(&child));
+                // The object was not changed.
+                // If it was created,
+                //   it must now have been moved elsewhere (wrapped or transferred).
+                // If it was deleted or transferred,
+                //   it must have been an input/received/wrapped object.
+                // In either case, the value must now have been moved elsewhere, giving us:
+                // (new or deleted or transferred or received) ==> no value
+                // which is equivalent to:
+                // has value ==> (!deleted and !transferred and !input)
+                // If the value is still there, it must have been loaded.
+                // Combining these to give us the check:
+                // has value ==> (loaded and !deleted and !transferred and !input and !received)
+                // which is equivalent to:
+                // !(no value) ==> (loaded and !deleted and !transferred and !input and !received)
+                debug_assert!(
+                    final_value.is_none()
+                        || (loaded_child_objects.contains_key(&child)
+                            && !self.deleted_ids.contains(&child)
+                            && !self.transfers.contains_key(&child)
+                            && !self.input_objects.contains_key(&child)
+                            && !self.received.contains_key(&child))
+                );
+                // In any case, if it was not changed, it should not be marked as modified
+                debug_assert!(loaded_child_objects
+                    .get(&child)
+                    .map_or(true, |loaded_child| !loaded_child.is_modified));
             }
         }
     }

@@ -4,7 +4,7 @@
 // This test verifies the correct deletion of the Config's setting object after the epoch it was
 // created. THe value is set only in one epoch.
 
-//# init --accounts A B --addresses test=0x0
+//# init --accounts A B --addresses test=0x0 --protocol-version 73
 
 //# publish --sender A
 module test::regulated_coin {
