@@ -8078,15 +8078,10 @@ dependencies = [
 name = "move-trace-format"
 version = "0.0.1"
 dependencies = [
- "anyhow",
- "enum-compat-util",
  "move-binary-format",
  "move-core-types",
- "move-proc-macros",
- "ref-cast",
  "serde",
  "serde_json",
- "variant_count",
 ]
 
 [[package]]
