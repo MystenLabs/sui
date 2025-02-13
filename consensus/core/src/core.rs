@@ -320,17 +320,17 @@ impl Core {
 
         // We want to enable the commit process logic when GC is enabled.
         if self.dag_state.read().gc_enabled() {
-            let certified_commits = self
-                .validate_certified_commits(certified_commits)
+            let votes = certified_commits.votes().to_vec();
+            let commits = self
+                .validate_certified_commits(certified_commits.commits().to_vec())
                 .expect("Certified commits validation failed");
-            
+
             // Accept the certified commit votes. This is optimistically done to increase the chances of having votes available when this node
             // will need to sync commits to other nodes.
-            self.block_manager
-                .try_accept_blocks(certified_commits.votes().to_vec());
+            self.block_manager.try_accept_blocks(votes);
 
             // Try to commit the new blocks. Take into account the trusted commit that has been provided.
-            self.try_commit(certified_commits.commits().to_vec())?;
+            self.try_commit(commits)?;
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
@@ -435,12 +435,11 @@ impl Core {
     /// Keeps only the certified commits that have a commit index > last commit index. It also ensures that the first commit in the list is the next one in line, otherwise it panics.
     fn validate_certified_commits(
         &mut self,
-        certified_commits: CertifiedCommits,
-    ) -> ConsensusResult<CertifiedCommits> {
+        commits: Vec<CertifiedCommit>,
+    ) -> ConsensusResult<Vec<CertifiedCommit>> {
         // Filter out the commits that have been already locally committed and keep only anything that is above the last committed index.
         let last_commit_index = self.dag_state.read().last_commit_index();
-        let commits = certified_commits
-            .commits()
+        let commits = commits
             .iter()
             .filter(|commit| {
                 if commit.index() > last_commit_index {
@@ -467,7 +466,7 @@ impl Core {
             }
         }
 
-        Ok(CertifiedCommits::new(commits, certified_commits.votes().to_vec()).commits())
+        Ok(commits)
     }
 
     // Attempts to create a new block, persist and propose it to all peers.
@@ -3238,7 +3237,7 @@ mod test {
         }
 
         // The corresponding blocks of the certified commits should be accepted and stored before linearizing and committing the DAG.
-        core.add_certified_commits(certified_commits.clone())
+        core.add_certified_commits(CertifiedCommits::new(certified_commits.clone(), vec![]))
             .expect("Should not fail");
 
         let commits = store.scan_commits((6..=10).into()).unwrap();
