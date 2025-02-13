@@ -8786,7 +8786,8 @@
             "enum": [
               "AuthenticatorStateCreate",
               "RandomnessStateCreate",
-              "CoinDenyListStateCreate"
+              "CoinDenyListStateCreate",
+              "StoreExecutionTimeObservations"
             ]
           },
           {
