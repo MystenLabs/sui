@@ -8,7 +8,6 @@ title: Module `deepbook::custodian_v2`
 -  [Struct `AccountCap`](#deepbook_custodian_v2_AccountCap)
 -  [Struct `Custodian`](#deepbook_custodian_v2_Custodian)
 -  [Constants](#@Constants_0)
--  [Function `mint_account_cap`](#deepbook_custodian_v2_mint_account_cap)
 -  [Function `create_child_account_cap`](#deepbook_custodian_v2_create_child_account_cap)
 -  [Function `delete_account_cap`](#deepbook_custodian_v2_delete_account_cap)
 -  [Function `account_owner`](#deepbook_custodian_v2_account_owner)
@@ -90,7 +89,7 @@ title: Module `deepbook::custodian_v2`
 ## Struct `AccountCap`
 
 Capability granting permission to access an entry in <code><a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_Custodian">Custodian</a>.account_balances</code>.
-Calling <code><a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_mint_account_cap">mint_account_cap</a></code> creates an "admin account cap" such that id == owner with
+Calling <code>mint_account_cap</code> creates an "admin account cap" such that id == owner with
 the permission to both access funds and create new <code><a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_AccountCap">AccountCap</a></code>s.
 Calling <code><a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_create_child_account_cap">create_child_account_cap</a></code> creates a "child account cap" such that id != owner
 that can access funds, but cannot create new <code><a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_AccountCap">AccountCap</a></code>s.
@@ -168,34 +167,6 @@ that can access funds, but cannot create new <code><a href="../deepbook/custodia
 </code></pre>
 
 
-
-<a name="deepbook_custodian_v2_mint_account_cap"></a>
-
-## Function `mint_account_cap`
-
-Create an admin <code><a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_AccountCap">AccountCap</a></code> that can be used across all DeepBook pools, and has
-the permission to create new <code><a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_AccountCap">AccountCap</a></code>s that can access the same source of funds
-
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_AccountCap">deepbook::custodian_v2::AccountCap</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> TxContext): <a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_AccountCap">AccountCap</a> {
-    <b>let</b> id = object::new(ctx);
-    <b>let</b> owner = object::uid_to_address(&id);
-    <a href="../deepbook/custodian_v2.md#deepbook_custodian_v2_AccountCap">AccountCap</a> { id, owner }
-}
-</code></pre>
-
-
-
-</details>
 
 <a name="deepbook_custodian_v2_create_child_account_cap"></a>
 
