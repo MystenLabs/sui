@@ -1527,6 +1527,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency_with_non_zero_address");
     let build_config = BuildConfig::new_for_testing().config;
+    let config = build_config.config;
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,

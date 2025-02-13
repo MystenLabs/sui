@@ -62,7 +62,7 @@ impl Build {
     pub fn execute_internal(
         rerooted_path: &Path,
         config: MoveBuildConfig,
-        with_unpublished_deps: bool,
+        with_unpublished_dependencies: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
         chain_id: Option<String>,
@@ -71,21 +71,22 @@ impl Build {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
+            with_unpublished_dependencies,
             chain_id,
         }
-        .build(rerooted_path, with_unpublished_deps)?;
+        .build(rerooted_path)?;
         if dump_bytecode_as_base64 {
             check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
-            if !with_unpublished_deps {
+            if !with_unpublished_dependencies {
                 check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
             }
 
             println!(
                 "{}",
                 json!({
-                    "modules": pkg.get_package_base64(with_unpublished_deps),
+                    "modules": pkg.get_package_base64(with_unpublished_dependencies),
                     "dependencies": pkg.get_dependency_storage_package_ids(),
-                    "digest": pkg.get_package_digest(with_unpublished_deps),
+                    "digest": pkg.get_package_digest(with_unpublished_dependencies),
                 })
             )
         }

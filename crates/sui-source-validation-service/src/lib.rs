@@ -165,11 +165,14 @@ pub async fn verify_package(
     config.silence_warnings = true;
     let build_config = BuildConfig {
         config,
+        with_unpublished_dependencies: false,
         run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */
         print_diags_to_stderr: false,
         chain_id: Some(chain_id),
     };
-    let compiled_package = build_config.build(package_path.as_ref())?;
+    let compiled_package = build_config.build(
+        package_path.as_ref(),
+    )?;
 
     BytecodeSourceVerifier::new(client.read_api())
         .verify(&compiled_package, ValidationMode::root())

@@ -1721,9 +1721,10 @@ impl SuiClientCommands {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
+                    with_unpublished_dependencies: false,
                     chain_id: Some(chain_id),
                 }
-                .build(&package_path, false)?;
+                .build(&package_path)?;
 
                 let client = context.get_client().await?;
                 BytecodeSourceVerifier::new(client.read_api())
@@ -1787,6 +1788,7 @@ fn compile_package_simple(
         config: resolve_lock_file_path(build_config, Some(package_path))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
+        with_unpublished_dependencies: false,
         chain_id: chain_id.clone(),
     };
     let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
@@ -1887,6 +1889,7 @@ pub(crate) async fn compile_package(
         run_bytecode_verifier,
         print_diags_to_stderr,
         chain_id: chain_id.clone(),
+        with_unpublished_dependencies,
     };
     let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
     let (_, dependencies) = gather_published_ids(&resolution_graph, chain_id.clone());

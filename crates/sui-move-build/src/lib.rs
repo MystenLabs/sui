@@ -76,7 +76,7 @@ pub mod test_utils {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push(relative_path);
 
-        BuildConfig::new_for_testing().build(&path, false).unwrap()
+        BuildConfig::new_for_testing().build(&path).unwrap()
     }
 }
 
@@ -104,6 +104,8 @@ pub struct BuildConfig {
     /// The chain ID that compilation is with respect to (e.g., required to resolve
     /// published dependency IDs from the `Move.lock`).
     pub chain_id: Option<String>,
+    /// Include unpublished dependencies in the build
+    pub with_unpublished_dependencies: bool,
 }
 
 impl BuildConfig {
@@ -114,12 +116,23 @@ impl BuildConfig {
         let lock_file = install_dir.join("Move.lock");
         build_config.config.install_dir = Some(install_dir);
         build_config.config.lock_file = Some(lock_file);
+        build_config.with_unpublished_dependencies = false;
         build_config
             .config
             .lint_flag
             .set(move_compiler::linters::LintLevel::None);
         build_config.config.silence_warnings = true;
         build_config
+    }
+
+    /// Sets the with_unpublished_deps flag to the given value
+    pub fn set_with_unpublished_dependencies(&mut self, with_unpublished_dependencies: bool) {
+        self.with_unpublished_dependencies = with_unpublished_dependencies;
+    }
+
+    /// Sets the with_unpublished_deps flag to true
+    pub fn with_unpublished_dependencies(&mut self) {
+        self.with_unpublished_dependencies = true;
     }
 
     pub fn new_for_testing_replace_addresses<I, S>(dep_original_addresses: I) -> Self
@@ -184,7 +197,8 @@ impl BuildConfig {
 
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
-    pub fn build(self, path: &Path, with_unpublished_deps: bool) -> SuiResult<CompiledPackage> {
+    pub fn build(self, path: &Path) -> SuiResult<CompiledPackage> {
+        let with_unpublished_deps = self.with_unpublished_dependencies;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let chain_id = self.chain_id.clone();
@@ -704,6 +718,7 @@ impl Default for BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
+            with_unpublished_dependencies: false,
             chain_id: None,
         }
     }
