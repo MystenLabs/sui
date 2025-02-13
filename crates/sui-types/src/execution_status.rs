@@ -376,6 +376,21 @@ impl ExecutionStatus {
             ExecutionStatus::Failure { error, command } => (error, command),
         }
     }
+
+    pub fn get_congested_objects(&self) -> Option<&CongestedObjects> {
+        if let ExecutionStatus::Failure {
+            error:
+                ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
+                    congested_objects,
+                },
+            ..
+        } = self
+        {
+            Some(congested_objects)
+        } else {
+            None
+        }
+    }
 }
 
 pub type CommandIndex = usize;
