@@ -846,24 +846,15 @@ mod checked {
             }
         }
         // script visibility checked manually for entry points
-        let mut result = if trace_builder_opt.is_some() {
-            context.execute_function_bypass_visibility(
+        let mut result = context
+            .execute_function_bypass_visibility(
                 module_id,
                 function,
                 type_arguments,
                 serialized_arguments,
                 trace_builder_opt,
             )
-        } else {
-            context.execute_function_bypass_visibility(
-                module_id,
-                function,
-                type_arguments,
-                serialized_arguments,
-                &mut None,
-            )
-        }
-        .map_err(|e| context.convert_vm_error(e))?;
+            .map_err(|e| context.convert_vm_error(e))?;
 
         // When this function is used during publishing, it
         // may be executed several times, with objects being
