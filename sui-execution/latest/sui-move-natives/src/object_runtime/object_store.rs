@@ -582,7 +582,7 @@ impl<'a> ChildObjectStore<'a> {
                 ));
         };
 
-        let mut value = if let Some(ChildObject { ty, value, .. }) = self.store.remove(&child) {
+        let mut value = if let Some(ChildObject { value, .. }) = self.store.remove(&child) {
             if value.exists()? {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
