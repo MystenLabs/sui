@@ -128,11 +128,11 @@ pub fn manifest_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("manifest.json")
 }
 
-/// Given a protocol version returns:
-/// * The path to the snapshot directory for that version if it exists.
-/// * If the version is greater than the latest snapshot version then `Ok(None)`.
+/// Given a protocol version:
+/// * The path to the snapshot directory for that version is returned, if it exists.
+/// * If the version is greater than the latest snapshot version, then `Ok(None)` is returned.
 /// * If the version does not exist, but there are snapshots present with versions greater than
-///   `version` then the smallest snapshot number greater than `version` is returned.
+///   `version`, then the smallest snapshot number greater than `version` is returned.
 fn snapshot_path_for_version(version: u64) -> anyhow::Result<PathBuf> {
     let snapshot_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bytecode_snapshot");
     let mut snapshots = BTreeSet::new();
