@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(deprecated_usage, unused_variable, unused_field, unused_type_parameter)]
+#[deprecated, allow(deprecated_usage, unused_field, unused_type_parameter)]
 module deepbook::clob_v2 {
     use std::type_name::TypeName;
 
@@ -301,7 +301,7 @@ module deepbook::clob_v2 {
         linked_table::destroy_empty(orders);
     }
 
-    public fun create_account(ctx: &mut TxContext): AccountCap {
+    public fun create_account(_ctx: &mut TxContext): AccountCap {
         
         abort 1337
     }
@@ -326,12 +326,12 @@ module deepbook::clob_v2 {
     /// The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
     /// Taker_fee_rate of 0.25% should be 2_500_000 for example
     public fun create_customized_pool<BaseAsset, QuoteAsset>(
-        tick_size: u64,
-        lot_size: u64,
-        taker_fee_rate: u64,
-        maker_rebate_rate: u64,
-        creation_fee: Coin<SUI>,
-        ctx: &mut TxContext,
+        _tick_size: u64,
+        _lot_size: u64,
+        _taker_fee_rate: u64,
+        _maker_rebate_rate: u64,
+        _creation_fee: Coin<SUI>,
+        _ctx: &mut TxContext,
     ) {
         
         abort 1337
@@ -339,10 +339,10 @@ module deepbook::clob_v2 {
 
     /// Function for creating an external pool. This API can be used to wrap deepbook pools into other objects.
     public fun create_pool_with_return<BaseAsset, QuoteAsset>(
-        tick_size: u64,
-        lot_size: u64,
-        creation_fee: Coin<SUI>,
-        ctx: &mut TxContext,
+        _tick_size: u64,
+        _lot_size: u64,
+        _creation_fee: Coin<SUI>,
+        _ctx: &mut TxContext,
     ): Pool<BaseAsset, QuoteAsset> {
         
         abort 1337
@@ -353,12 +353,12 @@ module deepbook::clob_v2 {
     /// The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
     /// Taker_fee_rate of 0.25% should be 2_500_000 for example
     public fun create_customized_pool_with_return<BaseAsset, QuoteAsset>(
-        tick_size: u64,
-        lot_size: u64,
-        taker_fee_rate: u64,
-        maker_rebate_rate: u64,
-        creation_fee: Coin<SUI>,
-        ctx: &mut TxContext,
+        _tick_size: u64,
+        _lot_size: u64,
+        _taker_fee_rate: u64,
+        _maker_rebate_rate: u64,
+        _creation_fee: Coin<SUI>,
+        _ctx: &mut TxContext,
     ) : Pool<BaseAsset, QuoteAsset> {
         
         abort 1337
@@ -368,30 +368,30 @@ module deepbook::clob_v2 {
     /// If a user wants to create a pool and then destroy/lock the pool_owner_cap one can do
     /// so with this function.
     public fun create_customized_pool_v2<BaseAsset, QuoteAsset>(
-        tick_size: u64,
-        lot_size: u64,
-        taker_fee_rate: u64,
-        maker_rebate_rate: u64,
-        creation_fee: Coin<SUI>,
-        ctx: &mut TxContext,
+        _tick_size: u64,
+        _lot_size: u64,
+        _taker_fee_rate: u64,
+        _maker_rebate_rate: u64,
+        _creation_fee: Coin<SUI>,
+        _ctx: &mut TxContext,
     ) : (Pool<BaseAsset, QuoteAsset>, PoolOwnerCap) {
         
         abort 1337
     }
 
     public fun deposit_base<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        coin: Coin<BaseAsset>,
-        account_cap: &AccountCap
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _coin: Coin<BaseAsset>,
+        _account_cap: &AccountCap
     ) {
         
         abort 1337
     }
 
     public fun deposit_quote<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        coin: Coin<QuoteAsset>,
-        account_cap: &AccountCap
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _coin: Coin<QuoteAsset>,
+        _account_cap: &AccountCap
     ) {
         
         abort 1337
@@ -429,14 +429,14 @@ module deepbook::clob_v2 {
 
     // for smart routing
     public fun swap_exact_base_for_quote<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        client_order_id: u64,
-        account_cap: &AccountCap,
-        quantity: u64,
-        base_coin: Coin<BaseAsset>,
-        quote_coin: Coin<QuoteAsset>,
-        clock: &Clock,
-        ctx: &mut TxContext,
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _client_order_id: u64,
+        _account_cap: &AccountCap,
+        _quantity: u64,
+        _base_coin: Coin<BaseAsset>,
+        _quote_coin: Coin<QuoteAsset>,
+        _clock: &Clock,
+        _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
         
         abort 1337
@@ -444,14 +444,14 @@ module deepbook::clob_v2 {
 
     // for smart routing
     public fun swap_exact_base_for_quote_with_metadata<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        client_order_id: u64,
-        account_cap: &AccountCap,
-        quantity: u64,
-        base_coin: Coin<BaseAsset>,
-        quote_coin: Coin<QuoteAsset>,
-        clock: &Clock,
-        ctx: &mut TxContext,
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _client_order_id: u64,
+        _account_cap: &AccountCap,
+        _quantity: u64,
+        _base_coin: Coin<BaseAsset>,
+        _quote_coin: Coin<QuoteAsset>,
+        _clock: &Clock,
+        _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
         
         abort 1337
@@ -459,26 +459,26 @@ module deepbook::clob_v2 {
 
     // for smart routing
     public fun swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        client_order_id: u64,
-        account_cap: &AccountCap,
-        quantity: u64,
-        clock: &Clock,
-        quote_coin: Coin<QuoteAsset>,
-        ctx: &mut TxContext,
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _client_order_id: u64,
+        _account_cap: &AccountCap,
+        _quantity: u64,
+        _clock: &Clock,
+        _quote_coin: Coin<QuoteAsset>,
+        _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
        
        abort 1337
     }
 
     public fun swap_exact_quote_for_base_with_metadata<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        client_order_id: u64,
-        account_cap: &AccountCap,
-        quantity: u64,
-        clock: &Clock,
-        quote_coin: Coin<QuoteAsset>,
-        ctx: &mut TxContext,
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _client_order_id: u64,
+        _account_cap: &AccountCap,
+        _quantity: u64,
+        _clock: &Clock,
+        _quote_coin: Coin<QuoteAsset>,
+        _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
         
         abort 1337
@@ -486,30 +486,30 @@ module deepbook::clob_v2 {
 
     /// Place a market order to the order book.
     public fun place_market_order<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        account_cap: &AccountCap,
-        client_order_id: u64,
-        quantity: u64,
-        is_bid: bool,
-        base_coin: Coin<BaseAsset>,
-        quote_coin: Coin<QuoteAsset>,
-        clock: &Clock,
-        ctx: &mut TxContext,
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _account_cap: &AccountCap,
+        _client_order_id: u64,
+        _quantity: u64,
+        _is_bid: bool,
+        _base_coin: Coin<BaseAsset>,
+        _quote_coin: Coin<QuoteAsset>,
+        _clock: &Clock,
+        _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
         
         abort 1337
     }
 
     public fun place_market_order_with_metadata<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        account_cap: &AccountCap,
-        client_order_id: u64,
-        quantity: u64,
-        is_bid: bool,
-        base_coin: Coin<BaseAsset>,
-        quote_coin: Coin<QuoteAsset>,
-        clock: &Clock,
-        ctx: &mut TxContext,
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _account_cap: &AccountCap,
+        _client_order_id: u64,
+        _quantity: u64,
+        _is_bid: bool,
+        _base_coin: Coin<BaseAsset>,
+        _quote_coin: Coin<QuoteAsset>,
+        _clock: &Clock,
+        _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
         
         abort 1337
@@ -521,17 +521,17 @@ module deepbook::clob_v2 {
     /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
     /// So please check that boolean value first before using the order id.
     public fun place_limit_order<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        client_order_id: u64,
-        price: u64,
-        quantity: u64,
-        self_matching_prevention: u8,
-        is_bid: bool,
-        expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
-        restriction: u8,
-        clock: &Clock,
-        account_cap: &AccountCap,
-        ctx: &mut TxContext
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _client_order_id: u64,
+        _price: u64,
+        _quantity: u64,
+        _self_matching_prevention: u8,
+        _is_bid: bool,
+        _expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
+        _restriction: u8,
+        _clock: &Clock,
+        _account_cap: &AccountCap,
+        _ctx: &mut TxContext
     ): (u64, u64, bool, u64) {
         
         abort 1337
@@ -543,17 +543,17 @@ module deepbook::clob_v2 {
     /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
     /// So please check that boolean value first before using the order id.
     public fun place_limit_order_with_metadata<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        client_order_id: u64,
-        price: u64,
-        quantity: u64,
-        self_matching_prevention: u8,
-        is_bid: bool,
-        expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
-        restriction: u8,
-        clock: &Clock,
-        account_cap: &AccountCap,
-        ctx: &mut TxContext
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _client_order_id: u64,
+        _price: u64,
+        _quantity: u64,
+        _self_matching_prevention: u8,
+        _is_bid: bool,
+        _expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
+        _restriction: u8,
+        _clock: &Clock,
+        _account_cap: &AccountCap,
+        _ctx: &mut TxContext
     ): (u64, u64, bool, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
         
         abort 1337
@@ -1020,7 +1020,7 @@ module deepbook::clob_v2 {
     }
 
     public fun matched_order_metadata_info<BaseAsset, QuoteAsset>(
-        matched_order_metadata: &MatchedOrderMetadata<BaseAsset, QuoteAsset>
+        _matched_order_metadata: &MatchedOrderMetadata<BaseAsset, QuoteAsset>
     ) : ( ID, u64, bool, address, address, u64, u64, u64, u64) {
         
         abort 1337
