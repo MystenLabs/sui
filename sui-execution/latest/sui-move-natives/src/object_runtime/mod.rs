@@ -3,7 +3,7 @@
 
 pub(crate) mod object_store;
 
-use self::object_store::{ChildObjectEffect, ObjectResult};
+use self::object_store::{ChildObjectEffectV0, ChildObjectEffects, ObjectResult};
 use super::get_object_id;
 use better_any::{Tid, TidAble};
 use indexmap::map::IndexMap;
@@ -524,7 +524,7 @@ impl ObjectRuntimeState {
     pub(crate) fn finish(
         mut self,
         loaded_child_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
-        child_object_effects: BTreeMap<ObjectID, ChildObjectEffect>,
+        child_object_effects: ChildObjectEffects,
     ) -> Result<RuntimeResults, ExecutionError> {
         let mut loaded_child_objects: BTreeMap<_, _> = loaded_child_objects
             .into_iter()
@@ -538,46 +538,7 @@ impl ObjectRuntimeState {
                 )
             })
             .collect();
-        for (child, child_object_effect) in child_object_effects {
-            let ChildObjectEffect {
-                owner: parent,
-                ty,
-                effect,
-            } = child_object_effect;
-
-            if let Some(loaded_child) = loaded_child_objects.get_mut(&child) {
-                loaded_child.is_modified = true;
-            }
-
-            match effect {
-                // was modified, so mark it as mutated and transferred
-                Op::Modify(v) => {
-                    debug_assert!(!self.transfers.contains_key(&child));
-                    debug_assert!(!self.new_ids.contains(&child));
-                    debug_assert!(loaded_child_objects.contains_key(&child));
-                    self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
-                }
-
-                Op::New(v) => {
-                    debug_assert!(!self.transfers.contains_key(&child));
-                    self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
-                }
-
-                Op::Delete => {
-                    // was transferred so not actually deleted
-                    if self.transfers.contains_key(&child) {
-                        debug_assert!(!self.deleted_ids.contains(&child));
-                    }
-                    // ID was deleted too was deleted so mark as deleted
-                    if self.deleted_ids.contains(&child) {
-                        debug_assert!(!self.transfers.contains_key(&child));
-                        debug_assert!(!self.new_ids.contains(&child));
-                    }
-                }
-            }
-        }
+        self.apply_child_object_effects(&mut loaded_child_objects, child_object_effects);
         let ObjectRuntimeState {
             input_objects: _,
             new_ids,
@@ -651,6 +612,65 @@ impl ObjectRuntimeState {
 
     pub fn incr_total_events_size(&mut self, size: u64) {
         self.total_events_size += size;
+    }
+
+    fn apply_child_object_effects(
+        &mut self,
+        loaded_child_objects: &mut BTreeMap<ObjectID, LoadedRuntimeObject>,
+        child_object_effects: ChildObjectEffects,
+    ) {
+        match child_object_effects {
+            ChildObjectEffects::V0(child_object_effects) => {
+                self.apply_child_object_effects_v0(loaded_child_objects, child_object_effects)
+            }
+        }
+    }
+
+    fn apply_child_object_effects_v0(
+        &mut self,
+        loaded_child_objects: &mut BTreeMap<ObjectID, LoadedRuntimeObject>,
+        child_object_effects: BTreeMap<ObjectID, ChildObjectEffectV0>,
+    ) {
+        for (child, child_object_effect) in child_object_effects {
+            let ChildObjectEffectV0 {
+                owner: parent,
+                ty,
+                effect,
+            } = child_object_effect;
+
+            if let Some(loaded_child) = loaded_child_objects.get_mut(&child) {
+                loaded_child.is_modified = true;
+            }
+
+            match effect {
+                // was modified, so mark it as mutated and transferred
+                Op::Modify(v) => {
+                    debug_assert!(!self.transfers.contains_key(&child));
+                    debug_assert!(!self.new_ids.contains(&child));
+                    debug_assert!(loaded_child_objects.contains_key(&child));
+                    self.transfers
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
+                }
+
+                Op::New(v) => {
+                    debug_assert!(!self.transfers.contains_key(&child));
+                    self.transfers
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
+                }
+
+                Op::Delete => {
+                    // was transferred so not actually deleted
+                    if self.transfers.contains_key(&child) {
+                        debug_assert!(!self.deleted_ids.contains(&child));
+                    }
+                    // ID was deleted too was deleted so mark as deleted
+                    if self.deleted_ids.contains(&child) {
+                        debug_assert!(!self.transfers.contains_key(&child));
+                        debug_assert!(!self.new_ids.contains(&child));
+                    }
+                }
+            }
+        }
     }
 }
 
