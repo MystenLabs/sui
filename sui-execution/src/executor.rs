@@ -7,7 +7,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
 use sui_types::storage::BackingStore;
 use sui_types::{
-    base_types::{ObjectRef, SuiAddress, TxContext},
+    base_types::{ObjectRef, SuiAddress},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -85,8 +85,11 @@ pub trait Executor {
         // Configuration
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        // Genesis State
-        tx_context: &mut TxContext,
+        // Epoch
+        epoch_id: EpochId,
+        epoch_timestamp_ms: u64,
+        // Genesis Digest
+        transaction_digest: &TransactionDigest,
         // Transaction
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,

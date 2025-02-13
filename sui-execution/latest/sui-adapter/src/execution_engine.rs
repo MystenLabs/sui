@@ -301,6 +301,7 @@ mod checked {
 
         let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
         let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
+        let digest = tx_ctx.digest();
 
         // We must charge object read here during transaction execution, because if this fails
         // we must still ensure an effect is committed and all objects versions incremented
@@ -393,7 +394,7 @@ mod checked {
         if let Err(e) = run_conservation_checks::<Mode>(
             temporary_store,
             gas_charger,
-            tx_ctx,
+            digest,
             move_vm,
             protocol_config.simple_conservation_checks(),
             enable_expensive_checks,
@@ -412,7 +413,7 @@ mod checked {
     fn run_conservation_checks<Mode: ExecutionMode>(
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
-        tx_ctx: &mut TxContext,
+        tx_digest: TransactionDigest,
         move_vm: &Arc<MoveVM>,
         simple_conservation_checks: bool,
         enable_expensive_checks: bool,
@@ -471,7 +472,7 @@ mod checked {
                     // we will create or destroy SUI otherwise
                     panic!(
                         "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
-                        tx_ctx.digest(),
+                        tx_digest,
                         recovery_err,
                         gas_charger.summary()
                     )
@@ -998,6 +999,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) {
+        let digest = tx_ctx.digest();
         let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
@@ -1032,7 +1034,7 @@ mod checked {
                     &deserialized_modules,
                     version,
                     dependencies,
-                    tx_ctx.digest(),
+                    digest,
                 );
 
                 info!(
