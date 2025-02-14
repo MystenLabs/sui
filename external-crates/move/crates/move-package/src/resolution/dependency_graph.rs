@@ -16,6 +16,7 @@ use std::{
     process::Command,
 };
 
+use crate::source_package::parsed_manifest::Dependencies;
 use crate::{
     lock_file::{schema, LockFile},
     package_hooks::{custom_resolve_pkg_id, resolve_version, PackageIdentifier},
@@ -198,6 +199,8 @@ pub struct DependencyGraphBuilder<Progress: Write> {
     visited_dependencies: VecDeque<(PackageIdentifier, PM::InternalDependency)>,
     /// Installation directory for compiled artifacts (from BuildConfig).
     install_dir: PathBuf,
+    /// Set of implicit dependencies to add to every package
+    implicit_deps: Dependencies,
 }
 
 impl<Progress: Write> DependencyGraphBuilder<Progress> {
@@ -205,12 +208,14 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         skip_fetch_latest_git_deps: bool,
         progress_output: Progress,
         install_dir: PathBuf,
+        implicit_deps: &Dependencies,
     ) -> Self {
         DependencyGraphBuilder {
             dependency_cache: DependencyCache::new(skip_fetch_latest_git_deps),
             progress_output,
             visited_dependencies: VecDeque::new(),
             install_dir,
+            implicit_deps: implicit_deps.clone(),
         }
     }
 
