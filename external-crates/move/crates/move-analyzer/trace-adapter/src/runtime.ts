@@ -319,6 +319,17 @@ export class Runtime extends EventEmitter {
             bcodeMapsModMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'disassembly'), this.filesMap);
         }
 
+        // if we are missing source maps (and thus source files), but have bytecode maps
+        // (and thus disassembled bytecode files), we will only be able to show disassembly,
+        // which becomes the default (source) view
+        Array.from(bcodeMapsModMap.entries()).forEach((entry) => {
+            const [mod, bcodeMap] = entry;
+            if (!sourceMapsModMap.has(mod)) {
+                sourceMapsModMap.set(mod, bcodeMap);
+                bcodeMapsModMap.delete(mod);
+            }
+        });
+
         this.trace = readTrace(traceFilePath, sourceMapsHashMap, sourceMapsModMap, bcodeMapsModMap, this.filesMap);
 
         // start trace viewing session with the first trace event
