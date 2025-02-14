@@ -218,6 +218,7 @@ const MAX_PROTOCOL_VERSION: u64 = 74;
 //             Enable zstd compression for consensus tonic network in mainnet.
 //             Enable the new commit rule for devnet.
 //             Enable consensus garbage collection for testnet.
+// Version 75: Removes unnecessary child object mutations
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -626,7 +627,7 @@ struct FeatureFlags {
 
     // If true, enables the optimizations for child object mutations, removing unnecessary mutations
     #[serde(skip_serializing_if = "is_false")]
-    optimize_child_object_mutations: bool,
+    minimize_child_object_mutations: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1811,8 +1812,8 @@ impl ProtocolConfig {
         self.feature_flags.enable_nitro_attestation
     }
 
-    pub fn optimize_child_object_mutations(&self) -> bool {
-        self.feature_flags.optimize_child_object_mutations
+    pub fn minimize_child_object_mutations(&self) -> bool {
+        self.feature_flags.minimize_child_object_mutations
     }
 }
 
@@ -3260,7 +3261,9 @@ impl ProtocolConfig {
                         // to be included before be considered garbage collected.
                         cfg.consensus_gc_depth = Some(60);
                     }
-                    cfg.feature_flags.optimize_child_object_mutations = true;
+                }
+                75 => {
+                    cfg.feature_flags.minimize_child_object_mutations = true;
                 }
                 // Use this template when making changes:
                 //

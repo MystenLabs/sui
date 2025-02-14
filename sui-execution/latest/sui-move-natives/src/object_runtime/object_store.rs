@@ -764,7 +764,7 @@ impl<'a> ChildObjectStore<'a> {
 
     // retrieve the `Op` effects for the child objects
     pub(super) fn take_effects(&mut self) -> PartialVMResult<ChildObjectEffects> {
-        if self.inner.protocol_config.optimize_child_object_mutations() {
+        if self.inner.protocol_config.minimize_child_object_mutations() {
             let v1_effects = std::mem::take(&mut self.store)
                 .into_iter()
                 .map(|(id, child_object)| {
@@ -837,7 +837,7 @@ impl<'a> ChildObjectStore<'a> {
 
 impl ObjectFingerprint {
     fn none(protocol_config: &ProtocolConfig) -> Self {
-        if !protocol_config.optimize_child_object_mutations() {
+        if !protocol_config.minimize_child_object_mutations() {
             Self(None)
         } else {
             Self(Some(ObjectFingerprint_::Empty))
@@ -850,7 +850,7 @@ impl ObjectFingerprint {
         original_type: &MoveObjectType,
         original_value: &Value,
     ) -> PartialVMResult<Self> {
-        Ok(if !protocol_config.optimize_child_object_mutations() {
+        Ok(if !protocol_config.minimize_child_object_mutations() {
             Self(None)
         } else {
             Self(Some(ObjectFingerprint_::Original {
