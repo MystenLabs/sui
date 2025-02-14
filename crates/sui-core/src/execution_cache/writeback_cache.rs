@@ -45,6 +45,7 @@ use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::AuthorityStore;
+use crate::fallback_fetch::{do_fallback_lookup, do_fallback_lookup_fallible};
 use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
 
@@ -72,6 +73,7 @@ use sui_types::digests::{
 };
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -86,7 +88,7 @@ use tracing::{debug, info, instrument, trace, warn};
 use super::cache_types::Ticket;
 use super::ExecutionCacheAPI;
 use super::{
-    cache_types::{CachedVersionMap, IsNewer, MonotonicCache},
+    cache_types::{CacheResult, CachedVersionMap, IsNewer, MonotonicCache},
     implement_passthrough_traits,
     object_locks::ObjectLocks,
     CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheReconfigAPI,
@@ -185,15 +187,6 @@ impl IsNewer for LatestObjectCacheEntry {
 }
 
 type MarkerKey = (EpochId, FullObjectID);
-
-enum CacheResult<T> {
-    /// Entry is in the cache
-    Hit(T),
-    /// Entry is not in the cache and is known to not exist
-    NegativeHit,
-    /// Entry is not in the cache and may or may not exist in the store
-    Miss,
-}
 
 /// UncommitedData stores execution outputs that are not yet written to the db. Entries in this
 /// struct can only be purged after they are committed.
@@ -978,37 +971,6 @@ impl WritebackCache {
         self.set_backpressure(pending_count);
     }
 
-    fn persist_transactions_and_effects(
-        &self,
-        digests: &[(TransactionDigest, TransactionEffectsDigest)],
-    ) {
-        let mut transactions_and_effects = Vec::with_capacity(digests.len());
-        for (tx_digest, fx_digest) in digests {
-            let Some(outputs) = self
-                .dirty
-                .pending_transaction_writes
-                .get(tx_digest)
-                .map(|o| o.clone())
-            else {
-                debug!("transaction {:?} was already committed", tx_digest);
-                continue;
-            };
-
-            assert_eq!(
-                outputs.effects.digest(),
-                *fx_digest,
-                "effects digest mismatch"
-            );
-
-            transactions_and_effects
-                .push(((*outputs.transaction).clone(), outputs.effects.clone()));
-        }
-
-        self.store
-            .persist_transactions_and_effects(&transactions_and_effects)
-            .expect("db error");
-    }
-
     fn approximate_pending_transaction_count(&self) -> u64 {
         let num_commits = self
             .dirty
@@ -1152,33 +1114,6 @@ impl WritebackCache {
                 &ObjectEntry::Wrapped,
             );
         }
-    }
-
-    async fn persist_transactions(&self, digests: &[TransactionDigest]) {
-        let mut txns = Vec::with_capacity(digests.len());
-        for tx_digest in digests {
-            let Some(tx) = self
-                .dirty
-                .pending_transaction_writes
-                .get(tx_digest)
-                .map(|o| o.transaction.clone())
-            else {
-                // tx should exist in the db if it is not in dirty set.
-                debug_assert!(self
-                    .store
-                    .get_transaction_block(tx_digest)
-                    .unwrap()
-                    .is_some());
-                // If the transaction is not in dirty, it does not need to be committed.
-                // This situation can happen if we build a checkpoint locally which was just executed
-                // via state sync.
-                continue;
-            };
-
-            txns.push((*tx_digest, (*tx).clone()));
-        }
-
-        self.store.commit_transactions(&txns).expect("db error");
     }
 
     // Move the oldest/least entry from the dirty queue to the cache queue.
@@ -1333,19 +1268,12 @@ impl ExecutionCacheCommit for WritebackCache {
         .boxed()
     }
 
-    fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()> {
-        WritebackCache::persist_transactions(self, digests).boxed()
+    fn persist_transaction(&self, tx: &VerifiedExecutableTransaction) {
+        self.store.persist_transaction(tx).expect("db error");
     }
 
     fn approximate_pending_transaction_count(&self) -> u64 {
         WritebackCache::approximate_pending_transaction_count(self)
-    }
-
-    fn persist_transactions_and_effects(
-        &self,
-        digests: &[(TransactionDigest, TransactionEffectsDigest)],
-    ) {
-        WritebackCache::persist_transactions_and_effects(self, digests);
     }
 }
 
@@ -2109,61 +2037,6 @@ impl ExecutionCacheWrite for WritebackCache {
     ) {
         WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs);
     }
-}
-
-/// do_fallback_lookup is a helper function for multi-get operations.
-/// It takes a list of keys and first attempts to look up each key in the cache.
-/// The cache can return a hit, a miss, or a negative hit (if the object is known to not exist).
-/// Any keys that result in a miss are then looked up in the store.
-///
-/// The "get from cache" and "get from store" behavior are implemented by the caller and provided
-/// via the get_cached_key and multiget_fallback functions.
-fn do_fallback_lookup<K: Copy, V: Default + Clone>(
-    keys: &[K],
-    get_cached_key: impl Fn(&K) -> CacheResult<V>,
-    multiget_fallback: impl Fn(&[K]) -> Vec<V>,
-) -> Vec<V> {
-    do_fallback_lookup_fallible(
-        keys,
-        |key| Ok(get_cached_key(key)),
-        |keys| Ok(multiget_fallback(keys)),
-    )
-    .expect("cannot fail")
-}
-
-fn do_fallback_lookup_fallible<K: Copy, V: Default + Clone>(
-    keys: &[K],
-    get_cached_key: impl Fn(&K) -> SuiResult<CacheResult<V>>,
-    multiget_fallback: impl Fn(&[K]) -> SuiResult<Vec<V>>,
-) -> SuiResult<Vec<V>> {
-    let mut results = vec![V::default(); keys.len()];
-    let mut fallback_keys = Vec::with_capacity(keys.len());
-    let mut fallback_indices = Vec::with_capacity(keys.len());
-
-    for (i, key) in keys.iter().enumerate() {
-        match get_cached_key(key)? {
-            CacheResult::Miss => {
-                fallback_keys.push(*key);
-                fallback_indices.push(i);
-            }
-            CacheResult::NegativeHit => (),
-            CacheResult::Hit(value) => {
-                results[i] = value;
-            }
-        }
-    }
-
-    let fallback_results = multiget_fallback(&fallback_keys)?;
-    assert_eq!(fallback_results.len(), fallback_indices.len());
-    assert_eq!(fallback_results.len(), fallback_keys.len());
-
-    for (i, result) in fallback_indices
-        .into_iter()
-        .zip(fallback_results.into_iter())
-    {
-        results[i] = result;
-    }
-    Ok(results)
 }
 
 implement_passthrough_traits!(WritebackCache);

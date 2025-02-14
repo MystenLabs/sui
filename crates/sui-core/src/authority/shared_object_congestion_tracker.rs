@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::authority_per_epoch_store::AuthorityEpochTables;
 use super::execution_time_estimator::ExecutionTimeEstimator;
 use crate::authority::transaction_deferral::DeferralKey;
-use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
@@ -88,21 +86,14 @@ impl SharedObjectCongestionTracker {
     }
 
     pub fn from_protocol_config(
-        tables: &AuthorityEpochTables,
+        initial_object_debts: impl IntoIterator<Item = (ObjectID, u64)>,
         protocol_config: &ProtocolConfig,
-        round: Round,
         for_randomness: bool,
-        transactions: &[VerifiedSequencedConsensusTransaction],
     ) -> SuiResult<Self> {
         let max_accumulated_txn_cost_per_object_in_commit =
             protocol_config.max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option();
         Ok(Self::new(
-            tables.load_initial_object_debts(
-                round,
-                for_randomness,
-                protocol_config,
-                transactions,
-            )?,
+            initial_object_debts,
             protocol_config.per_object_congestion_control_mode(),
             if for_randomness {
                 protocol_config
@@ -303,7 +294,7 @@ impl SharedObjectCongestionTracker {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum CongestionPerObjectDebt {
     V1(Round, u64),
 }
