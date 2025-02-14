@@ -1021,9 +1021,9 @@ impl Core {
             }
         }
 
-        // Include partially propagated blocks from excluded authorities, to help propagate the blocks
-        // across the network with less latency impact. Other excluded ancestors are not included in the block
-        // but still broadcasted to peers.
+        // Iterate through excluded ancestors and include the ancestor or the ancestor's ancestor
+        // that has been accepted by a quorum of the network. The other excluded ancestors are not
+        // included in the block but will still be broadcasted to peers.
         for (score, ancestor) in excluded_ancestors.iter() {
             let excluded_author = ancestor.author();
             let block_hostname = &self.context.committee.authority(excluded_author).hostname;
