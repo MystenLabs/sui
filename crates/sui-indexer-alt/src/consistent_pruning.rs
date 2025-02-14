@@ -87,6 +87,55 @@ impl PruningLookupTable {
         Ok(result)
     }
 
+    /// Returns a list of (object_id, checkpoint_number) pairs where each pair indicates a
+    /// checkpoint whose immediate predecessor should be pruned. The checkpoint_number is exclusive,
+    /// meaning we'll prune the entry with the largest checkpoint number less than it.
+    ///
+    /// For deletions, we include two entries:
+    /// 1. One to prune its immediate predecessor (like mutations)
+    /// 2. Another with checkpoint+1 to prune the deletion entry itself
+    ///
+    /// Example:
+    /// - Create at CP 0
+    /// - Modify at CP 1, 2, 10
+    /// - Delete at CP 15
+    ///
+    /// Returns pairs for:
+    /// - (obj, 1)  // will prune CP 0 because 0 < 1
+    /// - (obj, 2)  // will prune CP 1 because 1 < 2
+    /// - (obj, 10) // will prune CP 2 because 2 < 10
+    /// - (obj, 15) // will prune CP 10 because 10 < 15
+    /// - (obj, 16) // will prune CP 15 because 15 < 16
+    pub fn get_prune_info_v2(
+        &self,
+        cp_from: u64,
+        cp_to_exclusive: u64,
+    ) -> anyhow::Result<Vec<(ObjectID, u64)>> {
+        if cp_from >= cp_to_exclusive {
+            bail!(
+                "No valid range to take from the lookup table: from={}, to_exclusive={}",
+                cp_from,
+                cp_to_exclusive
+            );
+        }
+
+        let mut result = Vec::new();
+        for cp in cp_from..cp_to_exclusive {
+            let info = self
+                .table
+                .get(&cp)
+                .ok_or_else(|| anyhow::anyhow!("Prune info for checkpoint {cp} not found"))?;
+
+            for (object_id, update_kind) in &info.value().info {
+                result.push((*object_id, cp));
+                if matches!(update_kind, UpdateKind::Delete) {
+                    result.push((*object_id, cp + 1));
+                }
+            }
+        }
+        Ok(result)
+    }
+
     // Remove prune info for checkpoints that we no longer need.
     // NOTE: Only call this when we have successfully pruned all the checkpoints in the range.
     pub fn gc_prune_info(&self, cp_from: u64, cp_to_exclusive: u64) {
