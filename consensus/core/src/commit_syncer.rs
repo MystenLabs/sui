@@ -309,16 +309,15 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         );
                     }
                     for block_ref in missing {
-                        let hostname = self
+                        let hostname = &self
                             .inner
                             .context
                             .committee
                             .authority(block_ref.author)
-                            .hostname
-                            .clone();
+                            .hostname;
                         metrics
                             .commit_sync_fetch_missing_blocks
-                            .with_label_values(&[&hostname])
+                            .with_label_values(&[hostname])
                             .inc();
                     }
                 }
