@@ -531,20 +531,17 @@ impl RpcIndexStore {
     ///
     /// Updates will not be committed to the database until `commit_update_for_checkpoint` is
     /// called.
-    pub fn index_checkpoint(
-        &self,
-        checkpoint: &CheckpointData,
-        resolver: &mut dyn LayoutResolver,
-    ) -> Result<(), StorageError> {
+    pub fn index_checkpoint(&self, checkpoint: &CheckpointData, resolver: &mut dyn LayoutResolver) {
         let sequence_number = checkpoint.checkpoint_summary.sequence_number;
-        let batch = self.tables.index_checkpoint(checkpoint, resolver)?;
+        let batch = self
+            .tables
+            .index_checkpoint(checkpoint, resolver)
+            .expect("db error");
 
         self.pending_updates
             .lock()
             .unwrap()
             .insert(sequence_number, batch);
-
-        Ok(())
     }
 
     /// Commits the pending updates for the provided checkpoint number.

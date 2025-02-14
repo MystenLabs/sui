@@ -61,7 +61,7 @@ use std::hash::Hash;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
-use sui_macros::fail_point_async;
+use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{
@@ -909,14 +909,14 @@ impl WritebackCache {
 
     // Commits dirty data for the given TransactionDigest to the db.
     #[instrument(level = "debug", skip_all)]
-    async fn commit_transaction_outputs(
+    fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
         digests: &[TransactionDigest],
         // TODO: Delete this parameter once table migration is complete.
         use_object_per_epoch_marker_table_v2: bool,
     ) {
-        fail_point_async!("writeback-cache-commit");
+        fail_point!("writeback-cache-commit");
         trace!(?digests);
 
         let mut all_outputs = Vec::with_capacity(digests.len());
@@ -1252,20 +1252,19 @@ impl WritebackCache {
 impl ExecutionCacheAPI for WritebackCache {}
 
 impl ExecutionCacheCommit for WritebackCache {
-    fn commit_transaction_outputs<'a>(
-        &'a self,
+    fn commit_transaction_outputs(
+        &self,
         epoch: EpochId,
-        digests: &'a [TransactionDigest],
+        digests: &[TransactionDigest],
         // TODO: Delete this parameter once table migration is complete.
         use_object_per_epoch_marker_table_v2: bool,
-    ) -> BoxFuture<'a, ()> {
+    ) {
         WritebackCache::commit_transaction_outputs(
             self,
             epoch,
             digests,
             use_object_per_epoch_marker_table_v2,
         )
-        .boxed()
     }
 
     fn persist_transaction(&self, tx: &VerifiedExecutableTransaction) {
