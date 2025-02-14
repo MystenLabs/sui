@@ -5,7 +5,7 @@
 // need to be marked as mutated.
 // Operates through a long chain of dynamic fields
 
-//# init --addresses test=0x0 --accounts A
+//# init --addresses test=0x0 --accounts A --protocol-version 73
 
 //# publish
 

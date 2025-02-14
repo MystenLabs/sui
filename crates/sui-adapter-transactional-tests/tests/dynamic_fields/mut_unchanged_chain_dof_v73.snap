@@ -54,20 +54,20 @@ gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 
 
 task 7, line 88:
 //# run test::m1::add_remove --sender A --args object(2,8)
-mutated: object(0,0), object(2,8)
-gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2294820, non_refundable_storage_fee: 23180
+mutated: object(0,0), object(2,0), object(2,2), object(2,4), object(2,7), object(2,8), object(2,10), object(2,13)
+gas summary: computation_cost: 1000000, storage_cost: 13657200,  storage_rebate: 13520628, non_refundable_storage_fee: 136572
 
 task 8, line 90:
 //# run test::m1::add_remove --sender A --args object(2,9)
-mutated: object(0,0), object(2,9)
-gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2294820, non_refundable_storage_fee: 23180
+mutated: object(0,0), object(2,1), object(2,3), object(2,5), object(2,6), object(2,9), object(2,11), object(2,12)
+gas summary: computation_cost: 1000000, storage_cost: 13657200,  storage_rebate: 13520628, non_refundable_storage_fee: 136572
 
 task 9, line 92:
 //# run test::m1::write_back --sender A --args object(2,8)
-mutated: object(0,0), object(2,8)
-gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2294820, non_refundable_storage_fee: 23180
+mutated: object(0,0), object(2,8), object(2,10)
+gas summary: computation_cost: 1000000, storage_cost: 3838000,  storage_rebate: 3799620, non_refundable_storage_fee: 38380
 
 task 10, line 94:
 //# run test::m1::write_back --sender A --args object(2,9)
-mutated: object(0,0), object(2,9)
-gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2294820, non_refundable_storage_fee: 23180
+mutated: object(0,0), object(2,9), object(2,11)
+gas summary: computation_cost: 1000000, storage_cost: 3838000,  storage_rebate: 3799620, non_refundable_storage_fee: 38380

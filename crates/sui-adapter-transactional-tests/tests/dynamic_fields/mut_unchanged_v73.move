@@ -4,7 +4,7 @@
 // This test tests that objects that are borrowed mutably or added/removed, but not modified, do not
 // need to be marked as mutated
 
-//# init --addresses test=0x0 --accounts A
+//# init --addresses test=0x0 --accounts A --protocol-version 73
 
 //# publish
 
