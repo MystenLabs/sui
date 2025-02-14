@@ -81,12 +81,6 @@ pub(crate) struct DagState {
     /// for leader schedule yet.
     scoring_subdag: ScoringSubdag,
 
-    // TODO: Remove when DistributedVoteScoring is enabled.
-    /// The list of committed subdags that have been sequenced by the universal
-    /// committer but have yet to be used to calculate reputation scores for the
-    /// next leader schedule. Until then we consider it as "unscored" subdags.
-    unscored_committed_subdags: Vec<CommittedSubDag>,
-
     // Commit votes pending to be included in new blocks.
     // TODO: limit to 1st commit per round with multi-leader.
     pending_commit_votes: VecDeque<CommitVote>,
@@ -162,12 +156,7 @@ impl DagState {
             unscored_committed_subdags.len()
         );
 
-        if context
-            .protocol_config
-            .consensus_distributed_vote_scoring_strategy()
-        {
-            scoring_subdag.add_subdags(std::mem::take(&mut unscored_committed_subdags));
-        }
+        scoring_subdag.add_subdags(std::mem::take(&mut unscored_committed_subdags));
 
         let mut state = Self {
             context,
@@ -184,7 +173,6 @@ impl DagState {
             commits_to_write: vec![],
             commit_info_to_write: vec![],
             scoring_subdag,
-            unscored_committed_subdags,
             store: store.clone(),
             cached_rounds,
             evicted_rounds: vec![0; num_authorities],
@@ -823,9 +811,6 @@ impl DagState {
     }
 
     pub(crate) fn add_commit_info(&mut self, reputation_scores: ReputationScores) {
-        // We empty the unscored committed subdags to calculate reputation scores.
-        assert!(self.unscored_committed_subdags.is_empty());
-
         // We create an empty scoring subdag once reputation scores are calculated.
         // Note: It is okay for this to not be gated by protocol config as the
         // scoring_subdag should be empty in either case at this point.
@@ -990,27 +975,6 @@ impl DagState {
         self.store
             .read_last_commit_info()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
-    }
-
-    // TODO: Remove four methods below this when DistributedVoteScoring is enabled.
-    pub(crate) fn unscored_committed_subdags_count(&self) -> u64 {
-        self.unscored_committed_subdags.len() as u64
-    }
-
-    #[cfg(test)]
-    pub(crate) fn unscored_committed_subdags(&self) -> Vec<CommittedSubDag> {
-        self.unscored_committed_subdags.clone()
-    }
-
-    pub(crate) fn add_unscored_committed_subdags(
-        &mut self,
-        committed_subdags: Vec<CommittedSubDag>,
-    ) {
-        self.unscored_committed_subdags.extend(committed_subdags);
-    }
-
-    pub(crate) fn take_unscored_committed_subdags(&mut self) -> Vec<CommittedSubDag> {
-        std::mem::take(&mut self.unscored_committed_subdags)
     }
 
     pub(crate) fn add_scoring_subdags(&mut self, scoring_subdags: Vec<CommittedSubDag>) {
@@ -1699,118 +1663,6 @@ mod test {
         // Then all should be found apart from the last one
         expected.insert(3, None);
         assert_eq!(result, expected);
-    }
-
-    // TODO: Remove when DistributedVoteScoring is enabled.
-    #[rstest]
-    #[tokio::test]
-    async fn test_flush_and_recovery_with_unscored_subdag(#[values(0, 5)] gc_depth: u32) {
-        telemetry_subscribers::init_for_testing();
-        let num_authorities: u32 = 4;
-        let (mut context, _) = Context::new_for_test(num_authorities as usize);
-        context
-            .protocol_config
-            .set_consensus_distributed_vote_scoring_strategy_for_testing(false);
-
-        if gc_depth > 0 {
-            context
-                .protocol_config
-                .set_consensus_gc_depth_for_testing(gc_depth);
-        }
-
-        let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-        let mut dag_state = DagState::new(context.clone(), store.clone());
-
-        // Create test blocks and commits for round 1 ~ 10
-        let num_rounds: u32 = 10;
-        let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder.layers(1..=num_rounds).build();
-        let mut commits = vec![];
-
-        for (_subdag, commit) in dag_builder.get_sub_dag_and_commits(1..=num_rounds) {
-            commits.push(commit);
-        }
-
-        // Add the blocks from first 5 rounds and first 5 commits to the dag state
-        let temp_commits = commits.split_off(5);
-        dag_state.accept_blocks(dag_builder.blocks(1..=5));
-        for commit in commits.clone() {
-            dag_state.add_commit(commit);
-        }
-
-        // Flush the dag state
-        dag_state.flush();
-
-        // Add the rest of the blocks and commits to the dag state
-        dag_state.accept_blocks(dag_builder.blocks(6..=num_rounds));
-        for commit in temp_commits.clone() {
-            dag_state.add_commit(commit);
-        }
-
-        // All blocks should be found in DagState.
-        let all_blocks = dag_builder.blocks(6..=num_rounds);
-        let block_refs = all_blocks
-            .iter()
-            .map(|block| block.reference())
-            .collect::<Vec<_>>();
-        let result = dag_state
-            .get_blocks(&block_refs)
-            .into_iter()
-            .map(|b| b.unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(result, all_blocks);
-
-        // Last commit index should be 10.
-        assert_eq!(dag_state.last_commit_index(), 10);
-        assert_eq!(
-            dag_state.last_committed_rounds(),
-            dag_builder.last_committed_rounds.clone()
-        );
-
-        // Destroy the dag state.
-        drop(dag_state);
-
-        // Recover the state from the store
-        let dag_state = DagState::new(context.clone(), store.clone());
-
-        // Blocks of first 5 rounds should be found in DagState.
-        let blocks = dag_builder.blocks(1..=5);
-        let block_refs = blocks
-            .iter()
-            .map(|block| block.reference())
-            .collect::<Vec<_>>();
-        let result = dag_state
-            .get_blocks(&block_refs)
-            .into_iter()
-            .map(|b| b.unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(result, blocks);
-
-        // Blocks above round 5 should not be in DagState, because they are not flushed.
-        let missing_blocks = dag_builder.blocks(6..=num_rounds);
-        let block_refs = missing_blocks
-            .iter()
-            .map(|block| block.reference())
-            .collect::<Vec<_>>();
-        let retrieved_blocks = dag_state
-            .get_blocks(&block_refs)
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-        assert!(retrieved_blocks.is_empty());
-
-        // Last commit index should be 5.
-        assert_eq!(dag_state.last_commit_index(), 5);
-
-        // This is the last_commmit_rounds of the first 5 commits that were flushed
-        let expected_last_committed_rounds = vec![4, 5, 4, 4];
-        assert_eq!(
-            dag_state.last_committed_rounds(),
-            expected_last_committed_rounds
-        );
-        // Unscored subdags will be recoverd based on the flushed commits and no commit info
-        assert_eq!(dag_state.unscored_committed_subdags_count(), 5);
     }
 
     #[tokio::test]
