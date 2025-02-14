@@ -176,7 +176,7 @@ macro_rules! fetch_child_object_unbounded {
                     ))
                 }
             };
-            match object.data {
+            match &object.data {
                 Data::Package(_) => {
                     return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
                         format!(
