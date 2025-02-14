@@ -327,17 +327,20 @@ impl TransactionClient {
 
 /// `TransactionVerifier` implementation is supplied by Sui to validate transactions in a block,
 /// before acceptance of the block.
-#[async_trait::async_trait]
 pub trait TransactionVerifier: Send + Sync + 'static {
     /// Determines if this batch of transactions is valid.
     /// Fails if any one of the transactions is invalid.
     fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError>;
 
-    /// Returns indices of transactions to reject, validator error over transactions.
-    /// Currently only uncertified user transactions can be rejected. The rest of transactions
-    /// are implicitly voted to be accepted.
-    /// When the result is an error, the whole block should be rejected from local DAG instead.
-    async fn verify_and_vote_batch(
+    /// Returns indices of transactions to reject, or a transaction validation error.
+    /// Currently only uncertified user transactions can be voted to reject, which are created
+    /// by Mysticeti fastpath client.
+    /// Honest validators may disagree on voting for uncertified user transactions.
+    /// The other types of transactions are implicitly voted to be accepted if they pass validation.
+    ///
+    /// Honest validators should produce the same validation outcome on the same batch of
+    /// transactions. So if a batch from a peer fails validation, the peer is equivocating.
+    fn verify_and_vote_batch(
         &self,
         batch: &[&[u8]],
     ) -> Result<Vec<TransactionIndex>, ValidationError>;
@@ -354,13 +357,12 @@ pub enum ValidationError {
 pub struct NoopTransactionVerifier;
 
 #[cfg(any(test, msim))]
-#[async_trait::async_trait]
 impl TransactionVerifier for NoopTransactionVerifier {
     fn verify_batch(&self, _batch: &[&[u8]]) -> Result<(), ValidationError> {
         Ok(())
     }
 
-    async fn verify_and_vote_batch(
+    fn verify_and_vote_batch(
         &self,
         _batch: &[&[u8]],
     ) -> Result<Vec<TransactionIndex>, ValidationError> {

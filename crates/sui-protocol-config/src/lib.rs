@@ -3428,6 +3428,10 @@ impl ProtocolConfig {
     pub fn set_consensus_linearize_subdag_v2_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_linearize_subdag_v2 = val;
     }
+
+    pub fn set_mysticeti_fastpath_for_testing(&mut self, val: bool) {
+        self.feature_flags.mysticeti_fastpath = val;
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
