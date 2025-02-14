@@ -369,8 +369,8 @@ const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
  * @param sourceMapsHashMap a map from file hash to a source map.
  * @param sourceMapsModMap a map from stringified module info to a source map.
  * @param bcodeMapModMap a map from stringified module info to a bytecode map.
- * @param srcFilesMap a map from source file hash to file info.
- * @param bcodeFilesMap a map from disassembled bytecode file hash to file info.
+ * @param filesMap a map from file hash to file info (for both source files
+ * and disassembled bytecode files).
  * @returns execution trace.
  * @throws Error with a descriptive error message if reading trace has failed.
  */
@@ -379,8 +379,7 @@ export function readTrace(
     sourceMapsHashMap: Map<string, ISourceMap>,
     sourceMapsModMap: Map<string, ISourceMap>,
     bcodeMapModMap: Map<string, ISourceMap>,
-    srcFilesMap: Map<string, IFileInfo>,
-    bcodeFilesMap: Map<string, IFileInfo>
+    filesMap: Map<string, IFileInfo>,
 ): ITrace {
     const traceJSON: JSONTraceRootObject = JSON.parse(fs.readFileSync(traceFilePath, 'utf8'));
     if (traceJSON.events.length === 0) {
@@ -465,7 +464,7 @@ export function readTrace(
                 bcodeFileHash = bcodeMap.fileHash;
                 optimizedBcodeLines = bcodeMap.optimizedLines;
                 bcodeFunEntry = bcodeMap.functions.get(frame.function_name);
-                const currentBCodeFile = bcodeFilesMap.get(bcodeMap.fileHash);
+                const currentBCodeFile = filesMap.get(bcodeMap.fileHash);
                 if (currentBCodeFile) {
                     bcodeFilePath = currentBCodeFile.path;
                 }
@@ -484,7 +483,7 @@ export function readTrace(
                 optimizedSrcLines,
                 optimizedBcodeLines
             });
-            const currentSrcFile = srcFilesMap.get(sourceMap.fileHash);
+            const currentSrcFile = filesMap.get(sourceMap.fileHash);
 
             if (!currentSrcFile) {
                 throw new Error(`Cannot find file with hash: ${sourceMap.fileHash}`);
@@ -545,9 +544,9 @@ export function readTrace(
                 );
             }
 
-            recordTracedLine(srcFilesMap, tracedSrcLines, instSrcFileLoc);
+            recordTracedLine(filesMap, tracedSrcLines, instSrcFileLoc);
             if (instBcodeFileLoc) {
-                recordTracedLine(bcodeFilesMap, tracedBcodeLines, instBcodeFileLoc);
+                recordTracedLine(filesMap, tracedBcodeLines, instBcodeFileLoc);
             }
             // re-read frame info as it may have changed as a result of processing
             // and inlined call
