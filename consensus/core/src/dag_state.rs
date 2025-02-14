@@ -579,7 +579,6 @@ impl DagState {
 
     // Retrieves the cached block within the range [start_round, end_round) from a given authority.
     // NOTE: end_round must be greater than GENESIS_ROUND.
-    #[cfg(test)]
     pub(crate) fn get_last_cached_block_in_range(
         &self,
         authority: AuthorityIndex,
