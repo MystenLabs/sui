@@ -16,9 +16,12 @@ use crate::{
 
 pub(crate) trait BlockVerifier: Send + Sync + 'static {
     /// Verifies a block and its transactions, checking signatures, size limits,
-    /// and data validity.
-    /// When Mysticeti fastpath is enabled, it also votes on the transactions
-    /// and can return a non-empty list of rejected transaction indices.
+    /// and transaction validity. All honest validators should produce the same verification
+    /// outcome for the same block, so any verification error should be due to equivocation.
+    ///
+    /// When Mysticeti fastpath is enabled, it also votes on the transactions in verified blocks,
+    /// and can return a non-empty list of rejected transaction indices. Different honest
+    /// validators may vote differently on transactions.
     fn verify_and_vote(&self, block: &SignedBlock) -> ConsensusResult<Vec<TransactionIndex>>;
 
     /// Verifies a block w.r.t. ancestor blocks.

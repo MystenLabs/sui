@@ -240,7 +240,7 @@ pub struct AuthorityMetrics {
     batch_size: Histogram,
 
     authority_state_handle_transaction_latency: Histogram,
-    authority_state_handle_transaction_v2_latency: Histogram,
+    authority_state_handle_vote_transaction_latency: Histogram,
 
     execute_certificate_latency_single_writer: Histogram,
     execute_certificate_latency_shared_object: Histogram,
@@ -447,9 +447,9 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            authority_state_handle_transaction_v2_latency: register_histogram_with_registry!(
-                "authority_state_handle_transaction_v2_latency",
-                "Latency of handling transactions with v2",
+            authority_state_handle_vote_transaction_latency: register_histogram_with_registry!(
+                "authority_state_handle_vote_transaction_latency",
+                "Latency of voting on transactions without signing",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -1030,13 +1030,13 @@ impl AuthorityState {
     /// When Ok, returns None if the transaction has not been executed, and returns
     /// (TransactionEffects, TransactionEvents) if the transaction has been executed.
     #[instrument(level = "trace", skip_all)]
-    pub(crate) fn vote_transaction(
+    pub(crate) fn handle_vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> SuiResult<Option<(TransactionEffects, TransactionEvents)>> {
         let tx_digest = *transaction.digest();
-        debug!("handle_transaction_v2");
+        debug!("handle_vote_transaction");
 
         // Check if the transaction has already been executed.
         let tx_output = self.get_transaction_output(&tx_digest)?;
@@ -1046,7 +1046,7 @@ impl AuthorityState {
 
         let _metrics_guard = self
             .metrics
-            .authority_state_handle_transaction_v2_latency
+            .authority_state_handle_vote_transaction_latency
             .start_timer();
         self.metrics.tx_orders.inc();
 

@@ -332,10 +332,14 @@ pub trait TransactionVerifier: Send + Sync + 'static {
     /// Fails if any one of the transactions is invalid.
     fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError>;
 
-    /// Returns indices of transactions to reject, or a validation error.
-    /// Currently only uncertified user transactions can be rejected. The rest of transactions
-    /// are implicitly voted to be accepted if they pass validation.
-    /// When the result is a validation error, the whole block should be rejected.
+    /// Returns indices of transactions to reject, or a transaction validation error.
+    /// Currently only uncertified user transactions can be voted to reject, which are created
+    /// by Mysticeti fastpath client.
+    /// Honest validators may disagree on voting for uncertified user transactions.
+    /// The other types of transactions are implicitly voted to be accepted if they pass validation.
+    ///
+    /// Honest validators should produce the same validation outcome on the same batch of
+    /// transactions. So if a batch from a peer fails validation, the peer is equivocating.
     fn verify_and_vote_batch(
         &self,
         batch: &[&[u8]],

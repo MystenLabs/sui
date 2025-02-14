@@ -179,7 +179,8 @@ impl SuiTxValidator {
 
         let tx = epoch_store.verify_transaction(*tx)?;
 
-        self.authority_state.vote_transaction(epoch_store, tx)?;
+        self.authority_state
+            .handle_vote_transaction(epoch_store, tx)?;
 
         Ok(())
     }

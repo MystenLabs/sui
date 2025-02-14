@@ -545,7 +545,7 @@ impl ValidatorService {
         let _span = error_span!("validator_state_handle_tx_v2", ?tx_digest);
 
         let tx_output = state
-            .vote_transaction(&epoch_store, transaction.clone())
+            .handle_vote_transaction(&epoch_store, transaction.clone())
             .tap_err(|e| {
                 if let SuiError::ValidatorHaltedAtEpochEnd = e {
                     metrics.num_rejected_tx_in_epoch_boundary.inc();
