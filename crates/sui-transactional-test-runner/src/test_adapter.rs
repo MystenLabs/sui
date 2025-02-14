@@ -940,6 +940,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 dependencies,
                 sender,
                 gas_budget,
+                dry_run,
                 syntax,
                 policy,
                 gas_price,
@@ -1025,6 +1026,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             dependencies,
                             sender,
                             gas_budget,
+                            dry_run,
                             policy,
                             gas_price,
                         ).await?;
@@ -1413,6 +1415,7 @@ impl SuiTestAdapter {
         dependencies: Vec<String>,
         sender: String,
         gas_budget: Option<u64>,
+        dry_run: bool,
         policy: u8,
         gas_price: u64,
     ) -> anyhow::Result<Option<String>> {
@@ -1464,11 +1467,22 @@ impl SuiTestAdapter {
 
         let pt = builder.finish();
 
-        let data =
-            |sender, gas| TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price);
-
-        let transaction = self.sign_txn(Some(sender), data);
-        let summary = self.execute_txn(transaction).await?;
+        let summary = if dry_run {
+            let transaction = TransactionData::new_programmable(
+                self.get_sender(Some(sender)).address,
+                vec![],
+                pt,
+                gas_budget,
+                gas_price,
+            );
+            self.dry_run(transaction).await?
+        } else {
+            let data = |sender, gas| {
+                TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price)
+            };
+            let transaction = self.sign_txn(Some(sender), data);
+            self.execute_txn(transaction).await?
+        };
         let created_package = summary
             .created
             .iter()
