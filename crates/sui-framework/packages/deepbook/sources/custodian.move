@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(deprecated_usage, unused_variable)]
+#[allow(deprecated_usage)]
 module deepbook::custodian {
     use sui::balance::{Self, Balance, split};
     use sui::coin::{Self, Coin};
@@ -24,7 +24,7 @@ module deepbook::custodian {
     }
 
     /// Create an `AccountCap` that can be used across all DeepBook pool
-    public fun mint_account_cap(ctx: &mut TxContext): AccountCap {
+    public fun mint_account_cap(_ctx: &mut TxContext): AccountCap {
         
         abort 1337
     }
