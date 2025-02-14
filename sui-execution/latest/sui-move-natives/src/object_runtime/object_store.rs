@@ -6,6 +6,7 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
 };
+use move_stdlib_natives::debug;
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, StructRef, Value},
@@ -775,9 +776,17 @@ impl<'a> ChildObjectStore<'a> {
                         value,
                         fingerprint,
                     } = child_object;
+                    #[cfg(debug_assertions)]
+                    let dirty_flag_mutated = value.is_mutated();
                     let final_value = value.into_value();
                     let object_changed =
                         fingerprint.object_has_changed(&owner, &move_type, &final_value)?;
+                    // The old dirty flag was pessimistic in its tracking of mutations, meaning
+                    // it would mark mutations even if the value remained the same.
+                    // This means that if the object changed, the dirty flag must have been marked.
+                    // However, we can't guarantee the opposite.
+                    // object changed ==> dirty flag mutated
+                    debug_assert!(!object_changed || dirty_flag_mutated);
                     let child_effect = ChildObjectEffectV1 {
                         owner,
                         ty,
@@ -797,9 +806,11 @@ impl<'a> ChildObjectStore<'a> {
                         ty,
                         move_type: _,
                         value,
-                        fingerprint: _,
+                        fingerprint: _fingerprint,
                     } = child_object;
                     let effect = value.into_effect()?;
+                    // should be disabled if the feature is disabled
+                    debug_assert!(_fingerprint.0.is_none());
                     let child_effect = ChildObjectEffectV0 { owner, ty, effect };
                     Some((id, child_effect))
                 })
