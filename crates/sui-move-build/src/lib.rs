@@ -33,7 +33,7 @@ use move_package::{
     },
     package_hooks::{PackageHooks, PackageIdentifier},
     resolution::resolution_graph::ResolvedGraph,
-    source_package::parsed_manifest::PackageName,
+    source_package::parsed_manifest::{Dependencies, PackageName},
     BuildConfig as MoveBuildConfig,
 };
 use move_package::{
@@ -630,6 +630,7 @@ impl Default for BuildConfig {
     fn default() -> Self {
         let config = MoveBuildConfig {
             default_flavor: Some(move_compiler::editions::Flavor::Sui),
+            implicit_dependencies: Dependencies::new(),
             ..MoveBuildConfig::default()
         };
         BuildConfig {
