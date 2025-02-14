@@ -245,7 +245,8 @@ export class Runtime extends EventEmitter {
     };
 
     /**
-     * Map of file hashes to file info.
+     * Map of file hashes to file info (both for source files
+     * and for files representing disassembled bytecode).
      */
     private filesMap = new Map<string, IFileInfo>();
 
@@ -253,11 +254,6 @@ export class Runtime extends EventEmitter {
      * Map of line breakpoints, keyed on a file path.
      */
     private lineBreakpoints = new Map<string, Set<number>>();
-
-    /**
-     * Map of file hashes to files representing disassembled bytecode.
-     */
-    private bcodeFilesMap = new Map<string, IFileInfo>();
 
     /**
      * A Move file currently opened in the editor window that
@@ -298,9 +294,9 @@ export class Runtime extends EventEmitter {
 
         // create file maps for all files in the `sources` directory, including both package source
         // files and source files for dependencies
-        hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'sources'), this.filesMap, MOVE_FILE_EXT);
+        this.hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'sources'), MOVE_FILE_EXT);
         // update with files from the actual "sources" directory rather than from the "build" directory
-        hashToFileMap(path.join(pkgRoot, 'sources'), this.filesMap, MOVE_FILE_EXT);
+        this.hashToFileMap(path.join(pkgRoot, 'sources'), MOVE_FILE_EXT);
 
         // create source maps for all modules in the `build` directory
         const sourceMapsModMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'source_maps'), this.filesMap);
@@ -318,12 +314,23 @@ export class Runtime extends EventEmitter {
         let bcodeMapsModMap = new Map<string, ISourceMap>();
         if (fs.existsSync(disassemblyDir)) {
             // create file maps for all bytecode files in the `disassembly` directory
-            hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'disassembly'), this.bcodeFilesMap, BCODE_FILE_EXT);
+            this.hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'disassembly'), BCODE_FILE_EXT);
             // created bytecode maps for disassembled bytecode files
-            bcodeMapsModMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'disassembly'), this.bcodeFilesMap);
+            bcodeMapsModMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'disassembly'), this.filesMap);
         }
 
-        this.trace = readTrace(traceFilePath, sourceMapsHashMap, sourceMapsModMap, bcodeMapsModMap, this.filesMap, this.bcodeFilesMap);
+        // if we are missing source maps (and thus source files), but have bytecode maps
+        // (and thus disassembled bytecode files), we will only be able to show disassembly,
+        // which becomes the default (source) view
+        Array.from(bcodeMapsModMap.entries()).forEach((entry) => {
+            const [mod, bcodeMap] = entry;
+            if (!sourceMapsModMap.has(mod)) {
+                sourceMapsModMap.set(mod, bcodeMap);
+                bcodeMapsModMap.delete(mod);
+            }
+        });
+
+        this.trace = readTrace(traceFilePath, sourceMapsHashMap, sourceMapsModMap, bcodeMapsModMap, this.filesMap);
 
         // start trace viewing session with the first trace event
         this.eventIndex = 0;
@@ -890,7 +897,7 @@ export class Runtime extends EventEmitter {
         const srcFilePath = currentFile.path;
         let bcodeFilePath = undefined;
         if (bcodeFileHash) {
-            const bcodeFile = this.bcodeFilesMap.get(bcodeFileHash);
+            const bcodeFile = this.filesMap.get(bcodeFileHash);
             if (bcodeFile) {
                 bcodeFilePath = bcodeFile.path;
             }
@@ -948,6 +955,36 @@ export class Runtime extends EventEmitter {
         }, 0);
     }
 
+    /**
+     * Creates a map from a file hash to file information for all Move source files in a directory.
+     *
+     * @param directory path to the directory containing Move source files.
+     * @param extension file extension of a Move source file or a disassembled bytecode file.
+     */
+    private hashToFileMap(
+        directory: string,
+        extension: String
+    ): void {
+        const processDirectory = (dir: string) => {
+            const files = fs.readdirSync(dir);
+            for (const f of files) {
+                const filePath = path.join(dir, f);
+                const stats = fs.statSync(filePath);
+                if (stats.isDirectory()) {
+                    processDirectory(filePath);
+                } else if (path.extname(f) === extension) {
+                    const content = fs.readFileSync(filePath, 'utf8');
+                    const numFileHash = computeFileHash(content);
+                    const lines = content.split('\n');
+                    const fileInfo = { path: filePath, content, lines };
+                    const fileHash = Buffer.from(numFileHash).toString('base64');
+                    this.filesMap.set(fileHash, fileInfo);
+                }
+            }
+        };
+
+        processDirectory(directory);
+    }
     //
     // Utility functions for testing and debugging.
     //
@@ -1152,39 +1189,6 @@ export class Runtime extends EventEmitter {
 function isGeneratedLocal(local: ILocalInfo): boolean {
     return local.name.includes('%') || local.internalName.includes('%');
 }
-
-/**
- * Creates a map from a file hash to file information for all Move source files in a directory.
- *
- * @param directory path to the directory containing Move source files.
- * @param filesMap map to update with file information.
- */
-function hashToFileMap(
-    directory: string,
-    filesMap: Map<string, IFileInfo>,
-    extension: String
-): void {
-    const processDirectory = (dir: string) => {
-        const files = fs.readdirSync(dir);
-        for (const f of files) {
-            const filePath = path.join(dir, f);
-            const stats = fs.statSync(filePath);
-            if (stats.isDirectory()) {
-                processDirectory(filePath);
-            } else if (path.extname(f) === extension) {
-                const content = fs.readFileSync(filePath, 'utf8');
-                const numFileHash = computeFileHash(content);
-                const lines = content.split('\n');
-                const fileInfo = { path: filePath, content, lines };
-                const fileHash = Buffer.from(numFileHash).toString('base64');
-                filesMap.set(fileHash, fileInfo);
-            }
-        }
-    };
-
-    processDirectory(directory);
-}
-
 
 /**
  * Handles a write to a local variable in a stack frame.
