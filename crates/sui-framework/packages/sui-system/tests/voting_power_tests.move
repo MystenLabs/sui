@@ -67,6 +67,130 @@ module sui_system::voting_power_tests {
         scenario.end();
     }
 
+    struct Random has drop, store, copy {
+        seed: u64
+    }
+
+    public fun new(): Random {
+        Random {
+            seed: 72473375793
+        }
+    }
+
+    public fun random(rand: &mut Random, m: u64): u64 {
+        rand.seed = (((((72473375793 as u128) * (rand.seed as u128) + 465462346546) >> 1) & 0x0000000000000000ffffffffffffffff) as u64);
+        rand.seed % m
+    }
+
+    #[test]
+    fun test_fuzz_random() {
+        use std::debug;
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let max_total_stake = 10_000_000_000;
+        let min_stake = 15_000_000;
+        let stake;
+        let random = new();
+        let length;
+        let validators;
+
+        let n = 0;
+        while (n < 270) {
+            length = random(&mut random, 29) + 1;
+            let i = 0;
+            let stakes = vector::empty();
+            let temp_total_stake = 0;
+            let limit = max_total_stake / length;
+            while (i < length) {
+                stake = min_stake + random(&mut random, limit);
+                if (stake + temp_total_stake > max_total_stake) {
+                    break
+                };
+                temp_total_stake = temp_total_stake + stake;
+                vector::push_back(&mut stakes, stake);
+                i = i + 1;
+            };
+            debug::print(&stakes);
+            validators = gtu::create_validators_with_stakes(stakes, ctx);
+            voting_power::set_voting_power(&mut validators);
+            test_utils::destroy(validators);
+            n = n + 1;
+        };
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_fuzz_minimal() {
+        use std::debug;
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let max_total_stake = 10_000_000_000;
+        let min_stake = 15_000_000;
+        let stake;
+        let random = new();
+        let length;
+        let validators;
+
+        let n = 0;
+        while (n < 270) {
+            length = random(&mut random, 29) + 1;
+            let i = 0;
+            let stakes = vector::empty();
+            let temp_total_stake = 0;
+            while (i < length) {
+                stake = (1 + random(&mut random, 2)) * min_stake + random(&mut random, 10);
+                if (stake + temp_total_stake > max_total_stake) {
+                    break
+                };
+                temp_total_stake = temp_total_stake + stake;
+                vector::push_back(&mut stakes, stake);
+                i = i + 1;
+            };
+            debug::print(&stakes);
+            validators = gtu::create_validators_with_stakes(stakes, ctx);
+            voting_power::set_voting_power(&mut validators);
+            test_utils::destroy(validators);
+            n = n + 1;
+        };
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_fuzz_big() {
+        use std::debug;
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let max_total_stake = 10_000_000_000;
+        let min_stake = 15_000_000;
+        let stake;
+        let random = new();
+        let length;
+        let validators;
+
+        let n = 0;
+        while (n < 270) {
+            length = random(&mut random, 29) + 1;
+            let i = 0;
+            let stakes = vector::empty();
+            let temp_total_stake = 0;
+            while (i < length) {
+                stake = (1 + (2^random(&mut random, 10))) * min_stake + random(&mut random, 1000000);
+                if (stake + temp_total_stake > max_total_stake) {
+                    break
+                };
+                temp_total_stake = temp_total_stake + stake;
+                vector::push_back(&mut stakes, stake);
+                i = i + 1;
+            };
+            debug::print(&stakes);
+            validators = gtu::create_validators_with_stakes(stakes, ctx);
+            voting_power::set_voting_power(&mut validators);
+            test_utils::destroy(validators);
+            n = n + 1;
+        };
+        test_scenario::end(scenario);
+    }
+
     fun get_voting_power(validators: &vector<Validator>): vector<u64> {
         let mut result = vector[];
         let mut i = 0;
