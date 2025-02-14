@@ -972,24 +972,6 @@ do not have this capability:
 
 
 
-<a name="deepbook_clob_v2_REFERENCE_MAKER_REBATE_RATE"></a>
-
-
-
-<pre><code><b>const</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_REFERENCE_MAKER_REBATE_RATE">REFERENCE_MAKER_REBATE_RATE</a>: u64 = 1500000;
-</code></pre>
-
-
-
-<a name="deepbook_clob_v2_REFERENCE_TAKER_FEE_RATE"></a>
-
-
-
-<pre><code><b>const</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_REFERENCE_TAKER_FEE_RATE">REFERENCE_TAKER_FEE_RATE</a>: u64 = 2500000;
-</code></pre>
-
-
-
 <a name="deepbook_clob_v2_usr_open_orders_exist"></a>
 
 ## Function `usr_open_orders_exist`
@@ -1187,7 +1169,7 @@ Destroy the given <code>pool_owner_cap</code> object
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset&gt;(<a href="../deepbook/clob_v2.md#deepbook_clob_v2_tick_size">tick_size</a>: u64, lot_size: u64, creation_fee: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset&gt;(_tick_size: u64, _lot_size: u64, _creation_fee: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1197,19 +1179,12 @@ Destroy the given <code>pool_owner_cap</code> object
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset&gt;(
-    <a href="../deepbook/clob_v2.md#deepbook_clob_v2_tick_size">tick_size</a>: u64,
-    lot_size: u64,
-    creation_fee: Coin&lt;SUI&gt;,
-    ctx: &<b>mut</b> TxContext,
+    _tick_size: u64,
+    _lot_size: u64,
+    _creation_fee: Coin&lt;SUI&gt;,
+    _ctx: &<b>mut</b> TxContext,
 ) {
-    <a href="../deepbook/clob_v2.md#deepbook_clob_v2_create_customized_pool">create_customized_pool</a>&lt;BaseAsset, QuoteAsset&gt;(
-        <a href="../deepbook/clob_v2.md#deepbook_clob_v2_tick_size">tick_size</a>,
-        lot_size,
-        <a href="../deepbook/clob_v2.md#deepbook_clob_v2_REFERENCE_TAKER_FEE_RATE">REFERENCE_TAKER_FEE_RATE</a>,
-        <a href="../deepbook/clob_v2.md#deepbook_clob_v2_REFERENCE_MAKER_REBATE_RATE">REFERENCE_MAKER_REBATE_RATE</a>,
-        creation_fee,
-        ctx,
-    );
+    <b>abort</b> 1337
 }
 </code></pre>
 

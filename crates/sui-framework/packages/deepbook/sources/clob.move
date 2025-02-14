@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[deprecated, allow(deprecated_usage)]
 module deepbook::clob {
     use std::type_name::TypeName;
 
@@ -161,11 +160,12 @@ module deepbook::clob {
         linked_table::destroy_empty(orders);
     }
 
+    #[deprecated]
     public fun create_account(_ctx: &mut TxContext): AccountCap {
         abort DEPRECATED
     }
 
-    #[allow(unused_type_parameter)]
+    #[deprecated, allow(unused_type_parameter)]
     public fun create_pool<BaseAsset, QuoteAsset>(
         _tick_size: u64,
         _lot_size: u64,
@@ -175,6 +175,7 @@ module deepbook::clob {
         abort DEPRECATED
     }
 
+    #[deprecated]
     public fun deposit_base<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
         _coin: Coin<BaseAsset>,
@@ -184,6 +185,7 @@ module deepbook::clob {
         abort 1337
     }
 
+    #[deprecated]
     public fun deposit_quote<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
         _coin: Coin<QuoteAsset>,
@@ -213,6 +215,7 @@ module deepbook::clob {
         custodian::withdraw_asset(&mut pool.quote_custodian, quantity, account_cap, ctx)
     }
 
+    #[deprecated]
     // for smart routing
     public fun swap_exact_base_for_quote<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
@@ -226,6 +229,7 @@ module deepbook::clob {
         abort 1337
     }
 
+    #[deprecated]
     // for smart routing
     public fun swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
@@ -238,6 +242,7 @@ module deepbook::clob {
         abort 1337
     }
 
+    #[deprecated]
     /// Place a market order to the order book.
     public fun place_market_order<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
@@ -252,6 +257,7 @@ module deepbook::clob {
         abort 1337
     }
 
+    #[deprecated]
     /// Place a limit order to the order book.
     /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
     /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.

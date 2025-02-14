@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[deprecated, allow(deprecated_usage)]
 module deepbook::clob_v2 {
     use std::type_name::TypeName;
 
@@ -31,8 +30,6 @@ module deepbook::clob_v2 {
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
-    const REFERENCE_TAKER_FEE_RATE: u64 = 2_500_000;
-    const REFERENCE_MAKER_REBATE_RATE: u64 = 1_500_000;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -307,28 +304,24 @@ module deepbook::clob_v2 {
         linked_table::destroy_empty(orders);
     }
 
+    #[deprecated]
     public fun create_account(_ctx: &mut TxContext): AccountCap {
         
         abort 1337
     }
 
+    #[deprecated, allow(unused_type_parameter)]
     public fun create_pool<BaseAsset, QuoteAsset>(
-        tick_size: u64,
-        lot_size: u64,
-        creation_fee: Coin<SUI>,
-        ctx: &mut TxContext,
+        _tick_size: u64,
+        _lot_size: u64,
+        _creation_fee: Coin<SUI>,
+        _ctx: &mut TxContext,
     ) {
-        create_customized_pool<BaseAsset, QuoteAsset>(
-            tick_size,
-            lot_size,
-            REFERENCE_TAKER_FEE_RATE,
-            REFERENCE_MAKER_REBATE_RATE,
-            creation_fee,
-            ctx,
-        );
+        
+        abort 1337
     }
 
-    #[allow(unused_type_parameter)]
+    #[deprecated, allow(unused_type_parameter)]
     /// Function for creating pool with customized taker fee rate and maker rebate rate.
     /// The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
     /// Taker_fee_rate of 0.25% should be 2_500_000 for example
@@ -344,6 +337,7 @@ module deepbook::clob_v2 {
         abort 1337
     }
 
+    #[deprecated]
     /// Function for creating an external pool. This API can be used to wrap deepbook pools into other objects.
     public fun create_pool_with_return<BaseAsset, QuoteAsset>(
         _tick_size: u64,
@@ -355,7 +349,7 @@ module deepbook::clob_v2 {
         abort 1337
     }
 
-    #[allow(lint(self_transfer))]
+    #[deprecated, allow(lint(self_transfer))]
     /// Function for creating pool with customized taker fee rate and maker rebate rate.
     /// The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
     /// Taker_fee_rate of 0.25% should be 2_500_000 for example
@@ -371,6 +365,7 @@ module deepbook::clob_v2 {
         abort 1337
     }
 
+    #[deprecated]
     /// A V2 function for creating customized pools for better PTB friendliness/compostability.
     /// If a user wants to create a pool and then destroy/lock the pool_owner_cap one can do
     /// so with this function.
@@ -386,6 +381,7 @@ module deepbook::clob_v2 {
         abort 1337
     }
 
+    #[deprecated]
     public fun deposit_base<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
         _coin: Coin<BaseAsset>,
@@ -395,6 +391,7 @@ module deepbook::clob_v2 {
         abort 1337
     }
 
+    #[deprecated]
     public fun deposit_quote<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
         _coin: Coin<QuoteAsset>,
@@ -434,6 +431,7 @@ module deepbook::clob_v2 {
         custodian::withdraw_asset(&mut pool.quote_custodian, quantity, account_cap, ctx)
     }
 
+    #[deprecated]
     // for smart routing
     public fun swap_exact_base_for_quote<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
@@ -449,6 +447,7 @@ module deepbook::clob_v2 {
         abort 1337
     }
 
+    #[deprecated]
     // for smart routing
     public fun swap_exact_base_for_quote_with_metadata<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
@@ -464,6 +463,7 @@ module deepbook::clob_v2 {
         abort 1337
     }
 
+    #[deprecated]
     // for smart routing
     public fun swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
@@ -478,6 +478,7 @@ module deepbook::clob_v2 {
        abort 1337
     }
 
+    #[deprecated]
     public fun swap_exact_quote_for_base_with_metadata<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
         _client_order_id: u64,
@@ -491,6 +492,7 @@ module deepbook::clob_v2 {
         abort 1337
     }
 
+    #[deprecated]
     /// Place a market order to the order book.
     public fun place_market_order<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
@@ -507,6 +509,7 @@ module deepbook::clob_v2 {
         abort 1337
     }
 
+    #[deprecated]
     public fun place_market_order_with_metadata<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
         _account_cap: &AccountCap,
@@ -522,6 +525,7 @@ module deepbook::clob_v2 {
         abort 1337
     }
 
+    #[deprecated]
     /// Place a limit order to the order book.
     /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
     /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
@@ -544,6 +548,7 @@ module deepbook::clob_v2 {
         abort 1337
     }
 
+    #[deprecated]
     /// Place a limit order to the order book.
     /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
     /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
@@ -1026,6 +1031,7 @@ module deepbook::clob_v2 {
         order
     }
 
+    #[deprecated]
     public fun matched_order_metadata_info<BaseAsset, QuoteAsset>(
         _matched_order_metadata: &MatchedOrderMetadata<BaseAsset, QuoteAsset>
     ) : ( ID, u64, bool, address, address, u64, u64, u64, u64) {

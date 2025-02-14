@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[deprecated, allow(deprecated_usage)]
 module deepbook::critbit {
     use sui::table::{Self, Table};
     use deepbook::math::{count_leading_zeros};
