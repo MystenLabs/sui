@@ -3,8 +3,10 @@
 
 // This test verifies double adding an address to the deny list does not panic and still
 // ensures the correct behavior when removing
+// After protocol version 74, some of the child object mutations will not appear since they do not
+// modify the Move value.
 
-//# init --accounts A B --addresses test=0x0 --protocol-version 73
+//# init --accounts A B --addresses test=0x0 --protocol-version 74
 
 //# publish --sender A
 module test::regulated_coin {

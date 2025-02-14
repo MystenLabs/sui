@@ -4,8 +4,10 @@
 // This test tests that objects that are borrowed mutably or added/removed, but not modified, do not
 // need to be marked as mutated.
 // Operates through a long chain of dynamic fields
+// After protocol version 74, some of the child object mutations will not appear since they do not
+// modify the Move value.
 
-//# init --addresses test=0x0 --accounts A --protocol-version 73
+//# init --addresses test=0x0 --accounts A --protocol-version 74
 
 //# publish
 

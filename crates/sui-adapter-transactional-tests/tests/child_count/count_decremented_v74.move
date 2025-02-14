@@ -3,8 +3,10 @@
 
 // DEPRECATED child count no longer tracked
 // tests various ways of "removing" a child decrements the count
+// After protocol version 74, some of the child object mutations will not appear since they do not
+// modify the Move value.
 
-//# init --addresses test=0x0 --accounts A B --protocol-version 73
+//# init --addresses test=0x0 --accounts A B --protocol-version 74
 
 //# publish
 
