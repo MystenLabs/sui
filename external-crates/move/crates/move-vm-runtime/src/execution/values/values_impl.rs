@@ -2334,6 +2334,43 @@ impl Display for Reference {
     }
 }
 
+impl fmt::Display for ConstantValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConstantValue::U8(x) => write!(f, "{}", x),
+            ConstantValue::U16(x) => write!(f, "{}", x),
+            ConstantValue::U32(x) => write!(f, "{}", x),
+            ConstantValue::U64(x) => write!(f, "{}", x),
+            ConstantValue::U128(x) => write!(f, "{}", x),
+            ConstantValue::U256(x) => write!(f, "{}", x),
+            ConstantValue::Bool(b) => write!(f, "{}", b),
+            ConstantValue::Address(addr) => write!(f, "{}", addr),
+            ConstantValue::Container(c) => write!(f, "{}", c),
+        }
+    }
+}
+
+impl fmt::Display for ConstantContainer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConstantContainer::Vec(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::Struct(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecU8(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecU64(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecU128(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecBool(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecAddress(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecU16(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecU32(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecU256(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::Variant(tag, vec) => {
+                write!(f, "|tag: {}|", tag)?;
+                display_list_of_items(vec.iter(), f)
+            }
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub mod debug {
     use crate::execution::interpreter::locals::StackFrame;

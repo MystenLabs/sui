@@ -271,13 +271,9 @@ impl<'extensions> MoveVM<'extensions> {
 
         let fun_ref = function.to_ref();
 
-        let parameters = fun_ref
-            .parameters
-            .into_iter()
-            .map(|ty| ty.to_type())
-            .collect();
+        let parameters = fun_ref.parameters.iter().map(|ty| ty.to_type()).collect();
 
-        let return_ = fun_ref.return_.into_iter().map(|ty| ty.to_type()).collect();
+        let return_ = fun_ref.return_.iter().map(|ty| ty.to_type()).collect();
 
         // verify type arguments
         self.virtual_tables

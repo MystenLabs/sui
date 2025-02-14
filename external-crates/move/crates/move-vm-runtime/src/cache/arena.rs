@@ -82,14 +82,6 @@ impl Arena {
             Err(PartialVMError::new(StatusCode::PACKAGE_ARENA_LIMIT_REACHED))
         }
     }
-
-    pub(crate) fn alloc_item<T>(&self, item: T) -> PartialVMResult<*const T> {
-        if let Ok(value) = self.0.try_alloc(item) {
-            Ok(value)
-        } else {
-            Err(PartialVMError::new(StatusCode::PACKAGE_ARENA_LIMIT_REACHED))
-        }
-    }
 }
 
 impl<T> ArenaVec<T> {
@@ -116,6 +108,12 @@ impl<T> ArenaVec<T> {
             .iter()
             .map(|val_ref| VMPointer::from_ref(val_ref))
             .collect()
+    }
+}
+
+impl<T> ArenaBox<T> {
+    pub fn inner_ref(&self) -> &T {
+        &self.0
     }
 }
 

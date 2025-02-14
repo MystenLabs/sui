@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{
-        arena::{Arena, ArenaBox, ArenaVec},
-        identifier_interner::IdentifierKey,
-    },
+    cache::arena::{Arena, ArenaBox, ArenaVec},
     execution::{
         dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
         values::ConstantValue,
@@ -218,7 +215,8 @@ pub struct FunctionInstantiation {
 pub struct StructInstantiation {
     // struct field count
     pub field_count: u16,
-    pub def: VirtualTableKey,
+    pub def_vtable_key: VirtualTableKey,
+    pub type_params: VMPointer<ArenaVec<ArenaType>>,
     pub instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
@@ -241,7 +239,9 @@ pub struct FieldInstantiation {
 pub struct EnumInstantiation {
     // enum variant count
     pub variant_count_map: ArenaVec<u16>,
-    pub def: VirtualTableKey,
+    pub enum_def: VMPointer<EnumDef>,
+    pub def_vtable_key: VirtualTableKey,
+    pub type_params: VMPointer<ArenaVec<ArenaType>>,
     pub instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
@@ -249,7 +249,7 @@ pub struct EnumInstantiation {
 #[derive(Debug)]
 pub struct VariantInstantiation {
     pub enum_inst: VMPointer<EnumInstantiation>,
-    pub variant_tag: u16,
+    pub variant: VMPointer<VariantDef>,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -821,90 +821,6 @@ pub(crate) enum Bytecode {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-impl Module {
-    pub fn struct_at(&self, idx: StructDefinitionIndex) -> VirtualTableKey {
-        self.structs[idx.0 as usize].def_vtable_key.clone()
-    }
-
-    pub fn struct_instantiation_at(&self, idx: u16) -> &StructInstantiation {
-        &self.struct_instantiations[idx as usize]
-    }
-
-    pub fn function_instantiation_at(&self, idx: u16) -> &FunctionInstantiation {
-        &self.function_instantiations[idx as usize]
-    }
-
-    pub fn field_count(&self, idx: u16) -> u16 {
-        self.structs[idx as usize].field_count
-    }
-
-    pub fn field_instantiation_count(&self, idx: u16) -> u16 {
-        self.struct_instantiations[idx as usize].field_count
-    }
-
-    pub fn field_offset(&self, idx: FieldHandleIndex) -> usize {
-        self.field_handles[idx.0 as usize].offset
-    }
-
-    pub fn field_instantiation_offset(&self, idx: FieldInstantiationIndex) -> usize {
-        self.field_instantiations[idx.0 as usize].offset
-    }
-
-    pub fn single_type_at(&self, idx: SignatureIndex) -> &ArenaType {
-        self.single_signature_token_map.get(&idx).unwrap()
-    }
-
-    pub fn instantiation_signature_at(&self, idx: SignatureIndex) -> &[ArenaType] {
-        &self.instantiation_signatures[idx.0 as usize]
-    }
-
-    pub fn enum_at(&self, idx: EnumDefinitionIndex) -> VirtualTableKey {
-        self.enums[idx.0 as usize].def_vtable_key.clone()
-    }
-
-    pub fn enum_instantiation_at(&self, idx: EnumDefInstantiationIndex) -> &EnumInstantiation {
-        &self.enum_instantiations[idx.0 as usize]
-    }
-
-    pub fn variant_at(&self, vidx: VariantHandleIndex) -> &VariantDef {
-        let variant_handle = &self.variant_handles[vidx.0 as usize];
-        let enum_def = &self.enums[variant_handle.enum_def.0 as usize];
-        &enum_def.variants[variant_handle.variant as usize]
-    }
-
-    pub fn variant_handle_at(&self, vidx: VariantHandleIndex) -> &VariantHandle {
-        &self.variant_handles[vidx.0 as usize]
-    }
-
-    pub fn variant_field_count(&self, vidx: VariantHandleIndex) -> (u16, VariantTag) {
-        let variant = self.variant_at(vidx);
-        (variant.field_count, variant.tag)
-    }
-
-    pub fn variant_instantiation_handle_at(
-        &self,
-        vidx: VariantInstantiationHandleIndex,
-    ) -> &VariantInstantiationHandle {
-        &self.variant_instantiation_handles[vidx.0 as usize]
-    }
-
-    pub fn variant_instantiantiation_field_count_and_tag(
-        &self,
-        vidx: VariantInstantiationHandleIndex,
-    ) -> (u16, VariantTag) {
-        let handle = self.variant_instantiation_handle_at(vidx);
-        let enum_inst = &self.enum_instantiations[handle.enum_def.0 as usize];
-        (
-            enum_inst.variant_count_map[handle.variant as usize],
-            handle.variant,
-        )
-    }
-
-    pub fn constant_at(&self, idx: ConstantPoolIndex) -> &Constant {
-        &self.constants[idx.0 as usize]
-    }
-}
-
 impl Function {
     #[allow(unused)]
     pub fn file_format_version(&self) -> u32 {
@@ -990,6 +906,47 @@ impl Function {
     }
 }
 
+impl CallType {
+    fn name(&self) -> String {
+        match self {
+            CallType::Direct(vmpointer) => vmpointer.pretty_short_string().to_string(),
+            CallType::Virtual(virtual_table_key) => virtual_table_key.to_short_string().unwrap(),
+        }
+    }
+}
+
+impl StructDef {
+    pub fn datatype(&self) -> Type {
+        Type::Datatype(self.def_vtable_key.clone())
+    }
+
+    pub fn field_count(&self) -> usize {
+        self.fields.len()
+    }
+}
+
+impl EnumDef {
+    pub fn datatype(&self) -> Type {
+        Type::Datatype(self.def_vtable_key.clone())
+    }
+}
+
+impl VariantDef {
+    pub fn datatype(&self) -> Type {
+        Type::Datatype(self.enum_def.to_ref().def_vtable_key.clone())
+    }
+
+    pub fn field_count(&self) -> usize {
+        self.fields.len()
+    }
+}
+
+impl VariantInstantiation {
+    pub fn field_count(&self) -> usize {
+        self.variant.fields.len()
+    }
+}
+
 impl ArenaType {
     /// Convert to a runtime type by performing a deep copy
     pub fn to_type(&self) -> Type {
@@ -1010,7 +967,7 @@ impl ArenaType {
             ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
             ArenaType::DatatypeInstantiation(def_inst) => {
                 let (def_idx, instantiation) = &**def_inst;
-                let inst = instantiation.into_iter().map(|ty| ty.to_type()).collect();
+                let inst = instantiation.iter().map(|ty| ty.to_type()).collect();
                 Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
             }
         }
@@ -1032,17 +989,31 @@ impl DatatypeDescriptor {
         }
     }
 
+    pub fn type_parameters(&self) -> &[DatatypeTyParameter] {
+        match self.datatype_info.inner_ref() {
+            Datatype::Enum(vmpointer) => &vmpointer.type_parameters,
+            Datatype::Struct(vmpointer) => &vmpointer.type_parameters,
+        }
+    }
+
+    pub fn abilities(&self) -> &AbilitySet {
+        match self.datatype_info.inner_ref() {
+            Datatype::Enum(vmpointer) => &vmpointer.abilities,
+            Datatype::Struct(vmpointer) => &vmpointer.abilities,
+        }
+    }
+
     pub fn qualified_name(&self) -> VirtualTableKey {
-        match self.datatype_info.as_ref() {
+        match self.datatype_info.inner_ref() {
             Datatype::Enum(ptr) => ptr.to_ref().def_vtable_key.clone(),
             Datatype::Struct(ptr) => ptr.to_ref().def_vtable_key.clone(),
         }
     }
 
     pub fn intra_package_name(&self) -> IntraPackageKey {
-        match self.datatype_info.as_ref() {
-            Datatype::Enum(ptr) => ptr.to_ref().def_vtable_key.inner_pkg_key.clone(),
-            Datatype::Struct(ptr) => ptr.to_ref().def_vtable_key.inner_pkg_key.clone(),
+        match self.datatype_info.inner_ref() {
+            Datatype::Enum(ptr) => ptr.def_vtable_key.inner_pkg_key,
+            Datatype::Struct(ptr) => ptr.def_vtable_key.inner_pkg_key,
         }
     }
 }
@@ -1159,40 +1130,19 @@ impl Type {
 }
 
 impl DatatypeDescriptor {
-    pub fn get_struct(&self) -> PartialVMResult<&StructType> {
-        match self.datatype_info.to_ref() {
-            Datatype::Struct(struct_type) => Ok(struct_type.to_ref()),
-            x @ Datatype::Enum(_) => Err(PartialVMError::new(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            )
-            .with_message(format!("Expected struct type but got {:?}", x))),
-        }
-    }
-
-    pub fn get_enum(&self) -> PartialVMResult<&EnumType> {
-        match self.datatype_info.to_ref() {
-            Datatype::Enum(enum_type) => Ok(enum_type.to_ref()),
-            x @ Datatype::Struct(_) => Err(PartialVMError::new(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            )
-            .with_message(format!("Expected enum type but got {:?}", x))),
-        }
-    }
-
     pub fn datatype_key(&self) -> VirtualTableKey {
-        let module_name = self.module_key;
-        let member_name = self.member_key;
-        VirtualTableKey {
-            package_key: *self.runtime_id.address(),
-            inner_pkg_key: IntraPackageKey {
-                module_name,
-                member_name,
-            },
+        match &self.datatype_info.inner_ref() {
+            Datatype::Enum(vmpointer) => vmpointer.to_ref().def_vtable_key.clone(),
+            Datatype::Struct(vmpointer) => vmpointer.to_ref().def_vtable_key.clone(),
         }
     }
 
     pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
-        self.type_parameters.iter().map(|param| &param.constraints)
+        let type_params = match self.datatype_info.inner_ref() {
+            Datatype::Enum(vmpointer) => &vmpointer.to_ref().type_parameters,
+            Datatype::Struct(vmpointer) => &vmpointer.to_ref().type_parameters,
+        };
+        type_params.iter().map(|param| &param.constraints)
     }
 }
 
@@ -1200,7 +1150,6 @@ impl DatatypeDescriptor {
 // Type Substitution
 // -------------------------------------------------------------------------------------------------
 
-// Our shared trait.
 pub trait TypeSubst {
     fn clone_impl(&self, depth: usize) -> PartialVMResult<Type>;
     fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
@@ -1279,33 +1228,50 @@ macro_rules! impl_deep_subst {
     };
 }
 
-// Now generate the implementations for both types.
+// Generated implementations.
 impl_deep_subst!(Type);
 impl_deep_subst!(ArenaType);
 
 // -------------------------------------------------------------------------------------------------
-// Equality
+// Type Node Count
 // -------------------------------------------------------------------------------------------------
 
-impl PartialEq for Function {
-    fn eq(&self, other: &Self) -> bool {
-        self.file_format_version == other.file_format_version
-            && self.is_entry == other.is_entry
-            && self.index == other.index
-            && self.code == other.code // Compare raw pointers for equality
-            && self.parameters == other.parameters
-            && self.locals == other.locals
-            && self.return_ == other.return_
-            && self.type_parameters == other.type_parameters
-            && self.def_is_native == other.def_is_native
-            && self.module == other.module
-            && self.name == other.name
-            && self.locals_len == other.locals_len
-            && self.jump_tables == other.jump_tables
-    }
+// Macro that generates the implementations.
+macro_rules! impl_count_type_nodes {
+    ($ty:ident) => {
+        impl TypeNodeCount for $ty {
+            fn count_type_nodes(&self) -> u64 {
+                let mut todo = vec![self];
+                let mut result = 0;
+                while let Some(ty) = todo.pop() {
+                    match ty {
+                        $ty::Vector(ty) | $ty::Reference(ty) | $ty::MutableReference(ty) => {
+                            result += 1;
+                            todo.push(ty);
+                        }
+                        $ty::DatatypeInstantiation(struct_inst) => {
+                            let (_, ty_args) = &**struct_inst;
+                            result += 1;
+                            todo.extend(ty_args.iter())
+                        }
+                        _ => {
+                            result += 1;
+                        }
+                    }
+                }
+                result
+            }
+        }
+    };
 }
 
-impl Eq for Function {}
+pub trait TypeNodeCount {
+    fn count_type_nodes(&self) -> u64;
+}
+
+// Generated implementations.
+impl_count_type_nodes!(Type);
+impl_count_type_nodes!(ArenaType);
 
 // -------------------------------------------------------------------------------------------------
 // Into
@@ -1425,32 +1391,51 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CastU64 => write!(f, "CastU64"),
             Bytecode::CastU128 => write!(f, "CastU128"),
             Bytecode::CastU256 => write!(f, "CastU256"),
-            Bytecode::LdConst(a) => write!(f, "LdConst({})", a),
+            Bytecode::LdConst(a) => write!(f, "LdConst({})", a.to_ref().value),
             Bytecode::LdTrue => write!(f, "LdTrue"),
             Bytecode::LdFalse => write!(f, "LdFalse"),
             Bytecode::CopyLoc(a) => write!(f, "CopyLoc({})", a),
             Bytecode::MoveLoc(a) => write!(f, "MoveLoc({})", a),
             Bytecode::StLoc(a) => write!(f, "StLoc({})", a),
-            Bytecode::DirectCall(fun) => write!(f, "Call({})", fun.to_ref().name),
+            Bytecode::DirectCall(fun) => write!(f, "Call({})", fun.pretty_short_string()),
             Bytecode::VirtualCall(vtable_key) => {
-                let string_interner = string_interner();
-                let module_name = string_interner
-                    .resolve_ident(&vtable_key.inner_pkg_key.module_name, "module name")
-                    .expect("Failed to find interned string");
-                let member_name = string_interner
-                    .resolve_ident(&vtable_key.inner_pkg_key.member_name, "member name")
-                    .expect("Failed to find interned string");
                 write!(
                     f,
-                    "Call(~{}::{}::{})",
-                    vtable_key.package_key, module_name, member_name
+                    "Call(~{})",
+                    vtable_key
+                        .to_short_string()
+                        .expect("Failed to find interned ident")
                 )
             }
-            Bytecode::CallGeneric(ndx) => write!(f, "CallGeneric({})", ndx),
-            Bytecode::Pack(a) => write!(f, "Pack({})", a),
-            Bytecode::PackGeneric(a) => write!(f, "PackGeneric({})", a),
-            Bytecode::Unpack(a) => write!(f, "Unpack({})", a),
-            Bytecode::UnpackGeneric(a) => write!(f, "UnpackGeneric({})", a),
+            Bytecode::CallGeneric(inst) => write!(f, "CallGeneric({})", inst.handle.name()),
+            Bytecode::Pack(a) => write!(
+                f,
+                "Pack({})",
+                a.def_vtable_key
+                    .to_short_string()
+                    .expect("Failed to find interned ident")
+            ),
+            Bytecode::PackGeneric(a) => write!(
+                f,
+                "PackGeneric({})",
+                a.def_vtable_key
+                    .to_short_string()
+                    .expect("Failed to find interned ident")
+            ),
+            Bytecode::Unpack(a) => write!(
+                f,
+                "Unpack({})",
+                a.def_vtable_key
+                    .to_short_string()
+                    .expect("Failed to find interned ident")
+            ),
+            Bytecode::UnpackGeneric(a) => write!(
+                f,
+                "UnpackGeneric({})",
+                a.def_vtable_key
+                    .to_short_string()
+                    .expect("Failed to find interned ident")
+            ),
             Bytecode::ReadRef => write!(f, "ReadRef"),
             Bytecode::WriteRef => write!(f, "WriteRef"),
             Bytecode::FreezeRef => write!(f, "FreezeRef"),
@@ -1481,14 +1466,14 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::Ge => write!(f, "Ge"),
             Bytecode::Abort => write!(f, "Abort"),
             Bytecode::Nop => write!(f, "Nop"),
-            Bytecode::VecPack(a, n) => write!(f, "VecPack({}, {})", a, n),
-            Bytecode::VecLen(a) => write!(f, "VecLen({})", a),
-            Bytecode::VecImmBorrow(a) => write!(f, "VecImmBorrow({})", a),
-            Bytecode::VecMutBorrow(a) => write!(f, "VecMutBorrow({})", a),
-            Bytecode::VecPushBack(a) => write!(f, "VecPushBack({})", a),
-            Bytecode::VecPopBack(a) => write!(f, "VecPopBack({})", a),
-            Bytecode::VecUnpack(a, n) => write!(f, "VecUnpack({}, {})", a, n),
-            Bytecode::VecSwap(a) => write!(f, "VecSwap({})", a),
+            Bytecode::VecPack(a, n) => write!(f, "VecPack({:?}, {})", a.to_ref(), n),
+            Bytecode::VecLen(a) => write!(f, "VecLen({:?})", a.to_ref()),
+            Bytecode::VecImmBorrow(a) => write!(f, "VecImmBorrow({:?})", a.to_ref()),
+            Bytecode::VecMutBorrow(a) => write!(f, "VecMutBorrow({:?})", a.to_ref()),
+            Bytecode::VecPushBack(a) => write!(f, "VecPushBack({:?})", a.to_ref()),
+            Bytecode::VecPopBack(a) => write!(f, "VecPopBack({:?})", a.to_ref()),
+            Bytecode::VecUnpack(a, n) => write!(f, "VecUnpack({:?}, {})", a.to_ref(), n),
+            Bytecode::VecSwap(a) => write!(f, "VecSwap({:?})", a.to_ref()),
             Bytecode::PackVariant(handle) => {
                 write!(f, "PackVariant({:?})", handle)
             }
@@ -1545,5 +1530,36 @@ impl std::fmt::Debug for Package {
             .field("loaded_modules", &self.loaded_modules)
             .field("vtable", &self.vtable)
             .finish()
+    }
+}
+
+impl std::fmt::Debug for ArenaType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArenaType::Bool => write!(f, "bool"),
+            ArenaType::U8 => write!(f, "u8"),
+            ArenaType::U64 => write!(f, "u64"),
+            ArenaType::U128 => write!(f, "u128"),
+            ArenaType::Address => write!(f, "address"),
+            ArenaType::Signer => write!(f, "signer"),
+            ArenaType::Vector(inner) => write!(f, "vector<{:?}>", inner.inner_ref()),
+            ArenaType::Datatype(key) => write!(f, "{}", key.to_short_string().unwrap()),
+            ArenaType::DatatypeInstantiation(inst) => {
+                // inst is an ArenaBox<(VirtualTableKey, ArenaVec<ArenaType>)>
+                let (key, types) = inst.inner_ref();
+                write!(f, "{}<", key.to_short_string().unwrap())?;
+                let types = types
+                    .iter()
+                    .map(|x| format!("{:?}", x) + ",")
+                    .collect::<String>();
+                write!(f, "{}>", types)
+            }
+            ArenaType::Reference(inner) => write!(f, "&{:?}", inner.inner_ref()),
+            ArenaType::MutableReference(inner) => write!(f, "&mut {:?}", inner.inner_ref()),
+            ArenaType::TyParam(idx) => write!(f, "T{}", idx),
+            ArenaType::U16 => write!(f, "u16"),
+            ArenaType::U32 => write!(f, "u32"),
+            ArenaType::U256 => write!(f, "u256"),
+        }
     }
 }
