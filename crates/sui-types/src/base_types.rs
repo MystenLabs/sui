@@ -960,6 +960,43 @@ pub fn move_utf8_str_layout() -> A::MoveStructLayout {
     }
 }
 
+// The Rust representation of the Move `TxContext`.
+// This struct must be kept in sync with the Move `TxContext` definition.
+// Moving forward we are going to zero all fields of the Move `TxContext`
+// and use native functions to retrieve info about the transaction.
+// However we cannot remove the Move type and so this struct is going to
+// be the Rust equivalent to the Move `TxContext` for legacy usages.
+//
+// `TxContext` in Rust (see below) is going to be purely used in Rust and can
+// evolve as needed without worrying any compatibility with Move.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct MoveLegacyTxContext {
+    // Signer/sender of the transaction
+    sender: AccountAddress,
+    // Digest of the current transaction
+    digest: Vec<u8>,
+    // The current epoch number
+    epoch: EpochId,
+    // Timestamp that the epoch started at
+    epoch_timestamp_ms: CheckpointTimestamp,
+    // Number of `ObjectID`'s generated during execution of the current transaction
+    ids_created: u64,
+}
+
+impl From<&TxContext> for MoveLegacyTxContext {
+    fn from(tx_context: &TxContext) -> Self {
+        Self {
+            sender: tx_context.sender,
+            digest: tx_context.digest.clone(),
+            epoch: tx_context.epoch,
+            epoch_timestamp_ms: tx_context.epoch_timestamp_ms,
+            ids_created: tx_context.ids_created,
+        }
+    }
+}
+
+// Information about the transaction context.
+// This struct is not related to Move and can evolve as needed/required.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TxContext {
     /// Signer/sender of the transaction
@@ -1055,6 +1092,11 @@ impl TxContext {
         SuiAddress::from(ObjectID(self.sender))
     }
 
+    pub fn to_bcs_legacy_context(&self) -> Vec<u8> {
+        let move_context: MoveLegacyTxContext = self.into();
+        bcs::to_bytes(&move_context).unwrap()
+    }
+
     pub fn to_vec(&self) -> Vec<u8> {
         bcs::to_bytes(&self).unwrap()
     }
@@ -1063,7 +1105,7 @@ impl TxContext {
     /// when mutable context is passed over some boundary via
     /// serialize/deserialize and this is the reason why this method
     /// consumes the other context..
-    pub fn update_state(&mut self, other: TxContext) -> Result<(), ExecutionError> {
+    pub fn update_state(&mut self, other: MoveLegacyTxContext) -> Result<(), ExecutionError> {
         if self.sender != other.sender
             || self.digest != other.digest
             || other.ids_created < self.ids_created
