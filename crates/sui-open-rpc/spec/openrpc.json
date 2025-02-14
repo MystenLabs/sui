@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "74",
+              "maxSupportedProtocolVersion": "75",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1333,6 +1333,7 @@
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
+                "minimize_child_object_mutations": false,
                 "missing_type_is_compatibility_error": true,
                 "mysticeti_fastpath": false,
                 "mysticeti_leader_scoring_and_schedule": false,
