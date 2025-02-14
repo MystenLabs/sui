@@ -1,15 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::bigtable_reader::BigtableReader;
 use super::objects::VersionedObjectKey;
 use super::pg_reader::PgReader;
 use super::read_error::ReadError;
+use super::{bigtable_reader::BigtableReader, checkpoints::CheckpointKey};
 use async_graphql::dataloader::DataLoader;
 use std::collections::HashMap;
 use std::sync::Arc;
-use sui_types::object::Object;
+use sui_types::{
+    crypto::AuthorityQuorumSignInfo,
+    messages_checkpoint::{CheckpointContents, CheckpointSummary},
+    object::Object,
+};
 
+/// A loader for point lookups in kv stores backed by either Bigtable or Postgres.
+/// Supported lookups:
+/// - Objects by id and version
+/// - Checkpoints by sequence number
+/// - Transactions by digest
 #[derive(Clone)]
 pub(crate) enum KVLoader {
     Bigtable(Arc<DataLoader<BigtableReader>>),
@@ -64,6 +73,39 @@ impl KVLoader {
                     })
                 })
                 .collect(),
+        }
+    }
+
+    pub(crate) async fn load_one_checkpoint(
+        &self,
+        key: CheckpointKey,
+    ) -> Result<
+        Option<(
+            CheckpointSummary,
+            CheckpointContents,
+            AuthorityQuorumSignInfo<true>,
+        )>,
+        Arc<ReadError>,
+    > {
+        match self {
+            Self::Bigtable(loader) => loader.load_one(key).await,
+            Self::Pg(loader) => loader
+                .load_one(key)
+                .await?
+                .map(|stored| {
+                    let summary: CheckpointSummary = bcs::from_bytes(&stored.checkpoint_summary)
+                        .map_err(|e| ReadError::Serde(e.into()))?;
+
+                    let contents: CheckpointContents = bcs::from_bytes(&stored.checkpoint_contents)
+                        .map_err(|e| ReadError::Serde(e.into()))?;
+
+                    let signature: AuthorityQuorumSignInfo<true> =
+                        bcs::from_bytes(&stored.validator_signatures)
+                            .map_err(|e| ReadError::Serde(e.into()))?;
+
+                    Ok((summary, contents, signature))
+                })
+                .transpose(),
         }
     }
 }
