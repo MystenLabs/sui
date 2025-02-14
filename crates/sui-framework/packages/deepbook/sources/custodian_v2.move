@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(deprecated_usage)]
+#[deprecated]
 module deepbook::custodian_v2 {
     use sui::balance::{Self, Balance, split};
     use sui::coin::{Self, Coin};
