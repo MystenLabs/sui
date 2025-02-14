@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[deprecated, allow(deprecated_usage, unused_field, unused_type_parameter)]
+#[deprecated]
 module deepbook::clob_v2 {
     use std::type_name::TypeName;
 
@@ -38,6 +38,7 @@ module deepbook::clob_v2 {
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Events <<<<<<<<<<<<<<<<<<<<<<<<
 
+    #[allow(unused_field)]
     /// Emitted when a new pool is created
     public struct PoolCreated has copy, store, drop {
         /// object ID of the newly created pool
@@ -51,6 +52,7 @@ module deepbook::clob_v2 {
         lot_size: u64,
     }
 
+    #[allow(unused_field)]
     /// Emitted when a maker order is injected into the order book.
     public struct OrderPlaced<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
@@ -105,6 +107,7 @@ module deepbook::clob_v2 {
         orders_canceled: vector<AllOrdersCanceledComponent<BaseAsset, QuoteAsset>>,
     }
 
+    #[allow(unused_field)]
     /// Emitted only when a maker order is filled.
     public struct OrderFilled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
@@ -128,6 +131,7 @@ module deepbook::clob_v2 {
         maker_rebates: u64
     }
 
+    #[allow(unused_field)]
     /// Emitted when user deposit asset to custodian
     public struct DepositAsset<phantom Asset> has copy, store, drop {
         /// object id of the pool that asset deposit to
@@ -148,6 +152,7 @@ module deepbook::clob_v2 {
         owner: address
     }
 
+    #[allow(unused_field)]
     /// Returned as metadata only when a maker order is filled from place order functions.
     public struct MatchedOrderMetadata<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
@@ -199,6 +204,7 @@ module deepbook::clob_v2 {
         open_orders: LinkedTable<u64, Order>,
     }
 
+    #[allow(unused_field)]
     public struct Pool<phantom BaseAsset, phantom QuoteAsset> has key, store {
         // The key to the following Critbit Tree are order prices.
         id: UID,
@@ -322,6 +328,7 @@ module deepbook::clob_v2 {
         );
     }
 
+    #[allow(unused_type_parameter)]
     /// Function for creating pool with customized taker fee rate and maker rebate rate.
     /// The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
     /// Taker_fee_rate of 0.25% should be 2_500_000 for example
