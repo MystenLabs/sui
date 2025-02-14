@@ -13370,6 +13370,7 @@ dependencies = [
  "anemo",
  "anyhow",
  "arc-swap",
+ "async-stream",
  "async-trait",
  "axum 0.7.5",
  "bcs",

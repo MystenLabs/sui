@@ -905,7 +905,7 @@ impl SuiNode {
         let node = Arc::new(node);
         let node_copy = node.clone();
         spawn_monitored_task!(async move {
-            let result = Self::monitor_reconfiguration(node_copy).await;
+            let result = Self::monitor_reconfiguration(node_copy, epoch_store).await;
             if let Err(error) = result {
                 warn!("Reconfiguration finished with error {:?}", error);
             }
@@ -1671,15 +1671,22 @@ impl SuiNode {
 
     /// This function awaits the completion of checkpoint execution of the current epoch,
     /// after which it iniitiates reconfiguration of the entire system.
-    pub async fn monitor_reconfiguration(self: Arc<Self>) -> Result<()> {
+    pub async fn monitor_reconfiguration(
+        self: Arc<Self>,
+        mut epoch_store: Arc<AuthorityPerEpochStore>,
+    ) -> Result<()> {
         let checkpoint_executor_metrics =
             CheckpointExecutorMetrics::new(&self.registry_service.default_registry());
 
         loop {
             let mut accumulator_guard = self.accumulator.lock().await;
             let accumulator = accumulator_guard.take().unwrap();
-            let mut checkpoint_executor = CheckpointExecutor::new(
-                self.state_sync_handle.subscribe_to_synced_checkpoints(),
+            info!(
+                "Creating checkpoint executor for epoch {}",
+                epoch_store.epoch()
+            );
+            let checkpoint_executor = CheckpointExecutor::new(
+                epoch_store.clone(),
                 self.checkpoint_store.clone(),
                 self.state.clone(),
                 accumulator.clone(),
@@ -1732,10 +1739,7 @@ impl SuiNode {
                     .submit(transaction, None, &cur_epoch_store)?;
             }
 
-            let stop_condition = checkpoint_executor
-                .run_epoch(cur_epoch_store.clone(), run_with_range)
-                .await;
-            drop(checkpoint_executor);
+            let stop_condition = checkpoint_executor.run_epoch(run_with_range).await;
 
             if stop_condition == StopReason::RunWithRangeCondition {
                 SuiNode::shutdown(&self).await;
@@ -1813,6 +1817,15 @@ impl SuiNode {
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
             // in the new epoch.
+            let new_epoch_store = self
+                .reconfigure_state(
+                    &self.state,
+                    &cur_epoch_store,
+                    next_epoch_committee.clone(),
+                    new_epoch_start_state,
+                    accumulator.clone(),
+                )
+                .await;
 
             let new_validator_components = if let Some(ValidatorComponents {
                 validator_server_handle,
@@ -1843,15 +1856,6 @@ impl SuiNode {
                 consensus_manager.shutdown().await;
                 info!("Consensus has shut down.");
 
-                let new_epoch_store = self
-                    .reconfigure_state(
-                        &self.state,
-                        &cur_epoch_store,
-                        next_epoch_committee.clone(),
-                        new_epoch_start_state,
-                        accumulator.clone(),
-                    )
-                    .await;
                 info!("Epoch store finished reconfiguration.");
 
                 // No other components should be holding a strong reference to state accumulator
@@ -1896,16 +1900,6 @@ impl SuiNode {
                     None
                 }
             } else {
-                let new_epoch_store = self
-                    .reconfigure_state(
-                        &self.state,
-                        &cur_epoch_store,
-                        next_epoch_committee.clone(),
-                        new_epoch_start_state,
-                        accumulator.clone(),
-                    )
-                    .await;
-
                 // No other components should be holding a strong reference to state accumulator
                 // at this point. Confirm here before we swap in the new accumulator.
                 let accumulator_metrics = Arc::into_inner(accumulator)
@@ -1966,6 +1960,7 @@ impl SuiNode {
                 .await?;
             }
 
+            epoch_store = new_epoch_store;
             info!("Reconfiguration finished");
         }
     }
