@@ -341,13 +341,13 @@ pub fn build_from_resolution_graph(
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
 
-    // Tree shake the package's dependencies to remove any that are not used by the package.
     let mut package = CompiledPackage {
         package,
         published_at,
         dependency_ids,
         bytecode_deps,
     };
+    // Tree shake the package's dependencies to remove any that are not used by the package.
     // this will only modify the dependency_ids.published field to remove any unnecessary package
     // dependencies
     package.tree_shake(with_unpublished_deps, &resolution_graph);
@@ -681,10 +681,12 @@ impl CompiledPackage {
             let immediate_deps = module.module.immediate_dependencies();
             for dep in immediate_deps {
                 if let Some(pkg_name) = module_to_pkg_name.get(&dep) {
-                    used_immediate_packages.insert(pkg_name.expect(&format!(
-                        "Package {} should exist but could not find it in the package table.",
-                        dep.name()
-                    )));
+                    used_immediate_packages.insert(pkg_name.unwrap_or_else(|| {
+                        panic!(
+                            "Package {} should exist but could not find it in the package table.",
+                            dep.name()
+                        )
+                    }));
                 }
             }
         }

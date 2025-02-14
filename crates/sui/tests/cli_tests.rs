@@ -1412,13 +1412,15 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing();
+    build_config.with_unpublished_dependencies();
+    let build_config = build_config.config;
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
-        verify_deps: true,
+        verify_deps: false,
         with_unpublished_dependencies,
     }
     .execute(context)
@@ -4266,7 +4268,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
         context,
         rgp,
         gas_obj_id,
-        skip_dependency_verification,
         with_unpublished_dependencies,
     )
     .await?;
