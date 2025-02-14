@@ -239,6 +239,8 @@ impl<'extensions> MoveVM<'extensions> {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
+    /// Return a `TypeTag` for the provided `Type` using the VM's virtual tables. The returned
+    /// `TypeTag` will use defining type IDs.
     pub fn type_tag_for_type_defining_ids(&self, ty: &Type) -> VMResult<TypeTag> {
         self.virtual_tables
             .type_to_type_tag(ty)
@@ -249,6 +251,8 @@ impl<'extensions> MoveVM<'extensions> {
     /// NB: the `TypeTag` is coming from outside and therefore _may_ not represent a valid type
     /// (e.g., an undefined type). Therefore any errors in resolution should be treated as runtime
     /// errors and not anything else.
+    /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
+    /// IDs) are not correct here.
     pub fn load_type(&self, tag: &TypeTag) -> VMResult<Type> {
         self.virtual_tables
             .load_type(tag)
@@ -259,6 +263,8 @@ impl<'extensions> MoveVM<'extensions> {
     /// NB: the `TypeTag` is coming from outside and therefore _may_ not represent a valid type
     /// (e.g., an undefined type). Therefore any errors in resolution should be treated as runtime
     /// errors and not anything else.
+    /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
+    /// IDs) are not correct here.
     pub fn runtime_type_layout(&self, ty: &TypeTag) -> VMResult<runtime_value::MoveTypeLayout> {
         self.virtual_tables
             .get_type_layout(ty)
@@ -269,6 +275,8 @@ impl<'extensions> MoveVM<'extensions> {
     /// NB: the `TypeTag` is coming from outside and therefore _may_ not represent a valid type
     /// (e.g., an undefined type). Therefore any errors in resolution should be treated as runtime
     /// errors and not anything else.
+    /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
+    /// IDs) are not correct here.
     pub fn annotated_type_layout(&self, ty: &TypeTag) -> VMResult<annotated_value::MoveTypeLayout> {
         self.virtual_tables
             .get_fully_annotated_type_layout(ty)

@@ -644,9 +644,6 @@ impl Container {
 
 impl Reference {
     pub fn equals(&self, other: &Reference) -> PartialVMResult<bool> {
-        if let Reference::Global(other) = other {
-            return self.equals(&Reference::Container(other.value.ptr_clone()));
-        }
         // TODO: auto-gen this?
         match_reference_impls!(self; other;
             container ref_1, ref_2 => {

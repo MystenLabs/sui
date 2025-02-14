@@ -509,55 +509,6 @@ impl PTBLinkageResolver {
         }
         Ok(ResolvedLinkage::from_resolution_table(resolution_table))
     }
-
-    // TODO(vm-rewrite): remove this function once we move to always using defining IDs on types
-    // for resolution (after pulling them in to the adapter)..
-    pub fn runtime_type_tag(
-        &mut self,
-        type_tag: &TypeTag,
-        store: &dyn PackageStore,
-    ) -> Result<TypeTag, ExecutionError> {
-        match type_tag {
-            x @ (TypeTag::Bool
-            | TypeTag::U8
-            | TypeTag::U64
-            | TypeTag::U128
-            | TypeTag::Address
-            | TypeTag::Signer
-            | TypeTag::U16
-            | TypeTag::U32
-            | TypeTag::U256) => Ok(x.clone()),
-            TypeTag::Vector(type_tag) => {
-                let ty = self.runtime_type_tag(type_tag, store)?;
-                Ok(TypeTag::Vector(Box::new(ty)))
-            }
-            TypeTag::Struct(struct_tag) => {
-                let StructTag {
-                    address,
-                    module,
-                    name,
-                    type_params,
-                } = &**struct_tag;
-                let package = Self::get_package(
-                    &mut self.package_cache,
-                    &mut self.type_origin_cache,
-                    &ObjectID::from(*address),
-                    store,
-                )?;
-                let runtime_address = package.original_package_id().into();
-                let type_params = type_params
-                    .iter()
-                    .map(|ty| self.runtime_type_tag(ty, store))
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(TypeTag::Struct(Box::new(StructTag {
-                    address: runtime_address,
-                    module: module.clone(),
-                    name: name.clone(),
-                    type_params,
-                })))
-            }
-        }
-    }
 }
 
 impl PTBLinkageResolver {
@@ -774,7 +725,8 @@ impl PTBLinkageResolver {
                     )
                 })?
                 .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvalidLinkage))?;
-            let package_types = type_origin_map.entry(*object_id).or_default();
+            let original_package_id = package.original_package_id();
+            let package_types = type_origin_map.entry(original_package_id).or_default();
             for ((module_name, type_name), defining_id) in package.type_origin_map().into_iter() {
                 if let Some(other) = package_types.insert(
                     (module_name.to_string(), type_name.to_string()),
