@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(unused_use, unused_variable, unused_field, unused_let_mut, deprecated_usage)]
+#[deprecated]
 module deepbook::clob {
-    use std::type_name::{Self, TypeName};
+    use std::type_name::TypeName;
 
-    use sui::balance::{Self, Balance};
+    use sui::balance::Balance;
     use sui::clock::{Self, Clock};
-    use sui::coin::{Self, Coin, join};
+    use sui::coin::Coin;
     use sui::event;
     use sui::linked_table::{Self, LinkedTable};
     use sui::sui::SUI;
-    use sui::table::{Self, Table, contains, add, borrow_mut};
+    use sui::table::{Self, Table, contains, borrow_mut};
 
-    use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, max_leaf, next_leaf, previous_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
+    use deepbook::critbit::{Self, CritbitTree, borrow_mut_leaf_by_index, remove_leaf_by_index, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf};
     use deepbook::custodian::{Self, Custodian, AccountCap};
     use deepbook::math::Self as clob_math;
 
@@ -48,6 +48,7 @@ module deepbook::clob {
         lot_size: u64,
     }
 
+    #[allow(unused_field)]
     /// Emitted when a maker order is injected into the order book.
     public struct OrderPlacedV2<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
@@ -75,6 +76,7 @@ module deepbook::clob {
         price: u64
     }
 
+    #[allow(unused_field)]
     /// Emitted only when a maker order is filled.
     public struct OrderFilledV2<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
@@ -174,20 +176,20 @@ module deepbook::clob {
     }
 
     public fun deposit_base<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        coin: Coin<BaseAsset>,
-        account_cap: &AccountCap
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _coin: Coin<BaseAsset>,
+        _account_cap: &AccountCap
     ) {
-        
+
         abort 1337
     }
 
     public fun deposit_quote<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        coin: Coin<QuoteAsset>,
-        account_cap: &AccountCap
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _coin: Coin<QuoteAsset>,
+        _account_cap: &AccountCap
     ) {
-        
+
         abort 1337
     }
 
@@ -213,40 +215,40 @@ module deepbook::clob {
 
     // for smart routing
     public fun swap_exact_base_for_quote<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        quantity: u64,
-        base_coin: Coin<BaseAsset>,
-        quote_coin: Coin<QuoteAsset>,
-        clock: &Clock,
-        ctx: &mut TxContext,
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _quantity: u64,
+        _base_coin: Coin<BaseAsset>,
+        _quote_coin: Coin<QuoteAsset>,
+        _clock: &Clock,
+        _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
-        
+
         abort 1337
     }
 
     // for smart routing
     public fun swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        quantity: u64,
-        clock: &Clock,
-        quote_coin: Coin<QuoteAsset>,
-        ctx: &mut TxContext,
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _quantity: u64,
+        _clock: &Clock,
+        _quote_coin: Coin<QuoteAsset>,
+        _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
-       
+
         abort 1337
     }
 
     /// Place a market order to the order book.
     public fun place_market_order<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        quantity: u64,
-        is_bid: bool,
-        mut base_coin: Coin<BaseAsset>,
-        mut quote_coin: Coin<QuoteAsset>,
-        clock: &Clock,
-        ctx: &mut TxContext,
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _quantity: u64,
+        _is_bid: bool,
+        mut _base_coin: Coin<BaseAsset>,
+        mut _quote_coin: Coin<QuoteAsset>,
+        _clock: &Clock,
+        _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
-        
+
         abort 1337
     }
 
@@ -256,17 +258,17 @@ module deepbook::clob {
     /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
     /// So please check that boolean value first before using the order id.
     public fun place_limit_order<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        price: u64,
-        quantity: u64,
-        is_bid: bool,
-        expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
-        restriction: u8,
-        clock: &Clock,
-        account_cap: &AccountCap,
-        ctx: &mut TxContext
+        _pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _price: u64,
+        _quantity: u64,
+        _is_bid: bool,
+        _expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
+        _restriction: u8,
+        _clock: &Clock,
+        _account_cap: &AccountCap,
+        _ctx: &mut TxContext
     ): (u64, u64, bool, u64) {
-       
+
        abort 1337
     }
 
