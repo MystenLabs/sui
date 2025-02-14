@@ -1022,7 +1022,8 @@ impl Core {
         }
 
         // Iterate through excluded ancestors and include the ancestor or the ancestor's ancestor
-        // that has been accepted by a quorum of the network. The other excluded ancestors are not
+        // that has been accepted by a quorum of the network. If the original ancestor itself
+        // is not included then it will be part of excluded ancestors that are not
         // included in the block but will still be broadcasted to peers.
         for (score, ancestor) in excluded_ancestors.iter() {
             let excluded_author = ancestor.author();
@@ -1056,28 +1057,37 @@ impl Core {
                 continue;
             }
 
-            let ancestor = if ancestor.round() == accepted_low_quorum_round {
+            let ancestor = if ancestor.round() <= accepted_low_quorum_round {
                 // Include the ancestor block as it has been seen & accepted by a strong quorum.
                 ancestor.clone()
             } else {
-                // Only cached blocks need to be propagated. Committed and GC'ed blocks do not need to be propagated.
-                let Some(ancestor) = self.dag_state.read().get_last_cached_block_in_range(
+                // Exclude this ancestor since it hasn't been accepted by a strong quorum
+                excluded_and_equivocating_ancestors.insert(ancestor.reference());
+                trace!("Excluded low score ancestor {} with score {score} to propose for round {clock_round}: ancestor round {} > accepted low quorum round {accepted_low_quorum_round} ", ancestor.reference(), ancestor.round());
+                node_metrics
+                    .excluded_proposal_ancestors_count_by_authority
+                    .with_label_values(&[block_hostname])
+                    .inc();
+
+                // Look for an earlier block in the ancestor chain that we can include as there
+                // is a gap between the last included round and the accepted low quorum round.
+                //
+                // Note: Only cached blocks need to be propagated. Committed and GC'ed blocks
+                // do not need to be propagated.
+                match self.dag_state.read().get_last_cached_block_in_range(
                     excluded_author,
                     last_included_round + 1,
                     accepted_low_quorum_round + 1,
-                ) else {
-                    trace!("Excluded low score ancestor {} with score {score} to propose for round {clock_round}: no suitable block found", ancestor.reference());
-                    node_metrics
-                        .excluded_proposal_ancestors_count_by_authority
-                        .with_label_values(&[block_hostname])
-                        .inc();
-                    continue;
-                };
-
-                // This ancestor has not propagated well, but we will attempt to include
-                // the part of its history that has been propagated well as there is
-                // a gap between the last included round and the accepted low quorum round
-                ancestor
+                ) {
+                    Some(earlier_ancestor) => {
+                        // Found an earlier block that has been propagated well - include it instead
+                        earlier_ancestor
+                    }
+                    None => {
+                        // No suitable earlier block found
+                        continue;
+                    }
+                }
             };
             self.last_included_ancestors[excluded_author] = Some(ancestor.reference());
             ancestors_to_propose.push(ancestor.clone());
