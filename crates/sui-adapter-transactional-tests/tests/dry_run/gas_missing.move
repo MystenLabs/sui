@@ -10,7 +10,6 @@
 /// gas heavy function
 module test::m {
 
-    use sui::dynamic_field::add;
 
     public struct Obj has key {
         id: object::UID,
@@ -35,28 +34,26 @@ module test::m {
 //> TransferObjects([Gas], Input(0))
 
 // Return a small amount of coin to A
-//# programmable --sender B --inputs 1 @A
+//# programmable --sender B --inputs 2 @A
 //> SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
 
 // Account A now has 3,0
 //# view-object 3,0
 
-// not enough gas
+// Not enough gas for large_vector()
 //# programmable --sender A --inputs 100 --dry-run --gas-payment 3,0
 //> 0: test::m::large_vector(Input(0));
 
-// give A 5000000000 gas but split across 2 objects
-//# programmable --sender B --inputs 250000 240000 @A
+// Give A enough gas to send transaction after rebates, it should still fail
+//# programmable --sender B --inputs 2499999999 @A
 //> SplitCoins(Gas, [Input(0), Input(0)]);
-//> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(2))
+//> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(1))
 
-
-// Account A now has 6,0 6,1
+// Account A now has 6,0 6,1 that are 2 gas short of the needed amount
 //# programmable --sender A --inputs 100 --dry-run --gas-payment 6,0 --gas-payment 6,1
 //> 0: test::m::large_vector(Input(0));
 
-
-// Account A now has 6,0 6,1
-//# programmable --sender A --inputs 100 --dev-inspect --gas-payment 6,0 --gas-payment 6,1
+// Include 3,0 in the gas payment, it should succeed
+//# programmable --sender A --inputs 100 --dry-run --gas-payment 6,0 --gas-payment 6,1 --gas-payment 3,0
 //> 0: test::m::large_vector(Input(0));
