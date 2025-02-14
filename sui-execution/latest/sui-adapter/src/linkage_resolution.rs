@@ -3,7 +3,7 @@
 
 use crate::{execution_mode::ExecutionMode, programmable_transactions::datastore::PackageStore};
 use move_binary_format::{binary_config::BinaryConfig, file_format::Visibility};
-use move_core_types::language_storage::StructTag;
+use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 use move_vm_runtime::shared::linkage_context::LinkageContext;
 use std::collections::BTreeMap;
 use sui_protocol_config::ProtocolConfig;
@@ -52,6 +52,8 @@ pub fn linkage_analysis_for_protocol_config<Mode: ExecutionMode>(
     )?))
 }
 
+type TypeOriginMap = BTreeMap<ObjectID, BTreeMap<(String, String), ObjectID>>;
+
 /// Metadata and shared operations for the PTB linkage analysis.
 #[derive(Debug)]
 pub struct PTBLinkageResolver {
@@ -62,7 +64,10 @@ pub struct PTBLinkageResolver {
     pub binary_config: BinaryConfig,
     /// Cache for packages that we've loaded so far. Note: We may drop this cache if it grows too
     /// large.
-    pub all_packages: BTreeMap<ObjectID, MovePackage>,
+    pub package_cache: BTreeMap<ObjectID, MovePackage>,
+    /// A mapping of the (original package ID)::<module_name>::<type_name> to the defining ID for
+    /// that type.
+    pub type_origin_cache: TypeOriginMap,
 }
 
 /// Configuration for the linkage analysis.
@@ -216,13 +221,15 @@ impl LinkageConfig {
 
     fn resolution_table_with_native_packages<'a>(
         &self,
-        all_packages: &'a mut BTreeMap<ObjectID, MovePackage>,
+        package_cache: &'a mut BTreeMap<ObjectID, MovePackage>,
+        type_origin_map: &mut TypeOriginMap,
         store: &dyn PackageStore,
     ) -> Result<ResolutionTable, ExecutionError> {
         let mut resolution_table = ResolutionTable::empty();
         if self.always_include_system_packages {
             for id in NATIVE_PACKAGE_IDS {
-                let package = PTBLinkageResolver::get_package(all_packages, id, store)?;
+                let package =
+                    PTBLinkageResolver::get_package(package_cache, type_origin_map, id, store)?;
                 debug_assert_eq!(package.id(), *id);
                 debug_assert_eq!(package.original_package_id(), *id);
                 resolution_table
@@ -264,6 +271,21 @@ impl ResolvedLinkage {
 
     pub fn resolve_to_runtime_id(&self, object_id: &ObjectID) -> Option<ObjectID> {
         self.linkage_resolution.get(object_id).copied()
+    }
+
+    /// Given a module name and type name, resolve it to the defining package ID.
+    /// The `module_address` can be _any_ valid referent of the package in question (i.e., any
+    /// valid package ID for the package in question).
+    pub fn resolve_type_to_defining_id(
+        &self,
+        resolver: &PTBLinkageResolver,
+        module_address: ObjectID,
+        module_name: String,
+        type_name: String,
+    ) -> Option<ObjectID> {
+        let runtime_id = self.resolve_to_runtime_id(&module_address)?;
+        let package_type_origins = resolver.type_origin_cache.get(&runtime_id)?;
+        package_type_origins.get(&(module_name, type_name)).copied()
     }
 }
 
@@ -358,10 +380,10 @@ impl PerCommandLinkage {
     ) -> Result<Self, ExecutionError> {
         let linkage_config =
             LinkageConfig::per_command_linkage_settings(always_include_system_packages);
-        let all_packages = BTreeMap::new();
         Ok(Self {
             internal: PTBLinkageResolver {
-                all_packages,
+                package_cache: BTreeMap::new(),
+                type_origin_cache: TypeOriginMap::new(),
                 linkage_config,
                 binary_config,
             },
@@ -392,14 +414,19 @@ impl UnifiedLinkage {
     ) -> Result<Self, ExecutionError> {
         let linkage_config =
             LinkageConfig::unified_linkage_settings(always_include_system_packages);
-        let mut all_packages = BTreeMap::new();
-        let unification_table =
-            linkage_config.resolution_table_with_native_packages(&mut all_packages, store)?;
+        let mut package_cache = BTreeMap::new();
+        let mut type_origin_cache = TypeOriginMap::new();
+        let unification_table = linkage_config.resolution_table_with_native_packages(
+            &mut package_cache,
+            &mut type_origin_cache,
+            store,
+        )?;
         Ok(Self {
             internal: PTBLinkageResolver {
-                all_packages,
+                package_cache,
                 linkage_config,
                 binary_config,
+                type_origin_cache,
             },
             unification_table,
         })
@@ -425,7 +452,12 @@ impl PTBLinkageResolver {
     ) -> Result<ResolvedLinkage, ExecutionError> {
         let mut resolution_table = ResolutionTable::empty();
         for id in ids {
-            let pkg = Self::get_package(&mut self.all_packages, id, store)?;
+            let pkg = Self::get_package(
+                &mut self.package_cache,
+                &mut self.type_origin_cache,
+                id,
+                store,
+            )?;
             let transitive_deps = pkg
                 .linkage_table()
                 .values()
@@ -459,7 +491,8 @@ impl PTBLinkageResolver {
         let mut resolution_table = ResolutionTable::empty();
         for (runtime_id, package_id) in linkage.linkage_table.iter() {
             let package = PTBLinkageResolver::get_package(
-                &mut self.all_packages,
+                &mut self.package_cache,
+                &mut self.type_origin_cache,
                 &ObjectID::from(*package_id),
                 store,
             )?;
@@ -477,6 +510,8 @@ impl PTBLinkageResolver {
         Ok(ResolvedLinkage::from_resolution_table(resolution_table))
     }
 
+    // TODO(vm-rewrite): remove this function once we move to always using defining IDs on types
+    // for resolution (after pulling them in to the adapter)..
     pub fn runtime_type_tag(
         &mut self,
         type_tag: &TypeTag,
@@ -503,8 +538,12 @@ impl PTBLinkageResolver {
                     name,
                     type_params,
                 } = &**struct_tag;
-                let package =
-                    Self::get_package(&mut self.all_packages, &ObjectID::from(*address), store)?;
+                let package = Self::get_package(
+                    &mut self.package_cache,
+                    &mut self.type_origin_cache,
+                    &ObjectID::from(*address),
+                    store,
+                )?;
                 let runtime_address = package.original_package_id().into();
                 let type_params = type_params
                     .iter()
@@ -524,7 +563,8 @@ impl PTBLinkageResolver {
 impl PTBLinkageResolver {
     pub fn new(linkage_config: LinkageConfig, binary_config: BinaryConfig) -> Self {
         Self {
-            all_packages: BTreeMap::new(),
+            package_cache: BTreeMap::new(),
+            type_origin_cache: TypeOriginMap::new(),
             linkage_config,
             binary_config,
         }
@@ -539,7 +579,8 @@ impl PTBLinkageResolver {
         match command {
             Command::MoveCall(programmable_move_call) => {
                 let pkg = Self::get_package(
-                    &mut self.all_packages,
+                    &mut self.package_cache,
+                    &mut self.type_origin_cache,
                     &programmable_move_call.package,
                     store,
                 )?;
@@ -623,11 +664,19 @@ impl PTBLinkageResolver {
                 }
             }
             Command::Upgrade(_, deps, _, _) | Command::Publish(_, deps) => {
-                let mut resolution_table = self
-                    .linkage_config
-                    .resolution_table_with_native_packages(&mut self.all_packages, store)?;
+                let mut resolution_table =
+                    self.linkage_config.resolution_table_with_native_packages(
+                        &mut self.package_cache,
+                        &mut self.type_origin_cache,
+                        store,
+                    )?;
                 for id in deps.into_iter() {
-                    let pkg = Self::get_package(&mut self.all_packages, id, store)?;
+                    let pkg = Self::get_package(
+                        &mut self.package_cache,
+                        &mut self.type_origin_cache,
+                        id,
+                        store,
+                    )?;
                     resolution_table.resolution_table.insert(
                         pkg.original_package_id(),
                         ConflictResolution::Exact(pkg.version(), pkg.id()),
@@ -676,7 +725,8 @@ impl PTBLinkageResolver {
                         self.linkage_config.generate_type_constraint(),
                     )?;
                     let pkg = Self::get_package(
-                        &mut self.all_packages,
+                        &mut self.package_cache,
+                        &mut self.type_origin_cache,
                         &ObjectID::from(struct_input.address),
                         store,
                     )?;
@@ -703,17 +753,18 @@ impl PTBLinkageResolver {
     }
 
     fn get_package<'a>(
-        all_packages: &'a mut BTreeMap<ObjectID, MovePackage>,
+        package_cache: &'a mut BTreeMap<ObjectID, MovePackage>,
+        type_origin_map: &mut TypeOriginMap,
         object_id: &ObjectID,
         store: &dyn PackageStore,
     ) -> Result<&'a MovePackage, ExecutionError> {
         // If we've cached too many packages, clear the cache. We'll windup pulling in any more
         // that we need if we need them again.
-        if all_packages.len() > MAX_CACHED_PACKAGES {
-            all_packages.clear();
+        if package_cache.len() > MAX_CACHED_PACKAGES {
+            package_cache.clear();
         }
 
-        if !all_packages.contains_key(object_id) {
+        if !package_cache.contains_key(object_id) {
             let package = store
                 .get_package(object_id)
                 .map_err(|e| {
@@ -723,10 +774,22 @@ impl PTBLinkageResolver {
                     )
                 })?
                 .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvalidLinkage))?;
-            all_packages.insert(*object_id, package);
+            let package_types = type_origin_map.entry(*object_id).or_default();
+            for ((module_name, type_name), defining_id) in package.type_origin_map().into_iter() {
+                if let Some(other) = package_types.insert(
+                    (module_name.to_string(), type_name.to_string()),
+                    defining_id,
+                ) {
+                    assert_eq!(
+                        other, defining_id,
+                        "type origin map should never have conflicting entries"
+                    );
+                }
+            }
+            package_cache.insert(*object_id, package);
         }
 
-        Ok(all_packages.get(object_id).expect("Guaranteed to exist"))
+        Ok(package_cache.get(object_id).expect("Guaranteed to exist"))
     }
 
     // Add a package to the unification table, unifying it with any existing package in the table.
@@ -738,7 +801,12 @@ impl PTBLinkageResolver {
         resolution_table: &mut ResolutionTable,
         resolution_fn: fn(&MovePackage) -> ConflictResolution,
     ) -> Result<(), ExecutionError> {
-        let package = Self::get_package(&mut self.all_packages, object_id, store)?;
+        let package = Self::get_package(
+            &mut self.package_cache,
+            &mut self.type_origin_cache,
+            object_id,
+            store,
+        )?;
 
         let resolution = resolution_fn(package);
         let original_pkg_id = package.original_package_id();
