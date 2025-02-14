@@ -775,7 +775,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_deposit_base">deposit_base</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_deposit_base">deposit_base</a>&lt;BaseAsset, QuoteAsset&gt;(_pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, _coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, _account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>)
 </code></pre>
 
 
@@ -785,9 +785,9 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_deposit_base">deposit_base</a>&lt;BaseAsset, QuoteAsset&gt;(
-    pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    coin: Coin&lt;BaseAsset&gt;,
-    account_cap: &AccountCap
+    _pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
+    _coin: Coin&lt;BaseAsset&gt;,
+    _account_cap: &AccountCap
 ) {
     <b>abort</b> 1337
 }
@@ -803,7 +803,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_deposit_quote">deposit_quote</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_deposit_quote">deposit_quote</a>&lt;BaseAsset, QuoteAsset&gt;(_pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, _coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, _account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>)
 </code></pre>
 
 
@@ -813,9 +813,9 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_deposit_quote">deposit_quote</a>&lt;BaseAsset, QuoteAsset&gt;(
-    pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    coin: Coin&lt;QuoteAsset&gt;,
-    account_cap: &AccountCap
+    _pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
+    _coin: Coin&lt;QuoteAsset&gt;,
+    _account_cap: &AccountCap
 ) {
     <b>abort</b> 1337
 }
@@ -891,7 +891,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_swap_exact_base_for_quote">swap_exact_base_for_quote</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, base_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_swap_exact_base_for_quote">swap_exact_base_for_quote</a>&lt;BaseAsset, QuoteAsset&gt;(_pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, _quantity: u64, _base_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, _quote_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, _clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, u64)
 </code></pre>
 
 
@@ -901,12 +901,12 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_swap_exact_base_for_quote">swap_exact_base_for_quote</a>&lt;BaseAsset, QuoteAsset&gt;(
-    pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    quantity: u64,
-    base_coin: Coin&lt;BaseAsset&gt;,
-    quote_coin: Coin&lt;QuoteAsset&gt;,
-    clock: &Clock,
-    ctx: &<b>mut</b> TxContext,
+    _pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
+    _quantity: u64,
+    _base_coin: Coin&lt;BaseAsset&gt;,
+    _quote_coin: Coin&lt;QuoteAsset&gt;,
+    _clock: &Clock,
+    _ctx: &<b>mut</b> TxContext,
 ): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64) {
     <b>abort</b> 1337
 }
@@ -922,7 +922,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_swap_exact_quote_for_base">swap_exact_quote_for_base</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, quote_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_swap_exact_quote_for_base">swap_exact_quote_for_base</a>&lt;BaseAsset, QuoteAsset&gt;(_pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, _quantity: u64, _clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, _quote_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, u64)
 </code></pre>
 
 
@@ -932,11 +932,11 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_swap_exact_quote_for_base">swap_exact_quote_for_base</a>&lt;BaseAsset, QuoteAsset&gt;(
-    pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    quantity: u64,
-    clock: &Clock,
-    quote_coin: Coin&lt;QuoteAsset&gt;,
-    ctx: &<b>mut</b> TxContext,
+    _pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
+    _quantity: u64,
+    _clock: &Clock,
+    _quote_coin: Coin&lt;QuoteAsset&gt;,
+    _ctx: &<b>mut</b> TxContext,
 ): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64) {
     <b>abort</b> 1337
 }
@@ -953,7 +953,7 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 Place a market order to the order book.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_place_market_order">place_market_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, is_bid: bool, base_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_place_market_order">place_market_order</a>&lt;BaseAsset, QuoteAsset&gt;(_pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, _quantity: u64, _is_bid: bool, _base_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, _quote_coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;, _clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;QuoteAsset&gt;)
 </code></pre>
 
 
@@ -963,13 +963,13 @@ Place a market order to the order book.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_place_market_order">place_market_order</a>&lt;BaseAsset, QuoteAsset&gt;(
-    pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    quantity: u64,
-    is_bid: bool,
-    <b>mut</b> base_coin: Coin&lt;BaseAsset&gt;,
-    <b>mut</b> quote_coin: Coin&lt;QuoteAsset&gt;,
-    clock: &Clock,
-    ctx: &<b>mut</b> TxContext,
+    _pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
+    _quantity: u64,
+    _is_bid: bool,
+    <b>mut</b> _base_coin: Coin&lt;BaseAsset&gt;,
+    <b>mut</b> _quote_coin: Coin&lt;QuoteAsset&gt;,
+    _clock: &Clock,
+    _ctx: &<b>mut</b> TxContext,
 ): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;) {
     <b>abort</b> 1337
 }
@@ -990,7 +990,7 @@ When the limit order is successfully placed, we return true to indicate that and
 So please check that boolean value first before using the order id.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_place_limit_order">place_limit_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price: u64, quantity: u64, is_bid: bool, expire_timestamp: u64, restriction: u8, clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (u64, u64, bool, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_place_limit_order">place_limit_order</a>&lt;BaseAsset, QuoteAsset&gt;(_pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">deepbook::clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, _price: u64, _quantity: u64, _is_bid: bool, _expire_timestamp: u64, _restriction: u8, _clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, _account_cap: &<a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (u64, u64, bool, u64)
 </code></pre>
 
 
@@ -1000,15 +1000,15 @@ So please check that boolean value first before using the order id.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../deepbook/clob.md#deepbook_clob_place_limit_order">place_limit_order</a>&lt;BaseAsset, QuoteAsset&gt;(
-    pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    price: u64,
-    quantity: u64,
-    is_bid: bool,
-    expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
-    restriction: u8,
-    clock: &Clock,
-    account_cap: &AccountCap,
-    ctx: &<b>mut</b> TxContext
+    _pool: &<b>mut</b> <a href="../deepbook/clob.md#deepbook_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
+    _price: u64,
+    _quantity: u64,
+    _is_bid: bool,
+    _expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
+    _restriction: u8,
+    _clock: &Clock,
+    _account_cap: &AccountCap,
+    _ctx: &<b>mut</b> TxContext
 ): (u64, u64, bool, u64) {
    <b>abort</b> 1337
 }
