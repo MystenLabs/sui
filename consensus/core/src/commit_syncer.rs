@@ -308,6 +308,18 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             missing, fetched_commit_range
                         );
                     }
+                    for block_ref in missing {
+                        let hostname = &self
+                            .inner
+                            .context
+                            .committee
+                            .authority(block_ref.author)
+                            .hostname;
+                        metrics
+                            .commit_sync_fetch_missing_blocks
+                            .with_label_values(&[hostname])
+                            .inc();
+                    }
                 }
                 Err(e) => {
                     info!("Failed to add blocks, shutting down: {}", e);
