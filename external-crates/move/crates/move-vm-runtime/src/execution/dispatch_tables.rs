@@ -10,13 +10,14 @@
 use crate::{
     cache::identifier_interner::IdentifierKey,
     jit::execution::ast::{
-        ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeSubst,
+        ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
+        TypeSubst,
     },
     shared::{
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, VALUE_DEPTH_MAX,
         },
-        types::RuntimePackageId,
+        types::{PackageStorageId, RuntimePackageId},
         vm_pointer::VMPointer,
     },
     string_interner,
@@ -34,7 +35,10 @@ use move_core_types::{
 
 use move_vm_config::runtime::VMConfig;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -57,7 +61,10 @@ pub struct VMDispatchTables {
     /// Representation of runtime type depths. This is separate from the underlying packages to
     /// avoid grabbing write-locks and toward the possibility these may change based on linkage
     /// (e.g., type ugrades or similar).
-    pub type_depths: BTreeMap<RuntimePackageId, BTreeMap<IntraPackageKey, DepthFormula>>,
+    pub(crate) type_depths: BTreeMap<RuntimePackageId, BTreeMap<IntraPackageKey, DepthFormula>>,
+    /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
+    #[allow(dead_code)]
+    pub(crate) defining_id_origins: BTreeMap<PackageStorageId, RuntimePackageId>,
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -68,9 +75,13 @@ pub struct PackageVirtualTable {
     pub functions: BTreeMap<IntraPackageKey, VMPointer<Function>>,
     /// Representation of runtime types.
     pub types: BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
+    /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
+    pub defining_ids: BTreeSet<PackageStorageId>,
 }
 
 /// runtime_address::module_name::function_name
+/// NB: This relies on no boxing -- if this introduces boxes, the arena allocation in the execution
+/// AST will leak memory.
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct VirtualTableKey {
     pub package_key: RuntimePackageId,
@@ -117,16 +128,34 @@ impl VMDispatchTables {
         vm_config: Arc<VMConfig>,
         loaded_packages: BTreeMap<RuntimePackageId, Arc<Package>>,
     ) -> VMResult<Self> {
+        let defining_id_origins = {
+            let mut defining_id_map = BTreeMap::new();
+            for (addr, pkg) in &loaded_packages {
+                for defining_id in &pkg.vtable.defining_ids {
+                    if let Some(prev) = defining_id_map.insert(*defining_id, *addr) {
+                        return Err(PartialVMError::new(
+                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        )
+                        .with_message(format!(
+                            "Defining ID {defining_id} found for {addr} and {prev}"
+                        ))
+                        .finish(Location::Undefined));
+                    }
+                }
+            }
+            defining_id_map
+        };
         Ok(Self {
             vm_config,
             loaded_packages,
+            defining_id_origins,
             type_depths: BTreeMap::new(),
         })
     }
 
     pub fn get_package(&self, id: &RuntimePackageId) -> PartialVMResult<Arc<Package>> {
         self.loaded_packages.get(id).cloned().ok_or_else(|| {
-            PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
+            PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
                 .with_message(format!("Package {} not found", id))
         })
     }
@@ -137,15 +166,15 @@ impl VMDispatchTables {
     ) -> PartialVMResult<VMPointer<Module>> {
         let (package, module_id) = runtime_id.into();
         let package = self.loaded_packages.get(package).ok_or_else(|| {
-            PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
+            PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
                 .with_message(format!("Package {} not found", package))
         })?;
         package
             .loaded_modules
             .get(module_id)
-            .map(|module| VMPointer::from_ref(module))
+            .map(VMPointer::from_ref)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
+                PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
                     .with_message(format!("Module {} not found", module_id))
             })
     }
@@ -163,7 +192,7 @@ impl VMDispatchTables {
             Ok(result.ptr_clone())
         } else {
             Err(
-                PartialVMError::new(StatusCode::MISSING_DEPENDENCY).with_message(format!(
+                PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR).with_message(format!(
                     "Could not find function {}",
                     vtable_key.to_string()?
                 )),
@@ -183,7 +212,7 @@ impl VMDispatchTables {
         {
             Ok(result.ptr_clone())
         } else {
-            Err(PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
+            Err(PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
                 .with_message(format!("Could not find type {}", vtable_key.to_string()?)))
         }
     }
@@ -212,12 +241,12 @@ impl VMDispatchTables {
             TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt)?)),
             TypeTag::Struct(struct_tag) => {
                 let package_key = struct_tag.address;
-                let string_interner = string_interner();
-                let module_name = string_interner
-                    .resolve_identifier(&struct_tag.module)
+                let ident_interner = string_interner();
+                let module_name = ident_interner
+                    .get_or_intern_identifier(&struct_tag.module)
                     .map_err(|e| e.finish(Location::Undefined))?;
-                let member_name = string_interner
-                    .resolve_identifier(&struct_tag.name)
+                let member_name = ident_interner
+                    .get_or_intern_identifier(&struct_tag.name)
                     .map_err(|e| e.finish(Location::Undefined))?;
                 let key = VirtualTableKey {
                     package_key,
@@ -226,18 +255,23 @@ impl VMDispatchTables {
                         member_name,
                     },
                 };
-                let struct_type = self
+                let datatype = self
                     .resolve_type(&key)
                     .map_err(|e| e.finish(Location::Undefined))?
                     .to_ref();
-                if struct_type.type_parameters.is_empty() && struct_tag.type_params.is_empty() {
+                let Datatype::Struct(_) = datatype.datatype_info.inner_ref() else {
+                    return Err(PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE)
+                        .with_message("Type with struct type tag was not a struct".to_string())
+                        .finish(Location::Undefined));
+                };
+                if datatype.type_parameters().is_empty() && struct_tag.type_params.is_empty() {
                     Type::Datatype(key)
                 } else {
                     let mut type_params = vec![];
                     for ty_param in &struct_tag.type_params {
                         type_params.push(self.load_type(ty_param)?);
                     }
-                    self.verify_ty_args(struct_type.type_param_constraints(), &type_params)
+                    self.verify_ty_args(datatype.type_param_constraints(), &type_params)
                         .map_err(|e| e.finish(Location::Undefined))?;
                     Type::DatatypeInstantiation(Box::new((key, type_params)))
                 }
@@ -290,12 +324,12 @@ impl VMDispatchTables {
                 vec![false],
                 vec![self.abilities(ty)?],
             ),
-            Type::Datatype(idx) => Ok(self.resolve_type(idx)?.to_ref().abilities),
+            Type::Datatype(idx) => Ok(*self.resolve_type(idx)?.to_ref().abilities()),
             Type::DatatypeInstantiation(inst) => {
                 let (idx, type_args) = &**inst;
                 let datatype_type = self.resolve_type(idx)?.to_ref();
                 let declared_phantom_parameters = datatype_type
-                    .type_parameters
+                    .type_parameters()
                     .iter()
                     .map(|param| param.is_phantom);
                 let type_argument_abilities = type_args
@@ -303,7 +337,7 @@ impl VMDispatchTables {
                     .map(|arg| self.abilities(arg))
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 AbilitySet::polymorphic_abilities(
-                    datatype_type.abilities,
+                    *datatype_type.abilities(),
                     declared_phantom_parameters,
                     type_argument_abilities,
                 )
@@ -358,7 +392,7 @@ impl VMDispatchTables {
         }
 
         let datatype = self.resolve_type(&datatype_name.clone())?.to_ref();
-        let formulas = match datatype.datatype_info.to_ref() {
+        let formulas = match datatype.datatype_info.inner_ref() {
             // The depth of enum is calculated as the maximum depth of any of its variants.
             Datatype::Enum(enum_type) => enum_type
                 .variants
@@ -521,7 +555,7 @@ impl VMDispatchTables {
     ) -> PartialVMResult<runtime_value::MoveDatatypeLayout> {
         let ty = self.resolve_type(datatype_name)?.to_ref();
         // TODO(vm-rewrite): update this code
-        let type_layout = match ty.datatype_info.to_ref() {
+        let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(ref einfo) => {
                 let mut variant_layouts = vec![];
                 for variant in einfo.variants.iter() {
@@ -609,7 +643,7 @@ impl VMDispatchTables {
         let ty = self.resolve_type(datatype_name)?.to_ref();
         let struct_tag =
             self.datatype_to_type_tag(datatype_name, ty_args, DatatypeTagType::Defining)?;
-        let type_layout = match ty.datatype_info.to_ref() {
+        let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(enum_type) => {
                 let mut variant_layouts = BTreeMap::new();
                 for variant in enum_type.variants.iter() {
@@ -891,6 +925,7 @@ impl PackageVirtualTable {
         Self {
             functions: BTreeMap::new(),
             types: BTreeMap::new(),
+            defining_ids: BTreeSet::new(),
         }
     }
 }
@@ -920,6 +955,15 @@ impl VirtualTableKey {
     pub fn to_string(&self) -> PartialVMResult<String> {
         let inner_name = self.inner_pkg_key.to_string()?;
         Ok(format!("{}::{}", self.package_key, inner_name))
+    }
+
+    pub fn to_short_string(&self) -> PartialVMResult<String> {
+        let inner_name = self.inner_pkg_key.to_string()?;
+        Ok(format!(
+            "0x{}::{}",
+            self.package_key.short_str_lossless(),
+            inner_name,
+        ))
     }
 }
 
@@ -971,39 +1015,3 @@ pub fn checked_subst(ty: &ArenaType, ty_args: &[Type]) -> PartialVMResult<Type> 
     }
     ty.subst(ty_args)
 }
-
-pub trait TypeNodeCount {
-    fn count_type_nodes(&self) -> u64;
-}
-
-// Macro that generates the implementations.
-macro_rules! impl_count_type_nodes {
-    ($ty:ident) => {
-        impl TypeNodeCount for $ty {
-            fn count_type_nodes(&self) -> u64 {
-                let mut todo = vec![self];
-                let mut result = 0;
-                while let Some(ty) = todo.pop() {
-                    match ty {
-                        $ty::Vector(ty) | $ty::Reference(ty) | $ty::MutableReference(ty) => {
-                            result += 1;
-                            todo.push(ty);
-                        }
-                        $ty::DatatypeInstantiation(struct_inst) => {
-                            let (_, ty_args) = &**struct_inst;
-                            result += 1;
-                            todo.extend(ty_args.iter())
-                        }
-                        _ => {
-                            result += 1;
-                        }
-                    }
-                }
-                result
-            }
-        }
-    };
-}
-
-impl_count_type_nodes!(Type);
-impl_count_type_nodes!(ArenaType);

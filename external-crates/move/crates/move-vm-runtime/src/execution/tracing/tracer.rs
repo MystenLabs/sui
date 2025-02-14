@@ -3,15 +3,16 @@
 
 use crate::{
     execution::{
-        dispatch_tables::VMDispatchTables, interpreter::state::MachineState,
+        dispatch_tables::VMDispatchTables,
+        interpreter::{
+            helpers::{instantiate_enum_type, instantiate_single_type, instantiate_struct_type},
+            state::MachineState,
+        },
         values::Value as RuntimeValue,
     },
     jit::execution::ast::{ArenaType, Function, Type, TypeSubst},
 };
-use move_binary_format::{
-    errors::{PartialVMError, VMError, VMResult},
-    file_format::ConstantPoolIndex,
-};
+use move_binary_format::errors::{PartialVMError, VMError, VMResult};
 use move_core_types::{
     annotated_value::{MoveTypeLayout as AnnotatedTypeLayout, MoveValue as AnnotatedValue},
     language_storage::TypeTag,
@@ -813,34 +814,21 @@ impl<'a> VMTracer<'a> {
             }
             // Handled by open frame
             B::DirectCall(_) | B::VirtualCall(_) | B::CallGeneric(_) => {}
-            B::Pack(sidx) => {
-                let field_count =
-                    machine.call_stack.current_frame.resolver.field_count(*sidx) as usize;
+            B::Pack(struct_ptr) => {
+                let field_count = struct_ptr.field_count();
                 self.register_pre_effects(popn(field_count)?);
             }
-            B::PackGeneric(sidx) => {
-                let field_count = machine
-                    .call_stack
-                    .current_frame
-                    .resolver
-                    .field_instantiation_count(*sidx) as usize;
+            B::PackGeneric(struct_inst_ptr) => {
+                let field_count = struct_inst_ptr.field_count as usize;
                 self.register_pre_effects(popn(field_count)?);
             }
-            B::PackVariant(vidx) => {
-                let (field_count, _variant_tag) = machine
-                    .call_stack
-                    .current_frame
-                    .resolver
-                    .variant_field_count_and_tag(*vidx);
-                self.register_pre_effects(popn(field_count as usize)?);
+            B::PackVariant(variant_ptr) => {
+                let field_count = variant_ptr.field_count();
+                self.register_pre_effects(popn(field_count)?);
             }
-            B::PackVariantGeneric(vidx) => {
-                let (field_count, _variant_tag) = machine
-                    .call_stack
-                    .current_frame
-                    .resolver
-                    .variant_instantiantiation_field_count_and_tag(*vidx);
-                self.register_pre_effects(popn(field_count as usize)?);
+            B::PackVariantGeneric(variant_inst_ptr) => {
+                let field_count = variant_inst_ptr.field_count();
+                self.register_pre_effects(popn(field_count)?);
             }
             B::ReadRef => {
                 let ref_value = self.resolve_stack_value(vtables, machine, 0)?;
@@ -909,9 +897,9 @@ impl<'a> VMTracer<'a> {
                     B::LdU256(_) => AnnotatedTypeLayout::U256,
                     B::LdTrue => AnnotatedTypeLayout::Bool,
                     B::LdFalse => AnnotatedTypeLayout::Bool,
-                    B::LdConst(const_idx) => {
-                        get_constant_type_layout(vtables, machine, *const_idx)?
-                    }
+                    B::LdConst(const_ptr) => vtables
+                        .arena_type_to_fully_annotated_layout(&const_ptr.type_)
+                        .ok()?,
                     _ => unreachable!(),
                 };
                 let a_layout = StackType {
@@ -1017,10 +1005,9 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], vec![], *remaining_gas, pc);
             }
-            B::Pack(sidx) => {
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let field_count = resolver.field_count(*sidx) as usize;
-                let struct_type = resolver.get_struct_type(*sidx);
+            B::Pack(struct_ptr) => {
+                let field_count = struct_ptr.field_count();
+                let struct_type = struct_ptr.datatype();
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count);
                 let ty = vtables.type_to_fully_annotated_layout(&struct_type).ok()?;
@@ -1035,12 +1022,13 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            B::PackGeneric(sidx) => {
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let field_count = resolver.field_instantiation_count(*sidx) as usize;
-                let struct_type = resolver
-                    .instantiate_struct_type(*sidx, &machine.call_stack.current_frame.ty_args)
-                    .ok()?;
+            B::PackGeneric(struct_inst_ptr) => {
+                let field_count = struct_inst_ptr.field_count as usize;
+                let struct_type = instantiate_struct_type(
+                    struct_inst_ptr,
+                    &machine.call_stack.current_frame.ty_args,
+                )
+                .ok()?;
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count);
                 let ty = vtables.type_to_fully_annotated_layout(&struct_type).ok()?;
@@ -1186,14 +1174,13 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            i @ (B::MutBorrowField(fhidx) | B::ImmBorrowField(fhidx)) => {
+            i @ (B::MutBorrowField(fh_ptr) | B::ImmBorrowField(fh_ptr)) => {
                 let value_ty = self.type_stack.pop()?;
 
                 let AnnotatedTypeLayout::Struct(slayout) = &value_ty.layout else {
                     panic!("Expected struct, got {:?}", value_ty.layout)
                 };
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let field_offset = resolver.field_offset(*fhidx);
+                let field_offset = fh_ptr.offset;
                 let field_layout = slayout.fields.get(field_offset)?.layout.clone();
 
                 let location = value_ty.ref_type.as_ref()?.1.clone();
@@ -1215,14 +1202,13 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            i @ (B::MutBorrowFieldGeneric(fhidx) | B::ImmBorrowFieldGeneric(fhidx)) => {
+            i @ (B::MutBorrowFieldGeneric(fh_ptr) | B::ImmBorrowFieldGeneric(fh_ptr)) => {
                 let value_ty = self.type_stack.pop()?;
 
                 let AnnotatedTypeLayout::Struct(slayout) = &value_ty.layout else {
                     panic!("Expected struct, got {:?}", value_ty.layout)
                 };
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let field_offset = resolver.field_instantiation_offset(*fhidx);
+                let field_offset = fh_ptr.offset;
                 let field_layout = slayout.fields.get(field_offset)?.layout.clone();
                 let location = value_ty.ref_type.as_ref()?.1.clone();
                 let field_location =
@@ -1245,10 +1231,8 @@ impl<'a> VMTracer<'a> {
                     .instruction(instruction, ty_args, effects, *remaining_gas, pc);
             }
 
-            B::VecPack(tok, n) => {
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let ty = resolver
-                    .instantiate_single_type(*tok, &machine.call_stack.current_frame.ty_args)
+            B::VecPack(ty_ptr, n) => {
+                let ty = instantiate_single_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
                     .ok()?;
                 let ty = vtables.type_to_fully_annotated_layout(&ty).ok()?;
                 let ty = AnnotatedTypeLayout::Vector(Box::new(ty));
@@ -1370,13 +1354,12 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            B::PackVariant(vidx) => {
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let (field_count, _variant_tag) = resolver.variant_field_count_and_tag(*vidx);
+            B::PackVariant(variant_inst_ptr) => {
+                let field_count = variant_inst_ptr.field_count();
                 let stack_len = self.type_stack.len();
-                let _ = self.type_stack.split_off(stack_len - field_count as usize);
+                let _ = self.type_stack.split_off(stack_len - field_count);
                 let ty = vtables
-                    .type_to_fully_annotated_layout(&resolver.get_enum_type(*vidx))
+                    .type_to_fully_annotated_layout(&variant_inst_ptr.enum_def.datatype())
                     .ok()?;
                 let a_layout = StackType {
                     layout: ty,
@@ -1388,17 +1371,17 @@ impl<'a> VMTracer<'a> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            B::PackVariantGeneric(vidx) => {
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let (field_count, _variant_tag) =
-                    resolver.variant_instantiantiation_field_count_and_tag(*vidx);
+            B::PackVariantGeneric(variant_inst_ptr) => {
+                let field_count = variant_inst_ptr.variant.variant_tag;
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count as usize);
                 let ty = vtables
                     .type_to_fully_annotated_layout(
-                        &resolver
-                            .instantiate_enum_type(*vidx, &machine.call_stack.current_frame.ty_args)
-                            .ok()?,
+                        &instantiate_enum_type(
+                            variant_inst_ptr,
+                            &machine.call_stack.current_frame.ty_args,
+                        )
+                        .ok()?,
                     )
                     .ok()?;
                 let a_layout = StackType {
@@ -1413,11 +1396,10 @@ impl<'a> VMTracer<'a> {
             }
             i @ (B::UnpackVariant(_) | B::UnpackVariantGeneric(_)) => {
                 let ty = self.type_stack.pop()?;
-                let resolver = &machine.call_stack.current_frame.resolver;
                 let (field_count, tag) = match i {
-                    B::UnpackVariant(vidx) => resolver.variant_field_count_and_tag(*vidx),
-                    B::UnpackVariantGeneric(vidx) => {
-                        resolver.variant_instantiantiation_field_count_and_tag(*vidx)
+                    B::UnpackVariant(vptr) => (vptr.field_count(), vptr.variant_tag),
+                    B::UnpackVariantGeneric(inst_ptr) => {
+                        (inst_ptr.field_count(), inst_ptr.variant.variant_tag)
                     }
                     _ => unreachable!(),
                 };
@@ -1434,7 +1416,7 @@ impl<'a> VMTracer<'a> {
                     self.type_stack.push(a_layout);
                 }
                 for i in 0..field_count {
-                    let value = self.resolve_stack_value(vtables, machine, i as usize)?;
+                    let value = self.resolve_stack_value(vtables, machine, i)?;
                     effects.push(EF::Push(value));
                 }
                 let effects = self.register_post_effects(effects);
@@ -1446,20 +1428,21 @@ impl<'a> VMTracer<'a> {
             | B::UnpackVariantGenericImmRef(_)
             | B::UnpackVariantGenericMutRef(_)) => {
                 let ty = self.type_stack.pop()?;
-                let resolver = &machine.call_stack.current_frame.resolver;
-                let ((field_count, tag), ref_type) = match i {
-                    B::UnpackVariantImmRef(vidx) => {
-                        (resolver.variant_field_count_and_tag(*vidx), Mutability::Imm)
+                let (field_count, tag, ref_type) = match i {
+                    B::UnpackVariantImmRef(vptr) => {
+                        (vptr.field_count(), vptr.variant_tag, Mutability::Imm)
                     }
-                    B::UnpackVariantMutRef(vidx) => {
-                        (resolver.variant_field_count_and_tag(*vidx), Mutability::Mut)
+                    B::UnpackVariantMutRef(vptr) => {
+                        (vptr.field_count(), vptr.variant_tag, Mutability::Mut)
                     }
-                    B::UnpackVariantGenericImmRef(vidx) => (
-                        resolver.variant_instantiantiation_field_count_and_tag(*vidx),
+                    B::UnpackVariantGenericImmRef(inst_ptr) => (
+                        inst_ptr.field_count(),
+                        inst_ptr.variant.variant_tag,
                         Mutability::Imm,
                     ),
-                    B::UnpackVariantGenericMutRef(vidx) => (
-                        resolver.variant_instantiantiation_field_count_and_tag(*vidx),
+                    B::UnpackVariantGenericMutRef(inst_ptr) => (
+                        inst_ptr.field_count(),
+                        inst_ptr.variant.variant_tag,
                         Mutability::Mut,
                     ),
                     _ => unreachable!(),
@@ -1480,7 +1463,7 @@ impl<'a> VMTracer<'a> {
                     self.type_stack.push(a_layout);
                 }
                 for i in 0..field_count {
-                    let value = self.resolve_stack_value(vtables, machine, i as usize)?;
+                    let value = self.resolve_stack_value(vtables, machine, i)?;
                     effects.push(EF::Push(value));
                 }
                 let effects = self.register_post_effects(effects);
@@ -1682,20 +1665,4 @@ fn into_annotated_move_value(
     type_: &AnnotatedTypeLayout,
 ) -> Option<AnnotatedValue> {
     value.as_annotated_move_value(type_)
-}
-
-/// Get the type layout of a constant.
-fn get_constant_type_layout(
-    vtables: &VMDispatchTables,
-    machine: &MachineState,
-    const_ndx: ConstantPoolIndex,
-) -> Option<AnnotatedTypeLayout> {
-    let constant = machine
-        .call_stack
-        .current_frame
-        .resolver
-        .constant_at(const_ndx);
-    vtables
-        .arena_type_to_fully_annotated_layout(&constant.type_)
-        .ok()
 }

@@ -57,6 +57,7 @@ struct FunctionContext<'pkg_ctxt, 'natives> {
     definitions: Definitions,
 }
 
+#[allow(dead_code)]
 struct Definitions {
     structs: Vec<VMPointer<StructDef>>,
     struct_instantiations: Vec<VMPointer<StructInstantiation>>,
@@ -104,7 +105,8 @@ impl PackageContext<'_> {
         datatype_descriptors: Vec<VMPointer<DatatypeDescriptor>>,
     ) -> PartialVMResult<()> {
         for ptr in datatype_descriptors.into_iter() {
-            let name = ptr.to_ref().intra_package_name();
+            self.vtable.defining_ids.insert(*ptr.defining_id.address());
+            let name = ptr.intra_package_name();
             if self.vtable.types.insert(name, ptr).is_some() {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -275,33 +277,33 @@ fn module(
     let cmodule = &module.compiled_module;
 
     // Initialize module data
-    let type_refs = initialize_type_refs(context, &cmodule)?;
+    let type_refs = initialize_type_refs(context, cmodule)?;
 
-    let (structs, enums, datatype_descriptors) = datatypes(context, &package_id, &cmodule)?;
-    let (instantiation_signatures, _signature_map) = cache_signatures(context, &cmodule)?;
+    let (structs, enums, datatype_descriptors) = datatypes(context, &package_id, cmodule)?;
+    let (instantiation_signatures, _signature_map) = cache_signatures(context, cmodule)?;
     dbg_println!("Module types loaded");
 
     let sig_pointers = instantiation_signatures
         .iter()
-        .map(|sig| VMPointer::from_ref(sig))
+        .map(VMPointer::from_ref)
         .collect::<Vec<_>>();
 
     context.insert_vtable_datatypes(datatype_descriptors.to_ptrs())?;
 
-    let struct_instantiations = struct_instantiations(context, &cmodule, &structs, &sig_pointers)?;
-    let enum_instantiations = enum_instantiations(context, &cmodule, &enums, &sig_pointers)?;
+    let struct_instantiations = struct_instantiations(context, cmodule, &structs, &sig_pointers)?;
+    let enum_instantiations = enum_instantiations(context, cmodule, &enums, &sig_pointers)?;
 
     // Process function instantiations
-    let function_instantiations = function_instantiations(context, &cmodule, &sig_pointers)?;
+    let function_instantiations = function_instantiations(context, cmodule, &sig_pointers)?;
 
     // Process field handles and instantiations
-    let field_handles = field_handles(context, &cmodule, &structs)?;
-    let field_instantiations = field_instantiations(context, &cmodule, &field_handles)?;
+    let field_handles = field_handles(context, cmodule, &structs)?;
+    let field_instantiations = field_instantiations(context, cmodule, &field_handles)?;
 
-    let constants = constants(context, &cmodule)?;
+    let constants = constants(context, cmodule)?;
 
-    let variant_handles = variant_handles(&cmodule, &enums);
-    let variant_instantiations = variant_instantiations(context, &cmodule, &enum_instantiations)?;
+    let variant_handles = variant_handles(cmodule, &enums);
+    let variant_instantiations = variant_instantiations(context, cmodule, &enum_instantiations)?;
 
     let definitions = Definitions {
         variants: variant_handles,
@@ -444,7 +446,7 @@ fn datatypes(
 
     let datatype_descriptors = struct_descriptors
         .into_iter()
-        .chain(enum_descriptors.into_iter())
+        .chain(enum_descriptors)
         .collect::<Vec<_>>();
     let datatype_descriptors = context.arena_vec(datatype_descriptors.into_iter())?;
 
@@ -677,12 +679,14 @@ fn struct_instantiations(
             let def = struct_inst.def.0 as usize;
             let struct_def = &structs[def];
             let field_count = struct_def.fields.len() as u16;
-
+            let instantiation_idx = struct_inst.type_parameters;
+            let type_params = signatures[instantiation_idx.0 as usize].ptr_clone();
             let instantiation = signatures[struct_inst.type_parameters.0 as usize].ptr_clone();
 
             Ok(StructInstantiation {
                 field_count,
-                def: struct_def.def_vtable_key.clone(),
+                def_vtable_key: struct_def.def_vtable_key.clone(),
+                type_params,
                 instantiation,
             })
         })
@@ -704,11 +708,18 @@ fn enum_instantiations(
             let enum_def = &enums[def];
             let variant_count_map =
                 context.arena_vec(enum_def.variants.iter().map(|v| v.fields.len() as u16))?;
+            let instantiation_idx = enum_inst.type_parameters;
+            let type_params = signatures[instantiation_idx.0 as usize].ptr_clone();
             let instantiation = signatures[enum_inst.type_parameters.0 as usize].ptr_clone();
+
+            let def_vtable_key = enum_def.def_vtable_key.clone();
+            let enum_def = VMPointer::from_ref(enum_def);
 
             Ok(EnumInstantiation {
                 variant_count_map,
-                def: enum_def.def_vtable_key.clone(),
+                enum_def,
+                def_vtable_key,
+                type_params,
                 instantiation,
             })
         })
@@ -763,11 +774,8 @@ fn variant_instantiations(
     let variant_insts = module.variant_instantiation_handles().iter().map(|v_inst| {
         let FF::VariantInstantiationHandle { enum_def, variant } = v_inst;
         let enum_inst = VMPointer::from_ref(&enum_instantiations[enum_def.0 as usize]);
-        let variant_tag = *variant;
-        VariantInstantiation {
-            enum_inst,
-            variant_tag,
-        }
+        let variant = VMPointer::from_ref(&enum_inst.enum_def.variants[*variant as usize]);
+        VariantInstantiation { enum_inst, variant }
     });
     context.arena_vec(variant_insts.into_iter())
 }

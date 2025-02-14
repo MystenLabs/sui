@@ -118,7 +118,7 @@ impl<T> ArenaVec<T> {
 }
 
 impl<T> ArenaBox<T> {
-    pub fn as_ref(&self) -> &T {
+    pub fn inner_ref(&self) -> &T {
         &self.0
     }
 }

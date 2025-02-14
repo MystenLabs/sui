@@ -7,7 +7,7 @@ Call Stack:
             [1] LdU64(2)
             [2] Lt
             [3] BrFalse(8)
-          > [4] Call(~0000000000000000000000000000000000000000000000000000000000000001::debug::print_stack_trace)
+          > [4] Call(~0x1::debug::print_stack_trace)
             [5] MoveLoc(0)
             [6] StLoc(1)
             [7] Branch(15)
@@ -21,12 +21,12 @@ Call Stack:
 
         Code:
             [10] LdU64(1)
-            [11] VecImmBorrow(2)
+            [11] VecImmBorrow(bool)
             [12] StLoc(0)
-          > [13] CallGeneric(0)
+          > [13] CallGeneric(0x7::N::foo)
             [14] StLoc(2)
             [15] ImmBorrowLoc(2)
-            [16] CallGeneric(1)
+            [16] CallGeneric(0x1::debug::print)
 
         Locals:
             [0] (&) false
@@ -40,7 +40,7 @@ Call Stack:
             [2] MutBorrowLoc(0)
             [3] StLoc(1)
             [4] LdU64(4)
-          > [5] Call(sum)
+          > [5] Call(0x7::M::sum)
             [6] StLoc(2)
             [7] MoveLoc(1)
             [8] Pop
@@ -57,7 +57,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(sum)
+          > [12] Call(0x7::M::sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)
@@ -73,7 +73,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(sum)
+          > [12] Call(0x7::M::sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)
@@ -89,7 +89,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(sum)
+          > [12] Call(0x7::M::sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)
@@ -112,7 +112,7 @@ Call Stack:
             [1] LdU64(2)
             [2] Lt
             [3] BrFalse(8)
-          > [4] Call(~0000000000000000000000000000000000000000000000000000000000000001::debug::print_stack_trace)
+          > [4] Call(~0x1::debug::print_stack_trace)
             [5] MoveLoc(0)
             [6] StLoc(1)
             [7] Branch(15)
@@ -125,10 +125,10 @@ Call Stack:
     [1] 0000000000000000000000000000000000000000000000000000000000000007::print_stack_trace::print_stack_trace
 
         Code:
-            [16] CallGeneric(1)
+            [16] CallGeneric(0x1::debug::print)
             [17] MoveLoc(0)
             [18] Pop
-          > [19] CallGeneric(2)
+          > [19] CallGeneric(0x7::N::foo)
             [20] Pop
             [21] Ret
 
@@ -144,7 +144,7 @@ Call Stack:
             [2] MutBorrowLoc(0)
             [3] StLoc(1)
             [4] LdU64(4)
-          > [5] Call(sum)
+          > [5] Call(0x7::M::sum)
             [6] StLoc(2)
             [7] MoveLoc(1)
             [8] Pop
@@ -161,7 +161,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(sum)
+          > [12] Call(0x7::M::sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)
@@ -177,7 +177,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(sum)
+          > [12] Call(0x7::M::sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)
@@ -193,7 +193,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(sum)
+          > [12] Call(0x7::M::sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)
