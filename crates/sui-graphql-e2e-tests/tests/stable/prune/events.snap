@@ -1,0 +1,203 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-37:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 39:
+//# run Test::M1::create --sender A --args 0 @A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 41:
+//# run Test::M1::emit_a --sender A --args object(2,0) 0
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 4, line 43:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, line 45:
+//# advance-epoch
+Epoch advanced: 0
+
+task 6, line 47:
+//# run Test::M1::emit_a --sender A --args object(2,0) 1
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 7, line 49:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, lines 51-80:
+//# run-graphql --wait-for-checkpoint-pruned 1
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6NSwiZSI6MCwiYyI6M30",
+          "node": {
+            "transactionBlock": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 3
+                }
+              }
+            },
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xa286f296f0fbc2828616670adc9108817eefaa7a440106a2ed54c144582c9401::M1::EventA"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 9, line 82:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 10, line 84:
+//# run Test::M1::emit_a --sender A --args object(2,0) 2
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 11, line 86:
+//# run Test::M1::emit_a --sender A --args object(2,0) 3
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 12, line 88:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 13, lines 90-119:
+//# run-graphql --cursors {"tx":5,"e":0,"c":3}
+Response: {
+  "data": {
+    "events": {
+      "edges": []
+    }
+  }
+}
+
+task 14, lines 121-150:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6NSwiZSI6MCwiYyI6NX0",
+          "node": {
+            "transactionBlock": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 3
+                }
+              }
+            },
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xa286f296f0fbc2828616670adc9108817eefaa7a440106a2ed54c144582c9401::M1::EventA"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NiwiZSI6MCwiYyI6NX0",
+          "node": {
+            "transactionBlock": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 5
+                }
+              }
+            },
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xa286f296f0fbc2828616670adc9108817eefaa7a440106a2ed54c144582c9401::M1::EventA"
+              },
+              "json": {
+                "new_value": "2"
+              },
+              "bcs": "AgAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NywiZSI6MCwiYyI6NX0",
+          "node": {
+            "transactionBlock": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 5
+                }
+              }
+            },
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xa286f296f0fbc2828616670adc9108817eefaa7a440106a2ed54c144582c9401::M1::EventA"
+              },
+              "json": {
+                "new_value": "3"
+              },
+              "bcs": "AwAAAAAAAAA="
+            }
+          }
+        }
+      ]
+    }
+  }
+}

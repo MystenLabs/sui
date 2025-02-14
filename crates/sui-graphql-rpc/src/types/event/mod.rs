@@ -10,15 +10,15 @@ use super::{
 };
 use crate::data::{self, DbConnection, QueryExecutor};
 use crate::query;
-use crate::server::watermark_task::Watermark;
 use crate::{data::Db, error::Error};
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use cursor::EvLookup;
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use lookups::{add_bounds, select_emit_module, select_event_type, select_sender};
 use sui_indexer::models::{events::StoredEvent, transactions::StoredTransaction};
-use sui_indexer::schema::events;
+use sui_indexer::schema::{checkpoints, events};
 use sui_types::base_types::ObjectID;
 use sui_types::Identifier;
 use sui_types::{
@@ -134,18 +134,12 @@ impl Event {
         db: &Db,
         page: Page<Cursor>,
         filter: EventFilter,
-        watermark: &Watermark,
+        checkpoint_viewed_at: u64,
+        tx_lo: u64,
     ) -> Result<Connection<String, Event>, Error> {
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let Watermark {
-            hi_cp,
-            hi_tx,
-            lo_tx,
-            ..
-        } = watermark;
-        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(*hi_cp);
-        let tx_lo = *lo_tx as i64;
-        let tx_hi = *hi_tx as i64;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+        let tx_lo = tx_lo as i64;
 
         // Construct tx and ev sequence number query with table-relevant filters, if they exist. The
         // resulting query will look something like `SELECT tx_sequence_number,
@@ -164,8 +158,16 @@ impl Event {
             }
         };
 
+        use checkpoints::dsl;
         let (prev, next, results) = db
             .execute(move |conn| async move {
+                // Get the tx_hi per checkpoint_viewed_at, which is either from watermarks or from
+                // the cursor if the latter is provided.
+                let tx_hi: i64 = conn.first(move || {
+                    dsl::checkpoints.select(dsl::network_total_transactions)
+                        .filter(dsl::sequence_number.eq(checkpoint_viewed_at as i64))
+                }).await?;
+
                 let (prev, next, mut events): (bool, bool, Vec<StoredEvent>) =
                     if let Some(filter_query) =  query_constraint {
                         let query = add_bounds(filter_query, &filter.transaction_digest, &page, tx_lo, tx_hi);

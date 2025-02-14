@@ -126,7 +126,10 @@ pub(crate) fn add_bounds(
     // Temporally bounds the query to the unpruned data range
     query = filter!(
         query,
-        format!("tx_sequence_number BETWEEN {} AND {}", tx_lo, tx_hi)
+        format!(
+            "tx_sequence_number >= {} AND tx_sequence_number < {}",
+            tx_lo, tx_hi
+        )
     );
 
     if let Some(after) = page.after() {
