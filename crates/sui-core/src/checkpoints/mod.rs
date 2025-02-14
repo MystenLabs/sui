@@ -748,6 +748,9 @@ impl CheckpointStore {
         Ok(())
     }
 
+    /// TODO: this is only needed while upgrading from non-dataquarantine to
+    /// dataquarantine. After that it can be deleted.
+    ///
     /// Re-executes all transactions from all local, uncertified checkpoints for crash recovery.
     /// All transactions thus re-executed are guaranteed to not have any missing dependencies,
     /// because we start from the highest executed checkpoint, and proceed through checkpoints in
@@ -791,16 +794,19 @@ impl CheckpointStore {
             let tx_digests: Vec<_> = contents.iter().map(|digests| digests.transaction).collect();
             let fx_digests: Vec<_> = contents.iter().map(|digests| digests.effects).collect();
             let txns = cache.multi_get_transaction_blocks(&tx_digests);
-            for (tx, digest) in txns.iter().zip(tx_digests.iter()) {
-                if tx.is_none() {
-                    panic!("transaction {:?} not found", digest);
-                }
-            }
 
-            let txns: Vec<_> = txns
-                .into_iter()
-                .map(|tx| tx.unwrap())
-                .zip(fx_digests.into_iter())
+            let txns: Vec<_> = itertools::izip!(txns, tx_digests, fx_digests)
+                .filter_map(|(tx, digest, fx)| {
+                    if let Some(tx) = tx {
+                        Some((tx, fx))
+                    } else {
+                        info!(
+                            "transaction {:?} not found during checkpoint re-execution",
+                            digest
+                        );
+                        None
+                    }
+                })
                 // end of epoch transaction can only be executed by CheckpointExecutor
                 .filter(|(tx, _)| !tx.data().transaction_data().is_end_of_epoch_tx())
                 .map(|(tx, fx)| {
@@ -998,6 +1004,7 @@ impl CheckpointBuilder {
             {
                 Ok(seq) => {
                     self.last_built.send_if_modified(|cur| {
+                        // when rebuilding checkpoints at startup, seq can be for an old checkpoint
                         if seq > *cur {
                             *cur = seq;
                             true
@@ -1104,6 +1111,15 @@ impl CheckpointBuilder {
 
                 // No other dependencies of this consensus commit prologue that haven't been included
                 // in any previous checkpoint.
+                if unsorted_ccp.len() != 1 {
+                    fatal!(
+                        "Expected 1 consensus commit prologue, got {:?}",
+                        unsorted_ccp
+                            .iter()
+                            .map(|e| e.transaction_digest())
+                            .collect::<Vec<_>>()
+                    );
+                }
                 assert_eq!(unsorted_ccp.len(), 1);
                 assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
             }
@@ -1183,23 +1199,6 @@ impl CheckpointBuilder {
         let mut all_tx_digests =
             Vec::with_capacity(new_checkpoints.iter().map(|(_, c)| c.size()).sum());
 
-        // When upgrading to a data-quarantining build, we need to persist the transactions and effects
-        // to the database for crash recovery. After the upgrade this is no longer needed, because recovery
-        // is driven by replay of consensus commits.
-        // This only updates the content-addressed stores (similar to state sync), it does not mark any
-        // transactions as executed.
-        self.state
-            .get_cache_commit()
-            .persist_transactions_and_effects(
-                &new_checkpoints
-                    .iter()
-                    .flat_map(|(_, c)| {
-                        c.iter()
-                            .map(|digests| (digests.transaction, digests.effects))
-                    })
-                    .collect::<Vec<_>>(),
-            );
-
         for (summary, contents) in &new_checkpoints {
             debug!(
                 checkpoint_commit_height = height,
@@ -1207,11 +1206,24 @@ impl CheckpointBuilder {
                 contents_digest = ?contents.digest(),
                 "writing checkpoint",
             );
-            all_tx_digests.extend(contents.iter().map(|digests| digests.transaction));
 
-            self.output
-                .checkpoint_created(summary, contents, &self.epoch_store, &self.tables)
-                .await?;
+            if let Some(previously_computed_summary) = self
+                .tables
+                .locally_computed_checkpoints
+                .get(&summary.sequence_number)?
+            {
+                if previously_computed_summary != *summary {
+                    // Panic so that we don't send out an equivocating checkpoint sig.
+                    fatal!(
+                        "Checkpoint {} was previously built with a different result: {:?} vs {:?}",
+                        summary.sequence_number,
+                        previously_computed_summary,
+                        summary
+                    );
+                }
+            }
+
+            all_tx_digests.extend(contents.iter().map(|digests| digests.transaction));
 
             self.metrics
                 .transactions_included_in_checkpoint
@@ -1232,22 +1244,14 @@ impl CheckpointBuilder {
             )?;
         }
 
-        // Durably commit transactions (but not their outputs) to the database.
-        // Called before writing a locally built checkpoint to the CheckpointStore, so that
-        // the inputs of the checkpoint cannot be lost.
-        // These transactions are guaranteed to be final unless this validator
-        // forks (i.e. constructs a checkpoint which will never be certified). In this case
-        // some non-final transactions could be left in the database.
-        //
-        // This is an intermediate solution until we delay commits to the epoch db. After
-        // we have done that, crash recovery will be done by re-processing consensus commits
-        // and pending_consensus_transactions, and this method can be removed.
-        self.state
-            .get_cache_commit()
-            .persist_transactions(&all_tx_digests)
-            .await;
-
         batch.write()?;
+
+        // Send all checkpoint sigs to consensus.
+        for (summary, contents) in &new_checkpoints {
+            self.output
+                .checkpoint_created(summary, contents, &self.epoch_store, &self.tables)
+                .await?;
+        }
 
         for (local_checkpoint, _) in &new_checkpoints {
             if let Some(certified_checkpoint) = self
@@ -1262,7 +1266,7 @@ impl CheckpointBuilder {
 
         self.notify_aggregator.notify_one();
         self.epoch_store
-            .process_pending_checkpoint(height, new_checkpoints)?;
+            .process_constructed_checkpoint(height, new_checkpoints);
         Ok(())
     }
 
@@ -1318,20 +1322,16 @@ impl CheckpointBuilder {
         Ok(chunks)
     }
 
-    #[instrument(level = "debug", skip_all)]
-    async fn create_checkpoints(
-        &self,
-        all_effects: Vec<TransactionEffects>,
-        details: &PendingCheckpointInfo,
-    ) -> anyhow::Result<NonEmpty<(CheckpointSummary, CheckpointContents)>> {
-        let _scope = monitored_scope("CheckpointBuilder::create_checkpoints");
-        let total = all_effects.len();
-        let mut last_checkpoint = self.epoch_store.last_built_checkpoint_summary()?;
+    fn load_last_built_checkpoint_summary(
+        epoch_store: &AuthorityPerEpochStore,
+        tables: &CheckpointStore,
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, CheckpointSummary)>> {
+        let mut last_checkpoint = epoch_store.last_built_checkpoint_summary()?;
         if last_checkpoint.is_none() {
-            let epoch = self.epoch_store.epoch();
+            let epoch = epoch_store.epoch();
             if epoch > 0 {
                 let previous_epoch = epoch - 1;
-                let last_verified = self.tables.get_epoch_last_checkpoint(previous_epoch)?;
+                let last_verified = tables.get_epoch_last_checkpoint(previous_epoch)?;
                 last_checkpoint = last_verified.map(VerifiedCheckpoint::into_summary_and_sequence);
                 if let Some((ref seq, _)) = last_checkpoint {
                     debug!("No checkpoints in builder DB, taking checkpoint from previous epoch with sequence {seq}");
@@ -1341,6 +1341,19 @@ impl CheckpointBuilder {
                 }
             }
         }
+        Ok(last_checkpoint)
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    async fn create_checkpoints(
+        &self,
+        all_effects: Vec<TransactionEffects>,
+        details: &PendingCheckpointInfo,
+    ) -> anyhow::Result<NonEmpty<(CheckpointSummary, CheckpointContents)>> {
+        let _scope = monitored_scope("CheckpointBuilder::create_checkpoints");
+        let total = all_effects.len();
+        let mut last_checkpoint =
+            Self::load_last_built_checkpoint_summary(&self.epoch_store, &self.tables)?;
         let last_checkpoint_seq = last_checkpoint.as_ref().map(|(seq, _)| *seq);
         info!(
             next_checkpoint_seq = last_checkpoint_seq.unwrap_or_default() + 1,
@@ -2283,13 +2296,19 @@ impl CheckpointService {
         let notify_builder = Arc::new(Notify::new());
         let notify_aggregator = Arc::new(Notify::new());
 
-        let highest_previously_built_seq = epoch_store
-            .last_built_checkpoint_builder_summary()
-            .expect("epoch should not have ended")
-            .map(|s| s.summary.sequence_number)
+        // We may have built higher checkpoint numbers before restarting.
+        let highest_previously_built_seq = checkpoint_store
+            .get_latest_locally_computed_checkpoint()
+            .map(|s| s.sequence_number)
             .unwrap_or(0);
 
-        let (highest_currently_built_seq_tx, _) = watch::channel(highest_previously_built_seq);
+        let highest_currently_built_seq =
+            CheckpointBuilder::load_last_built_checkpoint_summary(&epoch_store, &checkpoint_store)
+                .expect("epoch should not have ended")
+                .map(|(seq, _)| seq)
+                .unwrap_or(0);
+
+        let (highest_currently_built_seq_tx, _) = watch::channel(highest_currently_built_seq);
 
         let aggregator = CheckpointAggregator::new(
             checkpoint_store.clone(),
@@ -2348,7 +2367,7 @@ impl CheckpointService {
 
         // If this times out, the validator may still start up. The worst that can
         // happen is that we will crash later on (due to missing transactions).
-        if tokio::time::timeout(Duration::from_secs(10), self.wait_for_rebuilt_checkpoints())
+        if tokio::time::timeout(Duration::from_secs(60), self.wait_for_rebuilt_checkpoints())
             .await
             .is_err()
         {
@@ -2365,12 +2384,17 @@ impl CheckpointService {
     pub async fn wait_for_rebuilt_checkpoints(&self) {
         let highest_previously_built_seq = self.highest_previously_built_seq;
         let mut rx = self.highest_currently_built_seq_tx.subscribe();
+        let mut highest_currently_built_seq = *rx.borrow_and_update();
+        info!(
+            "Waiting for checkpoints to be rebuilt, previously built seq: {highest_previously_built_seq}, currently built seq: {highest_currently_built_seq}"
+        );
         loop {
-            let highest_currently_built_seq = *rx.borrow_and_update();
             if highest_currently_built_seq >= highest_previously_built_seq {
+                info!("Checkpoint rebuild complete");
                 break;
             }
             rx.changed().await.unwrap();
+            highest_currently_built_seq = *rx.borrow_and_update();
         }
     }
 
@@ -2384,9 +2408,8 @@ impl CheckpointService {
 
         let mut output = ConsensusCommitOutput::new(0);
         epoch_store.write_pending_checkpoint(&mut output, &checkpoint)?;
-        let mut batch = epoch_store.db_batch_for_test();
-        output.write_to_batch(epoch_store, &mut batch)?;
-        batch.write()?;
+        output.set_default_commit_stats_for_testing();
+        epoch_store.push_consensus_output_for_tests(output);
         self.notify_checkpoint()?;
         Ok(())
     }

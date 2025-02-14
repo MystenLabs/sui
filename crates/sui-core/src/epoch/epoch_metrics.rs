@@ -107,6 +107,12 @@ pub struct EpochMetrics {
 
     /// The number of execution time observations dropped due to backpressure from the observer.
     pub epoch_execution_time_observations_dropped: IntCounter,
+
+    /// The number of consensus output items in the quarantine.
+    pub consensus_quarantine_queue_size: IntGauge,
+
+    /// The number of shared object assignments in the quarantine.
+    pub shared_object_assignments_size: IntGauge,
 }
 
 impl EpochMetrics {
@@ -234,6 +240,18 @@ impl EpochMetrics {
             epoch_execution_time_observations_dropped: register_int_counter_with_registry!(
                 "epoch_execution_time_observations_dropped",
                 "The number of execution time observations dropped due to backpressure from the observer",
+                registry
+            )
+            .unwrap(),
+            consensus_quarantine_queue_size: register_int_gauge_with_registry!(
+                "consensus_quarantine_queue_size",
+                "The number of consensus output items in the quarantine",
+                registry
+            )
+            .unwrap(),
+            shared_object_assignments_size: register_int_gauge_with_registry!(
+                "shared_object_assignments_size",
+                "The number of shared object assignments in the quarantine",
                 registry
             )
             .unwrap(),

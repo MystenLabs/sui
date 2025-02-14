@@ -1022,39 +1022,13 @@ impl AuthorityStore {
         Ok(())
     }
 
-    /// Commits transactions only to the db. Called by checkpoint builder. See
-    /// ExecutionCache::commit_transactions for more info
-    pub(crate) fn commit_transactions(
-        &self,
-        transactions: &[(TransactionDigest, VerifiedTransaction)],
-    ) -> SuiResult {
+    /// Commits transactions only (not effects or other transaction outputs) to the db.
+    /// See ExecutionCache::persist_transaction for more info
+    pub(crate) fn persist_transaction(&self, tx: &VerifiedExecutableTransaction) -> SuiResult {
         let mut batch = self.perpetual_tables.transactions.batch();
         batch.insert_batch(
             &self.perpetual_tables.transactions,
-            transactions
-                .iter()
-                .map(|(digest, tx)| (*digest, tx.serializable_ref())),
-        )?;
-        batch.write()?;
-        Ok(())
-    }
-
-    pub(crate) fn persist_transactions_and_effects(
-        &self,
-        transactions_and_effects: &[(VerifiedTransaction, TransactionEffects)],
-    ) -> SuiResult {
-        let mut batch = self.perpetual_tables.transactions.batch();
-        batch.insert_batch(
-            &self.perpetual_tables.transactions,
-            transactions_and_effects
-                .iter()
-                .map(|(tx, _)| (*tx.digest(), tx.serializable_ref())),
-        )?;
-        batch.insert_batch(
-            &self.perpetual_tables.effects,
-            transactions_and_effects
-                .iter()
-                .map(|(_, fx)| (fx.digest(), fx.clone())),
+            [(tx.digest(), tx.clone().into_unsigned().serializable_ref())],
         )?;
         batch.write()?;
         Ok(())
