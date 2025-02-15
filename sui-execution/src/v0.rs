@@ -9,8 +9,9 @@ use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
+use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{ObjectRef, SuiAddress, TxContext},
+    base_types::{SuiAddress, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -76,7 +77,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        gas_coins: Vec<ObjectRef>,
+        gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
@@ -89,6 +90,7 @@ impl executor::Executor for Executor {
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
+        let gas_coins = gas.payment;
         let (inner_temp_store, gas_status, effects, result) =
             execute_transaction_to_effects::<execution_mode::Normal>(
                 store,
@@ -120,7 +122,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        gas_coins: Vec<ObjectRef>,
+        gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
@@ -132,6 +134,7 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
+        let gas_coins = gas.payment;
         if skip_all_checks {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
@@ -185,6 +188,10 @@ impl executor::Executor for Executor {
             transaction_digest,
             &epoch_id,
             epoch_timestamp_ms,
+            // genesis transaction: RGP: 1, sponsor: None
+            // Those values are unused anyway in execution versions before 3 (or latest)
+            1,
+            None,
         );
         execute_genesis_state_update(
             store,

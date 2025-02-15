@@ -41,6 +41,7 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
 use sui_types::storage::{get_module, PackageObject};
+use sui_types::transaction::GasData;
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::{
@@ -764,6 +765,12 @@ impl LocalExec {
             )
             .expect("Failed to create gas status")
         };
+        let gas_data = GasData {
+            payment: tx_info.gas.clone(),
+            owner: tx_info.gas_owner.unwrap_or(tx_info.sender),
+            price: tx_info.gas_price,
+            budget: tx_info.gas_budget,
+        };
         let (inner_store, gas_status, effects, _timings, result) = executor
             .execute_transaction_to_effects(
                 &self,
@@ -774,7 +781,7 @@ impl LocalExec {
                 &tx_info.executed_epoch,
                 tx_info.epoch_start_timestamp,
                 CheckedInputObjects::new_for_replay(input_objects.clone()),
-                tx_info.gas.clone(),
+                gas_data,
                 gas_status,
                 transaction_kind.clone(),
                 tx_info.sender,
@@ -823,6 +830,12 @@ impl LocalExec {
         trace!(target: "replay_gas_info", "{}", Pretty(gas_status));
 
         let skip_checks = true;
+        let gas_data = GasData {
+            payment: tx_info.gas.clone(),
+            owner: tx_info.gas_owner.unwrap_or(tx_info.sender),
+            price: tx_info.gas_price,
+            budget: tx_info.gas_budget,
+        };
         if let ProgrammableTransaction(pt) = transaction_kind {
             trace!(
                 target: "replay_ptb_info",
@@ -841,7 +854,7 @@ impl LocalExec {
                             &tx_info.executed_epoch,
                             tx_info.epoch_start_timestamp,
                             CheckedInputObjects::new_for_replay(input_objects),
-                            tx_info.gas.clone(),
+                            gas_data,
                             SuiGasStatus::new(
                                 tx_info.gas_budget,
                                 tx_info.gas_price,
@@ -924,7 +937,7 @@ impl LocalExec {
             reference_gas_price,
         )
         .unwrap();
-        let (kind, signer, gas) = executable.transaction_data().execution_parts();
+        let (kind, signer, gas_data) = executable.transaction_data().execution_parts();
         let executor = sui_execution::executor(&protocol_config, true, None).unwrap();
         let (_, _, effects, _timings, exec_res) = executor.execute_transaction_to_effects(
             &store,
@@ -935,7 +948,7 @@ impl LocalExec {
             &executed_epoch,
             epoch_start_timestamp,
             input_objects,
-            gas,
+            gas_data,
             gas_status,
             kind,
             signer,
@@ -1530,8 +1543,9 @@ impl LocalExec {
             input_objects: input_objs,
             shared_object_refs,
             gas: gas_object_refs,
-            gas_budget: gas_data.budget,
+            gas_owner: (gas_data.owner != sender).then_some(gas_data.owner),
             gas_price: gas_data.price,
+            gas_budget: gas_data.budget,
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects: SuiTransactionBlockEffects::V1(effects),
@@ -1592,8 +1606,6 @@ impl LocalExec {
                 }
             })
             .collect();
-        let gas_data = orig_tx.transaction_data().gas_data();
-        let gas_object_refs: Vec<_> = gas_data.clone().payment.into_iter().collect();
         let receiving_objs = orig_tx
             .transaction_data()
             .receiving_objects()
@@ -1611,6 +1623,8 @@ impl LocalExec {
         let (epoch_start_timestamp, reference_gas_price) = self
             .get_epoch_start_timestamp_and_rgp(epoch_id, tx_digest)
             .await?;
+        let gas_data = orig_tx.transaction_data().gas_data();
+        let gas_object_refs: Vec<_> = gas_data.clone().payment.into_iter().collect();
 
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),
@@ -1619,8 +1633,9 @@ impl LocalExec {
             input_objects: input_objs,
             shared_object_refs,
             gas: gas_object_refs,
-            gas_budget: gas_data.budget,
+            gas_owner: (gas_data.owner != sender).then_some(gas_data.owner),
             gas_price: gas_data.price,
+            gas_budget: gas_data.budget,
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects,
