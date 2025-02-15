@@ -305,6 +305,7 @@ impl CheckpointStore {
         sequence_numbers: &[CheckpointSequenceNumber],
     ) -> Result<Vec<Option<CheckpointSummary>>, TypedStoreError> {
         let checkpoints = self
+            .tables
             .locally_computed_checkpoints
             .multi_get(sequence_numbers)?;
 
@@ -803,7 +804,7 @@ impl CheckpointStore {
         &self,
         epoch_id: EpochId,
     ) -> SuiResult<Option<CheckpointSequenceNumber>> {
-        let seq = self.epoch_last_checkpoint_map.get(&epoch_id)?;
+        let seq = self.tables.epoch_last_checkpoint_map.get(&epoch_id)?;
         Ok(seq)
     }
 
