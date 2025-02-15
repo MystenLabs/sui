@@ -1,8 +1,8 @@
 ---
 source: crates/move-package/tests/test_runner.rs
 ---
-[1;32mRESOLVING DEPENDENCIES IN[0m Anything [1;32mFROM[0m Root [1;32mWITH[0m ../resolvers/successful_package_batch_response.sh
-[31m../resolvers/successful_package_batch_response.sh stderr:[0m
+RESOLVING DEPENDENCIES IN Anything FROM Root WITH ../resolvers/successful_package_batch_response.sh
+../resolvers/successful_package_batch_response.sh stderr:
 Successful External Resolver
 PWD:     $ROOT/external-crates/move/crates/move-package/tests/test_sources/external_package_batch_response
 Type:    dependencies
