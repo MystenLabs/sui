@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::congestion_tracker::CongestionTracker;
 use crate::consensus_adapter::ConsensusOverloadChecker;
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
@@ -21,6 +22,7 @@ use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::CompiledModule;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
+use mysten_common::fatal;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
@@ -240,7 +242,7 @@ pub struct AuthorityMetrics {
     batch_size: Histogram,
 
     authority_state_handle_transaction_latency: Histogram,
-    authority_state_handle_transaction_v2_latency: Histogram,
+    authority_state_handle_vote_transaction_latency: Histogram,
 
     execute_certificate_latency_single_writer: Histogram,
     execute_certificate_latency_shared_object: Histogram,
@@ -447,9 +449,9 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            authority_state_handle_transaction_v2_latency: register_histogram_with_registry!(
-                "authority_state_handle_transaction_v2_latency",
-                "Latency of handling transactions with v2",
+            authority_state_handle_vote_transaction_latency: register_histogram_with_registry!(
+                "authority_state_handle_vote_transaction_latency",
+                "Latency of voting on transactions without signing",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -831,6 +833,8 @@ pub struct AuthorityState {
 
     /// The chain identifier is derived from the digest of the genesis checkpoint.
     chain_identifier: ChainIdentifier,
+
+    pub(crate) congestion_tracker: Arc<CongestionTracker>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -935,7 +939,7 @@ impl AuthorityState {
     /// This is a private method and should be kept that way. It doesn't check whether
     /// the provided transaction is a system transaction, and hence can only be called internally.
     #[instrument(level = "trace", skip_all)]
-    async fn handle_transaction_impl(
+    fn handle_transaction_impl(
         &self,
         transaction: VerifiedTransaction,
         sign: bool,
@@ -996,9 +1000,7 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        let signed = self
-            .handle_transaction_impl(transaction, true, epoch_store)
-            .await;
+        let signed = self.handle_transaction_impl(transaction, true, epoch_store);
         match signed {
             Ok(Some(s)) => {
                 if self.is_validator(epoch_store) {
@@ -1032,13 +1034,13 @@ impl AuthorityState {
     /// When Ok, returns None if the transaction has not been executed, and returns
     /// (TransactionEffects, TransactionEvents) if the transaction has been executed.
     #[instrument(level = "trace", skip_all)]
-    pub async fn handle_transaction_v2(
+    pub(crate) fn handle_vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> SuiResult<Option<(TransactionEffects, TransactionEvents)>> {
         let tx_digest = *transaction.digest();
-        debug!("handle_transaction_v2");
+        debug!("handle_vote_transaction");
 
         // Check if the transaction has already been executed.
         let tx_output = self.get_transaction_output(&tx_digest)?;
@@ -1048,7 +1050,7 @@ impl AuthorityState {
 
         let _metrics_guard = self
             .metrics
-            .authority_state_handle_transaction_v2_latency
+            .authority_state_handle_vote_transaction_latency
             .start_timer();
         self.metrics.tx_orders.inc();
 
@@ -1062,10 +1064,7 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        match self
-            .handle_transaction_impl(transaction, false, epoch_store)
-            .await
-        {
+        match self.handle_transaction_impl(transaction, false, epoch_store) {
             Ok(Some(_)) => {
                 panic!("handle_transaction_impl should not return a signed transaction")
             }
@@ -1688,6 +1687,7 @@ impl AuthorityState {
                 kind,
                 signer,
                 tx_digest,
+                &mut None,
             );
 
         fail_point_if!("cp_execution_nondeterminism", || {
@@ -1880,6 +1880,7 @@ impl AuthorityState {
                 kind,
                 signer,
                 transaction_digest,
+                &mut None,
             );
         let tx_digest = *effects.transaction_digest();
 
@@ -2070,6 +2071,7 @@ impl AuthorityState {
                 kind,
                 signer,
                 transaction.digest(),
+                &mut None,
             );
 
         Ok(SimulateTransactionResult {
@@ -2938,6 +2940,7 @@ impl AuthorityState {
             overload_info: AuthorityOverloadInfo::default(),
             validator_tx_finalizer,
             chain_identifier,
+            congestion_tracker: Arc::new(CongestionTracker::new()),
         });
 
         // Start a task to execute ready certificates.
@@ -3150,6 +3153,7 @@ impl AuthorityState {
         epoch_start_configuration: EpochStartConfiguration,
         accumulator: Arc<StateAccumulator>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         Self::check_protocol_version(
             supported_protocol_versions,
@@ -3165,6 +3169,29 @@ impl AuthorityState {
 
         // Terminate all epoch-specific tasks (those started with within_alive_epoch).
         cur_epoch_store.epoch_terminated().await;
+
+        let highest_locally_built_checkpoint_seq = self
+            .checkpoint_store
+            .get_latest_locally_computed_checkpoint()
+            .map(|c| *c.sequence_number())
+            .unwrap_or(0);
+
+        assert!(
+            epoch_last_checkpoint >= highest_locally_built_checkpoint_seq,
+            "{epoch_last_checkpoint} >= {highest_locally_built_checkpoint_seq}"
+        );
+        if highest_locally_built_checkpoint_seq == epoch_last_checkpoint {
+            // if we built the last checkpoint locally (as opposed to receiving it from a peer),
+            // then all shared_version_assignments except the one for the ChangeEpoch transaction
+            // should have been removed
+            let num_shared_version_assignments = cur_epoch_store.num_shared_version_assignments();
+            // Note that while 1 is the typical value, 0 is possible if the node restarts after
+            // committing the last checkpoint but before reconfiguring.
+            if num_shared_version_assignments > 1 {
+                // If this happens in prod, we have a memory leak, but not a correctness issue.
+                debug_fatal!("all shared_version_assignments should have been removed (num_shared_version_assignments: {num_shared_version_assignments})");
+            }
+        }
 
         // Safe to being reconfiguration now. No transactions are being executed,
         // and no epoch-specific tasks are running.
@@ -3215,6 +3242,7 @@ impl AuthorityState {
                 new_committee,
                 epoch_start_configuration,
                 expensive_safety_check_config,
+                epoch_last_checkpoint,
             )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
@@ -3245,6 +3273,11 @@ impl AuthorityState {
             self.get_backing_package_store().clone(),
             self.get_object_store().clone(),
             &self.config.expensive_safety_check_config,
+            self.checkpoint_store
+                .get_epoch_last_checkpoint(epoch_store.epoch())
+                .unwrap()
+                .map(|c| *c.sequence_number())
+                .unwrap_or_default(),
         );
         let new_epoch = new_epoch_store.epoch();
         self.transaction_manager.reconfigure(new_epoch);
@@ -5162,6 +5195,7 @@ impl AuthorityState {
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_epoch, "re-opening AuthorityEpochTables for new epoch");
@@ -5178,6 +5212,7 @@ impl AuthorityState {
             self.get_object_store().clone(),
             expensive_safety_check_config,
             cur_epoch_store.get_chain_identifier(),
+            epoch_last_checkpoint,
         );
         self.epoch_store.store(new_epoch_store.clone());
         Ok(new_epoch_store)
@@ -5277,6 +5312,14 @@ impl RandomnessRoundReceiver {
         let transaction = VerifiedExecutableTransaction::new_system(transaction, epoch);
         let digest = *transaction.digest();
 
+        // Randomness state updates contain the full bls signature for the random round,
+        // which cannot necessarily be reconstructed again later. Therefore we must immediately
+        // persist this transaction. If we crash before its outputs are committed, this
+        // ensures we will be able to re-execute it.
+        self.authority_state
+            .get_cache_commit()
+            .persist_transaction(&transaction);
+
         // Send transaction to TransactionManager for execution.
         self.authority_state
             .transaction_manager()
@@ -5316,7 +5359,7 @@ impl RandomnessRoundReceiver {
 
             let effects = effects.pop().expect("should return effects");
             if *effects.status() != ExecutionStatus::Success {
-                panic!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
+                fatal!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
             }
             debug!("successfully executed randomness state update transaction at epoch {epoch}, round {round}");
         });

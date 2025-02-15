@@ -28,6 +28,7 @@ use std::{
 use either::Either;
 use futures::stream::FuturesOrdered;
 use itertools::izip;
+use mysten_common::fatal;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::{fail_point, fail_point_async};
@@ -462,7 +463,7 @@ impl CheckpointExecutor {
             .await;
 
         epoch_store
-            .handle_committed_transactions(all_tx_digests)
+            .handle_finalized_checkpoint(checkpoint.data(), all_tx_digests)
             .expect("cannot fail");
 
         // Once the checkpoint is finalized, we know that any randomness contained in this checkpoint has
@@ -1240,7 +1241,7 @@ fn get_unexecuted_transactions(
             .enumerate()
             .map(|(i, (tx, expected_effects_digest))| {
                 let tx = tx.unwrap_or_else(||
-                    panic!(
+                    fatal!(
                         "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
                         unexecuted_txns[i]
                     )
@@ -1390,6 +1391,14 @@ async fn finalize_checkpoint(
 ) -> SuiResult<(Accumulator, Option<CheckpointData>)> {
     debug!("finalizing checkpoint");
     epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
+
+    if state.is_fullnode(epoch_store) {
+        state.congestion_tracker.process_checkpoint_effects(
+            transaction_cache_reader,
+            &checkpoint,
+            &effects,
+        );
+    }
 
     // TODO remove once we no longer need to support this table for read RPC
     state

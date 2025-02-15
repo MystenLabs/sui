@@ -779,6 +779,7 @@ impl LocalExec {
                 transaction_kind.clone(),
                 tx_info.sender,
                 *tx_digest,
+                &mut None,
             );
 
         if let Err(err) = self.pretty_print_for_tracing(
@@ -939,6 +940,7 @@ impl LocalExec {
             kind,
             signer,
             *executable.digest(),
+            &mut None,
         );
 
         let effects =

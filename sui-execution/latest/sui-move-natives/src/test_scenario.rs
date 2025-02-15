@@ -3,7 +3,7 @@
 
 use crate::{
     get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
-    object_runtime::{ObjectRuntime, RuntimeResults},
+    object_runtime::{object_store::ChildObjectEffects, ObjectRuntime, RuntimeResults},
 };
 use better_any::{Tid, TidAble};
 use indexmap::{IndexMap, IndexSet};
@@ -141,7 +141,7 @@ pub fn end_transaction(
     // Determine writes and deletes
     // We pass the received objects since they should be viewed as "loaded" for the purposes of of
     // calculating the effects of the transaction.
-    let results = object_runtime_state.finish(received, BTreeMap::new());
+    let results = object_runtime_state.finish(received, ChildObjectEffects::empty());
     let RuntimeResults {
         writes,
         user_events,

@@ -1,0 +1,10 @@
+[package]
+name = "disassembly_no_source"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+disassembly_no_source = "0x0"
+std = "0x1"

@@ -48,10 +48,16 @@ struct ConfigSetting {
 }
 
 #[derive(Debug)]
-pub(crate) struct ChildObjectEffect {
+pub(crate) struct ChildObjectEffectV0 {
     pub(super) owner: ObjectID,
     pub(super) ty: Type,
     pub(super) effect: Op<Value>,
+}
+
+pub(crate) enum ChildObjectEffects {
+    // In this version, we accurately track mutations via WriteRef to the child object, or
+    // references rooted in the child object.
+    V0(BTreeMap<ObjectID, ChildObjectEffectV0>),
 }
 
 struct Inner<'a> {
@@ -576,7 +582,7 @@ impl<'a> ChildObjectStore<'a> {
                 ));
         };
 
-        let mut value = if let Some(ChildObject { ty, value, .. }) = self.store.remove(&child) {
+        let mut value = if let Some(ChildObject { value, .. }) = self.store.remove(&child) {
             if value.exists()? {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -589,20 +595,7 @@ impl<'a> ChildObjectStore<'a> {
                         ),
                 );
             }
-            if self.inner.protocol_config.loaded_child_object_format() {
-                // double check format did not change
-                if !self.inner.protocol_config.loaded_child_object_format_type() && child_ty != &ty
-                {
-                    let msg = format!("Type changed for child {child} when setting the value back");
-                    return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(msg),
-                    );
-                }
-                value
-            } else {
-                GlobalValue::none()
-            }
+            value
         } else {
             GlobalValue::none()
         };
@@ -722,8 +715,8 @@ impl<'a> ChildObjectStore<'a> {
     }
 
     // retrieve the `Op` effects for the child objects
-    pub(super) fn take_effects(&mut self) -> BTreeMap<ObjectID, ChildObjectEffect> {
-        std::mem::take(&mut self.store)
+    pub(super) fn take_effects(&mut self) -> ChildObjectEffects {
+        let v0_effects = std::mem::take(&mut self.store)
             .into_iter()
             .filter_map(|(id, child_object)| {
                 let ChildObject {
@@ -733,10 +726,11 @@ impl<'a> ChildObjectStore<'a> {
                     value,
                 } = child_object;
                 let effect = value.into_effect()?;
-                let child_effect = ChildObjectEffect { owner, ty, effect };
+                let child_effect = ChildObjectEffectV0 { owner, ty, effect };
                 Some((id, child_effect))
             })
-            .collect()
+            .collect();
+        ChildObjectEffects::V0(v0_effects)
     }
 
     pub(super) fn all_active_objects(&self) -> impl Iterator<Item = ActiveChildObject<'_>> {
@@ -763,5 +757,11 @@ impl<'a> ChildObjectStore<'a> {
                 copied_value: copied_child_value,
             }
         })
+    }
+}
+
+impl ChildObjectEffects {
+    pub(crate) fn empty() -> Self {
+        ChildObjectEffects::V0(BTreeMap::new())
     }
 }

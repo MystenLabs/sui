@@ -23,6 +23,7 @@ mod checked {
         language_storage::{ModuleId, TypeTag},
         u256::U256,
     };
+    use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::{
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
@@ -44,8 +45,9 @@ mod checked {
     use sui_types::type_input::TypeInput;
     use sui_types::{
         base_types::{
-            MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
-            RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+            MoveLegacyTxContext, MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind,
+            RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME,
+            TX_CONTEXT_STRUCT_NAME,
         },
         coin::Coin,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},
@@ -76,6 +78,7 @@ mod checked {
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
         let mut timings = vec![];
         let result = execute_inner::<Mode>(
@@ -87,6 +90,7 @@ mod checked {
             tx_context,
             gas_charger,
             pt,
+            trace_builder_opt,
         );
 
         match result {
@@ -104,6 +108,7 @@ mod checked {
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         let ProgrammableTransaction { inputs, commands } = pt;
         let mut context = ExecutionContext::new(
@@ -119,7 +124,9 @@ mod checked {
         let mut mode_results = Mode::empty_results();
         for (idx, command) in commands.into_iter().enumerate() {
             let start = Instant::now();
-            if let Err(err) = execute_command::<Mode>(&mut context, &mut mode_results, command) {
+            if let Err(err) =
+                execute_command::<Mode>(&mut context, &mut mode_results, command, trace_builder_opt)
+            {
                 let object_runtime: &ObjectRuntime = context.object_runtime();
                 // We still need to record the loaded child objects for replay
                 let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
@@ -157,6 +164,7 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         mode_results: &mut Mode::ExecutionResults,
         command: Command,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let mut argument_updates = Mode::empty_arguments();
         let results = match command {
@@ -357,14 +365,19 @@ mod checked {
                     loaded_type_arguments,
                     arguments,
                     /* is_init */ false,
+                    trace_builder_opt,
                 );
 
                 context.linkage_view.reset_linkage();
                 return_values?
             }
-            Command::Publish(modules, dep_ids) => {
-                execute_move_publish::<Mode>(context, &mut argument_updates, modules, dep_ids)?
-            }
+            Command::Publish(modules, dep_ids) => execute_move_publish::<Mode>(
+                context,
+                &mut argument_updates,
+                modules,
+                dep_ids,
+                trace_builder_opt,
+            )?,
             Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
                 execute_move_upgrade::<Mode>(
                     context,
@@ -391,6 +404,7 @@ mod checked {
         type_arguments: Vec<Type>,
         arguments: Vec<Argument>,
         is_init: bool,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         // check that the function is either an entry function or a valid public function
         let LoadedFunctionInfo {
@@ -420,6 +434,7 @@ mod checked {
             type_arguments,
             tx_context_kind,
             serialized_arguments,
+            trace_builder_opt,
         )?;
         assert_invariant!(
             by_mut_ref.len() == mutable_reference_outputs.len(),
@@ -518,6 +533,7 @@ mod checked {
         argument_updates: &mut Mode::ArgumentUpdates,
         module_bytes: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         assert_invariant!(
             !module_bytes.is_empty(),
@@ -554,8 +570,9 @@ mod checked {
         // the last package we pushed is the one we are verifying and running the init from
         context.linkage_view.set_linkage(&package)?;
         context.write_package(package);
-        let res = publish_and_verify_modules(context, runtime_id, &modules)
-            .and_then(|_| init_modules::<Mode>(context, argument_updates, &modules));
+        let res = publish_and_verify_modules(context, runtime_id, &modules).and_then(|_| {
+            init_modules::<Mode>(context, argument_updates, &modules, trace_builder_opt)
+        });
         context.linkage_view.reset_linkage();
         if res.is_err() {
             context.pop_package();
@@ -821,11 +838,12 @@ mod checked {
         type_arguments: Vec<Type>,
         tx_context_kind: TxContextKind,
         mut serialized_arguments: Vec<Vec<u8>>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<SerializedReturnValues, ExecutionError> {
         match tx_context_kind {
             TxContextKind::None => (),
             TxContextKind::Mutable | TxContextKind::Immutable => {
-                serialized_arguments.push(context.tx_context.to_vec());
+                serialized_arguments.push(context.tx_context.to_bcs_legacy_context());
             }
         }
         // script visibility checked manually for entry points
@@ -835,6 +853,7 @@ mod checked {
                 function,
                 type_arguments,
                 serialized_arguments,
+                trace_builder_opt,
             )
             .map_err(|e| context.convert_vm_error(e))?;
 
@@ -849,7 +868,7 @@ mod checked {
             let Some((_, ctx_bytes, _)) = result.mutable_reference_outputs.pop() else {
                 invariant_violation!("Missing TxContext in reference outputs");
             };
-            let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).map_err(|e| {
+            let updated_ctx: MoveLegacyTxContext = bcs::from_bytes(&ctx_bytes).map_err(|e| {
                 ExecutionError::invariant_violation(format!(
                     "Unable to deserialize TxContext bytes. {e}"
                 ))
@@ -926,6 +945,7 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         modules: &[CompiledModule],
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let modules_to_init = modules.iter().filter_map(|module| {
             for fdef in &module.function_defs {
@@ -951,6 +971,7 @@ mod checked {
                 vec![],
                 vec![],
                 /* is_init */ true,
+                trace_builder_opt,
             )?;
 
             assert_invariant!(

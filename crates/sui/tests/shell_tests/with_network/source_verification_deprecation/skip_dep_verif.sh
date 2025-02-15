@@ -11,15 +11,15 @@ do
     && mv Move.toml $i
 done
 
-echo "=== publish dependency ===" | tee /dev/stderr
+echo "=== publish dependency (should warn about deprecation) ===" | tee /dev/stderr
 sui client --client.config $CONFIG publish "dependency" --skip-dependency-verification \
   --json | jq '.effects.status'
 
-echo "=== publish package v0 (should NOT warn) ===" | tee /dev/stderr
+echo "=== publish package v0 (should warn about deprecation) ===" | tee /dev/stderr
 UPGRADE_CAP=$(sui client --client.config $CONFIG publish "example" --skip-dependency-verification \
   --json | jq -r '.objectChanges[] | select(.objectType == "0x2::package::UpgradeCap") | .objectId')
 
-echo "=== upgrade package (should NOT warn) ===" | tee /dev/stderr
+echo "=== upgrade package (should warn about deprecation) ===" | tee /dev/stderr
 sui client --client.config $CONFIG upgrade --upgrade-capability $UPGRADE_CAP example --skip-dependency-verification \
   --json | jq '.effects.status'
 

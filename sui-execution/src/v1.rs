@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::{collections::HashSet, sync::Arc};
 
 use move_binary_format::CompiledModule;
+use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
@@ -80,6 +81,7 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
+        _trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -172,10 +174,18 @@ impl executor::Executor for Executor {
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        tx_context: &mut TxContext,
+        epoch_id: EpochId,
+        epoch_timestamp_ms: u64,
+        transaction_digest: &TransactionDigest,
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
+        let tx_context = &mut TxContext::new_from_components(
+            &SuiAddress::default(),
+            transaction_digest,
+            &epoch_id,
+            epoch_timestamp_ms,
+        );
         execute_genesis_state_update(
             store,
             protocol_config,

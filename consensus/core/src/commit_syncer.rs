@@ -308,6 +308,18 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             missing, fetched_commit_range
                         );
                     }
+                    for block_ref in missing {
+                        let hostname = &self
+                            .inner
+                            .context
+                            .committee
+                            .authority(block_ref.author)
+                            .hostname;
+                        metrics
+                            .commit_sync_fetch_missing_blocks
+                            .with_label_values(&[hostname])
+                            .inc();
+                    }
                 }
                 Err(e) => {
                     info!("Failed to add blocks, shutting down: {}", e);
@@ -712,8 +724,9 @@ impl<C: NetworkClient> Inner<C> {
         for serialized in serialized_blocks {
             let block: SignedBlock =
                 bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
-            // The block signature needs to be verified.
-            self.block_verifier.verify(&block)?;
+            // Only block signatures need to be verified, to verify commit votes.
+            // But the blocks will be sent to Core, so they need to be fully verified.
+            self.block_verifier.verify_and_vote(&block)?;
             for vote in block.commit_votes() {
                 if *vote == end_commit_ref {
                     stake_aggregator.add(block.author(), &self.context.committee);

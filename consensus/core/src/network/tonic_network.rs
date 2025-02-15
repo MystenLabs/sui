@@ -915,7 +915,7 @@ fn to_host_port_str(addr: &Multiaddr) -> Result<String, &'static str> {
 
 /// Attempts to convert a multiaddr of the form `/[ip4,ip6]/{}/[udp,tcp]/{port}` into
 /// a SocketAddr value.
-fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
+pub fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
     let mut iter = addr.iter();
 
     match (iter.next(), iter.next()) {
