@@ -1605,7 +1605,7 @@ impl CheckpointBuilder {
                         .upgrade()
                         .expect("No checkpoints should be getting built after local configuration");
                     let acc = state_acc.accumulate_checkpoint(
-                        effects.clone(),
+                        &effects,
                         sequence_number,
                         &self.epoch_store,
                     )?;

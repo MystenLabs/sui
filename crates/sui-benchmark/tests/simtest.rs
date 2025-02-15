@@ -417,8 +417,6 @@ mod test {
         });
         register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
 
-        register_fail_point_async("writeback-cache-commit", || delay_failpoint(10..20, 0.001));
-
         test_simulated_load(test_cluster, 120).await;
     }
 
