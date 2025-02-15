@@ -249,12 +249,11 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         // root package here; at the end of this method (after the graph is built) we iterate over
         // all packages in the graph and add the dependencies there. The reason we add them to the
         // root package here is to ensure that they and their dependencies are correctly processed.
-
-        // We copy into implicit_deps instead of the other way around so that we keep entries from
-        // root_manifest.
-        let mut all_root_deps = self.implicit_deps.clone();
-        all_root_deps.append(&mut root_manifest.dependencies);
-        root_manifest.dependencies.clone_from(&mut all_root_deps);
+        for (name, dep) in self.implicit_deps.iter() {
+            if !root_manifest.dependencies.contains_key(name) {
+                root_manifest.dependencies.insert(*name, dep.clone());
+            }
+        }
 
         // collect sub-graphs for "regular" and "dev" dependencies
         let root_pkg_id = custom_resolve_pkg_id(&root_manifest).with_context(|| {
@@ -381,7 +380,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
     }
 
     /// Update each node of [dep_graphs] to include links to the implicit dependencies
-    fn add_implicit_defs(&self, dep_graphs: &mut BTreeMap<Symbol, DependencyGraphInfo>) -> () {
+    fn add_implicit_defs(&self, dep_graphs: &mut BTreeMap<Symbol, DependencyGraphInfo>) {
         // find the graph nodes corresponding to the implicit deps
         for graph_info in dep_graphs.values_mut() {
             let graph = &mut graph_info.g.package_graph;
