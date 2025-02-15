@@ -232,7 +232,45 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                     Ok(()) => {
                         pending_prune_ranges.remove(&from);
                         let pruner_hi = pending_prune_ranges.get_pruner_hi() as i64;
-                        db_watermark.pruner_hi = pruner_hi;
+                        if db_watermark.pruner_hi != pruner_hi {
+                            // (4) Update the pruner watermark
+                            let guard = metrics
+                                .watermark_pruner_write_latency
+                                .with_label_values(&[H::NAME])
+                                .start_timer();
+
+                            let Ok(mut conn) = db.connect().await else {
+                                warn!(
+                                    pipeline = H::NAME,
+                                    "Pruner failed to connect, while updating watermark"
+                                );
+                                continue;
+                            };
+
+                            db_watermark.pruner_hi = pruner_hi;
+                            match db_watermark.update(&mut conn).await {
+                                Err(e) => {
+                                    let elapsed = guard.stop_and_record();
+                                    error!(
+                                        pipeline = H::NAME,
+                                        elapsed_ms = elapsed * 1000.0,
+                                        "Failed to update pruner watermark: {e}"
+                                    )
+                                }
+
+                                Ok(true) => {
+                                    let elapsed = guard.stop_and_record();
+                                    logger.log::<H>(&db_watermark, elapsed);
+
+                                    metrics
+                                        .watermark_pruner_hi_in_db
+                                        .with_label_values(&[H::NAME])
+                                        .set(db_watermark.pruner_hi);
+                                }
+                                Ok(false) => {}
+                            }
+                        }
+
                         metrics
                             .watermark_pruner_hi
                             .with_label_values(&[H::NAME])
