@@ -25,7 +25,7 @@ To securely access randomness:
 
 - Define your function as (private) `entry`.
 - Prefer generating randomness using function-local `RandomGenerator`.
-- Make sure that the "unhappy path" of your function does not charge more resources than the "happy path".
+- Make sure that the "unhappy path" of your function does not consume more resources than the "happy path".
 
 ## Limited resources and `Random` dependent flows
 
