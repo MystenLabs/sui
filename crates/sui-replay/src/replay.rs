@@ -41,6 +41,7 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
 use sui_types::storage::{get_module, PackageObject};
+use sui_types::transaction::GasData;
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::{
@@ -757,8 +758,8 @@ impl LocalExec {
             SuiGasStatus::new_unmetered()
         } else {
             SuiGasStatus::new(
-                tx_info.gas_budget,
-                tx_info.gas_price,
+                tx_info.gas.budget,
+                tx_info.gas.price,
                 tx_info.reference_gas_price,
                 protocol_config,
             )
@@ -843,8 +844,8 @@ impl LocalExec {
                             CheckedInputObjects::new_for_replay(input_objects),
                             tx_info.gas.clone(),
                             SuiGasStatus::new(
-                                tx_info.gas_budget,
-                                tx_info.gas_price,
+                                tx_info.gas.budget,
+                                tx_info.gas.price,
                                 tx_info.reference_gas_price,
                                 protocol_config,
                             )?,
@@ -924,7 +925,7 @@ impl LocalExec {
             reference_gas_price,
         )
         .unwrap();
-        let (kind, signer, gas) = executable.transaction_data().execution_parts();
+        let (kind, signer, gas_data) = executable.transaction_data().execution_parts();
         let executor = sui_execution::executor(&protocol_config, true, None).unwrap();
         let (_, _, effects, _timings, exec_res) = executor.execute_transaction_to_effects(
             &store,
@@ -935,7 +936,7 @@ impl LocalExec {
             &executed_epoch,
             epoch_start_timestamp,
             input_objects,
-            gas,
+            gas_data,
             gas_status,
             kind,
             signer,
@@ -1508,6 +1509,12 @@ impl LocalExec {
             .iter()
             .map(|obj_ref| obj_ref.to_object_ref())
             .collect();
+        let gas_data = GasData {
+            payment: gas_object_refs,
+            owner: gas_data.owner,
+            price: gas_data.price,
+            budget: gas_data.budget,
+        };
         let receiving_objs = orig_tx
             .transaction_data()
             .receiving_objects()
@@ -1529,9 +1536,7 @@ impl LocalExec {
             modified_at_versions,
             input_objects: input_objs,
             shared_object_refs,
-            gas: gas_object_refs,
-            gas_budget: gas_data.budget,
-            gas_price: gas_data.price,
+            gas: gas_data,
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects: SuiTransactionBlockEffects::V1(effects),
@@ -1592,8 +1597,7 @@ impl LocalExec {
                 }
             })
             .collect();
-        let gas_data = orig_tx.transaction_data().gas_data();
-        let gas_object_refs: Vec<_> = gas_data.clone().payment.into_iter().collect();
+        let gas_data = orig_tx.transaction_data().gas_data().clone();
         let receiving_objs = orig_tx
             .transaction_data()
             .receiving_objects()
@@ -1618,9 +1622,7 @@ impl LocalExec {
             modified_at_versions,
             input_objects: input_objs,
             shared_object_refs,
-            gas: gas_object_refs,
-            gas_budget: gas_data.budget,
-            gas_price: gas_data.price,
+            gas: gas_data,
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects,
@@ -1799,6 +1801,7 @@ impl LocalExec {
         // Download gas (although this should already be in cache from modified at versions?)
         let gas_refs: Vec<_> = tx_info
             .gas
+            .payment
             .iter()
             .filter_map(|w| (w.0 != ObjectID::ZERO).then_some((w.0, w.1)))
             .collect();

@@ -122,6 +122,15 @@ mod checked {
             *epoch_id,
         );
 
+        // let sponsor = {
+        //     let gas_owner = tx_data.gas_owner();
+        //     if gas_owner == signer {
+        //         None
+        //     } else {
+        //         Some(gas_owner)
+        //     }
+        // };
+        let gas_price = gas_status.gas_price();
         let mut gas_charger =
             GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
 
@@ -130,6 +139,8 @@ mod checked {
             &transaction_digest,
             epoch_id,
             epoch_timestamp_ms,
+            gas_price,
+            None, // TODO: everything
         );
 
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
