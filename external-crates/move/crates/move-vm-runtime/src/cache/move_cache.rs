@@ -91,7 +91,6 @@ impl MoveCache {
         &self.package_cache
     }
 
-
     // -------------------------------------------
     // Cache Eviction For Testing
     // -------------------------------------------
