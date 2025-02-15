@@ -4985,10 +4985,25 @@ impl AuthorityState {
 
         // Load tx in the last N checkpoints before end-of-epoch, and save only the
         // execution time observations for commands in these checkpoints.
-        let sequence_numbers = (last_checkpoint_before_end_of_epoch
-            .saturating_sub(NUM_INCLUDED_CHECKPOINTS - 1)
-            ..=last_checkpoint_before_end_of_epoch)
-            .collect::<Vec<_>>();
+        let start_checkpoint = std::cmp::max(
+            last_checkpoint_before_end_of_epoch.saturating_sub(NUM_INCLUDED_CHECKPOINTS - 1),
+            // If we have <N checkpoints in the epoch, use all of them.
+            epoch_store
+                .epoch()
+                .checked_sub(1)
+                .map(|prev_epoch| {
+                    self.checkpoint_store
+                        .get_epoch_last_checkpoint_seq_number(prev_epoch)
+                        .expect("typed store must not fail")
+                        .expect(
+                            "sequence number of last checkpoint of preceding epoch must be saved",
+                        )
+                        + 1
+                })
+                .unwrap_or(0),
+        );
+        let sequence_numbers =
+            (start_checkpoint..=last_checkpoint_before_end_of_epoch).collect::<Vec<_>>();
         let contents_digests: Vec<_> = self
             .checkpoint_store
             .multi_get_locally_computed_checkpoints(&sequence_numbers)

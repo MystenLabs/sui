@@ -3,7 +3,7 @@
 
 #[cfg(msim)]
 mod test {
-    use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
+    use rand::{distributions::uniform::SampleRange, seq::SliceRandom, thread_rng, Rng};
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
     use std::path::PathBuf;
@@ -475,13 +475,14 @@ mod test {
         let separate_randomness_budget;
         {
             let mut rng = thread_rng();
-            mode = match rng.gen_range(0..4) {
-                0 => PerObjectCongestionControlMode::TotalGasBudget,
-                1 => PerObjectCongestionControlMode::TotalTxCount,
-                2 => PerObjectCongestionControlMode::TotalGasBudgetWithCap,
-                3 => PerObjectCongestionControlMode::ExecutionTimeEstimate,
-                _ => unreachable!(),
-            };
+            mode = *[
+                PerObjectCongestionControlMode::TotalGasBudget,
+                PerObjectCongestionControlMode::TotalTxCount,
+                PerObjectCongestionControlMode::TotalGasBudgetWithCap,
+                PerObjectCongestionControlMode::ExecutionTimeEstimate,
+            ]
+            .choose(&mut rng)
+            .unwrap();
             checkpoint_budget_factor = rng.gen_range(1..20);
             txn_count_limit = rng.gen_range(1..=10);
             max_deferral_rounds = if rng.gen_bool(0.5) {
