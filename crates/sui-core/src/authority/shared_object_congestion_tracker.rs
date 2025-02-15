@@ -1170,8 +1170,8 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget => 60,
             PerObjectCongestionControlMode::TotalTxCount => 13,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => 45, // 3 objects, 7 commands
-            // previous cost 3_000_010 + 7 commands * 1.5M
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => 13_500_010,
+            // previous cost 3_000_010 + (unknown-command default of 1.5M)
+            PerObjectCongestionControlMode::ExecutionTimeEstimate => 4_500_010,
         };
         shared_object_congestion_tracker
             .bump_object_execution_cost(&execution_time_estimator, &cert);

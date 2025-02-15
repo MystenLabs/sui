@@ -190,6 +190,11 @@ impl ExecutionTimeObserver {
     }
 }
 
+// Default duration estimate used for transations containing a command without any
+// available observations.
+// TODO: Make this a protocol config.
+const DEFAULT_TRANSACTION_DURATION: Duration = Duration::from_millis(1_500);
+
 // Key used to save StoredExecutionTimeObservations in the Sui system state object's
 // `extra_fields` Bag.
 pub const EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY: u64 = 0;
@@ -330,19 +335,19 @@ impl ExecutionTimeEstimator {
             debug_fatal!("get_estimate called on non-ProgrammableTransaction");
             return Duration::ZERO;
         };
-        tx.commands
-            .iter()
-            .map(|command| {
-                let key = ExecutionTimeObservationKey::from_command(command);
-                self.consensus_observations
-                    .get(&key)
-                    .map(|obs| obs.stake_weighted_median)
-                    .unwrap_or_else(|| key.default_duration())
-                    // For native commands, adjust duration by length of command's inputs/outputs.
-                    // This is sort of arbitrary, but hopefully works okay as a heuristic.
+        let mut estimate = Duration::ZERO;
+        for command in &tx.commands {
+            let key = ExecutionTimeObservationKey::from_command(command);
+            let Some(command_estimate) = self.consensus_observations.get(&key).map(|obs| {
+                obs.stake_weighted_median
                     .mul_f64(command_length(command).get() as f64)
-            })
-            .sum()
+            }) else {
+                estimate = DEFAULT_TRANSACTION_DURATION;
+                break;
+            };
+            estimate += command_estimate;
+        }
+        estimate
     }
 
     pub fn take_observations(&mut self) -> StoredExecutionTimeObservations {
