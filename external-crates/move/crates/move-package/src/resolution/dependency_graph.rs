@@ -230,7 +230,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         lock_string_opt: Option<String>,
     ) -> Result<(DependencyGraph, bool)> {
         let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
-        let root_manifest = parse_source_manifest(toml_manifest)?;
+        let mut root_manifest = parse_source_manifest(toml_manifest)?;
 
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
@@ -244,6 +244,17 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 Err(_) => None, // malformed header - regenerate lock file
             })
             .unwrap_or(None);
+
+        // add implicit dependencies to the manifest. Implicit dependencies are added only to the
+        // root package here; at the end of this method (after the graph is built) we iterate over
+        // all packages in the graph and add the dependencies there. The reason we add them to the
+        // root package here is to ensure that they and their dependencies are correctly processed.
+
+        // We copy into implicit_deps instead of the other way around so that we keep entries from
+        // root_manifest.
+        let mut all_root_deps = self.implicit_deps.clone();
+        all_root_deps.append(&mut root_manifest.dependencies);
+        root_manifest.dependencies.clone_from(&mut all_root_deps);
 
         // collect sub-graphs for "regular" and "dev" dependencies
         let root_pkg_id = custom_resolve_pkg_id(&root_manifest).with_context(|| {
@@ -267,7 +278,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             // write_to_lock should create a fresh lockfile for computing the dependency digest, hence the `None` arg below
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone(), None))
             .collect::<Result<Vec<LockFile>>>()?;
-        let (dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) = self
+        let (mut dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) = self
             .collect_graphs(
                 parent,
                 root_pkg_id,
@@ -277,6 +288,11 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 root_manifest.dev_dependencies.clone(),
             )?;
 
+        // smash implicit dependencies into the collected subgraphs
+        self.add_implicit_defs(&mut dep_graphs);
+        self.add_implicit_defs(&mut dev_dep_graphs);
+
+        // compute new digests and return early if the manifest and deps digests are unchanged
         let dev_dep_lock_files = dev_dep_graphs
             .values()
             // write_to_lock should create a fresh lockfile for computing the dependency digest, hence the `None` arg below
@@ -302,6 +318,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             _ => (new_manifest_digest, new_deps_digest),
         };
 
+        // combine the subgraphs for the dependencies into a single graph for the root package
         dep_graphs.extend(dev_dep_graphs);
         dep_names.extend(dev_dep_names);
 
@@ -361,6 +378,32 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         combined_graph.discover_always_deps();
 
         Ok((combined_graph, true))
+    }
+
+    /// Update each node of [dep_graphs] to include links to the implicit dependencies
+    fn add_implicit_defs(&self, dep_graphs: &mut BTreeMap<Symbol, DependencyGraphInfo>) -> () {
+        // find the graph nodes corresponding to the implicit deps
+        for graph_info in dep_graphs.values_mut() {
+            let graph = &mut graph_info.g.package_graph;
+            let nodes: Vec<_> = graph.nodes().collect();
+            for n in nodes {
+                if !self.implicit_deps.contains_key(&n) {
+                    for implicit in self.implicit_deps.keys() {
+                        graph.add_edge(
+                            n,
+                            *implicit,
+                            Dependency {
+                                mode: DependencyMode::Always,
+                                subst: None,
+                                digest: None,
+                                dep_override: true,
+                                dep_name: *implicit,
+                            },
+                        );
+                    }
+                }
+            }
+        }
     }
 
     /// Given all dependencies from the parent manifest file, collects all the sub-graphs
