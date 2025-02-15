@@ -289,24 +289,26 @@ impl AuthorityStorePruner {
         }
         perpetual_batch.delete_batch(&perpetual_db.effects, effect_digests)?;
 
-        let mut checkpoints_batch = checkpoint_db.certified_checkpoints.batch();
+        let mut checkpoints_batch = checkpoint_db.tables.certified_checkpoints.batch();
 
         let checkpoint_content_digests =
             checkpoint_content_to_prune.iter().map(|ckpt| ckpt.digest());
         checkpoints_batch.delete_batch(
-            &checkpoint_db.checkpoint_content,
+            &checkpoint_db.tables.checkpoint_content,
             checkpoint_content_digests.clone(),
         )?;
         checkpoints_batch.delete_batch(
-            &checkpoint_db.checkpoint_sequence_by_contents_digest,
+            &checkpoint_db.tables.checkpoint_sequence_by_contents_digest,
             checkpoint_content_digests,
         )?;
 
-        checkpoints_batch
-            .delete_batch(&checkpoint_db.checkpoint_by_digest, checkpoints_to_prune)?;
+        checkpoints_batch.delete_batch(
+            &checkpoint_db.tables.checkpoint_by_digest,
+            checkpoints_to_prune,
+        )?;
 
         checkpoints_batch.insert_batch(
-            &checkpoint_db.watermarks,
+            &checkpoint_db.tables.watermarks,
             [(
                 &CheckpointWatermark::HighestPruned,
                 &(checkpoint_number, CheckpointDigest::random()),
@@ -460,6 +462,7 @@ impl AuthorityStorePruner {
 
         loop {
             let Some(ckpt) = checkpoint_store
+                .tables
                 .certified_checkpoints
                 .get(&(checkpoint_number + 1))?
             else {

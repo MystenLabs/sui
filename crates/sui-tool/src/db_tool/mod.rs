@@ -380,12 +380,7 @@ pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
     );
     perpetual_db.reset_db_for_execution_since_genesis()?;
 
-    let checkpoint_db = CheckpointStore::open_tables_read_write(
-        path.join("checkpoints"),
-        MetricConf::default(),
-        None,
-        None,
-    );
+    let checkpoint_db = CheckpointStore::new(&path.join("checkpoints"));
     checkpoint_db.reset_db_for_execution_since_genesis()?;
 
     let epoch_db = AuthorityEpochTables::open_tables_read_write(
@@ -407,12 +402,7 @@ pub fn rewind_checkpoint_execution(
     epoch: EpochId,
     checkpoint_sequence_number: u64,
 ) -> anyhow::Result<()> {
-    let checkpoint_db = CheckpointStore::open_tables_read_write(
-        path.join("checkpoints"),
-        MetricConf::default(),
-        None,
-        None,
-    );
+    let checkpoint_db = CheckpointStore::new(&path.join("checkpoints"));
     let Some(checkpoint) =
         checkpoint_db.get_checkpoint_by_sequence_number(checkpoint_sequence_number)?
     else {
@@ -490,12 +480,7 @@ pub fn set_checkpoint_watermark(
     path: &Path,
     options: SetCheckpointWatermarkOptions,
 ) -> anyhow::Result<()> {
-    let checkpoint_db = CheckpointStore::open_tables_read_write(
-        path.join("checkpoints"),
-        MetricConf::default(),
-        None,
-        None,
-    );
+    let checkpoint_db = CheckpointStore::new(&path.join("checkpoints"));
 
     if let Some(highest_verified) = options.highest_verified {
         let Some(checkpoint) = checkpoint_db.get_checkpoint_by_sequence_number(highest_verified)?
