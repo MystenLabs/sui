@@ -90,6 +90,16 @@ impl MoveCache {
     pub fn package_cache(&self) -> &RwLock<PackageCache> {
         &self.package_cache
     }
+
+
+    // -------------------------------------------
+    // Cache Eviction For Testing
+    // -------------------------------------------
+
+    /// For use with unit testing: remove a package, returning `true` if it was present.
+    pub(crate) fn remove_package(&self, storage_id: &PackageStorageId) -> bool {
+        self.package_cache.write().remove(storage_id).is_some()
+    }
 }
 
 impl Package {
