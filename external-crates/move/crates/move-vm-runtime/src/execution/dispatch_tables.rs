@@ -239,6 +239,7 @@ impl VMDispatchTables {
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,
             TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt)?)),
+            // NB: Note that this tag is slightly misnamed and used for all Datatypes.
             TypeTag::Struct(struct_tag) => {
                 let package_key = struct_tag.address;
                 let ident_interner = string_interner();
@@ -259,11 +260,6 @@ impl VMDispatchTables {
                     .resolve_type(&key)
                     .map_err(|e| e.finish(Location::Undefined))?
                     .to_ref();
-                let Datatype::Struct(_) = datatype.datatype_info.inner_ref() else {
-                    return Err(PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE)
-                        .with_message("Type with struct type tag was not a struct".to_string())
-                        .finish(Location::Undefined));
-                };
                 if datatype.type_parameters().is_empty() && struct_tag.type_params.is_empty() {
                     Type::Datatype(key)
                 } else {
