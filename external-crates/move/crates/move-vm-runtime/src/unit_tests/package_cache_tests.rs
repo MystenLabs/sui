@@ -325,6 +325,107 @@ fn cache_package_external_package_type_references_with_shared_dep() {
 }
 
 #[test]
+fn cache_and_evict_packages() {
+    let package1_address = AccountAddress::from_hex_literal("0x1").unwrap();
+    let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
+    let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
+    let mut adapter = InMemoryTestAdapter::new();
+    for pkg in compile_packages_in_file("package5.move", &[]) {
+        adapter.insert_package_into_storage(pkg);
+    }
+
+    let link_context = adapter.get_linkage_context(package3_address).unwrap();
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
+    assert!(result.is_ok());
+
+    assert!(adapter.runtime().cache().package_cache().read().len() == 3);
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package1_address)
+        .is_some());
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package2_address)
+        .is_some());
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package3_address)
+        .is_some());
+
+    assert!(
+        adapter.runtime().cache().remove_package(&package2_address),
+        "Package 2 not found"
+    );
+    assert!(adapter.runtime().cache().package_cache().read().len() == 2);
+
+    assert!(
+        !adapter.runtime().cache().remove_package(&package2_address),
+        "Package 2 double-evicted"
+    );
+    assert!(adapter.runtime().cache().package_cache().read().len() == 2);
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package1_address)
+        .is_some());
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package2_address)
+        .is_none());
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package3_address)
+        .is_some());
+
+    // This should re-load package 2, but not packages 1 or 3.
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
+    assert!(result.is_ok());
+    assert!(adapter.runtime().cache().package_cache().read().len() == 3);
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package1_address)
+        .is_some());
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package2_address)
+        .is_some());
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package3_address)
+        .is_some());
+
+    // Re-evict 2.
+    assert!(
+        adapter.runtime().cache().remove_package(&package2_address),
+        "Package 2 not found"
+    );
+    assert!(adapter.runtime().cache().package_cache().read().len() == 2);
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package1_address)
+        .is_some());
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package2_address)
+        .is_none());
+    assert!(adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package3_address)
+        .is_some());
+}
+
+#[test]
 fn cache_package_external_package_type_references_cache_reload_with_shared_dep() {
     let package1_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
