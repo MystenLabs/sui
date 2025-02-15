@@ -185,10 +185,10 @@ The Move compiler enforces this behavior by rejecting `public` functions with `R
 If you want to call `roll_dice(r: &Random, ctx: &mut TxContext)` in module `example`, use the following code snippet:
 
 ```typescript
-const txb = new Transaction();
-txb.moveCall({
+const tx = new Transaction();
+tx.moveCall({
   target: "${PACKAGE_ID}::example::roll_dice",
-  arguments: [txb.object('0x8')]
+  arguments: [tx.object.random()]
 });
 ...
 ```
