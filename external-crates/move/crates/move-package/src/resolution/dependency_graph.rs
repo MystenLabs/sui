@@ -208,20 +208,25 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         skip_fetch_latest_git_deps: bool,
         progress_output: Progress,
         install_dir: PathBuf,
-        implicit_deps: &Dependencies,
+        implicit_deps: Dependencies,
     ) -> Self {
         DependencyGraphBuilder {
             dependency_cache: DependencyCache::new(skip_fetch_latest_git_deps),
             progress_output,
             visited_dependencies: VecDeque::new(),
             install_dir,
-            implicit_deps: implicit_deps.clone(),
+            implicit_deps,
         }
     }
 
     /// Get a new graph by either reading it from Move.lock file (if this file is up-to-date, in
     /// which case also return false) or by computing a new graph based on the content of the
     /// Move.toml (manifest) file (in which case also return true).
+    ///
+    /// Additional dependencies on [self.implicit_dependencies] are added to all nodes of the
+    /// returned graph, except for nodes that are themselves in [self.implicit_dependencies] or
+    /// that have an explicit dependency on one of the implicit packages (note that having just one
+    /// explicit dep from a node disables all implicit deps for that node!)
     pub fn get_graph(
         &mut self,
         parent: &PM::DependencyKind,
@@ -230,7 +235,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         lock_string_opt: Option<String>,
     ) -> Result<(DependencyGraph, bool)> {
         let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
-        let root_manifest = parse_source_manifest(toml_manifest)?;
+        let mut root_manifest = parse_source_manifest(toml_manifest)?;
 
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
@@ -245,6 +250,17 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             })
             .unwrap_or(None);
 
+        // implicits deps should be skipped if the manifest contains any of them
+        // explicitly (or if the manifest is for a system package).
+        let add_implicits: bool = !self.implicit_deps.iter().any(|(name, _)| {
+            root_manifest.dependencies.contains_key(name) || root_manifest.package.name == *name
+        });
+        if add_implicits {
+            for (name, dep) in self.implicit_deps.iter() {
+                root_manifest.dependencies.insert(*name, dep.clone());
+            }
+        }
+
         // collect sub-graphs for "regular" and "dev" dependencies
         let root_pkg_id = custom_resolve_pkg_id(&root_manifest).with_context(|| {
             format!(
@@ -252,6 +268,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 root_manifest.package.name
             )
         })?;
+
         let root_pkg_name = root_manifest.package.name;
         let (mut dep_graphs, resolved_id_deps, mut dep_names, mut overrides) = self
             .collect_graphs(
@@ -277,6 +294,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 root_manifest.dev_dependencies.clone(),
             )?;
 
+        // compute new digests and return early if the manifest and deps digests are unchanged
         let dev_dep_lock_files = dev_dep_graphs
             .values()
             // write_to_lock should create a fresh lockfile for computing the dependency digest, hence the `None` arg below
@@ -302,6 +320,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             _ => (new_manifest_digest, new_deps_digest),
         };
 
+        // combine the subgraphs for the dependencies into a single graph for the root package
         dep_graphs.extend(dev_dep_graphs);
         dep_names.extend(dev_dep_names);
 
