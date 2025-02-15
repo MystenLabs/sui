@@ -375,7 +375,7 @@ fn initialize_type_refs(
 /// Loads strucks and enums, returning them and their datatype descriptors (for vtable entry).
 fn datatypes(
     context: &mut PackageContext,
-    package_id: &PackageStorageId,
+    storage_id: &PackageStorageId,
     module: &CompiledModule,
 ) -> PartialVMResult<(
     ArenaVec<StructDef>,
@@ -394,7 +394,7 @@ fn datatypes(
     fn defining_id(
         context: &PackageContext,
         ident_interner: &IdentifierInterner,
-        package_id: &PackageStorageId,
+        storage_id: &PackageStorageId,
         name: &VirtualTableKey,
     ) -> PartialVMResult<ModuleId> {
         let defining_address = context
@@ -406,15 +406,17 @@ fn datatypes(
                     name.to_string().expect("No name")
                 ))
             })?;
-        dbg_println!("Package ID: {:?}", package_id);
+        dbg_println!("Package ID: {:?}", storage_id);
         dbg_println!("Defining Address: {:?}", defining_address);
         let module_id =
             ident_interner.resolve_ident(&name.inner_pkg_key.module_name, "module name")?;
         Ok(ModuleId::new(*defining_address, module_id))
     }
 
-    let structs: ArenaVec<StructDef> = structs(context, package_id, module)?;
-    let enums: ArenaVec<EnumDef> = enums(context, package_id, module)?;
+    let runtime_id = context.runtime_id;
+
+    let structs: ArenaVec<StructDef> = structs(context, &runtime_id, module)?;
+    let enums: ArenaVec<EnumDef> = enums(context, &runtime_id, module)?;
 
     let runtime_id = module.self_id();
     let interner = string_interner();
@@ -423,7 +425,7 @@ fn datatypes(
         .iter()
         .map(|struct_| {
             let name = resolve_member_name(&interner, &struct_.def_vtable_key)?;
-            let defining_id = defining_id(context, &interner, package_id, &struct_.def_vtable_key)?;
+            let defining_id = defining_id(context, &interner, storage_id, &struct_.def_vtable_key)?;
             let runtime_id = runtime_id.clone();
             let datatype_info =
                 context.arena_box(Datatype::Struct(VMPointer::from_ref(struct_)))?;
@@ -436,7 +438,7 @@ fn datatypes(
         .iter()
         .map(|enum_| {
             let name = resolve_member_name(&interner, &enum_.def_vtable_key)?;
-            let defining_id = defining_id(context, &interner, package_id, &enum_.def_vtable_key)?;
+            let defining_id = defining_id(context, &interner, storage_id, &enum_.def_vtable_key)?;
             let runtime_id = runtime_id.clone();
             let datatype_info = context.arena_box(Datatype::Enum(VMPointer::from_ref(enum_)))?;
             let descriptor = DatatypeDescriptor::new(name, defining_id, runtime_id, datatype_info);
@@ -455,7 +457,7 @@ fn datatypes(
 
 fn structs(
     context: &mut PackageContext<'_>,
-    package_id: &PackageStorageId,
+    original_id: &RuntimePackageId,
     module: &CompiledModule,
 ) -> PartialVMResult<ArenaVec<StructDef>> {
     let ident_interner = string_interner();
@@ -469,7 +471,8 @@ fn structs(
 
             let name = module.identifier_at(struct_handle.name);
             let member_name = ident_interner.get_or_intern_ident_str(name)?;
-            let def_vtable_key = VirtualTableKey::from_parts(*package_id, module_name, member_name);
+            let def_vtable_key =
+                VirtualTableKey::from_parts(*original_id, module_name, member_name);
 
             let abilities = struct_handle.abilities;
 
@@ -513,7 +516,7 @@ fn structs(
 
 fn enums(
     context: &mut PackageContext<'_>,
-    package_id: &PackageStorageId,
+    original_id: &RuntimePackageId,
     module: &CompiledModule,
 ) -> PartialVMResult<ArenaVec<EnumDef>> {
     // We do this in two passes:
@@ -531,7 +534,8 @@ fn enums(
 
             let name = module.identifier_at(enum_handle.name);
             let member_name = ident_interner.get_or_intern_ident_str(name)?;
-            let def_vtable_key = VirtualTableKey::from_parts(*package_id, module_name, member_name);
+            let def_vtable_key =
+                VirtualTableKey::from_parts(*original_id, module_name, member_name);
 
             let enum_module_handle = module.module_handle_at(enum_handle.module);
             dbg_println!("Indexing type {:?} at {:?}", name, enum_module_handle);
