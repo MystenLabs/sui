@@ -1,14 +1,14 @@
 ---
 source: crates/move-package/tests/test_runner.rs
 ---
-[1;32mRESOLVING DEPENDENCIES IN[0m A [1;32mFROM[0m Root [1;32mWITH[0m ../resolvers/successful.sh
-[31m../resolvers/successful.sh stderr:[0m
+RESOLVING DEPENDENCIES IN A FROM Root WITH ../resolvers/successful.sh
+../resolvers/successful.sh stderr:
 Successful External Resolver
 PWD:     $ROOT/external-crates/move/crates/move-package/tests/test_sources/external_dev_dep
 Type:    dependencies
 Package: A
-[1;32mRESOLVING DEV-DEPENDENCIES IN[0m B [1;32mFROM[0m Root [1;32mWITH[0m ../resolvers/successful.sh
-[31m../resolvers/successful.sh stderr:[0m
+RESOLVING DEV-DEPENDENCIES IN B FROM Root WITH ../resolvers/successful.sh
+../resolvers/successful.sh stderr:
 Successful External Resolver
 PWD:     $ROOT/external-crates/move/crates/move-package/tests/test_sources/external_dev_dep
 Type:    dev-dependencies
