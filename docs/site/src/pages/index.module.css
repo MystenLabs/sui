@@ -19,7 +19,7 @@
   margin: 10rem auto;
 }
 
-.card, .cardCTA {
+.card, {
   background-color: rgba(247, 247, 248, .05);
   border: 1px solid;
   border-color: var(--sui-line);
@@ -30,15 +30,22 @@
   border-radius: 30px;
   height: 20.3125rem;
 }
+
 .cardCTA {
-  height: 100%;
+  background-color: rgba(247, 247, 248, 0.05);
+  border: 1px solid var(--sui-line);
+  display: flex;
+  flex-direction: column;
+  padding: 1.875rem;
   justify-content: center;
+  border-radius: 30px;
+  height: 100%;
 }
 
 .cardLinksContainer {
   display: flex;
   flex-direction: column;
-  justify-self: flex-end;
+  justify-content: flex-end;
 }
 
 .cardLink {
