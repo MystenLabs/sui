@@ -24,13 +24,16 @@ use move_vm_types::{
 };
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet},
+    rc::Rc,
     sync::Arc,
 };
 use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
 use sui_types::{
-    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
     committee::EpochId,
+    digests::TransactionDigest,
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
     execution::DynamicallyLoadedObjectMetadata,
     id::UID,
@@ -108,6 +111,12 @@ pub struct ObjectRuntime<'a> {
 
     pub(crate) protocol_config: &'a ProtocolConfig,
     pub(crate) metrics: Arc<LimitsMetrics>,
+}
+
+#[derive(Tid)]
+pub struct TransactionContext {
+    pub(crate) tx_context: Rc<RefCell<TxContext>>,
+    pub(crate) digest: Option<GlobalValue>,
 }
 
 pub enum TransferResult {
@@ -755,4 +764,79 @@ pub fn get_all_uids(
     )
     .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
     Ok(ids)
+}
+
+impl TransactionContext {
+    pub fn new(tx_context: Rc<RefCell<TxContext>>) -> Self {
+        Self {
+            tx_context,
+            digest: None,
+        }
+    }
+
+    pub fn sender(&self) -> SuiAddress {
+        self.tx_context.borrow().sender()
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.tx_context.borrow().epoch()
+    }
+
+    pub fn epoch_timestamp_ms(&self) -> u64 {
+        self.tx_context.borrow().epoch_timestamp_ms()
+    }
+
+    pub fn digest(&self) -> TransactionDigest {
+        self.tx_context.borrow().digest()
+    }
+
+    pub fn move_digest_ref(&mut self) -> PartialVMResult<Value> {
+        if self.digest.is_none() {
+            let digest = self.tx_context.borrow().digest().into_inner();
+            let digest = Value::vector_u8(digest);
+            self.digest = Some(GlobalValue::cached(digest)?);
+        }
+        self.digest.as_ref().unwrap().borrow_global()
+    }
+
+    pub fn sponsor(&self) -> Option<SuiAddress> {
+        self.tx_context.borrow().sponsor()
+    }
+
+    pub fn ids_created(&self) -> u64 {
+        self.tx_context.borrow().ids_created()
+    }
+
+    // native fun derive_id(tx_hash: vector<u8>, ids_created: u64): address;
+    pub fn fresh_id(&self) -> ObjectID {
+        self.tx_context.borrow_mut().fresh_id()
+    }
+
+    //
+    // Test only function
+    //
+    pub fn inc_epoch(&self) {
+        self.tx_context.borrow_mut().inc_epoch();
+    }
+
+    pub fn inc_epoch_timestamp(&self, delta_ms: u64) {
+        self.tx_context.borrow_mut().inc_epoch_timestamp(delta_ms);
+    }
+
+    pub fn replace(
+        &self,
+        sender: AccountAddress,
+        tx_hash: Vec<u8>,
+        epoch: u64,
+        epoch_timestamp_ms: u64,
+        ids_created: u64,
+    ) {
+        self.tx_context.borrow_mut().replace(
+            sender,
+            tx_hash,
+            epoch,
+            epoch_timestamp_ms,
+            ids_created,
+        );
+    }
 }

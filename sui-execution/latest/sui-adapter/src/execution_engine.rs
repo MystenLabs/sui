@@ -10,6 +10,8 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
+    use std::cell::RefCell;
+    use std::rc::Rc;
     use std::{collections::HashSet, sync::Arc};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
@@ -134,7 +136,7 @@ mod checked {
         let mut gas_charger =
             GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
 
-        let mut tx_ctx = TxContext::new_from_components(
+        let tx_ctx = TxContext::new_from_components(
             &transaction_signer,
             &transaction_digest,
             epoch_id,
@@ -142,6 +144,7 @@ mod checked {
             gas_price,
             None, // TODO: everything
         );
+        let tx_ctx = Rc::new(RefCell::new(tx_ctx));
 
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
@@ -150,7 +153,7 @@ mod checked {
             &mut temporary_store,
             transaction_kind,
             &mut gas_charger,
-            &mut tx_ctx,
+            tx_ctx,
             move_vm,
             protocol_config,
             metrics,
@@ -254,7 +257,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         move_vm: &Arc<MoveVM>,
-        tx_context: &mut TxContext,
+        tx_context: Rc<RefCell<TxContext>>,
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
@@ -263,11 +266,11 @@ mod checked {
             store,
             input_objects,
             vec![],
-            tx_context.digest(),
+            tx_context.borrow().digest(),
             protocol_config,
             0,
         );
-        let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
+        let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
         programmable_transactions::execution::execute::<execution_mode::Genesis>(
             protocol_config,
             metrics,
@@ -288,7 +291,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,
         gas_charger: &mut GasCharger,
-        tx_ctx: &mut TxContext,
+        tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -312,7 +315,7 @@ mod checked {
 
         let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
         let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
-        let digest = tx_ctx.digest();
+        let digest = tx_ctx.borrow().digest();
 
         // We must charge object read here during transaction execution, because if this fails
         // we must still ensure an effect is committed and all objects versions incremented
@@ -579,7 +582,7 @@ mod checked {
     fn execution_loop<Mode: ExecutionMode>(
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,
-        tx_ctx: &mut TxContext,
+        tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
@@ -604,7 +607,7 @@ mod checked {
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::Genesis(GenesisTransaction { objects }) => {
-                if tx_ctx.epoch() != 0 {
+                if tx_ctx.borrow().epoch() != 0 {
                     panic!("BUG: Genesis Transactions can only be executed in epoch 0");
                 }
 
@@ -614,7 +617,7 @@ mod checked {
                             let object = ObjectInner {
                                 data,
                                 owner,
-                                previous_transaction: tx_ctx.digest(),
+                                previous_transaction: tx_ctx.borrow().digest(),
                                 storage_rebate: 0,
                             };
                             temporary_store.create_object(object.into());
@@ -904,7 +907,7 @@ mod checked {
         builder: ProgrammableTransactionBuilder,
         change_epoch: ChangeEpoch,
         temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
+        tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
@@ -928,7 +931,7 @@ mod checked {
             metrics.clone(),
             move_vm,
             temporary_store,
-            tx_ctx,
+            tx_ctx.clone(),
             gas_charger,
             advance_epoch_pt,
             trace_builder_opt,
@@ -958,7 +961,7 @@ mod checked {
                     metrics.clone(),
                     move_vm,
                     temporary_store,
-                    tx_ctx,
+                    tx_ctx.clone(),
                     gas_charger,
                     advance_epoch_safe_mode_pt,
                     trace_builder_opt,
@@ -1003,14 +1006,14 @@ mod checked {
     fn process_system_packages(
         change_epoch: ChangeEpoch,
         temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
+        tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &MoveVM,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) {
-        let digest = tx_ctx.digest();
+        let digest = tx_ctx.borrow().digest();
         let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
@@ -1033,7 +1036,7 @@ mod checked {
                     metrics.clone(),
                     move_vm,
                     temporary_store,
-                    tx_ctx,
+                    tx_ctx.clone(),
                     gas_charger,
                     publish_pt,
                     trace_builder_opt,
@@ -1074,7 +1077,7 @@ mod checked {
     fn setup_consensus_commit(
         consensus_commit_timestamp_ms: CheckpointTimestamp,
         temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
+        tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
@@ -1215,7 +1218,7 @@ mod checked {
     fn setup_authenticator_state_update(
         update: AuthenticatorStateUpdate,
         temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
+        tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
@@ -1284,7 +1287,7 @@ mod checked {
     fn setup_randomness_state_update(
         update: RandomnessStateUpdate,
         temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
+        tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,

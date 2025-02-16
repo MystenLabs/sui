@@ -217,6 +217,7 @@ const MAX_PROTOCOL_VERSION: u64 = 74;
 //             Enable all gas costs for load_nitro_attestation.
 //             Enable zstd compression for consensus tonic network in mainnet.
 //             Enable the new commit rule for devnet.
+//             Make `TxContext` Move API native
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -622,6 +623,10 @@ struct FeatureFlags {
     // If true, enable zstd compression for consensus tonic network.
     #[serde(skip_serializing_if = "is_false")]
     consensus_zstd_compression: bool,
+
+    // If true, enable `TxContext` Move API to go native.
+    #[serde(skip_serializing_if = "is_false")]
+    move_native_context: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1087,6 +1092,16 @@ pub struct ProtocolConfig {
     // TxContext
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
     tx_context_derive_id_cost_base: Option<u64>,
+    tx_context_sender_cost_base: Option<u64>,
+    tx_context_epoch_cost_base: Option<u64>,
+    tx_context_epoch_timestamp_ms_cost_base: Option<u64>,
+    tx_context_digest_cost_base: Option<u64>,
+    tx_context_sponsor_cost_base: Option<u64>,
+    tx_context_ids_created_cost_base: Option<u64>,
+    tx_context_replace_cost_base: Option<u64>,
+    tx_context_inc_epoch_timestamp_cost_base: Option<u64>,
+    tx_context_inc_epoch_cost_base: Option<u64>,
+    tx_context_fresh_id_cost_base: Option<u64>,
 
     // Types
     // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -1802,8 +1817,13 @@ impl ProtocolConfig {
     pub fn consensus_zstd_compression(&self) -> bool {
         self.feature_flags.consensus_zstd_compression
     }
+
     pub fn enable_nitro_attestation(&self) -> bool {
         self.feature_flags.enable_nitro_attestation
+    }
+
+    pub fn move_native_context(&self) -> bool {
+        self.feature_flags.move_native_context
     }
 }
 
@@ -2097,6 +2117,16 @@ impl ProtocolConfig {
             // `tx_context` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
             tx_context_derive_id_cost_base: Some(52),
+            tx_context_sender_cost_base: None,
+            tx_context_epoch_cost_base: None,
+            tx_context_epoch_timestamp_ms_cost_base: None,
+            tx_context_digest_cost_base: None,
+            tx_context_sponsor_cost_base: None,
+            tx_context_ids_created_cost_base: None,
+            tx_context_replace_cost_base: None,
+            tx_context_inc_epoch_timestamp_cost_base: None,
+            tx_context_inc_epoch_cost_base: None,
+            tx_context_fresh_id_cost_base: None,
 
             // `types` module
             // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -3245,6 +3275,25 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                     }
+
+                    if chain != Chain::Mainnet {
+                        // Assuming a round rate of max 15/sec, then using a gc depth of 60 allow blocks within a window of ~4 seconds
+                        // to be included before be considered garbage collected.
+                        cfg.consensus_gc_depth = Some(60);
+                    }
+
+                    cfg.feature_flags.move_native_context = false;
+
+                    cfg.tx_context_sender_cost_base = Some(30);
+                    cfg.tx_context_epoch_cost_base = Some(30);
+                    cfg.tx_context_epoch_timestamp_ms_cost_base = Some(30);
+                    cfg.tx_context_digest_cost_base = Some(30);
+                    cfg.tx_context_sponsor_cost_base = Some(30);
+                    cfg.tx_context_ids_created_cost_base = Some(30);
+                    cfg.tx_context_replace_cost_base = Some(30);
+                    cfg.tx_context_inc_epoch_timestamp_cost_base = Some(30);
+                    cfg.tx_context_inc_epoch_cost_base = Some(30);
+                    cfg.tx_context_fresh_id_cost_base = Some(30);
                 }
                 // Use this template when making changes:
                 //
