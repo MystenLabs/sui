@@ -760,10 +760,11 @@ mod checked {
         tx_context_kind: TxContextKind,
         mut serialized_arguments: Vec<Vec<u8>>,
     ) -> Result<SerializedReturnValues, ExecutionError> {
+        let is_native = context.protocol_config.move_native_context();
         match tx_context_kind {
             TxContextKind::None => (),
             TxContextKind::Mutable | TxContextKind::Immutable => {
-                serialized_arguments.push(context.tx_context.to_bcs_legacy_context());
+                serialized_arguments.push(context.tx_context.to_bcs_legacy_context(is_native));
             }
         }
         // script visibility checked manually for entry points
@@ -792,7 +793,7 @@ mod checked {
                     "Unable to deserialize TxContext bytes. {e}"
                 ))
             })?;
-            context.tx_context.update_state(updated_ctx)?;
+            context.tx_context.update_state(updated_ctx, is_native)?;
         }
         Ok(result)
     }
