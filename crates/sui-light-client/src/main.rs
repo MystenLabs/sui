@@ -192,6 +192,7 @@ fn read_checkpoint_general(
     bcs::from_bytes(&buffer).map_err(|_| anyhow!("Unable to parse checkpoint file"))
 }
 
+// NOTE: Technically, we just need the committee's, but we store the entire checkpoint summary.
 fn write_checkpoint(
     config: &Config,
     summary: &Envelope<CheckpointSummary, AuthorityQuorumSignInfo<true>>,
@@ -199,6 +200,7 @@ fn write_checkpoint(
     write_checkpoint_general(config, summary, None)
 }
 
+// NOTE: Technically, we just need the committee's, but we store the entire checkpoint summary.
 fn write_checkpoint_general(
     config: &Config,
     summary: &Envelope<CheckpointSummary, AuthorityQuorumSignInfo<true>>,
@@ -236,6 +238,7 @@ async fn download_checkpoint_summary(
     checkpoint_number: u64,
 ) -> anyhow::Result<CertifiedCheckpointSummary> {
     // Download the checkpoint from the server
+    info!("Downloading checkpoint summary: {}", checkpoint_number);
 
     let url = Url::parse(&config.object_store_url)?;
     let (dyn_store, _store_path) = parse_url(&url).unwrap();
@@ -294,6 +297,8 @@ async fn sync_checkpoint_list_to_latest(config: &Config) -> anyhow::Result<()> {
             target_epoch, target_last_checkpoint_number
         );
     }
+
+    println!("Synced checkpoint list to latest!");
 
     Ok(())
 }
@@ -590,6 +595,7 @@ pub async fn main() {
         Some(SCommands::Object { oid }) => {
             let oid = ObjectID::from_str(&oid).unwrap();
             let object = get_verified_object(&config, oid).await.unwrap();
+            info!("Successfully verified object: {}", oid);
 
             if let Data::Move(move_object) = &object.data {
                 let object_type = move_object.type_().clone();
@@ -621,7 +627,9 @@ pub async fn main() {
                 .await
                 .expect("Failed to sync checkpoints");
         }
-        _ => {}
+        _ => {
+            println!("No command...");
+        }
     }
 }
 
@@ -656,7 +664,7 @@ mod tests {
 
     async fn read_data() -> (Committee, CheckpointData) {
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        d.push("example_config/20873329.yaml");
+        d.push("test_files/20873329.yaml");
 
         let mut reader = fs::File::open(d.clone()).unwrap();
         let metadata = fs::metadata(&d).unwrap();
@@ -683,7 +691,7 @@ mod tests {
         let committee = Committee::new(checkpoint.epoch().checked_add(1).unwrap(), prev_committee);
 
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        d.push("example_config/20958462.bcs");
+        d.push("test_files/20958462.bcs");
 
         let full_checkpoint = read_full_checkpoint(&d).await.unwrap();
 
