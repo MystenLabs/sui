@@ -689,18 +689,18 @@ For more details on publishing, please check the setup folder's [README](https:/
 
 Select a package for specific instructions.
 
-{@include: ../../../snippets/info-gas-budget.mdx}
-
 <Tabs>
 
 <TabItem label="asset_tokenization" value="asset_tokenization">
 
 ### Manually
 
+{@include: ../../../snippets/info-gas-budget.mdx}
+
 In a terminal or console at the `move/asset_tokenization` directory of the project enter:
 
 ```sh
-$ sui client publish --gas-budget <GAS-BUDGET>
+$ sui client publish
 ```
 
 For the gas budget, use a standard value such as `20000000`.
@@ -741,10 +741,12 @@ For more details regarding this process, please consult the setup folder's [READ
 
 ### Manually
 
+{@include: ../../../snippets/info-gas-budget.mdx}
+
 In a terminal or console at the `move/template` directory of the project enter:
 
 ```sh
-$ sui client publish --gas-budget <GAS-BUDGET>
+$ sui client publish
 ```
 
 For the gas budget, use a standard value such as `20000000`.

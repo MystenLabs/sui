@@ -29,9 +29,9 @@ debug::print_stack_trace();
 
 Alternatively, any call to abort or assertion failure also prints the stacktrace at the point of failure.
 
-## Using debug in my_module
+## Using debug in `example`
 
-To see the module in action, update your `my_module` code to include debug calls. Specifically, update the `new_sword` function so that you print the value of `forge` before and after updating `swords_created`. Also, include a `print_stack_trace` so that the function looks like the following:
+To see the module in action, update your `example` module code to include debug calls. Specifically, update the `new_sword` function so that you print the value of `forge` before and after updating `swords_created`. Also, include a `print_stack_trace` so that the function looks like the following:
 
 ```move
 public fun new_sword(
@@ -65,8 +65,8 @@ INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING my_first_package
 Running Move unit tests
-[ PASS    ] 0x0::my_module::test_module_init
-[debug] 0x0::my_module::Forge {
+[ PASS    ] my_first_package::example::test_module_init
+[debug] example::my_first_package::Forge {
   id: 0x2::object::UID {
     id: 0x2::object::ID {
       bytes: @0x34401905bebdf8c04f3cd5f04f442a39372c8dc321c29edfb4f9cb30b23ab96
@@ -74,7 +74,7 @@ Running Move unit tests
   },
   swords_created: 0
 }
-[debug] 0x0::my_module::Forge {
+[debug] my_first_package::example::Forge {
   id: 0x2::object::UID {
     id: 0x2::object::ID {
       bytes: @0x34401905bebdf8c04f3cd5f04f442a39372c8dc321c29edfb4f9cb30b23ab96
@@ -83,7 +83,7 @@ Running Move unit tests
   swords_created: 1
 }
 Call Stack:
-    [0] 0000000000000000000000000000000000000000000000000000000000000000::my_module::test_module_init
+    [0] 0000000000000000000000000000000000000000000000000000000000000000::example::test_module_init
 
         Code:
             [35] LdU64(7)
@@ -103,7 +103,7 @@ Call Stack:
 
 Operand Stack:
 
-[ PASS    ] 0x0::my_module::test_sword_transactions
+[ PASS    ] my_first_package::example::test_sword_transactions
 Test result: OK. Total tests: 2; passed: 2; failed: 0
 ```
 

@@ -253,7 +253,7 @@ You want to send 0.5 SUI to `eloquent-amber`. Given that you have a few gas coin
 {@include: ../../snippets/info-gas-budget.mdx}
 
 ```sh
-$ sui client pay-sui --recipients eloquent-amber --input-coins 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --amounts 500000000 --gas-budget 5000000
+$ sui client pay-sui --recipients eloquent-amber --input-coins 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --amounts 500000000
 ```
 
 The result is:
@@ -411,11 +411,11 @@ $ sui client gas eloquent-amber
 
 If you want to transfer the whole object, you can use `sui client pay-all-sui` or `sui client transfer-sui` (without passing the amount): 
 ```sh
-$ sui client pay-sui --recipient eloquent-amber --input-coins 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --gas-budget 5000000
+$ sui client pay-sui --recipient eloquent-amber --input-coins 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52
 ```
 or
 ```sh
-$ sui client transfer-sui --to eloquent-amber --sui-coin-object-id 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --gas-budget 5000000
+$ sui client transfer-sui --to eloquent-amber --sui-coin-object-id 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52
 ```
 
 Then check the gas for `eloquent-amber` again:
@@ -614,7 +614,7 @@ This example also makes use of `sui move` commands. To learn more about those co
     ```
 1. Use `sui client publish` to publish the package, being sure to set an appropriate value for the `gas-budget` flag if you're using an older version of Sui. The console responds with the details of the publish. You can use `sui client object <OBJECT-ID>` to check the details of any of the objects from the process.
     ```sh
-    $ sui client publish --gas-budget 100000000 .
+    $ sui client publish .
     ```
     ```sh
      Transaction Digest: ABPd7v8BxLkcyHvX8Jt1SbneQRwzE9WzcEoptT2RDNVF
