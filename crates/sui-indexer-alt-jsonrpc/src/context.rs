@@ -45,6 +45,7 @@ impl Context {
     pub(crate) async fn new(
         db_args: DbArgs,
         bigtable_config: Option<BigtableConfig>,
+        limits: sui_package_resolver::Limits,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
     ) -> Result<Self, Error> {
@@ -59,7 +60,7 @@ impl Context {
         };
 
         let store = PackageCache::new(DbPackageStore::new(pg_loader.clone()));
-        let package_resolver = Arc::new(Resolver::new(store));
+        let package_resolver = Arc::new(Resolver::new_with_limits(store, limits));
 
         Ok(Self {
             pg_reader,
