@@ -95,7 +95,7 @@ impl Coin {
     pub fn layout(type_param: TypeTag) -> MoveStructLayout {
         MoveStructLayout {
             type_: Self::type_(type_param.clone()),
-            fields: Box::new(vec![
+            fields: vec![
                 MoveFieldLayout::new(
                     ident_str!("id").to_owned(),
                     MoveTypeLayout::Struct(Box::new(UID::layout())),
@@ -104,7 +104,7 @@ impl Coin {
                     ident_str!("balance").to_owned(),
                     MoveTypeLayout::Struct(Box::new(Balance::layout(type_param))),
                 ),
-            ]),
+            ],
         }
     }
 
