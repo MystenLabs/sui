@@ -23,7 +23,7 @@ use crate::{
         object_info::LatestObjectInfoKey,
         objects::{load_latest, VersionedObjectKey},
     },
-    error::{internal_error, rpc_bail, RpcError},
+    error::{rpc_bail, RpcError},
 };
 
 /// Fetch the necessary data from the stores in `ctx` and transform it to build a response for a
@@ -72,7 +72,7 @@ pub(super) async fn latest_object(
     let o = load_latest(ctx.loader(), object_id)
         .await
         .context("Failed to load latest object")?
-        .ok_or_else(|| internal_error!("Could not find latest content for live object"))?;
+        .context("Could not find latest content for live object")?;
 
     Ok(SuiObjectResponse::new_with_data(
         object(ctx, o, options).await?,

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Context as _};
+use anyhow::Context as _;
 use diesel::{
     dsl::sql,
     expression::{
@@ -191,7 +191,7 @@ async fn by_checkpoint(
         let ix = (tx - cp_lo) as usize;
         let digest = digests
             .get(ix)
-            .ok_or_else(|| anyhow!("Transaction out of bounds in checkpoint"))?
+            .context("Transaction out of bounds in checkpoint")?
             .transaction
             .inner()
             .to_vec();
@@ -404,7 +404,7 @@ async fn from_sequence_numbers(
     for seq in rows {
         let bytes = digests
             .get(&TxDigestKey(seq as u64))
-            .ok_or_else(|| anyhow!("Missing transaction digest for transaction {seq}"))?
+            .with_context(|| format!("Missing transaction digest for transaction {seq}"))?
             .tx_digest
             .as_slice();
 
