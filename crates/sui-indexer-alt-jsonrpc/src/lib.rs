@@ -220,6 +220,7 @@ pub async fn start_rpc(
         name_service,
         coins,
         bigtable_config,
+        package_resolver,
         extra: _,
     } = rpc_config.finish();
 
@@ -227,11 +228,19 @@ pub async fn start_rpc(
     let transactions_config = transactions.finish(TransactionsConfig::default());
     let name_service_config = name_service.finish(NameServiceConfig::default());
     let coins_config = coins.finish(CoinsConfig::default());
+    let package_resolver_limits = package_resolver.finish();
 
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
 
-    let context = Context::new(db_args, bigtable_config, rpc.metrics(), registry).await?;
+    let context = Context::new(
+        db_args,
+        bigtable_config,
+        package_resolver_limits,
+        rpc.metrics(),
+        registry,
+    )
+    .await?;
 
     let system_package_task = SystemPackageTask::new(
         context.clone(),
