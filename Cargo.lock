@@ -14223,6 +14223,7 @@ dependencies = [
  "sui-open-rpc-macros",
  "sui-package-resolver",
  "sui-pg-db",
+ "sui-protocol-config",
  "sui-types",
  "telemetry-subscribers",
  "thiserror 1.0.69",

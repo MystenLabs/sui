@@ -1,0 +1,9 @@
+[package]
+name = "type_limits"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+type_limits = "0x0"
