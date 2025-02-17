@@ -14,7 +14,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use fastcrypto::traits::Signer;
 use rand::rngs::OsRng;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
@@ -24,11 +24,12 @@ use sui_storage::blob::{Blob, BlobEncoding};
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::base_types::{AuthorityName, ObjectID, VersionNumber};
-use sui_types::crypto::AuthoritySignature;
+use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, VersionNumber};
+use sui_types::crypto::{get_account_key_pair, AccountKeyPair, AuthoritySignature};
 use sui_types::digests::ConsensusCommitDigest;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
-use sui_types::object::Object;
+use sui_types::object::{Object, Owner};
 use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
@@ -327,6 +328,42 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     /// Return the reference gas price for the current epoch
     pub fn reference_gas_price(&self) -> u64 {
         self.epoch_state.reference_gas_price()
+    }
+
+    /// Create a new account and credit it with `amount` gas units from a faucet account. Returns
+    /// the account, its keypair, and a reference to the gas object it was funded with.
+    ///
+    /// ```
+    /// use simulacrum::Simulacrum;
+    /// use sui_types::base_types::SuiAddress;
+    /// use sui_types::gas_coin::MIST_PER_SUI;
+    ///
+    /// # fn main() {
+    /// let mut simulacrum = Simulacrum::new();
+    /// let (account, kp, gas) = simulacrum.funded_account(MIST_PER_SUI).unwrap();
+    ///
+    /// // `account` is a fresh SuiAddress that owns a Coin<SUI> object with single SUI in it,
+    /// // referred to by `gas`.
+    /// // ...
+    /// # }
+    /// ```
+    pub fn funded_account(
+        &mut self,
+        amount: u64,
+    ) -> Result<(SuiAddress, AccountKeyPair, ObjectRef)> {
+        let (address, key) = get_account_key_pair();
+        let fx = self.request_gas(address, amount)?;
+        ensure!(fx.status().is_ok(), "Failed to request gas for account");
+
+        let gas = fx
+            .created()
+            .into_iter()
+            .find_map(|(oref, owner)| {
+                matches!(owner, Owner::AddressOwner(owner) if owner == address).then_some(oref)
+            })
+            .context("Could not find created object")?;
+
+        Ok((address, key, gas))
     }
 
     /// Request that `amount` Mist be sent to `address` from a faucet account.
