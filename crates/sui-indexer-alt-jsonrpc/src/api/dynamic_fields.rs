@@ -141,8 +141,8 @@ async fn dynamic_field_object_response(
     };
 
     let options = SuiObjectDataOptions::full_content();
-    use RpcError as E;
 
+    use RpcError as E;
     Ok(SuiObjectResponse::new_with_data(
         objects::response::object_data_with_options(ctx, object, &options)
             .await

@@ -19,7 +19,7 @@ use tokio::join;
 use crate::{
     context::Context,
     data::{object_info::LatestObjectInfoKey, objects::load_latest},
-    error::{rpc_bail, RpcError},
+    error::{rpc_bail, InternalContext, RpcError},
 };
 
 /// Fetch the necessary data from the stores in `ctx` and transform it to build a response for a
@@ -124,11 +124,11 @@ pub(crate) async fn object_data_with_options(
 
     let content = content
         .transpose()
-        .context("Failed to deserialize object content")?;
+        .internal_context("Failed to deserialize object content")?;
 
     let bcs = bcs
         .transpose()
-        .context("Failed to deserialize object to BCS")?;
+        .internal_context("Failed to deserialize object to BCS")?;
 
     Ok(SuiObjectData {
         object_id: object.id(),
