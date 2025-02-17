@@ -72,6 +72,7 @@ feature_flags:
   convert_type_argument_error: true
   variant_nodes: true
   consensus_zstd_compression: true
+  move_native_context: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -195,6 +196,16 @@ transfer_freeze_object_cost_base: 52
 transfer_share_object_cost_base: 52
 transfer_receive_object_cost_base: 52
 tx_context_derive_id_cost_base: 52
+tx_context_sender_cost_base: 30
+tx_context_epoch_cost_base: 30
+tx_context_epoch_timestamp_ms_cost_base: 30
+tx_context_digest_cost_base: 30
+tx_context_sponsor_cost_base: 30
+tx_context_ids_created_cost_base: 30
+tx_context_replace_cost_base: 30
+tx_context_inc_epoch_timestamp_cost_base: 30
+tx_context_inc_epoch_cost_base: 30
+tx_context_fresh_id_cost_base: 30
 types_is_one_time_witness_cost_base: 52
 types_is_one_time_witness_type_tag_cost_per_byte: 2
 types_is_one_time_witness_type_cost_per_byte: 2
@@ -348,6 +359,7 @@ max_soft_bundle_size: 5
 bridge_should_try_to_finalize_committee: true
 max_accumulated_txn_cost_per_object_in_mysticeti_commit: 37000000
 max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: 7400000
+consensus_gc_depth: 60
 gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
