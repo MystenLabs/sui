@@ -134,8 +134,9 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
         Box::leak(Box::new(TransactionDigest::default())),
         &0,
         0,
-        0,
+        1,
         None,
+        protocol_config.move_native_context(),
     );
     ext.add(TransactionContext::new(Rc::new(RefCell::new(tx_context))));
     ext.add(store);

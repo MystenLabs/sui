@@ -117,6 +117,7 @@ mod checked {
             // Those values are unused in execution versions before 3 (or latest)
             1,
             None,
+            protocol_config.move_native_context(),
         );
 
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();

@@ -192,6 +192,7 @@ impl executor::Executor for Executor {
             // Those values are unused anyway in execution versions before 3 (or latest)
             1,
             None,
+            protocol_config.move_native_context(),
         );
         execute_genesis_state_update(
             store,

@@ -67,12 +67,12 @@ mod checked {
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
-        Command, EndOfEpochTransactionKind, GenesisTransaction, ObjectArg, ProgrammableTransaction,
-        TransactionKind,
+        Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
+        ProgrammableTransaction, TransactionKind,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
-        base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
+        base_types::{ObjectID, SuiAddress, TransactionDigest, TxContext},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
@@ -83,7 +83,7 @@ mod checked {
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
-        gas_coins: Vec<ObjectRef>,
+        gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
@@ -124,15 +124,16 @@ mod checked {
             *epoch_id,
         );
 
-        // let sponsor = {
-        //     let gas_owner = tx_data.gas_owner();
-        //     if gas_owner == signer {
-        //         None
-        //     } else {
-        //         Some(gas_owner)
-        //     }
-        // };
+        let sponsor = {
+            let gas_owner = gas_data.owner;
+            if gas_owner == transaction_signer {
+                None
+            } else {
+                Some(gas_owner)
+            }
+        };
         let gas_price = gas_status.gas_price();
+        let gas_coins = gas_data.payment;
         let mut gas_charger =
             GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
 
@@ -142,7 +143,8 @@ mod checked {
             epoch_id,
             epoch_timestamp_ms,
             gas_price,
-            None, // TODO: everything
+            sponsor,
+            protocol_config.move_native_context(),
         );
         let tx_ctx = Rc::new(RefCell::new(tx_ctx));
 

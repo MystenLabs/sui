@@ -88,11 +88,10 @@ impl executor::Executor for Executor {
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        let gas_coins = gas.payment;
         execute_transaction_to_effects::<execution_mode::Normal>(
             store,
             input_objects,
-            gas_coins,
+            gas,
             gas_status,
             transaction_kind,
             transaction_signer,
@@ -130,12 +129,11 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
-        let gas_coins = gas.payment;
         let (inner_temp_store, gas_status, effects, _timings, result) = if skip_all_checks {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
-                gas_coins,
+                gas,
                 gas_status,
                 transaction_kind,
                 transaction_signer,
@@ -153,7 +151,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
                 store,
                 input_objects,
-                gas_coins,
+                gas,
                 gas_status,
                 transaction_kind,
                 transaction_signer,
@@ -190,6 +188,7 @@ impl executor::Executor for Executor {
             // genesis transaction: RGP: 1, sponsor: None
             1,
             None,
+            protocol_config.move_native_context(),
         );
         let tx_context = Rc::new(RefCell::new(tx_context));
         execute_genesis_state_update(

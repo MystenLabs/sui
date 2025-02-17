@@ -191,6 +191,7 @@ impl executor::Executor for Executor {
             // genesis transaction: RGP: 1, sponsor: None
             1,
             None,
+            protocol_config.move_native_context(),
         );
         execute_genesis_state_update(
             store,
