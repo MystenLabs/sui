@@ -330,6 +330,7 @@ fn command_length(command: &Command) -> f64 {
 mod tests {
     use super::*;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::checkpoints::CheckpointStore;
     use crate::consensus_adapter::{
         ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
         MockConsensusClient,
@@ -346,6 +347,7 @@ mod tests {
         let epoch_store = authority.epoch_store_for_testing();
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(mock_consensus_client),
+            CheckpointStore::new_for_tests(),
             authority.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
@@ -470,6 +472,7 @@ mod tests {
         let epoch_store = authority.epoch_store_for_testing();
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(mock_consensus_client),
+            CheckpointStore::new_for_tests(),
             authority.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,

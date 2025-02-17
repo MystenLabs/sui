@@ -592,8 +592,6 @@ impl CheckpointExecutor {
         let state = self.state.clone();
         let subscription_service_enabled = self.subscription_service_checkpoint_sender.is_some();
 
-        epoch_store.notify_synced_checkpoint(*checkpoint.sequence_number());
-
         pending.push_back(spawn_monitored_task!(async move {
             let epoch_store = epoch_store.clone();
             let (tx_digests, checkpoint_acc, checkpoint_data, randomness_rounds) = loop {
