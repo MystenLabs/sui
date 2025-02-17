@@ -277,9 +277,6 @@ impl Core {
                     .join(",")
             );
 
-            // Try to certify additional blocks if possible.
-            self.try_certify()?;
-
             // Try to commit the new blocks if possible.
             self.try_commit()?;
 
@@ -749,18 +746,6 @@ impl Core {
             .notify_own_blocks_status(committed_block_refs, self.dag_state.read().gc_round());
 
         Ok(committed_sub_dags)
-    }
-
-    // Try certifying blocks in the DAG. A certified block must meet these criteria within its voting round:
-    // - A quorum of authorities link to the block via ancestors.
-    // - Every transaction in the block is either accepted or rejected by a quorum.
-    fn try_certify(&mut self) -> ConsensusResult<()> {
-        if !self.context.protocol_config.mysticeti_fastpath() {
-            return Ok(());
-        }
-        let certified_blocks = self.dag_state.write().take_certified_blocks();
-        self.commit_observer
-            .handle_certified_blocks(certified_blocks)
     }
 
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
@@ -1262,12 +1247,14 @@ pub(crate) fn create_cores(context: Context, authorities: Vec<Stake>) -> Vec<Cor
 
 #[cfg(test)]
 pub(crate) struct CoreTextFixture {
-    pub core: Core,
-    pub signal_receivers: CoreSignalsReceivers,
-    pub block_receiver: broadcast::Receiver<ExtendedBlock>,
-    pub _commit_output_receiver: UnboundedReceiver<CommittedSubDag>,
-    pub _block_output_receiver: UnboundedReceiver<CertifiedBlocksOutput>,
-    pub store: Arc<MemStore>,
+    pub(crate) core: Core,
+    pub(crate) signal_receivers: CoreSignalsReceivers,
+    pub(crate) block_receiver: broadcast::Receiver<ExtendedBlock>,
+    #[allow(unused)]
+    pub(crate) commit_output_receiver: UnboundedReceiver<CommittedSubDag>,
+    pub(crate) blocks_output_receiver: UnboundedReceiver<CertifiedBlocksOutput>,
+    #[allow(unused)]
+    pub(crate) store: Arc<MemStore>,
 }
 
 #[cfg(test)]
@@ -1301,7 +1288,7 @@ impl CoreTextFixture {
         // Need at least one subscriber to the block broadcast channel.
         let block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, commit_output_receiver, block_output_receiver) =
+        let (commit_consumer, commit_output_receiver, blocks_output_receiver) =
             CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
@@ -1330,8 +1317,8 @@ impl CoreTextFixture {
             core,
             signal_receivers,
             block_receiver,
-            _commit_output_receiver: commit_output_receiver,
-            _block_output_receiver: block_output_receiver,
+            commit_output_receiver,
+            blocks_output_receiver,
             store,
         }
     }
