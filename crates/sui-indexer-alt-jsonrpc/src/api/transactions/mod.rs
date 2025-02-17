@@ -107,8 +107,15 @@ impl QueryTransactionsApiServer for QueryTransactions {
             data: digests,
             next_cursor,
             has_next_page,
-        } = filter::transactions(ctx, config, &query.filter, cursor, limit, descending_order)
-            .await?;
+        } = filter::transactions(
+            ctx,
+            config,
+            &query.filter,
+            cursor.clone(),
+            limit,
+            descending_order,
+        )
+        .await?;
 
         let options = query.options.unwrap_or_default();
 
@@ -131,7 +138,7 @@ impl QueryTransactionsApiServer for QueryTransactions {
 
         Ok(Page {
             data,
-            next_cursor,
+            next_cursor: next_cursor.or(cursor),
             has_next_page,
         })
     }
