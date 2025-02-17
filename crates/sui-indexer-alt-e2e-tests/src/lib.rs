@@ -22,6 +22,7 @@ use sui_pg_db::{
 };
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
+    crypto::AccountKeyPair,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::ExecutionError,
     execution_status::ExecutionStatus,
@@ -139,6 +140,15 @@ impl FullCluster {
     /// Return the reference gas price for the current epoch
     pub fn reference_gas_price(&self) -> u64 {
         self.executor.reference_gas_price()
+    }
+
+    /// Create a new account and credit it with `amount` gas units from a faucet account. Returns
+    /// the account, its keypair, and a reference to the gas object it was funded with.
+    pub fn funded_account(
+        &mut self,
+        amount: u64,
+    ) -> anyhow::Result<(SuiAddress, AccountKeyPair, ObjectRef)> {
+        self.executor.funded_account(amount)
     }
 
     /// Request gas from the faucet, sent to `address`. Return the object reference of the gas
