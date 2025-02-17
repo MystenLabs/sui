@@ -122,7 +122,6 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
                 pub struct #struct_ident {
                     #(#field_tokens)*
                 }
-
             }
         });
 
@@ -230,6 +229,8 @@ fn try_resolve_known_types(
             "0x2::versioned::Versioned" => "sui_types::versioned::Versioned".to_string(),
             "0x2::bag::Bag" => "sui_types::collection_types::Bag".to_string(),
             "0x1::type_name::TypeName" => "String".to_string(),
+            "0x1::string::String" => "String".to_string(),
+            "0x1::ascii::String" => "String".to_string(),
             "0x2::object_bag::ObjectBag" => "sui_types::collection_types::Bag".to_string(),
             "0x2::package::UpgradeCap" => "sui_types::move_package::UpgradeCap".to_string(),
             "0x2::coin::Coin" => "sui_types::coin::Coin".to_string(),
@@ -256,7 +257,7 @@ fn try_resolve_known_types(
                 format!("{module}::{name}")
             }
             _ => {
-                format!("{name}")
+                format!("{module}::{name}")
             }
         }
     } else {
