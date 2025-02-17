@@ -962,7 +962,7 @@ impl SuiClientCommands {
                 let package_id = compiled_package.published_at.clone()?;
                 let package_digest =
                     compiled_package.get_package_digest(with_unpublished_dependencies);
-                let dep_ids = compiled_package.get_published_dependencies_ids();
+                let dep_ids = compiled_package.tree_shake(with_unpublished_dependencies);
 
                 if verify_compatibility {
                     check_compatibility(
@@ -1083,7 +1083,7 @@ impl SuiClientCommands {
                 let compiled_package = compile_result?;
                 let compiled_modules =
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
-                let dep_ids = compiled_package.get_published_dependencies_ids();
+                let dep_ids = compiled_package.tree_shake(with_unpublished_dependencies);
 
                 let tx_kind = client
                     .transaction_builder()
@@ -1705,7 +1705,6 @@ impl SuiClientCommands {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
-                    with_unpublished_dependencies: false,
                     chain_id: Some(chain_id),
                 }
                 .build(&package_path)?;
@@ -1772,14 +1771,12 @@ fn compile_package_simple(
         config: resolve_lock_file_path(build_config, Some(package_path))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
-        with_unpublished_dependencies: false,
         chain_id: chain_id.clone(),
     };
     let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
 
     Ok(build_from_resolution_graph(
         resolution_graph,
-        false,
         false,
         false,
         chain_id,
@@ -1873,7 +1870,6 @@ pub(crate) async fn compile_package(
         run_bytecode_verifier,
         print_diags_to_stderr,
         chain_id: chain_id.clone(),
-        with_unpublished_dependencies,
     };
     let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
     let (_, dependencies) = gather_published_ids(&resolution_graph, chain_id.clone());
@@ -1883,7 +1879,6 @@ pub(crate) async fn compile_package(
     };
     let compiled_package = build_from_resolution_graph(
         resolution_graph,
-        with_unpublished_dependencies,
         run_bytecode_verifier,
         print_diags_to_stderr,
         chain_id,

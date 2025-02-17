@@ -4,7 +4,7 @@
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use move_symbol_pool::Symbol;
-use petgraph::{algo, prelude::DiGraphMap, Direction};
+use petgraph::{algo, prelude::DiGraphMap, visit::Dfs, Direction};
 
 use std::io::BufRead;
 use std::{
@@ -1554,6 +1554,17 @@ impl DependencyGraph {
                     .filter(|(_, _, dep)| dep.mode == DependencyMode::Always)
                     .map(|(_, pkg, _)| pkg),
             );
+        }
+    }
+
+    /// Add all transitive dependencies of `start` node to a mutable `list`. Note that this keeps
+    /// the initial start node in the list.
+    pub fn add_transitive_dependencies(&self, start: &Symbol, list: &mut BTreeSet<Symbol>) {
+        let mut dfs = Dfs::new(&self.package_graph, *start);
+
+        // Visit all reachable nodes
+        while let Some(n) = dfs.next(&self.package_graph) {
+            list.insert(n);
         }
     }
 }

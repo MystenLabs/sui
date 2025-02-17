@@ -1412,9 +1412,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
-    let mut build_config = BuildConfig::new_for_testing();
-    build_config.with_unpublished_dependencies();
-    let build_config = build_config.config;
+    let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,

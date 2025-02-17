@@ -28,7 +28,6 @@ move-core-types.workspace = true
 move-ir-types.workspace = true
 move-package.workspace = true
 move-symbol-pool.workspace = true
-petgraph.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

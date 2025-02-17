@@ -3,8 +3,6 @@
 
 extern crate move_ir_types;
 
-use petgraph::prelude::{Dfs, DiGraphMap};
-
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
@@ -34,7 +32,7 @@ use move_package::{
         build_plan::BuildPlan, compiled_package::CompiledPackage as MoveCompiledPackage,
     },
     package_hooks::{PackageHooks, PackageIdentifier},
-    resolution::resolution_graph::ResolvedGraph,
+    resolution::{dependency_graph::DependencyGraph, resolution_graph::ResolvedGraph},
     source_package::parsed_manifest::PackageName,
     BuildConfig as MoveBuildConfig,
 };
@@ -91,6 +89,8 @@ pub struct CompiledPackage {
     /// The bytecode modules that this package depends on (both directly and transitively),
     /// i.e. on-chain dependencies.
     pub bytecode_deps: Vec<(PackageName, CompiledModule)>,
+    /// Transitive dependency graph of a Move package
+    pub dependency_graph: DependencyGraph,
 }
 
 /// Wrapper around the core Move `BuildConfig` with some Sui-specific info
@@ -104,8 +104,6 @@ pub struct BuildConfig {
     /// The chain ID that compilation is with respect to (e.g., required to resolve
     /// published dependency IDs from the `Move.lock`).
     pub chain_id: Option<String>,
-    /// Include unpublished dependencies in the build
-    pub with_unpublished_dependencies: bool,
 }
 
 impl BuildConfig {
@@ -116,23 +114,12 @@ impl BuildConfig {
         let lock_file = install_dir.join("Move.lock");
         build_config.config.install_dir = Some(install_dir);
         build_config.config.lock_file = Some(lock_file);
-        build_config.with_unpublished_dependencies = false;
         build_config
             .config
             .lint_flag
             .set(move_compiler::linters::LintLevel::None);
         build_config.config.silence_warnings = true;
         build_config
-    }
-
-    /// Sets the with_unpublished_deps flag to the given value
-    pub fn set_with_unpublished_dependencies(&mut self, with_unpublished_dependencies: bool) {
-        self.with_unpublished_dependencies = with_unpublished_dependencies;
-    }
-
-    /// Sets the with_unpublished_deps flag to true
-    pub fn with_unpublished_dependencies(&mut self) {
-        self.with_unpublished_dependencies = true;
     }
 
     pub fn new_for_testing_replace_addresses<I, S>(dep_original_addresses: I) -> Self
@@ -166,7 +153,7 @@ impl BuildConfig {
     }
 
     fn compile_package<W: Write>(
-        resolution_graph: ResolvedGraph,
+        resolution_graph: &ResolvedGraph,
         writer: &mut W,
     ) -> anyhow::Result<(MoveCompiledPackage, FnInfoMap)> {
         let build_plan = BuildPlan::create(resolution_graph)?;
@@ -198,14 +185,12 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: &Path) -> SuiResult<CompiledPackage> {
-        let with_unpublished_deps = self.with_unpublished_dependencies;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let chain_id = self.chain_id.clone();
         let resolution_graph = self.resolution_graph(path, chain_id.clone())?;
         build_from_resolution_graph(
             resolution_graph,
-            with_unpublished_deps,
             run_bytecode_verifier,
             print_diags_to_stderr,
             chain_id,
@@ -269,7 +254,6 @@ pub fn set_sui_flavor(build_config: &mut MoveBuildConfig) -> Option<String> {
 
 pub fn build_from_resolution_graph(
     resolution_graph: ResolvedGraph,
-    with_unpublished_deps: bool,
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
     chain_id: Option<String>,
@@ -310,9 +294,9 @@ pub fn build_from_resolution_graph(
     }
 
     let result = if print_diags_to_stderr {
-        BuildConfig::compile_package(resolution_graph.clone(), &mut std::io::stderr())
+        BuildConfig::compile_package(&resolution_graph, &mut std::io::stderr())
     } else {
-        BuildConfig::compile_package(resolution_graph.clone(), &mut std::io::sink())
+        BuildConfig::compile_package(&resolution_graph, &mut std::io::sink())
     };
     // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
     // format to include anyhow's error context chain.
@@ -341,17 +325,13 @@ pub fn build_from_resolution_graph(
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
 
-    let mut package = CompiledPackage {
+    Ok(CompiledPackage {
         package,
         published_at,
         dependency_ids,
         bytecode_deps,
-    };
-    // Tree shake the package's dependencies to remove any that are not used by the package.
-    // this will only modify the dependency_ids.published field to remove any unnecessary package
-    // dependencies
-    package.tree_shake(with_unpublished_deps, &resolution_graph);
-    Ok(package)
+        dependency_graph: resolution_graph.graph,
+    })
 }
 
 impl CompiledPackage {
@@ -638,43 +618,39 @@ impl CompiledPackage {
     }
 
     /// Tree-shake the package's dependencies to remove any that are not referenced in source code.
-    pub fn tree_shake(&mut self, with_unpublished_deps: bool, resolution_graph: &ResolvedGraph) {
-        // 1) Start from the root modules (or all modules if with_unpublished_deps is true as we
+    ///
+    /// This algorithm uses the set of root modules as the starting point to retrieve the
+    /// list of used packages that are immediate dependencies of these modules. Essentially, it
+    /// will remove any package that has no immediate module dependency to it.
+    ///
+    /// Then, it will recursively find all the transitive dependencies of the packages in the list
+    /// above and add them to the list of packages that need to be kept as dependencies.
+    pub fn tree_shake(&self, with_unpublished_deps: bool) -> Vec<ObjectID> {
+        // Start from the root modules (or all modules if with_unpublished_deps is true as we
         // need to include modules with 0x0 address)
-        // 2) Next, find the immediate dependencies for each root module and store the package name
-        // in the used_immediate_packages set. This basically prunes the packages that are not used
-        // based on the modules information.
-        // 3) Next, for each package from used_immediate_packages set, we need to find all the
-        // transitive dependencies. Those trans dependencies need to be included in the final list
-        // of package dependencies!
-        // 4) We union the used_immediate_packages and the transitive dependencies to get the final
-        // list of dependencies that this package needs.
-        // 5) Finally, filter out packages that are not in the union above from the
-        // dependency_ids.published field
-
-        // #1
-        let root_modules = if with_unpublished_deps {
-            &self
-                .package
+        let root_modules: Vec<_> = if with_unpublished_deps {
+            self.package
                 .all_compiled_units_with_source()
                 .filter(|m| m.unit.address.into_inner() == AccountAddress::ZERO)
                 .map(|x| x.unit.clone())
-                .collect::<Vec<_>>()
+                .collect()
         } else {
-            &self
-                .package
+            self.package
                 .root_modules()
                 .map(|x| x.unit.clone())
-                .collect::<Vec<_>>()
+                .collect()
         };
 
-        // #2
+        // Find the immediate dependencies for each root module and store the package name
+        // in the used_immediate_packages set. This basically prunes the packages that are not used
+        // based on the modules information.
+
         let mut pkgs_to_keep: BTreeSet<Symbol> = BTreeSet::new();
-        let module_to_pkg_name = &self
+        let module_to_pkg_name: BTreeMap<_, _> = self
             .package
             .all_modules()
             .map(|m| (m.unit.module.self_id(), m.unit.package_name))
-            .collect::<BTreeMap<_, _>>();
+            .collect();
         let mut used_immediate_packages: BTreeSet<Symbol> = BTreeSet::new();
 
         for module in root_modules.iter() {
@@ -691,22 +667,24 @@ impl CompiledPackage {
             }
         }
 
-        // #3
-        for pkg in &used_immediate_packages {
-            pkgs_to_keep.extend(get_transitive_dependencies(
-                &resolution_graph.graph.package_graph,
-                pkg,
-            ));
-        }
+        // Next, for each package from used_immediate_packages set, we need to find all the
+        // transitive dependencies. Those trans dependencies need to be included in the final list
+        // of package dependencies (note that the pkg itself will be added by the transitive deps
+        // function)
+        used_immediate_packages.iter().for_each(|pkg| {
+            self.dependency_graph
+                .add_transitive_dependencies(pkg, &mut pkgs_to_keep)
+        });
 
-        // #4
-        pkgs_to_keep.extend(used_immediate_packages);
         pkgs_to_keep.extend(self.bytecode_deps.iter().map(|(name, _)| *name));
 
-        // #5
+        // Finally, filter out packages that are not in the union above from the
+        // dependency_ids.published field and return the package ids.
         self.dependency_ids
             .published
-            .retain(|pkg_name, _| pkgs_to_keep.contains(pkg_name));
+            .iter()
+            .filter_map(|(pkg_name, id)| pkgs_to_keep.contains(pkg_name).then_some(*id))
+            .collect()
     }
 }
 
@@ -720,7 +698,6 @@ impl Default for BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
-            with_unpublished_dependencies: false,
             chain_id: None,
         }
     }
@@ -900,23 +877,4 @@ pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<
     Err(SuiError::ModulePublishFailure {
         error: error_messages.join("\n"),
     })
-}
-
-/// Return the transitive dependencies of a node in a directed graph
-pub fn get_transitive_dependencies<N, E>(graph: &DiGraphMap<N, E>, start: &N) -> BTreeSet<N>
-where
-    N: Ord + Copy + Eq + std::hash::Hash,
-{
-    let mut visited = BTreeSet::new();
-    let mut dfs = Dfs::new(graph, *start);
-
-    // Skip the start node itself
-    dfs.next(graph);
-
-    // Visit all reachable nodes
-    while let Some(n) = dfs.next(graph) {
-        visited.insert(n);
-    }
-
-    visited
 }

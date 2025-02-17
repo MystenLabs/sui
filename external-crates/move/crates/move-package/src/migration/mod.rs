@@ -50,7 +50,7 @@ pub const NO_MIGRATION_NEEDED_MSG: &str = "No migration is required. Enjoy!";
 pub const BAR: &str = "============================================================";
 
 pub struct MigrationContext<'a, W: Write, R: BufRead> {
-    build_plan: BuildPlan,
+    build_plan: &'a BuildPlan<'a>,
     terminal: Terminal<'a, W, R>,
 }
 
@@ -59,7 +59,7 @@ pub struct MigrationOptions {
 }
 
 pub fn migrate<W: Write, R: BufRead>(
-    build_plan: BuildPlan,
+    build_plan: &BuildPlan,
     writer: &mut W,
     reader: &mut R,
 ) -> anyhow::Result<MigrationOptions> {
@@ -69,7 +69,7 @@ pub fn migrate<W: Write, R: BufRead>(
 
 impl<'a, W: Write, R: BufRead> MigrationContext<'a, W, R> {
     pub fn new<'new>(
-        build_plan: BuildPlan,
+        build_plan: &'new BuildPlan,
         writer: &'new mut W,
         reader: &'new mut R,
     ) -> MigrationContext<'new, W, R> {

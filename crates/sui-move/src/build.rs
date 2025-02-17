@@ -71,7 +71,6 @@ impl Build {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
-            with_unpublished_dependencies,
             chain_id,
         }
         .build(rerooted_path)?;

@@ -328,8 +328,7 @@ impl TestTransactionBuilder {
             TestTransactionData::Publish(data) => {
                 let (all_module_bytes, dependencies) = match data {
                     PublishData::Source(path, with_unpublished_deps) => {
-                        let mut build_config = BuildConfig::new_for_testing();
-                        build_config.set_with_unpublished_dependencies(with_unpublished_deps);
+                        let build_config = BuildConfig::new_for_testing();
                         let compiled_package = build_config.build(&path).unwrap();
                         let all_module_bytes =
                             compiled_package.get_package_bytes(with_unpublished_deps);
