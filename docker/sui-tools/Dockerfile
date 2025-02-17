@@ -16,16 +16,12 @@ COPY sui-execution sui-execution
 COPY external-crates external-crates
 
 RUN cargo build --profile ${PROFILE} \
-    --bin sui-node \
     --bin stress \
     --bin sui-bridge \
     --bin bridge-indexer \
     --bin deepbook-indexer \
     --bin sui-bridge-cli \
-    --bin sui-analytics-indexer \
-    --bin sui-edge-proxy \
     --bin sui \
-    --bin sui-faucet \
     --bin sui-cluster-test \
     --bin sui-tool
 
@@ -36,16 +32,12 @@ WORKDIR "$WORKDIR/sui"
 # sui-tool needs libpq at runtime and uses git when fetching move dependencies during build
 RUN apt-get update && apt-get install -y libpq5 libpq-dev ca-certificates git
 
-COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/stress /usr/local/bin
 COPY --from=builder /sui/target/release/sui-bridge /usr/local/bin
 COPY --from=builder /sui/target/release/bridge-indexer /usr/local/bin
 COPY --from=builder /sui/target/release/deepbook-indexer /usr/local/bin
 COPY --from=builder /sui/target/release/sui-bridge-cli /usr/local/bin
-COPY --from=builder /sui/target/release/sui-analytics-indexer /usr/local/bin
-COPY --from=builder /sui/target/release/sui-edge-proxy /usr/local/bin
 COPY --from=builder /sui/target/release/sui /usr/local/bin
-COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
 COPY --from=builder /sui/target/release/sui-tool /usr/local/bin
 
