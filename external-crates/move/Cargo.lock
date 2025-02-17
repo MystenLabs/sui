@@ -2368,18 +2368,10 @@ dependencies = [
 name = "move-trace-format"
 version = "0.0.1"
 dependencies = [
- "anyhow",
- "enum-compat-util",
- "getrandom 0.2.15",
  "move-binary-format",
  "move-core-types",
- "move-proc-macros",
- "proptest",
- "proptest-derive",
- "ref-cast",
  "serde",
  "serde_json",
- "variant_count",
 ]
 
 [[package]]
