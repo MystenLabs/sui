@@ -249,9 +249,17 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         // root package here; at the end of this method (after the graph is built) we iterate over
         // all packages in the graph and add the dependencies there. The reason we add them to the
         // root package here is to ensure that they and their dependencies are correctly processed.
-        for (name, dep) in self.implicit_deps.iter() {
-            if !root_manifest.dependencies.contains_key(name) {
-                root_manifest.dependencies.insert(*name, dep.clone());
+        //
+        // implicits deps should be skipped entirely if the root manifest contains any of them explicitly
+        let add_implicits: bool = self
+            .implicit_deps
+            .iter()
+            .any(|(name, _)| root_manifest.dependencies.contains_key(name));
+        if add_implicits {
+            for (name, dep) in self.implicit_deps.iter() {
+                if !root_manifest.dependencies.contains_key(name) {
+                    root_manifest.dependencies.insert(*name, dep.clone());
+                }
             }
         }
 
@@ -288,8 +296,10 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             )?;
 
         // smash implicit dependencies into the collected subgraphs
-        self.add_implicit_defs(&mut dep_graphs);
-        self.add_implicit_defs(&mut dev_dep_graphs);
+        if add_implicits {
+            self.add_implicit_defs(&mut dep_graphs);
+            self.add_implicit_defs(&mut dev_dep_graphs);
+        }
 
         // compute new digests and return early if the manifest and deps digests are unchanged
         let dev_dep_lock_files = dev_dep_graphs
