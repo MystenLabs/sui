@@ -51,13 +51,12 @@ impl QueryExecutor {
         deadline: Instant,
     ) -> Result<()> {
         let client = pool.get().await?;
-        let mut query_rng = rand::rngs::StdRng::from_entropy();
-        let mut row_rng = rand::rngs::StdRng::from_entropy();
+        let mut rng = rand::rngs::StdRng::from_entropy();
         while Instant::now() < deadline {
             let enriched = enriched_queries
-                .choose(&mut query_rng)
+                .choose(&mut rng)
                 .ok_or_else(|| anyhow::anyhow!("No queries available"))?;
-            let Some(row) = enriched.rows.choose(&mut row_rng) else {
+            let Some(row) = enriched.rows.choose(&mut rng) else {
                 // skip when the table is empty and thus no values to sample.
                 continue;
             };
