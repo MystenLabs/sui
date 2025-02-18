@@ -139,14 +139,16 @@ impl Handler for ObjInfo {
                 VALUES {}
             ),
             predecessors AS (
-                SELECT m.object_id, m.cp_sequence_number as mod_cp,
-                       (SELECT cp_sequence_number
-                        FROM obj_info oi
-                        WHERE oi.{:?} = m.object_id
-                          AND oi.{:?} < m.cp_sequence_number
-                        ORDER BY cp_sequence_number DESC
-                        LIMIT 1) as predecessor_cp
-                FROM modifications m
+                SELECT m.object_id, sub.max_cp as predecessor_cp
+                FROM modifications m,
+                LATERAL (
+                    SELECT cp_sequence_number as max_cp
+                    FROM obj_info oi
+                    WHERE oi.{:?} = m.object_id
+                        AND oi.{:?} < m.cp_sequence_number
+                    ORDER BY cp_sequence_number DESC
+                    LIMIT 1
+                ) sub
             )
             DELETE FROM obj_info
             WHERE (object_id, cp_sequence_number) IN

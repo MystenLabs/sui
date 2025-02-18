@@ -206,14 +206,16 @@ impl Handler for CoinBalanceBuckets {
                 VALUES {}
             ),
             predecessors AS (
-                SELECT m.object_id, m.cp_sequence_number as mod_cp,
-                       (SELECT cp_sequence_number
-                        FROM coin_balance_buckets cbo
-                        WHERE cbo.{:?} = m.object_id
-                          AND cbo.{:?} < m.cp_sequence_number
-                        ORDER BY cp_sequence_number DESC
-                        LIMIT 1) as predecessor_cp
-                FROM modifications m
+                SELECT m.object_id, sub.max_cp as predecessor_cp
+                FROM modifications m,
+                LATERAL (
+                    SELECT cp_sequence_number as max_cp
+                    FROM coin_balance_buckets cbo
+                    WHERE cbo.{:?} = m.object_id
+                        AND cbo.{:?} < m.cp_sequence_number
+                    ORDER BY cp_sequence_number DESC
+                    LIMIT 1
+                ) sub
             )
             DELETE FROM coin_balance_buckets
             WHERE (object_id, cp_sequence_number) IN
