@@ -5,7 +5,7 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.11
-    image: sui-node:${SUI_NODE_A_TAG}
+    image: sui-node:${SUI_NODE_A_TAG}:${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
     container_name: validator1
     hostname: validator1
     environment:
@@ -33,7 +33,7 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.12
-    image: sui-node:${SUI_NODE_A_TAG}
+    image: sui-node:${SUI_NODE_A_TAG}:${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
     container_name: validator2
     hostname: validator2
     environment:
@@ -61,7 +61,7 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.13
-    image: sui-node-alt:${SUI_NODE_B_TAG}
+    image: sui-node-alt:${SUI_NODE_B_TAG}:${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
     container_name: validator3
     hostname: validator3
     environment:
@@ -89,7 +89,7 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.14
-    image: sui-node-alt:${SUI_NODE_B_TAG}
+    image: sui-node-alt:${SUI_NODE_B_TAG}:${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
     container_name: validator4
     hostname: validator4
     environment:
@@ -117,7 +117,7 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.15
-    image: sui-node-alt:${SUI_NODE_B_TAG}
+    image: sui-node-alt:${SUI_NODE_B_TAG}:${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
     hostname: fullnode1
     container_name: fullnode1
     environment:
@@ -146,7 +146,7 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.16
-    image: stress:${SUI_NODE_B_TAG}
+    image: stress:${SUI_NODE_B_TAG}:${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
     container_name: stress
     environment:
       - RUST_LOG=info
