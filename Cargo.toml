@@ -156,6 +156,7 @@ members = [
     "crates/sui-replay",
     "crates/sui-rosetta",
     "crates/sui-rpc-api",
+    "crates/sui-rpc-benchmark",
     "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
     "crates/sui-security-watchdog",

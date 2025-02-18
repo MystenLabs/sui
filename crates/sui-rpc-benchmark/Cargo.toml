@@ -1,0 +1,27 @@
+[package]
+name = "sui-rpc-benchmark"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive"] }
+dashmap.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+rand.workspace = true
+sui-indexer-alt-framework.workspace = true
+telemetry-subscribers.workspace = true
+tracing.workspace = true
+tokio = { workspace = true, features = ["full"] }
+url.workspace = true
+tokio-postgres = "0.7.12"
+bb8 = "0.8.5"
+bb8-postgres = "0.8.0"
+
+[[bin]]
+name = "sui-rpc-benchmark"
+path = "src/main.rs"
