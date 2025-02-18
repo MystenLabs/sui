@@ -1,31 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
-
 use super::request_loader::JsonRpcRequestLine;
 use crate::config::BenchmarkConfig;
 /// This module implements the JSON RPC benchmark runner.
 /// The main function is `run_queries`, which runs the queries concurrently
 /// and records the overall and per-method stats.
-use anyhow::Result;
-use chrono::{DateTime, Utc};
+use anyhow::{bail, Result};
+use dashmap::DashMap;
 use phf::phf_map;
 use serde_json::Value;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 use sui_indexer_alt_framework::task::TrySpawnStreamExt;
 use tokio::time::timeout;
 use tracing::info;
 
 /// static map of method names to the index of their cursor parameter
 static METHOD_CURSOR_POSITIONS: phf::Map<&'static str, usize> = phf_map! {
-    // based on function headers in indexer.rs
+    // based on function headers in crates/sui-json-rpc-api/src/indexer.rs
     "suix_getOwnedObjects" => 2,
     "suix_queryTransactionBlocks" => 1,
-    // based on function headers in coin.rs
+    // based on function headers in crates/sui-json-rpc-api/src/coin.rs
     "suix_getCoins" => 2,
     "suix_getAllCoins" => 1,
 };
@@ -47,21 +46,12 @@ pub struct JsonRpcStats {
     pub per_method: HashMap<String, PerMethodStats>,
 }
 
-/// Entry in the pagination state tracking a pagination request with time-based expiration
-#[derive(Clone)]
-struct RequestEntry {
-    last_timestamp: DateTime<Utc>,
-    cursor: Option<Value>,
-}
-
-/// Tracks pagination state for active pagination requests with time-based expiration
+/// Tracks pagination state for active pagination requests
 /// The key is the method name and the params serialized to a string, except the cursor parameter;
-/// The value is the timestamp of the request with the same key and its returned cursor.
+/// The value is the cursor for the next page.
 #[derive(Default)]
 struct PaginationCursorState {
-    requests: HashMap<String, RequestEntry>,
-    /// Duration after which a pagination request expires
-    window: Duration,
+    requests: DashMap<String, Value>,
 }
 
 impl JsonRpcStats {
@@ -86,10 +76,9 @@ impl JsonRpcStats {
 }
 
 impl PaginationCursorState {
-    fn with_window_size(window: Duration) -> Self {
+    fn new() -> Self {
         Self {
-            requests: HashMap::new(),
-            window,
+            requests: DashMap::new(),
         }
     }
 
@@ -145,25 +134,16 @@ impl PaginationCursorState {
         Ok(())
     }
 
-    fn update(&mut self, key: String, timestamp: DateTime<Utc>, cursor: Option<Value>) {
-        self.requests.insert(
-            key,
-            RequestEntry {
-                last_timestamp: timestamp,
-                cursor,
-            },
-        );
+    fn update(&self, key: String, cursor: Option<Value>) {
+        if let Some(cursor) = cursor {
+            self.requests.insert(key, cursor);
+        } else {
+            self.requests.remove(&key);
+        }
     }
 
-    fn get(&self, key: &str, current_ts: DateTime<Utc>) -> Option<&RequestEntry> {
-        let entry = self.requests.get(key)?;
-        if current_ts.signed_duration_since(entry.last_timestamp)
-            <= chrono::Duration::from_std(self.window).unwrap()
-        {
-            Some(entry)
-        } else {
-            None
-        }
+    fn get(&self, key: &str) -> Option<Value> {
+        self.requests.get(key).map(|entry| entry.clone())
     }
 }
 
@@ -174,12 +154,7 @@ pub async fn run_queries(
 ) -> Result<JsonRpcStats> {
     let concurrency = config.concurrency;
     let shared_stats = Arc::new(Mutex::new(JsonRpcStats::new()));
-    let pagination_window = config
-        .json_rpc_pagination_window
-        .ok_or_else(|| anyhow::anyhow!("pagination_window must be set for JSON RPC benchmark"))?;
-    let pagination_state = Arc::new(Mutex::new(PaginationCursorState::with_window_size(
-        pagination_window,
-    )));
+    let pagination_state = Arc::new(PaginationCursorState::new());
     let client = reqwest::Client::new();
     let endpoint = endpoint.to_owned();
 
@@ -216,20 +191,17 @@ pub async fn run_queries(
             {
                 let method_key =
                     PaginationCursorState::get_method_key(&request_line.method, &params)?;
-                let state = pagination_state.lock().map_err(|e| {
-                    anyhow::anyhow!("Failed to acquire pagination state lock: {}", e)
-                })?;
 
                 if let Some(param_value) = params.get(cursor_idx) {
                     // only update cursor if the original value is not Null, otherwise stick to the Null value,
                     // which means JSON RPC server will return the first page of results.
                     if *param_value != Value::Null {
-                        if let Some(entry) = state.get(&method_key, request_line.timestamp) {
-                            // use stored cursor if available and within window, continue pagination
+                        if let Some(cursor) = pagination_state.get(&method_key) {
+                            // use stored cursor if available, continue pagination
                             PaginationCursorState::update_params_cursor(
                                 &mut request_line.body_json,
                                 cursor_idx,
-                                entry.cursor.as_ref(),
+                                Some(&cursor),
                                 &request_line.method,
                             )?;
                         } else {
@@ -243,12 +215,13 @@ pub async fn run_queries(
                         }
                     }
                 } else {
-                    return Err(anyhow::anyhow!(
-                        "Value at cursor index {} should not be None",
-                        cursor_idx
-                    ));
+                    bail!(
+                        "Could not read cursor index {} for method {} with params {:?}",
+                        cursor_idx,
+                        request_line.method,
+                        params
+                    );
                 }
-                drop(state);
             }
 
             let now = Instant::now();
@@ -260,20 +233,42 @@ pub async fn run_queries(
             let elapsed_ms = now.elapsed().as_millis() as f64;
             let is_error = !matches!(res, Ok(Ok(ref resp)) if resp.status().is_success());
 
-            // update pagination cursor if the request is successful and has a `nextCursor``
+            // update pagination cursor if the request is successful.
             if !is_error {
                 let method_key =
                     PaginationCursorState::get_method_key(&request_line.method, &params)?;
                 if let Ok(Ok(resp)) = res {
                     let body = resp.json::<Value>().await?;
-                    let cursor = body
+                    // check if there is a next page, if so, update the cursor with the nextCursor;
+                    // otherwise, remove the cursor so that next request will restart from the first page.
+                    let has_next_page = body
                         .get("result")
-                        .and_then(|r| r.get("nextCursor"))
-                        .cloned();
-                    let mut state = pagination_state.lock().map_err(|e| {
-                        anyhow::anyhow!("Failed to acquire pagination state lock: {}", e)
-                    })?;
-                    state.update(method_key, request_line.timestamp, cursor);
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("no result found for method {}", request_line.method)
+                        })?
+                        .get("hasNextPage")
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "no hasNextPage found for method {}",
+                                request_line.method
+                            )
+                        })?
+                        .as_bool()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "hasNextPage is not a boolean for method {}",
+                                request_line.method
+                            )
+                        })?;
+                    if has_next_page {
+                        let cursor = body
+                            .get("result")
+                            .and_then(|r| r.get("nextCursor"))
+                            .cloned();
+                        pagination_state.update(method_key, cursor);
+                    } else {
+                        pagination_state.update(method_key, None);
+                    }
                 }
             }
 
