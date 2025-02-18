@@ -418,6 +418,7 @@ impl CompiledPackage {
         self.dependency_ids.published.values().cloned().collect()
     }
 
+    /// Return a digest of the bytecode modules in this package.
     pub fn get_package_digest(&self, with_unpublished_deps: bool) -> [u8; 32] {
         let hash_modules = true;
         MovePackage::compute_digest_for_modules_and_deps(
@@ -625,7 +626,7 @@ impl CompiledPackage {
     ///
     /// Then, it will recursively find all the transitive dependencies of the packages in the list
     /// above and add them to the list of packages that need to be kept as dependencies.
-    pub fn tree_shake(&self, with_unpublished_deps: bool) -> Vec<ObjectID> {
+    pub fn tree_shake(&mut self, with_unpublished_deps: bool) {
         // Start from the root modules (or all modules if with_unpublished_deps is true as we
         // need to include modules with 0x0 address)
         let root_modules: Vec<_> = if with_unpublished_deps {
@@ -682,9 +683,7 @@ impl CompiledPackage {
         // dependency_ids.published field and return the package ids.
         self.dependency_ids
             .published
-            .iter()
-            .filter_map(|(pkg_name, id)| pkgs_to_keep.contains(pkg_name).then_some(*id))
-            .collect()
+            .retain(|pkg_name, _| pkgs_to_keep.contains(pkg_name));
     }
 }
 

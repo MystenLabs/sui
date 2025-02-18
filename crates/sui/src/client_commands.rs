@@ -962,7 +962,7 @@ impl SuiClientCommands {
                 let package_id = compiled_package.published_at.clone()?;
                 let package_digest =
                     compiled_package.get_package_digest(with_unpublished_dependencies);
-                let dep_ids = compiled_package.tree_shake(with_unpublished_dependencies);
+                let dep_ids = compiled_package.get_published_dependencies_ids();
 
                 if verify_compatibility {
                     check_compatibility(
@@ -1083,7 +1083,7 @@ impl SuiClientCommands {
                 let compiled_package = compile_result?;
                 let compiled_modules =
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
-                let dep_ids = compiled_package.tree_shake(with_unpublished_dependencies);
+                let dep_ids = compiled_package.get_published_dependencies_ids();
 
                 let tx_kind = client
                     .transaction_builder()
@@ -1774,13 +1774,11 @@ fn compile_package_simple(
         chain_id: chain_id.clone(),
     };
     let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
+    let mut compiled_package =
+        build_from_resolution_graph(resolution_graph, false, false, chain_id)?;
+    compiled_package.tree_shake(false);
 
-    Ok(build_from_resolution_graph(
-        resolution_graph,
-        false,
-        false,
-        chain_id,
-    )?)
+    Ok(compiled_package)
 }
 
 pub(crate) async fn upgrade_package(
@@ -1792,7 +1790,7 @@ pub(crate) async fn upgrade_package(
     skip_dependency_verification: bool,
     env_alias: Option<String>,
 ) -> Result<(u8, CompiledPackage), anyhow::Error> {
-    let compiled_package = compile_package(
+    let mut compiled_package = compile_package(
         read_api,
         build_config,
         package_path,
@@ -1800,6 +1798,7 @@ pub(crate) async fn upgrade_package(
         skip_dependency_verification,
     )
     .await?;
+    compiled_package.tree_shake(with_unpublished_dependencies);
 
     compiled_package.published_at.as_ref().map_err(|e| match e {
         PublishedAtError::NotPresent => {
@@ -1877,12 +1876,13 @@ pub(crate) async fn compile_package(
     if !with_unpublished_dependencies {
         check_unpublished_dependencies(&dependencies.unpublished)?;
     };
-    let compiled_package = build_from_resolution_graph(
+    let mut compiled_package = build_from_resolution_graph(
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
         chain_id,
     )?;
+    compiled_package.tree_shake(with_unpublished_dependencies);
     let protocol_config = read_api.get_protocol_config(None).await?;
 
     // Check that the package's Move version is compatible with the chain's
