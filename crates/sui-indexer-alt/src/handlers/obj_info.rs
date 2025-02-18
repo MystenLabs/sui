@@ -137,26 +137,22 @@ impl Handler for ObjInfo {
             "
             WITH modifications(object_id, cp_sequence_number) AS (
                 VALUES {}
-            ),
-            predecessors AS (
-                SELECT m.object_id, sub.max_cp as predecessor_cp
-                FROM modifications m,
-                LATERAL (
-                    SELECT cp_sequence_number as max_cp
-                    FROM obj_info oi
-                    WHERE oi.{:?} = m.object_id
-                        AND oi.{:?} < m.cp_sequence_number
-                    ORDER BY cp_sequence_number DESC
-                    LIMIT 1
-                ) sub
             )
-            DELETE FROM obj_info
-            WHERE (object_id, cp_sequence_number) IN
-                (SELECT object_id, predecessor_cp
-                 FROM predecessors
-                 WHERE predecessor_cp IS NOT NULL)
+            DELETE FROM obj_info oi
+            USING modifications m
+            WHERE oi.{:?} = m.object_id
+              AND oi.{:?} = (
+                SELECT oi2.cp_sequence_number
+                FROM obj_info oi2
+                WHERE oi2.{:?} = m.object_id
+                  AND oi2.{:?} < m.cp_sequence_number
+                ORDER BY oi2.cp_sequence_number DESC
+                LIMIT 1
+              )
             ",
             values,
+            dsl::object_id,
+            dsl::cp_sequence_number,
             dsl::object_id,
             dsl::cp_sequence_number,
         );

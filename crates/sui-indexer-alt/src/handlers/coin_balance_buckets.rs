@@ -204,26 +204,22 @@ impl Handler for CoinBalanceBuckets {
             "
             WITH modifications(object_id, cp_sequence_number) AS (
                 VALUES {}
-            ),
-            predecessors AS (
-                SELECT m.object_id, sub.max_cp as predecessor_cp
-                FROM modifications m,
-                LATERAL (
-                    SELECT cp_sequence_number as max_cp
-                    FROM coin_balance_buckets cbo
-                    WHERE cbo.{:?} = m.object_id
-                        AND cbo.{:?} < m.cp_sequence_number
-                    ORDER BY cp_sequence_number DESC
-                    LIMIT 1
-                ) sub
             )
-            DELETE FROM coin_balance_buckets
-            WHERE (object_id, cp_sequence_number) IN
-                (SELECT object_id, predecessor_cp
-                 FROM predecessors
-                 WHERE predecessor_cp IS NOT NULL)
+            DELETE FROM coin_balance_buckets cbo
+            USING modifications m
+            WHERE cbo.{:?} = m.object_id
+              AND cbo.{:?} = (
+                SELECT cbo2.cp_sequence_number
+                FROM coin_balance_buckets cbo2
+                WHERE cbo2.{:?} = m.object_id
+                  AND cbo2.{:?} < m.cp_sequence_number
+                ORDER BY cbo2.cp_sequence_number DESC
+                LIMIT 1
+              )
             ",
             values,
+            dsl::object_id,
+            dsl::cp_sequence_number,
             dsl::object_id,
             dsl::cp_sequence_number,
         );
