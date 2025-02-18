@@ -23,6 +23,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{BlockStream, ExtendedSerializedBlock, NetworkService},
+    round_tracker::PeerRoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
     synchronizer::SynchronizerHandle,
@@ -42,6 +43,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     subscription_counter: Arc<SubscriptionCounter>,
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
+    round_tracker: Arc<RwLock<PeerRoundTracker>>,
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
@@ -54,6 +56,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         rx_block_broadcaster: broadcast::Receiver<ExtendedBlock>,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
+        round_tracker: Arc<RwLock<PeerRoundTracker>>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(
             context.clone(),
@@ -69,6 +72,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             subscription_counter,
             dag_state,
             store,
+            round_tracker,
         }
     }
 }
@@ -246,13 +250,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             excluded_ancestors.truncate(excluded_ancestors_limit);
         }
 
-        self.core_dispatcher
-            .set_peer_accepted_rounds_from_block(ExtendedBlock {
+        self.round_tracker
+            .write()
+            .update_from_block(&ExtendedBlock {
                 block: verified_block,
                 excluded_ancestors: excluded_ancestors.clone(),
-            })
-            .await
-            .map_err(|_| ConsensusError::Shutdown)?;
+            });
 
         self.context
             .metrics
@@ -712,7 +715,7 @@ mod tests {
 
     use crate::{
         authority_service::AuthorityService,
-        block::{BlockAPI, BlockRef, ExtendedBlock, SignedBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, BlockRef, SignedBlock, TestBlock, VerifiedBlock},
         commit::{CertifiedCommits, CommitRange},
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
@@ -720,7 +723,7 @@ mod tests {
         dag_state::DagState,
         error::ConsensusResult,
         network::{BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkService},
-        round_tracker::QuorumRound,
+        round_tracker::PeerRoundTracker,
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
         test_dag_builder::DagBuilder,
@@ -776,23 +779,11 @@ mod tests {
             Ok(Default::default())
         }
 
-        async fn set_peer_accepted_rounds_from_block(
-            &self,
-            _extended_block: ExtendedBlock,
-        ) -> Result<(), CoreError> {
+        fn notify_rounds_probed(&self) -> Result<(), CoreError> {
             todo!()
         }
 
         fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
-            todo!()
-        }
-
-        fn set_propagation_delay_and_quorum_rounds(
-            &self,
-            _delay: Round,
-            _received_quorum_rounds: Vec<QuorumRound>,
-            _accepted_quorum_rounds: Vec<QuorumRound>,
-        ) -> Result<(), CoreError> {
             todo!()
         }
 
@@ -887,6 +878,10 @@ mod tests {
             dag_state.clone(),
             false,
         );
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
@@ -896,6 +891,7 @@ mod tests {
             rx_block_broadcast,
             dag_state,
             store,
+            round_tracker,
         ));
 
         // Test delaying blocks with time drift.
@@ -950,6 +946,10 @@ mod tests {
             dag_state.clone(),
             true,
         );
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
@@ -959,6 +959,7 @@ mod tests {
             rx_block_broadcast,
             dag_state.clone(),
             store,
+            round_tracker,
         ));
 
         // Create some blocks for a few authorities. Create some equivocations as well and store in dag state.
