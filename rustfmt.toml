@@ -1,5 +1,2 @@
 edition = "2021"
 use_field_init_shorthand = true
-
-group_imports = "StdExternalCrate"
-imports_granularity = "Crate"
