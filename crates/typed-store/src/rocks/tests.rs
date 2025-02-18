@@ -3,7 +3,6 @@
 use super::*;
 use crate::rocks::iter::{Iter, RevIter};
 use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
-use crate::rocks::util::{is_ref_count_value, reference_count_merge_operator};
 use crate::{reopen, retry_transaction};
 use rstest::rstest;
 use serde::Deserialize;
@@ -1356,116 +1355,6 @@ async fn open_as_secondary_test() {
 struct ObjectWithRefCount {
     value: i64,
     ref_count: i64,
-}
-
-fn increment_counter(db: &DBMap<String, ObjectWithRefCount>, key: &str, value: i64) {
-    let mut batch = db.batch();
-    batch
-        .partial_merge_batch(db, [(key.to_string(), value.to_le_bytes())])
-        .unwrap();
-    batch.write().unwrap();
-}
-
-#[tokio::test]
-async fn refcount_test() {
-    let key = "key".to_string();
-    let mut options = rocksdb::Options::default();
-    options.set_merge_operator(
-        "refcount operator",
-        reference_count_merge_operator,
-        reference_count_merge_operator,
-    );
-    let db = DBMap::<String, ObjectWithRefCount>::open(
-        temp_dir(),
-        MetricConf::default(),
-        Some(options),
-        None,
-        &ReadWriteOptions::default(),
-    )
-    .expect("failed to open rocksdb");
-    let object = ObjectWithRefCount {
-        value: 3,
-        ref_count: 1,
-    };
-    // increment value 10 times
-    let iterations = 10;
-    for _ in 0..iterations {
-        let mut batch = db.batch();
-        batch.merge_batch(&db, [(key.to_string(), object)]).unwrap();
-        batch.write().unwrap();
-    }
-    let value = db
-        .get(&key)
-        .expect("failed to read value")
-        .expect("value is empty");
-    assert_eq!(value.value, object.value);
-    assert_eq!(value.ref_count, iterations);
-
-    // decrement value
-    increment_counter(&db, &key, -1);
-    let value = db.get(&key).unwrap().unwrap();
-    assert_eq!(value.value, object.value);
-    assert_eq!(value.ref_count, iterations - 1);
-}
-
-#[tokio::test]
-async fn refcount_with_compaction_test() {
-    let key = "key".to_string();
-    let mut options = rocksdb::Options::default();
-    options.set_merge_operator(
-        "refcount operator",
-        reference_count_merge_operator,
-        reference_count_merge_operator,
-    );
-    let db = DBMap::<String, ObjectWithRefCount>::open(
-        temp_dir(),
-        MetricConf::default(),
-        Some(options),
-        None,
-        &ReadWriteOptions::default(),
-    )
-    .expect("failed to open rocksdb");
-
-    let object = ObjectWithRefCount {
-        value: 3,
-        ref_count: 1,
-    };
-    let mut batch = db.batch();
-    batch.merge_batch(&db, [(key.to_string(), object)]).unwrap();
-    batch.write().unwrap();
-    // increment value once
-    increment_counter(&db, &key, 1);
-    let value = db.get(&key).unwrap().unwrap();
-    assert_eq!(value.value, object.value);
-
-    // decrement value to 0
-    increment_counter(&db, &key, -1);
-    increment_counter(&db, &key, -1);
-    // ref count went to zero. Reading value returns empty array
-    assert!(db.get(&key).is_err());
-    let value = db.multi_get_raw_bytes([(&key)]).unwrap()[0]
-        .clone()
-        .unwrap();
-    assert!(value.is_empty());
-
-    // refcount increment makes value visible again
-    increment_counter(&db, &key, 1);
-    let value = db.get(&key).unwrap().unwrap();
-    assert_eq!(value.value, object.value);
-
-    increment_counter(&db, &key, -1);
-    db.compact_range(
-        &object,
-        &ObjectWithRefCount {
-            value: 100,
-            ref_count: 1,
-        },
-    )
-    .unwrap();
-
-    increment_counter(&db, &key, 1);
-    let value = db.get_raw_bytes(&key).unwrap().unwrap();
-    assert!(is_ref_count_value(&value));
 }
 
 fn open_map<P: AsRef<Path>, K, V>(

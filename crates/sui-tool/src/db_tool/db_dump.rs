@@ -22,7 +22,6 @@ use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
 use sui_core::jsonrpc_index::IndexStoreTables;
 use sui_core::rpc_index::RpcIndexStore;
-use sui_storage::mutex_table::RwLockTable;
 use sui_types::base_types::{EpochId, ObjectID};
 use tracing::info;
 use typed_store::rocks::{default_db_options, MetricConf};
@@ -208,7 +207,6 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
     );
     info!("Highest pruned checkpoint: {}", highest_pruned_checkpoint);
     let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
-    let lock_table = Arc::new(RwLockTable::new(1));
     info!("Pruning setup for db at path: {:?}", db_path.display());
     let pruning_config = AuthorityStorePruningConfig {
         num_epochs_to_retain: 0,
@@ -219,11 +217,9 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
         &perpetual_db,
         &checkpoint_store,
         Some(&rpc_index),
-        &lock_table,
         None,
         pruning_config,
         metrics,
-        usize::MAX,
         EPOCH_DURATION_MS_FOR_TESTING,
     )
     .await?;
@@ -235,7 +231,6 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
     let checkpoint_store = CheckpointStore::new(&db_path.join("checkpoints"));
     let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
-    let lock_table = Arc::new(RwLockTable::new(1));
     info!("Pruning setup for db at path: {:?}", db_path.display());
     let pruning_config = AuthorityStorePruningConfig {
         num_epochs_to_retain_for_checkpoints: Some(1),
@@ -247,11 +242,9 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         &perpetual_db,
         &checkpoint_store,
         Some(&rpc_index),
-        &lock_table,
         None,
         pruning_config,
         metrics,
-        usize::MAX,
         archive_readers,
         EPOCH_DURATION_MS_FOR_TESTING,
     )
