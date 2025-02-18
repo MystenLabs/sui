@@ -216,6 +216,14 @@ impl MoveObjectType {
         Self(MoveObjectType_::GasCoin)
     }
 
+    pub fn coin(coin_type: TypeTag) -> Self {
+        Self(if GAS::is_gas_type(&coin_type) {
+            MoveObjectType_::GasCoin
+        } else {
+            MoveObjectType_::Coin(coin_type)
+        })
+    }
+
     pub fn staked_sui() -> Self {
         Self(MoveObjectType_::StakedSui)
     }
