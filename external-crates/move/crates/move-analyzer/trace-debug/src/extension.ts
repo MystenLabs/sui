@@ -29,6 +29,11 @@ const DEBUGGER_TYPE = 'move-debug';
 const MOVE_FILE_EXT = '.move';
 
 /**
+ * File extension for disassembled bytecode files.
+ */
+const BCODE_FILE_EXT = ".mvb";
+
+/**
  * The extension for JSON files.
  */
 const JSON_FILE_EXT = ".json";
@@ -246,15 +251,24 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
         if (!pkgRoot) {
             throw new Error(`Cannot find package root for file  '${editor.document.uri.fsPath}'`);
         }
-        if (path.extname(editor.document.uri.fsPath) === MOVE_FILE_EXT) {
+        if (openedFileExt === MOVE_FILE_EXT) {
             const pkgModules = findSrcModules(editor.document.getText());
             if (pkgModules.length === 0) {
                 throw new Error(`Cannot find any modules in file '${editor.document.uri.fsPath}'`);
             }
             tracedFunctions = findTracedFunctionsFromPath(pkgRoot, pkgModules);
         } else {
-            // this is a disassembled bytecode file as this function is only called if
-            // the active file is either a .json, .move, or .mvb file
+            if (openedFileExt !== BCODE_FILE_EXT) {
+                throw new Error('Unsupported file extension '
+                    + `'${openedFileExt}'`
+                    + '(currently supporting: '
+                    + `'${MOVE_FILE_EXT}'`
+                    + ', '
+                    + `'${JSON_FILE_EXT}'`
+                    + ', '
+                    + `'${BCODE_FILE_EXT}'`
+                    + ')');
+            }
             const modulePattern = /\bmodule\s+\d+\.\w+\b/g;
             const moduleSequences = editor.document.getText().match(modulePattern);
             if (!moduleSequences || moduleSequences.length === 0) {
@@ -278,7 +292,7 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
         : await pickFunctionToDebug(tracedFunctions);
 
     if (!fun) {
-        throw new Error(`No function to be trace-debugged selected from\n` + tracedFunctions.join('\n'));
+        throw new Error(`No function to be trace - debugged selected from\n` + tracedFunctions.join('\n'));
     }
     return fun;
 }
