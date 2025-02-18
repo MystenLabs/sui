@@ -16,7 +16,6 @@ pub use traits::Map;
 pub mod metrics;
 pub mod rocks;
 pub use typed_store_error::TypedStoreError;
-pub mod sally;
 pub mod test_db;
 pub use metrics::DBMetrics;
 
@@ -153,5 +152,3 @@ pub type StoreError = typed_store_error::TypedStoreError;
 /// //     bad_field: u32,
 /// // #}
 pub use typed_store_derive::DBMapUtils;
-
-pub use typed_store_derive::SallyDB;
