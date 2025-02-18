@@ -16,7 +16,7 @@ use tokio_postgres::{types::ToSql, NoTls};
 use tracing::info;
 use url::Url;
 
-use crate::direct::benchmark_config::BenchmarkConfig;
+use crate::config::BenchmarkConfig;
 use crate::direct::metrics::{BenchmarkResult, MetricsCollector};
 use crate::direct::query_enricher::{EnrichedBenchmarkQuery, SqlValue};
 
@@ -95,7 +95,7 @@ impl QueryExecutor {
         );
 
         let start = Instant::now();
-        let deadline = start + self.config.timeout;
+        let deadline = start + self.config.duration;
         let (concurrency, metrics, pool, queries) = (
             self.config.concurrency,
             self.metrics.clone(),
