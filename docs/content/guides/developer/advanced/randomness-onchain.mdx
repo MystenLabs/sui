@@ -80,7 +80,7 @@ A second function, called by transaction `tx2`, reads the stored value and compl
 It is important that the inputs to the second function are fixed and cannot be modified after `tx1` (otherwise an attacker can modify them after seeing the randomness committed by `tx1`).
 Also, it is important to gracefully handle the case in which the second step is never completed (for example, charge a fee in the first step).
 See [this](https://github.com/MystenLabs/sui/blob/main/examples/move/random/random_nft/sources/example.move#L117-L142) for example implementation.
-- Write the function in a way that the happy flow consumes more resources than the unhappy one. Please keep the following in mind:
+- Write the function in a way that the happy flow consumes more resources than the unhappy one. Keep the following in mind:
   - External functions or native ones can change in the future, potentially resulting in different costs compared to the time you conducted your tests.
   - [profile-transaction](../../../references/cli/client.mdx#profile-a-transaction) can be used to profile the costs of a transaction.
   - UIDs generated and deleted on the same transaction do not count towards the limit. 
