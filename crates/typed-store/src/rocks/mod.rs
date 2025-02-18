@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 pub mod errors;
 pub(crate) mod iter;
-pub(crate) mod keys;
 pub(crate) mod safe_iter;
 pub(crate) mod values;
 
-use self::{iter::Iter, keys::Keys, values::Values};
+use self::{iter::Iter, values::Values};
 use crate::rocks::errors::typed_store_err_from_bcs_err;
 use crate::rocks::errors::typed_store_err_from_bincode_err;
 use crate::rocks::errors::typed_store_err_from_rocks_err;
@@ -1693,19 +1692,6 @@ impl<'a> DBTransaction<'a> {
         )
     }
 
-    pub fn keys<K: DeserializeOwned, V: DeserializeOwned>(
-        &'a self,
-        db: &DBMap<K, V>,
-    ) -> Keys<'a, K> {
-        let mut db_iter = RocksDBRawIter::OptimisticTransaction(
-            self.transaction
-                .raw_iterator_cf_opt(&db.cf(), db.opts.readopts()),
-        );
-        db_iter.seek_to_first();
-
-        Keys::new(db_iter)
-    }
-
     pub fn values<K: DeserializeOwned, V: DeserializeOwned>(
         &'a self,
         db: &DBMap<K, V>,
@@ -1812,7 +1798,6 @@ where
     type Error = TypedStoreError;
     type Iterator = Iter<'a, K, V>;
     type SafeIterator = SafeIter<'a, K, V>;
-    type Keys = Keys<'a, K>;
     type Values = Values<'a, V>;
 
     #[instrument(level = "trace", skip_all, err)]
@@ -2150,15 +2135,6 @@ where
             keys_scanned,
             Some(self.db_metrics.clone()),
         )
-    }
-
-    fn keys(&'a self) -> Self::Keys {
-        let mut db_iter = self
-            .rocksdb
-            .raw_iterator_cf(&self.cf(), self.opts.readopts());
-        db_iter.seek_to_first();
-
-        Keys::new(db_iter)
     }
 
     fn values(&'a self) -> Self::Values {
