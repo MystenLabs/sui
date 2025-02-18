@@ -202,13 +202,24 @@ impl Handler for CoinBalanceBuckets {
             .join(",");
         let query = format!(
             "
-            WITH to_prune_data (object_id, cp_sequence_number_exclusive) AS (
+            WITH modifications(object_id, cp_sequence_number) AS (
                 VALUES {}
+            ),
+            predecessors AS (
+                SELECT m.object_id, m.cp_sequence_number as mod_cp,
+                       (SELECT cp_sequence_number
+                        FROM coin_balance_buckets cbo
+                        WHERE cbo.{:?} = m.object_id
+                          AND cbo.{:?} < m.cp_sequence_number
+                        ORDER BY cp_sequence_number DESC
+                        LIMIT 1) as predecessor_cp
+                FROM modifications m
             )
             DELETE FROM coin_balance_buckets
-            USING to_prune_data
-            WHERE coin_balance_buckets.{:?} = to_prune_data.object_id
-              AND coin_balance_buckets.{:?} < to_prune_data.cp_sequence_number_exclusive
+            WHERE (object_id, cp_sequence_number) IN
+                (SELECT object_id, predecessor_cp
+                 FROM predecessors
+                 WHERE predecessor_cp IS NOT NULL)
             ",
             values,
             dsl::object_id,

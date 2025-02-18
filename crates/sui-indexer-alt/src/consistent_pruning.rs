@@ -53,40 +53,6 @@ impl PruningLookupTable {
         self.table.insert(checkpoint, prune_info);
     }
 
-    /// Given a range of checkpoints to prune (from inclusive, to_exclusive exclusive), return the set of objects
-    /// that should be pruned, and for each object the checkpoint upper bound (exclusive) that
-    /// the objects should be pruned at.
-    pub fn get_prune_info(
-        &self,
-        cp_from: u64,
-        cp_to_exclusive: u64,
-    ) -> anyhow::Result<BTreeMap<ObjectID, u64>> {
-        if cp_from >= cp_to_exclusive {
-            bail!(
-                "No valid range to take from the lookup table: from={}, to_exclusive={}",
-                cp_from,
-                cp_to_exclusive
-            );
-        }
-
-        let mut result: BTreeMap<ObjectID, u64> = BTreeMap::new();
-        for cp in cp_from..cp_to_exclusive {
-            let info = self
-                .table
-                .get(&cp)
-                .ok_or_else(|| anyhow::anyhow!("Prune info for checkpoint {cp} not found"))?;
-            for (object_id, update_kind) in &info.value().info {
-                let prune_checkpoint = match update_kind {
-                    UpdateKind::Mutate => cp,
-                    UpdateKind::Delete => cp + 1,
-                };
-                let entry = result.entry(*object_id).or_default();
-                *entry = (*entry).max(prune_checkpoint);
-            }
-        }
-        Ok(result)
-    }
-
     /// Returns a list of (object_id, checkpoint_number) pairs where each pair indicates a
     /// checkpoint whose immediate predecessor should be pruned. The checkpoint_number is exclusive,
     /// meaning we'll prune the entry with the largest checkpoint number less than it.
@@ -106,7 +72,7 @@ impl PruningLookupTable {
     /// - (obj, 10) // will prune CP 2 because 2 < 10
     /// - (obj, 15) // will prune CP 10 because 10 < 15
     /// - (obj, 16) // will prune CP 15 because 15 < 16
-    pub fn get_prune_info_v2(
+    pub fn get_prune_info(
         &self,
         cp_from: u64,
         cp_to_exclusive: u64,
@@ -168,8 +134,8 @@ mod tests {
         // Prune checkpoints 1-2
         let result = table.get_prune_info(1, 3).unwrap();
         assert_eq!(result.len(), 2);
-        assert_eq!(result[&obj1], 1);
-        assert_eq!(result[&obj2], 2);
+        assert_eq!(result[0].1, 1);
+        assert_eq!(result[1].1, 2);
 
         // Remove prune info for checkpoints 1-2
         table.gc_prune_info(1, 3);
@@ -193,9 +159,9 @@ mod tests {
 
         // Prune checkpoints 1-2
         let result = table.get_prune_info(1, 3).unwrap();
-        assert_eq!(result.len(), 1);
+        assert_eq!(result.len(), 3);
         // For deleted objects, we prune up to and including the deletion checkpoint
-        assert_eq!(result[&obj], 3);
+        assert_eq!(result[2].1, 3);
     }
 
     #[test]
@@ -228,8 +194,9 @@ mod tests {
 
         // Prune checkpoints 1-2
         let result = table.get_prune_info(1, 3).unwrap();
-        assert_eq!(result.len(), 1);
-        // Should use the latest mutation checkpoint
-        assert_eq!(result[&obj], 2);
+        assert_eq!(result.len(), 2);
+        // Don't dedupe entries for the same object
+        assert_eq!(result[0].1, 1);
+        assert_eq!(result[1].1, 2);
     }
 }

@@ -116,7 +116,7 @@ impl Handler for ObjInfo {
 
         let to_prune = self
             .pruning_lookup_table
-            .get_prune_info_v2(from, to_exclusive)?;
+            .get_prune_info(from, to_exclusive)?;
 
         if to_prune.is_empty() {
             self.pruning_lookup_table.gc_prune_info(from, to_exclusive);
