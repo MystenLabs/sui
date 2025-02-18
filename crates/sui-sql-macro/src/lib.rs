@@ -54,7 +54,7 @@ impl Parse for SqlInput {
 /// The `sql!` macro is used to construct a `diesel::SqlLiteral<T>` using a format string to
 /// describe the SQL snippet with the following syntax:
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// sql!(as T, "format", binds,*)
 /// ```
 ///
@@ -63,13 +63,13 @@ impl Parse for SqlInput {
 /// type is given as a string which must correspond to a type in the `diesel::sql_types` module.
 /// Bound values following in the order matching their binders in the string:
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// sql!(as Bool, "{BigInt} <= foo AND foo < {BigInt}", 5, 10)
 /// ```
 ///
 /// The above macro invocation will generate the following code:
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// sql::<Bool>("")
 ///    .bind::<BigInt, _>(5)
 ///    .sql(" <= foo AND foo < ")
