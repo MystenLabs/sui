@@ -8,43 +8,59 @@
 
 # The values provided in this template are the default values that will be used
 # when any section or field is not specified in your own configuration
+[graph]
+# If 1 or more target triples (and optionally, target_features) are specified,
+# only the specified targets will be checked when running `cargo deny check`.
+# This means, if a particular package is only ever used as a target specific
+# dependency, such as, for example, the `nix` crate only being used via the
+# `target_family = "unix"` configuration, that only having windows targets in
+# this list would mean the nix crate, as well as any of its exclusive
+# dependencies not shared by any other crates, would be ignored, as the target
+# list here is effectively saying which targets you are building for.
+targets = [
+
+
+  # The triple can be any string, but only the target triples built in to
+  # rustc (as of 1.40) can be checked against actual config expressions
+  # { triple = "x86_64-unknown-linux-musl" },
+  # You can also specify which target_features you promise are enabled for a
+  # particular target. target_features are currently not validated against
+  # the actual valid features supported by the target architecture.
+  # { triple = "wasm32-unknown-unknown", features = ["atomics"] },
+]
 
 # This section is considered when running `cargo deny check advisories`
 # More documentation for the advisories section can be found here:
 # https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
 [advisories]
-version = 2
 # The path where the advisory database is cloned/fetched into
 db-path = "~/.cargo/advisory-db"
 # The url(s) of the advisory databases to use
 db-urls = ["https://github.com/rustsec/advisory-db"]
+# The lint level for crates that have been yanked from their source registry
+yanked = "warn"
 # A list of advisory IDs to ignore. Note that ignored advisories will still
 # output a note when they are encountered.
 ignore = [
-    # "RUSTSEC-0000-0000",
-    # difference 2.0.0 is unmaintained
+  # difference 2.0.0 is unmaintained
     "RUSTSEC-2020-0095",
-    # rusoto is unmaintained, use aws crates
-    "RUSTSEC-2022-0071",
     # `tui` is unmaintained; use `ratatui` instead
     "RUSTSEC-2023-0049",
-    # we don't do RSA signing on Sui (only verifying for zklogin)
-    "RUSTSEC-2023-0071",
-    # A few dependencies use unpatched rustls.
-    "RUSTSEC-2024-0336",
-    # allow yaml-rust being unmaintained
+    # `yaml-rust` is unmaintained
     "RUSTSEC-2024-0320",
-    # allow unmaintained proc-macro-error used in transitive dependencies
+    # `proc-macro-error` is unmaintained, needed by `tabled`
     "RUSTSEC-2024-0370",
+    # `serde_cbor` is unmaintained
+    "RUSTSEC-2021-0127",
+    # `atty` is unmaintained
+    "RUSTSEC-2024-0375",
+    # Potential unaligned read in `atty`
+    "RUSTSEC-2021-0145",
 
-    # Temporarily allow until arrow family of crates updates `lexical-core` to 1.0
-    "RUSTSEC-2023-0086",
     # allow unmaintained instant crate used in transitive dependencies (backoff, cached, fastrand, parking_lot_*)
     "RUSTSEC-2024-0384",
     # allow unmaintained derivative crate used in transitive dependencies (ark-*)
     "RUSTSEC-2024-0388",
-    # allow outdated 'idna' until passkey-client crate is able to update
-    "RUSTSEC-2024-0421",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -54,31 +70,28 @@ ignore = [
 # * Medium - CVSS Score 4.0 - 6.9
 # * High - CVSS Score 7.0 - 8.9
 # * Critical - CVSS Score 9.0 - 10.0
-#severity-threshold =
+# severity-threshold =
 
 # This section is considered when running `cargo deny check licenses`
 # More documentation for the licenses section can be found here:
 # https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
 [licenses]
-version = 2
 # List of explicitly allowed licenses
 # See https://spdx.org/licenses/ for list of possible licenses
 # [possible values: any SPDX 3.11 short identifier (+ optional exception)].
 allow = [
-    "MIT",
-    "BSD-2-Clause",
-    "BSD-3-Clause",
-    "Apache-2.0",
-    "MPL-2.0",
-    "ISC",
-    "CC0-1.0",
-    "0BSD",
-    "LicenseRef-ring",
-    "Unlicense",
-    "BSL-1.0",
-    "Unicode-DFS-2016",
-    "Unicode-3.0",
-    #"Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "Apache-2.0",
+  "MPL-2.0",
+  "CC0-1.0",
+  "0BSD",
+  "Unlicense",
+  "BSL-1.0",
+  "Unicode-3.0",
+  "Zlib",
+  "NCSA"
 ]
 # The confidence threshold for detecting a license from license text.
 # The higher the value, the more closely the license text must be to the
@@ -88,42 +101,32 @@ confidence-threshold = 0.8
 # Allow 1 or more licenses on a per-crate basis, so that particular licenses
 # aren't accepted for every possible crate as with the normal allow list
 exceptions = [
-    # Each entry is the crate and version constraint, and its specific allow
-    # list
-    #{ allow = ["Zlib"], name = "adler32", version = "*" },
+
+
+  # Each entry is the crate and version constraint, and its specific allow
+  # list
+  # { allow = ["Zlib"], name = "adler32", version = "*" },
 ]
 
 # Some crates don't have (easily) machine readable licensing information,
 # adding a clarification entry for it allows you to manually specify the
 # licensing information
-#[[licenses.clarify]]
+# [[licenses.clarify]]
 # The name of the crate the clarification applies to
-#name = "ring"
+# name = "ring"
 # The optional version constraint for the crate
-#version = "*"
+# version = "*"
 # The SPDX expression for the license requirements of the crate
-#expression = "MIT AND ISC AND OpenSSL"
+# expression = "MIT AND ISC AND OpenSSL"
 # One or more files in the crate's source used as the "source of truth" for
 # the license expression. If the contents match, the clarification will be used
 # when running the license check, otherwise the clarification will be ignored
 # and the crate will be checked normally, which may produce warnings or errors
 # depending on the rest of your configuration
-#license-files = [
-    # Each entry is a crate relative path, and the (opaque) hash of its contents
-    #{ path = "LICENSE", hash = 0xbd0eed23 }
-#]
-[[licenses.clarify]]
-name = "ring"
-expression = "LicenseRef-ring"
-license-files = [
-    { path = "LICENSE", hash = 0xbd0eed23 }
-]
-[[licenses.clarify]]
-name = "target-lexicon"
-version = "*"
-expression = "Apache-2.0"
-license-files = [
-]
+# license-files = [
+# Each entry is a crate relative path, and the (opaque) hash of its contents
+# { path = "LICENSE", hash = 0xbd0eed23 }
+# ]
 
 [licenses.private]
 # If true, ignores workspace crates that aren't published, or are only
@@ -133,7 +136,9 @@ ignore = false
 # is only published to private registries, and ignore is true, the crate will
 # not have its license(s) checked
 registries = [
-    #"https://sekretz.com/registry
+
+
+  # "https://sekretz.com/registry
 ]
 
 # This section is considered when running `cargo deny check bans`.
@@ -141,7 +146,7 @@ registries = [
 # https://embarkstudios.github.io/cargo-deny/checks/bans/cfg.html
 [bans]
 # Lint level for when multiple versions of the same crate are detected
-multiple-versions = "allow"
+multiple-versions = "warn"
 # Lint level for when a crate version requirement is `*`
 wildcards = "allow"
 # The graph highlighting used when creating dotgraphs for crates
@@ -152,28 +157,41 @@ wildcards = "allow"
 highlight = "all"
 # List of crates that are allowed. Use with care!
 allow = [
-    #{ name = "ansi_term", version = "=0.11.0" },
+
+
+  # { name = "ansi_term", version = "=0.11.0" },
 ]
 # List of crates to deny
 deny = [
-    # Each entry the name of a crate and a version range. If version is
-    # not specified, all versions will be matched.
-    #{ name = "ansi_term", version = "=0.11.0" },
-    #
-    # Wrapper crates can optionally be specified to allow the crate when it
-    # is a direct dependency of the otherwise banned crate
-    #{ name = "ansi_term", version = "=0.11.0", wrappers = [] },
+
+
+  # Each entry the name of a crate and a version range. If version is
+  # not specified, all versions will be matched.
+  # { name = "ansi_term", version = "=0.11.0" },
+  #
+  # Wrapper crates can optionally be specified to allow the crate when it
+  # is a direct dependency of the otherwise banned crate
+  # { name = "ansi_term", version = "=0.11.0", wrappers = [] },
 ]
 # Certain crates/versions that will be skipped when doing duplicate detection.
 skip = [
-    #{ name = "ansi_term", version = "=0.11.0" },
+  "hermit-abi",
+  # { name = "ansi_term", version = "=0.11.0" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
 # dependencies starting at the specified crate, up to a certain depth, which is
 # by default infinite
 skip-tree = [
-    #{ name = "ansi_term", version = "=0.11.0", depth = 20 },
+  "codespan",
+  "colored",
+  "itertools",
+  "lsp-types",
+  "ouroboros",
+  "tracing-subscriber",
+  "serde_yaml",
+  "getrandom",
+  # { name = "ansi_term", version = "=0.11.0", depth = 20 },
 ]
 
 # This section is considered when running `cargo deny check sources`.
@@ -190,15 +208,6 @@ unknown-git = "warn"
 # if not specified. If it is specified but empty, no registries are allowed.
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # List of URLs for allowed Git repositories
-allow-git = [
-    "https://github.com/asonnino/prometheus-parser",
-    "https://github.com/zhiburt/tabled",
-]
+allow-git = []
 
 [sources.allow-org]
-github = [
-    "mystenmark",
-    "bmwill",
-    "mystenlabs",
-    "nextest-rs",
-]
