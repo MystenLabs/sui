@@ -3,19 +3,22 @@
 
 use std::time::Duration;
 
+#[derive(Debug, Clone)]
 pub struct BenchmarkConfig {
     /// Number of concurrent clients
     pub concurrency: usize,
-    /// All queries will execute if they finish within the specified timeout.
-    /// Otherwise, the binary will stop at that time and report collected metrics.
-    pub timeout: Duration,
+    /// Duration to run the benchmark in seconds
+    pub duration: Duration,
+    /// Optional path to JSON RPC file for JSON RPC benchmarks
+    pub json_rpc_file_path: Option<String>,
 }
 
 impl Default for BenchmarkConfig {
     fn default() -> Self {
         Self {
             concurrency: 50,
-            timeout: Duration::from_secs(30),
+            duration: Duration::from_secs(30),
+            json_rpc_file_path: None,
         }
     }
 }
