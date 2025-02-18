@@ -6,7 +6,7 @@ pub mod direct;
 use std::time::Duration;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{value_parser, Parser, Subcommand};
 use tracing::info;
 use url::Url;
 
@@ -32,9 +32,10 @@ pub enum Command {
     DirectQuery {
         #[clap(
             long,
-            default_value = "postgres://postgres:postgres@localhost:5432/sui"
+            default_value = "postgres://postgres:postgres@localhost:5432/sui",
+            value_parser = value_parser!(Url)
         )]
-        db_url: String,
+        db_url: Url,
         #[clap(long, default_value = "50")]
         concurrency: usize,
         #[clap(long, default_value = "30")]
@@ -63,7 +64,6 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
             concurrency,
             duration_secs,
         } => {
-            let db_url = Url::parse(&db_url)?;
             info!("Running direct query benchmark against DB {}", db_url);
 
             let template_generator = QueryTemplateGenerator::new(db_url.clone());
