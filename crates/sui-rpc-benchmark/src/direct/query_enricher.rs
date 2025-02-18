@@ -8,6 +8,9 @@
 use anyhow::Result;
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
+use parking_lot::Mutex;
+use std::sync::Arc;
+use sui_indexer_alt_framework::task::TrySpawnStreamExt;
 use tokio_postgres::{types::Type, NoTls, Row};
 use tracing::warn;
 use url::Url;
@@ -58,50 +61,61 @@ impl QueryEnricher {
             .collect()
     }
 
-    async fn enrich_query(&self, query: &QueryTemplate) -> Result<EnrichedBenchmarkQuery> {
-        let client = self.pool.get().await?;
-        let sql = format!(
-            "SELECT {} FROM {} WHERE {} IS NOT NULL LIMIT 1000",
-            query.needed_columns.join(", "),
-            query.table_name,
-            query.needed_columns[0]
-        );
-
-        let rows = client.query(&sql, &[]).await?;
-        let Some(first_row) = rows.first() else {
-            warn!(
-                table = query.table_name,
-                "No sample data found for query on table, table is empty."
-            );
-            return Ok(EnrichedBenchmarkQuery {
-                query: query.clone(),
-                rows: Vec::new(),
-                types: query.needed_columns.iter().map(|_| Type::TEXT).collect(), // default type
-            });
-        };
-        let types = first_row
-            .columns()
-            .iter()
-            .map(|c| c.type_().clone())
-            .collect();
-        let raw_rows = rows.iter().map(Self::row_to_values).collect();
-
-        Ok(EnrichedBenchmarkQuery {
-            query: query.clone(),
-            rows: raw_rows,
-            types,
-        })
-    }
-
     pub async fn enrich_queries(
         &self,
         queries: Vec<QueryTemplate>,
     ) -> Result<Vec<EnrichedBenchmarkQuery>> {
-        let mut enriched_queries = Vec::new();
-        for query in queries {
-            let enriched = self.enrich_query(&query).await?;
-            enriched_queries.push(enriched);
-        }
-        Ok(enriched_queries)
+        let enriched_queries = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let pool = self.pool.clone();
+        let enriched_queries_clone = enriched_queries.clone();
+
+        futures::stream::iter(queries)
+            .try_for_each_spawned(10, move |query| {
+                let pool = pool.clone();
+                let enriched_queries = enriched_queries_clone.clone();
+                async move {
+                    let client = pool.get().await?;
+                    let sql = format!(
+                        "SELECT {} FROM {} WHERE {} IS NOT NULL LIMIT 1000",
+                        query.needed_columns.join(", "),
+                        query.table_name,
+                        query.needed_columns[0]
+                    );
+
+                    let rows = client.query(&sql, &[]).await?;
+                    let Some(first_row) = rows.first() else {
+                        warn!(
+                            table = query.table_name,
+                            "No sample data found for query on table, table is empty."
+                        );
+                        let enriched = EnrichedBenchmarkQuery {
+                            query: query.clone(),
+                            rows: Vec::new(),
+                            types: query.needed_columns.iter().map(|_| Type::TEXT).collect(), // default type
+                        };
+                        enriched_queries.lock().push(enriched);
+                        return Ok::<(), anyhow::Error>(());
+                    };
+                    let types = first_row
+                        .columns()
+                        .iter()
+                        .map(|c| c.type_().clone())
+                        .collect();
+                    let raw_rows = rows.iter().map(Self::row_to_values).collect();
+
+                    let enriched = EnrichedBenchmarkQuery {
+                        query: query.clone(),
+                        rows: raw_rows,
+                        types,
+                    };
+                    enriched_queries.lock().push(enriched);
+                    Ok::<(), anyhow::Error>(())
+                }
+            })
+            .await?;
+
+        Ok(Arc::try_unwrap(enriched_queries)
+            .map_err(|_| anyhow::anyhow!("Failed to try_unwrap Arc"))?
+            .into_inner())
     }
 }

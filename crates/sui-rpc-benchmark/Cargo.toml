@@ -11,6 +11,7 @@ anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
 dashmap.workspace = true
 futures.workspace = true
+parking_lot.workspace = true
 rand.workspace = true
 sui-indexer-alt-framework.workspace = true
 telemetry-subscribers.workspace = true
