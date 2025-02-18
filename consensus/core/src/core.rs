@@ -39,7 +39,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     leader_schedule::LeaderSchedule,
-    round_tracker::{PeerRoundTracker, QuorumRound},
+    round_tracker::PeerRoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction::TransactionConsumer,
     universal_committer::{
@@ -67,14 +67,6 @@ pub(crate) struct Core {
     /// Core stops proposing new blocks when there is no subscriber, because new proposed blocks
     /// will likely contain only stale info when they propagate to peers.
     subscriber_exists: bool,
-    /// Estimated delay by round for propagating blocks to a quorum.
-    /// Because of the nature of TCP and block streaming, propagation delay is expected to be
-    /// 0 in most cases, even when the actual latency of broadcasting blocks is high.
-    /// When this value is higher than the `propagation_delay_stop_proposal_threshold`,
-    /// most likely this validator cannot broadcast  blocks to the network at all.
-    /// Core stops proposing new blocks in this case.
-    propagation_delay: Round,
-
     /// Used to make commit decisions for leader blocks in the dag.
     committer: UniversalCommitter,
     /// The last new round for which core has sent out a signal.
@@ -114,6 +106,10 @@ pub(crate) struct Core {
     // quorum rounds periodically which is used across other components to make
     // decisions about block proposals.
     round_tracker: Arc<RwLock<PeerRoundTracker>>,
+    // Tracks the last checked proposal control state.
+    // We maintain this recent history so that if state changes from not proposing
+    // to proposing, we will attempt to create a new block.
+    is_proposing: bool,
 }
 
 impl Core {
@@ -185,7 +181,6 @@ impl Core {
             transaction_consumer,
             block_manager,
             subscriber_exists,
-            propagation_delay: 0,
             committer,
             commit_observer,
             signals,
@@ -194,6 +189,7 @@ impl Core {
             last_known_proposed_round: min_propose_round,
             ancestor_state_manager,
             round_tracker,
+            is_proposing: false,
         }
         .recover()
     }
@@ -398,24 +394,6 @@ impl Core {
             );
         }
         Ok(missing_block_refs)
-    }
-
-    pub(crate) fn update_peer_accepted_rounds(
-        &mut self,
-        extended_block: ExtendedBlock,
-    ) -> ConsensusResult<()> {
-        let _scope = monitored_scope("Core::update_peer_accepted_rounds");
-        let _s = self
-            .context
-            .metrics
-            .node_metrics
-            .scope_processing_time
-            .with_label_values(&["Core::update_peer_accepted_rounds"])
-            .start_timer();
-
-        self.round_tracker.write().update_from_block(extended_block);
-
-        Ok(())
     }
 
     /// If needed, signals a new clock round and sets up leader timeout.
@@ -739,7 +717,7 @@ impl Core {
         // Update round tracker with our own highest accepted blocks
         self.round_tracker
             .write()
-            .update_from_block(extended_block.clone());
+            .update_from_block(&extended_block);
 
         Some(extended_block)
     }
@@ -928,38 +906,6 @@ impl Core {
         self.subscriber_exists = exists;
     }
 
-    /// Sets the delay by round for propagating blocks to a quorum and the received
-    /// & accepted quorum rounds per authority for ancestor state manager.
-    pub(crate) fn set_propagation_delay_and_quorum_rounds(
-        &mut self,
-        delay: Round,
-        received_quorum_rounds: Vec<QuorumRound>,
-        accepted_quorum_rounds: Vec<QuorumRound>,
-    ) {
-        info!(
-            "Received quorum round per authority in ancestor state manager set to: {}",
-            self.context
-                .committee
-                .authorities()
-                .zip(received_quorum_rounds.iter())
-                .map(|((i, _), rounds)| format!("{i}: {rounds:?}"))
-                .join(", ")
-        );
-        info!(
-            "Accepted quorum round per authority in ancestor state manager set to: {}",
-            self.context
-                .committee
-                .authorities()
-                .zip(accepted_quorum_rounds.iter())
-                .map(|((i, _), rounds)| format!("{i}: {rounds:?}"))
-                .join(", ")
-        );
-        self.ancestor_state_manager
-            .set_quorum_rounds_per_authority(received_quorum_rounds, accepted_quorum_rounds);
-        info!("Propagation round delay set to: {delay}");
-        self.propagation_delay = delay;
-    }
-
     /// Sets the min propose round for the proposer allowing to propose blocks only for round numbers
     /// `> last_known_proposed_round`. At the moment is allowed to call the method only once leading to a panic
     /// if attempt to do multiple times.
@@ -971,54 +917,67 @@ impl Core {
         info!("Last known proposed round set to {round}");
     }
 
+    // Whether core is currently proposing new blocks.
+    pub(crate) fn is_proposing(&self) -> bool {
+        self.is_proposing
+    }
+
     /// Whether the core should propose new blocks.
-    pub(crate) fn should_propose(&self) -> bool {
+    pub(crate) fn should_propose(&mut self) -> bool {
+        let (_, _, propagation_delay) = self
+            .round_tracker
+            .read()
+            .calculate_quorum_rounds_and_propagation_delay();
+
         let clock_round = self.dag_state.read().threshold_clock_round();
         let core_skipped_proposals = &self.context.metrics.node_metrics.core_skipped_proposals;
 
-        if !self.subscriber_exists {
-            debug!("Skip proposing for round {clock_round}, no subscriber exists.");
-            core_skipped_proposals
-                .with_label_values(&["no_subscriber"])
-                .inc();
-            return false;
-        }
-
-        if self.propagation_delay
-            > self
-                .context
-                .parameters
-                .propagation_delay_stop_proposal_threshold
-        {
-            debug!(
-                "Skip proposing for round {clock_round}, high propagation delay {} > {}.",
-                self.propagation_delay,
-                self.context
+        let should_propose = match () {
+            _ if !self.subscriber_exists => {
+                debug!("Skip proposing for round {clock_round}, no subscriber exists.");
+                core_skipped_proposals
+                    .with_label_values(&["no_subscriber"])
+                    .inc();
+                false
+            }
+            _ if propagation_delay
+                > self
+                    .context
                     .parameters
-                    .propagation_delay_stop_proposal_threshold
-            );
-            core_skipped_proposals
-                .with_label_values(&["high_propagation_delay"])
-                .inc();
-            return false;
-        }
-
-        let Some(last_known_proposed_round) = self.last_known_proposed_round else {
-            debug!("Skip proposing for round {clock_round}, last known proposed round has not been synced yet.");
-            core_skipped_proposals
-                .with_label_values(&["no_last_known_proposed_round"])
-                .inc();
-            return false;
+                    .propagation_delay_stop_proposal_threshold =>
+            {
+                debug!(
+                    "Skip proposing for round {clock_round}, high propagation delay {} > {}.",
+                    propagation_delay,
+                    self.context
+                        .parameters
+                        .propagation_delay_stop_proposal_threshold
+                );
+                core_skipped_proposals
+                    .with_label_values(&["high_propagation_delay"])
+                    .inc();
+                false
+            }
+            _ => match self.last_known_proposed_round {
+                None => {
+                    debug!("Skip proposing for round {clock_round}, last known proposed round has not been synced yet.");
+                    core_skipped_proposals
+                        .with_label_values(&["no_last_known_proposed_round"])
+                        .inc();
+                    false
+                }
+                Some(last_known_proposed_round) if clock_round <= last_known_proposed_round => {
+                    debug!("Skip proposing for round {clock_round} as last known proposed round is {last_known_proposed_round}");
+                    core_skipped_proposals
+                        .with_label_values(&["higher_last_known_proposed_round"])
+                        .inc();
+                    false
+                }
+                Some(_) => true,
+            },
         };
-        if clock_round <= last_known_proposed_round {
-            debug!("Skip proposing for round {clock_round} as last known proposed round is {last_known_proposed_round}");
-            core_skipped_proposals
-                .with_label_values(&["higher_last_known_proposed_round"])
-                .inc();
-            return false;
-        }
-
-        true
+        self.is_proposing = should_propose;
+        should_propose
     }
 
     // Try to decide which of the certified commits will have to be committed next respecting the `limit`. If provided `limit` is zero, it will panic.
@@ -1092,7 +1051,19 @@ impl Core {
         );
 
         // Ensure ancestor state is up to date before selecting for proposal.
-        self.ancestor_state_manager.update_all_ancestors_state();
+        let round_tracker = self.round_tracker.read();
+        let (_, accepted_quorum_rounds, _) =
+            round_tracker.calculate_quorum_rounds_and_propagation_delay();
+        let round_prober_update_count = round_tracker.round_prober_update_count;
+        let new_block_update_count = round_tracker.new_block_update_count;
+        drop(round_tracker);
+
+        self.ancestor_state_manager.update_all_ancestors_state(
+            &accepted_quorum_rounds,
+            round_prober_update_count,
+            new_block_update_count,
+        );
+
         let ancestor_state_map = self.ancestor_state_manager.get_ancestor_states();
 
         let quorum_round = clock_round.saturating_sub(1);
@@ -1187,10 +1158,7 @@ impl Core {
             let excluded_author = ancestor.author();
             let block_hostname = &self.context.committee.authority(excluded_author).hostname;
             // A quorum of validators reported to have accepted blocks from the excluded_author up to the low quorum round.
-            let mut accepted_low_quorum_round = self
-                .ancestor_state_manager
-                .accepted_quorum_round_per_authority[excluded_author]
-                .0;
+            let mut accepted_low_quorum_round = accepted_quorum_rounds[excluded_author].0;
             // If the accepted quorum round of this ancestor is greater than or equal
             // to the clock round then we want to make sure to set it to clock_round - 1
             // as that is the max round the new block can include as an ancestor.
@@ -1461,7 +1429,10 @@ impl CoreTextFixture {
 
         let block_signer = signers.remove(own_index.value()).1;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let core = Core::new(
             context,
             leader_schedule,
@@ -1580,7 +1551,10 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1704,7 +1678,10 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1795,7 +1772,10 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1902,7 +1882,10 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2048,7 +2031,10 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2201,7 +2187,10 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2273,7 +2262,10 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2306,6 +2298,21 @@ mod test {
 
         // Process all the blocks
         assert!(core.add_blocks(blocks).unwrap().is_empty());
+
+        core.round_tracker.write().update_from_probe(
+            vec![
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+            ],
+            vec![
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+            ],
+        );
 
         // Try to propose - no block should be produced.
         assert!(core.try_propose(true).unwrap().is_none());
@@ -2469,6 +2476,21 @@ mod test {
                     .add_blocks(last_round_blocks.clone())
                     .unwrap();
 
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, 0],
+                        vec![round, round, round, 0],
+                        vec![round, round, round, 0],
+                        vec![0, 0, 0, 0],
+                    ],
+                    vec![
+                        vec![round, round, round, 0],
+                        vec![round, round, round, 0],
+                        vec![round, round, round, 0],
+                        vec![0, 0, 0, 0],
+                    ],
+                );
+
                 // Only when round > 1 and using non-genesis parents.
                 if let Some(r) = last_round_blocks.first().map(|b| b.round()) {
                     assert_eq!(round - 1, r);
@@ -2503,6 +2525,23 @@ mod test {
                     .core
                     .add_blocks(last_round_blocks.clone())
                     .unwrap();
+
+                // Don't update probed rounds for authority 3 so it will remain
+                // excluded
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, 0],
+                        vec![round, round, round, 0],
+                        vec![round, round, round, 0],
+                        vec![round, round, round, round],
+                    ],
+                    vec![
+                        vec![round, round, round, 0],
+                        vec![round, round, round, 0],
+                        vec![round, round, round, 0],
+                        vec![round, round, round, round],
+                    ],
+                );
 
                 // Only when round > 1 and using non-genesis parents.
                 if let Some(r) = last_round_blocks.first().map(|b| b.round()) {
@@ -2575,7 +2614,10 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2587,7 +2629,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
-            round_tracker,
+            round_tracker.clone(),
         );
 
         // No new block should have been produced
@@ -2611,6 +2653,27 @@ mod test {
         // Process all the blocks
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         core.set_last_known_proposed_round(12);
+
+        round_tracker.write().update_from_probe(
+            vec![
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![0, 0, 0, 0, 0, 0, 0],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+            ],
+            vec![
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![0, 0, 0, 0, 0, 0, 0],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+            ],
+        );
 
         let block = core.try_propose(true).expect("No error").unwrap();
         assert_eq!(block.round(), 13);
@@ -2733,28 +2796,29 @@ mod test {
         assert_eq!(extended_block.block.ancestors().len(), 5);
         assert_eq!(extended_block.excluded_ancestors.len(), 0);
 
-        // Set quorum rounds for authority which will unlock the Excluded
-        // authority (1) and then we should be able to create a new layer of blocks
-        // which will then all be included as ancestors for the next proposal
-        core.set_propagation_delay_and_quorum_rounds(
-            0,
+        // Simulate updating received and accepted rounds from prober.
+        // New quorum rounds for authority can then be computed which will unlock
+        // the Excluded authority (1) and then we should be able to create a new
+        // layer of blocks which will then all be included as ancestors for the
+        // next proposal
+        round_tracker.write().update_from_probe(
             vec![
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
             ],
             vec![
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![16, 16, 16, 16, 16, 16, 16],
             ],
         );
 
@@ -2823,7 +2887,10 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2911,7 +2978,10 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2978,7 +3048,10 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2991,7 +3064,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
-            round_tracker,
+            round_tracker.clone(),
         );
 
         // There is no proposal during recovery because there is no subscriber.
@@ -3002,7 +3075,26 @@ mod test {
         );
 
         // Use a large propagation delay to disable proposing.
-        core.set_propagation_delay_and_quorum_rounds(1000, vec![], vec![]);
+        // This is done by accepting an own block at round 1000 to dag state and
+        // then simulating updating round tracker received rounds from probe where
+        // low quorum round for own index should get calculated to round 0.
+        dag_state
+            .write()
+            .accept_block(VerifiedBlock::new_for_test(TestBlock::new(1000, 0).build()));
+        round_tracker.write().update_from_probe(
+            vec![
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+            ],
+            vec![
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+            ],
+        );
 
         // Make propagation delay the only reason for not proposing.
         core.set_subscriber_exists(true);
@@ -3011,7 +3103,30 @@ mod test {
         assert!(core.try_propose(true).unwrap().is_none());
 
         // Let Core know there is no propagation delay.
-        core.set_propagation_delay_and_quorum_rounds(0, vec![], vec![]);
+        // This is done by simulating updating round tracker recieved rounds from probe
+        // where low quorum round for own index should get calculated to round 1000.
+        round_tracker.write().update_from_probe(
+            vec![
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+            ],
+            vec![
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+            ],
+        );
+
+        // Also add the necessary blocks from round 1000 so core will propose for
+        // round 1001
+        for author in 1..4 {
+            dag_state.write().accept_block(VerifiedBlock::new_for_test(
+                TestBlock::new(1000, author).build(),
+            ));
+        }
 
         // Proposing now would succeed.
         assert!(core.try_propose(true).unwrap().is_some());
@@ -3041,6 +3156,21 @@ mod test {
                     .core
                     .add_blocks(last_round_blocks.clone())
                     .unwrap();
+
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                );
 
                 // A "new round" signal should be received given that all the blocks of previous round have been processed
                 let new_round = receive(
@@ -3373,7 +3503,10 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -3492,6 +3625,25 @@ mod test {
                     .core
                     .add_blocks(last_round_blocks.clone())
                     .unwrap();
+
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                    ],
+                    vec![
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                    ],
+                );
 
                 // A "new round" signal should be received given that all the blocks of previous round have been processed
                 let new_round = receive(
@@ -3628,6 +3780,21 @@ mod test {
                     .add_blocks(last_round_blocks.clone())
                     .unwrap();
 
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                );
+
                 // A "new round" signal should be received given that all the blocks of previous round have been processed
                 let new_round = receive(
                     Duration::from_secs(1),
@@ -3723,6 +3890,20 @@ mod test {
                     .core
                     .add_blocks(last_round_blocks.clone())
                     .unwrap();
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                );
                 core_fixture.core.new_block(round, true).unwrap();
 
                 let block = core_fixture.core.last_proposed_block();

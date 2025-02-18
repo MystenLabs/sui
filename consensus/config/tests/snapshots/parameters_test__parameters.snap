@@ -18,7 +18,6 @@ sync_last_known_own_block_timeout:
 round_prober_interval_ms: 5000
 round_prober_request_timeout_ms: 4000
 propagation_delay_stop_proposal_threshold: 5
-quorum_round_update_interval_ms: 5000
 dag_state_cached_rounds: 500
 commit_sync_parallel_fetches: 8
 commit_sync_batch_size: 100

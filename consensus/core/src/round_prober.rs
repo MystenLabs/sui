@@ -166,18 +166,12 @@ impl<C: NetworkClient> RoundProber<C> {
                                 tracing::warn!("Received invalid number of received rounds from peer {}", peer_name);
                             }
 
-                            if self
-                                .context
-                                .protocol_config
-                                .consensus_round_prober_probe_accepted_rounds() {
-                                    if accepted.len() == self.context.committee.size() {
-                                        highest_accepted_rounds[peer] = accepted;
-                                    } else {
-                                        node_metrics.round_prober_request_errors.with_label_values(&["invalid_accepted_rounds"]).inc();
-                                        tracing::warn!("Received invalid number of accepted rounds from peer {}", peer_name);
-                                    }
-                                }
-
+                            if accepted.len() == self.context.committee.size() {
+                                highest_accepted_rounds[peer] = accepted;
+                            } else {
+                                node_metrics.round_prober_request_errors.with_label_values(&["invalid_accepted_rounds"]).inc();
+                                tracing::warn!("Received invalid number of accepted rounds from peer {}", peer_name);
+                            }
                         },
                         // When a request fails, the highest received rounds from that authority will be 0
                         // for the subsequent computations.
@@ -206,6 +200,8 @@ impl<C: NetworkClient> RoundProber<C> {
         self.round_tracker
             .write()
             .update_from_probe(highest_accepted_rounds, highest_received_rounds);
+
+        let _ = self.core_thread_dispatcher.notify_rounds_probed();
     }
 }
 
@@ -219,7 +215,7 @@ mod test {
     use parking_lot::RwLock;
 
     use crate::{
-        block::{BlockRef, ExtendedBlock},
+        block::BlockRef,
         commit::{CertifiedCommits, CommitRange},
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -227,7 +223,7 @@ mod test {
         error::{ConsensusError, ConsensusResult},
         network::{BlockStream, NetworkClient},
         round_prober::RoundProber,
-        round_tracker::{PeerRoundTracker, QuorumRound},
+        round_tracker::PeerRoundTracker,
         storage::mem_store::MemStore,
         Round, TestBlock, VerifiedBlock,
     };
@@ -275,24 +271,12 @@ mod test {
             unimplemented!()
         }
 
-        async fn set_peer_accepted_rounds_from_block(
-            &self,
-            _extended_block: ExtendedBlock,
-        ) -> Result<(), CoreError> {
-            unimplemented!()
-        }
-
         fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
             unimplemented!()
         }
 
-        fn set_propagation_delay_and_quorum_rounds(
-            &self,
-            _delay: Round,
-            _received_quorum_rounds: Vec<QuorumRound>,
-            _accepted_quorum_rounds: Vec<QuorumRound>,
-        ) -> Result<(), CoreError> {
-            unimplemented!()
+        fn notify_rounds_probed(&self) -> Result<(), CoreError> {
+            Ok(())
         }
 
         fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
@@ -389,6 +373,7 @@ mod test {
 
     #[tokio::test]
     async fn test_round_prober() {
+        telemetry_subscribers::init_for_testing();
         const NUM_AUTHORITIES: usize = 7;
         let context = Arc::new(Context::new_for_test(NUM_AUTHORITIES).0);
         let core_thread_dispatcher = Arc::new(FakeThreadDispatcher::new(vec![
@@ -418,7 +403,10 @@ mod test {
             ], // highest_accepted_rounds
         ));
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
+            context.clone(),
+            dag_state.clone(),
+        )));
         let prober = RoundProber::new(
             context.clone(),
             core_thread_dispatcher.clone(),
@@ -449,7 +437,10 @@ mod test {
 
         prober.probe().await;
 
-        let received_quorum_rounds = round_tracker.read().compute_received_quorum_round();
+        let (received_quorum_rounds, accepted_quorum_rounds, propagation_delay) = round_tracker
+            .read()
+            .calculate_quorum_rounds_and_propagation_delay();
+
         assert_eq!(
             received_quorum_rounds,
             vec![
@@ -463,7 +454,6 @@ mod test {
             ]
         );
 
-        let accepted_quorum_rounds = round_tracker.read().compute_accepted_quorum_round();
         assert_eq!(
             accepted_quorum_rounds,
             vec![
@@ -476,5 +466,7 @@ mod test {
                 (107, 170)
             ]
         );
+
+        assert_eq!(propagation_delay, 10);
     }
 }
