@@ -6,7 +6,7 @@ use fastcrypto::ed25519::Ed25519KeyPair;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
-use sui_sdk::verify_signature::verify_signature;
+use sui_sdk::verify_personal_message_signature::verify_personal_message_signature;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{Ed25519SuiSignature, SuiKeyPair};
 use sui_types::crypto::{SignatureScheme, SuiSignatureInner};
@@ -46,7 +46,7 @@ fn keystore_display_test() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
-async fn test_verify_signature() {
+async fn test_verify_personal_message_signature() {
     let (address, sec1): (_, Ed25519KeyPair) = get_key_pair();
     let message = b"hello";
     let intent_message = IntentMessage::new(
@@ -55,10 +55,15 @@ async fn test_verify_signature() {
             message: message.to_vec(),
         },
     );
+
     let s = Signature::new_secure(&intent_message, &sec1);
-    let signature = GenericSignature::Signature(s);
-    let res = verify_signature(signature, message, address, None).await;
+    let signature: GenericSignature = GenericSignature::Signature(s);
+    let res = verify_personal_message_signature(signature.clone(), message, address, None).await;
     assert!(res.is_ok());
+
+    let res =
+        verify_personal_message_signature(signature, "wrong msg".as_bytes(), address, None).await;
+    assert!(res.is_err());
 }
 
 #[sim_test]
@@ -79,8 +84,23 @@ async fn test_verify_signature_zklogin() {
     test_cluster.wait_for_epoch(Some(1)).await;
     test_cluster.wait_for_authenticator_state_update().await;
     let client = test_cluster.sui_client();
-    let res = verify_signature(signature, message, user_address, Some(client.clone())).await;
+    let res = verify_personal_message_signature(
+        signature.clone(),
+        message,
+        user_address,
+        Some(client.clone()),
+    )
+    .await;
     assert!(res.is_ok());
+
+    let res = verify_personal_message_signature(
+        signature,
+        "wrong msg".as_bytes(),
+        user_address,
+        Some(client.clone()),
+    )
+    .await;
+    assert!(res.is_err());
 }
 
 #[tokio::test]
@@ -103,6 +123,10 @@ async fn test_verify_signature_multisig() {
     let multisig = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
     let generic_sig = GenericSignature::MultiSig(multisig);
 
-    let res = verify_signature(generic_sig, message, address, None).await;
+    let res = verify_personal_message_signature(generic_sig.clone(), message, address, None).await;
     assert!(res.is_ok());
+
+    let res =
+        verify_personal_message_signature(generic_sig, "wrong msg".as_bytes(), address, None).await;
+    assert!(res.is_err());
 }

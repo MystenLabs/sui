@@ -16,7 +16,7 @@ use sui_types::{
 
 /// Verify a signature against a personal message bytes and the sui address.
 /// SuiClient is required to pass in if zkLogin signature is supplied.
-pub async fn verify_signature(
+pub async fn verify_personal_message_signature(
     signature: GenericSignature,
     message: &[u8],
     address: SuiAddress,
