@@ -131,12 +131,11 @@ mod tests {
     use tokio::time::{sleep, Instant};
 
     use crate::{
-        block::{BlockRef, ExtendedBlock, Round, VerifiedBlock},
+        block::{BlockRef, Round, VerifiedBlock},
         context::Context,
         core::CoreSignals,
         core_thread::{CoreError, CoreThreadDispatcher},
         leader_timeout::LeaderTimeoutTask,
-        round_tracker::QuorumRound,
     };
 
     #[derive(Clone, Default)]
@@ -179,23 +178,11 @@ mod tests {
             todo!()
         }
 
-        async fn set_peer_accepted_rounds_from_block(
-            &self,
-            _extended_block: ExtendedBlock,
-        ) -> Result<(), CoreError> {
+        fn notify_rounds_probed(&self) -> Result<(), CoreError> {
             todo!()
         }
 
         fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
-            todo!()
-        }
-
-        fn set_propagation_delay_and_quorum_rounds(
-            &self,
-            _delay: Round,
-            _received_quorum_rounds: Vec<QuorumRound>,
-            _accepted_quorum_rounds: Vec<QuorumRound>,
-        ) -> Result<(), CoreError> {
             todo!()
         }
 
