@@ -135,36 +135,27 @@ impl TypeTag {
 
     /// Return all of the addresses used inside of the type.
     pub fn all_addresses(&self) -> BTreeSet<AccountAddress> {
-        fn find_addresses_recur(account_addresses: &mut BTreeSet<AccountAddress>, tag: &TypeTag) {
-            match tag {
-                TypeTag::Bool
-                | TypeTag::U8
-                | TypeTag::U64
-                | TypeTag::U128
-                | TypeTag::U16
-                | TypeTag::U32
-                | TypeTag::U256
-                | TypeTag::Address
-                | TypeTag::Signer => (),
-                TypeTag::Vector(inner) => find_addresses_recur(account_addresses, inner),
-                TypeTag::Struct(tag) => {
-                    let StructTag {
-                        address,
-                        module: _,
-                        name: _,
-                        type_params,
-                    } = &**tag;
-                    account_addresses.insert(*address);
-                    for tag in type_params {
-                        find_addresses_recur(account_addresses, tag)
-                    }
-                }
+        let mut account_addresses = BTreeSet::new();
+        self.find_addresses_internal(&mut account_addresses);
+        account_addresses
+    }
+
+    pub(crate) fn find_addresses_internal(&self, account_addresses: &mut BTreeSet<AccountAddress>) {
+        match self {
+            TypeTag::Bool
+            | TypeTag::U8
+            | TypeTag::U64
+            | TypeTag::U128
+            | TypeTag::U16
+            | TypeTag::U32
+            | TypeTag::U256
+            | TypeTag::Address
+            | TypeTag::Signer => (),
+            TypeTag::Vector(inner) => inner.find_addresses_internal(account_addresses),
+            TypeTag::Struct(tag) => {
+                tag.all_addresses_internal(account_addresses);
             }
         }
-
-        let mut account_addresses = BTreeSet::new();
-        find_addresses_recur(&mut account_addresses, self);
-        account_addresses
     }
 }
 
@@ -280,6 +271,25 @@ impl StructTag {
                 .fold(AbstractMemorySize::new(0), |accum, val| {
                     accum + val.abstract_size_for_gas_metering()
                 })
+    }
+
+    pub fn all_addresses(&self) -> BTreeSet<AccountAddress> {
+        let mut account_addresses = BTreeSet::new();
+        self.all_addresses_internal(&mut account_addresses);
+        account_addresses
+    }
+
+    pub fn all_addresses_internal(&self, addrs: &mut BTreeSet<AccountAddress>) {
+        let StructTag {
+            address,
+            module: _,
+            name: _,
+            type_params,
+        } = self;
+        addrs.insert(*address);
+        for tag in type_params {
+            tag.find_addresses_internal(addrs);
+        }
     }
 }
 

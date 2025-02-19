@@ -72,7 +72,7 @@ pub fn publish(
 
     // use the publish_module API from the VM since we don't allow breaking changes
     let natives = NativeFunctions::new(natives)?;
-    let mut runtime = MoveRuntime::new_with_default_config(natives);
+    let runtime = MoveRuntime::new_with_default_config(natives);
 
     let mut gas_status = get_gas_status(cost_table, None)?;
 
