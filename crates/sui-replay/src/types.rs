@@ -16,7 +16,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, Ver
 use sui_types::digests::{ObjectDigest, TransactionDigest};
 use sui_types::error::{SuiError, SuiObjectResponseError, SuiResult, UserInputError};
 use sui_types::object::Object;
-use sui_types::transaction::{InputObjectKind, SenderSignedData, TransactionKind};
+use sui_types::transaction::{GasData, InputObjectKind, SenderSignedData, TransactionKind};
 use thiserror::Error;
 use tokio::time::Duration;
 use tracing::{error, warn};
@@ -43,9 +43,7 @@ pub struct OnChainTransactionInfo {
     pub kind: TransactionKind,
     pub modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
     pub shared_object_refs: Vec<ObjectRef>,
-    pub gas: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
-    pub gas_budget: u64,
-    pub gas_price: u64,
+    pub gas: GasData,
     pub executed_epoch: u64,
     pub dependencies: Vec<TransactionDigest>,
     #[serde(skip)]

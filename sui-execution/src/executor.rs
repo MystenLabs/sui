@@ -6,8 +6,9 @@ use std::{collections::HashSet, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
 use sui_types::storage::BackingStore;
+use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{ObjectRef, SuiAddress},
+    base_types::SuiAddress,
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -36,7 +37,7 @@ pub trait Executor {
         // Transaction Inputs
         input_objects: CheckedInputObjects,
         // Gas related
-        gas_coins: Vec<ObjectRef>,
+        gas: GasData,
         gas_status: SuiGasStatus,
         // Transaction
         transaction_kind: TransactionKind,
@@ -65,7 +66,7 @@ pub trait Executor {
         // Transaction Inputs
         input_objects: CheckedInputObjects,
         // Gas related
-        gas_coins: Vec<ObjectRef>,
+        gas: GasData,
         gas_status: SuiGasStatus,
         // Transaction
         transaction_kind: TransactionKind,

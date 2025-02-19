@@ -1017,6 +1017,12 @@ pub struct TxContext {
     epoch_timestamp_ms: CheckpointTimestamp,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
+    // gas price passed to transaction as input
+    gas_price: u64,
+    // address of the sponsor if any
+    sponsor: Option<AccountAddress>,
+    // flag to indicate whether the Move implementaion is native or not
+    is_native: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -1030,12 +1036,22 @@ pub enum TxContextKind {
 }
 
 impl TxContext {
-    pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch_data: &EpochData) -> Self {
+    pub fn new(
+        sender: &SuiAddress,
+        digest: &TransactionDigest,
+        epoch_data: &EpochData,
+        gas_price: u64,
+        sponsor: Option<SuiAddress>,
+        is_native: bool,
+    ) -> Self {
         Self::new_from_components(
             sender,
             digest,
             &epoch_data.epoch_id(),
             epoch_data.epoch_start_timestamp(),
+            gas_price,
+            sponsor,
+            is_native,
         )
     }
 
@@ -1044,6 +1060,9 @@ impl TxContext {
         digest: &TransactionDigest,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        gas_price: u64,
+        sponsor: Option<SuiAddress>,
+        is_native: bool,
     ) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
@@ -1051,6 +1070,9 @@ impl TxContext {
             epoch: *epoch_id,
             epoch_timestamp_ms,
             ids_created: 0,
+            gas_price,
+            sponsor: sponsor.map(|s| AccountAddress::new(s.0)),
+            is_native,
         }
     }
 
@@ -1083,6 +1105,27 @@ impl TxContext {
         self.epoch
     }
 
+    pub fn sender(&self) -> SuiAddress {
+        SuiAddress::from(ObjectID(self.sender))
+    }
+
+    pub fn epoch_timestamp_ms(&self) -> u64 {
+        self.epoch_timestamp_ms
+    }
+
+    /// Return the transaction digest, to include in new objects
+    pub fn digest(&self) -> TransactionDigest {
+        TransactionDigest::new(self.digest.clone().try_into().unwrap())
+    }
+
+    pub fn sponsor(&self) -> Option<SuiAddress> {
+        self.sponsor.map(SuiAddress::from)
+    }
+
+    pub fn ids_created(&self) -> u64 {
+        self.ids_created
+    }
+
     /// Derive a globally unique object ID by hashing self.digest | self.ids_created
     pub fn fresh_id(&mut self) -> ObjectID {
         let id = ObjectID::derive_id(self.digest(), self.ids_created);
@@ -1091,17 +1134,22 @@ impl TxContext {
         id
     }
 
-    /// Return the transaction digest, to include in new objects
-    pub fn digest(&self) -> TransactionDigest {
-        TransactionDigest::new(self.digest.clone().try_into().unwrap())
-    }
-
-    pub fn sender(&self) -> SuiAddress {
-        SuiAddress::from(ObjectID(self.sender))
-    }
-
     pub fn to_bcs_legacy_context(&self) -> Vec<u8> {
-        let move_context: MoveLegacyTxContext = self.into();
+        let move_context: MoveLegacyTxContext = if self.is_native {
+            let tx_context = &TxContext {
+                sender: AccountAddress::ZERO,
+                digest: self.digest.clone(),
+                epoch: 0,
+                epoch_timestamp_ms: 0,
+                ids_created: 0,
+                gas_price: 0,
+                sponsor: None,
+                is_native: true,
+            };
+            tx_context.into()
+        } else {
+            self.into()
+        };
         bcs::to_bytes(&move_context).unwrap()
     }
 
@@ -1114,31 +1162,45 @@ impl TxContext {
     /// serialize/deserialize and this is the reason why this method
     /// consumes the other context..
     pub fn update_state(&mut self, other: MoveLegacyTxContext) -> Result<(), ExecutionError> {
-        if self.sender != other.sender
-            || self.digest != other.digest
-            || other.ids_created < self.ids_created
-        {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::InvariantViolation,
-                "Immutable fields for TxContext changed",
-            ));
+        if !self.is_native {
+            if self.sender != other.sender
+                || self.digest != other.digest
+                || other.ids_created < self.ids_created
+            {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::InvariantViolation,
+                    "Immutable fields for TxContext changed",
+                ));
+            }
+            self.ids_created = other.ids_created;
         }
-        self.ids_created = other.ids_created;
         Ok(())
     }
 
-    // Generate a random TxContext for testing.
-    pub fn random_for_testing_only() -> Self {
-        Self::new(
-            &SuiAddress::random_for_testing_only(),
-            &TransactionDigest::random(),
-            &EpochData::new_test(),
-        )
+    //
+    // Move test only API
+    //
+    pub fn inc_epoch(&mut self) {
+        self.epoch += 1;
     }
 
-    /// Generate a TxContext for testing with a specific sender.
-    pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
-        Self::new(sender, &TransactionDigest::random(), &EpochData::new_test())
+    pub fn inc_epoch_timestamp(&mut self, delta_ms: u64) {
+        self.epoch_timestamp_ms += delta_ms;
+    }
+
+    pub fn replace(
+        &mut self,
+        sender: AccountAddress,
+        tx_hash: Vec<u8>,
+        epoch: u64,
+        epoch_timestamp_ms: u64,
+        ids_created: u64,
+    ) {
+        self.sender = sender;
+        self.digest = tx_hash;
+        self.epoch = epoch;
+        self.epoch_timestamp_ms = epoch_timestamp_ms;
+        self.ids_created = ids_created;
     }
 }
 

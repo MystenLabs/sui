@@ -204,7 +204,7 @@ impl SingleValidator {
             self.epoch_store.reference_gas_price(),
         )
         .unwrap();
-        let (kind, signer, gas) = executable.transaction_data().execution_parts();
+        let (kind, signer, gas_data) = executable.transaction_data().execution_parts();
         let (inner_temp_store, _, effects, _timings, _) =
             self.epoch_store.executor().execute_transaction_to_effects(
                 &store,
@@ -215,7 +215,7 @@ impl SingleValidator {
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,
-                gas,
+                gas_data,
                 gas_status,
                 kind,
                 signer,

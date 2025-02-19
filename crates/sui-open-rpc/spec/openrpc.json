@@ -1334,6 +1334,7 @@
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
+                "move_native_context": false,
                 "mysticeti_fastpath": false,
                 "mysticeti_leader_scoring_and_schedule": false,
                 "mysticeti_use_committed_subdag_digest": false,
@@ -1944,6 +1945,16 @@
                 "tx_context_derive_id_cost_base": {
                   "u64": "52"
                 },
+                "tx_context_digest_cost_base": null,
+                "tx_context_epoch_cost_base": null,
+                "tx_context_epoch_timestamp_ms_cost_base": null,
+                "tx_context_fresh_id_cost_base": null,
+                "tx_context_ids_created_cost_base": null,
+                "tx_context_inc_epoch_cost_base": null,
+                "tx_context_inc_epoch_timestamp_cost_base": null,
+                "tx_context_replace_cost_base": null,
+                "tx_context_sender_cost_base": null,
+                "tx_context_sponsor_cost_base": null,
                 "type_name_get_base_cost": null,
                 "type_name_get_per_byte_cost": null,
                 "types_is_one_time_witness_cost_base": {

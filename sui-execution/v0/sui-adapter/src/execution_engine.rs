@@ -87,6 +87,10 @@ mod checked {
             &transaction_digest,
             epoch_id,
             epoch_timestamp_ms,
+            // Those values are unused in execution versions before 3 (or latest)
+            1,
+            None,
+            protocol_config.move_native_context(),
         );
 
         let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
