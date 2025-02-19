@@ -23,6 +23,9 @@ macro_rules! try_block {
     }};
 }
 
+// NB: this does the lookup separately from the insertion, as otherwise would require copying the
+// key to retrieve the entry and support the error case.
+#[allow(clippy::map_entry)]
 /// Either returns a BTreeMap of unique keys, or a repeated key if the input keys are not unique.
 pub fn unique_map<Key: Ord, Value>(
     values: impl IntoIterator<Item = (Key, Value)>,
