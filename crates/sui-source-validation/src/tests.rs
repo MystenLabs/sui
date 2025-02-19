@@ -685,7 +685,7 @@ async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
         let pkg_path = copy_published_package(&tempdir, "b", b_ref.0.into()).await?;
 
         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-        BuildConfig::default().build(&pkg_path).unwrap();
+        BuildConfig::new_for_testing().build(&pkg_path).unwrap();
 
         fs::remove_dir_all(pkg_path.join("sources"))?;
     };
