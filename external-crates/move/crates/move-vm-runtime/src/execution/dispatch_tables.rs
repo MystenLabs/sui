@@ -8,7 +8,7 @@
 // in the transitive closure of the root package.
 
 use crate::{
-    cache::identifier_interner::IdentifierKey,
+    cache::identifier_interner::{intern_identifier, resolve_interned, IdentifierKey},
     jit::execution::ast::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
         TypeSubst,
@@ -20,7 +20,6 @@ use crate::{
         types::{PackageStorageId, RuntimePackageId},
         vm_pointer::VMPointer,
     },
-    string_interner,
 };
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
@@ -28,6 +27,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     annotated_value,
+    identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
     runtime_value,
     vm_status::StatusCode,
@@ -36,7 +36,7 @@ use move_core_types::{
 use move_vm_config::runtime::VMConfig;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
 
@@ -61,10 +61,12 @@ pub struct VMDispatchTables {
     /// Representation of runtime type depths. This is separate from the underlying packages to
     /// avoid grabbing write-locks and toward the possibility these may change based on linkage
     /// (e.g., type ugrades or similar).
-    pub(crate) type_depths: BTreeMap<RuntimePackageId, BTreeMap<IntraPackageKey, DepthFormula>>,
+    /// [SAFETY] Ordering of inner maps is not guaranteed
+    pub(crate) type_depths: BTreeMap<RuntimePackageId, HashMap<IntraPackageKey, DepthFormula>>,
     /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
+    /// [SAFETY] Ordering is not guaranteed
     #[allow(dead_code)]
-    pub(crate) defining_id_origins: BTreeMap<PackageStorageId, RuntimePackageId>,
+    pub(crate) defining_id_origins: HashMap<PackageStorageId, RuntimePackageId>,
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -72,9 +74,11 @@ pub struct VMDispatchTables {
 #[derive(Debug)]
 pub struct PackageVirtualTable {
     /// Representation of runtime functions.
-    pub functions: BTreeMap<IntraPackageKey, VMPointer<Function>>,
+    /// [SAFETY] Ordering is not guaranteed
+    pub functions: HashMap<IntraPackageKey, VMPointer<Function>>,
     /// Representation of runtime types.
-    pub types: BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
+    /// [SAFETY] Ordering is not guaranteed
+    pub types: HashMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
     /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
     pub defining_ids: BTreeSet<PackageStorageId>,
 }
@@ -82,13 +86,13 @@ pub struct PackageVirtualTable {
 /// runtime_address::module_name::function_name
 /// NB: This relies on no boxing -- if this introduces boxes, the arena allocation in the execution
 /// AST will leak memory.
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct VirtualTableKey {
     pub package_key: RuntimePackageId,
     pub inner_pkg_key: IntraPackageKey,
 }
 
-#[derive(Debug, Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 pub struct IntraPackageKey {
     pub module_name: IdentifierKey,
     pub member_name: IdentifierKey,
@@ -129,7 +133,7 @@ impl VMDispatchTables {
         loaded_packages: BTreeMap<RuntimePackageId, Arc<Package>>,
     ) -> VMResult<Self> {
         let defining_id_origins = {
-            let mut defining_id_map = BTreeMap::new();
+            let mut defining_id_map = HashMap::new();
             for (addr, pkg) in &loaded_packages {
                 for defining_id in &pkg.vtable.defining_ids {
                     if let Some(prev) = defining_id_map.insert(*defining_id, *addr) {
@@ -183,13 +187,12 @@ impl VMDispatchTables {
         &self,
         vtable_key: &VirtualTableKey,
     ) -> PartialVMResult<VMPointer<Function>> {
-        if let Some(result) = self
-            .loaded_packages
-            .get(&vtable_key.package_key)
-            .map(|pkg| &pkg.vtable)
-            .and_then(|vtable| vtable.functions.get(&vtable_key.inner_pkg_key))
-        {
-            Ok(result.ptr_clone())
+        let Some(pkg) = self.loaded_packages.get(&vtable_key.package_key) else {
+            return Err(PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
+                .with_message(format!("Could not find package {}", vtable_key.package_key)));
+        };
+        if let Some(function_) = pkg.vtable.functions.get(&vtable_key.inner_pkg_key) {
+            Ok(function_.ptr_clone())
         } else {
             Err(
                 PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR).with_message(format!(
@@ -204,13 +207,12 @@ impl VMDispatchTables {
         &self,
         vtable_key: &VirtualTableKey,
     ) -> PartialVMResult<VMPointer<DatatypeDescriptor>> {
-        if let Some(result) = self
-            .loaded_packages
-            .get(&vtable_key.package_key)
-            .map(|pkg| &pkg.vtable)
-            .and_then(|vtable| vtable.types.get(&vtable_key.inner_pkg_key))
-        {
-            Ok(result.ptr_clone())
+        let Some(pkg) = self.loaded_packages.get(&vtable_key.package_key) else {
+            return Err(PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
+                .with_message(format!("Could not find package {}", vtable_key.package_key)));
+        };
+        if let Some(type_) = pkg.vtable.types.get(&vtable_key.inner_pkg_key) {
+            Ok(type_.ptr_clone())
         } else {
             Err(PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
                 .with_message(format!("Could not find type {}", vtable_key.to_string()?)))
@@ -252,12 +254,9 @@ impl VMDispatchTables {
                         ))
                         .finish(Location::Undefined)
                 })?;
-                let ident_interner = string_interner();
-                let module_name = ident_interner
-                    .get_or_intern_identifier(&struct_tag.module)
+                let module_name = intern_identifier(&struct_tag.module)
                     .map_err(|e| e.finish(Location::Undefined))?;
-                let member_name = ident_interner
-                    .get_or_intern_identifier(&struct_tag.name)
+                let member_name = intern_identifier(&struct_tag.name)
                     .map_err(|e| e.finish(Location::Undefined))?;
                 let key = VirtualTableKey {
                     package_key,
@@ -391,7 +390,7 @@ impl VMDispatchTables {
         &mut self,
         datatype_name: &VirtualTableKey,
     ) -> PartialVMResult<DepthFormula> {
-        let mut depth_cache = BTreeMap::new();
+        let mut depth_cache = HashMap::new();
         let depth_formula =
             self.calculate_depth_of_datatype_and_cache(datatype_name, &mut depth_cache)?;
         for (datatype_key, depth) in depth_cache {
@@ -412,7 +411,7 @@ impl VMDispatchTables {
     fn calculate_depth_of_datatype_and_cache(
         &self,
         datatype_name: &VirtualTableKey,
-        depth_cache: &mut BTreeMap<VirtualTableKey, DepthFormula>,
+        depth_cache: &mut HashMap<VirtualTableKey, DepthFormula>,
     ) -> PartialVMResult<DepthFormula> {
         // If we've already computed this datatypes depth, no more work remains to be done.
         if let Some(form) = self.cached_type_depth(datatype_name) {
@@ -453,7 +452,7 @@ impl VMDispatchTables {
     fn calculate_depth_of_type_and_cache(
         &self,
         ty: &ArenaType,
-        depth_cache: &mut BTreeMap<VirtualTableKey, DepthFormula>,
+        depth_cache: &mut HashMap<VirtualTableKey, DepthFormula>,
     ) -> PartialVMResult<DepthFormula> {
         Ok(match ty {
             ArenaType::Bool
@@ -503,9 +502,6 @@ impl VMDispatchTables {
     // -------------------------------------------
     // Type Translation Helpers
     // -------------------------------------------
-    // Note that these are all "lazy": they only
-    // fill out datatype information fields as
-    // they are requested, not before.
 
     fn datatype_to_type_tag(
         &self,
@@ -530,7 +526,7 @@ impl VMDispatchTables {
                 datatype.defining_id.name().to_owned(),
             ),
         };
-        let name = datatype.name.clone();
+        let name = resolve_interned(&datatype.name, "datatype name")?;
 
         let tag = StructTag {
             address,
@@ -693,14 +689,18 @@ impl VMDispatchTables {
                         .iter()
                         .zip(variant.fields.iter())
                         .map(|(n, ty)| {
+                            let n = resolve_interned(n, "field name")?;
                             let ty = checked_subst(ty, ty_args)?;
                             let l =
                                 self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
-                            Ok(annotated_value::MoveFieldLayout::new(n.clone(), l))
+                            Ok(annotated_value::MoveFieldLayout::new(n, l))
                         })
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     variant_layouts.insert(
-                        (variant.variant_name.clone(), variant.variant_tag),
+                        (
+                            resolve_interned(&variant.variant_name, "variant name")?,
+                            variant.variant_tag,
+                        ),
                         field_layouts,
                     );
                 }
@@ -726,9 +726,10 @@ impl VMDispatchTables {
                     .iter()
                     .zip(struct_type.fields.iter())
                     .map(|(n, ty)| {
+                        let n = resolve_interned(n, "field name")?;
                         let ty = checked_subst(ty, ty_args)?;
                         let l = self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
-                        Ok(annotated_value::MoveFieldLayout::new(n.clone(), l))
+                        Ok(annotated_value::MoveFieldLayout::new(n, l))
                     })
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 annotated_value::MoveDatatypeLayout::Struct(Box::new(
@@ -954,8 +955,8 @@ impl DepthFormula {
 impl PackageVirtualTable {
     pub fn new() -> Self {
         Self {
-            functions: BTreeMap::new(),
-            types: BTreeMap::new(),
+            functions: HashMap::new(),
+            types: HashMap::new(),
             defining_ids: BTreeSet::new(),
         }
     }
@@ -983,6 +984,15 @@ impl VirtualTableKey {
         }
     }
 
+    pub fn module_id(&self) -> PartialVMResult<ModuleId> {
+        let module_name = resolve_interned(&self.inner_pkg_key.module_name, "module name")?;
+        Ok(ModuleId::new(self.package_key, module_name))
+    }
+
+    pub fn member_name(&self) -> PartialVMResult<Identifier> {
+        resolve_interned(&self.inner_pkg_key.member_name, "member name")
+    }
+
     pub fn to_string(&self) -> PartialVMResult<String> {
         let inner_name = self.inner_pkg_key.to_string()?;
         Ok(format!("{}::{}", self.package_key, inner_name))
@@ -1000,8 +1010,8 @@ impl VirtualTableKey {
 
 impl IntraPackageKey {
     pub fn to_string(&self) -> PartialVMResult<String> {
-        let module_name = string_interner().resolve_ident(&self.module_name, "module name")?;
-        let member_name = string_interner().resolve_ident(&self.member_name, "member name")?;
+        let module_name = resolve_interned(&self.module_name, "module name")?;
+        let member_name = resolve_interned(&self.member_name, "member name")?;
         Ok(format!("{}::{}", module_name, member_name))
     }
 }
