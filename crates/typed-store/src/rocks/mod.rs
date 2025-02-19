@@ -9,7 +9,7 @@ use self::{iter::Iter, values::Values};
 use crate::rocks::errors::typed_store_err_from_bcs_err;
 use crate::rocks::errors::typed_store_err_from_bincode_err;
 use crate::rocks::errors::typed_store_err_from_rocks_err;
-use crate::rocks::safe_iter::SafeIter;
+use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 use crate::TypedStoreError;
 use crate::{
     metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
@@ -1285,6 +1285,43 @@ impl<K, V> DBMap<K, V> {
         readopts
     }
 
+    /// Creates a safe reversed iterator with optional bounds.
+    /// Upper bound is included.
+    pub fn reversed_safe_iter_with_bounds(
+        &self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> Result<SafeRevIter<'_, K, V>, TypedStoreError>
+    where
+        K: Serialize + DeserializeOwned,
+        V: Serialize + DeserializeOwned,
+    {
+        let upper_bound_key = upper_bound.as_ref().map(|k| be_fix_int_ser(&k));
+        let readopts = self.create_read_options_with_range((
+            lower_bound
+                .as_ref()
+                .map(Bound::Included)
+                .unwrap_or(Bound::Unbounded),
+            upper_bound
+                .as_ref()
+                .map(Bound::Included)
+                .unwrap_or(Bound::Unbounded),
+        ));
+
+        let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
+        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+        let iter = SafeIter::new(
+            self.cf.clone(),
+            db_iter,
+            _timer,
+            _perf_ctx,
+            bytes_scanned,
+            keys_scanned,
+            Some(self.db_metrics.clone()),
+        );
+        Ok(SafeRevIter::new(iter, upper_bound_key.transpose()?))
+    }
+
     // Creates a RocksDB read option with lower and upper bounds set corresponding to `range`.
     fn create_read_options_with_range(&self, range: impl RangeBounds<K>) -> ReadOptions
     where
@@ -2015,9 +2052,12 @@ where
     /// overriden in the config), so please use this function with caution
     #[instrument(level = "trace", skip_all, err)]
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError> {
-        let mut iter = self.unbounded_iter().seek_to_first();
-        let first_key = iter.next().map(|(k, _v)| k);
-        let last_key = iter.skip_to_last().next().map(|(k, _v)| k);
+        let first_key = self.unbounded_iter().next().map(|(k, _v)| k);
+        let last_key = self
+            .reversed_safe_iter_with_bounds(None, None)?
+            .next()
+            .transpose()?
+            .map(|(k, _v)| k);
         if let Some((first_key, last_key)) = first_key.zip(last_key) {
             let mut batch = self.batch();
             batch.schedule_delete_range(self, &first_key, &last_key)?;

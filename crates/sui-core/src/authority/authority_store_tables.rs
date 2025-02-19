@@ -218,11 +218,11 @@ impl AuthorityPerpetualTables {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        let iter = self
-            .objects
-            .safe_range_iter(ObjectKey::min_for_id(&object_id)..=ObjectKey::max_for_id(&object_id))
-            .skip_prior_to(&ObjectKey(object_id, version))?;
-        match iter.reverse().next() {
+        let mut iter = self.objects.reversed_safe_iter_with_bounds(
+            Some(ObjectKey::min_for_id(&object_id)),
+            Some(ObjectKey(object_id, version)),
+        )?;
+        match iter.next() {
             Some(Ok((key, o))) => self.object(&key, o),
             Some(Err(e)) => Err(e.into()),
             None => Ok(None),
@@ -298,12 +298,12 @@ impl AuthorityPerpetualTables {
         &self,
         object_id: ObjectID,
     ) -> Result<Option<ObjectRef>, SuiError> {
-        let mut iterator = self
-            .objects
-            .unbounded_iter()
-            .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
+        let mut iterator = self.objects.reversed_safe_iter_with_bounds(
+            Some(ObjectKey::min_for_id(&object_id)),
+            Some(ObjectKey::max_for_id(&object_id)),
+        )?;
 
-        if let Some((object_key, value)) = iterator.next() {
+        if let Some(Ok((object_key, value))) = iterator.next() {
             if object_key.0 == object_id {
                 return Ok(Some(self.object_reference(&object_key, value)?));
             }
@@ -315,12 +315,12 @@ impl AuthorityPerpetualTables {
         &self,
         object_id: ObjectID,
     ) -> Result<Option<(ObjectKey, StoreObjectWrapper)>, SuiError> {
-        let mut iterator = self
-            .objects
-            .unbounded_iter()
-            .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
+        let mut iterator = self.objects.reversed_safe_iter_with_bounds(
+            Some(ObjectKey::min_for_id(&object_id)),
+            Some(ObjectKey::max_for_id(&object_id)),
+        )?;
 
-        if let Some((object_key, value)) = iterator.next() {
+        if let Some(Ok((object_key, value))) = iterator.next() {
             if object_key.0 == object_id {
                 return Ok(Some((object_key, value)));
             }
@@ -415,12 +415,7 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
-        Ok(self
-            .objects
-            .unbounded_iter()
-            .skip_to(&ObjectKey::ZERO)?
-            .next()
-            .is_none())
+        Ok(self.objects.unbounded_iter().next().is_none())
     }
 
     pub fn iter_live_object_set(&self, include_wrapped_object: bool) -> LiveSetIter<'_> {
@@ -506,11 +501,10 @@ impl AuthorityPerpetualTables {
     pub fn get_object_fallible(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
         let obj_entry = self
             .objects
-            .unbounded_iter()
-            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+            .reversed_safe_iter_with_bounds(None, Some(ObjectKey::max_for_id(object_id)))?
             .next();
 
-        match obj_entry {
+        match obj_entry.transpose()? {
             Some((ObjectKey(obj_id, version), obj)) if obj_id == *object_id => {
                 Ok(self.object(&ObjectKey(obj_id, version), obj)?)
             }

@@ -2788,7 +2788,7 @@ impl AuthorityState {
             Some(seq) => self
                 .checkpoint_store
                 .get_checkpoint_by_sequence_number(seq)?,
-            None => self.checkpoint_store.get_latest_certified_checkpoint(),
+            None => self.checkpoint_store.get_latest_certified_checkpoint()?,
         }
         .map(|v| v.into_inner());
         let contents = match &summary {
@@ -2813,7 +2813,7 @@ impl AuthorityState {
                 Some(seq) => self
                     .checkpoint_store
                     .get_checkpoint_by_sequence_number(seq)?,
-                None => self.checkpoint_store.get_latest_certified_checkpoint(),
+                None => self.checkpoint_store.get_latest_certified_checkpoint()?,
             }
             .map(|v| v.into_inner());
             summary.map(CheckpointSummaryResponse::Certified)
@@ -2822,7 +2822,7 @@ impl AuthorityState {
                 Some(seq) => self.checkpoint_store.get_locally_computed_checkpoint(seq)?,
                 None => self
                     .checkpoint_store
-                    .get_latest_locally_computed_checkpoint(),
+                    .get_latest_locally_computed_checkpoint()?,
             };
             summary.map(CheckpointSummaryResponse::Pending)
         };
@@ -3167,7 +3167,7 @@ impl AuthorityState {
 
         let highest_locally_built_checkpoint_seq = self
             .checkpoint_store
-            .get_latest_locally_computed_checkpoint()
+            .get_latest_locally_computed_checkpoint()?
             .map(|c| *c.sequence_number())
             .unwrap_or(0);
 

@@ -417,9 +417,11 @@ impl IndexStore {
         };
         let next_sequence_number = tables
             .transaction_order
-            .unbounded_iter()
-            .skip_to_last()
+            .reversed_safe_iter_with_bounds(None, None)
+            .expect("failed to initialize indexes")
             .next()
+            .transpose()
+            .expect("failed to initialize indexes")
             .map(|(seq, _)| seq + 1)
             .unwrap_or(0)
             .into();
@@ -823,22 +825,26 @@ impl IndexStore {
                 error: UserInputError::Unsupported(format!("{:?}", filter)),
             }),
             None => {
-                let iter = self.tables.transaction_order.unbounded_iter();
-
                 if reverse {
-                    let iter = iter
-                        .skip_prior_to(&cursor.unwrap_or(TxSequenceNumber::MAX))?
-                        .reverse()
+                    let iter = self
+                        .tables
+                        .transaction_order
+                        .reversed_safe_iter_with_bounds(
+                            None,
+                            Some(cursor.unwrap_or(TxSequenceNumber::MAX)),
+                        )?
                         .skip(usize::from(cursor.is_some()))
-                        .map(|(_, digest)| digest);
+                        .map(|result| result.map(|(_, digest)| digest));
                     if let Some(limit) = limit {
-                        Ok(iter.take(limit).collect())
+                        Ok(iter.take(limit).collect::<Result<Vec<_>, _>>()?)
                     } else {
-                        Ok(iter.collect())
+                        Ok(iter.collect::<Result<Vec<_>, _>>()?)
                     }
                 } else {
-                    let iter = iter
-                        .skip_to(&cursor.unwrap_or(TxSequenceNumber::MIN))?
+                    let iter = self
+                        .tables
+                        .transaction_order
+                        .iter_with_bounds(Some(cursor.unwrap_or(TxSequenceNumber::MIN)), None)
                         .skip(usize::from(cursor.is_some()))
                         .map(|(_, digest)| digest);
                     if let Some(limit) = limit {
@@ -861,11 +867,14 @@ impl IndexStore {
     ) -> SuiResult<Vec<TransactionDigest>> {
         Ok(if reverse {
             let iter = index
-                .unbounded_iter()
-                .skip_prior_to(&(key.clone(), cursor.unwrap_or(TxSequenceNumber::MAX)))?
-                .reverse()
+                .reversed_safe_iter_with_bounds(
+                    None,
+                    Some((key.clone(), cursor.unwrap_or(TxSequenceNumber::MAX))),
+                )?
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
                 .take_while(|((id, _), _)| *id == key)
                 .map(|(_, digest)| digest);
             if let Some(limit) = limit {
@@ -875,8 +884,10 @@ impl IndexStore {
             }
         } else {
             let iter = index
-                .unbounded_iter()
-                .skip_to(&(key.clone(), cursor.unwrap_or(TxSequenceNumber::MIN)))?
+                .iter_with_bounds(
+                    Some((key.clone(), cursor.unwrap_or(TxSequenceNumber::MIN))),
+                    None,
+                )
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
                 .take_while(|((id, _), _)| *id == key)
@@ -995,13 +1006,15 @@ impl IndexStore {
                 .unwrap_or(if reverse { max_string } else { "".to_string() });
 
         let key = (package, module_val, function_val, cursor_val);
-        let iter = self.tables.transactions_by_move_function.unbounded_iter();
         Ok(if reverse {
-            let iter = iter
-                .skip_prior_to(&key)?
-                .reverse()
+            let iter = self
+                .tables
+                .transactions_by_move_function
+                .reversed_safe_iter_with_bounds(None, Some(key))?
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
                 .take_while(|((id, m, f, _), _)| {
                     *id == package
                         && module.as_ref().map(|x| x == m).unwrap_or(true)
@@ -1014,8 +1027,10 @@ impl IndexStore {
                 iter.collect()
             }
         } else {
-            let iter = iter
-                .skip_to(&key)?
+            let iter = self
+                .tables
+                .transactions_by_move_function
+                .iter_with_bounds(Some(key), None)
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
                 .take_while(|((id, m, f, _), _)| {
@@ -1068,19 +1083,18 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_order
-                .unbounded_iter()
-                .skip_prior_to(&(tx_seq, event_seq))?
-                .reverse()
+                .reversed_safe_iter_with_bounds(None, Some((tx_seq, event_seq)))?
                 .take(limit)
-                .map(|((_, event_seq), (digest, tx_digest, time))| {
-                    (digest, tx_digest, event_seq, time)
+                .map(|result| {
+                    result.map(|((_, event_seq), (digest, tx_digest, time))| {
+                        (digest, tx_digest, event_seq, time)
+                    })
                 })
-                .collect()
+                .collect::<Result<Vec<_>, _>>()?
         } else {
             self.tables
                 .event_order
-                .unbounded_iter()
-                .skip_to(&(tx_seq, event_seq))?
+                .iter_with_bounds(Some((tx_seq, event_seq)), None)
                 .take(limit)
                 .map(|((_, event_seq), (digest, tx_digest, time))| {
                     (digest, tx_digest, event_seq, time)
@@ -1104,9 +1118,9 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_order
-                .unbounded_iter()
-                .skip_prior_to(&(min(tx_seq, seq), event_seq))?
-                .reverse()
+                .reversed_safe_iter_with_bounds(None, Some((min(tx_seq, seq), event_seq)))?
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
                 .take_while(|((tx, _), _)| tx == &seq)
                 .take(limit)
                 .map(|((_, event_seq), (digest, tx_digest, time))| {
@@ -1116,8 +1130,7 @@ impl IndexStore {
         } else {
             self.tables
                 .event_order
-                .unbounded_iter()
-                .skip_to(&(max(tx_seq, seq), event_seq))?
+                .iter_with_bounds(Some((max(tx_seq, seq), event_seq)), None)
                 .take_while(|((tx, _), _)| tx == &seq)
                 .take(limit)
                 .map(|((_, event_seq), (digest, tx_digest, time))| {
@@ -1138,9 +1151,9 @@ impl IndexStore {
     ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
         Ok(if descending {
             index
-                .unbounded_iter()
-                .skip_prior_to(&(key.clone(), (tx_seq, event_seq)))?
-                .reverse()
+                .reversed_safe_iter_with_bounds(None, Some((key.clone(), (tx_seq, event_seq))))?
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
                 .take_while(|((m, _), _)| m == key)
                 .take(limit)
                 .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
@@ -1149,8 +1162,7 @@ impl IndexStore {
                 .collect()
         } else {
             index
-                .unbounded_iter()
-                .skip_to(&(key.clone(), (tx_seq, event_seq)))?
+                .iter_with_bounds(Some((key.clone(), (tx_seq, event_seq))), None)
                 .take_while(|((m, _), _)| m == key)
                 .take(limit)
                 .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
@@ -1249,9 +1261,9 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_by_time
-                .unbounded_iter()
-                .skip_prior_to(&(end_time, (tx_seq, event_seq)))?
-                .reverse()
+                .reversed_safe_iter_with_bounds(None, Some((end_time, (tx_seq, event_seq))))?
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
                 .take_while(|((m, _), _)| m >= &start_time)
                 .take(limit)
                 .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
@@ -1261,8 +1273,7 @@ impl IndexStore {
         } else {
             self.tables
                 .event_by_time
-                .unbounded_iter()
-                .skip_to(&(start_time, (tx_seq, event_seq)))?
+                .iter_with_bounds(Some((start_time, (tx_seq, event_seq))), None)
                 .take_while(|((m, _), _)| m <= &end_time)
                 .take(limit)
                 .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
@@ -1279,14 +1290,13 @@ impl IndexStore {
     ) -> SuiResult<impl Iterator<Item = Result<(ObjectID, DynamicFieldInfo), TypedStoreError>> + '_>
     {
         debug!(?object, "get_dynamic_fields");
-        let iter_lower_bound = (object, ObjectID::ZERO);
+        // The object id 0 is the smallest possible
+        let iter_lower_bound = (object, cursor.unwrap_or(ObjectID::ZERO));
         let iter_upper_bound = (object, ObjectID::MAX);
         Ok(self
             .tables
             .dynamic_field_index
             .safe_iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
-            // The object id 0 is the smallest possible
-            .skip_to(&(object, cursor.unwrap_or(ObjectID::ZERO)))?
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
             .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0 .0 == object))
@@ -1375,8 +1385,7 @@ impl IndexStore {
         let start_key =
             CoinIndexKey2::new(owner, starting_coin_type.clone(), u64::MAX, ObjectID::ZERO);
         Ok(coin_index
-            .unbounded_iter()
-            .skip_to(&start_key)?
+            .iter_with_bounds(Some(start_key), None)
             .take_while(move |(key, _)| {
                 if key.owner != owner {
                     return false;
@@ -1405,8 +1414,7 @@ impl IndexStore {
         Ok(self
             .tables
             .coin_index_2
-            .unbounded_iter()
-            .skip_to(&start_key)?
+            .iter_with_bounds(Some(start_key), None)
             .filter(move |(key, _)| key.object_id != starting_object_id)
             .enumerate()
             .take_while(move |(index, (key, _))| {
@@ -1435,9 +1443,8 @@ impl IndexStore {
         Ok(self
             .tables
             .owner_index
-            .unbounded_iter()
             // The object id 0 is the smallest possible
-            .skip_to(&(owner, starting_object_id))?
+            .iter_with_bounds(Some((owner, starting_object_id)), None)
             .skip(usize::from(starting_object_id != ObjectID::ZERO))
             .take_while(move |((address_owner, _), _)| address_owner == &owner)
             .filter(move |(_, o)| {
