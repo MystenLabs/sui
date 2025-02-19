@@ -9,9 +9,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_pruner::{
     AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
 };
-use crate::authority::authority_store_types::{
-    get_store_object_pair, ObjectContentDigest, StoreObject, StoreObjectPair, StoreObjectWrapper,
-};
+use crate::authority::authority_store_types::{get_store_object, StoreObject, StoreObjectWrapper};
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::rpc_index::RpcIndexStore;
 use crate::state_accumulator::AccumulatorStore;
@@ -24,7 +22,7 @@ use move_core_types::resolver::ModuleResolver;
 use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
-use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
+use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
@@ -49,7 +47,6 @@ use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
-use typed_store::rocks::util::is_ref_count_value;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -120,11 +117,6 @@ pub struct AuthorityStore {
 
     pub(crate) root_state_notify_read: NotifyRead<EpochId, (CheckpointSequenceNumber, Accumulator)>,
 
-    /// Guards reference count updates to `indirect_move_objects` table
-    pub(crate) objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
-
-    indirect_objects_threshold: usize,
-
     /// Whether to enable expensive SUI conservation check at epoch boundaries.
     enable_epoch_sui_conservation_check: bool,
 
@@ -143,7 +135,6 @@ impl AuthorityStore {
         config: &NodeConfig,
         registry: &Registry,
     ) -> SuiResult<Arc<Self>> {
-        let indirect_objects_threshold = config.indirect_objects_threshold;
         let enable_epoch_sui_conservation_check = config
             .expensive_safety_check_config
             .enable_epoch_sui_conservation_check();
@@ -179,7 +170,6 @@ impl AuthorityStore {
         let this = Self::open_inner(
             genesis,
             perpetual_tables,
-            indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
             registry,
         )
@@ -225,25 +215,16 @@ impl AuthorityStore {
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: &Committee,
         genesis: &Genesis,
-        indirect_objects_threshold: usize,
     ) -> SuiResult<Arc<Self>> {
         // TODO: Since we always start at genesis, the committee should be technically the same
         // as the genesis committee.
         assert_eq!(committee.epoch, 0);
-        Self::open_inner(
-            genesis,
-            perpetual_tables,
-            indirect_objects_threshold,
-            true,
-            &Registry::new(),
-        )
-        .await
+        Self::open_inner(genesis, perpetual_tables, true, &Registry::new()).await
     }
 
     async fn open_inner(
         genesis: &Genesis,
         perpetual_tables: Arc<AuthorityPerpetualTables>,
-        indirect_objects_threshold: usize,
         enable_epoch_sui_conservation_check: bool,
         registry: &Registry,
     ) -> SuiResult<Arc<Self>> {
@@ -252,8 +233,6 @@ impl AuthorityStore {
             perpetual_tables,
             root_state_notify_read:
                 NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
-            objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS)),
-            indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
             metrics: AuthorityStoreMetrics::new(registry),
         });
@@ -301,7 +280,6 @@ impl AuthorityStore {
     /// or inserting genesis objects.
     pub fn open_no_genesis(
         perpetual_tables: Arc<AuthorityPerpetualTables>,
-        indirect_objects_threshold: usize,
         enable_epoch_sui_conservation_check: bool,
         registry: &Registry,
     ) -> SuiResult<Arc<Self>> {
@@ -310,8 +288,6 @@ impl AuthorityStore {
             perpetual_tables,
             root_state_notify_read:
                 NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
-            objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS)),
-            indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
             metrics: AuthorityStoreMetrics::new(registry),
         });
@@ -679,18 +655,11 @@ impl AuthorityStore {
         let mut write_batch = self.perpetual_tables.objects.batch();
 
         // Insert object
-        let StoreObjectPair(store_object, indirect_object) =
-            get_store_object_pair(object.clone(), self.indirect_objects_threshold);
+        let store_object = get_store_object(object.clone());
         write_batch.insert_batch(
             &self.perpetual_tables.objects,
             std::iter::once((ObjectKey::from(object_ref), store_object)),
         )?;
-        if let Some(indirect_obj) = indirect_object {
-            write_batch.insert_batch(
-                &self.perpetual_tables.indirect_move_objects,
-                std::iter::once((indirect_obj.inner().digest(), indirect_obj)),
-            )?;
-        }
 
         // Update the index
         if object.get_single_owner().is_some() {
@@ -714,24 +683,12 @@ impl AuthorityStore {
             .map(|o| (o.compute_object_reference(), o))
             .collect();
 
-        batch
-            .insert_batch(
-                &self.perpetual_tables.objects,
-                ref_and_objects.iter().map(|(oref, o)| {
-                    (
-                        ObjectKey::from(oref),
-                        get_store_object_pair((*o).clone(), self.indirect_objects_threshold).0,
-                    )
-                }),
-            )?
-            .insert_batch(
-                &self.perpetual_tables.indirect_move_objects,
-                ref_and_objects.iter().filter_map(|(_, o)| {
-                    let StoreObjectPair(_, indirect_object) =
-                        get_store_object_pair((*o).clone(), self.indirect_objects_threshold);
-                    indirect_object.map(|obj| (obj.inner().digest(), obj))
-                }),
-            )?;
+        batch.insert_batch(
+            &self.perpetual_tables.objects,
+            ref_and_objects
+                .iter()
+                .map(|(oref, o)| (ObjectKey::from(oref), get_store_object((*o).clone()))),
+        )?;
 
         let non_child_object_refs: Vec<_> = ref_and_objects
             .iter()
@@ -753,7 +710,6 @@ impl AuthorityStore {
     pub fn bulk_insert_live_objects(
         perpetual_db: &AuthorityPerpetualTables,
         live_objects: impl Iterator<Item = LiveObject>,
-        indirect_objects_threshold: usize,
         expected_sha3_digest: &[u8; 32],
     ) -> SuiResult<()> {
         let mut hasher = Sha3_256::default();
@@ -762,8 +718,7 @@ impl AuthorityStore {
             hasher.update(object.object_reference().2.inner());
             match object {
                 LiveObject::Normal(object) => {
-                    let StoreObjectPair(store_object_wrapper, indirect_object) =
-                        get_store_object_pair(object.clone(), indirect_objects_threshold);
+                    let store_object_wrapper = get_store_object(object.clone());
                     batch.insert_batch(
                         &perpetual_db.objects,
                         std::iter::once((
@@ -771,12 +726,6 @@ impl AuthorityStore {
                             store_object_wrapper,
                         )),
                     )?;
-                    if let Some(indirect_object) = indirect_object {
-                        batch.merge_batch(
-                            &perpetual_db.indirect_move_objects,
-                            iter::once((indirect_object.inner().digest(), indirect_object)),
-                        )?;
-                    }
                     if !object.is_child_object() {
                         Self::initialize_live_object_markers(
                             &perpetual_db.live_owned_object_markers,
@@ -822,31 +771,6 @@ impl AuthorityStore {
         Ok(self.perpetual_tables.epoch_start_configuration.get(&())?)
     }
 
-    /// Acquires read locks for affected indirect objects
-    #[instrument(level = "trace", skip_all)]
-    async fn acquire_read_locks_for_indirect_objects(
-        &self,
-        written: &[Object],
-    ) -> Vec<RwLockGuard> {
-        // locking is required to avoid potential race conditions with the pruner
-        // potential race:
-        //   - transaction execution branches to reference count increment
-        //   - pruner decrements ref count to 0
-        //   - compaction job compresses existing merge values to an empty vector
-        //   - tx executor commits ref count increment instead of the full value making object inaccessible
-        // read locks are sufficient because ref count increments are safe,
-        // concurrent transaction executions produce independent ref count increments and don't corrupt the state
-        let digests = written
-            .iter()
-            .filter_map(|object| {
-                let StoreObjectPair(_, indirect_object) =
-                    get_store_object_pair(object.clone(), self.indirect_objects_threshold);
-                indirect_object.map(|obj| obj.inner().digest())
-            })
-            .collect();
-        self.objects_lock_table.acquire_read_locks(digests)
-    }
-
     /// Updates the state resulting from the execution of a certificate.
     ///
     /// Internally it checks that all locks for active inputs are at the correct
@@ -863,8 +787,6 @@ impl AuthorityStore {
         for outputs in tx_outputs {
             written.extend(outputs.written.values().cloned());
         }
-
-        let _locks = self.acquire_read_locks_for_indirect_objects(&written);
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
         for outputs in tx_outputs {
@@ -950,47 +872,14 @@ impl AuthorityStore {
         )?;
 
         // Insert each output object into the stores
-        let (new_objects, new_indirect_move_objects): (Vec<_>, Vec<_>) = written
-            .iter()
-            .map(|(id, new_object)| {
-                let version = new_object.version();
-                trace!(?id, ?version, "writing object");
-                let StoreObjectPair(store_object, indirect_object) =
-                    get_store_object_pair(new_object.clone(), self.indirect_objects_threshold);
-                (
-                    (ObjectKey(*id, version), store_object),
-                    indirect_object.map(|obj| (obj.inner().digest(), obj)),
-                )
-            })
-            .unzip();
+        let new_objects = written.iter().map(|(id, new_object)| {
+            let version = new_object.version();
+            trace!(?id, ?version, "writing object");
+            let store_object = get_store_object(new_object.clone());
+            (ObjectKey(*id, version), store_object)
+        });
 
-        let indirect_objects: Vec<_> = new_indirect_move_objects.into_iter().flatten().collect();
-        let existing_digests = self
-            .perpetual_tables
-            .indirect_move_objects
-            .multi_get_raw_bytes(indirect_objects.iter().map(|(digest, _)| digest))?;
-        // split updates to existing and new indirect objects
-        // for new objects full merge needs to be triggered. For existing ref count increment is sufficient
-        let (existing_indirect_objects, new_indirect_objects): (Vec<_>, Vec<_>) = indirect_objects
-            .into_iter()
-            .enumerate()
-            .partition(|(idx, _)| matches!(&existing_digests[*idx], Some(value) if !is_ref_count_value(value)));
-
-        write_batch.insert_batch(&self.perpetual_tables.objects, new_objects.into_iter())?;
-        if !new_indirect_objects.is_empty() {
-            write_batch.merge_batch(
-                &self.perpetual_tables.indirect_move_objects,
-                new_indirect_objects.into_iter().map(|(_, pair)| pair),
-            )?;
-        }
-        if !existing_indirect_objects.is_empty() {
-            write_batch.partial_merge_batch(
-                &self.perpetual_tables.indirect_move_objects,
-                existing_indirect_objects
-                    .into_iter()
-                    .map(|(_, (digest, _))| (digest, 1_u64.to_le_bytes())),
-            )?;
-        }
+        write_batch.insert_batch(&self.perpetual_tables.objects, new_objects)?;
 
         let event_digest = events.digest();
         let events = events
@@ -1846,11 +1735,9 @@ impl AuthorityStore {
             &self.perpetual_tables,
             checkpoint_store,
             rpc_index,
-            &self.objects_lock_table,
             None,
             pruning_config,
             AuthorityStorePruningMetrics::new_for_test(),
-            usize::MAX,
             EPOCH_DURATION_MS_FOR_TESTING,
         )
         .await;

@@ -750,8 +750,8 @@ impl<'a> Disassembler<'a> {
                 self.add_function_bytecode_map(
                     bcode_map,
                     function_definition_index,
-                    fun_name_loc,
                     fun_def_loc,
+                    fun_name_loc,
                     function.is_native(),
                     type_param_source_names,
                     param_source_names,
@@ -775,11 +775,11 @@ impl<'a> Disassembler<'a> {
 
         let fun_def_end_offset = buffer.byte_len();
         if let Some(bcode_map) = bcode_map_opt {
-            let fun_loc = Loc::new(FileHash::empty(), fun_def_start_offset, fun_def_end_offset);
+            let fun_def_loc = Loc::new(FileHash::empty(), fun_def_start_offset, fun_def_end_offset);
             self.add_function_bytecode_map(
                 bcode_map,
                 function_definition_index,
-                fun_loc,
+                fun_def_loc,
                 fun_name_loc,
                 function.is_native(),
                 type_param_source_names,

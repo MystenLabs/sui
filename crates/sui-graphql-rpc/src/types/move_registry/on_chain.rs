@@ -8,7 +8,7 @@ use move_core_types::language_storage::StructTag;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use sui_json_rpc::name_service::{validate_label, Domain};
+use sui_name_service::{validate_label, Domain};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     collection_types::VecMap,

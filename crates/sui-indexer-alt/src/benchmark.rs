@@ -10,7 +10,7 @@ use sui_pg_db::{reset_database, DbArgs};
 use sui_synthetic_ingestion::synthetic_ingestion::read_ingestion_data;
 use tokio_util::sync::CancellationToken;
 
-use crate::{config::IndexerConfig, start_indexer};
+use crate::{config::IndexerConfig, setup_indexer};
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct BenchmarkArgs {
@@ -59,7 +59,7 @@ pub async fn run_benchmark(
 
     let cur_time = Instant::now();
 
-    start_indexer(
+    setup_indexer(
         db_args,
         indexer_args,
         client_args,
@@ -68,6 +68,8 @@ pub async fn run_benchmark(
         &Registry::new(),
         CancellationToken::new(),
     )
+    .await?
+    .run()
     .await?
     .await?;
 

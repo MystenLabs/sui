@@ -2742,7 +2742,7 @@ async fn test_authority_persist() {
     let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(&path, None));
     // Create an authority
     let store =
-        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
+        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis)
             .await
             .unwrap();
     let authority = init_state(&genesis, authority_key, store).await;
@@ -2768,7 +2768,7 @@ async fn test_authority_persist() {
     let committee = genesis.committee().unwrap();
     let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(&path, None));
     let store =
-        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
+        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis)
             .await
             .unwrap();
     let authority2 = init_state(&genesis, authority_key, store).await;
@@ -3240,8 +3240,7 @@ async fn test_store_revert_wrap_move_call() {
             authority_state.epoch_store_for_testing().epoch(),
             &[*create_effects.transaction_digest()],
             true,
-        )
-        .await;
+        );
 
     assert!(create_effects.status().is_ok());
     assert_eq!(create_effects.created().len(), 1);
@@ -3340,8 +3339,7 @@ async fn test_store_revert_unwrap_move_call() {
                 *wrap_effects.transaction_digest(),
             ],
             true,
-        )
-        .await;
+        );
 
     assert!(wrap_effects.status().is_ok());
     assert_eq!(wrap_effects.created().len(), 1);
@@ -3620,8 +3618,7 @@ async fn test_store_revert_add_ofield() {
                 *create_inner_effects.transaction_digest(),
             ],
             true,
-        )
-        .await;
+        );
 
     let add_txn = to_sender_signed_transaction(
         TransactionData::new_move_call(
@@ -3748,8 +3745,7 @@ async fn test_store_revert_remove_ofield() {
                 *add_effects.transaction_digest(),
             ],
             true,
-        )
-        .await;
+        );
 
     let field_v0 = add_effects.created()[0].0;
     let outer_v1 = find_by_id(&add_effects.mutated(), outer_v0.0).unwrap();
@@ -4814,7 +4810,6 @@ async fn test_consensus_message_processed() {
                     &effects1,
                     authority2.get_object_cache_reader().as_ref(),
                 )
-                .await
                 .unwrap();
             authority2.try_execute_for_test(&certificate).await.unwrap();
             authority2

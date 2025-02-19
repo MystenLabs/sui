@@ -214,7 +214,6 @@ impl<'a> TestAuthorityBuilder<'a> {
                     perpetual_tables,
                     &genesis_committee,
                     genesis,
-                    0,
                 )
                 .await
                 .unwrap()
@@ -350,7 +349,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             genesis.objects(),
             &DBCheckpointConfig::default(),
             config.clone(),
-            usize::MAX,
             ArchiveReaderBalancer::default(),
             None,
             chain_identifier,
@@ -398,17 +396,14 @@ impl<'a> TestAuthorityBuilder<'a> {
             .await
             .unwrap();
 
-        state
-            .get_cache_commit()
-            .commit_transaction_outputs(
-                epoch_store.epoch(),
-                &[*genesis.transaction().digest()],
-                epoch_store
-                    .protocol_config()
-                    .use_object_per_epoch_marker_table_v2_as_option()
-                    .unwrap_or(false),
-            )
-            .await;
+        state.get_cache_commit().commit_transaction_outputs(
+            epoch_store.epoch(),
+            &[*genesis.transaction().digest()],
+            epoch_store
+                .protocol_config()
+                .use_object_per_epoch_marker_table_v2_as_option()
+                .unwrap_or(false),
+        );
 
         // We want to insert these objects directly instead of relying on genesis because
         // genesis process would set the previous transaction field for these objects, which would

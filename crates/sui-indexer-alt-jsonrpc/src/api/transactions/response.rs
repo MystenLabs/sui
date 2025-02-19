@@ -32,7 +32,7 @@ use crate::{
         objects::VersionedObjectKey, transactions::TransactionKey,
         tx_balance_changes::TxBalanceChangeKey,
     },
-    error::{internal_error, invalid_params, rpc_bail, RpcError},
+    error::{invalid_params, rpc_bail, RpcError},
 };
 
 use super::error::Error;
@@ -313,7 +313,7 @@ async fn object_changes(
                 owner: o.owner().clone(),
                 object_type: o
                     .struct_tag()
-                    .ok_or_else(|| internal_error!("No type for object {object_id}"))?,
+                    .with_context(|| format!("No type for object {object_id}"))?,
                 object_id,
                 version: o.version(),
                 digest: d,
@@ -325,7 +325,7 @@ async fn object_changes(
                     recipient: o.owner().clone(),
                     object_type: o
                         .struct_tag()
-                        .ok_or_else(|| internal_error!("No type for object {object_id}"))?,
+                        .with_context(|| format!("No type for object {object_id}"))?,
                     object_id,
                     version: o.version(),
                     digest: od,
@@ -337,7 +337,7 @@ async fn object_changes(
                 owner: o.owner().clone(),
                 object_type: o
                     .struct_tag()
-                    .ok_or_else(|| internal_error!("No type for object {object_id}"))?,
+                    .with_context(|| format!("No type for object {object_id}"))?,
                 object_id,
                 version: o.version(),
                 previous_version: i.version(),
@@ -348,7 +348,7 @@ async fn object_changes(
                 sender: tx_data.sender(),
                 object_type: i
                     .struct_tag()
-                    .ok_or_else(|| internal_error!("No type for object {object_id}"))?,
+                    .with_context(|| format!("No type for object {object_id}"))?,
                 object_id,
                 version: effects.lamport_version(),
             },
@@ -357,7 +357,7 @@ async fn object_changes(
                 sender: tx_data.sender(),
                 object_type: i
                     .struct_tag()
-                    .ok_or_else(|| internal_error!("No type for object {object_id}"))?,
+                    .with_context(|| format!("No type for object {object_id}"))?,
                 object_id,
                 version: effects.lamport_version(),
             },

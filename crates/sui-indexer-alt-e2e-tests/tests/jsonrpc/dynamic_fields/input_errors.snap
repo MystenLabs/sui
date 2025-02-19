@@ -23,7 +23,7 @@ Response: {
   "id": 0,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Invalid type 0x0::M::Key<u64>: Package not found: 0000000000000000000000000000000000000000000000000000000000000000"
+    "message": "Invalid Params: Invalid type 0x0::M::Key<u64>: Package not found: 0x0000000000000000000000000000000000000000000000000000000000000000"
   }
 }
 
@@ -34,7 +34,7 @@ Response: {
   "id": 1,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Invalid type 0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a::M::Key<u64>: Package not found: bff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+    "message": "Invalid Params: Invalid type 0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a::M::Key<u64>: Package not found: 0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
   }
 }
 
@@ -45,7 +45,7 @@ Response: {
   "id": 2,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Invalid type 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::N::Key<u64>: Module not found: 24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::N"
+    "message": "Invalid Params: Invalid type 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::N::Key<u64>: Module not found: 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::N"
   }
 }
 
@@ -56,7 +56,7 @@ Response: {
   "id": 3,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Invalid type 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::DoesntExist<u64>: Datatype not found: 24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::DoesntExist"
+    "message": "Invalid Params: Invalid type 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::DoesntExist<u64>: Datatype not found: 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::DoesntExist"
   }
 }
 

@@ -75,7 +75,7 @@ error[E06001]: unused value without 'drop'
 54 │ │             magic: 42,
 55 │ │             strength: 7,
 56 │ │         };
-   │ ╰─────────' The type 'my_first_package::my_module::Sword' does not have the ability 'drop'
+   │ ╰─────────' The type 'my_first_package::example::Sword' does not have the ability 'drop'
    · │
 59 │           assert!(sword.magic() == 42 && sword.strength() == 7, 1);
    │                                                                   ^ Invalid return
@@ -98,7 +98,7 @@ BUILDING MoveStdlib
 BUILDING Sui
 BUILDING my_first_package
 Running Move unit tests
-[ PASS    ] 0x0::my_module::test_sword_create
+[ PASS    ] 0x0::example::test_sword_create
 Test result: OK. Total tests: 1; passed: 1; failed: 0
 ```
 
@@ -163,8 +163,8 @@ BUILDING Sui
 BUILDING MoveStdlib
 BUILDING my_first_package
 Running Move unit tests
-[ PASS    ] 0x0::my_module::test_sword_create
-[ PASS    ] 0x0::my_module::test_sword_transactions
+[ PASS    ] 0x0::example::test_sword_create
+[ PASS    ] 0x0::example::test_sword_transactions
 Test result: OK. Total tests: 2; passed: 2; failed: 0
 ```
 
