@@ -96,6 +96,7 @@ impl MoveCache {
     // -------------------------------------------
 
     /// For use with unit testing: remove a package, returning `true` if it was present.
+    #[cfg(test)]
     pub(crate) fn remove_package(&self, storage_id: &PackageStorageId) -> bool {
         self.package_cache.write().remove(storage_id).is_some()
     }

@@ -1015,6 +1015,10 @@ impl DatatypeDescriptor {
             Datatype::Struct(ptr) => ptr.def_vtable_key.inner_pkg_key,
         }
     }
+
+    pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
+        self.type_parameters().iter().map(|param| &param.constraints)
+    }
 }
 
 impl Type {
@@ -1125,23 +1129,6 @@ impl Type {
                     .with_message("VecMutBorrow expects a vector reference".to_string()),
             ),
         }
-    }
-}
-
-impl DatatypeDescriptor {
-    pub fn datatype_key(&self) -> VirtualTableKey {
-        match &self.datatype_info.inner_ref() {
-            Datatype::Enum(vmpointer) => vmpointer.to_ref().def_vtable_key.clone(),
-            Datatype::Struct(vmpointer) => vmpointer.to_ref().def_vtable_key.clone(),
-        }
-    }
-
-    pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
-        let type_params = match self.datatype_info.inner_ref() {
-            Datatype::Enum(vmpointer) => &vmpointer.to_ref().type_parameters,
-            Datatype::Struct(vmpointer) => &vmpointer.to_ref().type_parameters,
-        };
-        type_params.iter().map(|param| &param.constraints)
     }
 }
 

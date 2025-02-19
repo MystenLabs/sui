@@ -339,8 +339,8 @@ pub enum StatusCode {
     TYPE_RESOLUTION_FAILURE = 2021,
     DUPLICATE_NATIVE_FUNCTION = 2022,
     ARITHMETIC_OVERFLOW = 2023,
+    VTABLE_KEY_LOOKUP_ERROR = 2024,
     DUPLICATE_TYPE_DEFINITION = 2050,
-    VTABLE_KEY_LOOKUP_ERROR = 2033,
 
     // Errors that can arise from binary decoding (deserialization)
     // Deserializtion Errors: 3000-3999
