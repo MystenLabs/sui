@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use fastcrypto::traits::ToFromBytes;
 use p256::pkcs8::DecodePublicKey;
-use passkey_authenticator::{Authenticator, UserValidationMethod};
+use passkey_authenticator::Authenticator;
 use passkey_client::Client;
 use passkey_types::{
     ctap2::Aaguid,
@@ -16,13 +16,11 @@ use passkey_types::{
     Bytes, Passkey,
 };
 use shared_crypto::intent::{Intent, IntentMessage};
-use std::net::SocketAddr;
-use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::Signature;
+use sui_types::error::SuiError;
 use sui_types::error::UserInputError;
-use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::{
@@ -34,48 +32,8 @@ use sui_types::{
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use url::Url;
-
-struct MyUserValidationMethod {}
-#[async_trait::async_trait]
-impl UserValidationMethod for MyUserValidationMethod {
-    async fn check_user_presence(&self) -> bool {
-        true
-    }
-
-    async fn check_user_verification(&self) -> bool {
-        true
-    }
-
-    fn is_verification_enabled(&self) -> Option<bool> {
-        Some(true)
-    }
-
-    fn is_presence_enabled(&self) -> bool {
-        true
-    }
-}
-
-/// A helper struct for passkey response and transaction construction.
-pub struct PasskeyResponse<T> {
-    user_sig_bytes: Vec<u8>,
-    authenticator_data: Vec<u8>,
-    client_data_json: String,
-    intent_msg: IntentMessage<T>,
-}
-
-/// Submits a transaction to the test cluster and returns the result.
-async fn execute_tx(tx: Transaction, test_cluster: &TestCluster) -> SuiResult {
-    test_cluster
-        .authority_aggregator()
-        .authority_clients
-        .values()
-        .next()
-        .unwrap()
-        .authority_client()
-        .handle_transaction(tx, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
-        .await
-        .map(|_| ())
-}
+pub mod passkey_util;
+use passkey_util::{execute_tx, MyUserValidationMethod, PasskeyResponse};
 
 /// Register a new passkey, derive its address, fund it with gas and create a test
 /// transaction, then get a response from the passkey from signing.
@@ -202,6 +160,7 @@ async fn create_credential_and_sign_test_tx(
     let client_data_json = authenticated_cred.response.client_data_json.as_slice();
 
     PasskeyResponse {
+        sender,
         user_sig_bytes,
         authenticator_data: authenticator_data.to_vec(),
         client_data_json: String::from_utf8_lossy(client_data_json).to_string(),

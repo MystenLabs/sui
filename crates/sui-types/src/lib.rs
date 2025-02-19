@@ -71,6 +71,7 @@ pub mod multisig_legacy;
 pub mod nitro_attestation;
 pub mod object;
 pub mod passkey_authenticator;
+pub mod passkey_session_authenticator;
 pub mod programmable_transaction_builder;
 pub mod quorum_driver_types;
 pub mod randomness_state;
