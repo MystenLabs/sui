@@ -67,17 +67,7 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
         };
 
         let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
-        let Ok(runtime_tag) = self
-            .linkage_resolver
-            .resolver()
-            .runtime_type_tag(&type_tag, &data_store)
-        else {
-            return Err(SuiError::FailObjectLayout {
-                st: format!("{}", struct_tag),
-            });
-        };
-
-        match vm.annotated_type_layout(&runtime_tag) {
+        match vm.annotated_type_layout(&type_tag) {
             Ok(A::MoveTypeLayout::Struct(s)) => Ok(A::MoveDatatypeLayout::Struct(s)),
             Ok(A::MoveTypeLayout::Enum(e)) => Ok(A::MoveDatatypeLayout::Enum(e)),
             _ => Err(SuiError::FailObjectLayout {

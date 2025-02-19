@@ -25,6 +25,7 @@ use crate::{
     string_interner,
 };
 use move_binary_format::{
+    errors::VMResult,
     file_format::{
         empty_module, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex,
     },
@@ -188,11 +189,14 @@ impl Adapter {
     }
 
     fn load_type(&self, type_tag: &TypeTag) -> Type {
+        self.load_type_can_fail(type_tag)
+            .expect("Loading type should succeed")
+    }
+
+    fn load_type_can_fail(&self, type_tag: &TypeTag) -> VMResult<Type> {
         let vm = self.runtime_adapter.write();
         let session = vm.make_vm(self.store.linkage.clone()).unwrap();
-        session
-            .load_type(type_tag)
-            .expect("Loading type should succeed")
+        session.load_type(type_tag)
     }
 
     fn compute_depth_of_datatype(
@@ -783,7 +787,11 @@ fn relink_type_identity() {
     adapter.publish_package(b1_modules);
 
     let c1_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
-    let b1_s = adapter.load_type(&TypeTag::from_str("0x3::b::S").unwrap());
+    // Cannot use runtime ID for type!
+    assert!(adapter
+        .load_type_can_fail(&TypeTag::from_str("0x3::b::S").unwrap())
+        .is_err());
+    let b1_s = adapter.load_type(&TypeTag::from_str("0x6::b::S").unwrap());
 
     assert_eq!(c0_s, c1_s);
     assert_ne!(c1_s, b1_s);
@@ -821,7 +829,10 @@ fn relink_defining_module_successive() {
 
     adapter.publish_package(c1_modules);
     let c1_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
-    let c1_r = adapter.load_type(&TypeTag::from_str("0x2::c::R").unwrap());
+    assert!(adapter
+        .load_type_can_fail(&TypeTag::from_str("0x2::c::R").unwrap())
+        .is_err());
+    let c1_r = adapter.load_type(&TypeTag::from_str("0x5::c::R").unwrap());
 
     let mut adapter = adapter.with_linkage(
         /* linkage */ BTreeMap::from_iter([(*c0.address(), *c2.address())]),
@@ -835,8 +846,16 @@ fn relink_defining_module_successive() {
 
     adapter.publish_package(c2_modules);
     let c2_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
-    let c2_r = adapter.load_type(&TypeTag::from_str("0x2::c::R").unwrap());
-    let c2_q = adapter.load_type(&TypeTag::from_str("0x2::c::Q").unwrap());
+    assert!(adapter
+        .load_type_can_fail(&TypeTag::from_str("0x2::c::R").unwrap())
+        .is_err());
+    assert!(adapter
+        .load_type_can_fail(&TypeTag::from_str("0x2::c::Q").unwrap())
+        .is_err());
+    // Types must be loaded by defining ID. It is the adapter's responsibility to ensure that type
+    // tags are loaded with the correct defining module.
+    let c2_r = adapter.load_type(&TypeTag::from_str("0x5::c::R").unwrap());
+    let c2_q = adapter.load_type(&TypeTag::from_str("0x6::c::Q").unwrap());
 
     for s in &[c0_s, c1_s, c2_s] {
         let TypeTag::Struct(st) = adapter.get_type_tag(s) else {
@@ -889,8 +908,8 @@ fn relink_defining_module_oneshot() {
 
     adapter.publish_package(c2_modules);
     let s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
-    let r = adapter.load_type(&TypeTag::from_str("0x2::c::R").unwrap());
-    let q = adapter.load_type(&TypeTag::from_str("0x2::c::Q").unwrap());
+    let r = adapter.load_type(&TypeTag::from_str("0x5::c::R").unwrap());
+    let q = adapter.load_type(&TypeTag::from_str("0x6::c::Q").unwrap());
 
     let TypeTag::Struct(s) = adapter.get_type_tag(&s) else {
         panic!("Not a struct: {s:?}")

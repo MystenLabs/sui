@@ -202,18 +202,6 @@ mod checked {
             self.load_type(&TypeTag::Struct(Box::new(struct_tag.clone())))
         }
 
-        /// Translates a `TypeTag` that uses defining IDs (or possilby other non-runtime ID IDs)
-        /// to one that only uses the runtime ID in all places.
-        pub fn runtime_type_tag_for_type_tag(
-            &mut self,
-            type_tag: &TypeTag,
-        ) -> Result<TypeTag, ExecutionError> {
-            self.ctx
-                .linkage_analyzer
-                .resolver()
-                .runtime_type_tag(type_tag, &SuiDataStore::new(&self.ctx.state_view, &[]))
-        }
-
         //---------------------------------------------------------------------------
         // Error Resolution
         //---------------------------------------------------------------------------
@@ -283,11 +271,10 @@ mod checked {
             let new_events = events
                 .into_iter()
                 .map(|(tag, value)| {
-                    let runtime_tag = self
-                        .runtime_type_tag_for_type_tag(&TypeTag::Struct(Box::new(tag.clone())))?;
+                    let type_tag = TypeTag::Struct(Box::new(tag.clone()));
                     let layout = self
                         .vm_instance
-                        .runtime_type_layout(&runtime_tag)
+                        .runtime_type_layout(&type_tag)
                         .map_err(|e| self.convert_vm_error(e))?;
                     let Some(bytes) = value.simple_serialize(&layout) else {
                         invariant_violation!("Failed to deserialize already serialized Move value");
@@ -1046,12 +1033,9 @@ mod checked {
                 })?;
 
             for (id, (recipient, ty, value)) in writes {
-                let defining_tag = ty.into();
-                let runtime_tag = linkage_analyzer
-                    .resolver()
-                    .runtime_type_tag(&defining_tag, &store)?;
+                let type_tag = ty.into();
                 let abilities = vm_instance
-                    .load_type(&runtime_tag)
+                    .load_type(&type_tag)
                     .and_then(|ty| vm_instance.type_abilities(&ty))
                     .map_err(|e| {
                         convert_vm_error(
@@ -1065,7 +1049,7 @@ mod checked {
                         )
                     })?;
                 let has_public_transfer = abilities.has_store();
-                let layout = vm_instance.runtime_type_layout(&runtime_tag).map_err(|e| {
+                let layout = vm_instance.runtime_type_layout(&type_tag).map_err(|e| {
                     convert_vm_error(
                         e,
                         &unified_linkage,
@@ -1085,7 +1069,7 @@ mod checked {
                         protocol_config,
                         &loaded_runtime_objects,
                         id,
-                        defining_tag,
+                        type_tag,
                         has_public_transfer,
                         bytes,
                     )?
@@ -1192,16 +1176,13 @@ mod checked {
         };
 
         let tag: StructTag = type_.into();
-        let defining_type_tag = TypeTag::Struct(Box::new(tag));
-        let (vm, linkage) = vm_for_type_tags(linkage_analyzer, vm, [&defining_type_tag], state)
-            .map_err(|_| {
+        let type_tag = TypeTag::Struct(Box::new(tag));
+        let (vm, linkage) =
+            vm_for_type_tags(linkage_analyzer, vm, [&type_tag], state).map_err(|_| {
                 ExecutionError::from_kind(ExecutionErrorKind::VMVerificationOrDeserializationError)
             })?;
-        let runtime_type_tag = linkage_analyzer
-            .resolver()
-            .runtime_type_tag(&defining_type_tag, state)?;
         let type_ = vm
-            .load_type(&runtime_type_tag)
+            .load_type(&type_tag)
             .map_err(|e| convert_vm_error(e, &linkage, state, protocol_config))?;
         let abilities = vm
             .type_abilities(&type_)
@@ -1213,7 +1194,7 @@ mod checked {
         };
         Ok(ObjectValue {
             type_: ExecutionType {
-                type_: defining_type_tag,
+                type_: type_tag,
                 abilities,
             },
             has_public_transfer,
@@ -1296,11 +1277,8 @@ mod checked {
                         ExecutionErrorKind::VMVerificationOrDeserializationError,
                     )
                 })?;
-            let runtime_type_tag = link_ctx
-                .resolver()
-                .runtime_type_tag(&obj_value.type_.type_, &store)?;
             let fully_annotated_layout = vm
-                .annotated_type_layout(&runtime_type_tag)
+                .annotated_type_layout(&obj_value.type_.type_)
                 .map_err(|e| convert_vm_error(e, &linked_ctx, &store, protocol_config))?;
             let mut bytes = vec![];
             obj_value.write_bcs_bytes(&mut bytes);

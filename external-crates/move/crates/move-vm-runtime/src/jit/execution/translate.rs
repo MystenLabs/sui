@@ -424,12 +424,11 @@ fn datatypes(
         Ok(ModuleId::new(*defining_address, module_id))
     }
 
-    let runtime_id = context.runtime_id;
-
-    let structs: ArenaVec<StructDef> = structs(context, &runtime_id, module)?;
-    let enums: ArenaVec<EnumDef> = enums(context, &runtime_id, module)?;
-
     let runtime_id = module.self_id();
+    let runtime_address = *runtime_id.address();
+    let structs: ArenaVec<StructDef> = structs(context, &runtime_address, module)?;
+    let enums: ArenaVec<EnumDef> = enums(context, &runtime_address, module)?;
+
     let interner = string_interner();
 
     let struct_descriptors = structs

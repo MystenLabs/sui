@@ -227,6 +227,9 @@ impl VMDispatchTables {
     // Helpers for loading and verification
     // -------------------------------------------
 
+    // Load a type from a TypeTag into a VM type.
+    // NB: the type `TypeTag` _must_ be defining ID based. Otherwise, the type resolution will
+    // fail.
     pub(crate) fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
         Ok(match type_tag {
             TypeTag::Bool => Type::Bool,
@@ -241,7 +244,14 @@ impl VMDispatchTables {
             TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt)?)),
             // NB: Note that this tag is slightly misnamed and used for all Datatypes.
             TypeTag::Struct(struct_tag) => {
-                let package_key = struct_tag.address;
+                let defining_id = struct_tag.address;
+                let package_key = *self.defining_id_origins.get(&defining_id).ok_or_else(|| {
+                    PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE)
+                        .with_message(format!(
+                            "Defining ID {defining_id} for type {type_tag} not found in loaded packages"
+                        ))
+                        .finish(Location::Undefined)
+                })?;
                 let ident_interner = string_interner();
                 let module_name = ident_interner
                     .get_or_intern_identifier(&struct_tag.module)
@@ -260,6 +270,31 @@ impl VMDispatchTables {
                     .resolve_type(&key)
                     .map_err(|e| e.finish(Location::Undefined))?
                     .to_ref();
+
+                // The computed runtime ID should match the runtime ID of the datatype that we have
+                // loaded.
+                if datatype.runtime_id.address() != &package_key {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!(
+                                "Runtime ID resolution of {defining_id} => {package_key} does not match runtime ID of loaded type: {}",
+                                datatype.runtime_id.address()
+
+                            ))
+                            .finish(Location::Undefined),
+                    );
+                }
+                // The defining ID should match the defining ID of the datatype that we
+                // have loaded.
+                if datatype.defining_id.address() != &defining_id {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!(
+                                "Defining ID {defining_id} does not match defining ID {defining_id}"
+                            ))
+                            .finish(Location::Undefined),
+                    );
+                }
                 if datatype.type_parameters().is_empty() && struct_tag.type_params.is_empty() {
                     Type::Datatype(key)
                 } else {

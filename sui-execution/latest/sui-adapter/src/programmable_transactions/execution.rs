@@ -18,6 +18,7 @@ mod checked {
         file_format::{AbilitySet, LocalIndex, Visibility},
         normalized, CompiledModule,
     };
+    use move_core_types::language_storage::StructTag;
     use move_core_types::{
         account_address::AccountAddress,
         identifier::{IdentStr, Identifier},
@@ -25,7 +26,7 @@ mod checked {
         u256::U256,
     };
     use move_vm_runtime::execution::vm::LoadedFunctionInformation;
-    use move_vm_runtime::execution::Type;
+    use move_vm_runtime::execution::{Type, TypeSubst};
     use move_vm_runtime::natives::extensions::NativeContextMut;
     use move_vm_runtime::runtime::MoveRuntime;
     use move_vm_runtime::shared::serialization::SerializedReturnValues;
@@ -38,9 +39,11 @@ mod checked {
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution_config_utils::to_binary_config;
-    use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
+    use sui_types::execution_status::{
+        CommandArgumentError, PackageUpgradeError, TypeArgumentError,
+    };
     use sui_types::storage::{get_package_objects, PackageObject};
-    use sui_types::type_input::TypeInput;
+    use sui_types::type_input::{StructInput, TypeInput};
     use sui_types::{
         base_types::{
             MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
@@ -365,10 +368,9 @@ mod checked {
         let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
         for (ix, type_arg) in type_arguments.into_iter().enumerate() {
             let defining_type_arg = to_type_tag(context, type_arg)?;
-            let runtime_type_arg = context.runtime_type_tag_for_type_tag(&defining_type_arg)?;
             let ty = context
                 .vm_instance
-                .load_type(&runtime_type_arg)
+                .load_type(&defining_type_arg)
                 .map_err(|e| context.convert_type_argument_error(ix, e))?;
 
             loaded_type_arguments.push(ty);
@@ -1439,17 +1441,84 @@ mod checked {
         }
     }
 
+    // Convert a type input which may refer to a type by multiple different IDs (defining, or
+    // package ID) and convert it to a TypeTag that only uses defining IDs.
+    // The `context` is used to resolve the type input to a type tag and this is fine as we have
+    // built the `linked_context` based in part on these type inputs.
     fn to_type_tag(
         context: &mut LinkedContext<'_, '_, '_, '_>,
         type_input: TypeInput,
     ) -> Result<TypeTag, ExecutionError> {
-        if context.ctx.protocol_config.validate_identifier_inputs() {
-            type_input.into_type_tag().map_err(|e| {
-                ExecutionError::new_with_source(
-                    ExecutionErrorKind::VMInvariantViolation,
-                    e.to_string(),
-                )
+        fn into_type_tag(
+            context: &mut LinkedContext<'_, '_, '_, '_>,
+            type_input: TypeInput,
+        ) -> Result<TypeTag, ExecutionError> {
+            use TypeInput as I;
+            use TypeTag as T;
+            Ok(match type_input {
+                I::Bool => T::Bool,
+                I::U8 => T::U8,
+                I::U16 => T::U16,
+                I::U32 => T::U32,
+                I::U64 => T::U64,
+                I::U128 => T::U128,
+                I::U256 => T::U256,
+                I::Address => T::Address,
+                I::Signer => T::Signer,
+                I::Vector(t) => T::Vector(Box::new(into_type_tag(context, *t)?)),
+                I::Struct(s) => {
+                    let StructInput {
+                        address,
+                        module,
+                        name,
+                        type_params,
+                    } = *s;
+                    let definining_id = context
+                        .linkage
+                        .resolve_type_to_defining_id(
+                            context.ctx.linkage_analyzer.resolver(),
+                            address.into(),
+                            module.clone(),
+                            name.clone(),
+                        )
+                        .ok_or_else(|| {
+                            ExecutionError::new_with_source(
+                                ExecutionErrorKind::TypeArgumentError {
+                                    argument_idx: 0,
+                                    kind: TypeArgumentError::TypeNotFound,
+                                },
+                                format!(
+                                    "Unable to resolve type input: {address}::{module}::{name}"
+                                ),
+                            )
+                        })?;
+                    let type_params = type_params
+                        .into_iter()
+                        .map(|t| into_type_tag(context, t))
+                        .collect::<Result<_, _>>()?;
+                    T::Struct(Box::new(StructTag {
+                        address,
+                        module: Identifier::new(module).map_err(|e| {
+                            ExecutionError::new_with_source(
+                                ExecutionErrorKind::VMInvariantViolation,
+                                e.to_string(),
+                            )
+                        })?,
+                        name: Identifier::new(name).map_err(|e| {
+                            ExecutionError::new_with_source(
+                                ExecutionErrorKind::VMInvariantViolation,
+                                e.to_string(),
+                            )
+                        })?,
+                        type_params,
+                    }))
+                }
             })
+        }
+        // TODO(vm-rewrite): simplify this when we remove this protocol-gate check as this will be
+        // in an execution version greater than when this was turned on.
+        if context.ctx.protocol_config.validate_identifier_inputs() {
+            into_type_tag(context, type_input)
         } else {
             // SAFETY: Preserving existing behaviour for identifier deserialization within type
             // tags and inputs.
@@ -1463,9 +1532,8 @@ mod checked {
         idx: usize,
     ) -> Result<ExecutionType, ExecutionError> {
         let tag = to_type_tag(linked_context, type_input)?;
-        let runtime_tag = linked_context.runtime_type_tag_for_type_tag(&tag)?;
         linked_context
-            .load_type(&runtime_tag)
+            .load_type(&tag)
             .map_err(|e| linked_context.convert_type_argument_error(idx, e))
     }
 
