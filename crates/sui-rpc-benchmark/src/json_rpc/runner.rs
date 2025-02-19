@@ -6,7 +6,7 @@ use crate::config::BenchmarkConfig;
 /// This module implements the JSON RPC benchmark runner.
 /// The main function is `run_queries`, which runs the queries concurrently
 /// and records the overall and per-method stats.
-use anyhow::{bail, Result};
+use anyhow::{bail, Context as _, Result};
 use dashmap::DashMap;
 use phf::phf_map;
 use serde_json::Value;
@@ -91,21 +91,19 @@ impl PaginationCursorState {
     fn get_method_key(method: &str, params: &[Value]) -> Result<String, anyhow::Error> {
         let cursor_idx = METHOD_CURSOR_POSITIONS
             .get(method)
-            .ok_or_else(|| anyhow::anyhow!("method {} not found in cursor positions", method))?;
+            .with_context(|| format!("method {} not found in cursor positions", method))?;
         let key_param_len = params.len();
         let mut key_params = params.to_vec();
-        let param_to_modify = key_params.get_mut(*cursor_idx).ok_or_else(|| {
-            anyhow::anyhow!(
+        let param_to_modify = key_params.get_mut(*cursor_idx).with_context(|| {
+            format!(
                 "params length {} is less than cursor index {} for method {}",
-                key_param_len,
-                cursor_idx,
-                method
+                key_param_len, cursor_idx, method
             )
         })?;
         *param_to_modify = Value::Null;
         serde_json::to_string(&key_params)
             .map(|params_str| format!("{}-{}", method, params_str))
-            .map_err(|e| anyhow::anyhow!("failed to generate key for method {}: {}", method, e))
+            .with_context(|| format!("failed to generate key for method {}", method))
     }
 
     fn update_params_cursor(
@@ -117,9 +115,7 @@ impl PaginationCursorState {
         let params_array = params
             .get_mut("params")
             .and_then(|v| v.as_array_mut())
-            .ok_or_else(|| {
-                anyhow::anyhow!("params not found or not an array for method {}", method)
-            })?;
+            .with_context(|| format!("params not found or not an array for method {}", method))?;
         if params_array.len() <= cursor_idx {
             return Err(anyhow::anyhow!(
                 "cursor index {} is out of bounds for method {}",
@@ -179,8 +175,8 @@ pub async fn run_queries(
                 .get("params")
                 .and_then(|v| v.as_array())
                 .map(|a| a.to_vec())
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
+                .with_context(|| {
+                    format!(
                         "params not found or not an array for method: {}",
                         request_line.method
                     )
