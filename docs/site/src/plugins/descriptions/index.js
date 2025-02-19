@@ -36,6 +36,8 @@ const descriptionPlugin = (context, options) => {
         return files;
       }
 
+      // Creates a default section name if one is not provided
+      // The section name is currently only used in the llm text file
       function createSection(path) {
         const parts = path.replace(/^\//, "").split("/");
         if (parts.length === 0) {
@@ -98,6 +100,8 @@ const descriptionPlugin = (context, options) => {
       const { setGlobalData } = actions;
       setGlobalData(content);
     },
+    // Create llm text file after build so that all processed content like
+    // imports and tabs are included
     async postBuild({ content, siteConfig, routesPaths = [], outDir }) {
       let llms = [`# ${siteConfig.title}\n`, `${siteConfig.tagline}`];
       const grouped = content.descriptions.reduce((acc, item) => {
@@ -120,6 +124,7 @@ const descriptionPlugin = (context, options) => {
         });
       fs.writeFileSync(`${outDir}/llms.txt`, llms.join(`\n`));
 
+      // Array of pages that don't need to be included in the llm file
       const skips = ["/404.html", "/search", "/sui-api-ref", "/"];
       let llmsFull = [`# ${siteConfig.title}\n`, `${siteConfig.tagline}`];
       var turndownService = new TurndownService({
