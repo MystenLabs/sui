@@ -217,6 +217,11 @@ impl CheckpointStore {
         })
     }
 
+    pub fn new_for_tests() -> Arc<Self> {
+        let ckpt_dir = tempfile::tempdir().unwrap();
+        CheckpointStore::new(ckpt_dir.path())
+    }
+
     pub fn new_for_db_checkpoint_handler(path: &Path) -> Arc<Self> {
         let tables = CheckpointStoreTables::new(path, "db_checkpoint");
         Arc::new(Self {

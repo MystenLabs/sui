@@ -355,11 +355,6 @@ pub struct AuthorityPerEpochStore {
 
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
-    /// Get notified when a synced checkpoint has reached CheckpointExecutor.
-    synced_checkpoint_notify_read: NotifyRead<CheckpointSequenceNumber, ()>,
-    /// Caches the highest synced checkpoint sequence number as this has been notified from the CheckpointExecutor
-    highest_synced_checkpoint: RwLock<CheckpointSequenceNumber>,
-
     /// This is used to notify all epoch specific tasks that epoch has ended.
     epoch_alive_notify: NotifyOnce,
 
@@ -951,8 +946,6 @@ impl AuthorityPerEpochStore {
             checkpoint_state_notify_read: NotifyRead::new(),
             running_root_notify_read: NotifyRead::new(),
             executed_digests_notify_read: NotifyRead::new(),
-            synced_checkpoint_notify_read: NotifyRead::new(),
-            highest_synced_checkpoint: RwLock::new(0),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: RwLock::new(pending_consensus_certificates),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
@@ -2252,33 +2245,6 @@ impl AuthorityPerEpochStore {
             .map(|(registration, _)| registration);
 
         join_all(unprocessed_keys_registrations).await;
-        Ok(())
-    }
-
-    /// Notifies that a synced checkpoint of sequence number `checkpoint_seq` is available. The source of the notification
-    /// is the CheckpointExecutor. The consumer here is guaranteed to be notified in sequence order.
-    pub fn notify_synced_checkpoint(&self, checkpoint_seq: CheckpointSequenceNumber) {
-        let mut highest_synced_checkpoint = self.highest_synced_checkpoint.write();
-        *highest_synced_checkpoint = checkpoint_seq;
-        self.synced_checkpoint_notify_read
-            .notify(&checkpoint_seq, &());
-    }
-
-    /// Get notified when a synced checkpoint of sequence number `>= checkpoint_seq` is available.
-    pub async fn synced_checkpoint_notify(
-        &self,
-        checkpoint_seq: CheckpointSequenceNumber,
-    ) -> Result<(), SuiError> {
-        let registration = self
-            .synced_checkpoint_notify_read
-            .register_one(&checkpoint_seq);
-        {
-            let synced_checkpoint = self.highest_synced_checkpoint.read();
-            if *synced_checkpoint >= checkpoint_seq {
-                return Ok(());
-            }
-        }
-        registration.await;
         Ok(())
     }
 

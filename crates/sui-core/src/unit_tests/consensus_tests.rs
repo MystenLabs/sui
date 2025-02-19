@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashSet;
+use std::time::Duration;
 
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
@@ -13,13 +14,15 @@ use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use parking_lot::Mutex;
 use rand::rngs::StdRng;
-use rand::SeedableRng;
+use rand::{thread_rng, Rng, SeedableRng};
+use sui_macros::sim_test;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
+    SignedCheckpointSummary,
 };
-use sui_types::utils::{make_committee_key, to_sender_signed_transaction};
+use sui_types::utils::{make_committee_key_num, to_sender_signed_transaction};
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
     base_types::{ExecutionDigests, ObjectID, SuiAddress},
@@ -29,6 +32,7 @@ use sui_types::{
         TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     },
 };
+use tokio::time::sleep;
 
 /// Fixture: a few test gas objects.
 pub fn test_gas_objects() -> Vec<Object> {
@@ -228,11 +232,6 @@ pub fn make_consensus_adapter_for_test(
                                 .await?,
                         );
                     }
-                } else if let SequencedConsensusTransactionKey::External(
-                    ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number),
-                ) = tx.transaction.key()
-                {
-                    epoch_store.notify_synced_checkpoint(checkpoint_sequence_number);
                 } else {
                     transactions.extend(
                         epoch_store
@@ -277,6 +276,7 @@ pub fn make_consensus_adapter_for_test(
             execute,
             mock_block_status_receivers: Arc::new(Mutex::new(mock_block_status_receivers)),
         }),
+        state.checkpoint_store.clone(),
         state.name,
         Arc::new(ConnectionMonitorStatusForTests {}),
         100_000,
@@ -376,12 +376,12 @@ async fn submit_multiple_transactions_to_consensus_adapter() {
     waiter.await.unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn submit_checkpoint_signature_to_consensus_adapter() {
     telemetry_subscribers::init_for_testing();
 
     let mut rng = StdRng::seed_from_u64(1_100);
-    let (keys, committee) = make_committee_key(&mut rng);
+    let (keys, committee) = make_committee_key_num(1, &mut rng);
 
     // Initialize an authority
     let state = init_state_with_objects(vec![]).await;
@@ -389,7 +389,7 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
 
     // Make a new consensus adapter instance.
     let adapter = make_consensus_adapter_for_test(
-        state,
+        state.clone(),
         HashSet::new(),
         false,
         vec![with_block_status(BlockStatus::Sequenced(BlockRef::MIN))],
@@ -397,7 +397,7 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
 
     let checkpoint_summary = CheckpointSummary::new(
         &ProtocolConfig::get_for_max_version_UNSAFE(),
-        1,
+        0,
         2,
         10,
         &CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]),
@@ -412,22 +412,55 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
     let authority = authority_key.public().into();
     let signed_checkpoint_summary = SignedCheckpointSummary::new(
         committee.epoch,
-        checkpoint_summary,
+        checkpoint_summary.clone(),
         authority_key,
         authority,
     );
 
-    let transactions = vec![ConsensusTransaction::new_checkpoint_signature_message(
-        CheckpointSignatureMessage {
-            summary: signed_checkpoint_summary,
-        },
-    )];
-    let waiter = adapter
-        .submit_batch(
-            &transactions,
-            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
-            &epoch_store,
-        )
-        .unwrap();
-    waiter.await.unwrap();
+    let checkpoint_cert = CertifiedCheckpointSummary::new(
+        checkpoint_summary,
+        vec![signed_checkpoint_summary.auth_sig().clone()],
+        &committee,
+    )
+    .unwrap();
+
+    let verified_checkpoint_summary = checkpoint_cert.try_into_verified(&committee).unwrap();
+
+    let t1 = tokio::spawn({
+        let state = state.clone();
+        let verified_checkpoint_summary = verified_checkpoint_summary.clone();
+
+        async move {
+            let delay = Duration::from_millis(thread_rng().gen_range(0..1000));
+            sleep(delay).await;
+            state
+                .checkpoint_store
+                .insert_verified_checkpoint(&verified_checkpoint_summary)
+                .unwrap();
+            state
+                .checkpoint_store
+                .update_highest_synced_checkpoint(&verified_checkpoint_summary)
+                .unwrap();
+        }
+    });
+
+    let t2 = tokio::spawn(async move {
+        let transactions = vec![ConsensusTransaction::new_checkpoint_signature_message(
+            CheckpointSignatureMessage {
+                summary: signed_checkpoint_summary,
+            },
+        )];
+
+        let waiter = adapter
+            .submit_batch(
+                &transactions,
+                Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+                &epoch_store,
+            )
+            .unwrap();
+        waiter.await.unwrap();
+    });
+
+    t1.await.unwrap();
+    t2.await.unwrap();
 }
