@@ -48,8 +48,6 @@ ignore = [
     "RUSTSEC-2024-0320",
     # `proc-macro-error` is unmaintained, needed by `tabled`
     "RUSTSEC-2024-0370",
-    # `serde_cbor` is unmaintained
-    "RUSTSEC-2021-0127",
     # `atty` is unmaintained
     "RUSTSEC-2024-0375",
     # Potential unaligned read in `atty`
