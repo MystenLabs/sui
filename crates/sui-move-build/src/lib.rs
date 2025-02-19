@@ -677,6 +677,8 @@ impl CompiledPackage {
                 .add_transitive_dependencies(pkg, &mut pkgs_to_keep)
         });
 
+        // If a package depends on another published package that has only bytecode without source
+        // code available, we need to include also that package as dep.
         pkgs_to_keep.extend(self.bytecode_deps.iter().map(|(name, _)| *name));
 
         // Finally, filter out packages that are not in the union above from the
