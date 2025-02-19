@@ -1664,9 +1664,16 @@ impl CheckpointBuilder {
                         sequence_number,
                         &self.epoch_store,
                     )?;
+
                     state_acc
-                        .accumulate_running_root(&self.epoch_store, sequence_number, Some(acc))
+                        .wait_for_previous_running_root(&self.epoch_store, sequence_number)
                         .await?;
+
+                    state_acc.accumulate_running_root(
+                        &self.epoch_store,
+                        sequence_number,
+                        Some(acc),
+                    )?;
                     state_acc
                         .digest_epoch(self.epoch_store.clone(), sequence_number)
                         .await?
