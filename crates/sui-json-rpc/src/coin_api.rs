@@ -580,7 +580,7 @@ mod tests {
         let previous_transaction = TransactionDigest::from(arr);
         let object = Object::new_move(
             MoveObject::new_coin(
-                coin_type_string.parse::<StructTag>().unwrap().into(),
+                coin_type_string.parse::<TypeTag>().unwrap(),
                 1.into(),
                 object_id,
                 balance,

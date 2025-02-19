@@ -203,6 +203,15 @@ impl Indexer {
         self.ingestion_service.client()
     }
 
+    /// The pipelines that this indexer will run.
+    pub fn pipelines(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.added_pipelines.iter().copied().filter(|p| {
+            self.enabled_pipelines
+                .as_ref()
+                .map_or(true, |e| e.contains(*p))
+        })
+    }
+
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
     ///

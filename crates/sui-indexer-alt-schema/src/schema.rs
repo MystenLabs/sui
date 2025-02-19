@@ -14,6 +14,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    cp_sequence_numbers (cp_sequence_number) {
+        cp_sequence_number -> Int8,
+        tx_lo -> Int8,
+        epoch -> Int8,
+    }
+}
+
+diesel::table! {
     ev_emit_mod (package, module, tx_sequence_number) {
         package -> Bytea,
         module -> Text,
@@ -204,8 +212,22 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    watermarks (pipeline) {
+        pipeline -> Text,
+        epoch_hi_inclusive -> Int8,
+        checkpoint_hi_inclusive -> Int8,
+        tx_hi -> Int8,
+        timestamp_ms_hi_inclusive -> Int8,
+        reader_lo -> Int8,
+        pruner_timestamp -> Timestamp,
+        pruner_hi -> Int8,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     coin_balance_buckets,
+    cp_sequence_numbers,
     ev_emit_mod,
     ev_struct_inst,
     kv_checkpoints,
@@ -226,4 +248,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     tx_calls,
     tx_digests,
     tx_kinds,
+    watermarks,
 );

@@ -103,12 +103,13 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // Reject blocks failing validations.
-        if let Err(e) = self.block_verifier.verify(&signed_block) {
+        let verification_result = self.block_verifier.verify_and_vote(&signed_block);
+        if let Err(e) = verification_result {
             self.context
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname, "handle_send_block", e.clone().name()])
+                .with_label_values(&[peer_hostname, "handle_send_block", e.name()])
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);

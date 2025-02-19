@@ -4,17 +4,12 @@
 use anyhow::Context as _;
 use diesel::{ExpressionMethods, QueryDsl};
 
-use jsonrpsee::{
-    core::{DeserializeOwned, RpcResult},
-    proc_macros::rpc,
-};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sui_indexer_alt_schema::schema::kv_epoch_starts;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::{
-    base_types::ObjectID,
     dynamic_field::{derive_dynamic_field_id, Field},
-    object::Object,
     sui_serde::BigInt,
     sui_system_state::{
         sui_system_state_inner_v1::SuiSystemStateInnerV1,
@@ -27,8 +22,8 @@ use sui_types::{
 
 use crate::{
     context::Context,
-    data::objects::load_latest,
-    error::{internal_error, rpc_bail, InternalContext, RpcError},
+    data::objects::load_latest_deserialized,
+    error::{rpc_bail, RpcError},
 };
 
 use super::rpc_module::RpcModule;
@@ -94,10 +89,11 @@ async fn rgp_response(ctx: &Context) -> Result<BigInt<u64>, RpcError> {
 async fn latest_sui_system_state_response(
     ctx: &Context,
 ) -> Result<SuiSystemStateSummary, RpcError> {
+    let loader = ctx.loader();
     let wrapper: SuiSystemStateWrapper =
-        fetch_latest_for_system_state(ctx, SUI_SYSTEM_STATE_OBJECT_ID)
+        load_latest_deserialized(loader, SUI_SYSTEM_STATE_OBJECT_ID)
             .await
-            .internal_context("Failed to fetch system state wrapper object")?;
+            .context("Failed to fetch system state wrapper object")?;
 
     let inner_id = derive_dynamic_field_id(
         SUI_SYSTEM_STATE_OBJECT_ID,
@@ -107,39 +103,16 @@ async fn latest_sui_system_state_response(
     .context("Failed to derive inner system state field ID")?;
 
     Ok(match wrapper.version {
-        1 => fetch_latest_for_system_state::<Field<u64, SuiSystemStateInnerV1>>(ctx, inner_id)
+        1 => load_latest_deserialized::<Field<u64, SuiSystemStateInnerV1>>(loader, inner_id)
             .await
-            .internal_context("Failed to fetch inner system state object")?
+            .context("Failed to fetch inner system state object")?
             .value
             .into_sui_system_state_summary(),
-        2 => fetch_latest_for_system_state::<Field<u64, SuiSystemStateInnerV2>>(ctx, inner_id)
+        2 => load_latest_deserialized::<Field<u64, SuiSystemStateInnerV2>>(loader, inner_id)
             .await
-            .internal_context("Failed to fetch inner system state object")?
+            .context("Failed to fetch inner system state object")?
             .value
             .into_sui_system_state_summary(),
         v => rpc_bail!("Unexpected inner system state version: {v}"),
     })
-}
-
-/// Fetch the latest version of the object at ID `object_id`, and deserialize its contents as a
-/// Rust type `T`, assuming that it is a Move object (not a package).
-async fn fetch_latest_for_system_state<T: DeserializeOwned>(
-    ctx: &Context,
-    object_id: ObjectID,
-) -> Result<T, RpcError> {
-    let stored = load_latest(ctx.loader(), object_id)
-        .await?
-        .ok_or_else(|| internal_error!("No data found"))?
-        .serialized_object
-        .ok_or_else(|| internal_error!("No content found"))?;
-
-    let object: Object =
-        bcs::from_bytes(&stored).context("Failed to deserialize object contents")?;
-
-    let move_object = object
-        .data
-        .try_as_move()
-        .ok_or_else(|| internal_error!("Not a Move object"))?;
-
-    Ok(bcs::from_bytes(move_object.contents()).context("Failed to deserialize Move value")?)
 }

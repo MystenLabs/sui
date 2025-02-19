@@ -22,6 +22,7 @@ use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::CompiledModule;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
+use mysten_common::fatal;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
@@ -50,8 +51,10 @@ use std::{
 };
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
+use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
+use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
@@ -241,7 +244,7 @@ pub struct AuthorityMetrics {
     batch_size: Histogram,
 
     authority_state_handle_transaction_latency: Histogram,
-    authority_state_handle_transaction_v2_latency: Histogram,
+    authority_state_handle_vote_transaction_latency: Histogram,
 
     execute_certificate_latency_single_writer: Histogram,
     execute_certificate_latency_shared_object: Histogram,
@@ -448,9 +451,9 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            authority_state_handle_transaction_v2_latency: register_histogram_with_registry!(
-                "authority_state_handle_transaction_v2_latency",
-                "Latency of handling transactions with v2",
+            authority_state_handle_vote_transaction_latency: register_histogram_with_registry!(
+                "authority_state_handle_vote_transaction_latency",
+                "Latency of voting on transactions without signing",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -805,7 +808,7 @@ pub struct AuthorityState {
     pub rpc_index: Option<Arc<RpcIndexStore>>,
 
     pub subscription_handler: Arc<SubscriptionHandler>,
-    checkpoint_store: Arc<CheckpointStore>,
+    pub checkpoint_store: Arc<CheckpointStore>,
 
     committee_store: Arc<CommitteeStore>,
 
@@ -938,7 +941,7 @@ impl AuthorityState {
     /// This is a private method and should be kept that way. It doesn't check whether
     /// the provided transaction is a system transaction, and hence can only be called internally.
     #[instrument(level = "trace", skip_all)]
-    async fn handle_transaction_impl(
+    fn handle_transaction_impl(
         &self,
         transaction: VerifiedTransaction,
         sign: bool,
@@ -999,9 +1002,7 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        let signed = self
-            .handle_transaction_impl(transaction, true, epoch_store)
-            .await;
+        let signed = self.handle_transaction_impl(transaction, true, epoch_store);
         match signed {
             Ok(Some(s)) => {
                 if self.is_validator(epoch_store) {
@@ -1035,13 +1036,13 @@ impl AuthorityState {
     /// When Ok, returns None if the transaction has not been executed, and returns
     /// (TransactionEffects, TransactionEvents) if the transaction has been executed.
     #[instrument(level = "trace", skip_all)]
-    pub async fn handle_transaction_v2(
+    pub(crate) fn handle_vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> SuiResult<Option<(TransactionEffects, TransactionEvents)>> {
         let tx_digest = *transaction.digest();
-        debug!("handle_transaction_v2");
+        debug!("handle_vote_transaction");
 
         // Check if the transaction has already been executed.
         let tx_output = self.get_transaction_output(&tx_digest)?;
@@ -1051,7 +1052,7 @@ impl AuthorityState {
 
         let _metrics_guard = self
             .metrics
-            .authority_state_handle_transaction_v2_latency
+            .authority_state_handle_vote_transaction_latency
             .start_timer();
         self.metrics.tx_orders.inc();
 
@@ -1065,10 +1066,7 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        match self
-            .handle_transaction_impl(transaction, false, epoch_store)
-            .await
-        {
+        match self.handle_transaction_impl(transaction, false, epoch_store) {
             Ok(Some(_)) => {
                 panic!("handle_transaction_impl should not return a signed transaction")
             }
@@ -2881,7 +2879,6 @@ impl AuthorityState {
         genesis_objects: &[Object],
         db_checkpoint_config: &DBCheckpointConfig,
         config: NodeConfig,
-        indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
         validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
         chain_identifier: ChainIdentifier,
@@ -2910,12 +2907,10 @@ impl AuthorityState {
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             rpc_index.clone(),
-            store.objects_lock_table.clone(),
             config.authority_store_pruning_config.clone(),
             epoch_store.committee().authority_exists(&name),
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
-            indirect_objects_threshold,
             archive_readers,
             pruner_db,
         );
@@ -3025,11 +3020,9 @@ impl AuthorityState {
             &self.database_for_testing().perpetual_tables,
             &self.checkpoint_store,
             self.rpc_index.as_deref(),
-            &self.database_for_testing().objects_lock_table,
             None,
             config.authority_store_pruning_config,
             metrics,
-            config.indirect_objects_threshold,
             archive_readers,
             EPOCH_DURATION_MS_FOR_TESTING,
         )
@@ -3157,6 +3150,7 @@ impl AuthorityState {
         epoch_start_configuration: EpochStartConfiguration,
         accumulator: Arc<StateAccumulator>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         Self::check_protocol_version(
             supported_protocol_versions,
@@ -3172,6 +3166,29 @@ impl AuthorityState {
 
         // Terminate all epoch-specific tasks (those started with within_alive_epoch).
         cur_epoch_store.epoch_terminated().await;
+
+        let highest_locally_built_checkpoint_seq = self
+            .checkpoint_store
+            .get_latest_locally_computed_checkpoint()
+            .map(|c| *c.sequence_number())
+            .unwrap_or(0);
+
+        assert!(
+            epoch_last_checkpoint >= highest_locally_built_checkpoint_seq,
+            "{epoch_last_checkpoint} >= {highest_locally_built_checkpoint_seq}"
+        );
+        if highest_locally_built_checkpoint_seq == epoch_last_checkpoint {
+            // if we built the last checkpoint locally (as opposed to receiving it from a peer),
+            // then all shared_version_assignments except the one for the ChangeEpoch transaction
+            // should have been removed
+            let num_shared_version_assignments = cur_epoch_store.num_shared_version_assignments();
+            // Note that while 1 is the typical value, 0 is possible if the node restarts after
+            // committing the last checkpoint but before reconfiguring.
+            if num_shared_version_assignments > 1 {
+                // If this happens in prod, we have a memory leak, but not a correctness issue.
+                debug_fatal!("all shared_version_assignments should have been removed (num_shared_version_assignments: {num_shared_version_assignments})");
+            }
+        }
 
         // Safe to being reconfiguration now. No transactions are being executed,
         // and no epoch-specific tasks are running.
@@ -3222,6 +3239,7 @@ impl AuthorityState {
                 new_committee,
                 epoch_start_configuration,
                 expensive_safety_check_config,
+                epoch_last_checkpoint,
             )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
@@ -3252,6 +3270,11 @@ impl AuthorityState {
             self.get_backing_package_store().clone(),
             self.get_object_store().clone(),
             &self.config.expensive_safety_check_config,
+            self.checkpoint_store
+                .get_epoch_last_checkpoint(epoch_store.epoch())
+                .unwrap()
+                .map(|c| *c.sequence_number())
+                .unwrap_or_default(),
         );
         let new_epoch = new_epoch_store.epoch();
         self.transaction_manager.reconfigure(new_epoch);
@@ -4937,6 +4960,102 @@ impl AuthorityState {
         Some(tx)
     }
 
+    #[instrument(level = "debug", skip_all)]
+    fn create_execution_time_observations_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        end_of_epoch_observation_keys: Vec<ExecutionTimeObservationKey>,
+        last_checkpoint_before_end_of_epoch: CheckpointSequenceNumber,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if epoch_store
+            .protocol_config()
+            .per_object_congestion_control_mode()
+            != PerObjectCongestionControlMode::ExecutionTimeEstimate
+        {
+            return None;
+        }
+
+        // TODO: Make this a protocol config.
+        const NUM_INCLUDED_CHECKPOINTS: u64 = 10;
+
+        // Load tx in the last N checkpoints before end-of-epoch, and save only the
+        // execution time observations for commands in these checkpoints.
+        let start_checkpoint = std::cmp::max(
+            last_checkpoint_before_end_of_epoch.saturating_sub(NUM_INCLUDED_CHECKPOINTS - 1),
+            // If we have <N checkpoints in the epoch, use all of them.
+            epoch_store
+                .epoch()
+                .checked_sub(1)
+                .map(|prev_epoch| {
+                    self.checkpoint_store
+                        .get_epoch_last_checkpoint_seq_number(prev_epoch)
+                        .expect("typed store must not fail")
+                        .expect(
+                            "sequence number of last checkpoint of preceding epoch must be saved",
+                        )
+                        + 1
+                })
+                .unwrap_or(0),
+        );
+        let sequence_numbers =
+            (start_checkpoint..=last_checkpoint_before_end_of_epoch).collect::<Vec<_>>();
+        let contents_digests: Vec<_> = self
+            .checkpoint_store
+            .multi_get_locally_computed_checkpoints(&sequence_numbers)
+            .expect("typed store must not fail")
+            .into_iter()
+            .map(|maybe_checkpoint| {
+                maybe_checkpoint
+                    .expect("preceding checkpoints must exist by end of epoch")
+                    .content_digest
+            })
+            .collect();
+        let tx_digests: Vec<_> = self
+            .checkpoint_store
+            .multi_get_checkpoint_content(&contents_digests)
+            .expect("typed store must not fail")
+            .into_iter()
+            .flat_map(|maybe_contents| {
+                maybe_contents
+                    .expect("preceding checkpoint contents must exist by end of epoch")
+                    .into_inner()
+                    .into_iter()
+                    .map(|digests| digests.transaction)
+            })
+            .collect();
+        let included_execution_time_observations: HashSet<_> = self
+            .get_transaction_cache_reader()
+            .multi_get_transaction_blocks(&tx_digests)
+            .into_iter()
+            .flat_map(|maybe_tx| {
+                if let TransactionKind::ProgrammableTransaction(ptb) = maybe_tx
+                    .expect("preceding transaction must exist by end of epoch")
+                    .transaction_data()
+                    .kind()
+                {
+                    #[allow(clippy::unnecessary_to_owned)]
+                    itertools::Either::Left(
+                        ptb.commands
+                            .to_owned()
+                            .into_iter()
+                            .map(|cmd| ExecutionTimeObservationKey::from_command(&cmd)),
+                    )
+                } else {
+                    itertools::Either::Right(std::iter::empty())
+                }
+            })
+            .chain(end_of_epoch_observation_keys.into_iter())
+            .collect();
+
+        let tx = EndOfEpochTransactionKind::new_store_execution_time_observations(
+            epoch_store
+                .get_end_of_epoch_execution_time_observations()
+                .filter_and_sort_v1(|(key, _)| included_execution_time_observations.contains(key)),
+        );
+        info!("Creating StoreExecutionTimeObservations tx");
+        Some(tx)
+    }
+
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
@@ -4954,6 +5073,10 @@ impl AuthorityState {
         gas_cost_summary: &GasCostSummary,
         checkpoint: CheckpointSequenceNumber,
         epoch_start_timestamp_ms: CheckpointTimestamp,
+        end_of_epoch_observation_keys: Vec<ExecutionTimeObservationKey>,
+        // This may be less than `checkpoint - 1` if the end-of-epoch PendingCheckpoint produced
+        // >1 checkpoint.
+        last_checkpoint: CheckpointSequenceNumber,
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let mut txns = Vec::new();
 
@@ -4970,6 +5093,13 @@ impl AuthorityState {
             txns.push(tx);
         }
         if let Some(tx) = self.create_deny_list_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_execution_time_observations_tx(
+            epoch_store,
+            end_of_epoch_observation_keys,
+            last_checkpoint,
+        ) {
             txns.push(tx);
         }
 
@@ -5169,6 +5299,7 @@ impl AuthorityState {
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_epoch, "re-opening AuthorityEpochTables for new epoch");
@@ -5185,6 +5316,7 @@ impl AuthorityState {
             self.get_object_store().clone(),
             expensive_safety_check_config,
             cur_epoch_store.get_chain_identifier(),
+            epoch_last_checkpoint,
         );
         self.epoch_store.store(new_epoch_store.clone());
         Ok(new_epoch_store)
@@ -5284,6 +5416,14 @@ impl RandomnessRoundReceiver {
         let transaction = VerifiedExecutableTransaction::new_system(transaction, epoch);
         let digest = *transaction.digest();
 
+        // Randomness state updates contain the full bls signature for the random round,
+        // which cannot necessarily be reconstructed again later. Therefore we must immediately
+        // persist this transaction. If we crash before its outputs are committed, this
+        // ensures we will be able to re-execute it.
+        self.authority_state
+            .get_cache_commit()
+            .persist_transaction(&transaction);
+
         // Send transaction to TransactionManager for execution.
         self.authority_state
             .transaction_manager()
@@ -5323,7 +5463,7 @@ impl RandomnessRoundReceiver {
 
             let effects = effects.pop().expect("should return effects");
             if *effects.status() != ExecutionStatus::Success {
-                panic!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
+                fatal!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
             }
             debug!("successfully executed randomness state update transaction at epoch {epoch}, round {round}");
         });

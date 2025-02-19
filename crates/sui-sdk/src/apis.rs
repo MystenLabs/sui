@@ -13,6 +13,8 @@ use std::time::Duration;
 use std::time::Instant;
 use sui_json_rpc_types::DevInspectArgs;
 use sui_json_rpc_types::SuiData;
+use sui_json_rpc_types::ZkLoginIntentScope;
+use sui_json_rpc_types::ZkLoginVerifyResult;
 
 use crate::error::{Error, SuiRpcResult};
 use crate::RpcClient;
@@ -706,6 +708,21 @@ impl ReadApi {
             .api
             .http
             .try_get_object_before_version(object_id, version)
+            .await?)
+    }
+
+    /// Verify a zkLogin signature against bytes that is parsed using intent_scope, and the sui address.
+    pub async fn verify_zklogin_signature(
+        &self,
+        bytes: String,
+        signature: String,
+        intent_scope: ZkLoginIntentScope,
+        address: SuiAddress,
+    ) -> SuiRpcResult<ZkLoginVerifyResult> {
+        Ok(self
+            .api
+            .http
+            .verify_zklogin_signature(bytes, signature, intent_scope, address)
             .await?)
     }
 }

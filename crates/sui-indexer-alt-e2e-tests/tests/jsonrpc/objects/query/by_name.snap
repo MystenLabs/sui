@@ -118,7 +118,7 @@ Response: {
 }
 
 task 10, lines 96-108:
-//# run-jsonrpc --cursors @{obj_5_0,2}
+//# run-jsonrpc --cursors bcs(@{obj_5_0},2)
 Response: {
   "jsonrpc": "2.0",
   "id": 3,
