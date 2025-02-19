@@ -14,7 +14,6 @@ where
     type Error: Error;
     type Iterator: Iterator<Item = (K, V)>;
     type SafeIterator: Iterator<Item = Result<(K, V), TypedStoreError>>;
-    type Keys: Iterator<Item = Result<K, TypedStoreError>>;
     type Values: Iterator<Item = Result<V, TypedStoreError>>;
 
     /// Returns true if the map contains a value for the specified key.
@@ -81,9 +80,6 @@ where
 
     // Same as `range_iter` but performs status check.
     fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> Self::SafeIterator;
-
-    /// Returns an iterator over each key in the map.
-    fn keys(&'a self) -> Self::Keys;
 
     /// Returns an iterator over each value in the map.
     fn values(&'a self) -> Self::Values;
@@ -156,7 +152,6 @@ where
 {
     type Error: Error;
     type Iterator: Iterator<Item = Result<(K, V), TypedStoreError>>;
-    type Keys: Iterator<Item = Result<K, TypedStoreError>>;
     type Values: Iterator<Item = Result<V, TypedStoreError>>;
 
     /// Returns true if the map contains a value for the specified key.
@@ -173,9 +168,6 @@ where
 
     /// Returns an iterator visiting each key-value pair in the map.
     async fn iter(&'a self) -> Self::Iterator;
-
-    /// Returns an iterator over each key in the map.
-    async fn keys(&'a self) -> Self::Keys;
 
     /// Returns an iterator over each value in the map.
     async fn values(&'a self) -> Self::Values;

@@ -319,12 +319,6 @@ async fn test_skip(
     assert_eq!(key_vals[0], (456, "456".to_string()));
     assert_eq!(key_vals[1], (789, "789".to_string()));
 
-    // Skip all smaller: same for the keys iterator
-    let keys: Vec<_> = db.keys().skip_to(&456).expect("Seek failed").collect();
-    assert_eq!(keys.len(), 2);
-    assert_eq!(keys[0], Ok(456));
-    assert_eq!(keys[1], Ok(789));
-
     // Skip to the end
     assert_eq!(
         get_iter(&db, use_safe_iter)
@@ -333,16 +327,12 @@ async fn test_skip(
             .count(),
         0
     );
-    // same for the keys
-    assert_eq!(db.keys().skip_to(&999).expect("Seek failed").count(), 0);
 
     // Skip to last
     assert_eq!(
         get_iter(&db, use_safe_iter).skip_to_last().next(),
         Some((789, "789".to_string()))
     );
-    // same for the keys
-    assert_eq!(db.keys().skip_to_last().next(), Some(Ok(789)));
 
     // Skip to successor of first value
     assert_eq!(
@@ -352,7 +342,13 @@ async fn test_skip(
             .count(),
         3
     );
-    assert_eq!(db.keys().skip_to(&000).expect("Skip failed").count(), 3);
+    assert_eq!(
+        get_iter(&db, use_safe_iter)
+            .skip_to(&000)
+            .expect("Skip failed")
+            .count(),
+        3
+    );
 }
 
 #[rstest]
@@ -377,14 +373,6 @@ async fn test_skip_to_previous_simple(
         .collect();
     assert_eq!(key_vals.len(), 1);
     assert_eq!(key_vals[0], (789, "789".to_string()));
-    // Same for the keys iterator
-    let keys: Vec<_> = db
-        .keys()
-        .skip_prior_to(&999)
-        .expect("Seek failed")
-        .collect();
-    assert_eq!(keys.len(), 1);
-    assert_eq!(keys[0], Ok(789));
 
     // Skip to prior of first value
     // Note: returns an empty iterator!
@@ -397,7 +385,10 @@ async fn test_skip_to_previous_simple(
     );
     // Same for the keys iterator
     assert_eq!(
-        db.keys().skip_prior_to(&000).expect("Seek failed").count(),
+        get_iter(&db, use_safe_iter)
+            .skip_prior_to(&000)
+            .expect("Seek failed")
+            .count(),
         0
     );
 }
@@ -427,11 +418,11 @@ async fn test_iter_skip_to_previous_gap(
         db_iter.collect::<Vec<_>>()
     );
     // Same logic in the keys iterator
-    let db_iter = db.keys().skip_prior_to(&50).unwrap();
+    let db_iter = get_iter(&db, true).skip_prior_to(&50).unwrap();
 
     assert_eq!(
-        (49..50).chain(51..100).map(Ok).collect::<Vec<_>>(),
-        db_iter.collect::<Vec<_>>()
+        (49..50).chain(51..100).collect::<Vec<_>>(),
+        db_iter.map(|(k, _)| k).collect::<Vec<_>>()
     );
 }
 
@@ -489,19 +480,6 @@ async fn test_iter_reverse(
     assert_eq!(Some((2, "2".to_string())), iter.next());
     assert_eq!(Some((1, "1".to_string())), iter.next());
     assert_eq!(None, iter.next());
-}
-
-#[rstest]
-#[tokio::test]
-async fn test_keys(#[values(true, false)] is_transactional: bool) {
-    let db = open_map(temp_dir(), None, is_transactional);
-
-    db.insert(&123456789, &"123456789".to_string())
-        .expect("Failed to insert");
-
-    let mut keys = db.keys();
-    assert_eq!(Some(Ok(123456789)), keys.next());
-    assert_eq!(None, keys.next());
 }
 
 #[rstest]
@@ -660,8 +638,8 @@ async fn test_delete_batch() {
 
     batch.write().expect("Failed to execute batch");
 
-    for k in db.keys() {
-        assert_eq!(k.unwrap() % 2, 0);
+    for (k, _) in get_iter(&db, true) {
+        assert_eq!(k % 2, 0);
     }
 }
 
@@ -809,11 +787,11 @@ async fn test_iter_with_bounds(
     );
 
     // Same logic in the keys iterator
-    let db_iter = db.keys().skip_prior_to(&50).unwrap();
+    let db_iter = get_iter(&db, use_safe_iter).skip_prior_to(&50).unwrap();
 
     assert_eq!(
-        (49..50).chain(51..100).map(Ok).collect::<Vec<_>>(),
-        db_iter.collect::<Vec<_>>()
+        (49..50).chain(51..100).collect::<Vec<_>>(),
+        db_iter.map(|(k, _)| k).collect::<Vec<_>>()
     );
 
     // Skip to a key which is not within the bounds (bound is [1, 50))
@@ -951,11 +929,11 @@ async fn test_range_iter(
     );
 
     // Same logic in the keys iterator
-    let db_iter = db.keys().skip_prior_to(&50).unwrap();
+    let db_iter = get_iter(&db, use_safe_iter).skip_prior_to(&50).unwrap();
 
     assert_eq!(
-        (49..50).chain(51..100).map(Ok).collect::<Vec<_>>(),
-        db_iter.collect::<Vec<_>>()
+        (49..50).chain(51..100).collect::<Vec<_>>(),
+        db_iter.map(|(k, _)| k).collect::<Vec<_>>()
     );
 
     // Skip to a key which is not within the bounds (bound is [1, 50], but 50 doesn't exist in DB)
@@ -1288,8 +1266,6 @@ async fn test_transaction_read_your_write() {
             .unwrap(),
         vec![Some("11".to_string()), None]
     );
-    let keys: Vec<String> = tx.keys(&db).map(|x| x.unwrap()).collect();
-    assert_eq!(keys, vec![key1.to_string()]);
     let values: Vec<_> = tx.values(&db).collect();
     assert_eq!(values, vec![Ok("11".to_string())]);
     assert!(tx.commit().is_ok());
