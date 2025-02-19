@@ -4230,6 +4230,8 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
     // linkage table should be empty
     assert!(linkage_table_e.is_empty());
 
+    // ================= TEST 8 ================ //
+    // Pkg depends on A_v1 and on B, which depends on A, and code references A
     let package_path = temp_dir
         .path()
         .join("tree_shaking")
@@ -4247,20 +4249,129 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
     // E depends on A_v1, and on B, which depends on A, and code references A so the linkage table
     // should have A
     assert!(linkage_table_e.contains_key(&package_a_id));
+    Ok(())
+}
 
-    // ============== TEST 8 ================ //
+#[tokio::test]
+async fn test_tree_shaking_unpublished_deps() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, gas_obj_id, tests_folder) =
+        tree_shaking_test_setup().await?;
+    let context = test_cluster.wallet_mut();
+    let with_unpublished_dependencies = false;
+    // A package and with unpublished deps
+    let package_path = tests_folder.join("H_depends_on_G_unpublished");
+
+    // set with_unpublished_dependencies to true and publish package H
+    let (package_h_id, _) =
+        publish_package(package_path.clone(), context, rgp, gas_obj_id, true).await?;
+    let move_pkg_h = fetch_move_packages(&client, vec![package_h_id]).await;
+    let linkage_table_h = move_pkg_h.first().unwrap().linkage_table();
+    // H depends on G, which is unpublished, so the linkage table should be empty as G will be
+    // included in H during publishing
+    assert!(linkage_table_h.is_empty());
+
+    // try publish package H but `with_unpublished_dependencies` is false. Should error
+    let resp = publish_package(package_path, context, rgp, gas_obj_id, false).await;
+    assert!(resp.is_err());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_tree_shaking_bytecode_deps() -> Result<(), anyhow::Error> {
+    // let mut test_cluster = TestClusterBuilder::new().build().await;
+    // let rgp = test_cluster.get_reference_gas_price().await;
+    // let address = test_cluster.get_address_0();
+    // let context = &mut test_cluster.wallet;
+    // let client = context.get_client().await?;
+    // let object_refs = client
+    //     .read_api()
+    //     .get_owned_objects(
+    //         address,
+    //         Some(SuiObjectResponseQuery::new_with_options(
+    //             SuiObjectDataOptions::new()
+    //                 .with_type()
+    //                 .with_owner()
+    //                 .with_previous_transaction(),
+    //         )),
+    //         None,
+    //         None,
+    //     )
+    //     .await?
+    //     .data;
+    //
+    // let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+    // let temp_dir = tempfile::tempdir()?;
+    // let base_folder = "tree_shaking";
+    // std::fs::create_dir_all(temp_dir.path().join(base_folder))?;
+    //
+    // // copy all tests data to a temp dir to make it easier to manipulate files as needed
+    // let tests_dir = PathBuf::from(TEST_DATA_DIR);
+    // copy_dir_all(tests_dir, temp_dir.path()).map_err(|e| {
+    //     anyhow::anyhow!(
+    //         "Failed to copy test data dir to temp dir ({}): {}",
+    //         temp_dir.path().display(),
+    //         e.to_string()
+    //     )
+    // })?;
+
+    let (mut test_cluster, client, rgp, gas_obj_id, tests_folder) =
+        tree_shaking_test_setup().await?;
+    let context = test_cluster.wallet_mut();
+    let with_unpublished_dependencies = false;
+    let command = std::process::Command::new("ls")
+        .arg("-la")
+        .arg(&tests_folder)
+        .output()
+        .expect("failed to execute process");
+
+    println!("ls output: {}", String::from_utf8_lossy(&command.stdout));
+    println!("{:?}", tests_folder.display());
+
     // bytecode deps without source code
+    let package_path = tests_folder.join("A");
+    let (package_a_id, _) = publish_package(
+        package_path.clone(),
+        context,
+        rgp,
+        gas_obj_id,
+        with_unpublished_dependencies,
+    )
+    .await?;
 
-    // we delete the sources folder from pkg A and setup A as bytecode dep for package F
-    let pkg_a_path = temp_dir.path().join("tree_shaking").join("A");
+    // make pkg a to be a bytecode dep by
+    // set published-at field to package id
+    let content = std::fs::read_to_string(package_path.clone().join("Move.toml"))?;
+    let mut toml: toml::Value = toml::from_str(&content)?;
+    if let Some(tbl) = toml.get_mut("package") {
+        if let Some(tbl) = tbl.as_table_mut() {
+            tbl.insert(
+                "published-at".to_string(),
+                toml::Value::String(package_a_id.to_hex_uncompressed()),
+            );
+        }
+    }
+
+    if let Some(tbl) = toml.get_mut("addresses") {
+        if let Some(tbl) = tbl.as_table_mut() {
+            tbl.insert(
+                "a".to_string(),
+                toml::Value::String(package_a_id.to_hex_uncompressed()),
+            );
+        }
+    }
+
+    let toml_str = toml::to_string(&toml)?;
+    std::fs::write(package_path.join("Move.toml"), toml_str)?;
+
+    // we delete the sources folder from pkg A to setup A as bytecode dep for package F
+    fs::remove_file(&package_path.join("Move.lock"))?;
+    fs::remove_dir_all(&package_path.join("build"))?;
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    BuildConfig::default().build(&pkg_a_path).unwrap();
-    fs::remove_dir_all(pkg_a_path.join("sources"))?;
+    BuildConfig::default().build(&package_path).unwrap();
+    fs::remove_dir_all(&package_path.clone().join("sources"))?;
 
-    let package_path = temp_dir
-        .path()
-        .join("tree_shaking")
-        .join("F_depends_on_A_as_bytecode_dep");
+    let package_path = tests_folder.join("F_depends_on_A_as_bytecode_dep");
     let (package_f_id, _) = publish_package(
         package_path,
         context,
@@ -4273,25 +4384,6 @@ async fn test_tree_shaking() -> Result<(), anyhow::Error> {
     let linkage_table_f = move_pkg_f.first().unwrap().linkage_table();
     // F depends on A as a bytecode dep, so the linkage table should not be empty
     assert!(linkage_table_f.contains_key(&package_a_id));
-
-    // ============== TEST 9 ================ //
-    // test with a package and with unpublished deps
-    let package_path = temp_dir
-        .path()
-        .join("tree_shaking")
-        .join("H_depends_on_G_unpublished");
-
-    let (package_h_id, _) =
-        publish_package(package_path.clone(), context, rgp, gas_obj_id, true).await?;
-    let move_pkg_h = fetch_move_packages(&client, vec![package_h_id]).await;
-    let linkage_table_h = move_pkg_h.first().unwrap().linkage_table();
-    // H depends on G, which is unpublished, so the linkage table should be empty as G will be
-    // included in H during publishing
-    assert!(linkage_table_h.is_empty());
-
-    // try publish package H but `with_unpublished_dependencies` is false
-    let resp = publish_package(package_path, context, rgp, gas_obj_id, false).await;
-    assert!(resp.is_err());
 
     Ok(())
 }
@@ -4377,4 +4469,111 @@ pub async fn fetch_move_packages(
                 .unwrap()
         })
         .collect()
+}
+
+// async fn tree_shaking_test_setup(
+// ) -> Result<(TestCluster, &SuiClient, u64, ObjectID, PathBuf), anyhow::Error> {
+//     let test_cluster = TestClusterBuilder::new().build().await;
+//     let rgp = test_cluster.get_reference_gas_price().await;
+//     let address = test_cluster.get_address_0();
+//     let client = test_cluster.sui_client();
+//     let object_refs = client
+//         .read_api()
+//         .get_owned_objects(
+//             address,
+//             Some(SuiObjectResponseQuery::new_with_options(
+//                 SuiObjectDataOptions::new()
+//                     .with_type()
+//                     .with_owner()
+//                     .with_previous_transaction(),
+//             )),
+//             None,
+//             None,
+//         )
+//         .await?
+//         .data;
+//
+//     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+//     let temp_dir = tempfile::tempdir()?;
+//     std::fs::create_dir_all(&temp_dir.path().join("tree_shaking"))?;
+//
+//     // copy all tests data to a temp dir to make it easier to manipulate files as needed
+//     let tests_dir = PathBuf::from(TEST_DATA_DIR);
+//     copy_dir_all(&tests_dir, &temp_dir.path()).map_err(|e| {
+//         anyhow::anyhow!(
+//             "Failed to copy test data dir to temp dir ({}): {}",
+//             &temp_dir.path().display(),
+//             e.to_string()
+//         )
+//     })?;
+//
+//     let base_folder = temp_dir.path().join("tree_shaking");
+//
+//     Ok((
+//         test_cluster,
+//         test_cluster.sui_client(),
+//         rgp,
+//         gas_obj_id,
+//         base_folder,
+//     ))
+// }
+//
+async fn tree_shaking_test_setup(
+) -> Result<(TestCluster, SuiClient, u64, ObjectID, PathBuf), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address1 = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await.unwrap();
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address1,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let gas_obj_id = object_refs
+        .data
+        .first()
+        .unwrap()
+        .object()
+        .unwrap()
+        .object_id;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(&temp_dir.path()).unwrap();
+
+    // copy all tests data to a temp dir to make it easier to manipulate files as needed
+    let tests_dir = PathBuf::from(TEST_DATA_DIR).join("tree_shaking");
+    copy_dir_all(&tests_dir, &temp_dir.path()).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to copy test data dir to temp dir ({}): {}",
+            &temp_dir.path().display(),
+            e.to_string()
+        )
+    })?;
+
+    let base_folder = temp_dir.path();
+    let command = std::process::Command::new("ls")
+        .arg("-la")
+        .arg(&base_folder.to_path_buf())
+        .output()
+        .expect("failed to execute process");
+
+    println!("ls output: {}", String::from_utf8_lossy(&command.stdout));
+    println!("base folder {:?}", base_folder.display());
+
+    Ok((
+        test_cluster,
+        client,
+        rgp,
+        gas_obj_id,
+        base_folder.to_path_buf(),
+    ))
 }
