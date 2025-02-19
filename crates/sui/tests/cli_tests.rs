@@ -4504,4 +4504,3 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
 
     Ok(())
 }
-
