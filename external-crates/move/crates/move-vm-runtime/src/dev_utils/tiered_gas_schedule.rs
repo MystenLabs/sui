@@ -17,12 +17,12 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 
-use move_vm_profiler::GasProfiler;
-use move_vm_types::{
+use crate::jit::execution::ast::Type;
+use crate::shared::{
     gas::{GasMeter, SimpleInstruction},
-    loaded_data::runtime_types::Type,
     views::{TypeView, ValueView},
 };
+use move_vm_profiler::GasProfiler;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{

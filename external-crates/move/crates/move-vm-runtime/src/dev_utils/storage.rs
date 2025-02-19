@@ -15,8 +15,7 @@ use move_core_types::{
     account_address::AccountAddress,
     effects::ChangeSet,
     identifier::Identifier,
-    language_storage::ModuleId,
-    resolver::{ModuleResolver, MoveResolver, SerializedPackage, TypeOrigin},
+    resolver::{ModuleResolver, SerializedPackage, TypeOrigin},
 };
 use std::collections::BTreeMap;
 
@@ -41,6 +40,7 @@ pub struct DeltaStorage<'a, 'b, S> {
 pub struct StoredPackage {
     /// The package ID (address) for this package.
     pub package_id: PackageStorageId,
+    pub runtime_id: RuntimePackageId,
     pub modules: BTreeMap<Identifier, Vec<u8>>,
     /// For each dependency (including transitive dependencies), maps runtime package ID to the
     /// storage ID of the package that is to be used for the linkage rooted at this package.
@@ -66,16 +66,17 @@ impl BlankStorage {
     }
 }
 
-impl<'a, 'b, S: MoveResolver> DeltaStorage<'a, 'b, S> {
+impl<'a, 'b, S: ModuleResolver> DeltaStorage<'a, 'b, S> {
     pub fn new(base: &'a S, delta: &'b ChangeSet) -> Self {
         Self { base, delta }
     }
 }
 
 impl StoredPackage {
-    fn empty(storage_id: AccountAddress) -> Self {
+    fn empty(runtime_id: RuntimePackageId, storage_id: PackageStorageId) -> Self {
         Self {
             package_id: storage_id,
+            runtime_id,
             modules: BTreeMap::new(),
             linkage_context: LinkageContext::new(BTreeMap::new()),
             type_origin_table: vec![],
@@ -109,10 +110,12 @@ impl StoredPackage {
             })
             .collect::<Result<_>>()?;
 
+        let linkage_context = LinkageContext::new(linkage_table);
         Ok(Self {
             package_id: storage_id,
+            runtime_id: Self::runtime_id(&linkage_context, storage_id),
             modules,
-            linkage_context: LinkageContext::new(linkage_table),
+            linkage_context,
             type_origin_table,
         })
     }
@@ -134,6 +137,7 @@ impl StoredPackage {
 
         Ok(Self {
             package_id: storage_id,
+            runtime_id: Self::runtime_id(&linkage_context, storage_id),
             modules,
             linkage_context,
             type_origin_table,
@@ -143,6 +147,7 @@ impl StoredPackage {
     pub fn from_verified_package(verified_package: verif_ast::Package) -> Self {
         Self {
             package_id: verified_package.storage_id,
+            runtime_id: verified_package.runtime_id,
             modules: verified_package
                 .as_modules()
                 .into_iter()
@@ -155,9 +160,7 @@ impl StoredPackage {
                     (name, serialized)
                 })
                 .collect(),
-            linkage_context: LinkageContext::new(
-                verified_package.linkage_table.into_iter().collect(),
-            ),
+            linkage_context: LinkageContext::new(verified_package.linkage_table),
             type_origin_table: verified_package.type_origin_table,
         }
     }
@@ -165,23 +168,18 @@ impl StoredPackage {
     pub fn into_serialized_package(self) -> SerializedPackage {
         SerializedPackage {
             storage_id: self.package_id,
-            modules: self.modules.into_values().collect(),
+            runtime_id: self.runtime_id,
+            modules: self.modules,
             linkage_table: self.linkage_context.linkage_table.into_iter().collect(),
             type_origin_table: self.type_origin_table,
         }
     }
 
-    pub fn runtime_id(&self) -> RuntimePackageId {
-        self.linkage_context
+    fn runtime_id(linkage: &LinkageContext, storage_id: PackageStorageId) -> RuntimePackageId {
+        linkage
             .linkage_table
             .iter()
-            .find_map(|(k, v)| {
-                if *v == self.package_id {
-                    Some(*k)
-                } else {
-                    None
-                }
-            })
+            .find_map(|(k, v)| if *v == storage_id { Some(*k) } else { None })
             .expect("address not found in linkage table")
     }
 }
@@ -234,6 +232,7 @@ impl InMemoryStorage {
 
     pub fn publish_or_overwrite_module(
         &mut self,
+        runtime_id: RuntimePackageId,
         storage_id: PackageStorageId,
         module_name: Identifier,
         blob: Vec<u8>,
@@ -241,7 +240,7 @@ impl InMemoryStorage {
         let account = self
             .accounts
             .entry(storage_id)
-            .or_insert_with(|| StoredPackage::empty(storage_id));
+            .or_insert_with(|| StoredPackage::empty(runtime_id, storage_id));
         account.modules.insert(module_name, blob);
     }
 
@@ -265,10 +264,6 @@ impl InMemoryStorage {
 impl ModuleResolver for BlankStorage {
     type Error = ();
 
-    fn get_module(&self, _module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(None)
-    }
-
     fn get_packages_static<const N: usize>(
         &self,
         ids: [AccountAddress; N],
@@ -290,17 +285,6 @@ impl ModuleResolver for BlankStorage {
 
 impl<'a, 'b, S: ModuleResolver> ModuleResolver for DeltaStorage<'a, 'b, S> {
     type Error = S::Error;
-
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        if let Some(account_storage) = self.delta.accounts().get(module_id.address()) {
-            if let Some(blob_opt) = account_storage.modules().get(module_id.name()) {
-                return Ok(blob_opt.clone().ok());
-            }
-        }
-
-        self.base.get_module(module_id)
-    }
-
     fn get_packages_static<const N: usize>(
         &self,
         ids: [AccountAddress; N],
@@ -319,15 +303,16 @@ impl<'a, 'b, S: ModuleResolver> ModuleResolver for DeltaStorage<'a, 'b, S> {
         ids.iter()
             .map(|storage_id| {
                 if let Some(account_storage) = self.delta.accounts().get(storage_id) {
-                    let module_bytes: Vec<_> = account_storage
+                    let module_bytes: BTreeMap<_, _> = account_storage
                         .modules()
-                        .values()
-                        .map(|op| op.clone().ok())
+                        .iter()
+                        .map(|(name, op)| op.clone().ok().map(|blob| (name.clone(), blob)))
                         .collect::<Option<_>>()
                         .unwrap_or_default();
 
                     Ok(Some(SerializedPackage::raw_package(
                         module_bytes,
+                        account_storage.runtime_id(),
                         *storage_id,
                     )))
                 } else {
@@ -341,13 +326,6 @@ impl<'a, 'b, S: ModuleResolver> ModuleResolver for DeltaStorage<'a, 'b, S> {
 
 impl ModuleResolver for InMemoryStorage {
     type Error = ();
-
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        if let Some(account_storage) = self.accounts.get(module_id.address()) {
-            return Ok(account_storage.modules.get(module_id.name()).cloned());
-        }
-        Ok(None)
-    }
 
     fn get_packages_static<const N: usize>(
         &self,

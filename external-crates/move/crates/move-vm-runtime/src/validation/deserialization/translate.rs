@@ -11,9 +11,12 @@ use std::collections::BTreeMap;
 
 pub(crate) fn package(vm_config: &VMConfig, pkg: SerializedPackage) -> VMResult<Package> {
     let mut modules = BTreeMap::new();
-    for module in pkg.modules.iter() {
+    for (mname, module) in pkg.modules.iter() {
         let module = CompiledModule::deserialize_with_config(module, &vm_config.binary_config)
-            .map_err(|err| err.finish(Location::Undefined))?; // TODO: add Location::Package
+            // TODO(vm-rewrite): add Location::Package
+            .map_err(|err| err.finish(Location::Undefined))?;
+        // The name of the module in the mapping, and the name of the module itself should be equal
+        assert_eq!(mname.as_ident_str(), module.self_id().name());
         modules.insert(module.self_id(), module);
     }
 

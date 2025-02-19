@@ -12,14 +12,13 @@ use crate::{
     validation::verification::ast as verif_ast,
 };
 use move_binary_format::{errors::VMResult, file_format::CompiledModule};
-use move_core_types::resolver::{MoveResolver, SerializedPackage};
-use std::collections::BTreeMap;
+use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 
 // FIXME(cswords): support gas
 
 /// A VM Test Adaptor holds storage and a VM, and can handle publishing packages and executing
 /// functions. Based on its needs, it may also provide ways to generate linkage contexts.
-pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
+pub trait VMTestAdapter<Storage: ModuleResolver + Sync + Send> {
     /// Verify a package for publication, and receive a VM that can be used to call functions
     /// inside of it (such as ).
     fn verify_package<'extensions>(
@@ -76,7 +75,7 @@ pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
     /// Retrieve the linkage context for the given package in `Storage`.
     fn get_linkage_context(&self, package_id: PackageStorageId) -> VMResult<LinkageContext> {
         let pkg = self.get_package_from_store(&package_id)?;
-        Ok(LinkageContext::new(BTreeMap::from_iter(pkg.linkage_table)))
+        Ok(LinkageContext::new(pkg.linkage_table))
     }
 
     fn get_package_from_store(&self, package_id: &PackageStorageId) -> VMResult<SerializedPackage>;

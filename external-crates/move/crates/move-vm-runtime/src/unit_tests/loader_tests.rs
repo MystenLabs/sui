@@ -166,7 +166,7 @@ impl Adapter {
         if !self.store.type_origin.is_empty() {
             pkg.type_origin_table = self.store.type_origin.clone();
         }
-        let runtime_id = pkg.runtime_id();
+        let runtime_id = pkg.runtime_id;
         self.runtime_adapter
             .write()
             .publish_package(runtime_id, pkg.into_serialized_package())
@@ -180,7 +180,7 @@ impl Adapter {
         if !self.store.type_origin.is_empty() {
             pkg.type_origin_table = self.store.type_origin.clone();
         }
-        let runtime_id = pkg.runtime_id();
+        let runtime_id = pkg.runtime_id;
         self.runtime_adapter
             .write()
             .publish_package(runtime_id, pkg.into_serialized_package())
