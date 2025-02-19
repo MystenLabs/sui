@@ -22,8 +22,6 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 # output a note when they are encountered.
 ignore = [
     # "RUSTSEC-0000-0000",
-    # `tui` is unmaintained; use `ratatui` instead
-    "RUSTSEC-2023-0049",
     # we don't do RSA signing on Sui (only verifying for zklogin)
     "RUSTSEC-2023-0071",
     # allow yaml-rust being unmaintained
