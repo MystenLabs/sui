@@ -271,6 +271,7 @@ mod checked {
                 .get::<NativeContextMut<ObjectRuntime>>()
                 .borrow_mut();
             let events = object_runtime.take_user_events();
+            drop(object_runtime);
             let num_events = self.ctx.user_events.len() + events.len();
             let max_events = self.ctx.protocol_config.max_num_event_emit();
             if num_events as u64 > max_events {
@@ -282,9 +283,11 @@ mod checked {
             let new_events = events
                 .into_iter()
                 .map(|(tag, value)| {
+                    let runtime_tag = self
+                        .runtime_type_tag_for_type_tag(&TypeTag::Struct(Box::new(tag.clone())))?;
                     let layout = self
                         .vm_instance
-                        .runtime_type_layout(&TypeTag::Struct(Box::new(tag.clone())))
+                        .runtime_type_layout(&runtime_tag)
                         .map_err(|e| self.convert_vm_error(e))?;
                     let Some(bytes) = value.simple_serialize(&layout) else {
                         invariant_violation!("Failed to deserialize already serialized Move value");
@@ -842,7 +845,7 @@ mod checked {
                 gas_charger
                     .move_gas_status_mut()
                     .set_profiler(GasProfiler::init(
-                        &vm.config().profiler_config,
+                        &vm.vm_config().profiler_config,
                         format!("{}", tx_digest),
                         remaining_gas,
                     ));
@@ -1030,28 +1033,25 @@ mod checked {
                 .map(|(_, (_, ty, _))| ty.clone().into())
                 .collect::<Vec<_>>();
 
-            let (vm_instance, unified_linkage) = vm_for_type_tags(
-                linkage_analyzer,
-                vm,
-                &tys,
-                &SuiDataStore::new(
-                    state_view.as_sui_resolver().as_backing_package_store(),
-                    &new_packages,
-                ),
-            )
-            .map_err(|e| {
-                ExecutionError::new_with_source(
-                    ExecutionErrorKind::VMVerificationOrDeserializationError,
-                    e.to_string(),
-                )
-            })?;
+            let store = SuiDataStore::new(
+                state_view.as_sui_resolver().as_backing_package_store(),
+                &new_packages,
+            );
+            let (vm_instance, unified_linkage) =
+                vm_for_type_tags(linkage_analyzer, vm, &tys, &store).map_err(|e| {
+                    ExecutionError::new_with_source(
+                        ExecutionErrorKind::VMVerificationOrDeserializationError,
+                        e.to_string(),
+                    )
+                })?;
 
             for (id, (recipient, ty, value)) in writes {
-                // TODO: Lift this VM instance out the loop and create a combined linkage across
-                // all writes.
-                let tag = ty.into();
+                let defining_tag = ty.into();
+                let runtime_tag = linkage_analyzer
+                    .resolver()
+                    .runtime_type_tag(&defining_tag, &store)?;
                 let abilities = vm_instance
-                    .load_type(&tag)
+                    .load_type(&runtime_tag)
                     .and_then(|ty| vm_instance.type_abilities(&ty))
                     .map_err(|e| {
                         convert_vm_error(
@@ -1065,7 +1065,7 @@ mod checked {
                         )
                     })?;
                 let has_public_transfer = abilities.has_store();
-                let layout = vm_instance.runtime_type_layout(&tag).map_err(|e| {
+                let layout = vm_instance.runtime_type_layout(&runtime_tag).map_err(|e| {
                     convert_vm_error(
                         e,
                         &unified_linkage,
@@ -1085,7 +1085,7 @@ mod checked {
                         protocol_config,
                         &loaded_runtime_objects,
                         id,
-                        tag,
+                        defining_tag,
                         has_public_transfer,
                         bytes,
                     )?
@@ -1192,13 +1192,16 @@ mod checked {
         };
 
         let tag: StructTag = type_.into();
-        let type_tag = TypeTag::Struct(Box::new(tag));
-        let (vm, linkage) =
-            vm_for_type_tags(linkage_analyzer, vm, [&type_tag], state).map_err(|_| {
+        let defining_type_tag = TypeTag::Struct(Box::new(tag));
+        let (vm, linkage) = vm_for_type_tags(linkage_analyzer, vm, [&defining_type_tag], state)
+            .map_err(|_| {
                 ExecutionError::from_kind(ExecutionErrorKind::VMVerificationOrDeserializationError)
             })?;
+        let runtime_type_tag = linkage_analyzer
+            .resolver()
+            .runtime_type_tag(&defining_type_tag, state)?;
         let type_ = vm
-            .load_type(&type_tag)
+            .load_type(&runtime_type_tag)
             .map_err(|e| convert_vm_error(e, &linkage, state, protocol_config))?;
         let abilities = vm
             .type_abilities(&type_)
@@ -1210,7 +1213,7 @@ mod checked {
         };
         Ok(ObjectValue {
             type_: ExecutionType {
-                type_: type_tag,
+                type_: defining_type_tag,
                 abilities,
             },
             has_public_transfer,
@@ -1287,13 +1290,18 @@ mod checked {
         let store = SuiDataStore::new(state_view.as_sui_resolver().as_backing_package_store(), &[]);
         let obj_value = value_from_object(protocol_config, link_ctx, vm, &store, obj)?;
         let contained_uids = {
-            let (vm, link_ctx) = vm_for_type_tags(link_ctx, vm, [&obj_value.type_.type_], &store)
+            let (vm, linked_ctx) = vm_for_type_tags(link_ctx, vm, [&obj_value.type_.type_], &store)
                 .map_err(|_| {
-                ExecutionError::from_kind(ExecutionErrorKind::VMVerificationOrDeserializationError)
-            })?;
+                    ExecutionError::from_kind(
+                        ExecutionErrorKind::VMVerificationOrDeserializationError,
+                    )
+                })?;
+            let runtime_type_tag = link_ctx
+                .resolver()
+                .runtime_type_tag(&obj_value.type_.type_, &store)?;
             let fully_annotated_layout = vm
-                .annotated_type_layout(&obj_value.type_.type_)
-                .map_err(|e| convert_vm_error(e, &link_ctx, &store, protocol_config))?;
+                .annotated_type_layout(&runtime_type_tag)
+                .map_err(|e| convert_vm_error(e, &linked_ctx, &store, protocol_config))?;
             let mut bytes = vec![];
             obj_value.write_bcs_bytes(&mut bytes);
             match get_all_uids(&fully_annotated_layout, &bytes) {

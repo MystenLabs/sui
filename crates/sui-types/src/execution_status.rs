@@ -219,6 +219,9 @@ pub enum ExecutionFailureStatus {
 
     #[error("A valid linkage was unable to be determined for the transaction")]
     InvalidLinkage,
+
+    #[error("Duplicate module name {duplicate_module_name} in package")]
+    DuplicateModuleName { duplicate_module_name: String },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

@@ -17,7 +17,9 @@ pub(crate) fn package(vm_config: &VMConfig, pkg: SerializedPackage) -> VMResult<
             .map_err(|err| err.finish(Location::Undefined))?;
         // The name of the module in the mapping, and the name of the module itself should be equal
         assert_eq!(mname.as_ident_str(), module.self_id().name());
-        modules.insert(module.self_id(), module);
+
+        // Impossible for a package to have two modules with the same name at this point.
+        assert!(modules.insert(module.self_id(), module).is_none());
     }
 
     // Packages must be non-empty
