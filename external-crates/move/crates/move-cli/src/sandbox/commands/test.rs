@@ -429,14 +429,14 @@ fn add_update_baseline_fix(s: impl AsRef<str>) -> String {
 
 fn format_diff(expected: impl AsRef<str>, actual: impl AsRef<str>) -> String {
     use colored::Colorize;
-    use similar::ChangeTag::*;
+    use similar::ChangeTag;
     let diff = similar::TextDiff::from_lines(expected.as_ref(), actual.as_ref());
 
     diff.iter_all_changes()
         .map(|change| match change.tag() {
-            Delete => format!("{}{}", "-".bold(), change.value()).red(),
-            Insert => format!("{}{}", "+".bold(), change.value()).green(),
-            Equal => change.value().dimmed(),
+            ChangeTag::Delete => format!("{}{}", "-".bold(), change.value()).red(),
+            ChangeTag::Insert => format!("{}{}", "+".bold(), change.value()).green(),
+            ChangeTag::Equal => change.value().dimmed(),
         })
         .map(|s| s.to_string())
         .collect()
