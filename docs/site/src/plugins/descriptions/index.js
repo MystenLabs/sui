@@ -121,7 +121,7 @@ const descriptionPlugin = (context, options) => {
       fs.writeFileSync(`${outDir}/llms.txt`, llms.join(`\n`));
 
       const skips = ["/404.html", "/search", "/sui-api-ref", "/"];
-      let mdContent = [];
+      let llmsFull = [`# ${siteConfig.title}\n`, `${siteConfig.tagline}`];
       var turndownService = new TurndownService({
         headingStyle: "atx",
         preformattedCode: true,
@@ -136,14 +136,14 @@ const descriptionPlugin = (context, options) => {
             start = raw.match(/<div.*class="main-wrapper/);
           }
           const end = raw.match(/<footer class=/);
-          mdContent.push(
+          llmsFull.push(
             turndownService.turndown(
               `<html>${raw.substring(start.index, end.index)}</html>`,
             ),
           );
         }
       }
-      fs.writeFileSync(`${outDir}/llms-full.txt`, mdContent.join("\n\n"));
+      fs.writeFileSync(`${outDir}/llms-full.txt`, llmsFull.join("\n\n"));
     },
   };
 };
