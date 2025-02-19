@@ -10,7 +10,7 @@ use move_core_types::{
     language_storage::ModuleId,
     vm_status::StatusCode,
 };
-use move_vm_types::data_store::{DataStore, MoveResolver};
+use legacy_move_vm_types::data_store::{DataStore, MoveResolver};
 use std::collections::btree_map::BTreeMap;
 
 pub struct AccountDataCache {

@@ -567,6 +567,7 @@ move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
 move-package = { path = "external-crates/move/crates/move-package" }
 move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
 move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
+legacy-move-vm-types = { path = "external-crates/move/crates/legacy-move-vm-types" }
 ## TODO(vm-rewrite): we need to have a better execution versioning story here as just relying on the vm-runtime directly is not kosher...
 move-vm-runtime = { path = "external-crates/move/crates/move-vm-runtime/", features = [
     "tiered-gas",

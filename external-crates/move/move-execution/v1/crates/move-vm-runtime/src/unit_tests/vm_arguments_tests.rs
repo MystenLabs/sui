@@ -24,7 +24,7 @@ use move_core_types::{
     u256::U256,
     vm_status::{StatusCode, StatusType},
 };
-use move_vm_types::gas::UnmeteredGasMeter;
+use legacy_move_vm_types::gas::UnmeteredGasMeter;
 
 fn make_module_with_function(
     visibility: Visibility,

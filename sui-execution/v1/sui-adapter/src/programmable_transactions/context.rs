@@ -39,8 +39,8 @@ mod checked {
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
-    use move_vm_types::data_store::DataStore;
-    use move_vm_types::loaded_data::runtime_types::Type;
+    use legacy_move_vm_types::data_store::DataStore;
+    use legacy_move_vm_types::loaded_data::runtime_types::Type;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
@@ -192,11 +192,11 @@ mod checked {
             #[skip_checked_arithmetic]
             move_vm_profiler::tracing_feature_enabled! {
                 use move_vm_profiler::GasProfiler;
-                use move_vm_types::gas::GasMeter;
+                use legacy_move_vm_types::gas::GasMeter;
 
                 let tx_digest = tx_context.digest();
                 let remaining_gas: u64 =
-                    move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
+                    legacy_move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
                         .into();
                 gas_charger
                     .move_gas_status_mut()

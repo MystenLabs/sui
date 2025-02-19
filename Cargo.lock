@@ -7031,6 +7031,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
+name = "legacy-move-vm-types"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-profiler",
+ "proptest",
+ "serde",
+ "smallvec",
+]
+
+[[package]]
 name = "lexical-core"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8083,10 +8096,10 @@ name = "move-stdlib-natives-v0"
 version = "0.1.1"
 dependencies = [
  "hex",
+ "legacy-move-vm-types",
  "move-binary-format",
  "move-core-types",
  "move-vm-runtime-v0",
- "move-vm-types",
  "sha2 0.9.9",
  "sha3 0.9.1",
  "smallvec",
@@ -8097,10 +8110,10 @@ name = "move-stdlib-natives-v1"
 version = "0.1.1"
 dependencies = [
  "hex",
+ "legacy-move-vm-types",
  "move-binary-format",
  "move-core-types",
  "move-vm-runtime-v1",
- "move-vm-types",
  "sha2 0.9.9",
  "sha3 0.9.1",
  "smallvec",
@@ -8111,10 +8124,10 @@ name = "move-stdlib-natives-v2"
 version = "0.1.1"
 dependencies = [
  "hex",
+ "legacy-move-vm-types",
  "move-binary-format",
  "move-core-types",
  "move-vm-runtime-v2",
- "move-vm-types",
  "sha2 0.9.9",
  "sha3 0.9.1",
  "smallvec",
@@ -8254,12 +8267,12 @@ version = "0.1.0"
 dependencies = [
  "better_any",
  "fail",
+ "legacy-move-vm-types",
  "move-binary-format",
  "move-bytecode-verifier-v0",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
  "smallvec",
@@ -8272,12 +8285,12 @@ version = "0.1.0"
 dependencies = [
  "better_any",
  "fail",
+ "legacy-move-vm-types",
  "move-binary-format",
  "move-bytecode-verifier-v1",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
  "smallvec",
@@ -8290,29 +8303,16 @@ version = "0.1.0"
 dependencies = [
  "better_any",
  "fail",
+ "legacy-move-vm-types",
  "move-binary-format",
  "move-bytecode-verifier-v2",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
  "smallvec",
  "tracing",
-]
-
-[[package]]
-name = "move-vm-types"
-version = "0.1.0"
-dependencies = [
- "bcs",
- "move-binary-format",
- "move-core-types",
- "move-vm-profiler",
- "proptest",
- "serde",
- "smallvec",
 ]
 
 [[package]]
@@ -13112,6 +13112,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "leb128",
+ "legacy-move-vm-types",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier-meter",
@@ -13121,7 +13122,6 @@ dependencies = [
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime-v0",
- "move-vm-types",
  "once_cell",
  "parking_lot 0.12.3",
  "serde",
@@ -13140,6 +13140,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "leb128",
+ "legacy-move-vm-types",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier-meter",
@@ -13149,7 +13150,6 @@ dependencies = [
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime-v1",
- "move-vm-types",
  "parking_lot 0.12.3",
  "serde",
  "sui-macros",
@@ -13167,6 +13167,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "leb128",
+ "legacy-move-vm-types",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier-meter",
@@ -13176,7 +13177,6 @@ dependencies = [
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime-v2",
- "move-vm-types",
  "parking_lot 0.12.3",
  "serde",
  "sui-macros",
@@ -13890,6 +13890,7 @@ name = "sui-execution"
 version = "0.1.0"
 dependencies = [
  "cargo_metadata 0.15.4",
+ "legacy-move-vm-types",
  "move-abstract-interpreter",
  "move-abstract-interpreter-v2",
  "move-binary-format",
@@ -14710,12 +14711,12 @@ dependencies = [
  "better_any",
  "fastcrypto",
  "fastcrypto-zkp",
+ "legacy-move-vm-types",
  "linked-hash-map",
  "move-binary-format",
  "move-core-types",
  "move-stdlib-natives-v0",
  "move-vm-runtime-v0",
- "move-vm-types",
  "smallvec",
  "sui-protocol-config",
  "sui-types",
@@ -14730,12 +14731,12 @@ dependencies = [
  "better_any",
  "fastcrypto",
  "fastcrypto-zkp",
+ "legacy-move-vm-types",
  "linked-hash-map",
  "move-binary-format",
  "move-core-types",
  "move-stdlib-natives-v1",
  "move-vm-runtime-v1",
- "move-vm-types",
  "smallvec",
  "sui-protocol-config",
  "sui-types",
@@ -14751,11 +14752,11 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-zkp",
  "indexmap 2.7.0",
+ "legacy-move-vm-types",
  "move-binary-format",
  "move-core-types",
  "move-stdlib-natives-v2",
  "move-vm-runtime-v2",
- "move-vm-types",
  "smallvec",
  "sui-protocol-config",
  "sui-types",
@@ -15984,6 +15985,7 @@ dependencies = [
  "indexmap 2.7.0",
  "itertools 0.13.0",
  "jsonrpsee",
+ "legacy-move-vm-types",
  "lru 0.10.1",
  "move-binary-format",
  "move-bytecode-utils",
@@ -15993,7 +15995,6 @@ dependencies = [
  "move-ir-types",
  "move-vm-profiler",
  "move-vm-runtime",
- "move-vm-types",
  "mysten-metrics",
  "mysten-network",
  "nonempty",

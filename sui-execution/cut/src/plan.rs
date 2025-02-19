@@ -719,8 +719,7 @@ mod tests {
         let root = discover_root(cut.clone()).unwrap();
 
         let sui_execution = root.join("sui-execution");
-        let move_vm_types =
-            root.join("external-crates/move/move-execution/shared/crates/move-vm-types");
+        let legacy_move_vm_types = root.join("external-crates/move/crates/legacy-move-vm-types");
 
         let ws = Workspace::read(&root).unwrap();
 
@@ -729,7 +728,7 @@ mod tests {
 
         // Other examples
         assert!(ws.members.contains(&sui_execution));
-        assert!(ws.exclude.contains(&move_vm_types));
+        assert!(ws.exclude.contains(&legacy_move_vm_types));
     }
 
     #[test]

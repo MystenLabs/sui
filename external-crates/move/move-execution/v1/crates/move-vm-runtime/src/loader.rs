@@ -30,7 +30,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-use move_vm_types::{
+use legacy_move_vm_types::{
     data_store::DataStore,
     loaded_data::runtime_types::{
         CachedDatatype, CachedTypeIndex, Datatype, DepthFormula, StructType, Type,
