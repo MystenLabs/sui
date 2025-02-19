@@ -220,6 +220,11 @@ impl CheckpointExecutor {
 
         let this = Arc::new(self);
 
+        let concurrency = std::env::var("SUI_CHECKPOINT_EXECUTION_MAX_CONCURRENCY")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(this.config.checkpoint_execution_max_concurrency);
+
         let final_checkpoint_executed = stream_synced_checkpoints(
             this.checkpoint_store.clone(),
             next_to_schedule,
@@ -227,7 +232,7 @@ impl CheckpointExecutor {
         )
         // Checkpoint loading and execution is parallelized
         .map(|checkpoint| this.clone().execute_checkpoint(checkpoint))
-        .buffered(this.config.checkpoint_execution_max_concurrency)
+        .buffered(concurrency)
         // Committing checkpoint contents must be done serially
         // Returns whether the checkpoint just executed was the final checkpoint of the epoch
         .map(|ckpt_state| this.clone().commit_checkpoint(ckpt_state))
