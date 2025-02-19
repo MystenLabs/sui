@@ -1346,7 +1346,8 @@ mod checked {
         estimates: StoredExecutionTimeObservations,
     ) -> ProgrammableTransactionBuilder {
         let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
-        // TODO-DNS is the double `to_bytes` necessary to store as a Vec<u8> in Move?
+        // This is stored as a vector<u8> in Move, so we first convert to bytes before again
+        // serializing inside the call to `pure`.
         let estimates_bytes = bcs::to_bytes(&estimates).unwrap();
         let estimates_arg = builder.pure(estimates_bytes).unwrap();
         builder.programmable_move_call(

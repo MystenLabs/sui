@@ -490,7 +490,13 @@ mod test {
             } else {
                 rng.gen_range(1000..10000) // Large deferral round (testing liveness)
             };
-            if rng.gen_bool(0.5) {
+            if mode == PerObjectCongestionControlMode::ExecutionTimeEstimate {
+                // Note: ExecutionTimeEstimate mode does not work properly without overage enabled,
+                // because high default estimates will always initially exceed the per-commit
+                // budget. Overage must at least allow for a single 1.5s (150% util) tx.
+                let min_overage_factor = (150 / checkpoint_budget_factor) + 1;
+                allow_overage_factor = rng.gen_range(min_overage_factor..min_overage_factor * 2);
+            } else if rng.gen_bool(0.5) {
                 allow_overage_factor = rng.gen_range(1..100);
             }
             cap_factor_denominator = rng.gen_range(1..100);

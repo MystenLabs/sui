@@ -1282,6 +1282,8 @@ impl AuthorityPerEpochStore {
                 return itertools::Either::Left(std::iter::empty());
             }
         };
+        // This is stored as a vector<u8> in Move, so we double-deserialize to get back
+        //`StoredExecutionTimeObservations`.
         let Ok::<Vec<u8>, _>(stored_observations_bytes) = get_dynamic_field_from_store(
             object_store,
             system_state.extra_fields.id.id.bytes,
@@ -1290,7 +1292,6 @@ impl AuthorityPerEpochStore {
             warn!("Could not find stored execution time observations. This should only happen in the first epcoh where ExecutionTimeEstimate mode is enabled.");
             return itertools::Either::Left(std::iter::empty());
         };
-        // TODO-DNS is the double-serialize necessary to store as a Vec<u8> in Move?
         let stored_observations: StoredExecutionTimeObservations =
             bcs::from_bytes(&stored_observations_bytes)
                 .expect("failed to deserialize stored execution time estimates");
