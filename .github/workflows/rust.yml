@@ -371,7 +371,7 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@cargo-deny
-      - run: cargo deny check bans licenses sources
+      - run: cargo deny check bans licenses sources --hide-inclusion-graph
 
   cargo-deny-advisories:
     name: cargo-deny (advisories)
@@ -383,7 +383,7 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@cargo-deny
-      - run: cargo deny check advisories
+      - run: cargo deny check advisories --hide-inclusion-graph
 
   sui-excution-cut:
     name: cutting a new execution layer
