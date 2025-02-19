@@ -22,8 +22,6 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 # output a note when they are encountered.
 ignore = [
     # "RUSTSEC-0000-0000",
-    # difference 2.0.0 is unmaintained
-    "RUSTSEC-2020-0095",
     # rusoto is unmaintained, use aws crates
     "RUSTSEC-2022-0071",
     # `tui` is unmaintained; use `ratatui` instead
