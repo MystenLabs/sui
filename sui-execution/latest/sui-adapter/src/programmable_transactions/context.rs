@@ -201,6 +201,7 @@ mod checked {
         }
 
         /// Load a type. Linkage context is created ad-hoc for the type and its arguments.
+        /// NB: The type tag passed in must be a runtime type tag.
         pub fn load_type(&mut self, type_tag: &TypeTag) -> VMResult<ExecutionType> {
             self.vm_instance
                 .load_type(type_tag)
@@ -208,8 +209,20 @@ mod checked {
         }
 
         /// Load a type using the context's current session.
+        /// NB: The type tag passed in must be a runtime struct tag.
         pub fn load_type_from_struct(&mut self, struct_tag: &StructTag) -> VMResult<ExecutionType> {
             self.load_type(&TypeTag::Struct(Box::new(struct_tag.clone())))
+        }
+
+        /// Translates a `TypeTag` that uses defining IDs (or possilby other non-runtime ID IDs)
+        /// to one that only uses the runtime ID in all places.
+        pub fn runtime_type_tag_for_type_tag(
+            &mut self,
+            type_tag: &TypeTag,
+        ) -> Result<TypeTag, ExecutionError> {
+            self.ctx
+                .linkage_analyzer
+                .runtime_type_tag(type_tag, &SuiDataStore::new(&self.ctx.state_view, &[]))
         }
 
         //---------------------------------------------------------------------------

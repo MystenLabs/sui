@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{binary_config::BinaryConfig, file_format::Visibility};
+use move_core_types::language_storage::StructTag;
 use move_vm_runtime::shared::linkage_context::LinkageContext;
 use std::collections::BTreeMap;
 use sui_protocol_config::ProtocolConfig;
@@ -12,8 +13,8 @@ use sui_types::{
     move_package::MovePackage,
     transaction::Command,
     type_input::TypeInput,
-    BRIDGE_PACKAGE_ID, DEEPBOOK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
-    SUI_SYSTEM_PACKAGE_ID,
+    TypeTag, BRIDGE_PACKAGE_ID, DEEPBOOK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
 };
 
 use crate::programmable_transactions::datastore::PackageStore;
@@ -115,6 +116,14 @@ pub trait LinkageAnalysis {
         linkage: &LinkageContext,
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError>;
+
+    // Translate a type tag to a runtime type tag (where all addresses are the runtime ID of the
+    // package).
+    fn runtime_type_tag(
+        &mut self,
+        type_tag: &TypeTag,
+        store: &dyn PackageStore,
+    ) -> Result<TypeTag, ExecutionError>;
 }
 
 type ResolutionTable = BTreeMap<ObjectID, ConflictResolution>;
@@ -149,6 +158,14 @@ impl LinkageAnalysis for PerCommandLinkage {
     ) -> Result<ResolvedLinkage, ExecutionError> {
         self.internal.publication_linkage(linkage, store)
     }
+
+    fn runtime_type_tag(
+        &mut self,
+        type_tag: &TypeTag,
+        store: &dyn PackageStore,
+    ) -> Result<TypeTag, ExecutionError> {
+        self.internal.runtime_type_tag(type_tag, store)
+    }
 }
 
 impl LinkageAnalysis for UnifiedLinkage {
@@ -174,6 +191,14 @@ impl LinkageAnalysis for UnifiedLinkage {
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError> {
         self.internal.publication_linkage(linkage, store)
+    }
+
+    fn runtime_type_tag(
+        &mut self,
+        type_tag: &TypeTag,
+        store: &dyn PackageStore,
+    ) -> Result<TypeTag, ExecutionError> {
+        self.internal.runtime_type_tag(type_tag, store)
     }
 }
 
@@ -444,6 +469,49 @@ impl PTBLinkageMetadata {
             )?;
         }
         Ok(ResolvedLinkage::from_resolution_table(unification_table))
+    }
+
+    pub fn runtime_type_tag(
+        &mut self,
+        type_tag: &TypeTag,
+        store: &dyn PackageStore,
+    ) -> Result<TypeTag, ExecutionError> {
+        match type_tag {
+            x @ (TypeTag::Bool
+            | TypeTag::U8
+            | TypeTag::U64
+            | TypeTag::U128
+            | TypeTag::Address
+            | TypeTag::Signer
+            | TypeTag::U16
+            | TypeTag::U32
+            | TypeTag::U256) => Ok(x.clone()),
+            TypeTag::Vector(type_tag) => {
+                let ty = self.runtime_type_tag(type_tag, store)?;
+                Ok(TypeTag::Vector(Box::new(ty)))
+            }
+            TypeTag::Struct(struct_tag) => {
+                let StructTag {
+                    address,
+                    module,
+                    name,
+                    type_params,
+                } = &**struct_tag;
+                let package =
+                    Self::get_package(&mut self.all_packages, &ObjectID::from(*address), store)?;
+                let runtime_address = package.original_package_id().into();
+                let type_params = type_params
+                    .iter()
+                    .map(|ty| self.runtime_type_tag(ty, store))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(TypeTag::Struct(Box::new(StructTag {
+                    address: runtime_address,
+                    module: module.clone(),
+                    name: name.clone(),
+                    type_params,
+                })))
+            }
+        }
     }
 }
 
