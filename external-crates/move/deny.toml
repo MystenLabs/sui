@@ -42,8 +42,6 @@ yanked = "warn"
 # A list of advisory IDs to ignore. Note that ignored advisories will still
 # output a note when they are encountered.
 ignore = [
-  # difference 2.0.0 is unmaintained
-    "RUSTSEC-2020-0095",
     # `tui` is unmaintained; use `ratatui` instead
     "RUSTSEC-2023-0049",
     # `yaml-rust` is unmaintained
