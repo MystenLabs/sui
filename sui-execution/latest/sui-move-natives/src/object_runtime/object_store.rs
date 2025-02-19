@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object_runtime::get_all_uids;
+use crate::object_runtime::{fingerprint::ObjectFingerprint, get_all_uids};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
@@ -24,17 +24,6 @@ use sui_types::{
     object::{Data, MoveObject, Object, Owner},
     storage::ChildObjectResolver,
 };
-
-pub(super) struct ObjectFingerprint(Option<ObjectFingerprint_>);
-
-enum ObjectFingerprint_ {
-    Empty,
-    Original {
-        owner: ObjectID,
-        ty: MoveObjectType,
-        value: Value,
-    },
-}
 
 pub(super) struct ChildObject {
     pub(super) owner: ObjectID,
@@ -809,7 +798,7 @@ impl<'a> ChildObjectStore<'a> {
                     } = child_object;
                     let effect = value.into_effect()?;
                     // should be disabled if the feature is disabled
-                    debug_assert!(_fingerprint.0.is_none());
+                    debug_assert!(_fingerprint.is_disabled());
                     let child_effect = ChildObjectEffectV0 { owner, ty, effect };
                     Some((id, child_effect))
                 })
@@ -840,68 +829,6 @@ impl<'a> ChildObjectStore<'a> {
                 ty: &child_object.ty,
                 move_type: &child_object.move_type,
                 copied_value: copied_child_value,
-            }
-        })
-    }
-}
-
-impl ObjectFingerprint {
-    fn none(protocol_config: &ProtocolConfig) -> Self {
-        if !protocol_config.minimize_child_object_mutations() {
-            Self(None)
-        } else {
-            Self(Some(ObjectFingerprint_::Empty))
-        }
-    }
-
-    fn original(
-        protocol_config: &ProtocolConfig,
-        original_owner: &ObjectID,
-        original_type: &MoveObjectType,
-        original_value: &Value,
-    ) -> PartialVMResult<Self> {
-        Ok(if !protocol_config.minimize_child_object_mutations() {
-            Self(None)
-        } else {
-            Self(Some(ObjectFingerprint_::Original {
-                owner: *original_owner,
-                ty: original_type.clone(),
-                value: original_value.copy_value()?,
-            }))
-        })
-    }
-
-    fn object_has_changed(
-        &self,
-        final_owner: &ObjectID,
-        final_type: &MoveObjectType,
-        final_value: &Option<Value>,
-    ) -> PartialVMResult<bool> {
-        use ObjectFingerprint_ as F;
-        let Some(inner) = &self.0 else {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    "Object fingerprint not enabled, yet we were asked for the changes".to_string(),
-                ),
-            );
-        };
-        Ok(match (inner, final_value) {
-            (F::Empty, None) => false,
-            (F::Empty, Some(_)) | (F::Original { .. }, None) => true,
-            (
-                F::Original {
-                    owner: original_owner,
-                    ty: original_type,
-                    value: original_value,
-                },
-                Some(final_value),
-            ) => {
-                // owner changed or value changed.
-                // For the value, we must first check if the types are the same before comparing the
-                // values
-                !(original_owner == final_owner
-                    && original_type == final_type
-                    && original_value.equals(final_value)?)
             }
         })
     }

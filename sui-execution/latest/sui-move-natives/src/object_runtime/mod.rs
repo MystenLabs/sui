@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod fingerprint;
 pub(crate) mod object_store;
 
 use crate::object_runtime::object_store::ChildObjectEffectV1;
