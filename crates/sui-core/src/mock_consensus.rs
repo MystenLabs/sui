@@ -9,7 +9,7 @@ use crate::consensus_handler::SequencedConsensusTransaction;
 use consensus_core::BlockRef;
 use prometheus::Registry;
 use std::sync::{Arc, Weak};
-use sui_types::error::SuiResult;
+use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
@@ -104,7 +104,7 @@ impl MockConsensusClient {
         let transaction = &transactions[0];
         self.tx_sender
             .try_send(transaction.clone())
-            .expect("MockConsensusClient channel should not overflow");
+            .map_err(|_| SuiError::from("MockConsensusClient channel overflowed"))?;
         Ok(with_block_status(consensus_core::BlockStatus::Sequenced(
             BlockRef::MIN,
         )))
