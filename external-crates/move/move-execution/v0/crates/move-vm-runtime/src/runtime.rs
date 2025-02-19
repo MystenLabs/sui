@@ -21,13 +21,12 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::ModuleId,
-    resolver::MoveResolver,
     runtime_value::MoveTypeLayout,
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
-    data_store::DataStore,
+    data_store::{DataStore, MoveResolver},
     gas::GasMeter,
     loaded_data::runtime_types::Type,
     values::{Locals, Reference, VMValueCast, Value},

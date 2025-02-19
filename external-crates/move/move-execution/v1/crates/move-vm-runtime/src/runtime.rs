@@ -22,15 +22,14 @@ use move_core_types::{
     annotated_value as A,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
-    resolver::MoveResolver,
     runtime_value::MoveTypeLayout,
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
-    data_store::DataStore,
+    data_store::{DataStore, MoveResolver},
     gas::GasMeter,
-    loaded_data::runtime_types::{CachedDatatype, Type, VTableKey},
+    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
     values::{Locals, Reference, VMValueCast, Value},
 };
 use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};
@@ -462,7 +461,7 @@ impl VMRuntime {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
-    pub fn get_type(&self, index: VTableKey) -> Option<Arc<CachedDatatype>> {
+    pub fn get_type(&self, index: CachedTypeIndex) -> Option<Arc<CachedDatatype>> {
         self.loader.get_struct_type(index)
     }
 
@@ -477,7 +476,7 @@ impl VMRuntime {
         module_id: &ModuleId,
         struct_name: &IdentStr,
         data_store: &impl DataStore,
-    ) -> VMResult<(VTableKey, Arc<CachedDatatype>)> {
+    ) -> VMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
         self.loader
             .load_struct_by_name(struct_name, module_id, data_store)
     }

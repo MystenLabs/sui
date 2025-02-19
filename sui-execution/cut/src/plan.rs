@@ -719,7 +719,8 @@ mod tests {
         let root = discover_root(cut.clone()).unwrap();
 
         let sui_execution = root.join("sui-execution");
-        let move_vm_types = root.join("external-crates/move/crates/move-vm-types");
+        let move_vm_types =
+            root.join("external-crates/move/move-execution/shared/crates/move-vm-types");
 
         let ws = Workspace::read(&root).unwrap();
 

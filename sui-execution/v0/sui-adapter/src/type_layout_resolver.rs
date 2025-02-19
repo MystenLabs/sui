@@ -6,7 +6,6 @@ use crate::programmable_transactions::{
     context::load_type,
     linkage_view::{LinkageInfo, LinkageView},
 };
-use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
