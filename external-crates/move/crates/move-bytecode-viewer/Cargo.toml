@@ -8,11 +8,11 @@ publish = false
 edition = "2021"
 
 [dependencies]
-clap.workspace = true
 anyhow.workspace = true
-regex.workspace = true
-tui.workspace = true
+clap.workspace = true
 crossterm.workspace = true
+ratatui.workspace = true
+regex.workspace = true
 
 move-bytecode-source-map.workspace = true
 move-binary-format.workspace = true
