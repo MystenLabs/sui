@@ -144,7 +144,7 @@ fn get_trace_output_path(trace_execution: Option<String>) -> Result<PathBuf, Rep
                     ),
                 });
             }
-            fs::create_dir(&path).map_err(|e| ReplayError::TracingError {
+            fs::create_dir_all(&path).map_err(|e| ReplayError::TracingError {
                 err: format!("Failed to create default trace output directory: {:?}", e),
             })?;
             Ok(path)
@@ -152,7 +152,7 @@ fn get_trace_output_path(trace_execution: Option<String>) -> Result<PathBuf, Rep
     }
 }
 
-/// Saves the trace and additional metadata needed needed to analyze the trace
+/// Saves the trace and additional metadata needed to analyze the trace
 /// to a subderectory named after the transaction digest.
 fn save_trace_output(
     output_path: &PathBuf,
@@ -164,12 +164,12 @@ fn save_trace_output(
     if txn_output_path.exists() {
         return Err(ReplayError::TracingError {
             err: format!(
-                "Trace output directory already for transaction {} already exists: {:?}",
+                "Trace output directory for transaction {} already exists: {:?}",
                 digest, txn_output_path
             ),
         });
     }
-    fs::create_dir(&txn_output_path).map_err(|e| ReplayError::TracingError {
+    fs::create_dir_all(&txn_output_path).map_err(|e| ReplayError::TracingError {
         err: format!(
             "Failed to create trace output directory for transaction {}: {:?}",
             digest, e
