@@ -138,6 +138,18 @@ impl TreeShakingTest {
         .await
     }
 
+    async fn publish_package_without_tree_shaking(&mut self, package_name: &str) -> ObjectID {
+        let package_path = self.package_path(package_name);
+
+        let obj_ref = sui_test_transaction_builder::publish_package(
+            self.test_cluster.wallet_mut(),
+            package_path.clone(),
+        )
+        .await;
+
+        obj_ref.0
+    }
+
     async fn upgrade_package(
         &mut self,
         package_name: &str,
@@ -4165,292 +4177,6 @@ async fn test_parse_host_port() {
     assert!(parse_host_port(input.to_string(), 9123).is_err());
 }
 
-// #[tokio::test]
-// async fn test_tree_shaking() -> Result<(), anyhow::Error> {
-//     // This test checks that tree shaking works as expected. See the README.md file in the
-//     // tree_shaking tests data dir, and follow the comments in this test function!
-//     let mut test_cluster = TestClusterBuilder::new().build().await;
-//     let rgp = test_cluster.get_reference_gas_price().await;
-//     let address = test_cluster.get_address_0();
-//     let context = &mut test_cluster.wallet;
-//     let client = context.get_client().await?;
-//     let object_refs = client
-//         .read_api()
-//         .get_owned_objects(
-//             address,
-//             Some(SuiObjectResponseQuery::new_with_options(
-//                 SuiObjectDataOptions::new()
-//                     .with_type()
-//                     .with_owner()
-//                     .with_previous_transaction(),
-//             )),
-//             None,
-//             None,
-//         )
-//         .await?
-//         .data;
-//
-//     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
-//     let temp_dir = tempfile::tempdir()?;
-//     std::fs::create_dir_all(temp_dir.path().join("tree_shaking"))?;
-//
-//     // copy all tests data to a temp dir to make it easier to manipulate files as needed
-//     let tests_dir = PathBuf::from(TEST_DATA_DIR);
-//     copy_dir_all(tests_dir, temp_dir.path()).map_err(|e| {
-//         anyhow::anyhow!(
-//             "Failed to copy test data dir to temp dir ({}): {}",
-//             temp_dir.path().display(),
-//             e.to_string()
-//         )
-//     })?;
-//
-//     let with_unpublished_dependencies = false;
-//
-//     // ============== TEST 1 ================ //
-//     // Publish package A
-//     let package_path = temp_dir.path().join("tree_shaking").join("A");
-//     let (package_a_id, cap) = publish_package(
-//         package_path,
-//         context,
-//         rgp,
-//         gas_obj_id,
-//         with_unpublished_dependencies,
-//     )
-//     .await?;
-//
-//     // fetch linkage table of A
-//     let move_pkg_a = fetch_move_packages(&client, vec![package_a_id]).await;
-//     let linkage_table_a = move_pkg_a.first().unwrap().linkage_table();
-//     // A has no deps, linkage table should be empty!
-//     assert!(linkage_table_a.is_empty());
-//
-//     // ============== TEST 2 ================ //
-//     // Publish package B_depends_on_A and check the linkage table
-//     let package_path = temp_dir.path().join("tree_shaking").join("B_depends_on_A");
-//     let (package_b_id, _) = publish_package(
-//         package_path,
-//         context,
-//         rgp,
-//         gas_obj_id,
-//         with_unpublished_dependencies,
-//     )
-//     .await?;
-//
-//     // get linkage table of package B_depends_on_A
-//     let move_pkg_b = fetch_move_packages(&client, vec![package_b_id]).await;
-//     let linkage_table_b = move_pkg_b.first().unwrap().linkage_table();
-//     // B depends on A, so the linkage table should contain A's object ID
-//     assert!(linkage_table_b.contains_key(&package_a_id));
-//
-//     // ============== TEST 3 ================ //
-//     // Publish package B_depends_on_A_but_no_code_references_A and check the linkage table
-//     let package_path = temp_dir
-//         .path()
-//         .join("tree_shaking")
-//         .join("B_depends_on_A_but_no_code_references_A");
-//     let (package_b_1_id, _) = publish_package(
-//         package_path,
-//         context,
-//         rgp,
-//         gas_obj_id,
-//         with_unpublished_dependencies,
-//     )
-//     .await?;
-//
-//     // get linkage table of package B_depends_on_A_but_no_code_references_A
-//     let move_pkg_b_1 = fetch_move_packages(&client, vec![package_b_1_id]).await;
-//     let linkage_table_b_1 = move_pkg_b_1.first().unwrap().linkage_table();
-//     // B_no_code_reference_to_A depends on A in the manifest, but no code is referenced, so the linkage table should be
-//     // empty
-//     assert!(linkage_table_b_1.is_empty());
-//
-//     // ============== TEST 4 ================ //
-//     // Publish package C_depends_on_B_which_depends_on_A and check the linkage table
-//     // we use here the package B published in TEST 2
-//     let package_path = temp_dir
-//         .path()
-//         .join("tree_shaking")
-//         .join("C_depends_on_B_which_depends_on_A");
-//     let (package_c_id, _) = publish_package(
-//         package_path,
-//         context,
-//         rgp,
-//         gas_obj_id,
-//         with_unpublished_dependencies,
-//     )
-//     .await?;
-//
-//     // get linkage table of package C
-//     let move_pkg_c = fetch_move_packages(&client, vec![package_c_id]).await;
-//
-//     let linkage_table_c = move_pkg_c
-//         .iter()
-//         .flat_map(|x| x.linkage_table())
-//         .collect::<std::collections::BTreeMap<_, _>>();
-//     // C depends on B, which depends on A, so the linkage table should contain A's object ID, and
-//     // B's object ID
-//     assert!(linkage_table_c.contains_key(&package_a_id));
-//     assert!(linkage_table_c.contains_key(&package_b_id));
-//     assert!(linkage_table_c.len() == 2);
-//
-//     // ============== TEST 5 ================ //
-//     // Publish package C_depends_on_B_but_no_code_references_B and check the linkage table
-//     // we use here the package B published in TEST 3
-//     let package_path = temp_dir
-//         .path()
-//         .join("tree_shaking")
-//         .join("C_depends_on_B_but_no_code_references_B");
-//     let (package_c_1_id, _) = publish_package(
-//         package_path,
-//         context,
-//         rgp,
-//         gas_obj_id,
-//         with_unpublished_dependencies,
-//     )
-//     .await?;
-//
-//     // get linkage table of package C
-//     let move_pkg_c_1 = fetch_move_packages(&client, vec![package_c_1_id]).await;
-//     let linkage_table_c_1 = move_pkg_c_1
-//         .iter()
-//         .flat_map(|x| x.linkage_table())
-//         .collect::<std::collections::BTreeMap<_, _>>();
-//     // C depends on B, and B depends on A, but no code references B, so the linkage table should
-//     // be empty
-//     assert!(linkage_table_c_1.is_empty());
-//
-//     // ============== TEST 6 ================ //
-//     // Upgrade Package A and publish package D that depends on A_v1 but no code references A
-//     let pkg_a_v1_path = temp_dir.path().join("tree_shaking").join("A_v1");
-//     let mut build_config = BuildConfig::new_for_testing().config;
-//     std::fs::copy(
-//         temp_dir
-//             .path()
-//             .join("tree_shaking")
-//             .join("A")
-//             .join("Move.lock"),
-//         pkg_a_v1_path.join("Move.lock"),
-//     )?;
-//
-//     let a_v1_move_lock_path = pkg_a_v1_path.join("Move.lock");
-//     build_config.lock_file = Some(a_v1_move_lock_path.clone());
-//
-//     // upgrade package A (named A_v1)
-//     let resp = SuiClientCommands::Upgrade {
-//         package_path: pkg_a_v1_path.clone(),
-//         upgrade_capability: cap,
-//         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-//         build_config,
-//         skip_dependency_verification: false,
-//         verify_deps: false,
-//         verify_compatibility: true,
-//         with_unpublished_dependencies: false,
-//     }
-//     .execute(context)
-//     .await?;
-//
-//     let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
-//         unreachable!("Invalid response");
-//     };
-//
-//     let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
-//     assert!(effects.status.is_ok());
-//
-//     let package_a_v1 = effects
-//         .created()
-//         .iter()
-//         .find(|refe| matches!(refe.owner, Owner::Immutable))
-//         .unwrap();
-//
-//     let package_path = temp_dir
-//         .path()
-//         .join("tree_shaking")
-//         .join("D_depends_on_A_v1_but_no_code_references_A");
-//     let (package_d_id, _) = publish_package(
-//         package_path,
-//         context,
-//         rgp,
-//         gas_obj_id,
-//         with_unpublished_dependencies,
-//     )
-//     .await?;
-//
-//     // fetch linkage table of D
-//     let move_pkg_d = fetch_move_packages(&client, vec![package_d_id]).await;
-//     let linkage_table_d = move_pkg_d.first().unwrap().linkage_table();
-//     // D depends on A_v1, but no code references A, so the linkage table should be empty
-//     assert!(linkage_table_d.is_empty());
-//
-//     let package_path = temp_dir
-//         .path()
-//         .join("tree_shaking")
-//         .join("D_depends_on_A_v1");
-//     let (package_d_1_id, _) = publish_package(
-//         package_path,
-//         context,
-//         rgp,
-//         gas_obj_id,
-//         with_unpublished_dependencies,
-//     )
-//     .await?;
-//
-//     // fetch linkage table of D
-//     let move_pkg_d_1 = fetch_move_packages(&client, vec![package_d_1_id]).await;
-//     let linkage_table_d_1 = move_pkg_d_1
-//         .iter()
-//         .flat_map(|x| x.linkage_table())
-//         .collect::<std::collections::BTreeMap<_, _>>();
-//
-//     // D depends on A_v1, so the linkage table should contain an entry that has its key the A orig
-//     // id, and the upgraded id should be the A_v1 id
-//     assert!(linkage_table_d_1.contains_key(&package_a_id));
-//     assert!(linkage_table_d_1
-//         .get(&package_a_id)
-//         .is_some_and(|x| x.upgraded_id == package_a_v1.reference.object_id));
-//
-//     // ============== TEST 7 ================ //
-//     // pkg E has multiple deps (A_v1, B_depends_on_A) but without being referenced in the source
-//     // code. We test the dependency on this package and check the linkage table.
-//     let package_path = temp_dir
-//         .path()
-//         .join("tree_shaking")
-//         .join("E_depends_on_A_v1_and_on_B_depends_on_A_but_no_code_references_to_A_or_B");
-//     // publish with tree shaking and check again the linkage table. It should be empty
-//     let (package_e_id, _) = publish_package(
-//         package_path,
-//         context,
-//         rgp,
-//         gas_obj_id,
-//         with_unpublished_dependencies,
-//     )
-//     .await?;
-//     let move_pkg_e = fetch_move_packages(&client, vec![package_e_id]).await;
-//     let linkage_table_e = move_pkg_e.first().unwrap().linkage_table();
-//     // E depends on A_v1, and on B, which depends on A, but no code references A or B, so the
-//     // linkage table should be empty
-//     assert!(linkage_table_e.is_empty());
-//
-//     // ================= TEST 8 ================ //
-//     // Pkg depends on A_v1 and on B, which depends on A, and code references A
-//     let package_path = temp_dir
-//         .path()
-//         .join("tree_shaking")
-//         .join("E_depends_on_A_v1_and_on_B_depends_on_A_and_code_references_A");
-//     let (package_e_id, _) = publish_package(
-//         package_path,
-//         context,
-//         rgp,
-//         gas_obj_id,
-//         with_unpublished_dependencies,
-//     )
-//     .await?;
-//     let move_pkg_e = fetch_move_packages(&client, vec![package_e_id]).await;
-//     let linkage_table_e = move_pkg_e.first().unwrap().linkage_table();
-//     // E depends on A_v1, and on B, which depends on A, and code references A so the linkage table
-//     // should have A
-//     assert!(linkage_table_e.contains_key(&package_a_id));
-//     Ok(())
-// }
 #[sim_test]
 async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await.unwrap();
@@ -4488,28 +4214,7 @@ async fn test_tree_shaking_package_with_bytecode_deps() -> Result<(), anyhow::Er
     // make pkg a to be a bytecode dep for package F
     // set published-at field to package id and addresses a to package id
     let package_path = test.package_path("A");
-    let content = std::fs::read_to_string(&package_path.join("Move.toml"))?;
-    let mut toml: toml::Value = toml::from_str(&content)?;
-    if let Some(tbl) = toml.get_mut("package") {
-        if let Some(tbl) = tbl.as_table_mut() {
-            tbl.insert(
-                "published-at".to_string(),
-                toml::Value::String(package_a_id.to_hex_uncompressed()),
-            );
-        }
-    }
-
-    if let Some(tbl) = toml.get_mut("addresses") {
-        if let Some(tbl) = tbl.as_table_mut() {
-            tbl.insert(
-                "a".to_string(),
-                toml::Value::String(package_a_id.to_hex_uncompressed()),
-            );
-        }
-    }
-
-    let toml_str = toml::to_string(&toml)?;
-    std::fs::write(&package_path.join("Move.toml"), toml_str)?;
+    add_published_id_to_manifest(&package_path, &package_a_id);
 
     // delete the sources folder from pkg A to setup A as bytecode dep for package F
     fs::remove_file(&package_path.join("Move.lock"))?;
@@ -4527,7 +4232,10 @@ async fn test_tree_shaking_package_with_bytecode_deps() -> Result<(), anyhow::Er
         .await?;
     let linkage_table_f = test.fetch_linkage_table(package_f_id).await;
     // F depends on A as a bytecode dep, so the linkage table should not be empty
-    assert!(linkage_table_f.contains_key(&package_a_id), "Package F should depend on A");
+    assert!(
+        linkage_table_f.contains_key(&package_a_id),
+        "Package F should depend on A"
+    );
 
     Ok(())
 }
@@ -4647,7 +4355,6 @@ async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_refe
 #[sim_test]
 async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::Error> {
     // Publish package C_depends_on_B_but_no_code_references_B and check the linkage table
-    // we use here the package B published in TEST 3
     let mut test = TreeShakingTest::new().await?;
 
     // Publish package A and B
@@ -4710,5 +4417,90 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::E
         "Package E should depend on A"
     );
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish package A and D_depends_on_A_v1_but_no_code_references_A
+    let (package_a_id, cap) = test.publish_package("A", false).await?;
+    // Upgrade package A (named A_v1)
+    std::fs::copy(
+        test.package_path("A").join("Move.lock"),
+        test.package_path("A_v1").join("Move.lock"),
+    )?;
+    let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
+
+    // Upgrade package A (named A_v2)
+    std::fs::copy(
+        test.package_path("A_v1").join("Move.lock"),
+        test.package_path("A_v2").join("Move.lock"),
+    )?;
+    let package_a_v2_id = test.upgrade_package("A_v2", cap).await?;
+
+    // the old code for publishjing a package from sui-test-transaction-builder does not know about
+    // move.lock and so on, so we need to add manually the published-at address.
+    let package_path = test.package_path("A_v1");
+    add_published_id_to_manifest(&package_path, &package_a_v1_id)?;
+
+    let package_d_id = test
+        .publish_package_without_tree_shaking("D_depends_on_A_v1_but_no_code_references_A")
+        .await;
+    let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
+    assert!(
+        linkage_table_d.contains_key(&package_a_id),
+        "Package D should depend on A"
+    );
+
+    // published package D with the old stuff that isn't aware of automated address mgmt, so
+    // need to update the published-at field in the manifest
+    add_published_id_to_manifest(
+        &test.package_path("D_depends_on_A_v1_but_no_code_references_A"),
+        &package_d_id,
+    )?;
+
+    let (package_i_id, _) = test
+        .publish_package(
+            "I_depends_on_D_depends_on_A_v1_but_no_code_references_A",
+            false,
+        )
+        .await?;
+    let linkage_table_i = test.fetch_linkage_table(package_i_id).await;
+    assert!(
+        linkage_table_i.contains_key(&package_a_v2_id),
+        "Package I should have A_v2"
+    );
+
+    Ok(())
+}
+
+fn add_published_id_to_manifest(
+    package_path: &PathBuf,
+    package_id: &ObjectID,
+) -> Result<(), anyhow::Error> {
+    let content = std::fs::read_to_string(&package_path.join("Move.toml"))?;
+    let mut toml: toml::Value = toml::from_str(&content)?;
+    if let Some(tbl) = toml.get_mut("package") {
+        if let Some(tbl) = tbl.as_table_mut() {
+            tbl.insert(
+                "published-at".to_string(),
+                toml::Value::String(package_id.to_hex_uncompressed()),
+            );
+        }
+    }
+
+    if let Some(tbl) = toml.get_mut("addresses") {
+        if let Some(tbl) = tbl.as_table_mut() {
+            tbl.insert(
+                "a".to_string(),
+                toml::Value::String(package_id.to_hex_uncompressed()),
+            );
+        }
+    }
+
+    let toml_str = toml::to_string(&toml)?;
+    std::fs::write(&package_path.join("Move.toml"), toml_str)?;
     Ok(())
 }
