@@ -278,10 +278,10 @@ pub async fn fetch_move_packages(
 }
 
 fn add_published_id_to_manifest(
-    package_path: &PathBuf,
+    package_path: &Path,
     package_id: &ObjectID,
 ) -> Result<(), anyhow::Error> {
-    let content = std::fs::read_to_string(&package_path.join("Move.toml"))?;
+    let content = std::fs::read_to_string(package_path.join("Move.toml"))?;
     let mut toml: toml::Value = toml::from_str(&content)?;
     if let Some(tbl) = toml.get_mut("package") {
         if let Some(tbl) = tbl.as_table_mut() {
@@ -302,7 +302,7 @@ fn add_published_id_to_manifest(
     }
 
     let toml_str = toml::to_string(&toml)?;
-    std::fs::write(&package_path.join("Move.toml"), toml_str)?;
+    std::fs::write(package_path.join("Move.toml"), toml_str)?;
     Ok(())
 }
 
@@ -4246,12 +4246,12 @@ async fn test_tree_shaking_package_with_bytecode_deps() -> Result<(), anyhow::Er
     add_published_id_to_manifest(&package_path, &package_a_id)?;
 
     // delete the sources folder from pkg A to setup A as bytecode dep for package F
-    fs::remove_file(&package_path.join("Move.lock"))?;
-    fs::remove_dir_all(&package_path.join("build"))?;
+    fs::remove_file(package_path.join("Move.lock"))?;
+    fs::remove_dir_all(package_path.join("build"))?;
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     // now build the package which will create the build folder and a new Move.lock file
     BuildConfig::default().build(&package_path).unwrap();
-    fs::remove_dir_all(&package_path.join("sources"))?;
+    fs::remove_dir_all(package_path.join("sources"))?;
 
     let (package_f_id, _) = test
         .publish_package(
