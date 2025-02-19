@@ -256,7 +256,6 @@ pub struct VariantInstantiation {
 // Runtime Type representation
 // -------------------------------------------------------------------------------------------------
 
-#[derive(Debug)]
 pub(crate) enum ArenaType {
     Bool,
     U8,
