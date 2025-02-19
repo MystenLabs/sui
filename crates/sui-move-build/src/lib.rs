@@ -10,6 +10,7 @@ use std::{
     str::FromStr,
 };
 
+use anyhow::bail;
 use fastcrypto::encoding::Base64;
 use move_binary_format::{
     normalized::{self, Type},
@@ -626,7 +627,7 @@ impl CompiledPackage {
     ///
     /// Then, it will recursively find all the transitive dependencies of the packages in the list
     /// above and add them to the list of packages that need to be kept as dependencies.
-    pub fn tree_shake(&mut self, with_unpublished_deps: bool) {
+    pub fn tree_shake(&mut self, with_unpublished_deps: bool) -> Result<(), anyhow::Error> {
         // Start from the root modules (or all modules if with_unpublished_deps is true as we
         // need to include modules with 0x0 address)
         let root_modules: Vec<_> = if with_unpublished_deps {
@@ -645,7 +646,6 @@ impl CompiledPackage {
         // Find the immediate dependencies for each root module and store the package name
         // in the used_immediate_packages set. This basically prunes the packages that are not used
         // based on the modules information.
-
         let mut pkgs_to_keep: BTreeSet<Symbol> = BTreeSet::new();
         let module_to_pkg_name: BTreeMap<_, _> = self
             .package
@@ -654,16 +654,14 @@ impl CompiledPackage {
             .collect();
         let mut used_immediate_packages: BTreeSet<Symbol> = BTreeSet::new();
 
-        for module in root_modules.iter() {
+        for module in &root_modules {
             let immediate_deps = module.module.immediate_dependencies();
             for dep in immediate_deps {
                 if let Some(pkg_name) = module_to_pkg_name.get(&dep) {
-                    used_immediate_packages.insert(pkg_name.unwrap_or_else(|| {
-                        panic!(
-                            "Package {} should exist but could not find it in the package table.",
-                            dep.name()
-                        )
-                    }));
+                    let Some(pkg_name) = pkg_name else {
+                        bail!("Expected a package name but it's None")
+                    };
+                    used_immediate_packages.insert(*pkg_name);
                 }
             }
         }
@@ -686,6 +684,8 @@ impl CompiledPackage {
         self.dependency_ids
             .published
             .retain(|pkg_name, _| pkgs_to_keep.contains(pkg_name));
+
+        Ok(())
     }
 }
 

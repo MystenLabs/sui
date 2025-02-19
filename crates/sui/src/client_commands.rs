@@ -1776,7 +1776,7 @@ fn compile_package_simple(
     let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
     let mut compiled_package =
         build_from_resolution_graph(resolution_graph, false, false, chain_id)?;
-    compiled_package.tree_shake(false);
+    compiled_package.tree_shake(false)?;
 
     Ok(compiled_package)
 }
@@ -1798,7 +1798,7 @@ pub(crate) async fn upgrade_package(
         skip_dependency_verification,
     )
     .await?;
-    compiled_package.tree_shake(with_unpublished_dependencies);
+    compiled_package.tree_shake(with_unpublished_dependencies)?;
 
     compiled_package.published_at.as_ref().map_err(|e| match e {
         PublishedAtError::NotPresent => {
@@ -1882,7 +1882,7 @@ pub(crate) async fn compile_package(
         print_diags_to_stderr,
         chain_id,
     )?;
-    compiled_package.tree_shake(with_unpublished_dependencies);
+    compiled_package.tree_shake(with_unpublished_dependencies)?;
     let protocol_config = read_api.get_protocol_config(None).await?;
 
     // Check that the package's Move version is compatible with the chain's
