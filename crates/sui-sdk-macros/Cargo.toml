@@ -20,6 +20,7 @@ derive-syn-parse.workspace = true
 unescape.workspace = true
 reqwest = { workspace = true, features = ["blocking"] }
 move-binary-format.workspace = true
+move-core-types.workspace = true
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json.workspace = true
 sui-sdk-types.workspace = true

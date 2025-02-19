@@ -1,4 +1,6 @@
 use crate::bridge::bridge::BridgeInner;
+use crate::sui::coin::Coin;
+use crate::sui::sui::SUI;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use sui_sdk::SuiClientBuilder;
@@ -36,7 +38,8 @@ async fn test() {
         .unwrap();
 
     let bridge: Field<u64, BridgeInner> = bcs::from_bytes(&bridge_bcs).unwrap();
-    println!("{:#?}", bridge.value)
+
+    println!("{}", Coin::<SUI>::type_(vec![SUI::type_().into()]));
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

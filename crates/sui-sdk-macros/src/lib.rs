@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use move_core_types::account_address::AccountAddress;
 use proc_macro::TokenStream;
 use quote::quote;
 use reqwest::header::CONTENT_TYPE;
@@ -108,6 +109,7 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
     let module_tokens = package_data.iter().map(|(module_name, module)| {
         let module_ident = syn::Ident::new(module_name, proc_macro2::Span::call_site());
         let structs = module["structs"].as_object().unwrap();
+        let module_address = AccountAddress::from_str(module["address"].as_str().unwrap()).unwrap();
 
         let mut struct_tokens = structs
             .iter()
@@ -152,11 +154,22 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
                         pub #field_ident: #field_type,
                     }
                 });
+
                 if type_parameters.is_empty() {
                     quote! {
                         #[derive(serde::Deserialize, Debug)]
                         pub struct #struct_ident {
                             #(#field_tokens)*
+                        }
+                        impl #struct_ident {
+                            pub fn type_() -> MoveObjectType {
+                                MoveObjectType::from(move_core_types::language_storage::StructTag {
+                                    address: PACKAGE_ID,
+                                    module: MODULE_NAME.into(),
+                                    name: move_core_types::ident_str!(#name).into(),
+                                    type_params: vec![],
+                                })
+                            }
                         }
                     }
                 } else {
@@ -166,6 +179,16 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
                             #(#field_tokens)*
                             #(#phantoms)*
                         }
+                        impl <#(#type_parameters),*> #struct_ident<#(#type_parameters),*> {
+                            pub fn type_(type_params: Vec<move_core_types::language_storage::TypeTag>) -> MoveObjectType {
+                                MoveObjectType::from(move_core_types::language_storage::StructTag {
+                                    address: PACKAGE_ID,
+                                    module: MODULE_NAME.into(),
+                                    name: move_core_types::ident_str!(#name).into(),
+                                    type_params,
+                                })
+                            }
+                        }
                     }
                 }
             })
@@ -174,9 +197,12 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
         if struct_tokens.peek().is_none() {
             quote! {}
         } else {
+            let addr_byte_ident = module_address.as_slice();
             quote! {
                 pub mod #module_ident{
-                   use super::*;
+                    use super::*;
+                    pub const PACKAGE_ID: AccountAddress = AccountAddress::new([#(#addr_byte_ident),*]);
+                    pub const MODULE_NAME: &IdentStr = move_core_types::ident_str!(#module_name);
                     #(#struct_tokens)*
                 }
             }
@@ -187,6 +213,9 @@ pub fn move_contract(input: TokenStream) -> TokenStream {
     let expanded = quote! {
         pub mod #package_ident{
             use super::*;
+            use move_core_types::account_address::AccountAddress;
+            use move_core_types::identifier::IdentStr;
+            use sui_types::base_types::MoveObjectType;
             #(#module_tokens)*
         }
     };

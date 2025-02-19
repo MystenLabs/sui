@@ -15378,6 +15378,7 @@ dependencies = [
  "derive-syn-parse",
  "itertools 0.13.0",
  "move-binary-format",
+ "move-core-types",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
  "reqwest 0.12.9",
