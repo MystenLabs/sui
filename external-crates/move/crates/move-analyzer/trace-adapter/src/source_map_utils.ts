@@ -128,9 +128,20 @@ export interface ISourceMap {
     optimizedLines: number[]
 }
 
+/**
+ * Reads all source maps from the given directory. If `mustHaveSourceFile` flag
+ * is true, only source maps whose respective source files are present in the filesMap
+ * are included in the result.
+ * @param directory directory containing source map files.
+ * @param filesMap map from file hash to file information.
+ * @param mustHaveSourceFile indicates whether resulting source maps must have their
+ * respective source files present in the filesMap.
+ * @returns map from stringified module info to source map.
+ */
 export function readAllSourceMaps(
     directory: string,
-    filesMap: Map<string, IFileInfo>
+    filesMap: Map<string, IFileInfo>,
+    mustHaveSourceFile: boolean,
 ): Map<string, ISourceMap> {
     const sourceMapsMap = new Map<string, ISourceMap>();
     const allSourceMapLinesMap = new Map<string, Set<number>>;
@@ -143,8 +154,11 @@ export function readAllSourceMaps(
             if (stats.isDirectory()) {
                 processDirectory(filePath);
             } else if (path.extname(f) === JSON_FILE_EXT) {
-                const sourceMap = readSourceMap(filePath, filesMap, allSourceMapLinesMap);
-                sourceMapsMap.set(JSON.stringify(sourceMap.modInfo), sourceMap);
+                const sourceMap =
+                    readSourceMap(filePath, filesMap, allSourceMapLinesMap, mustHaveSourceFile);
+                if (sourceMap) {
+                    sourceMapsMap.set(JSON.stringify(sourceMap.modInfo), sourceMap);
+                }
             }
         }
     };
@@ -169,21 +183,27 @@ export function readAllSourceMaps(
 }
 
 /**
- * Reads a Move VM source map from a JSON file.
+ * Reads a Move VM source map from a JSON file. If `failOnNoSourceFile` is true,
+ * the function throws an error if the source file is not present in the filesMap.
  *
  * @param sourceMapPath path to the source map JSON file.
  * @param filesMap map from file hash to file information.
  * @param sourceMapLinesMap map from file hash to set of lines present
  * in all source maps for a given file (a given source map may contain
  * source lines for different files due to inlining).
- * @returns source map.
+ * @param failOnNoSourceFile indicates if source map retrieval should fail if the
+ * source file is not present in the filesMap or if it should return `undefined`.
+ *
+ * @returns source map or `undefined` if `failOnNoSourceFile` is true and the source file
+ * is not present in the filesMap.
  * @throws Error if with a descriptive error message if the source map cannot be read.
  */
 function readSourceMap(
     sourceMapPath: string,
     filesMap: Map<string, IFileInfo>,
-    sourceMapLinesMap: Map<string, Set<number>>
-): ISourceMap {
+    sourceMapLinesMap: Map<string, Set<number>>,
+    failOnNoSourceFile: boolean,
+): ISourceMap | undefined {
     const sourceMapJSON: JSONSrcRootObject = JSON.parse(fs.readFileSync(sourceMapPath, 'utf8'));
 
     const fileHash = Buffer.from(sourceMapJSON.definition_location.file_hash).toString('base64');
@@ -194,10 +214,14 @@ function readSourceMap(
     const functions = new Map<string, ISourceMapFunction>();
     const fileInfo = filesMap.get(fileHash);
     if (!fileInfo) {
-        throw new Error('Could not find file with hash: '
-            + fileHash
-            + ' when processing source map at: '
-            + sourceMapPath);
+        if (failOnNoSourceFile) {
+            throw new Error('Could not find file with hash: '
+                + fileHash
+                + ' when processing source map at: '
+                + sourceMapPath);
+        } else {
+            return undefined;
+        }
     }
     const sourceMapLines = sourceMapLinesMap.get(fileHash) ?? new Set<number>;
     prePopulateSourceMapLines(sourceMapJSON, fileInfo, sourceMapLines);
