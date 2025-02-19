@@ -7,7 +7,7 @@ use crate::{
         dispatch_tables::VMDispatchTables,
         interpreter::{self, locals::BaseHeap},
     },
-    jit::execution::ast::{Function, Type},
+    jit::execution::ast::{Function, Type, TypeSubst},
     natives::extensions::NativeContextExtensions,
     shared::{
         gas::GasMeter,
@@ -276,10 +276,13 @@ impl<'extensions> MoveVM<'extensions> {
 
         let fun_ref = function.to_ref();
 
-        // See TODO on LoadedModule to avoid this work
-        let parameters = fun_ref.parameters.clone();
+        let parameters = fun_ref
+            .parameters
+            .into_iter()
+            .map(|ty| ty.to_type())
+            .collect();
 
-        let return_ = fun_ref.return_.clone();
+        let return_ = fun_ref.return_.into_iter().map(|ty| ty.to_type()).collect();
 
         // verify type arguments
         self.virtual_tables
@@ -337,7 +340,7 @@ impl<'extensions> MoveVM<'extensions> {
             .map_err(|err| err.finish(Location::Undefined))?;
 
         let return_values = interpreter::run(
-            &self.virtual_tables,
+            &mut self.virtual_tables,
             self.vm_config.clone(),
             &mut self.native_extensions,
             tracer,

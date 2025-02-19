@@ -24,7 +24,7 @@ pub(crate) mod state;
 /// Entrypoint into the interpreter. All external calls need to be routed through this
 /// function.
 pub(crate) fn run(
-    vtables: &VMDispatchTables,
+    vtables: &mut VMDispatchTables,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,
     tracer: &mut Option<VMTracer<'_>>,

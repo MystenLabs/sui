@@ -3,11 +3,10 @@
 
 use crate::{
     execution::{
-        dispatch_tables::{subst, VMDispatchTables},
-        interpreter::state::MachineState,
+        dispatch_tables::VMDispatchTables, interpreter::state::MachineState,
         values::Value as RuntimeValue,
     },
-    jit::execution::ast::{Function, Type},
+    jit::execution::ast::{ArenaType, Function, Type, TypeSubst},
 };
 use move_binary_format::{
     errors::{PartialVMError, VMError, VMResult},
@@ -1637,8 +1636,8 @@ impl FunctionTypeInfo {
             }
         }
 
-        let subst_and_layout_type = |ty: &Type| -> Option<TagWithLayoutInfoOpt> {
-            let subst_ty = subst(ty, ty_args).ok()?;
+        let subst_and_layout_type = |ty: &ArenaType| -> Option<TagWithLayoutInfoOpt> {
+            let subst_ty = ty.subst(ty_args).ok()?;
             let (ty, ref_type) = deref_ty(subst_ty);
             let tag = vtables.type_to_type_tag(&ty).ok()?;
             // NB: This may fail if the type represents a value greater than the max
@@ -1696,5 +1695,7 @@ fn get_constant_type_layout(
         .current_frame
         .resolver
         .constant_at(const_ndx);
-    vtables.type_to_fully_annotated_layout(&constant.type_).ok()
+    vtables
+        .arena_type_to_fully_annotated_layout(&constant.type_)
+        .ok()
 }

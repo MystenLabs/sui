@@ -29,13 +29,13 @@ impl<T> VMPointer<T> {
     }
 
     #[inline]
-    pub fn to_ref<'a>(self) -> &'a T {
-        to_ref(self.ptr_clone().0)
+    pub fn to_ref<'a>(&self) -> &'a T {
+        to_ref(self.0)
     }
 
     #[inline]
-    pub fn to_mut_ref<'a>(self) -> &'a mut T {
-        to_mut_ref(self.ptr_clone().0)
+    pub fn to_mut_ref<'a>(&self) -> &'a mut T {
+        to_mut_ref(self.0)
     }
 
     #[inline]
@@ -112,23 +112,15 @@ impl<T: ::std::fmt::Debug> ::std::fmt::Debug for VMPointer<T> {
     }
 }
 
-// Pointer equality
-impl<T> PartialEq for VMPointer<T> {
+// VMPointer equality first checks pointer equality, then full equality
+impl<T: PartialEq> PartialEq for VMPointer<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.ptr_eq(other)
+        self.ptr_eq(other) || self.to_ref().eq(other.to_ref())
     }
 }
 
-impl<T> Eq for VMPointer<T> {}
-
-impl<T> Clone for VMPointer<T> {
-    #[allow(clippy::non_canonical_clone_impl)]
-    fn clone(&self) -> Self {
-        self.ptr_clone()
-    }
-}
-
-impl<T> Copy for VMPointer<T> {}
+// VMPointer equality first checks pointer equality, then full equality
+impl<T: Eq> Eq for VMPointer<T> {}
 
 impl<T> From<Box<T>> for VMPointer<T> {
     fn from(boxed: Box<T>) -> Self {
@@ -137,5 +129,34 @@ impl<T> From<Box<T>> for VMPointer<T> {
 
         // Create an `ArenaPointer` from the raw pointer.
         VMPointer(raw_ptr)
+    }
+}
+
+// Written in terms of the underlying pointers to ensure determinism.
+impl<T: PartialOrd> PartialOrd for VMPointer<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.to_ref().partial_cmp(other.to_ref())
+    }
+}
+
+// Written in terms of the underlying pointers to ensure determinism.
+impl<T: Ord> Ord for VMPointer<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.to_ref().cmp(other.to_ref())
+    }
+}
+// Written in terms of the underlying pointers to ensure determinism.
+
+impl<T: std::hash::Hash> std::hash::Hash for VMPointer<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.to_ref().hash(state)
+    }
+}
+
+impl<T> std::ops::Deref for VMPointer<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.to_ref()
     }
 }

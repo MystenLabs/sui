@@ -103,7 +103,7 @@ impl Package {
     /// Used for testing that the correct number of types are loaded
     #[allow(dead_code)]
     pub(crate) fn loaded_types_len(&self) -> usize {
-        self.runtime.vtable.types.cached_types.len()
+        self.runtime.vtable.types.len()
     }
 }
 

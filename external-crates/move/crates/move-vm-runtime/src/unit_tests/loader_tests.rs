@@ -201,7 +201,7 @@ impl Adapter {
         struct_name: &IdentStr,
     ) -> DepthFormula {
         let vm = self.runtime_adapter.write();
-        let session = vm.make_vm(self.store.linkage.clone()).unwrap();
+        let mut session = vm.make_vm(self.store.linkage.clone()).unwrap();
         session
             .virtual_tables
             .calculate_depth_of_type(&VirtualTableKey {
