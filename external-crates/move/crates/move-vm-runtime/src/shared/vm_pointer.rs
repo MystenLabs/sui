@@ -132,17 +132,20 @@ impl<T> From<Box<T>> for VMPointer<T> {
     }
 }
 
+// Written in terms of the underlying pointers to ensure determinism.
 impl<T: PartialOrd> PartialOrd for VMPointer<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.to_ref().partial_cmp(other.to_ref())
     }
 }
 
+// Written in terms of the underlying pointers to ensure determinism.
 impl<T: Ord> Ord for VMPointer<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.to_ref().cmp(other.to_ref())
     }
 }
+// Written in terms of the underlying pointers to ensure determinism.
 
 impl<T: std::hash::Hash> std::hash::Hash for VMPointer<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

@@ -63,11 +63,11 @@ pub struct VMDispatchTables {
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
 /// within the package.
 #[derive(Debug)]
-pub struct PackageVirtualTable {
+pub(crate) struct PackageVirtualTable {
     /// Representation of runtime functions.
-    pub functions: BTreeMap<IntraPackageKey, VMPointer<Function>>,
+    pub(crate) functions: BTreeMap<IntraPackageKey, VMPointer<Function>>,
     /// Representation of runtime types.
-    pub types: BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
+    pub(crate) types: BTreeMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
 }
 
 /// runtime_address::module_name::function_name
@@ -131,7 +131,7 @@ impl VMDispatchTables {
         })
     }
 
-    pub fn resolve_loaded_module(
+    pub(crate) fn resolve_loaded_module(
         &self,
         runtime_id: &ModuleId,
     ) -> PartialVMResult<VMPointer<Module>> {
@@ -150,7 +150,7 @@ impl VMDispatchTables {
             })
     }
 
-    pub fn resolve_function(
+    pub(crate) fn resolve_function(
         &self,
         vtable_key: &VirtualTableKey,
     ) -> PartialVMResult<VMPointer<Function>> {
@@ -171,7 +171,7 @@ impl VMDispatchTables {
         }
     }
 
-    pub fn resolve_type(
+    pub(crate) fn resolve_type(
         &self,
         vtable_key: &VirtualTableKey,
     ) -> PartialVMResult<VMPointer<DatatypeDescriptor>> {
@@ -566,7 +566,7 @@ impl VMDispatchTables {
         depth: u64,
     ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
         self.check_count_and_depth(count, &depth)?;
-        *count += 1;
+        *count = (*count).saturating_add(1);
         let result = match ty {
             Type::Bool => runtime_value::MoveTypeLayout::Bool,
             Type::U8 => runtime_value::MoveTypeLayout::U8,
@@ -679,7 +679,7 @@ impl VMDispatchTables {
         depth: u64,
     ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
         self.check_count_and_depth(count, &depth)?;
-        *count += 1;
+        *count = (*count).saturating_add(1);
         let result = match ty {
             Type::Bool => annotated_value::MoveTypeLayout::Bool,
             Type::U8 => annotated_value::MoveTypeLayout::U8,
@@ -927,7 +927,7 @@ impl Default for PackageVirtualTable {
 // Return an instantiated type given a generic and an instantiation.
 // Stopgap to avoid a recursion that is either taking too long or using too
 // much memory
-pub fn checked_subst(ty: &ArenaType, ty_args: &[Type]) -> PartialVMResult<Type> {
+pub(crate) fn checked_subst(ty: &ArenaType, ty_args: &[Type]) -> PartialVMResult<Type> {
     // Before instantiating the type, count the # of nodes of all type arguments plus
     // existing type instantiation.
     // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.

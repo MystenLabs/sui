@@ -12,17 +12,17 @@ use bumpalo::Bump;
 // Types - Arenas for Cache Allocations
 // -------------------------------------------------------------------------------------------------
 
-pub struct Arena(Bump);
+pub(crate) struct Arena(Bump);
 
 /// An arena-allocated vector. Notably, `Drop` does not drop the elements it holds, as that is the
 /// perview of the arena it was allocated in.
 #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ArenaVec<T>(std::mem::ManuallyDrop<Vec<T>>);
+pub(crate) struct ArenaVec<T>(std::mem::ManuallyDrop<Vec<T>>);
 
 /// An arena-allocated vector. Notably, `Drop` does not drop the value it holds, as that is the
 /// perview of the arena it was allocated in.
 #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ArenaBox<T>(std::mem::ManuallyDrop<Box<T>>);
+pub(crate) struct ArenaBox<T>(std::mem::ManuallyDrop<Box<T>>);
 
 /// Size of a package arena.
 /// This is 10 megabytes, which should be more than enough room for any pacakge on chain.
@@ -36,15 +36,15 @@ const ARENA_SIZE: usize = 10_000_000;
 
 impl Default for Arena {
     fn default() -> Self {
-        let bump = Bump::new();
-        bump.set_allocation_limit(Some(ARENA_SIZE));
-        Arena(bump)
+        Arena::new()
     }
 }
 
 impl Arena {
-    pub fn new() -> Self {
-        Arena(Bump::new())
+    pub(crate) fn new() -> Self {
+        let bump = Bump::new();
+        bump.set_allocation_limit(Some(ARENA_SIZE));
+        Arena(bump)
     }
 
     /// SAFETY:
@@ -52,7 +52,7 @@ impl Arena {
     ///    during this call.
     /// 2. This vector is allocated in the arena, and thus even it is dropped its memory will not
     ///    be reclaimed until the arena is discarded.
-    pub fn alloc_vec<T>(
+    pub(crate) fn alloc_vec<T>(
         &self,
         items: impl ExactSizeIterator<Item = T>,
     ) -> PartialVMResult<ArenaVec<T>> {
@@ -71,7 +71,7 @@ impl Arena {
     ///    during this call.
     /// 2. This box is allocated in the arena, and thus even it is dropped its memory will not be
     ///    reclaimed until the arena is discarded.
-    pub fn alloc_box<T>(&self, item: T) -> PartialVMResult<ArenaBox<T>> {
+    pub(crate) fn alloc_box<T>(&self, item: T) -> PartialVMResult<ArenaBox<T>> {
         if let Ok(slice) = self.0.try_alloc(item) {
             Ok(ArenaBox(unsafe {
                 std::mem::ManuallyDrop::new(Box::from_raw(slice as *mut T))
@@ -81,7 +81,7 @@ impl Arena {
         }
     }
 
-    pub fn alloc_item<T>(&self, item: T) -> PartialVMResult<*const T> {
+    pub(crate) fn alloc_item<T>(&self, item: T) -> PartialVMResult<*const T> {
         if let Ok(value) = self.0.try_alloc(item) {
             Ok(value)
         } else {
@@ -91,7 +91,7 @@ impl Arena {
 }
 
 impl<T> ArenaVec<T> {
-    pub fn iter(&self) -> std::slice::Iter<T> {
+    pub(crate) fn iter(&self) -> std::slice::Iter<T> {
         self.0.iter()
     }
 
@@ -101,15 +101,11 @@ impl<T> ArenaVec<T> {
         self.0.iter_mut()
     }
 
-    /// Make an empty ArenaVec
-    pub fn empty() -> Self {
+    /// Make an empty ArenaVec.
+    /// [SAFETY] If this is never pushed to, this will never be actually allocated. Rust will not
+    /// initialize a `vec![]` memory slot until a `push` occurs, so you must never do that.
+    pub(crate) fn empty() -> Self {
         ArenaVec(std::mem::ManuallyDrop::new(vec![]))
-    }
-}
-
-impl<T> ArenaBox<T> {
-    pub fn as_ref(&self) -> &T {
-        &self.0
     }
 }
 

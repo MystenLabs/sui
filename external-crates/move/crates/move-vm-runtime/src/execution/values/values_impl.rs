@@ -206,7 +206,7 @@ pub struct VariantRef(VMPointer<Container>);
 
 /// Constant representation of a Move value.
 #[derive(Debug)]
-pub enum ConstantValue {
+pub(crate) enum ConstantValue {
     U8(u8),
     U16(u16),
     U32(u32),
@@ -221,7 +221,7 @@ pub enum ConstantValue {
 /// A container is a collection of constant values. It is used to represent data structures like a
 /// Move vector or struct.
 #[derive(Debug)]
-pub enum ConstantContainer {
+pub(crate) enum ConstantContainer {
     Vec(ArenaVec<ConstantValue>),
     Struct(ArenaVec<ConstantValue>),
     VecU8(ArenaVec<u8>),
@@ -442,7 +442,7 @@ impl Reference {
 
 impl Value {
     /// Allocates the constant in the provided arena
-    pub fn to_constant_value(self, arena: &Arena) -> PartialVMResult<ConstantValue> {
+    pub(crate) fn to_constant_value(self, arena: &Arena) -> PartialVMResult<ConstantValue> {
         match self {
             Value::Invalid => Err(PartialVMError::new(
                 StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
@@ -468,7 +468,7 @@ impl Value {
 
 impl Container {
     /// Allocates the constant in the provided arena
-    pub fn to_constant_value(self, arena: &Arena) -> PartialVMResult<ConstantValue> {
+    pub(crate) fn to_constant_value(self, arena: &Arena) -> PartialVMResult<ConstantValue> {
         macro_rules! alloc_vec {
             ($values:expr) => {
                 arena.alloc_vec($values.into_iter())?
@@ -517,7 +517,7 @@ impl Container {
 
 impl ConstantValue {
     /// Performs a deep copy of the constant value
-    pub fn to_value(&self) -> Value {
+    pub(crate) fn to_value(&self) -> Value {
         match self {
             // TODO: auto-gen this?
             ConstantValue::U8(value) => Value::U8(*value),
@@ -537,7 +537,7 @@ impl ConstantValue {
 
 impl ConstantContainer {
     /// Performs a deep copy of the constant value
-    pub fn to_container(&self) -> Container {
+    pub(crate) fn to_container(&self) -> Container {
         macro_rules! clone_vec {
             ($vec:expr) => {
                 $vec.iter().map(|v| *v).collect()

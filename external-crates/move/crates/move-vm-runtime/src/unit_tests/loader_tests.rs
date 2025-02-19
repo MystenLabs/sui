@@ -229,7 +229,6 @@ impl Adapter {
 
     fn call_functions(&self, functions: &[(ModuleId, Identifier)]) {
         for (module_id, name) in functions {
-            println!("calling {name}");
             self.call_function(module_id, name);
         }
     }

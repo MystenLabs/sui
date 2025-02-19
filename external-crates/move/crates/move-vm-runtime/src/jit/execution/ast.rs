@@ -49,11 +49,11 @@ pub struct Package {
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
     // TODO(vm-rewrite): IdentifierKey
-    pub loaded_modules: BTreeMap<Identifier, Module>,
+    pub(crate) loaded_modules: BTreeMap<Identifier, Module>,
 
     // NB: Package functions and code are allocated into this arena.
-    pub package_arena: Arena,
-    pub vtable: PackageVirtualTable,
+    pub(crate) package_arena: Arena,
+    pub(crate) vtable: PackageVirtualTable,
 }
 
 // A LoadedModule is very similar to a CompiledModule but data is "transformed" to a representation
@@ -61,7 +61,7 @@ pub struct Package {
 // When code executes indexes in instructions are resolved against those runtime structure
 // so that any data needed for execution is immediately available
 #[derive(Debug)]
-pub struct Module {
+pub(crate) struct Module {
     #[allow(dead_code)]
     pub id: ModuleId,
 
@@ -132,7 +132,7 @@ pub struct Module {
 
 // A runtime constant
 #[derive(Debug)]
-pub struct Constant {
+pub(crate) struct Constant {
     pub value: ConstantValue,
     pub type_: ArenaType,
     // Size of constant -- used for gas charging.
@@ -142,7 +142,7 @@ pub struct Constant {
 // A runtime function
 // #[derive(Debug)]
 // https://github.com/rust-lang/rust/issues/70263
-pub struct Function {
+pub(crate) struct Function {
     #[allow(unused)]
     pub file_format_version: u32,
     pub is_entry: bool,
@@ -174,7 +174,7 @@ pub struct Function {
 //   (e.g., intra-package calls, or possibly calls to framework/well-known external packages).
 // - Virtual: the function is unknown and the index is the index in the global table of vtables
 //   that will be filled in at a later time before execution.
-pub enum CallType {
+pub(crate) enum CallType {
     Direct(VMPointer<Function>),
     Virtual(VirtualTableKey),
 }
@@ -254,7 +254,7 @@ pub struct VariantDef {
 // -------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum ArenaType {
+pub(crate) enum ArenaType {
     Bool,
     U8,
     U64,
@@ -276,14 +276,14 @@ pub enum ArenaType {
 #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct DatatypeDescriptor {
     pub abilities: AbilitySet,
-    pub type_parameters: ArenaVec<DatatypeTyParameter>,
+    pub(crate) type_parameters: ArenaVec<DatatypeTyParameter>,
     // TODO(vm-rewrite): IdentifierKey
     pub name: Identifier,
     pub defining_id: ModuleId,
     pub runtime_id: ModuleId,
     pub module_key: IdentifierKey,
     pub member_key: IdentifierKey,
-    pub datatype_info: VMPointer<Datatype>,
+    pub(crate) datatype_info: VMPointer<Datatype>,
 }
 
 #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -294,7 +294,7 @@ pub enum Datatype {
 
 #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct EnumType {
-    pub variants: ArenaVec<VariantType>,
+    pub(crate) variants: ArenaVec<VariantType>,
     pub enum_def: EnumDefinitionIndex,
 }
 
@@ -302,16 +302,16 @@ pub struct EnumType {
 pub struct VariantType {
     // TODO(vm-rewrite): IdentifierKey
     pub variant_name: Identifier,
-    pub fields: ArenaVec<ArenaType>,
-    pub field_names: ArenaVec<Identifier>,
+    pub(crate) fields: ArenaVec<ArenaType>,
+    pub(crate) field_names: ArenaVec<Identifier>,
     pub enum_def: EnumDefinitionIndex,
     pub variant_tag: VariantTag,
 }
 
 #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct StructType {
-    pub fields: ArenaVec<ArenaType>,
-    pub field_names: ArenaVec<Identifier>,
+    pub(crate) fields: ArenaVec<ArenaType>,
+    pub(crate) field_names: ArenaVec<Identifier>,
     pub struct_def: StructDefinitionIndex,
 }
 
@@ -348,7 +348,7 @@ pub enum Type {
 /// Bytecodes operate on a stack machine and each bytecode has side effect on the stack and the
 /// instruction stream.
 #[derive(Eq, PartialEq)]
-pub enum Bytecode {
+pub(crate) enum Bytecode {
     /// Pop and discard the value at the top of the stack.
     /// The value on the stack must be an copyable type.
     ///

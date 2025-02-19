@@ -223,7 +223,7 @@ fn module(
     // Initialize module data
     let type_refs = initialize_type_refs(package_context, &cmodule)?;
 
-    let (instantiation_signatures, _signature_map) = cache_signatures(package_context, &cmodule)?;
+    let instantiation_signatures = cache_signatures(package_context, &cmodule)?;
 
     let structs = structs(package_context, &cmodule, &type_refs, &descriptor_map)?;
     let enums = enums(package_context, &cmodule, &type_refs, &descriptor_map)?;
@@ -477,10 +477,9 @@ fn field_instantiations(
 fn cache_signatures(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
-) -> PartialVMResult<(
+) -> PartialVMResult<
     ArenaVec<ArenaVec<ArenaType>>,
-    BTreeMap<SignatureIndex, VMPointer<ArenaVec<ArenaType>>>,
-)> {
+> {
     let signatures = module
         .signatures()
         .iter()
@@ -494,12 +493,7 @@ fn cache_signatures(
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
     let signatures = context.arena_vec(signatures.into_iter())?;
-    let signature_map = signatures
-        .iter()
-        .enumerate()
-        .map(|(ndx, entry)| (SignatureIndex::new(ndx as u16), VMPointer::from_ref(entry)))
-        .collect::<BTreeMap<_, _>>();
-    Ok((signatures, signature_map))
+    Ok(signatures)
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -983,7 +977,7 @@ fn load_module_types(
             module_key: module_name,
             member_key: member_name,
         };
-        let _prev = datatype_descriptors.push(datatype_descriptor);
+        datatype_descriptors.push(datatype_descriptor);
     }
 
     for (idx, enum_def) in module.enum_defs().iter().enumerate() {
@@ -1060,7 +1054,7 @@ fn load_module_types(
             module_key: module_name,
             member_key: member_name,
         };
-        let _prev = datatype_descriptors.push(datatype_descriptor);
+        datatype_descriptors.push(datatype_descriptor);
     }
 
     let datatype_descriptors = package_context.arena_vec(datatype_descriptors.into_iter())?;
