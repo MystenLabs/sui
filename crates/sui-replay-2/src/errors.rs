@@ -9,6 +9,10 @@ use thiserror::Error;
 pub enum ReplayError {
     #[error("Generic Error: {:?}", err)]
     GenericError { err: String },
+
+    #[error("BCS Conversion Error: {:?}", err)]
+    BCSConversionError { err: String },
+
     #[error("Failed to parse transaction digest {}: {}", digest, err)]
     FailedToParseDigest { digest: String, err: String },
     #[error("Failed to load transaction {}: {}", digest, err)]

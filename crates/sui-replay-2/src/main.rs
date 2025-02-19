@@ -37,7 +37,7 @@ async fn main() {
             let mut env = ReplayEnvironment::new(data_store)
                 .await
                 .unwrap_or_else(|e| panic!("Failed to create replay environment: {:?}", e));
-            debug!("After Creation: {:?}", env);
+            debug!("After Creation: {:#?}", env);
 
             //
             // load transaction data
@@ -46,13 +46,13 @@ async fn main() {
                 .unwrap_or_else(|e: sui_replay_2::errors::ReplayError| {
                     panic!("Failed to get transaction data: {:?}", e)
                 });
-            debug!("After Transaction Load: {:?}", env);
+            debug!("After Transaction Load: {:#?}", env);
 
             //
             // replay transaction
             execution::execute_transaction_to_effects(replay_txn, &env, trace_execution)
                 .unwrap_or_else(|e| panic!("Error running a transaction: {:?}", e));
-            debug!("After Execution: {:?}", env);
+            debug!("After Execution: {:#?}", env);
         }
     }
 

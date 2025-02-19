@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    epoch_store::{EpochStore, EpochStoreEager, EpochStoreEagerNew},
+    epoch_store::EpochStoreRpc,
     errors::ReplayError,
     gql_queries::{package_versions_for_replay, EpochData},
     Node,
@@ -19,7 +19,7 @@ use sui_types::{
     event::SystemEpochInfoEvent, move_package::MovePackage, object::Object,
     supported_protocol_versions::Chain, transaction::TransactionData,
 };
-use tracing::{debug, info};
+use tracing::debug;
 
 const EPOCH_CHANGE_STRUCT_TAG: &str = "0x3::sui_system_state_inner::SystemEpochInfoEvent";
 
@@ -126,24 +126,18 @@ impl DataStore {
                     }
                 })?;
 
-                info!(
+                debug!(
                     "Collecting system package: {}[{} - {}], {:?}",
                     package_obj.id(),
                     package_obj.version(),
                     pkg_version,
                     epoch,
                 );
+                // TODO: fix this. If epoch is missing come up with something....
                 let epoch = epoch.unwrap_or(0);
                 // epoch.ok_or_else(|| ReplayError::MissingPackageEpoch {
                 //     pkg: pkg_address.to_string(),
                 // })? as u64;
-                debug!(
-                    "{}[{}/{}] - {}",
-                    package_obj.id(),
-                    package_obj.version(),
-                    pkg_version,
-                    epoch,
-                );
                 packages.push((package_obj, epoch));
             }
             if page_info.has_next_page {
@@ -190,26 +184,26 @@ impl DataStore {
             let InputObject {
                 object_id, version, ..
             } = object_input;
-            let address = Address::new(object_id.clone().into_bytes());
+            let address = Address::new((*object_id).into_bytes());
             let object_data = self
                 .client
-                .object(address, version.clone())
+                .object(address, *version)
                 .await
                 .map_err(|e| ReplayError::ObjectLoadError {
                     address: address.to_string(),
-                    version: version.clone(),
+                    version: *version,
                     err: format!("{:?}", e),
                 })?
                 .ok_or_else(|| ReplayError::ObjectNotFound {
                     address: address.to_string(),
-                    version: version.clone(),
+                    version: *version,
                 })?;
             let object =
                 Object::try_from(object_data).map_err(|e| ReplayError::ObjectConversionError {
                     id: object_id.to_string(),
                     err: format!("{:?}", e),
                 })?;
-            objects.push((*object_id, version.clone(), object));
+            objects.push((*object_id, *version, object));
         }
         Ok(objects)
     }
@@ -280,15 +274,14 @@ impl DataStore {
     //
     // Epoch operations
     //
-    pub async fn epochs(&self) -> Result<BTreeMap<u64, EpochData>, ReplayError> {
+    pub async fn epochs_gql_table(&self) -> Result<BTreeMap<u64, EpochData>, ReplayError> {
         let mut pag_filter = PaginationFilter {
-            direction: Direction::Forward,
+            direction: Direction::Backward,
             cursor: None,
             limit: None,
         };
 
         let mut epochs_data = BTreeMap::<u64, EpochData>::new();
-
         loop {
             let paged_epochs = crate::gql_queries::epochs(&self.client, pag_filter)
                 .await
@@ -299,15 +292,12 @@ impl DataStore {
                 .unwrap();
             let (page_info, data) = paged_epochs.into_parts();
             for epoch in data {
-                if epoch.transaction_blocks.nodes.is_empty() {
-                    continue;
-                }
                 epochs_data.insert(epoch.epoch_id, epoch.try_into()?);
             }
-            if page_info.has_next_page {
+            if page_info.has_previous_page {
                 pag_filter = PaginationFilter {
-                    direction: Direction::Forward,
-                    cursor: page_info.end_cursor.clone(),
+                    direction: Direction::Backward,
+                    cursor: page_info.start_cursor,
                     limit: None,
                 };
             } else {
@@ -318,13 +308,7 @@ impl DataStore {
         Ok(epochs_data)
     }
 
-    pub async fn epoch_store_1(&self) -> Result<EpochStore, ReplayError> {
-        Ok(EpochStore::EpochInfoEagerNew(EpochStoreEagerNew {
-            data: self.epochs().await?,
-        }))
-    }
-
-    pub async fn epoch_store(&self) -> Result<EpochStore, ReplayError> {
+    pub async fn epoch_store_rpc(&self) -> Result<EpochStoreRpc, ReplayError> {
         let mut protocol_configs = vec![];
         let mut rgps = vec![];
         let mut epoch_info = BTreeMap::new();
@@ -340,13 +324,7 @@ impl DataStore {
             cursor: None,
             limit: None,
         };
-        let mut quit = 0;
         loop {
-            if quit == 1 {
-                break;
-            } else {
-                quit += 1;
-            }
             let paged_events = self
                 .client
                 .events(Some(filter.clone()), pagination)
@@ -400,19 +378,17 @@ impl DataStore {
             rgp.1 = 0;
         }
 
-        Ok(EpochStore::EpochInfoEager(EpochStoreEager {
+        Ok(EpochStoreRpc {
             protocol_configs,
             rgps,
             epoch_info,
-        }))
-
-        // Ok((protocol_configs, rgps, epoch_info))
+        })
     }
 
     async fn get_epoch_timestamp(&self, digest: SdkTransactionDigest) -> Result<u64, ReplayError> {
         let txn_info = self
             .client
-            .transaction(digest.into())
+            .transaction(digest)
             .await
             .map_err(|e| {
                 let err = format!("{:?}", e);
@@ -427,11 +403,8 @@ impl DataStore {
             SdkTransactionKind::ChangeEpoch(change) => return Ok(change.epoch_start_timestamp_ms),
             SdkTransactionKind::EndOfEpoch(kinds) => {
                 for kind in kinds {
-                    match kind {
-                        EndOfEpochTransactionKind::ChangeEpoch(change) => {
-                            return Ok(change.epoch_start_timestamp_ms)
-                        }
-                        _ => (),
+                    if let EndOfEpochTransactionKind::ChangeEpoch(change) = kind {
+                        return Ok(change.epoch_start_timestamp_ms);
                     }
                 }
             }

@@ -17,7 +17,12 @@ use move_core_types::{
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 use move_trace_format::format::MoveTraceBuilder;
-use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashSet,
+    env, fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use sui_execution::Executor;
 use sui_types::digests::TransactionDigest;
 use sui_types::{
@@ -155,7 +160,7 @@ fn get_trace_output_path(trace_execution: Option<String>) -> Result<PathBuf, Rep
 /// Saves the trace and additional metadata needed to analyze the trace
 /// to a subderectory named after the transaction digest.
 fn save_trace_output(
-    output_path: &PathBuf,
+    output_path: &Path,
     digest: TransactionDigest,
     trace_builder: MoveTraceBuilder,
     env: &ReplayEnvironment,
@@ -201,7 +206,7 @@ fn save_trace_output(
                 err: format!("Failed to create bytecode package directory: {:?}", e),
             })?;
             for (mod_name, serialized_mod) in pkg.serialized_module_map() {
-                let compiled_mod = CompiledModule::deserialize_with_defaults(&serialized_mod)
+                let compiled_mod = CompiledModule::deserialize_with_defaults(serialized_mod)
                     .map_err(|e| ReplayError::TracingError {
                         err: format!(
                             "Failed to deserialize module {:?} in package {}: {:?}",
@@ -302,12 +307,11 @@ struct ReplayStore<'a> {
 
 impl BackingPackageStore for ReplayStore<'_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
-        info!("Getting package object for {:?}", package_id);
         if is_framework_package(package_id) {
             let pkg = self
                 .env
                 .get_system_package_at_epoch(package_id, self.epoch)
-                .map(|(pkg, _digest)| PackageObject::new(pkg.clone()))
+                .map(|pkg| PackageObject::new(pkg.clone()))
                 .unwrap();
             Ok(Some(pkg))
         } else {
@@ -390,7 +394,7 @@ impl ObjectStore for ReplayStore<'_> {
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         todo!(
-            "ObjectStore::get_object {:?} at {}",
+            "ObjectStore::get_object_by_key {:?} at {}",
             object_id,
             version.value()
         )

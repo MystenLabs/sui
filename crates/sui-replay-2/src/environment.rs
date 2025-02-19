@@ -11,7 +11,7 @@ use std::{
     fmt::Debug,
     ops::Bound,
 };
-use sui_types::{base_types::ObjectID, digests::TransactionDigest, object::Object};
+use sui_types::{base_types::ObjectID, object::Object};
 use tracing::debug;
 
 // True if the package is a system package
@@ -41,7 +41,7 @@ impl ReplayEnvironment {
     pub async fn new(data_store: DataStore) -> Result<Self, ReplayError> {
         // load epoch info
         debug!("Start epoch store");
-        let epoch_info = EpochStore::new(&data_store).await?;
+        let epoch_info = EpochStore::gql_table(&data_store).await?;
         debug!("End epoch store");
         // load system packages
         debug!("Start get_system_packages");
@@ -69,7 +69,7 @@ impl ReplayEnvironment {
             let version = version.unwrap();
             self.objects
                 .entry(object_id)
-                .or_insert_with(BTreeMap::new)
+                .or_default()
                 .insert(version, object);
         }
         Ok(())
@@ -120,15 +120,15 @@ impl ReplayEnvironment {
         &self,
         pkg_id: &ObjectID,
         epoch: u64,
-    ) -> Result<(Object, TransactionDigest), ReplayError> {
+    ) -> Result<Object, ReplayError> {
         let pkgs = self.system_packages.get(pkg_id);
-        let (pkg, digest) = match pkgs {
+        return match pkgs {
             Some(versions) => {
                 if let Some((_, pkg)) = versions
                     .range((Bound::Unbounded, Bound::Included(&epoch)))
                     .next_back()
                 {
-                    Ok((pkg.clone(), self.epoch_info.epoch_digest(epoch)?))
+                    Ok(pkg.clone())
                 } else {
                     Err(ReplayError::MissingPackageAtEpoch {
                         pkg: pkg_id.to_string(),
@@ -139,8 +139,7 @@ impl ReplayEnvironment {
             None => Err(ReplayError::MissingSystemPackage {
                 pkg: pkg_id.to_string(),
             }),
-        }?;
-        Ok((pkg, digest))
+        };
     }
 }
 
@@ -152,7 +151,7 @@ fn get_packages_deps(packages: &BTreeMap<ObjectID, Object>) -> BTreeSet<ObjectID
                 deps.insert(upgrade_info.upgraded_id);
             }
         } else {
-            assert!(false, "Not a package in package tables");
+            unreachable!("Not a package in package tables");
         }
     }
     packages.values().any(|pkg| deps.remove(&pkg.id()));

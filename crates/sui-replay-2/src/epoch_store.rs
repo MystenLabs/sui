@@ -18,8 +18,8 @@ use tracing::debug;
 #[derive(Debug)]
 pub enum EpochStore {
     None,
-    EpochInfoEager(EpochStoreEager),
-    EpochInfoEagerNew(EpochStoreEagerNew),
+    EpochInfoRpc(EpochStoreRpc),
+    EpochInfoTable(EpochStoreTable),
 }
 
 impl EpochStore {
@@ -27,44 +27,37 @@ impl EpochStore {
         EpochStore::None
     }
 
-    pub async fn new(data_store: &DataStore) -> Result<Self, ReplayError> {
-        debug!("Start load_epochs");
-        // let epoch_store = data_store.epoch_store().await?;
-        let epoch_store = data_store.epoch_store_1().await?;
-        println!("Epoch store: {:?}", epoch_store);
-        debug!("End load_epochs");
-        Ok(epoch_store)
+    pub async fn gql_table(data_store: &DataStore) -> Result<Self, ReplayError> {
+        let data = data_store.epochs_gql_table().await?;
+        Ok(EpochStore::EpochInfoTable(EpochStoreTable { data }))
+    }
+
+    pub async fn rpc_eager(data_store: &DataStore) -> Result<Self, ReplayError> {
+        let epoch_store_rpc = data_store.epoch_store_rpc().await?;
+        Ok(EpochStore::EpochInfoRpc(epoch_store_rpc))
     }
 
     pub fn protocol_config(&self, epoch: u64, chain: Chain) -> Result<ProtocolConfig, ReplayError> {
         match self {
             EpochStore::None => todo!("None EpochStore"),
-            EpochStore::EpochInfoEager(eager) => eager.protocol_config(epoch, chain),
-            EpochStore::EpochInfoEagerNew(data) => data.protocol_config(epoch, chain),
+            EpochStore::EpochInfoRpc(eager) => eager.protocol_config(epoch, chain),
+            EpochStore::EpochInfoTable(data) => data.protocol_config(epoch, chain),
         }
     }
 
     pub fn rgp(&self, epoch: u64) -> Result<u64, ReplayError> {
         match self {
             EpochStore::None => todo!("None EpochStore"),
-            EpochStore::EpochInfoEager(eager) => eager.rgp(epoch),
-            EpochStore::EpochInfoEagerNew(eager) => eager.rgp(epoch),
+            EpochStore::EpochInfoRpc(eager) => eager.rgp(epoch),
+            EpochStore::EpochInfoTable(eager) => eager.rgp(epoch),
         }
     }
 
     pub fn epoch_timestamp(&self, epoch: u64) -> Result<u64, ReplayError> {
         match self {
             EpochStore::None => todo!("None EpochStore"),
-            EpochStore::EpochInfoEager(eager) => eager.epoch_timestamp(epoch),
-            EpochStore::EpochInfoEagerNew(eager) => eager.epoch_timestamp(epoch),
-        }
-    }
-
-    pub fn epoch_digest(&self, epoch: u64) -> Result<TransactionDigest, ReplayError> {
-        match self {
-            EpochStore::None => todo!("None EpochStore"),
-            EpochStore::EpochInfoEager(eager) => eager.epoch_digest(epoch),
-            EpochStore::EpochInfoEagerNew(eager) => eager.epoch_digest(epoch),
+            EpochStore::EpochInfoRpc(eager) => eager.epoch_timestamp(epoch),
+            EpochStore::EpochInfoTable(eager) => eager.epoch_timestamp(epoch),
         }
     }
 }
@@ -72,11 +65,11 @@ impl EpochStore {
 type EpochId = u64;
 
 #[derive(Debug)]
-pub struct EpochStoreEagerNew {
+pub struct EpochStoreTable {
     pub data: BTreeMap<EpochId, EpochData>,
 }
 
-impl EpochStoreEagerNew {
+impl EpochStoreTable {
     pub fn protocol_config(&self, epoch: u64, chain: Chain) -> Result<ProtocolConfig, ReplayError> {
         let epoch = self
             .data
@@ -103,18 +96,10 @@ impl EpochStoreEagerNew {
             .ok_or(ReplayError::MissingTimestampForEpoch { epoch })?;
         Ok(epoch.start_timestamp)
     }
-
-    pub fn epoch_digest(&self, epoch: u64) -> Result<TransactionDigest, ReplayError> {
-        let epoch = self
-            .data
-            .get(&epoch)
-            .ok_or(ReplayError::MissingDigestForEpoch { epoch })?;
-        Ok(epoch.last_tx_digest.into())
-    }
 }
 
 #[derive(Debug)]
-pub struct EpochStoreEager {
+pub struct EpochStoreRpc {
     // protocol config version and epoch range they are valid for
     pub protocol_configs: Vec<(u64, u64, u64)>,
     // rgp and epoch range they are valid for
@@ -123,7 +108,7 @@ pub struct EpochStoreEager {
     pub epoch_info: BTreeMap<u64, (u64, TransactionDigest)>,
 }
 
-impl EpochStoreEager {
+impl EpochStoreRpc {
     pub fn protocol_config(&self, epoch: u64, chain: Chain) -> Result<ProtocolConfig, ReplayError> {
         debug!("Getting protocol config for epoch {}", epoch);
         let idx = self

@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_sdk_types::{
-    Address, EpochId, Object, TransactionDigest as SdkTransactionDigest, TransactionEffects,
-    Version,
-};
+use sui_sdk_types::{Address, EpochId, Object, TransactionEffects, Version};
 
 use crate::errors::ReplayError;
 use base64ct::Encoding;
@@ -15,7 +12,6 @@ use sui_graphql_client::{
     query_types::{schema, Base64, BigInt, DateTime, PageInfo},
     Client, Page, PaginationFilter,
 };
-use sui_types::digests::TransactionDigest;
 
 // "Output" types
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,7 +20,6 @@ pub struct EpochData {
     pub start_timestamp: u64,
     pub rgp: u64,
     pub protocol_version: u64,
-    pub last_tx_digest: TransactionDigest,
 }
 
 // GQL Queries
@@ -177,10 +172,6 @@ pub struct Epoch {
     pub end_timestamp: Option<DateTime>,
     pub reference_gas_price: Option<BigInt>,
     pub protocol_configs: Option<ProtocolConfigs>,
-    // we are only interested in the last tx, which should be the
-    // EndOfEpochTransaction type
-    #[arguments(last: 1)]
-    pub transaction_blocks: TransactionBlockConnection,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -250,37 +241,18 @@ impl TryFrom<Epoch> for EpochData {
 
         let rgp = epoch
             .reference_gas_price
-            .ok_or_else(|| ReplayError::MissingRGPForEpoch { epoch: epoch_id })?
+            .ok_or(ReplayError::MissingRGPForEpoch { epoch: epoch_id })?
             .0
             .parse::<u64>()
-            .map_err(|e| ReplayError::from(e))?;
+            .map_err(ReplayError::from)?;
 
         let protocol_version = epoch.protocol_configs.unwrap().protocol_version;
-        if epoch.transaction_blocks.nodes.is_empty() {
-            return Err(ReplayError::GenericError {
-                err: format!("Epoch {epoch_id} has no transaction blocks"),
-            });
-        }
-        let last_tx_digest = SdkTransactionDigest::from_base58(
-            epoch.transaction_blocks.nodes[0].digest.as_ref().unwrap(),
-        )
-        .map_err(|e| ReplayError::GenericError {
-            err: format!("No transaction digest for epoch {epoch_id}. {:?}", e),
-        })?;
-        let last_tx_digest =
-            TransactionDigest::try_from(last_tx_digest.as_bytes()).map_err(|e| {
-                ReplayError::FailedToParseDigest {
-                    digest: last_tx_digest.to_string(),
-                    err: format!("{:?}", e),
-                }
-            })?;
 
         Ok(EpochData {
             epoch_id,
             start_timestamp,
             rgp,
             protocol_version,
-            last_tx_digest,
         })
     }
 }

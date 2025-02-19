@@ -15,7 +15,7 @@ use sui_types::{
         ObjectReadResultKind, TransactionData, TransactionDataAPI, TransactionKind,
     },
 };
-use tracing::info;
+use tracing::{debug, info};
 
 // #[derive(Debug)]
 pub struct ReplayTransaction {
@@ -182,17 +182,34 @@ fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<InputObject>
     //         })
     //     })
     //     .collect::<BTreeSet<_>>();
-    let object_ids = effects
+    let mut object_ids = effects
         .modified_at_versions()
         .iter()
-        .filter_map(|(obj_id, seq_num)| {
-            info!("Modified at version: {:?}[{}]", obj_id, seq_num.value());
-            Some(InputObject {
+        .map(|(obj_id, seq_num)| {
+            debug!("Modified at version: {:?}[{}]", obj_id, seq_num.value());
+            InputObject {
                 object_id: *obj_id,
                 version: Some(seq_num.value()),
-            })
+            }
         })
         .collect::<BTreeSet<_>>();
+    effects
+        .unchanged_shared_objects()
+        .iter()
+        .for_each(|(obj_id, kind)| match kind {
+            sui_types::effects::UnchangedSharedKind::ReadOnlyRoot((ver, _digest)) => {
+                object_ids.insert(InputObject {
+                    object_id: *obj_id,
+                    version: Some(ver.value()),
+                });
+            }
+            sui_types::effects::UnchangedSharedKind::MutateDeleted(_)
+            | sui_types::effects::UnchangedSharedKind::ReadDeleted(_)
+            | sui_types::effects::UnchangedSharedKind::Cancelled(_)
+            | sui_types::effects::UnchangedSharedKind::PerEpochConfig => {
+                debug!("Unchanged shared kind: {:?}", kind);
+            }
+        });
     Ok(object_ids)
 }
 
