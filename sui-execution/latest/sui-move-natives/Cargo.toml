@@ -19,9 +19,7 @@ fastcrypto-vdf.workspace = true
 fastcrypto.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
-move-vm-types.workspace = true
 
-move-stdlib-natives = { path = "../../../external-crates/move/crates/move-stdlib-natives" }
 move-vm-runtime = { path = "../../../external-crates/move/crates/move-vm-runtime" }
 
 sui-protocol-config.workspace = true

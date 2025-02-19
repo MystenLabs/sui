@@ -6,10 +6,7 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
 };
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    values::{GlobalValue, StructRef, Value},
-};
+use move_vm_runtime::execution::values::{GlobalValue, StructRef, Value};
 use std::{
     collections::{btree_map, BTreeMap},
     sync::Arc,
@@ -27,7 +24,6 @@ use sui_types::{
 
 pub(super) struct ChildObject {
     pub(super) owner: ObjectID,
-    pub(super) ty: Type,
     pub(super) move_type: MoveObjectType,
     pub(super) value: GlobalValue,
 }
@@ -35,7 +31,6 @@ pub(super) struct ChildObject {
 pub(crate) struct ActiveChildObject<'a> {
     pub(crate) id: &'a ObjectID,
     pub(crate) owner: &'a ObjectID,
-    pub(crate) ty: &'a Type,
     pub(crate) move_type: &'a MoveObjectType,
     pub(crate) copied_value: Option<Value>,
 }
@@ -50,7 +45,7 @@ struct ConfigSetting {
 #[derive(Debug)]
 pub(crate) struct ChildObjectEffect {
     pub(super) owner: ObjectID,
-    pub(super) ty: Type,
+    pub(super) ty: MoveObjectType,
     pub(super) effect: Op<Value>,
 }
 
@@ -287,22 +282,21 @@ impl<'a> Inner<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_ty: &Type,
         child_ty_layout: &R::MoveTypeLayout,
         child_ty_fully_annotated_layout: &A::MoveTypeLayout,
-        child_move_type: &MoveObjectType,
-    ) -> PartialVMResult<ObjectResult<(Type, GlobalValue)>> {
+        child_move_type: MoveObjectType,
+    ) -> PartialVMResult<ObjectResult<(MoveObjectType, GlobalValue)>> {
         let obj = match self.get_or_fetch_object_from_store(parent, child)? {
             None => {
                 return Ok(ObjectResult::Loaded((
-                    child_ty.clone(),
+                    child_move_type.clone(),
                     GlobalValue::none(),
                 )))
             }
             Some(obj) => obj,
         };
         // object exists, but the type does not match
-        if obj.type_() != child_move_type {
+        if obj.type_() != &child_move_type {
             return Ok(ObjectResult::MismatchedType);
         }
         // generate a GlobalValue
@@ -341,16 +335,15 @@ impl<'a> Inner<'a> {
                 }
             }
         }
-        Ok(ObjectResult::Loaded((child_ty.clone(), global_value)))
+        Ok(ObjectResult::Loaded((child_move_type, global_value)))
     }
 }
 
 fn deserialize_move_object(
     obj: &MoveObject,
-    child_ty: &Type,
     child_ty_layout: &R::MoveTypeLayout,
     child_move_type: MoveObjectType,
-) -> PartialVMResult<ObjectResult<(Type, MoveObjectType, Value)>> {
+) -> PartialVMResult<ObjectResult<(MoveObjectType, Value)>> {
     let child_id = obj.id();
     // object exists, but the type does not match
     if obj.type_() != &child_move_type {
@@ -366,11 +359,7 @@ fn deserialize_move_object(
             )
         }
     };
-    Ok(ObjectResult::Loaded((
-        child_ty.clone(),
-        child_move_type,
-        value,
-    )))
+    Ok(ObjectResult::Loaded((child_move_type, value)))
 }
 
 impl<'a> ChildObjectStore<'a> {
@@ -405,7 +394,6 @@ impl<'a> ChildObjectStore<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_version: SequenceNumber,
-        child_ty: &Type,
         child_layout: &R::MoveTypeLayout,
         child_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
@@ -418,9 +406,9 @@ impl<'a> ChildObjectStore<'a> {
         };
 
         Ok(Some(
-            match deserialize_move_object(&obj, child_ty, child_layout, child_move_type)? {
+            match deserialize_move_object(&obj, child_layout, child_move_type)? {
                 ObjectResult::MismatchedType => (ObjectResult::MismatchedType, obj_meta),
-                ObjectResult::Loaded((_, _, v)) => {
+                ObjectResult::Loaded((_, v)) => {
                     // Find all UIDs inside of the value and update the object parent maps with the contained
                     // UIDs in the received value. They should all have an upper bound version as the receiving object.
                     // Only do this if we successfully load the object though.
@@ -479,7 +467,6 @@ impl<'a> ChildObjectStore<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_ty: &Type,
         child_layout: &R::MoveTypeLayout,
         child_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
@@ -490,10 +477,9 @@ impl<'a> ChildObjectStore<'a> {
                 let (ty, value) = match self.inner.fetch_object_impl(
                     parent,
                     child,
-                    child_ty,
                     child_layout,
                     child_fully_annotated_layout,
-                    &child_move_type,
+                    child_move_type,
                 )? {
                     ObjectResult::MismatchedType => return Ok(ObjectResult::MismatchedType),
                     ObjectResult::Loaded(res) => res,
@@ -523,8 +509,7 @@ impl<'a> ChildObjectStore<'a> {
 
                 e.insert(ChildObject {
                     owner: parent,
-                    ty,
-                    move_type: child_move_type,
+                    move_type: ty,
                     value,
                 })
             }
@@ -543,7 +528,6 @@ impl<'a> ChildObjectStore<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_ty: &Type,
         child_move_type: MoveObjectType,
         child_value: Value,
     ) -> PartialVMResult<()> {
@@ -568,7 +552,10 @@ impl<'a> ChildObjectStore<'a> {
                 ));
         };
 
-        let mut value = if let Some(ChildObject { ty, value, .. }) = self.store.remove(&child) {
+        let mut value = if let Some(ChildObject {
+            move_type, value, ..
+        }) = self.store.remove(&child)
+        {
             if value.exists()? {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -583,7 +570,8 @@ impl<'a> ChildObjectStore<'a> {
             }
             if self.inner.protocol_config.loaded_child_object_format() {
                 // double check format did not change
-                if !self.inner.protocol_config.loaded_child_object_format_type() && child_ty != &ty
+                if !self.inner.protocol_config.loaded_child_object_format_type()
+                    && child_move_type != move_type
                 {
                     let msg = format!("Type changed for child {child} when setting the value back");
                     return Err(
@@ -607,7 +595,6 @@ impl<'a> ChildObjectStore<'a> {
         }
         let child_object = ChildObject {
             owner: parent,
-            ty: child_ty.clone(),
             move_type: child_move_type,
             value,
         };
@@ -619,7 +606,6 @@ impl<'a> ChildObjectStore<'a> {
         &mut self,
         config_id: ObjectID,
         name_df_id: ObjectID,
-        _field_setting_ty: &Type,
         field_setting_layout: &R::MoveTypeLayout,
         field_setting_object_type: &MoveObjectType,
     ) -> PartialVMResult<ObjectResult<Option<Value>>> {
@@ -672,11 +658,7 @@ impl<'a> ChildObjectStore<'a> {
                 setting
             }
         };
-        let value = setting.value.copy_value().map_err(|e| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                format!("Failed to copy value for config setting {child}, with error {e}",),
-            )
-        })?;
+        let value = setting.value.copy_value();
         Ok(ObjectResult::Loaded(Some(value)))
     }
 
@@ -720,8 +702,7 @@ impl<'a> ChildObjectStore<'a> {
             .filter_map(|(id, child_object)| {
                 let ChildObject {
                     owner,
-                    ty,
-                    move_type: _,
+                    move_type: ty,
                     value,
                 } = child_object;
                 let effect = value.into_effect()?;
@@ -750,7 +731,6 @@ impl<'a> ChildObjectStore<'a> {
             ActiveChildObject {
                 id,
                 owner: &child_object.owner,
-                ty: &child_object.ty,
                 move_type: &child_object.move_type,
                 copied_value: copied_child_value,
             }
