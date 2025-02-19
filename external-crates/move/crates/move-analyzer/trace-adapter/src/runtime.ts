@@ -180,9 +180,20 @@ interface IRuntimeStackFrame {
      */
     optimizedBcodeLines: undefined | number[];
     /**
-     * Disassembly view is shown for this frame.
+     * Disassembly mode has been triggered (we have both
+     * source and disassembly mode available for this frame).
+     * This flag use used to choose between data stored for
+     * source files and disassembled bytecode files.
      */
-    showDisassembly: boolean;
+    disassemblyModeTriggered: boolean;
+    /**
+     * We are showing disassembly view (this may be the case
+     * either because disassembly mode has been triggered or
+     * because we only have disassembled bytecode available).
+     * This flag is used to control how debugger behaves when
+     * showing disasembled bytecode.
+     */
+    disassemblyView: boolean;
 }
 
 /**
@@ -288,7 +299,7 @@ export class Runtime extends EventEmitter {
         const openedFileBaseName = path.basename(openedFilePath, openedFileExt);
         let sourceMapsModMap = new Map<string, ISourceMap>();
         let bcodeMapsModMap = new Map<string, ISourceMap>();
-        let showDisassembly = false;
+        let disassemblyView = false;
         let traceFilePath = ''; // updated in both conditional branches
         if (openedFileExt === JSON_FILE_EXT && openedFileBaseName === REPLAY_TRACE_FILE_NAME) {
             // replay tool trace
@@ -337,7 +348,7 @@ export class Runtime extends EventEmitter {
                 && openedFileExt !== JSON_FILE_EXT) {
                 throw new Error(`File extension: ${openedFileExt} is not supported by trace debugger`);
             }
-            showDisassembly = openedFileExt === BCODE_FILE_EXT;
+            disassemblyView = openedFileExt === BCODE_FILE_EXT;
 
             // create file maps for all files in the `sources` directory, including both package source
             // files and source files for dependencies
@@ -399,7 +410,21 @@ export class Runtime extends EventEmitter {
                 currentEvent.optimizedSrcLines,
                 currentEvent.optimizedBcodeLines
             );
-        newFrame.showDisassembly = showDisassembly;
+        if (path.extname(newFrame.srcFilePath) === BCODE_FILE_EXT) {
+            // disassembed bytecode file is the only file available
+            // meanting disassembly view is on
+            if (newFrame.bcodeFilePath !== undefined) {
+                // this should never happen but assert just in case
+                throw new Error('Disassembled bytecode file path is not expected to be set for file: '
+                    + newFrame.srcFilePath);
+            }
+            disassemblyView = true;
+        }
+        // disassembly mode was triggered if disassembly view is on
+        // and we have both source and disassembled bytecode files
+        newFrame.disassemblyModeTriggered = disassemblyView && newFrame.bcodeFilePath !== undefined;
+        newFrame.disassemblyView = disassemblyView;
+
         this.frameStack = {
             frames: [newFrame],
             globals: new Map<number, RuntimeValueType>()
@@ -442,7 +467,7 @@ export class Runtime extends EventEmitter {
             const currentFrame = this.frameStack.frames[stackHeight - 1];
             // remember last call instruction line before it (potentially) changes
             // in the `instruction` call below
-            const lastCallInstructionLine = currentFrame.showDisassembly
+            const lastCallInstructionLine = currentFrame.disassemblyModeTriggered
                 ? currentFrame.lastCallInstructionBcodeLine
                 : currentFrame.lastCallInstructionSrcLine;
             let [sameLine, currentLine] = this.instruction(currentFrame, currentEvent);
@@ -585,6 +610,20 @@ export class Runtime extends EventEmitter {
                     currentEvent.optimizedSrcLines,
                     currentEvent.optimizedBcodeLines
                 );
+            // when creating a new frame maintain the invariant
+            // that all frames that belong to modules in the same
+            // file get the same view
+            newFrame.disassemblyModeTriggered = this.frameStack.frames.find(
+                frame => frame.disassemblyModeTriggered
+                    && frame.bcodeFilePath === newFrame.bcodeFilePath
+                    && frame.srcFilePath === newFrame.srcFilePath
+            ) !== undefined;
+            newFrame.disassemblyView = this.frameStack.frames.find(
+                frame => frame.disassemblyView
+                    && frame.bcodeFilePath === newFrame.bcodeFilePath
+                    && frame.srcFilePath === newFrame.srcFilePath
+            ) !== undefined;
+
             // set values of parameters in the new frame
             this.frameStack.frames.push(newFrame);
             for (let i = 0; i < currentEvent.paramValues.length; i++) {
@@ -596,7 +635,7 @@ export class Runtime extends EventEmitter {
                 );
             }
 
-            if (next && (!newFrame.showDisassembly || newFrame.id >= 0)) {
+            if (next && (!newFrame.disassemblyView || newFrame.id >= 0)) {
                 // step out of the frame right away if this frame is not inlined
                 // (id >= 0) or if we are NOT showing disassembly for it
                 // (otherwise we will see instructions skipped in the disassembly
@@ -734,14 +773,14 @@ export class Runtime extends EventEmitter {
                     throw new Error('No frame on the stack when processing Instruction event when continuing');
                 }
                 const currentFrame = this.frameStack.frames[stackHeight - 1];
-                const filePath = currentFrame.showDisassembly
+                const filePath = currentFrame.disassemblyModeTriggered
                     ? currentFrame.bcodeFilePath!
                     : currentFrame.srcFilePath;
                 const breakpoints = this.lineBreakpoints.get(filePath);
                 if (!breakpoints) {
                     continue;
                 }
-                const instLine = currentFrame.showDisassembly
+                const instLine = currentFrame.disassemblyModeTriggered
                     ? currentEvent.bcodeLoc!.line
                     : currentEvent.srcLoc.line;
                 if (breakpoints.has(instLine)) {
@@ -826,10 +865,10 @@ export class Runtime extends EventEmitter {
             currentFrame.lastCallInstructionBcodeLine = instructionEvent.bcodeLoc?.line;
         }
 
-        const instLine = currentFrame.showDisassembly
+        const instLine = currentFrame.disassemblyModeTriggered
             ? instructionEvent.bcodeLoc!.line
             : instructionEvent.srcLoc.line;
-        const frameLine = currentFrame.showDisassembly
+        const frameLine = currentFrame.disassemblyModeTriggered
             ? currentFrame.bcodeLine!
             : currentFrame.srcLine;
 
@@ -853,7 +892,7 @@ export class Runtime extends EventEmitter {
      */
     public setCurrentMoveFileFromPath(filePath: string): string | undefined {
         if (this.frameStack.frames.find(frame =>
-            frame.showDisassembly
+            frame.disassemblyModeTriggered
                 ? frame.bcodeFilePath === filePath
                 : frame.srcFilePath === filePath)) {
             this.currentMoveFile = filePath;
@@ -875,7 +914,7 @@ export class Runtime extends EventEmitter {
     public setCurrentMoveFileFromFrame(frameId: number): string | undefined {
         const frame = this.frameStack.frames.find(frame => frame.id === frameId);
         if (frame) {
-            this.currentMoveFile = frame.showDisassembly
+            this.currentMoveFile = frame.disassemblyModeTriggered
                 ? frame.bcodeFilePath
                 : frame.srcFilePath;
         } else {
@@ -896,7 +935,8 @@ export class Runtime extends EventEmitter {
                     && frame.bcodeFilePath !== undefined
                     && frame.bcodeLine !== undefined
                     && frame.optimizedBcodeLines !== undefined) {
-                    frame.showDisassembly = true;
+                    frame.disassemblyModeTriggered = true;
+                    frame.disassemblyView = true;
                 }
             });
         }
@@ -906,7 +946,8 @@ export class Runtime extends EventEmitter {
         if (this.currentMoveFile) {
             this.frameStack.frames.forEach(frame => {
                 if (frame.bcodeFilePath === this.currentMoveFile) {
-                    frame.showDisassembly = false;
+                    frame.disassemblyModeTriggered = false;
+                    frame.disassemblyView = false;
                 }
             });
         }
@@ -951,14 +992,6 @@ export class Runtime extends EventEmitter {
             }
         }
 
-        // when creating a new frame maintain the invariant
-        // that all frames that belong to modules in the same
-        // file get the same view
-        const showDisassembly = this.frameStack.frames.find(
-            frame => frame.showDisassembly
-                && frame.bcodeFilePath === bcodeFilePath
-        ) !== undefined;
-
         let locals = [];
         // create first scope for local variables
         locals[0] = [];
@@ -979,7 +1012,10 @@ export class Runtime extends EventEmitter {
             lastCallInstructionBcodeLine: undefined,
             optimizedSrcLines,
             optimizedBcodeLines,
-            showDisassembly
+            // diassembly related fields will be set by the caller
+            // as this function is executed in different contexts
+            disassemblyModeTriggered: false,
+            disassemblyView: false,
         };
 
         if (this.trace.events.length <= this.eventIndex + 1 ||
@@ -1020,10 +1056,10 @@ export class Runtime extends EventEmitter {
     public toString(): string {
         let res = 'current frame stack:\n';
         for (const frame of this.frameStack.frames) {
-            const fileName = frame.showDisassembly ?
+            const fileName = frame.disassemblyModeTriggered ?
                 path.basename(frame.bcodeFilePath!) :
                 path.basename(frame.srcFilePath);
-            const line = frame.showDisassembly ? frame.bcodeLine : frame.srcLine;
+            const line = frame.disassemblyModeTriggered ? frame.bcodeLine : frame.srcLine;
             res += this.singleTab
                 + 'function: '
                 + frame.name
@@ -1036,12 +1072,12 @@ export class Runtime extends EventEmitter {
                 res += this.singleTab + this.singleTab + 'scope ' + i + ' :\n';
                 for (let j = 0; j < frame.locals[i].length; j++) {
                     const local = frame.locals[i][j];
-                    if (local && (frame.showDisassembly || !isGeneratedLocal(local.info))) {
+                    if (local && (frame.disassemblyView || !isGeneratedLocal(local.info))) {
                         // don't show "artificial" locals outside of the disassembly view
                         res += this.varToString(
                             this.singleTab + this.singleTab + this.singleTab,
                             local,
-                            frame.showDisassembly
+                            frame.disassemblyView
                         ) + '\n';
                     }
                 }

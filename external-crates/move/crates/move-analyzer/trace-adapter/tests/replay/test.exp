@@ -6,6 +6,6 @@ current frame stack:
     scope 0 :
   function: foo (m.mvb:17)
     scope 0 :
-      p : 42
+      p#0#0 : 42
       type: u64
 
