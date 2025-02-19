@@ -146,7 +146,7 @@ title: Module `deepbook::custodian`
 Create an <code><a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">AccountCap</a></code> that can be used across all DeepBook pool
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_mint_account_cap">mint_account_cap</a>(_ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">deepbook::custodian::AccountCap</a>
 </code></pre>
 
 
@@ -155,8 +155,8 @@ Create an <code><a href="../deepbook/custodian.md#deepbook_custodian_AccountCap"
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> TxContext): <a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">AccountCap</a> {
-    <a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">AccountCap</a> { id: object::new(ctx) }
+<pre><code><b>public</b> <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_mint_account_cap">mint_account_cap</a>(_ctx: &<b>mut</b> TxContext): <a href="../deepbook/custodian.md#deepbook_custodian_AccountCap">AccountCap</a> {
+    <b>abort</b> 1337
 }
 </code></pre>
 
