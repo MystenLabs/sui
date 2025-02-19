@@ -589,6 +589,19 @@ impl BlockManager {
 
             blocks_gc_ed += 1;
 
+            let hostname = self
+                .context
+                .committee
+                .authority(block_ref.author)
+                .hostname
+                .as_str();
+            self.context
+                .metrics
+                .node_metrics
+                .block_manager_gced_blocks
+                .with_label_values(&[hostname])
+                .inc();
+
             assert!(!self.suspended_blocks.contains_key(block_ref), "Block should not be suspended, as we are causally GC'ing and no suspended block should exist for a missing ancestor.");
 
             // Also remove it from the missing list - we don't want to keep looking for it.
