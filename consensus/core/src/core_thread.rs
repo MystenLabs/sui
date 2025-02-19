@@ -292,7 +292,6 @@ impl ChannelCoreThreadDispatcher {
 }
 
 #[async_trait]
-#[async_trait]
 impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
     async fn add_blocks(
         &self,
@@ -427,7 +426,6 @@ impl MockCoreThreadDispatcher {
 }
 
 #[cfg(test)]
-#[async_trait]
 #[async_trait]
 impl CoreThreadDispatcher for MockCoreThreadDispatcher {
     async fn add_blocks(
