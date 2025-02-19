@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{execution_mode::ExecutionMode, programmable_transactions::datastore::PackageStore};
 use move_binary_format::{binary_config::BinaryConfig, file_format::Visibility};
 use move_core_types::language_storage::StructTag;
 use move_vm_runtime::shared::linkage_context::LinkageContext;
@@ -13,17 +14,13 @@ use sui_types::{
     move_package::MovePackage,
     transaction::Command,
     type_input::TypeInput,
-    TypeTag, BRIDGE_PACKAGE_ID, DEEPBOOK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+    TypeTag, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
 };
-
-use crate::programmable_transactions::datastore::PackageStore;
 
 /// Max number of packages to cache in the PTBLinkageMetadata. If we have more than this, we'll
 /// drop the cache and restart the cache.
 const MAX_CACHED_PACKAGES: usize = 200;
 
-#[allow(dead_code)]
 /// These are the set of native packages in Sui -- importantly they can be used implicitly by
 /// different parts of the system and are not required to be explicitly imported always.
 /// Additionally, there is no versioning concerns around these as they are "stable" for a given
@@ -32,13 +29,32 @@ const NATIVE_PACKAGE_IDS: &[ObjectID] = &[
     SUI_FRAMEWORK_PACKAGE_ID,
     SUI_SYSTEM_PACKAGE_ID,
     MOVE_STDLIB_PACKAGE_ID,
-    BRIDGE_PACKAGE_ID,
-    DEEPBOOK_PACKAGE_ID,
 ];
 
-/// Metadata for the PTB linkage analysis.
+pub trait LinkageAnalysis {
+    fn add_command(
+        &mut self,
+        command: &Command,
+        store: &dyn PackageStore,
+    ) -> Result<ResolvedLinkage, ExecutionError>;
+
+    fn resolver(&mut self) -> &mut PTBLinkageResolver;
+}
+
+pub fn linkage_analysis_for_protocol_config<Mode: ExecutionMode>(
+    protocol_config: &ProtocolConfig,
+    store: &dyn PackageStore,
+) -> Result<Box<dyn LinkageAnalysis>, ExecutionError> {
+    Ok(Box::new(PerCommandLinkage::new(
+        !Mode::packages_are_predefined(),
+        to_binary_config(protocol_config),
+        store,
+    )?))
+}
+
+/// Metadata and shared operations for the PTB linkage analysis.
 #[derive(Debug)]
-pub struct PTBLinkageMetadata {
+pub struct PTBLinkageResolver {
     /// Config to use for the linkage analysis.
     pub linkage_config: LinkageConfig,
     /// Config to use for the binary analysis (needed for deserialization to determine if a
@@ -61,6 +77,9 @@ pub struct LinkageConfig {
     /// Do we introduce an `Exact(<pkg>)` for each transitive dependency of a
     /// function?
     pub exact_transitive_deps: bool,
+    /// Whether system packages should always be included as a member in the generated linkage.
+    /// This is almost always true except for system transactions and genesis transactions.
+    pub always_include_system_packages: bool,
 }
 
 /// Unifiers. These are used to determine how to unify two packages.
@@ -76,16 +95,27 @@ pub enum ConflictResolution {
     AtLeast(SequenceNumber, ObjectID),
 }
 
+#[derive(Debug, Clone)]
+struct ResolutionTable {
+    pub resolution_table: BTreeMap<ObjectID, ConflictResolution>,
+    /// For every version of every package that we have seen, a mapping of the ObjectID for that
+    /// package to its runtime ID.
+    pub all_versions_resolution_table: BTreeMap<ObjectID, ObjectID>,
+}
+
 #[derive(Debug)]
 pub struct ResolvedLinkage {
     pub linkage: BTreeMap<ObjectID, ObjectID>,
-    pub reverse_linkage: BTreeMap<ObjectID, ObjectID>,
+    // A mapping of every package ID to its runtime ID.
+    // Note: Multiple packages can have the same runtime ID in this mapping, and domain of this map
+    // is a superset of range of `linkage`.
+    pub linkage_resolution: BTreeMap<ObjectID, ObjectID>,
     pub versions: BTreeMap<ObjectID, SequenceNumber>,
 }
 
 #[derive(Debug)]
 pub struct PerCommandLinkage {
-    internal: PTBLinkageMetadata,
+    internal: PTBLinkageResolver,
 }
 
 #[derive(Debug)]
@@ -93,45 +123,8 @@ pub struct UnifiedLinkage {
     /// Current unification table we have for packages. This is a mapping from the original
     /// package ID for a package to its current resolution. This is the "constraint set" that we
     /// are building/solving as we progress across the PTB.
-    unification_table: BTreeMap<ObjectID, ConflictResolution>,
-    internal: PTBLinkageMetadata,
-}
-
-pub trait LinkageAnalysis {
-    fn add_command(
-        &mut self,
-        command: &Command,
-        store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError>;
-
-    // Generate a linkage for the type tag
-    fn type_linkage(
-        &mut self,
-        ids: &[ObjectID],
-        store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError>;
-
-    fn publication_linkage(
-        &mut self,
-        linkage: &LinkageContext,
-        store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError>;
-
-    // Translate a type tag to a runtime type tag (where all addresses are the runtime ID of the
-    // package).
-    fn runtime_type_tag(
-        &mut self,
-        type_tag: &TypeTag,
-        store: &dyn PackageStore,
-    ) -> Result<TypeTag, ExecutionError>;
-}
-
-type ResolutionTable = BTreeMap<ObjectID, ConflictResolution>;
-
-pub fn linkage_analysis_for_protocol_config(
-    protocol_config: &ProtocolConfig,
-) -> Box<dyn LinkageAnalysis> {
-    Box::new(PerCommandLinkage::new(to_binary_config(protocol_config)))
+    unification_table: ResolutionTable,
+    internal: PTBLinkageResolver,
 }
 
 impl LinkageAnalysis for PerCommandLinkage {
@@ -143,28 +136,8 @@ impl LinkageAnalysis for PerCommandLinkage {
         self.add_command(command, store)
     }
 
-    fn type_linkage(
-        &mut self,
-        ids: &[ObjectID],
-        store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError> {
-        self.internal.generate_type_tag_linkage(ids, store)
-    }
-
-    fn publication_linkage(
-        &mut self,
-        linkage: &LinkageContext,
-        store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError> {
-        self.internal.publication_linkage(linkage, store)
-    }
-
-    fn runtime_type_tag(
-        &mut self,
-        type_tag: &TypeTag,
-        store: &dyn PackageStore,
-    ) -> Result<TypeTag, ExecutionError> {
-        self.internal.runtime_type_tag(type_tag, store)
+    fn resolver(&mut self) -> &mut PTBLinkageResolver {
+        &mut self.internal
     }
 }
 
@@ -177,47 +150,29 @@ impl LinkageAnalysis for UnifiedLinkage {
         self.add_command(command, store)
     }
 
-    fn type_linkage(
-        &mut self,
-        ids: &[ObjectID],
-        store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError> {
-        self.internal.generate_type_tag_linkage(ids, store)
-    }
-
-    fn publication_linkage(
-        &mut self,
-        linkage: &LinkageContext,
-        store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError> {
-        self.internal.publication_linkage(linkage, store)
-    }
-
-    fn runtime_type_tag(
-        &mut self,
-        type_tag: &TypeTag,
-        store: &dyn PackageStore,
-    ) -> Result<TypeTag, ExecutionError> {
-        self.internal.runtime_type_tag(type_tag, store)
+    fn resolver(&mut self) -> &mut PTBLinkageResolver {
+        &mut self.internal
     }
 }
 
 impl LinkageConfig {
-    pub fn unified_linkage_settings() -> Self {
+    pub fn unified_linkage_settings(always_include_system_packages: bool) -> Self {
         Self {
             fix_top_level_functions: true,
             fix_types: false,
             exact_entry_transitive_deps: false,
             exact_transitive_deps: false,
+            always_include_system_packages,
         }
     }
 
-    pub fn per_command_linkage_settings() -> Self {
+    pub fn per_command_linkage_settings(always_include_system_packages: bool) -> Self {
         Self {
             fix_top_level_functions: true,
             fix_types: false,
             exact_entry_transitive_deps: true,
             exact_transitive_deps: true,
+            always_include_system_packages,
         }
     }
 
@@ -258,32 +213,66 @@ impl LinkageConfig {
             ConflictResolution::at_least
         }
     }
+
+    fn resolution_table_with_native_packages<'a>(
+        &self,
+        all_packages: &'a mut BTreeMap<ObjectID, MovePackage>,
+        store: &dyn PackageStore,
+    ) -> Result<ResolutionTable, ExecutionError> {
+        let mut resolution_table = ResolutionTable::empty();
+        if self.always_include_system_packages {
+            for id in NATIVE_PACKAGE_IDS {
+                let package = PTBLinkageResolver::get_package(all_packages, id, store)?;
+                debug_assert_eq!(package.id(), *id);
+                debug_assert_eq!(package.original_package_id(), *id);
+                resolution_table
+                    .resolution_table
+                    .insert(*id, ConflictResolution::Exact(package.version(), *id));
+                resolution_table
+                    .all_versions_resolution_table
+                    .insert(*id, *id);
+            }
+        }
+
+        Ok(resolution_table)
+    }
 }
 
 impl ResolvedLinkage {
-    pub fn from_resolution_table(resolution_table: ResolutionTable) -> Self {
+    fn from_resolution_table(resolution_table: ResolutionTable) -> Self {
         let mut linkage = BTreeMap::new();
-        let mut reverse_linkage = BTreeMap::new();
         let mut versions = BTreeMap::new();
-        for (runtime_id, resolution) in resolution_table {
+        for (runtime_id, resolution) in resolution_table.resolution_table {
             match resolution {
                 ConflictResolution::Exact(version, object_id)
                 | ConflictResolution::AtLeast(version, object_id) => {
                     linkage.insert(runtime_id, object_id);
-                    reverse_linkage.insert(object_id, runtime_id);
                     versions.insert(runtime_id, version);
                 }
             }
         }
         Self {
             linkage,
-            reverse_linkage,
+            linkage_resolution: resolution_table.all_versions_resolution_table,
             versions,
         }
     }
 
     pub fn linkage_context(&self) -> LinkageContext {
         LinkageContext::new(self.linkage.iter().map(|(k, v)| (**k, **v)).collect())
+    }
+
+    pub fn resolve_to_runtime_id(&self, object_id: &ObjectID) -> Option<ObjectID> {
+        self.linkage_resolution.get(object_id).copied()
+    }
+}
+
+impl ResolutionTable {
+    pub fn empty() -> Self {
+        Self {
+            resolution_table: BTreeMap::new(),
+            all_versions_resolution_table: BTreeMap::new(),
+        }
     }
 }
 
@@ -362,14 +351,21 @@ impl ConflictResolution {
 }
 
 impl PerCommandLinkage {
-    pub fn new(binary_config: BinaryConfig) -> Self {
-        Self {
-            internal: PTBLinkageMetadata {
-                all_packages: BTreeMap::new(),
-                linkage_config: LinkageConfig::per_command_linkage_settings(),
+    pub fn new(
+        always_include_system_packages: bool,
+        binary_config: BinaryConfig,
+        _store: &dyn PackageStore,
+    ) -> Result<Self, ExecutionError> {
+        let linkage_config =
+            LinkageConfig::per_command_linkage_settings(always_include_system_packages);
+        let all_packages = BTreeMap::new();
+        Ok(Self {
+            internal: PTBLinkageResolver {
+                all_packages,
+                linkage_config,
                 binary_config,
             },
-        }
+        })
     }
 
     pub fn add_command(
@@ -377,7 +373,10 @@ impl PerCommandLinkage {
         command: &Command,
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError> {
-        let mut unification_table = BTreeMap::new();
+        let mut unification_table = ResolutionTable {
+            resolution_table: BTreeMap::new(),
+            all_versions_resolution_table: BTreeMap::new(),
+        };
         Ok(ResolvedLinkage::from_resolution_table(
             self.internal
                 .add_command(command, store, &mut unification_table)?,
@@ -387,16 +386,23 @@ impl PerCommandLinkage {
 
 impl UnifiedLinkage {
     pub fn new(
+        always_include_system_packages: bool,
         binary_config: BinaryConfig,
-    ) -> Self {
-        Self {
-            internal: PTBLinkageMetadata {
-                all_packages: BTreeMap::new(),
-                linkage_config: LinkageConfig::unified_linkage_settings(),
+        store: &dyn PackageStore,
+    ) -> Result<Self, ExecutionError> {
+        let linkage_config =
+            LinkageConfig::unified_linkage_settings(always_include_system_packages);
+        let mut all_packages = BTreeMap::new();
+        let unification_table =
+            linkage_config.resolution_table_with_native_packages(&mut all_packages, store)?;
+        Ok(Self {
+            internal: PTBLinkageResolver {
+                all_packages,
+                linkage_config,
                 binary_config,
             },
-            unification_table: BTreeMap::new(),
-        }
+            unification_table,
+        })
     }
 
     pub fn add_command(
@@ -411,13 +417,13 @@ impl UnifiedLinkage {
     }
 }
 
-impl PTBLinkageMetadata {
-    pub fn generate_type_tag_linkage(
+impl PTBLinkageResolver {
+    pub fn type_linkage(
         &mut self,
         ids: &[ObjectID],
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError> {
-        let mut unification_table = BTreeMap::new();
+        let mut resolution_table = ResolutionTable::empty();
         for id in ids {
             let pkg = Self::get_package(&mut self.all_packages, id, store)?;
             let transitive_deps = pkg
@@ -429,20 +435,20 @@ impl PTBLinkageMetadata {
             self.add_and_unify(
                 &package_id,
                 store,
-                &mut unification_table,
+                &mut resolution_table,
                 ConflictResolution::at_least,
             )?;
             for object_id in transitive_deps.iter() {
                 self.add_and_unify(
                     object_id,
                     store,
-                    &mut unification_table,
+                    &mut resolution_table,
                     ConflictResolution::at_least,
                 )?;
             }
         }
 
-        Ok(ResolvedLinkage::from_resolution_table(unification_table))
+        Ok(ResolvedLinkage::from_resolution_table(resolution_table))
     }
 
     pub fn publication_linkage(
@@ -450,9 +456,9 @@ impl PTBLinkageMetadata {
         linkage: &LinkageContext,
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError> {
-        let mut unification_table = BTreeMap::new();
+        let mut resolution_table = ResolutionTable::empty();
         for (runtime_id, package_id) in linkage.linkage_table.iter() {
-            let package = PTBLinkageMetadata::get_package(
+            let package = PTBLinkageResolver::get_package(
                 &mut self.all_packages,
                 &ObjectID::from(*package_id),
                 store,
@@ -464,11 +470,11 @@ impl PTBLinkageMetadata {
             self.add_and_unify(
                 &ObjectID::from(*runtime_id),
                 store,
-                &mut unification_table,
+                &mut resolution_table,
                 ConflictResolution::exact,
             )?;
         }
-        Ok(ResolvedLinkage::from_resolution_table(unification_table))
+        Ok(ResolvedLinkage::from_resolution_table(resolution_table))
     }
 
     pub fn runtime_type_tag(
@@ -515,7 +521,7 @@ impl PTBLinkageMetadata {
     }
 }
 
-impl PTBLinkageMetadata {
+impl PTBLinkageResolver {
     pub fn new(linkage_config: LinkageConfig, binary_config: BinaryConfig) -> Self {
         Self {
             all_packages: BTreeMap::new(),
@@ -524,11 +530,11 @@ impl PTBLinkageMetadata {
         }
     }
 
-    pub(crate) fn add_command(
+    fn add_command(
         &mut self,
         command: &Command,
         store: &dyn PackageStore,
-        unification_table: &mut ResolutionTable,
+        resolution_table: &mut ResolutionTable,
     ) -> Result<ResolutionTable, ExecutionError> {
         match command {
             Command::MoveCall(programmable_move_call) => {
@@ -570,7 +576,7 @@ impl PTBLinkageMetadata {
                 };
 
                 for ty in &programmable_move_call.type_arguments {
-                    self.add_type_input(ty, store, unification_table)?;
+                    self.add_type_input(ty, store, resolution_table)?;
                 }
 
                 // Register function entrypoint
@@ -578,7 +584,7 @@ impl PTBLinkageMetadata {
                     self.add_and_unify(
                         &pkg_id,
                         store,
-                        unification_table,
+                        resolution_table,
                         ConflictResolution::exact,
                     )?;
 
@@ -587,7 +593,7 @@ impl PTBLinkageMetadata {
                         self.add_and_unify(
                             object_id,
                             store,
-                            unification_table,
+                            resolution_table,
                             self.linkage_config
                                 .generate_entry_transitive_dep_constraint(),
                         )?;
@@ -596,7 +602,7 @@ impl PTBLinkageMetadata {
                     self.add_and_unify(
                         &pkg_id,
                         store,
-                        unification_table,
+                        resolution_table,
                         self.linkage_config.generate_top_level_fn_constraint(),
                     )?;
 
@@ -605,7 +611,7 @@ impl PTBLinkageMetadata {
                         self.add_and_unify(
                             object_id,
                             store,
-                            unification_table,
+                            resolution_table,
                             self.linkage_config.generate_transitive_dep_constraint(),
                         )?;
                     }
@@ -613,27 +619,29 @@ impl PTBLinkageMetadata {
             }
             Command::MakeMoveVec(type_input, _) => {
                 if let Some(ty) = type_input {
-                    self.add_type_input(ty, store, unification_table)?;
+                    self.add_type_input(ty, store, resolution_table)?;
                 }
             }
             Command::Upgrade(_, deps, _, _) | Command::Publish(_, deps) => {
-                return deps
-                    .into_iter()
-                    .map(|id| {
-                        let pkg = Self::get_package(&mut self.all_packages, id, store)?;
-                        Ok((
-                            pkg.original_package_id(),
-                            ConflictResolution::Exact(pkg.version(), pkg.id()),
-                        ))
-                    })
-                    .collect();
+                let mut resolution_table = ResolutionTable::empty();
+                for id in deps.into_iter() {
+                    let pkg = Self::get_package(&mut self.all_packages, id, store)?;
+                    resolution_table.resolution_table.insert(
+                        pkg.original_package_id(),
+                        ConflictResolution::Exact(pkg.version(), pkg.id()),
+                    );
+                    resolution_table
+                        .all_versions_resolution_table
+                        .insert(pkg.id(), pkg.original_package_id());
+                }
+                return Ok(resolution_table);
             }
             Command::TransferObjects(_, _)
             | Command::SplitCoins(_, _)
             | Command::MergeCoins(_, _) => (),
         };
 
-        Ok(unification_table.clone())
+        Ok(resolution_table.clone())
     }
 
     fn add_type_input(
@@ -725,7 +733,7 @@ impl PTBLinkageMetadata {
         &mut self,
         object_id: &ObjectID,
         store: &dyn PackageStore,
-        unification_table: &mut ResolutionTable,
+        resolution_table: &mut ResolutionTable,
         resolution_fn: fn(&MovePackage) -> ConflictResolution,
     ) -> Result<(), ExecutionError> {
         let package = Self::get_package(&mut self.all_packages, object_id, store)?;
@@ -733,13 +741,28 @@ impl PTBLinkageMetadata {
         let resolution = resolution_fn(package);
         let original_pkg_id = package.original_package_id();
 
-        if unification_table.contains_key(&original_pkg_id) {
-            let existing_unifier = unification_table
+        if resolution_table
+            .resolution_table
+            .contains_key(&original_pkg_id)
+        {
+            let existing_unifier = resolution_table
+                .resolution_table
                 .get_mut(&original_pkg_id)
                 .expect("Guaranteed to exist");
             *existing_unifier = existing_unifier.unify(&resolution)?;
         } else {
-            unification_table.insert(original_pkg_id, resolution);
+            resolution_table
+                .resolution_table
+                .insert(original_pkg_id, resolution);
+        }
+
+        if !resolution_table
+            .all_versions_resolution_table
+            .contains_key(object_id)
+        {
+            resolution_table
+                .all_versions_resolution_table
+                .insert(*object_id, original_pkg_id);
         }
 
         Ok(())

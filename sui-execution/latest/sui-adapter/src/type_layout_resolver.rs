@@ -30,7 +30,17 @@ struct NullSuiResolver<'state>(Box<dyn TypeLayoutStore + 'state>);
 impl<'state, 'vm> TypeLayoutResolver<'state, 'vm> {
     pub fn new(vm: &'vm MoveRuntime, state_view: Box<dyn TypeLayoutStore + 'state>) -> Self {
         let resolver = NullSuiResolver(state_view);
-        let linkage_resolver = UnifiedLinkage::new(vm.vm_config().binary_config.clone());
+        // Since we do not include system packages by default, we can set this to false as no
+        // loading will be done when creating the linkage resolver.
+        let always_include_system_packages = false;
+        let Some(linkage_resolver) = UnifiedLinkage::new(
+            always_include_system_packages,
+            vm.vm_config().binary_config.clone(),
+            &resolver,
+        )
+        .ok() else {
+            unreachable!()
+        };
         Self {
             vm,
             resolver,
