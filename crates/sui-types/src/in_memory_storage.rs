@@ -5,7 +5,7 @@ use crate::base_types::VersionNumber;
 use crate::committee::EpochId;
 use crate::inner_temporary_store::WrittenObjects;
 use crate::storage::{
-    get_module, get_module_by_id, load_package_object_from_object_store, PackageObject,
+    get_module, get_module_by_id, get_package, load_package_object_from_object_store, PackageObject,
 };
 use crate::transaction::TransactionDataAPI;
 use crate::transaction::{InputObjectKind, InputObjects, ObjectReadResult, Transaction};
@@ -18,6 +18,8 @@ use crate::{
 use better_any::{Tid, TidAble};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::resolver::SerializedPackage;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::BTreeMap;
 
@@ -96,6 +98,26 @@ impl ModuleResolver for InMemoryStorage {
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         get_module(self, module_id)
     }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        let mut packages = [(); N].map(|_| None);
+        for (i, id) in ids.iter().enumerate() {
+            packages[i] = get_package(self, &(*id).into())?;
+        }
+        Ok(packages)
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        ids.iter()
+            .map(|id| get_package(self, &(*id).into()))
+            .collect::<Result<_, _>>()
+    }
 }
 
 impl ModuleResolver for &mut InMemoryStorage {
@@ -103,6 +125,20 @@ impl ModuleResolver for &mut InMemoryStorage {
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         (**self).get_module(module_id)
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        (**self).get_packages_static(ids)
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        (**self).get_packages(ids)
     }
 }
 

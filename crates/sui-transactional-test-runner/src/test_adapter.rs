@@ -25,7 +25,7 @@ use move_core_types::ident_str;
 use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::IdentStr,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
 };
 use move_symbol_pool::Symbol;
@@ -35,7 +35,7 @@ use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
-use move_vm_runtime::session::SerializedReturnValues;
+use move_vm_runtime::shared::serialization::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::{self, Write};
@@ -199,6 +199,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             | TaskCommand::PrintBytecode(_)
             | TaskCommand::Publish(_, _)
             | TaskCommand::Run(_, _)
+            | TaskCommand::PublishAndCall(_, _)
             | TaskCommand::Subcommand(..) => None,
         }
     }
@@ -931,7 +932,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                         .named_address_mapping
                         .insert(package, before_upgrade);
                 }
-                let (warnings_opt, output, data, modules) = result?;
+                let (warnings_opt, data, (output, modules)) = result?;
                 store_modules(self, syntax, data, modules);
                 Ok(merge_output(warnings_opt, output))
             }
@@ -940,7 +941,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 dependencies,
             }) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
-                let (warnings_opt, output, data, modules) = compile_any(
+                let (warnings_opt, data, (output, modules)) = compile_any(
                     self,
                     "upgrade",
                     syntax,
@@ -1148,6 +1149,24 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             err = err.replace(&id[2..], &replace);
         }
         anyhow!(err)
+    }
+
+    /// Sui implements module publishes with calls via normal publish with `init` functions.
+    /// When we add init functions with arguments, we will need to implement this. For now we leave
+    /// this unimplemented.
+    async fn publish_modules_with_calls(
+        &mut self,
+        _modules: Vec<MaybeNamedCompiledModule>,
+        _calls: Vec<(ModuleId, Identifier, Vec<SuiValue>)>,
+        _signers: Vec<ParsedAddress>,
+        _gas_budget: Option<u64>,
+        _extra_args: Self::ExtraPublishArgs,
+    ) -> anyhow::Result<(
+        Option<String>,
+        Vec<MaybeNamedCompiledModule>,
+        Vec<SerializedReturnValues>,
+    )> {
+        unimplemented!()
     }
 }
 
