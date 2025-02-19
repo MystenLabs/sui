@@ -6,9 +6,10 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
 
+    use crate::adapter::new_move_runtime;
     use crate::execution_mode::{self, ExecutionMode};
     use move_binary_format::CompiledModule;
-    use move_vm_runtime::move_vm::MoveVM;
+    use move_vm_runtime::runtime::MoveRuntime;
     use std::{collections::HashSet, sync::Arc};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
@@ -26,7 +27,6 @@ mod checked {
     use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
     use tracing::{info, instrument, trace, warn};
 
-    use crate::adapter::new_move_vm;
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
@@ -85,7 +85,7 @@ mod checked {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         protocol_config: &ProtocolConfig,
@@ -237,7 +237,7 @@ mod checked {
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         tx_context: &mut TxContext,
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
@@ -271,7 +271,7 @@ mod checked {
         transaction_kind: TransactionKind,
         gas_charger: &mut GasCharger,
         tx_ctx: &mut TxContext,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
@@ -391,7 +391,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
         tx_ctx: &mut TxContext,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         simple_conservation_checks: bool,
         enable_expensive_checks: bool,
         cost_summary: &GasCostSummary,
@@ -546,7 +546,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,
         tx_ctx: &mut TxContext,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -856,7 +856,7 @@ mod checked {
         change_epoch: ChangeEpoch,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -916,12 +916,12 @@ mod checked {
         }
 
         if protocol_config.fresh_vm_on_framework_upgrade() {
-            let new_vm = new_move_vm(
+            let new_vm = new_move_runtime(
                 all_natives(/* silent */ true, protocol_config),
                 protocol_config,
                 /* enable_profiler */ None,
             )
-            .expect("Failed to create new MoveVM");
+            .expect("Failed to create new MoveRuntime");
             process_system_packages(
                 change_epoch,
                 temporary_store,
@@ -949,7 +949,7 @@ mod checked {
         change_epoch: ChangeEpoch,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
-        move_vm: &MoveVM,
+        move_vm: &MoveRuntime,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -1016,7 +1016,7 @@ mod checked {
         consensus_commit_timestamp_ms: CheckpointTimestamp,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -1153,7 +1153,7 @@ mod checked {
         update: AuthenticatorStateUpdate,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -1218,7 +1218,7 @@ mod checked {
         update: RandomnessStateUpdate,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,

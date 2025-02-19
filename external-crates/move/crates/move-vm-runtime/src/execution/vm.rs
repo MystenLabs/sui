@@ -290,6 +290,11 @@ impl<'extensions> MoveVM<'extensions> {
         }
     }
 
+    /// Return the linkage context of the VM.
+    pub fn linkage_context(&self) -> &LinkageContext {
+        &self.link_context
+    }
+
     // -------------------------------------------
     // Execution Operations
     // -------------------------------------------
