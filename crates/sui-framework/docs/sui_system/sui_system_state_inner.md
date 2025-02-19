@@ -66,6 +66,7 @@ title: Module `sui_system::sui_system_state_inner`
 -  [Function `pool_exchange_rates`](#sui_system_sui_system_state_inner_pool_exchange_rates)
 -  [Function `active_validator_addresses`](#sui_system_sui_system_state_inner_active_validator_addresses)
 -  [Function `extract_coin_balance`](#sui_system_sui_system_state_inner_extract_coin_balance)
+-  [Function `store_execution_time_estimates`](#sui_system_sui_system_state_inner_store_execution_time_estimates)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -715,6 +716,15 @@ the epoch advancement transaction.
 
 
 <pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ESafeModeGasNotProcessed">ESafeModeGasNotProcessed</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>: u64 = 0;
 </code></pre>
 
 
@@ -2675,6 +2685,33 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
     } <b>else</b> {
         total_balance
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_state_inner_store_execution_time_estimates"></a>
+
+## Function `store_execution_time_estimates`
+
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_store_execution_time_estimates">store_execution_time_estimates</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, estimates: vector&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_store_execution_time_estimates">store_execution_time_estimates</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, estimates: vector&lt;u8&gt;) {
+    <b>if</b> (bag::contains(&self.extra_fields, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>)) {
+        <b>let</b> _: vector&lt;u8&gt; = bag::remove(&<b>mut</b> self.extra_fields, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>);
+    };
+    bag::add(&<b>mut</b> self.extra_fields, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>, estimates);
 }
 </code></pre>
 

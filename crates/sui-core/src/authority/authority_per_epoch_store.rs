@@ -32,7 +32,7 @@ use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
 use sui_macros::fail_point_arg;
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
@@ -47,31 +47,33 @@ use sui_types::crypto::{
     AuthorityPublicKeyBytes, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, RandomnessRound,
 };
 use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
+use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::TransactionEffects;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
 };
-use sui_types::execution::ExecutionTiming;
+use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
 };
 use sui_types::messages_consensus::{
-    check_total_jwk_size, AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, ConsensusTransaction,
-    ConsensusTransactionKey, ConsensusTransactionKind, ExecutionTimeObservation, Round,
-    TimestampMs, VersionedDkgConfirmation,
+    check_total_jwk_size, AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, AuthorityIndex,
+    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+    ExecutionTimeObservation, Round, TimestampMs, VersionedDkgConfirmation,
 };
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{BackingPackageStore, InputKey, ObjectStore};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
+use sui_types::sui_system_state::{self, SuiSystemState};
 use sui_types::transaction::{
     AuthenticatorStateUpdate, CallArg, CertifiedTransaction, InputObjectKind, ObjectArg,
-    ProgrammableTransaction, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
-    TransactionKey, TransactionKind, VerifiedCertificate, VerifiedSignedTransaction,
-    VerifiedTransaction,
+    ProgrammableTransaction, SenderSignedData, StoredExecutionTimeObservations, Transaction,
+    TransactionData, TransactionDataAPI, TransactionKey, TransactionKind, VerifiedCertificate,
+    VerifiedSignedTransaction, VerifiedTransaction,
 };
 use tap::TapOptional;
 use tokio::sync::{mpsc, OnceCell};
@@ -95,6 +97,7 @@ use super::shared_object_congestion_tracker::{
 };
 use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::execution_time_estimator::EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
 use crate::authority::shared_object_version_manager::{
     AssignedTxAndVersions, ConsensusSharedObjVerAssignment, SharedObjVerManager,
 };
@@ -410,6 +413,8 @@ pub struct AuthorityPerEpochStore {
     execution_time_estimator: tokio::sync::Mutex<ExecutionTimeEstimator>,
     tx_local_execution_time:
         OnceCell<mpsc::Sender<(ProgrammableTransaction, Vec<ExecutionTiming>, Duration)>>,
+    // Saved at end of epoch for propagating observations to the next.
+    end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -612,6 +617,10 @@ pub struct AuthorityEpochTables {
     /// Accumulated per-object debts for congestion control.
     pub(crate) congestion_control_object_debts: DBMap<ObjectID, CongestionPerObjectDebt>,
     pub(crate) congestion_control_randomness_object_debts: DBMap<ObjectID, CongestionPerObjectDebt>,
+
+    /// Execution time observations for congestion control.
+    pub(crate) execution_time_observations:
+        DBMap<(u64, AuthorityIndex), Vec<(ExecutionTimeObservationKey, Duration)>>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -899,6 +908,27 @@ impl AuthorityPerEpochStore {
         let consensus_output_cache =
             ConsensusOutputCache::new(&epoch_start_configuration, &tables, metrics.clone());
 
+        let execution_time_estimator = ExecutionTimeEstimator::new(
+            committee.clone(),
+            // Load observations stored at end of previous epoch.
+            Self::get_stored_execution_time_observations(
+                &protocol_config,
+                committee.clone(),
+                &*object_store,
+            )
+            // Load observations stored during the current epoch.
+            .chain(
+                tables
+                    .execution_time_observations
+                    .unbounded_iter()
+                    .flat_map(|((generation, source), observations)| {
+                        observations
+                            .into_iter()
+                            .map(move |(key, duration)| (source, generation, key, duration))
+                    }),
+            ),
+        );
+
         let s = Arc::new(Self {
             name,
             committee: committee.clone(),
@@ -936,10 +966,9 @@ impl AuthorityPerEpochStore {
             jwk_aggregator,
             randomness_manager: OnceCell::new(),
             randomness_reporter: OnceCell::new(),
-            execution_time_estimator: tokio::sync::Mutex::new(ExecutionTimeEstimator::new(
-                committee,
-            )),
+            execution_time_estimator: tokio::sync::Mutex::new(execution_time_estimator),
             tx_local_execution_time: OnceCell::new(),
+            end_of_epoch_execution_time_observations: OnceCell::new(),
         });
 
         s.update_buffer_stake_metric();
@@ -1229,6 +1258,81 @@ impl AuthorityPerEpochStore {
             self.metrics.epoch_execution_time_observations_dropped.inc();
             warn!("failed to send local execution time to observer: {e}");
         }
+    }
+
+    pub fn get_stored_execution_time_observations(
+        protocol_config: &ProtocolConfig,
+        committee: Arc<Committee>,
+        object_store: &dyn ObjectStore,
+    ) -> impl Iterator<Item = (AuthorityIndex, u64, ExecutionTimeObservationKey, Duration)> {
+        if protocol_config.per_object_congestion_control_mode()
+            != PerObjectCongestionControlMode::ExecutionTimeEstimate
+        {
+            return itertools::Either::Left(std::iter::empty());
+        }
+
+        // Load stored execution time observations from the SuiSystemState object.
+        let system_state =
+            sui_system_state::get_sui_system_state(object_store).expect("System state must exist");
+        let system_state = match system_state {
+            SuiSystemState::V2(system_state) => system_state,
+            SuiSystemState::V1(_) => {
+                error!("`PerObjectCongestionControlMode::ExecutionTimeEstimate` cannot load execution time observations to SuiSystemState because it has an old version. This should not happen outside tests.");
+                return itertools::Either::Left(std::iter::empty());
+            }
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => {
+                return itertools::Either::Left(std::iter::empty());
+            }
+        };
+        // This is stored as a vector<u8> in Move, so we double-deserialize to get back
+        //`StoredExecutionTimeObservations`.
+        let Ok::<Vec<u8>, _>(stored_observations_bytes) = get_dynamic_field_from_store(
+            object_store,
+            system_state.extra_fields.id.id.bytes,
+            &EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY,
+        ) else {
+            warn!("Could not find stored execution time observations. This should only happen in the first epcoh where ExecutionTimeEstimate mode is enabled.");
+            return itertools::Either::Left(std::iter::empty());
+        };
+        let stored_observations: StoredExecutionTimeObservations =
+            bcs::from_bytes(&stored_observations_bytes)
+                .expect("failed to deserialize stored execution time estimates");
+        let stored_observations = stored_observations.unwrap_v1();
+        info!(
+            "loaded stored execution time observations for {} keys",
+            stored_observations.len()
+        );
+
+        // Make a single flattened iterator with every stored observation, for consumption
+        // by the `ExecutionTimeEstimator` constructor.
+        itertools::Either::Right(stored_observations.into_iter().flat_map(
+            move |(key, observations)| {
+                let committee = committee.clone();
+                observations
+                    .into_iter()
+                    .filter_map(move |(authority, duration)| {
+                        committee
+                            .authority_index(&authority)
+                            .map(|authority_index| {
+                                (
+                                    authority_index,
+                                    0, /* generation */
+                                    key.clone(),
+                                    duration,
+                                )
+                            })
+                    })
+            },
+        ))
+    }
+
+    pub fn get_end_of_epoch_execution_time_observations(&self) -> &StoredExecutionTimeObservations {
+        self.end_of_epoch_execution_time_observations.get().expect(
+            "`get_end_of_epoch_execution_time_observations` must not be called until end of epoch",
+        )
     }
 
     pub fn acquire_tx_guard(&self, cert: &VerifiedExecutableTransaction) -> SuiResult<CertTxGuard> {
@@ -2944,11 +3048,13 @@ impl AuthorityPerEpochStore {
             estimates,
         } in execution_time_observations
         {
+            let authority_index = self.committee.authority_index(&authority).unwrap();
             execution_time_estimator.process_observations_from_consensus(
-                self.committee.authority_index(&authority).unwrap(),
+                authority_index,
                 generation,
-                estimates,
+                &estimates,
             );
+            output.insert_execution_time_observation(authority_index, generation, estimates);
         }
 
         // We track transaction execution cost separately for regular transactions and transactions using randomness, since
@@ -3010,6 +3116,17 @@ impl AuthorityPerEpochStore {
             .await?;
         self.finish_consensus_certificate_process(&verified_transactions);
         output.record_consensus_commit_stats(consensus_stats.clone());
+
+        // If this is the final round, record execution time observations for storage in the
+        // end-of-epoch tx.
+        if final_round {
+            self.end_of_epoch_execution_time_observations
+                .set(execution_time_estimator.take_observations())
+                .expect(
+                    "`stored_execution_time_observations` should only be set once at end of epoch",
+                );
+            drop(execution_time_estimator); // make sure this is not used after `take_observations`
+        }
 
         let mut verified_transactions = verified_transactions;
 

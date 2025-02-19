@@ -3,7 +3,7 @@
 
 #[cfg(msim)]
 mod test {
-    use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
+    use rand::{distributions::uniform::SampleRange, seq::SliceRandom, thread_rng, Rng};
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
     use std::path::PathBuf;
@@ -473,13 +473,14 @@ mod test {
         let separate_randomness_budget;
         {
             let mut rng = thread_rng();
-            mode = if rng.gen_bool(0.33) {
-                PerObjectCongestionControlMode::TotalGasBudget
-            } else if rng.gen_bool(0.5) {
-                PerObjectCongestionControlMode::TotalTxCount
-            } else {
-                PerObjectCongestionControlMode::TotalGasBudgetWithCap
-            };
+            mode = *[
+                PerObjectCongestionControlMode::TotalGasBudget,
+                PerObjectCongestionControlMode::TotalTxCount,
+                PerObjectCongestionControlMode::TotalGasBudgetWithCap,
+                PerObjectCongestionControlMode::ExecutionTimeEstimate,
+            ]
+            .choose(&mut rng)
+            .unwrap();
             checkpoint_budget_factor = rng.gen_range(1..20);
             txn_count_limit = rng.gen_range(1..=10);
             max_deferral_rounds = if rng.gen_bool(0.5) {
@@ -487,7 +488,13 @@ mod test {
             } else {
                 rng.gen_range(1000..10000) // Large deferral round (testing liveness)
             };
-            if rng.gen_bool(0.5) {
+            if mode == PerObjectCongestionControlMode::ExecutionTimeEstimate {
+                // Note: ExecutionTimeEstimate mode does not work properly without overage enabled,
+                // because high default estimates will always initially exceed the per-commit
+                // budget. Overage must at least allow for a single 1.5s (150% util) tx.
+                let min_overage_factor = (150 / checkpoint_budget_factor) + 1;
+                allow_overage_factor = rng.gen_range(min_overage_factor..min_overage_factor * 2);
+            } else if rng.gen_bool(0.5) {
                 allow_overage_factor = rng.gen_range(1..100);
             }
             cap_factor_denominator = rng.gen_range(1..100);
@@ -520,6 +527,12 @@ mod test {
                 PerObjectCongestionControlMode::TotalGasBudget => {
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
+                    config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
+                        allow_overage_factor * total_gas_limit,
+                    );
+                    config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
+                        burst_limit_factor * total_gas_limit,
+                    );
                 },
                 PerObjectCongestionControlMode::TotalTxCount => {
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
@@ -534,17 +547,26 @@ mod test {
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
                     config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit/cap_factor_denominator);
                     config.set_gas_budget_based_txn_cost_absolute_cap_commit_count_for_testing(absolute_cap_factor);
+                    config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
+                        allow_overage_factor * total_gas_limit,
+                    );
+                    config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
+                        burst_limit_factor * total_gas_limit,
+                    );
                 },
-                // TODO: Enable once ExecutionTimeEstimate mode is functional across epochs.
-                PerObjectCongestionControlMode::ExecutionTimeEstimate => unimplemented!(),
+                PerObjectCongestionControlMode::ExecutionTimeEstimate => {
+                    let budget = checkpoint_budget_factor * 1_000; // convert budget factor to % utilization 
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(budget);
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(budget);
+                    config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
+                        allow_overage_factor * budget,
+                    );
+                    config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
+                        burst_limit_factor * budget,
+                    );
+                }
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
-            config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
-                allow_overage_factor * total_gas_limit,
-            );
-            config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
-                burst_limit_factor * total_gas_limit,
-            );
             if separate_randomness_budget {
                 config
                 .set_max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_for_testing(

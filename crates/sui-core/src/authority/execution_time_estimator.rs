@@ -3,6 +3,7 @@
 
 use std::{
     collections::HashMap,
+    num::NonZeroUsize,
     sync::{Arc, Weak},
     time::{Duration, Instant},
 };
@@ -20,7 +21,8 @@ use sui_types::{
     execution::{ExecutionTimeObservationKey, ExecutionTiming},
     messages_consensus::{AuthorityIndex, ConsensusTransaction, ExecutionTimeObservation},
     transaction::{
-        Command, ProgrammableTransaction, TransactionData, TransactionDataAPI, TransactionKind,
+        Command, ProgrammableTransaction, StoredExecutionTimeObservations, TransactionData,
+        TransactionDataAPI, TransactionKind,
     },
 };
 use tokio::sync::mpsc;
@@ -120,13 +122,17 @@ impl ExecutionTimeObserver {
             let mut command_duration = timing.duration();
 
             // Distribute overhead proportionally to each command's measured duration.
-            command_duration = command_duration
-                + extra_overhead
-                    .mul_f64(command_duration.as_secs_f64() / total_command_duration.as_secs_f64());
+            let overhead_factor = if total_command_duration > Duration::ZERO {
+                command_duration.as_secs_f64() / total_command_duration.as_secs_f64()
+            } else {
+                // divisor here must be >0 or this loop would not be running at all
+                1.0 / (tx.commands.len() as f64)
+            };
+            command_duration += extra_overhead.mul_f64(overhead_factor);
 
             // For native commands, adjust duration by length of command's inputs/outputs.
             // This is sort of arbitrary, but hopefully works okay as a heuristic.
-            command_duration = command_duration.div_f64(command_length(command));
+            command_duration = command_duration.div_f64(command_length(command).get() as f64);
 
             // Update moving-average observation for the command.
             let key = ExecutionTimeObservationKey::from_command(command);
@@ -186,7 +192,12 @@ impl ExecutionTimeObserver {
 
 // Default duration estimate used for transations containing a command without any
 // available observations.
+// TODO: Make this a protocol config.
 const DEFAULT_TRANSACTION_DURATION: Duration = Duration::from_millis(1_500);
+
+// Key used to save StoredExecutionTimeObservations in the Sui system state object's
+// `extra_fields` Bag.
+pub const EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY: u64 = 0;
 
 // Tracks global execution time observations provided by validators from consensus
 // and computes deterministic per-command estimates for use in congestion control.
@@ -232,13 +243,31 @@ impl ConsensusObservations {
 }
 
 impl ExecutionTimeEstimator {
-    pub fn new(committee: Arc<Committee>) -> Self {
+    pub fn new(
+        committee: Arc<Committee>,
+        initial_observations: impl Iterator<
+            Item = (AuthorityIndex, u64, ExecutionTimeObservationKey, Duration),
+        >,
+    ) -> Self {
         // TODO: At epoch start, prepopulate with end-of-epoch data from previous epoch.
         // TODO: Load saved consensus observations from per-epoch tables for crash recovery.
-        Self {
+        let mut estimator = Self {
             committee,
             consensus_observations: HashMap::new(),
+        };
+        for (source, generation, key, duration) in initial_observations {
+            estimator.process_observation_from_consensus(
+                source,
+                generation,
+                key.to_owned(),
+                duration,
+                true,
+            );
         }
+        for observation in estimator.consensus_observations.values_mut() {
+            observation.update_stake_weighted_median(&estimator.committee);
+        }
+        estimator
     }
 
     #[cfg(test)]
@@ -254,10 +283,16 @@ impl ExecutionTimeEstimator {
         &mut self,
         source: AuthorityIndex,
         generation: u64,
-        estimates: Vec<(ExecutionTimeObservationKey, Duration)>,
+        observations: &[(ExecutionTimeObservationKey, Duration)],
     ) {
-        for (key, duration) in estimates {
-            self.process_observation_from_consensus(source, generation, key, duration);
+        for (key, duration) in observations {
+            self.process_observation_from_consensus(
+                source,
+                generation,
+                key.to_owned(),
+                *duration,
+                false,
+            );
         }
     }
 
@@ -267,6 +302,7 @@ impl ExecutionTimeEstimator {
         generation: u64,
         observation_key: ExecutionTimeObservationKey,
         duration: Duration,
+        skip_update: bool,
     ) {
         let observations = self
             .consensus_observations
@@ -289,7 +325,9 @@ impl ExecutionTimeEstimator {
         }
         *obs_generation = generation;
         *obs_duration = Some(duration);
-        observations.update_stake_weighted_median(&self.committee);
+        if !skip_update {
+            observations.update_stake_weighted_median(&self.committee);
+        }
     }
 
     pub fn get_estimate(&self, tx: &TransactionData) -> Duration {
@@ -300,11 +338,10 @@ impl ExecutionTimeEstimator {
         let mut estimate = Duration::ZERO;
         for command in &tx.commands {
             let key = ExecutionTimeObservationKey::from_command(command);
-            let Some(command_estimate) = self
-                .consensus_observations
-                .get(&key)
-                .map(|obs| obs.stake_weighted_median.mul_f64(command_length(command)))
-            else {
+            let Some(command_estimate) = self.consensus_observations.get(&key).map(|obs| {
+                obs.stake_weighted_median
+                    .mul_f64(command_length(command).get() as f64)
+            }) else {
                 estimate = DEFAULT_TRANSACTION_DURATION;
                 break;
             };
@@ -312,18 +349,48 @@ impl ExecutionTimeEstimator {
         }
         estimate
     }
+
+    pub fn take_observations(&mut self) -> StoredExecutionTimeObservations {
+        StoredExecutionTimeObservations::V1(
+            self.consensus_observations
+                .drain()
+                .map(|(key, observations)| {
+                    let observations = observations
+                        .observations
+                        .into_iter()
+                        .enumerate()
+                        .filter_map(|(idx, (_, duration))| {
+                            duration.map(|d| {
+                                (
+                                    self.committee
+                                        .authority_by_index(idx.try_into().unwrap())
+                                        .cloned()
+                                        .unwrap(),
+                                    d,
+                                )
+                            })
+                        })
+                        .collect();
+                    (key, observations)
+                })
+                .collect(),
+        )
+    }
 }
 
-fn command_length(command: &Command) -> f64 {
-    match command {
-        Command::MoveCall(_) => 1.0,
-        Command::TransferObjects(src, _) => src.len() as f64,
-        Command::SplitCoins(_, amts) => amts.len() as f64,
-        Command::MergeCoins(_, src) => src.len() as f64,
-        Command::Publish(_, _) => 1.0,
-        Command::MakeMoveVec(_, src) => src.len() as f64,
-        Command::Upgrade(_, _, _, _) => 1.0,
-    }
+fn command_length(command: &Command) -> NonZeroUsize {
+    // Commands with variable-length inputs/outputs are reported as +1
+    // to account for fixed overhead and prevent divide-by-zero.
+    NonZeroUsize::new(match command {
+        Command::MoveCall(_) => 1,
+        Command::TransferObjects(src, _) => src.len() + 1,
+        Command::SplitCoins(_, amts) => amts.len() + 1,
+        Command::MergeCoins(_, src) => src.len() + 1,
+        Command::Publish(_, _) => 1,
+        Command::MakeMoveVec(_, src) => src.len() + 1,
+        Command::Upgrade(_, _, _, _) => 1,
+    })
+    .unwrap()
 }
 
 #[cfg(test)]
@@ -536,8 +603,8 @@ mod tests {
             transfer_obs.moving_average.get_average(),
             // 50ms time before adjustments
             // 50/150 == 1/3 of 30ms overhead distributed to object xfer
-            // 60ms adjusetd time / 2 transferred inputs == 30ms
-            Duration::from_millis(30)
+            // 60ms adjusetd time / 3 command length == 20ms
+            Duration::from_millis(20)
         );
     }
 
@@ -654,7 +721,7 @@ mod tests {
 
         let (committee, _) =
             Committee::new_simple_test_committee_with_normalized_voting_power(vec![10, 20, 30, 40]);
-        let mut estimator = ExecutionTimeEstimator::new(Arc::new(committee));
+        let mut estimator = ExecutionTimeEstimator::new(Arc::new(committee), std::iter::empty());
         // Create test keys
         let package = ObjectID::random();
         let module = "test_module".to_string();
@@ -674,18 +741,21 @@ mod tests {
             1,
             move_key.clone(),
             Duration::from_millis(1000),
+            false,
         );
         estimator.process_observation_from_consensus(
             1,
             1,
             move_key.clone(),
             Duration::from_millis(1000),
+            false,
         );
         estimator.process_observation_from_consensus(
             2,
             1,
             move_key.clone(),
             Duration::from_millis(1000),
+            false,
         );
 
         estimator.process_observation_from_consensus(
@@ -693,18 +763,21 @@ mod tests {
             1,
             transfer_key.clone(),
             Duration::from_millis(500),
+            false,
         );
         estimator.process_observation_from_consensus(
             1,
             1,
             transfer_key.clone(),
             Duration::from_millis(500),
+            false,
         );
         estimator.process_observation_from_consensus(
             2,
             1,
             transfer_key.clone(),
             Duration::from_millis(500),
+            false,
         );
 
         // Now record newer observations that should be used
@@ -713,18 +786,21 @@ mod tests {
             2,
             move_key.clone(),
             Duration::from_millis(100),
+            false,
         );
         estimator.process_observation_from_consensus(
             1,
             2,
             move_key.clone(),
             Duration::from_millis(200),
+            false,
         );
         estimator.process_observation_from_consensus(
             2,
             2,
             move_key.clone(),
             Duration::from_millis(300),
+            false,
         );
 
         estimator.process_observation_from_consensus(
@@ -732,18 +808,21 @@ mod tests {
             2,
             transfer_key.clone(),
             Duration::from_millis(50),
+            false,
         );
         estimator.process_observation_from_consensus(
             1,
             2,
             transfer_key.clone(),
             Duration::from_millis(60),
+            false,
         );
         estimator.process_observation_from_consensus(
             2,
             2,
             transfer_key.clone(),
             Duration::from_millis(70),
+            false,
         );
 
         // Try to record old observations again - these should be ignored
@@ -752,18 +831,21 @@ mod tests {
             1,
             move_key.clone(),
             Duration::from_millis(1000),
+            false,
         );
         estimator.process_observation_from_consensus(
             1,
             1,
             transfer_key.clone(),
             Duration::from_millis(500),
+            false,
         );
         estimator.process_observation_from_consensus(
             2,
             1,
             move_key.clone(),
             Duration::from_millis(1000),
+            false,
         );
 
         // Test single command transaction
@@ -815,10 +897,10 @@ mod tests {
         );
 
         // Should return sum of median move call (300ms)
-        // plus the per-transferred-item median (70ms) * number of items (2)
+        // plus the median transfer (70ms) * command length (3)
         assert_eq!(
             estimator.get_estimate(&multi_command_tx),
-            Duration::from_millis(440)
+            Duration::from_millis(510)
         );
     }
 }

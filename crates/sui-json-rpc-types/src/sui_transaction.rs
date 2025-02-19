@@ -555,6 +555,9 @@ impl SuiTransactionBlockKind {
                             ) => SuiEndOfEpochTransactionKind::BridgeCommitteeUpdate(
                                 bridge_shared_version,
                             ),
+                            EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
+                                SuiEndOfEpochTransactionKind::StoreExecutionTimeObservations
+                            }
                         })
                         .collect(),
                 })
@@ -653,6 +656,9 @@ impl SuiTransactionBlockKind {
                             }
                             EndOfEpochTransactionKind::BridgeCommitteeInit(seq) => {
                                 SuiEndOfEpochTransactionKind::BridgeCommitteeUpdate(seq)
+                            }
+                            EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
+                                SuiEndOfEpochTransactionKind::StoreExecutionTimeObservations
                             }
                         })
                         .collect(),
@@ -1669,6 +1675,7 @@ pub enum SuiEndOfEpochTransactionKind {
     CoinDenyListStateCreate,
     BridgeStateCreate(CheckpointDigest),
     BridgeCommitteeUpdate(SequenceNumber),
+    StoreExecutionTimeObservations,
 }
 
 #[serde_as]
