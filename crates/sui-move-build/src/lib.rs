@@ -35,7 +35,7 @@ use move_package::{
     package_hooks::{PackageHooks, PackageIdentifier},
     resolution::{dependency_graph::DependencyGraph, resolution_graph::ResolvedGraph},
     source_package::parsed_manifest::{Dependencies, PackageName},
-    BuildConfig as MoveBuildConfig,
+    BuildConfig as MoveBuildConfig, LintFlag,
 };
 use move_package::{
     source_package::parsed_manifest::OnChainInfo, source_package::parsed_manifest::SourceManifest,
@@ -110,17 +110,26 @@ pub struct BuildConfig {
 impl BuildConfig {
     pub fn new_for_testing() -> Self {
         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-        let mut build_config: Self = Default::default();
+
+        // Note: in the future, consider changing this to dependencies on the local system
+        // packages:
+        let implicit_dependencies = Dependencies::new();
         let install_dir = tempfile::tempdir().unwrap().into_path();
-        let lock_file = install_dir.join("Move.lock");
-        build_config.config.install_dir = Some(install_dir);
-        build_config.config.lock_file = Some(lock_file);
-        build_config
-            .config
-            .lint_flag
-            .set(move_compiler::linters::LintLevel::None);
-        build_config.config.silence_warnings = true;
-        build_config
+        let config = MoveBuildConfig {
+            default_flavor: Some(move_compiler::editions::Flavor::Sui),
+            implicit_dependencies,
+            lock_file: Some(install_dir.join("Move.lock")),
+            install_dir: Some(install_dir),
+            lint_flag: LintFlag::LEVEL_NONE,
+            silence_warnings: true,
+            ..MoveBuildConfig::default()
+        };
+        BuildConfig {
+            config,
+            run_bytecode_verifier: true,
+            print_diags_to_stderr: false,
+            chain_id: None,
+        }
     }
 
     pub fn new_for_testing_replace_addresses<I, S>(dep_original_addresses: I) -> Self
@@ -696,22 +705,6 @@ impl CompiledPackage {
             .retain(|pkg_name, _| pkgs_to_keep.contains(pkg_name));
 
         Ok(())
-    }
-}
-
-impl Default for BuildConfig {
-    fn default() -> Self {
-        let config = MoveBuildConfig {
-            default_flavor: Some(move_compiler::editions::Flavor::Sui),
-            implicit_dependencies: Dependencies::new(),
-            ..MoveBuildConfig::default()
-        };
-        BuildConfig {
-            config,
-            run_bytecode_verifier: true,
-            print_diags_to_stderr: false,
-            chain_id: None,
-        }
     }
 }
 

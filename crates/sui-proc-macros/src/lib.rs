@@ -58,7 +58,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
 
                     register_package_hooks(Box::new(SuiPackageHooks {}));
                     let mut path = PathBuf::from(env!("SIMTEST_STATIC_INIT_MOVE"));
-                    let mut build_config = BuildConfig::default();
+                    let mut build_config = BuildConfig::new_for_testing();
 
                     build_config.config.install_dir = Some(TempDir::new().unwrap().into_path());
                     let _all_module_bytes = build_config
