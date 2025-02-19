@@ -19,6 +19,7 @@ use move_ir_types::location::Spanned;
 use move_trace_format::format::MoveTraceBuilder;
 use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc};
 use sui_execution::Executor;
+use sui_types::digests::TransactionDigest;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
@@ -101,7 +102,7 @@ pub fn execute_transaction_to_effects(
     if let Some(trace_builder) = trace_builder_opt {
         // unwrap is safe if trace_builder_opt.is_some() holds
         let output_path = get_trace_output_path(trace_execution.unwrap())?;
-        save_trace_output(&output_path, trace_builder, env)?;
+        save_trace_output(&output_path, txn.digest, trace_builder, env)?;
     }
     Ok(())
 }
@@ -143,7 +144,7 @@ fn get_trace_output_path(trace_execution: Option<String>) -> Result<PathBuf, Rep
                     ),
                 });
             }
-            fs::create_dir(&path).map_err(|e| ReplayError::TracingError {
+            fs::create_dir_all(&path).map_err(|e| ReplayError::TracingError {
                 err: format!("Failed to create default trace output directory: {:?}", e),
             })?;
             Ok(path)
@@ -151,15 +152,32 @@ fn get_trace_output_path(trace_execution: Option<String>) -> Result<PathBuf, Rep
     }
 }
 
-/// Saves the trace and additional metadata needed needed to analyze the trace.
+/// Saves the trace and additional metadata needed to analyze the trace
+/// to a subderectory named after the transaction digest.
 fn save_trace_output(
     output_path: &PathBuf,
+    digest: TransactionDigest,
     trace_builder: MoveTraceBuilder,
     env: &ReplayEnvironment,
 ) -> Result<(), ReplayError> {
+    let txn_output_path = output_path.join(digest.to_string());
+    if txn_output_path.exists() {
+        return Err(ReplayError::TracingError {
+            err: format!(
+                "Trace output directory for transaction {} already exists: {:?}",
+                digest, txn_output_path
+            ),
+        });
+    }
+    fs::create_dir_all(&txn_output_path).map_err(|e| ReplayError::TracingError {
+        err: format!(
+            "Failed to create trace output directory for transaction {}: {:?}",
+            digest, e
+        ),
+    })?;
     let trace = trace_builder.into_trace();
     let json = trace.to_json();
-    let trace_file_path = output_path.join(TRACE_FILE_NAME);
+    let trace_file_path = txn_output_path.join(TRACE_FILE_NAME);
     fs::write(&trace_file_path, json.to_string().as_bytes()).map_err(|e| {
         ReplayError::TracingError {
             err: format!(
@@ -168,7 +186,7 @@ fn save_trace_output(
             ),
         }
     })?;
-    let bcode_dir = output_path.join(BCODE_DIR);
+    let bcode_dir = txn_output_path.join(BCODE_DIR);
     fs::create_dir(&bcode_dir).map_err(|e| ReplayError::TracingError {
         err: format!(
             "Failed to create bytecode output directory '{:?}': {:?}",
@@ -238,7 +256,7 @@ fn save_trace_output(
     }
     // create empty sources directory as a known placeholder for the users
     // to put optional source files there
-    let src_dir = output_path.join(SOURCE_DIR);
+    let src_dir = txn_output_path.join(SOURCE_DIR);
     fs::create_dir(&src_dir).map_err(|e| ReplayError::TracingError {
         err: format!(
             "Failed to create source output directory '{:?}': {:?}",
