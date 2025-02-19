@@ -12,7 +12,7 @@ module test::m {
 
     public struct S has key, store {
         id: UID,
-        other: EnumWrapper, 
+        other: EnumWrapper,
         wrapped: Wrapped,
         many: vector<Wrapped>,
     }
@@ -206,4 +206,3 @@ module test::m {
 // Should fail since at the version of the object we're passing in the field exists still
 //# programmable --sender A --inputs object(2,8)@2 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1))
-

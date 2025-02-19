@@ -217,6 +217,7 @@ const MAX_PROTOCOL_VERSION: u64 = 75;
 //             Enable all gas costs for load_nitro_attestation.
 //             Enable zstd compression for consensus tonic network in mainnet.
 //             Enable the new commit rule for devnet.
+// Version 75: Removes unnecessary child object mutations
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -622,6 +623,10 @@ struct FeatureFlags {
     // If true, enable zstd compression for consensus tonic network.
     #[serde(skip_serializing_if = "is_false")]
     consensus_zstd_compression: bool,
+
+    // If true, enables the optimizations for child object mutations, removing unnecessary mutations
+    #[serde(skip_serializing_if = "is_false")]
+    minimize_child_object_mutations: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1804,6 +1809,10 @@ impl ProtocolConfig {
     }
     pub fn enable_nitro_attestation(&self) -> bool {
         self.feature_flags.enable_nitro_attestation
+    }
+
+    pub fn minimize_child_object_mutations(&self) -> bool {
+        self.feature_flags.minimize_child_object_mutations
     }
 }
 
@@ -3246,7 +3255,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                     }
                 }
-                75 => {}
+                75 => {
+                    cfg.feature_flags.minimize_child_object_mutations = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
