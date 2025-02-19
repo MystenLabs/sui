@@ -56,7 +56,8 @@
     "react-ui-scrollspy": "^2.3.0",
     "rehype-katex": "^7.0.0",
     "remark-math": "^6.0.0",
-    "tailwindcss": "^3.4.1"
+    "tailwindcss": "^3.4.1",
+    "turndown": "^7.2.0"
   },
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "^7.23.4",
