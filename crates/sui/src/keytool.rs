@@ -3,7 +3,6 @@
 use crate::key_identity::{get_identity_address_from_keystore, KeyIdentity};
 use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
 use anyhow::anyhow;
-use aws_config::BehaviorVersion;
 use aws_sdk_kms::{
     primitives::Blob,
     types::{MessageType, SigningAlgorithmSpec},
@@ -882,7 +881,7 @@ impl KeyToolCommand {
                 info!("Digest to sign: {:?}", Base64::encode(digest));
 
                 // Set up the KMS client in default region.
-                let config = aws_config::defaults(BehaviorVersion::latest()).load().await;
+                let config = aws_config::load_from_env().await;
                 let kms = KmsClient::new(&config);
 
                 // Sign the message, normalize the signature and then compacts it

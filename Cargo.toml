@@ -273,7 +273,7 @@ async-recursion = "1.0.4"
 async-stream = "0.3.6"
 async-trait = "0.1.61"
 atomic_float = "0.1"
-aws-config = "1.5.16"
+aws-config = { version = "1.5.16", features = ["behavior-version-latest"] }
 aws-runtime = "1.5.5"
 aws-sdk-dynamodb = "1.65.0"
 aws-sdk-ec2 = "1.110.0"

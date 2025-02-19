@@ -15,7 +15,7 @@ use aws_sdk_ec2::{
         TagSpecification, VolumeType,
     },
 };
-use aws_smithy_runtime_api::client::{behavior_version::BehaviorVersion, result::SdkError};
+use aws_smithy_runtime_api::client::result::SdkError;
 use serde::Serialize;
 
 use crate::{
@@ -63,7 +63,7 @@ impl AwsClient {
 
         let mut clients = HashMap::new();
         for region in settings.regions.clone() {
-            let sdk_config = aws_config::defaults(BehaviorVersion::latest())
+            let sdk_config = aws_config::from_env()
                 .region(Region::new(region.clone()))
                 .profile_files(profile_files.clone())
                 .load()
