@@ -277,6 +277,35 @@ pub async fn fetch_move_packages(
         .collect()
 }
 
+fn add_published_id_to_manifest(
+    package_path: &PathBuf,
+    package_id: &ObjectID,
+) -> Result<(), anyhow::Error> {
+    let content = std::fs::read_to_string(&package_path.join("Move.toml"))?;
+    let mut toml: toml::Value = toml::from_str(&content)?;
+    if let Some(tbl) = toml.get_mut("package") {
+        if let Some(tbl) = tbl.as_table_mut() {
+            tbl.insert(
+                "published-at".to_string(),
+                toml::Value::String(package_id.to_hex_uncompressed()),
+            );
+        }
+    }
+
+    if let Some(tbl) = toml.get_mut("addresses") {
+        if let Some(tbl) = tbl.as_table_mut() {
+            tbl.insert(
+                "a".to_string(),
+                toml::Value::String(package_id.to_hex_uncompressed()),
+            );
+        }
+    }
+
+    let toml_str = toml::to_string(&toml)?;
+    std::fs::write(&package_path.join("Move.toml"), toml_str)?;
+    Ok(())
+}
+
 #[sim_test]
 async fn test_genesis() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir()?;
@@ -4214,7 +4243,7 @@ async fn test_tree_shaking_package_with_bytecode_deps() -> Result<(), anyhow::Er
     // make pkg a to be a bytecode dep for package F
     // set published-at field to package id and addresses a to package id
     let package_path = test.package_path("A");
-    add_published_id_to_manifest(&package_path, &package_a_id);
+    add_published_id_to_manifest(&package_path, &package_a_id)?;
 
     // delete the sources folder from pkg A to setup A as bytecode dep for package F
     fs::remove_file(&package_path.join("Move.lock"))?;
@@ -4476,31 +4505,3 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     Ok(())
 }
 
-fn add_published_id_to_manifest(
-    package_path: &PathBuf,
-    package_id: &ObjectID,
-) -> Result<(), anyhow::Error> {
-    let content = std::fs::read_to_string(&package_path.join("Move.toml"))?;
-    let mut toml: toml::Value = toml::from_str(&content)?;
-    if let Some(tbl) = toml.get_mut("package") {
-        if let Some(tbl) = tbl.as_table_mut() {
-            tbl.insert(
-                "published-at".to_string(),
-                toml::Value::String(package_id.to_hex_uncompressed()),
-            );
-        }
-    }
-
-    if let Some(tbl) = toml.get_mut("addresses") {
-        if let Some(tbl) = tbl.as_table_mut() {
-            tbl.insert(
-                "a".to_string(),
-                toml::Value::String(package_id.to_hex_uncompressed()),
-            );
-        }
-    }
-
-    let toml_str = toml::to_string(&toml)?;
-    std::fs::write(&package_path.join("Move.toml"), toml_str)?;
-    Ok(())
-}
