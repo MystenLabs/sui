@@ -414,6 +414,7 @@ pub fn rewind_checkpoint_execution(
             checkpoint.epoch()
         );
     }
+
     let highest_executed_sequence_number = checkpoint_db
         .get_highest_executed_checkpoint_seq_number()?
         .unwrap_or_default();

@@ -902,7 +902,6 @@ impl CheckpointStore {
         state: &AuthorityState,
         epoch_store: &AuthorityPerEpochStore,
     ) {
-        info!("rexecuting locally computed checkpoints for crash recovery");
         let epoch = epoch_store.epoch();
         let highest_executed = self
             .get_highest_executed_checkpoint_seq_number()
@@ -913,6 +912,11 @@ impl CheckpointStore {
             info!("no locally built checkpoints to verify");
             return;
         };
+
+        info!(
+            "rexecuting locally computed checkpoints for crash recovery from {} to {}",
+            highest_executed, highest_built
+        );
 
         for seq in highest_executed + 1..=*highest_built.sequence_number() {
             info!(?seq, "Re-executing locally computed checkpoint");
@@ -1660,9 +1664,16 @@ impl CheckpointBuilder {
                         sequence_number,
                         &self.epoch_store,
                     )?;
+
                     state_acc
-                        .accumulate_running_root(&self.epoch_store, sequence_number, Some(acc))
+                        .wait_for_previous_running_root(&self.epoch_store, sequence_number)
                         .await?;
+
+                    state_acc.accumulate_running_root(
+                        &self.epoch_store,
+                        sequence_number,
+                        Some(acc),
+                    )?;
                     state_acc
                         .digest_epoch(self.epoch_store.clone(), sequence_number)
                         .await?
