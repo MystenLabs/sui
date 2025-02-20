@@ -241,39 +241,9 @@ message GetCheckpointRequest {
   // Optional. The digest of the requested checkpoint.
   optional sui.types.Digest digest = 2;
 
-  // DEPRECATED To be removed in the next release
-  optional GetCheckpointOptions options = 3;
   // Optional. Mask for specifying which parts of the `GetCheckpointResponse`
   // should be returned.
   optional google.protobuf.FieldMask read_mask = 4;
-}
-
-// DEPRECATED To be removed in the next release
-message GetCheckpointOptions {
-  // Include the `sui.types.CheckpointSummary` in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool summary = 3;
-
-  // Include the `CheckpointSummary` formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool summary_bcs = 4;
-
-  // Include the `sui.types.ValidatorAggregatedSignature` in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool signature = 5;
-
-  // Include the `sui.types.CheckpointContents` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool contents = 6;
-
-  // Include the `CheckpointContents` formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool contents_bcs = 7;
 }
 
 // Response message for `NodeService.GetCheckpoint`.

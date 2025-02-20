@@ -155,13 +155,9 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
             (None, None) => None,
         };
 
-        let options = if let Some(read_mask) = request.read_mask {
-            crate::types::GetCheckpointOptions::from_read_mask(read_mask)
-        } else if let Some(options) = request.options {
-            options.into()
-        } else {
-            Default::default()
-        };
+        let options = crate::types::GetCheckpointOptions::from_read_mask(
+            request.read_mask.unwrap_or_default(),
+        );
 
         self.get_checkpoint(checkpoint, options)
             .map(Into::into)
