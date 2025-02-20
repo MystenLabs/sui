@@ -222,6 +222,11 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
     /// Get a new graph by either reading it from Move.lock file (if this file is up-to-date, in
     /// which case also return false) or by computing a new graph based on the content of the
     /// Move.toml (manifest) file (in which case also return true).
+    ///
+    /// Additional dependencies on [self.implicit_dependencies] are added to all nodes of the
+    /// returned graph, except for nodes that are themselves in [self.implicit_dependencies] or
+    /// that have an explicit dependency on one of the implicit packages (note that having just one
+    /// explicit dep from a node disables all implicit deps for that node!)
     pub fn get_graph(
         &mut self,
         parent: &PM::DependencyKind,
@@ -245,21 +250,14 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             })
             .unwrap_or(None);
 
-        // add implicit dependencies to the manifest. Implicit dependencies are added only to the
-        // root package here; at the end of this method (after the graph is built) we iterate over
-        // all packages in the graph and add the dependencies there. The reason we add them to the
-        // root package here is to ensure that they and their dependencies are correctly processed.
-        //
-        // implicits deps should be skipped entirely if the root manifest contains any of them explicitly
-        let add_implicits: bool = !self
-            .implicit_deps
-            .iter()
-            .any(|(name, _)| root_manifest.dependencies.contains_key(name));
+        // implicits deps should be skipped if the manifest contains any of them
+        // explicitly (or if the manifest is for a system package).
+        let add_implicits: bool = !self.implicit_deps.iter().any(|(name, _)| {
+            root_manifest.dependencies.contains_key(name) || root_manifest.package.name == *name
+        });
         if add_implicits {
             for (name, dep) in self.implicit_deps.iter() {
-                if !root_manifest.dependencies.contains_key(name) {
-                    root_manifest.dependencies.insert(*name, dep.clone());
-                }
+                root_manifest.dependencies.insert(*name, dep.clone());
             }
         }
 
@@ -270,6 +268,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 root_manifest.package.name
             )
         })?;
+
         let root_pkg_name = root_manifest.package.name;
         let (mut dep_graphs, resolved_id_deps, mut dep_names, mut overrides) = self
             .collect_graphs(
@@ -285,7 +284,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             // write_to_lock should create a fresh lockfile for computing the dependency digest, hence the `None` arg below
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone(), None))
             .collect::<Result<Vec<LockFile>>>()?;
-        let (mut dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) = self
+        let (dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) = self
             .collect_graphs(
                 parent,
                 root_pkg_id,
@@ -294,12 +293,6 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 DependencyMode::DevOnly,
                 root_manifest.dev_dependencies.clone(),
             )?;
-
-        // smash implicit dependencies into the collected subgraphs
-        if add_implicits {
-            self.add_implicit_deps(&mut dep_graphs);
-            self.add_implicit_deps(&mut dev_dep_graphs);
-        }
 
         // compute new digests and return early if the manifest and deps digests are unchanged
         let dev_dep_lock_files = dev_dep_graphs
@@ -387,34 +380,6 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         combined_graph.discover_always_deps();
 
         Ok((combined_graph, true))
-    }
-
-    /// Update each node of [dep_graphs] to include links to the implicit dependencies
-    fn add_implicit_deps(&self, dep_graphs: &mut BTreeMap<Symbol, DependencyGraphInfo>) {
-        // find the graph nodes corresponding to the implicit deps
-        for graph_info in dep_graphs.values_mut() {
-            let graph = &mut graph_info.g.package_graph;
-            let nodes: Vec<_> = graph.nodes().collect();
-            for n in nodes {
-                if self.implicit_deps.contains_key(&n) {
-                    continue;
-                }
-
-                for implicit in self.implicit_deps.keys() {
-                    graph.add_edge(
-                        n,
-                        *implicit,
-                        Dependency {
-                            mode: DependencyMode::Always,
-                            subst: None,
-                            digest: None,
-                            dep_override: true,
-                            dep_name: *implicit,
-                        },
-                    );
-                }
-            }
-        }
     }
 
     /// Given all dependencies from the parent manifest file, collects all the sub-graphs
