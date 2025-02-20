@@ -3,8 +3,8 @@
 
 use sui_macros::sim_test;
 use sui_rpc_api::client::Client as CoreClient;
+use sui_rpc_api::field_mask::FieldMaskUtil;
 use sui_rpc_api::proto::node::v2::node_service_client::NodeServiceClient;
-use sui_rpc_api::proto::node::v2::GetObjectOptions;
 use sui_rpc_api::proto::node::v2::GetObjectRequest;
 use sui_rpc_api::proto::node::v2::GetObjectResponse;
 use sui_sdk_types::ObjectId;
@@ -53,11 +53,7 @@ async fn get_object() {
         object,
         object_bcs,
     } = grpc_client
-        .get_object(
-            GetObjectRequest::new(id)
-                .with_version(1)
-                .with_options(GetObjectOptions::none()),
-        )
+        .get_object(GetObjectRequest::new(id).with_version(1))
         .await
         .unwrap()
         .into_inner();
@@ -71,7 +67,15 @@ async fn get_object() {
     assert!(object_bcs.is_none());
 
     let response = grpc_client
-        .get_object(GetObjectRequest::new(id).with_options(GetObjectOptions::all()))
+        .get_object(
+            GetObjectRequest::new(id).with_read_mask(FieldMaskUtil::from_paths([
+                "object_id",
+                "version",
+                "digest",
+                "object",
+                "object_bcs",
+            ])),
+        )
         .await
         .unwrap()
         .into_inner();
