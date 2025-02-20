@@ -92,13 +92,6 @@ impl Client {
         let request = crate::proto::node::v2::GetCheckpointRequest {
             sequence_number,
             digest: None,
-            options: Some(crate::proto::node::v2::GetCheckpointOptions {
-                summary: Some(false),
-                summary_bcs: Some(true),
-                signature: Some(true),
-                contents: Some(false),
-                contents_bcs: Some(false),
-            }),
             read_mask: FieldMaskUtil::from_paths(["summary_bcs", "signature"]).pipe(Some),
         };
 
