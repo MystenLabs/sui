@@ -10,7 +10,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::IndexerConfig;
-use sui_indexer_alt_e2e_tests::{find_address_owned, find_immutable, find_shared, FullCluster};
+use sui_indexer_alt_e2e_tests::{find_immutable, find_shared, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_jsonrpc::{
     config::{NameServiceConfig, RpcConfig},
@@ -19,7 +19,6 @@ use sui_indexer_alt_jsonrpc::{
 use sui_move_build::BuildConfig;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::get_account_key_pair,
     effects::TransactionEffectsAPI,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{ObjectArg, Transaction, TransactionData},
@@ -271,7 +270,7 @@ async fn test_resolve_subdomain_no_parent() {
 }
 
 struct SuiNSCluster {
-    pub cluster: FullCluster,
+    cluster: FullCluster,
     config: NameServiceConfig,
     forward_registry: ObjectArg,
     reverse_registry: ObjectArg,
@@ -297,13 +296,9 @@ impl SuiNSCluster {
             .expect("Failed to compile package");
 
         // (3) Create an address and fund it to be able to run transactions.
-        let (sender, kp) = get_account_key_pair();
-
-        let fx = sim
-            .request_gas(sender, DEFAULT_GAS_BUDGET * 3)
-            .expect("Failed to request gas");
-
-        let gas = find_address_owned(&fx).expect("Couldn't find gas object");
+        let (sender, kp, gas) = sim
+            .funded_account(DEFAULT_GAS_BUDGET * 3)
+            .expect("Failed to get account");
 
         // (4) Publish the mock SuiNS package.
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -436,14 +431,10 @@ impl SuiNSCluster {
         target: Option<SuiAddress>,
         expiration_timestamp_ms: u64,
     ) -> anyhow::Result<()> {
-        let (sender, kp) = get_account_key_pair();
-
-        let fx = self
+        let (sender, kp, gas) = self
             .cluster
-            .request_gas(sender, DEFAULT_GAS_BUDGET)
-            .expect("failed to request gas");
-
-        let gas = find_address_owned(&fx).expect("couldn't find gas object");
+            .funded_account(DEFAULT_GAS_BUDGET)
+            .expect("failed to get account");
 
         let mut builder = ProgrammableTransactionBuilder::new();
 

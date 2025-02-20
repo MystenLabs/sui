@@ -36,6 +36,7 @@ impl Context {
     /// Set-up access to the database through all the interfaces available in the context.
     pub(crate) async fn new(
         db_args: DbArgs,
+        limits: sui_package_resolver::Limits,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
     ) -> Result<Self, ReadError> {
@@ -43,7 +44,7 @@ impl Context {
         let loader = Arc::new(reader.as_data_loader());
 
         let store = PackageCache::new(DbPackageStore::new(loader.clone()));
-        let package_resolver = Arc::new(Resolver::new(store));
+        let package_resolver = Arc::new(Resolver::new_with_limits(store, limits));
 
         Ok(Self {
             reader,
