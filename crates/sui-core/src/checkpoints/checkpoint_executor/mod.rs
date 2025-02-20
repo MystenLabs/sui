@@ -24,7 +24,7 @@ use parking_lot::Mutex;
 use std::{sync::Arc, time::Instant};
 use sui_types::crypto::RandomnessRound;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
-use sui_types::messages_checkpoint::CheckpointContents;
+use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
@@ -161,7 +161,7 @@ impl CheckpointExecutor {
 
     // Gets the next checkpoint to schedule for execution. If the epoch is already
     // completed, returns None.
-    fn get_next_to_schedule(&self) -> Option<u64> {
+    fn get_next_to_schedule(&self) -> Option<CheckpointSequenceNumber> {
         // Decide the first checkpoint to schedule for execution.
         // If we haven't executed anything in the past, we schedule checkpoint 0.
         // Otherwise we schedule the one after highest executed.
