@@ -13,7 +13,7 @@ use crate::consensus_adapter::SubmitToConsensus;
 use itertools::Itertools;
 use lru::LruCache;
 use mysten_common::debug_fatal;
-use mysten_metrics::monitored_scope;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use simple_moving_average::{SingleSumSMA, SMA};
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::{
@@ -80,14 +80,15 @@ impl ExecutionTimeObserver {
                 NonZero::new(lru_cache_size).expect("lru_cache_size must be non-zero"),
             ),
         };
-        tokio::spawn(async move {
+        let epoch_store = epoch_store.clone();
+        spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
             while let Some((tx, timings, total_duration)) = rx_local_execution_time.recv().await {
                 observer
                     .record_local_observations(&tx, &timings, total_duration)
                     .await;
             }
             info!("shutting down ExecutionTimeObserver");
-        });
+        }));
     }
 
     #[cfg(test)]
