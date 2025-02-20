@@ -48,7 +48,7 @@ use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{error, error_span, info, Instrument};
 
 use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore,
+    authority::authority_per_epoch_store::AuthorityPerEpochStore, checkpoints::CheckpointStore,
     mysticeti_adapter::LazyMysticetiClient,
 };
 use crate::{
@@ -116,6 +116,7 @@ impl AuthorityServer {
     pub fn new_for_test(state: Arc<AuthorityState>) -> Self {
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(LazyMysticetiClient::new()),
+            CheckpointStore::new_for_tests(),
             state.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,

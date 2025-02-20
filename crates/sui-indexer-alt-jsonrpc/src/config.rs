@@ -4,9 +4,12 @@
 use std::mem;
 
 use sui_default_config::DefaultConfig;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use tracing::warn;
 
 use crate::api::{objects::ObjectsConfig, transactions::TransactionsConfig};
+
+pub use sui_name_service::NameServiceConfig;
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
@@ -16,6 +19,13 @@ pub struct RpcConfig {
 
     /// Configuration for transaction-related RPC methods.
     pub transactions: TransactionsLayer,
+
+    /// Configuration for SuiNS related RPC methods.
+    pub name_service: NameServiceLayer,
+
+    /// Configuration for bigtable kv store, if it is used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_config: Option<BigtableConfig>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -42,6 +52,24 @@ pub struct TransactionsLayer {
     pub extra: toml::Table,
 }
 
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
+pub struct NameServiceLayer {
+    pub package_address: Option<SuiAddress>,
+    pub registry_id: Option<ObjectID>,
+    pub reverse_registry_id: Option<ObjectID>,
+
+    #[serde(flatten)]
+    pub extra: toml::Table,
+}
+
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
+pub struct BigtableConfig {
+    /// The instance id of the Bigtable instance to connect to.
+    pub instance_id: String,
+}
+
 impl RpcConfig {
     /// Generate an example configuration, suitable for demonstrating the fields available to
     /// configure.
@@ -49,6 +77,8 @@ impl RpcConfig {
         Self {
             objects: ObjectsConfig::default().into(),
             transactions: TransactionsConfig::default().into(),
+            name_service: NameServiceConfig::default().into(),
+            bigtable_config: None,
             extra: Default::default(),
         }
     }
@@ -82,6 +112,17 @@ impl TransactionsLayer {
     }
 }
 
+impl NameServiceLayer {
+    pub fn finish(self, base: NameServiceConfig) -> NameServiceConfig {
+        check_extra("name service", self.extra);
+        NameServiceConfig {
+            package_address: self.package_address.unwrap_or(base.package_address),
+            registry_id: self.registry_id.unwrap_or(base.registry_id),
+            reverse_registry_id: self.reverse_registry_id.unwrap_or(base.reverse_registry_id),
+        }
+    }
+}
+
 impl From<ObjectsConfig> for ObjectsLayer {
     fn from(config: ObjectsConfig) -> Self {
         Self {
@@ -98,6 +139,17 @@ impl From<TransactionsConfig> for TransactionsLayer {
         Self {
             default_page_size: Some(config.default_page_size),
             max_page_size: Some(config.max_page_size),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl From<NameServiceConfig> for NameServiceLayer {
+    fn from(config: NameServiceConfig) -> Self {
+        Self {
+            package_address: Some(config.package_address),
+            registry_id: Some(config.registry_id),
+            reverse_registry_id: Some(config.reverse_registry_id),
             extra: Default::default(),
         }
     }

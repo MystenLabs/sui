@@ -33,7 +33,9 @@ mod checked {
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_core_types::ident_str;
     use sui_move_natives::all_natives;
-    use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
+    use sui_protocol_config::{
+        check_limit_by_meter, LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig,
+    };
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
         AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
@@ -66,7 +68,7 @@ mod checked {
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GenesisTransaction, ObjectArg, ProgrammableTransaction,
-        TransactionKind,
+        StoredExecutionTimeObservations, TransactionKind,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -715,6 +717,13 @@ mod checked {
                             assert!(protocol_config.should_try_to_finalize_bridge_committee());
                             builder = setup_bridge_committee_update(builder, bridge_shared_version)
                         }
+                        EndOfEpochTransactionKind::StoreExecutionTimeObservations(estimates) => {
+                            assert_eq!(
+                                protocol_config.per_object_congestion_control_mode(),
+                                PerObjectCongestionControlMode::ExecutionTimeEstimate
+                            );
+                            builder = setup_store_execution_time_estimates(builder, estimates);
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
@@ -1329,6 +1338,25 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate coin_deny_list_create transaction!");
+        builder
+    }
+
+    fn setup_store_execution_time_estimates(
+        mut builder: ProgrammableTransactionBuilder,
+        estimates: StoredExecutionTimeObservations,
+    ) -> ProgrammableTransactionBuilder {
+        let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+        // This is stored as a vector<u8> in Move, so we first convert to bytes before again
+        // serializing inside the call to `pure`.
+        let estimates_bytes = bcs::to_bytes(&estimates).unwrap();
+        let estimates_arg = builder.pure(estimates_bytes).unwrap();
+        builder.programmable_move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            ident_str!("store_execution_time_estimates").to_owned(),
+            vec![],
+            vec![system_state, estimates_arg],
+        );
         builder
     }
 }

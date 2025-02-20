@@ -4,19 +4,13 @@
 use anyhow::Context as _;
 
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use sui_indexer_alt_schema::checkpoints::StoredCheckpoint;
 use sui_json_rpc_types::Checkpoint;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::{
-    crypto::AuthorityQuorumSignInfo,
-    messages_checkpoint::{CheckpointContents, CheckpointSummary},
-    sui_serde::BigInt,
-};
+use sui_types::sui_serde::BigInt;
 
 use crate::{
     context::Context,
-    data::checkpoints::CheckpointKey,
     error::{invalid_params, InternalContext, RpcError},
 };
 
@@ -64,21 +58,12 @@ impl RpcModule for Checkpoints {
 
 /// Load a checkpoint and prepare it for presentation as a JSON-RPC response.
 async fn response(ctx: &Context, seq: u64) -> Result<Checkpoint, RpcError<Error>> {
-    let stored: StoredCheckpoint = ctx
-        .loader()
-        .load_one(CheckpointKey(seq))
+    let (summary, contents, signature) = ctx
+        .kv_loader()
+        .load_one_checkpoint(seq)
         .await
         .context("Failed to load checkpoint")?
         .ok_or_else(|| invalid_params(Error::NotFound(seq)))?;
-
-    let summary: CheckpointSummary = bcs::from_bytes(&stored.checkpoint_summary)
-        .context("Failed to deserialize checkpoint summary")?;
-
-    let contents: CheckpointContents = bcs::from_bytes(&stored.checkpoint_contents)
-        .context("Failed to deserialize checkpoint contents")?;
-
-    let signature: AuthorityQuorumSignInfo<true> = bcs::from_bytes(&stored.validator_signatures)
-        .context("Failed to deserialize validator signatures")?;
 
     Ok(Checkpoint::from((summary, contents, signature.signature)))
 }

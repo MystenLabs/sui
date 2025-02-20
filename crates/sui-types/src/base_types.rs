@@ -216,6 +216,14 @@ impl MoveObjectType {
         Self(MoveObjectType_::GasCoin)
     }
 
+    pub fn coin(coin_type: TypeTag) -> Self {
+        Self(if GAS::is_gas_type(&coin_type) {
+            MoveObjectType_::GasCoin
+        } else {
+            MoveObjectType_::Coin(coin_type)
+        })
+    }
+
     pub fn staked_sui() -> Self {
         Self(MoveObjectType_::StakedSui)
     }
@@ -938,10 +946,10 @@ pub fn move_ascii_str_layout() -> A::MoveStructLayout {
             name: STD_ASCII_STRUCT_NAME.to_owned(),
             type_params: vec![],
         },
-        fields: Box::new(vec![A::MoveFieldLayout::new(
+        fields: vec![A::MoveFieldLayout::new(
             ident_str!("bytes").into(),
             A::MoveTypeLayout::Vector(Box::new(A::MoveTypeLayout::U8)),
-        )]),
+        )],
     }
 }
 
@@ -953,10 +961,10 @@ pub fn move_utf8_str_layout() -> A::MoveStructLayout {
             name: STD_UTF8_STRUCT_NAME.to_owned(),
             type_params: vec![],
         },
-        fields: Box::new(vec![A::MoveFieldLayout::new(
+        fields: vec![A::MoveFieldLayout::new(
             ident_str!("bytes").into(),
             A::MoveTypeLayout::Vector(Box::new(A::MoveTypeLayout::U8)),
-        )]),
+        )],
     }
 }
 

@@ -1733,6 +1733,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bb8-postgres"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56ac82c42eb30889b5c4ee4763a24b8c566518171ebea648cd7e3bc532c60680"
+dependencies = [
+ "async-trait",
+ "bb8",
+ "tokio",
+ "tokio-postgres",
+]
+
+[[package]]
 name = "bcder"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3760,12 +3772,6 @@ name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
-
-[[package]]
-name = "difference"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
 
 [[package]]
 name = "difflib"
@@ -7548,7 +7554,6 @@ dependencies = [
  "clap",
  "codespan-reporting",
  "crossbeam",
- "derivative",
  "dunce",
  "im",
  "itertools 0.10.5",
@@ -7702,7 +7707,6 @@ dependencies = [
  "clap",
  "codespan-reporting",
  "colored",
- "difference",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",
@@ -7726,6 +7730,7 @@ dependencies = [
  "move-vm-test-utils",
  "move-vm-types",
  "serde_yaml 0.8.26",
+ "similar",
  "tempfile",
  "toml_edit 0.14.4",
  "walkdir",
@@ -7737,7 +7742,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "difference",
+ "colored",
  "dirs-next",
  "hex",
  "insta",
@@ -13945,6 +13950,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-move-build",
+ "sui-name-service",
  "sui-package-resolver",
  "sui-pg-db",
  "sui-protocol-config",
@@ -14060,6 +14066,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-keys",
  "sui-move-build",
+ "sui-name-service",
  "sui-open-rpc",
  "sui-package-resolver",
  "sui-pg-db",
@@ -14131,16 +14138,22 @@ dependencies = [
  "datatest-stable",
  "diesel",
  "diesel-async",
+ "jsonrpsee",
+ "move-core-types",
  "msim",
  "prometheus",
  "reqwest 0.12.9",
  "serde_json",
+ "simulacrum",
  "sui-indexer-alt",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-jsonrpc",
+ "sui-move-build",
  "sui-pg-db",
  "sui-transactional-test-runner",
+ "sui-types",
  "telemetry-subscribers",
+ "tempfile",
  "tokio",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "url",
@@ -14196,6 +14209,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "jsonrpsee",
+ "move-binary-format",
  "move-core-types",
  "pin-project-lite",
  "prometheus",
@@ -14209,6 +14223,8 @@ dependencies = [
  "sui-indexer-alt-schema",
  "sui-json",
  "sui-json-rpc-types",
+ "sui-kvstore",
+ "sui-name-service",
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-package-resolver",
@@ -14361,6 +14377,7 @@ dependencies = [
  "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-macros",
+ "sui-name-service",
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-protocol-config",
@@ -14804,6 +14821,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-move-build",
+ "sui-name-service",
  "sui-package-resolver",
  "sui-pg-db",
  "sui-protocol-config",
@@ -14824,6 +14842,17 @@ dependencies = [
  "tower-http 0.5.2",
  "tracing",
  "uuid 1.2.2",
+]
+
+[[package]]
+name = "sui-name-service"
+version = "1.44.0"
+dependencies = [
+ "bcs",
+ "move-core-types",
+ "serde",
+ "sui-types",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -14883,6 +14912,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",
+ "http 1.1.0",
  "humantime",
  "move-vm-profiler",
  "mysten-common",
@@ -14900,6 +14930,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-api",
  "sui-macros",
+ "sui-name-service",
  "sui-network",
  "sui-protocol-config",
  "sui-rpc-api",
@@ -14913,6 +14944,7 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tower 0.4.13",
+ "tower-http 0.5.2",
  "tracing",
  "typed-store",
  "url",
@@ -15282,6 +15314,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-rpc-benchmark"
+version = "1.44.0"
+dependencies = [
+ "anyhow",
+ "bb8",
+ "bb8-postgres",
+ "chrono",
+ "clap",
+ "dashmap",
+ "futures",
+ "parking_lot 0.12.3",
+ "rand 0.8.5",
+ "reqwest 0.12.9",
+ "serde",
+ "serde_json",
+ "sui-indexer-alt-framework",
+ "telemetry-subscribers",
+ "tokio",
+ "tokio-postgres",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "sui-rpc-loadgen"
 version = "1.44.0"
 dependencies = [
@@ -15327,6 +15383,7 @@ dependencies = [
  "futures-core",
  "jsonrpsee",
  "move-core-types",
+ "prometheus",
  "rand 0.8.5",
  "reqwest 0.12.9",
  "serde",
@@ -15338,9 +15395,13 @@ dependencies = [
  "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
+ "sui-macros",
+ "sui-protocol-config",
+ "sui-simulator",
  "sui-transaction-builder 0.0.0",
  "sui-types",
  "tempfile",
+ "test-cluster",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
@@ -16081,6 +16142,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "sui-data-ingestion-core",
  "sui-json-rpc",
+ "sui-name-service",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",

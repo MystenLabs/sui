@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 74;
+const MAX_PROTOCOL_VERSION: u64 = 75;
 
 // Record history of protocol version allocations here:
 //
@@ -217,8 +217,7 @@ const MAX_PROTOCOL_VERSION: u64 = 74;
 //             Enable all gas costs for load_nitro_attestation.
 //             Enable zstd compression for consensus tonic network in mainnet.
 //             Enable the new commit rule for devnet.
-//             Enable consensus garbage collection for testnet.
-
+// Version 75: Enable passkey auth in testnet.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -3246,11 +3245,10 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                     }
-
+                }
+                75 => {
                     if chain != Chain::Mainnet {
-                        // Assuming a round rate of max 15/sec, then using a gc depth of 60 allow blocks within a window of ~4 seconds
-                        // to be included before be considered garbage collected.
-                        cfg.consensus_gc_depth = Some(60);
+                        cfg.feature_flags.passkey_auth = true;
                     }
                 }
                 // Use this template when making changes:

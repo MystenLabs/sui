@@ -45,6 +45,7 @@ pub(crate) enum EndOfEpochTransactionKind {
     CoinDenyListStateCreate(CoinDenyListStateCreateTransaction),
     BridgeStateCreate(BridgeStateCreateTransaction),
     BridgeCommitteeInit(BridgeCommitteeInitTransaction),
+    StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction),
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -95,6 +96,13 @@ pub(crate) struct BridgeCommitteeInitTransaction {
     pub native: SequenceNumber,
     /// The checkpoint sequence number this was viewed at.
     pub checkpoint_viewed_at: u64,
+}
+
+#[derive(SimpleObject, Clone, PartialEq, Eq)]
+pub(crate) struct StoreExecutionTimeObservationsTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
 }
 
 pub(crate) type CTxn = JsonCursor<ConsistentIndexCursor>;
@@ -299,6 +307,11 @@ impl EndOfEpochTransactionKind {
                 K::BridgeCommitteeInit(BridgeCommitteeInitTransaction {
                     native: bridge_shared_version,
                     checkpoint_viewed_at,
+                })
+            }
+            N::StoreExecutionTimeObservations(_) => {
+                K::StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction {
+                    dummy: None,
                 })
             }
         }

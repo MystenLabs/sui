@@ -61,7 +61,6 @@ use crate::{
 
 use anyhow::{anyhow, Result};
 use crossbeam::channel::Sender;
-use derivative::*;
 use im::ordmap::OrdMap;
 use lsp_server::{Request, RequestId};
 use lsp_types::{
@@ -69,7 +68,6 @@ use lsp_types::{
     GotoDefinitionParams, Hover, HoverContents, HoverParams, Location, MarkupContent, MarkupKind,
     Position, Range, ReferenceParams, SymbolKind,
 };
-
 use sha2::{Digest, Sha256};
 use std::{
     cmp,
@@ -402,16 +400,23 @@ pub struct MemberDef {
 }
 
 /// Definition of a local (or parameter)
-#[allow(clippy::non_canonical_partial_ord_impl)]
-#[derive(Derivative, Debug, Clone, Eq, PartialEq)]
-#[derivative(PartialOrd, Ord)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LocalDef {
     /// Location of the definition
     pub def_loc: Loc,
     /// Type of definition
-    #[derivative(PartialOrd = "ignore")]
-    #[derivative(Ord = "ignore")]
     pub def_type: Type,
+}
+
+impl PartialOrd for LocalDef {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for LocalDef {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.def_loc.cmp(&other.def_loc)
+    }
 }
 
 /// Information about call sites relevant to the IDE
@@ -1952,7 +1957,7 @@ pub fn get_compiled_pkg(
     );
     let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
     let build_plan =
-        BuildPlan::create(resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
+        BuildPlan::create(&resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut compiler_info = None;

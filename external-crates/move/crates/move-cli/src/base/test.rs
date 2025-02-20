@@ -190,7 +190,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     }
 
     let root_package = resolution_graph.root_package();
-    let build_plan = BuildPlan::create(resolution_graph)?;
+    let build_plan = BuildPlan::create(&resolution_graph)?;
 
     // Compile the package. We need to intercede in the compilation, process being performed by the
     // Move package system, to first grab the compilation env, construct the test plan from it, and

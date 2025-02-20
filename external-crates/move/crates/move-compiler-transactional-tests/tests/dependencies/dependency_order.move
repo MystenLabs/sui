@@ -7,7 +7,7 @@ module 0x42::C {
 }
 
 //# publish
-// names used to try to force an ordering of depedencies
+// names used to try to force an ordering of dependencies
 module 0x43::B {
     public fun foo(): 0x42::C::T {
         0x42::C::foo()

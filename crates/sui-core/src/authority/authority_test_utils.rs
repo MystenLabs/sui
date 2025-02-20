@@ -126,7 +126,7 @@ pub async fn execute_certificate_with_execution_error(
     let state_after =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
-        vec![result.inner().data().clone()],
+        &[result.inner().data().clone()],
         epoch_store.protocol_config(),
     );
     state.union(&effects_acc);

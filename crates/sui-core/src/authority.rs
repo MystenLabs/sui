@@ -51,8 +51,10 @@ use std::{
 };
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
+use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
+use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
@@ -806,7 +808,7 @@ pub struct AuthorityState {
     pub rpc_index: Option<Arc<RpcIndexStore>>,
 
     pub subscription_handler: Arc<SubscriptionHandler>,
-    checkpoint_store: Arc<CheckpointStore>,
+    pub checkpoint_store: Arc<CheckpointStore>,
 
     committee_store: Arc<CommitteeStore>,
 
@@ -2877,7 +2879,6 @@ impl AuthorityState {
         genesis_objects: &[Object],
         db_checkpoint_config: &DBCheckpointConfig,
         config: NodeConfig,
-        indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
         validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
         chain_identifier: ChainIdentifier,
@@ -2906,12 +2907,10 @@ impl AuthorityState {
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             rpc_index.clone(),
-            store.objects_lock_table.clone(),
             config.authority_store_pruning_config.clone(),
             epoch_store.committee().authority_exists(&name),
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
-            indirect_objects_threshold,
             archive_readers,
             pruner_db,
         );
@@ -3021,11 +3020,9 @@ impl AuthorityState {
             &self.database_for_testing().perpetual_tables,
             &self.checkpoint_store,
             self.rpc_index.as_deref(),
-            &self.database_for_testing().objects_lock_table,
             None,
             config.authority_store_pruning_config,
             metrics,
-            config.indirect_objects_threshold,
             archive_readers,
             EPOCH_DURATION_MS_FOR_TESTING,
         )
@@ -4963,6 +4960,102 @@ impl AuthorityState {
         Some(tx)
     }
 
+    #[instrument(level = "debug", skip_all)]
+    fn create_execution_time_observations_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        end_of_epoch_observation_keys: Vec<ExecutionTimeObservationKey>,
+        last_checkpoint_before_end_of_epoch: CheckpointSequenceNumber,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if epoch_store
+            .protocol_config()
+            .per_object_congestion_control_mode()
+            != PerObjectCongestionControlMode::ExecutionTimeEstimate
+        {
+            return None;
+        }
+
+        // TODO: Make this a protocol config.
+        const NUM_INCLUDED_CHECKPOINTS: u64 = 10;
+
+        // Load tx in the last N checkpoints before end-of-epoch, and save only the
+        // execution time observations for commands in these checkpoints.
+        let start_checkpoint = std::cmp::max(
+            last_checkpoint_before_end_of_epoch.saturating_sub(NUM_INCLUDED_CHECKPOINTS - 1),
+            // If we have <N checkpoints in the epoch, use all of them.
+            epoch_store
+                .epoch()
+                .checked_sub(1)
+                .map(|prev_epoch| {
+                    self.checkpoint_store
+                        .get_epoch_last_checkpoint_seq_number(prev_epoch)
+                        .expect("typed store must not fail")
+                        .expect(
+                            "sequence number of last checkpoint of preceding epoch must be saved",
+                        )
+                        + 1
+                })
+                .unwrap_or(0),
+        );
+        let sequence_numbers =
+            (start_checkpoint..=last_checkpoint_before_end_of_epoch).collect::<Vec<_>>();
+        let contents_digests: Vec<_> = self
+            .checkpoint_store
+            .multi_get_locally_computed_checkpoints(&sequence_numbers)
+            .expect("typed store must not fail")
+            .into_iter()
+            .map(|maybe_checkpoint| {
+                maybe_checkpoint
+                    .expect("preceding checkpoints must exist by end of epoch")
+                    .content_digest
+            })
+            .collect();
+        let tx_digests: Vec<_> = self
+            .checkpoint_store
+            .multi_get_checkpoint_content(&contents_digests)
+            .expect("typed store must not fail")
+            .into_iter()
+            .flat_map(|maybe_contents| {
+                maybe_contents
+                    .expect("preceding checkpoint contents must exist by end of epoch")
+                    .into_inner()
+                    .into_iter()
+                    .map(|digests| digests.transaction)
+            })
+            .collect();
+        let included_execution_time_observations: HashSet<_> = self
+            .get_transaction_cache_reader()
+            .multi_get_transaction_blocks(&tx_digests)
+            .into_iter()
+            .flat_map(|maybe_tx| {
+                if let TransactionKind::ProgrammableTransaction(ptb) = maybe_tx
+                    .expect("preceding transaction must exist by end of epoch")
+                    .transaction_data()
+                    .kind()
+                {
+                    #[allow(clippy::unnecessary_to_owned)]
+                    itertools::Either::Left(
+                        ptb.commands
+                            .to_owned()
+                            .into_iter()
+                            .map(|cmd| ExecutionTimeObservationKey::from_command(&cmd)),
+                    )
+                } else {
+                    itertools::Either::Right(std::iter::empty())
+                }
+            })
+            .chain(end_of_epoch_observation_keys.into_iter())
+            .collect();
+
+        let tx = EndOfEpochTransactionKind::new_store_execution_time_observations(
+            epoch_store
+                .get_end_of_epoch_execution_time_observations()
+                .filter_and_sort_v1(|(key, _)| included_execution_time_observations.contains(key)),
+        );
+        info!("Creating StoreExecutionTimeObservations tx");
+        Some(tx)
+    }
+
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
@@ -4980,6 +5073,10 @@ impl AuthorityState {
         gas_cost_summary: &GasCostSummary,
         checkpoint: CheckpointSequenceNumber,
         epoch_start_timestamp_ms: CheckpointTimestamp,
+        end_of_epoch_observation_keys: Vec<ExecutionTimeObservationKey>,
+        // This may be less than `checkpoint - 1` if the end-of-epoch PendingCheckpoint produced
+        // >1 checkpoint.
+        last_checkpoint: CheckpointSequenceNumber,
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let mut txns = Vec::new();
 
@@ -4996,6 +5093,13 @@ impl AuthorityState {
             txns.push(tx);
         }
         if let Some(tx) = self.create_deny_list_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_execution_time_observations_tx(
+            epoch_store,
+            end_of_epoch_observation_keys,
+            last_checkpoint,
+        ) {
             txns.push(tx);
         }
 

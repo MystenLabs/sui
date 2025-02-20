@@ -50,7 +50,6 @@ pub struct StateSnapshotReaderV1 {
     local_object_store: Arc<dyn ObjectStorePutExt>,
     ref_files: BTreeMap<u32, BTreeMap<u32, FileMetadata>>,
     object_files: BTreeMap<u32, BTreeMap<u32, FileMetadata>>,
-    indirect_objects_threshold: usize,
     m: MultiProgress,
     concurrency: usize,
 }
@@ -60,7 +59,6 @@ impl StateSnapshotReaderV1 {
         epoch: u64,
         remote_store_config: &ObjectStoreConfig,
         local_store_config: &ObjectStoreConfig,
-        indirect_objects_threshold: usize,
         download_concurrency: NonZeroUsize,
         m: MultiProgress,
         skip_reset_local_store: bool,
@@ -186,7 +184,6 @@ impl StateSnapshotReaderV1 {
             local_object_store,
             ref_files,
             object_files,
-            indirect_objects_threshold,
             m,
             concurrency: download_concurrency.get(),
         })
@@ -385,7 +382,6 @@ impl StateSnapshotReaderV1 {
     ) -> Result<(), anyhow::Error> {
         let epoch_dir = self.epoch_dir();
         let concurrency = self.concurrency;
-        let threshold = self.indirect_objects_threshold;
         let remote_object_store = self.remote_object_store.clone();
         let input_files: Vec<_> = self
             .object_files
@@ -445,7 +441,6 @@ impl StateSnapshotReaderV1 {
                                 AuthorityStore::bulk_insert_live_objects(
                                     perpetual_db,
                                     obj_iter,
-                                    threshold,
                                     &sha3_digest,
                                 )
                                 .expect("Failed to insert live objects");

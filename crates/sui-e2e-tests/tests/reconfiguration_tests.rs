@@ -45,6 +45,8 @@ async fn advance_epoch_tx_test() {
                     &GasCostSummary::new(0, 0, 0, 0),
                     0, // checkpoint
                     0, // epoch_start_timestamp_ms
+                    vec![],
+                    0, // last_checkpoint
                 )
                 .await
                 .unwrap();

@@ -202,7 +202,6 @@ impl ValidatorConfigBuilder {
             metrics: None,
             supported_protocol_versions: self.supported_protocol_versions,
             db_checkpoint_config: Default::default(),
-            indirect_objects_threshold: usize::MAX,
             // By default, expensive checks will be enabled in debug build, but not in release build.
             expensive_safety_check_config: ExpensiveSafetyCheckConfig::default(),
             name_service_package_address: None,
@@ -502,7 +501,6 @@ impl FullnodeConfigBuilder {
             metrics: None,
             supported_protocol_versions: self.supported_protocol_versions,
             db_checkpoint_config: self.db_checkpoint_config.unwrap_or_default(),
-            indirect_objects_threshold: usize::MAX,
             expensive_safety_check_config: self
                 .expensive_safety_check_config
                 .unwrap_or_else(ExpensiveSafetyCheckConfig::new_enable_all),

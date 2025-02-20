@@ -877,6 +877,9 @@ active_validator_addresses
 extract_coin_balance
 	fun
 	0x3::sui_system_state_inner
+store_execution_time_estimates
+	public(package) fun
+	0x3::sui_system_state_inner
 SuiSystemState
 	public struct
 	0x3::sui_system
@@ -1013,6 +1016,9 @@ load_inner_maybe_upgrade
 	fun
 	0x3::sui_system
 validator_voting_powers
+	fun
+	0x3::sui_system
+store_execution_time_estimates
 	fun
 	0x3::sui_system
 GenesisValidatorMetadata

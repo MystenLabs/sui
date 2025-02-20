@@ -7,7 +7,7 @@ use std::{
 };
 
 use move_core_types::language_storage::StructTag;
-use sui_json_rpc::name_service::{Domain, NameRecord, SubDomainRegistration};
+use sui_name_service::{Domain, NameRecord, SubDomainRegistration};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     dynamic_field::Field,

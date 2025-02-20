@@ -28,10 +28,6 @@ pub(crate) use rpc_bail;
 
 /// Behaves exactly like `anyhow::Context`, but only adds context to `RpcError::InternalError`.
 pub(crate) trait InternalContext<T, E: std::error::Error> {
-    fn internal_context<C>(self, c: C) -> Result<T, RpcError<E>>
-    where
-        C: Display + Send + Sync + 'static;
-
     fn with_internal_context<C, F>(self, f: F) -> Result<T, RpcError<E>>
     where
         C: Display + Send + Sync + 'static,
@@ -63,19 +59,6 @@ pub(crate) enum RpcError<E: std::error::Error = Infallible> {
 }
 
 impl<T, E: std::error::Error> InternalContext<T, E> for Result<T, RpcError<E>> {
-    /// Wrap an internal error with additional context.
-    fn internal_context<C>(self, c: C) -> Result<T, RpcError<E>>
-    where
-        C: Display + Send + Sync + 'static,
-    {
-        use RpcError as E;
-        if let Err(E::InternalError(e)) = self {
-            Err(E::InternalError(e.context(c)))
-        } else {
-            self
-        }
-    }
-
     /// Wrap an internal error with additional context that is lazily evaluated only once an
     /// internal error has occured.
     fn with_internal_context<C, F>(self, f: F) -> Result<T, RpcError<E>>

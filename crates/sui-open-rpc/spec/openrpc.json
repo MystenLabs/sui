@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "74",
+              "maxSupportedProtocolVersion": "75",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -8786,7 +8786,8 @@
             "enum": [
               "AuthenticatorStateCreate",
               "RandomnessStateCreate",
-              "CoinDenyListStateCreate"
+              "CoinDenyListStateCreate",
+              "StoreExecutionTimeObservations"
             ]
           },
           {

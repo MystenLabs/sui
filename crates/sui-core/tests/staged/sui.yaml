@@ -337,6 +337,10 @@ DeleteKind:
       Wrap: UNIT
 Digest:
   NEWTYPESTRUCT: BYTES
+Duration:
+  STRUCT:
+    - secs: U64
+    - nanos: U32
 ECMHLiveObjectSetDigest:
   STRUCT:
     - digest:
@@ -390,6 +394,10 @@ EndOfEpochTransactionKind:
       BridgeCommitteeInit:
         NEWTYPE:
           TYPENAME: SequenceNumber
+    7:
+      StoreExecutionTimeObservations:
+        NEWTYPE:
+          TYPENAME: StoredExecutionTimeObservations
 Event:
   STRUCT:
     - package_id:
@@ -544,6 +552,30 @@ ExecutionStatus:
               TYPENAME: ExecutionFailureStatus
           - command:
               OPTION: U64
+ExecutionTimeObservationKey:
+  ENUM:
+    0:
+      MoveEntryPoint:
+        STRUCT:
+          - package:
+              TYPENAME: ObjectID
+          - module: STR
+          - function: STR
+          - type_arguments:
+              SEQ:
+                TYPENAME: TypeInput
+    1:
+      TransferObjects: UNIT
+    2:
+      SplitCoins: UNIT
+    3:
+      MergeCoins: UNIT
+    4:
+      Publish: UNIT
+    5:
+      MakeMoveVec: UNIT
+    6:
+      Upgrade: UNIT
 FullCheckpointContents:
   STRUCT:
     - transactions:
@@ -893,6 +925,18 @@ SenderSignedTransaction:
           TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
+StoredExecutionTimeObservations:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: ExecutionTimeObservationKey
+              - SEQ:
+                  TUPLE:
+                    - TYPENAME: AuthorityPublicKeyBytes
+                    - TYPENAME: Duration
 StructInput:
   STRUCT:
     - address:

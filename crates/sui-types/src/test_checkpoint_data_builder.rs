@@ -15,7 +15,6 @@ use crate::{
         dbg_addr, random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber,
         SuiAddress,
     },
-    coin::Coin,
     committee::Committee,
     digests::TransactionDigest,
     effects::{TestEffectsBuilder, TransactionEffectsAPI, TransactionEvents},
@@ -219,7 +218,7 @@ impl TestCheckpointDataBuilder {
             object_id
         );
         let move_object = MoveObject::new_coin(
-            Coin::type_(coin_type).into(),
+            coin_type,
             // version doesn't matter since we will set it to the lamport version when we finalize the transaction
             SequenceNumber::MIN,
             object_id,

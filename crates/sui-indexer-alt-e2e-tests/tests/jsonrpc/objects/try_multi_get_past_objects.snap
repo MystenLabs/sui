@@ -119,12 +119,11 @@ Response: {
       }
     },
     {
-      "status": "ObjectDeleted",
-      "details": {
-        "objectId": "0x0dfe3bf8505600c374ecc59e9580d3504a37a14f65b53084ef86c5861f39cc3f",
-        "version": 8,
-        "digest": "7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz"
-      }
+      "status": "VersionNotFound",
+      "details": [
+        "0x0dfe3bf8505600c374ecc59e9580d3504a37a14f65b53084ef86c5861f39cc3f",
+        8
+      ]
     },
     {
       "status": "VersionNotFound",
@@ -227,12 +226,11 @@ Response: {
       }
     },
     {
-      "status": "ObjectDeleted",
-      "details": {
-        "objectId": "0x0dfe3bf8505600c374ecc59e9580d3504a37a14f65b53084ef86c5861f39cc3f",
-        "version": 8,
-        "digest": "7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz"
-      }
+      "status": "VersionNotFound",
+      "details": [
+        "0x0dfe3bf8505600c374ecc59e9580d3504a37a14f65b53084ef86c5861f39cc3f",
+        8
+      ]
     },
     {
       "status": "VersionNotFound",

@@ -144,13 +144,13 @@ pub trait ExecutionCacheCommit: Send + Sync {
     /// Durably commit the outputs of the given transactions to the database.
     /// Will be called by CheckpointExecutor to ensure that transaction outputs are
     /// written durably before marking a checkpoint as finalized.
-    fn commit_transaction_outputs<'a>(
-        &'a self,
+    fn commit_transaction_outputs(
+        &self,
         epoch: EpochId,
-        digests: &'a [TransactionDigest],
+        digests: &[TransactionDigest],
         // TODO: Delete this parameter once table migration is complete.
         use_object_per_epoch_marker_table_v2: bool,
-    ) -> BoxFuture<'a, ()>;
+    );
 
     /// Durably commit a transaction to the database. Used to store any transactions
     /// that cannot be reconstructed at start-up by consensus replay. Currently the only

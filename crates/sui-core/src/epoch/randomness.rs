@@ -807,6 +807,7 @@ mod tests {
             authority_per_epoch_store::{ExecutionIndices, ExecutionIndicesWithStats},
             test_authority_builder::TestAuthorityBuilder,
         },
+        checkpoints::CheckpointStore,
         consensus_adapter::{
             ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
             MockConsensusClient,
@@ -862,6 +863,7 @@ mod tests {
                 .await;
             let consensus_adapter = Arc::new(ConsensusAdapter::new(
                 Arc::new(mock_consensus_client),
+                CheckpointStore::new_for_tests(),
                 state.name,
                 Arc::new(ConnectionMonitorStatusForTests {}),
                 100_000,
@@ -1012,6 +1014,7 @@ mod tests {
                 .await;
             let consensus_adapter = Arc::new(ConsensusAdapter::new(
                 Arc::new(mock_consensus_client),
+                CheckpointStore::new_for_tests(),
                 state.name,
                 Arc::new(ConnectionMonitorStatusForTests {}),
                 100_000,

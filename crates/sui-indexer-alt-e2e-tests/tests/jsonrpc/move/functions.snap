@@ -1,0 +1,291 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 17-28:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6353600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 30:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 32-36:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "visibility": "Public",
+    "isEntry": false,
+    "typeParameters": [],
+    "parameters": [
+      "U64",
+      {
+        "Struct": {
+          "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+          "module": "M",
+          "name": "O",
+          "typeArguments": []
+        }
+      },
+      {
+        "MutableReference": {
+          "Struct": {
+            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "module": "M",
+            "name": "O",
+            "typeArguments": []
+          }
+        }
+      },
+      {
+        "Vector": {
+          "Struct": {
+            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "module": "M",
+            "name": "O",
+            "typeArguments": []
+          }
+        }
+      }
+    ],
+    "return": [
+      "U32",
+      {
+        "Reference": {
+          "Struct": {
+            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "module": "M",
+            "name": "O",
+            "typeArguments": []
+          }
+        }
+      },
+      {
+        "Struct": {
+          "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+          "module": "M",
+          "name": "O",
+          "typeArguments": []
+        }
+      },
+      {
+        "Vector": {
+          "Struct": {
+            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "module": "M",
+            "name": "O",
+            "typeArguments": []
+          }
+        }
+      }
+    ]
+  }
+}
+
+task 4, lines 38-42:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "visibility": "Private",
+    "isEntry": true,
+    "typeParameters": [],
+    "parameters": [
+      "U16"
+    ],
+    "return": []
+  }
+}
+
+task 5, lines 44-63:
+//# upgrade --package P --sender A --upgrade-capability 1,1
+created: object(5,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 7250400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6, line 65:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 67-71:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "visibility": "Public",
+    "isEntry": false,
+    "typeParameters": [],
+    "parameters": [
+      "U64",
+      {
+        "Struct": {
+          "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+          "module": "M",
+          "name": "O",
+          "typeArguments": []
+        }
+      },
+      {
+        "MutableReference": {
+          "Struct": {
+            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "module": "M",
+            "name": "O",
+            "typeArguments": []
+          }
+        }
+      },
+      {
+        "Vector": {
+          "Struct": {
+            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "module": "M",
+            "name": "O",
+            "typeArguments": []
+          }
+        }
+      }
+    ],
+    "return": [
+      "U32",
+      {
+        "Reference": {
+          "Struct": {
+            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "module": "M",
+            "name": "O",
+            "typeArguments": []
+          }
+        }
+      },
+      {
+        "Struct": {
+          "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+          "module": "M",
+          "name": "O",
+          "typeArguments": []
+        }
+      },
+      {
+        "Vector": {
+          "Struct": {
+            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "module": "M",
+            "name": "O",
+            "typeArguments": []
+          }
+        }
+      }
+    ]
+  }
+}
+
+task 8, lines 73-77:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "visibility": "Private",
+    "isEntry": true,
+    "typeParameters": [],
+    "parameters": [
+      "U16",
+      "U8",
+      {
+        "Reference": {
+          "Struct": {
+            "address": "0xad738da99314f24c84fec6bdb0b1d0df9d64e96e2ab68af6498195e65142ea3c",
+            "module": "M",
+            "name": "O2",
+            "typeArguments": []
+          }
+        }
+      }
+    ],
+    "return": []
+  }
+}
+
+task 9, lines 79-83:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "visibility": "Public",
+    "isEntry": false,
+    "typeParameters": [],
+    "parameters": [
+      "Bool"
+    ],
+    "return": [
+      "U128"
+    ]
+  }
+}
+
+task 10, lines 85-89:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 5,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Invalid Move identifier: \"not a module\""
+  }
+}
+
+task 11, lines 91-95:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 6,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Package not found: 0x0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}
+
+task 12, lines 97-101:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 7,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Package not found: 0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+  }
+}
+
+task 13, lines 103-107:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 8,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Module not found: 0xad738da99314f24c84fec6bdb0b1d0df9d64e96e2ab68af6498195e65142ea3c::N"
+  }
+}
+
+task 14, lines 109-113:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 9,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Function not found: 0xad738da99314f24c84fec6bdb0b1d0df9d64e96e2ab68af6498195e65142ea3c::M::qux"
+  }
+}

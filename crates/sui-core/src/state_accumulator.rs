@@ -148,7 +148,7 @@ impl WrappedObject {
 
 pub fn accumulate_effects<T, S>(
     store: S,
-    effects: Vec<TransactionEffects>,
+    effects: &[TransactionEffects],
     protocol_config: &ProtocolConfig,
 ) -> Accumulator
 where
@@ -166,7 +166,7 @@ where
 
 fn accumulate_effects_v1<T, S>(
     store: S,
-    effects: Vec<TransactionEffects>,
+    effects: &[TransactionEffects],
     protocol_config: &ProtocolConfig,
 ) -> Accumulator
 where
@@ -297,7 +297,7 @@ where
     acc
 }
 
-fn accumulate_effects_v2<T, S>(store: S, effects: Vec<TransactionEffects>) -> Accumulator
+fn accumulate_effects_v2<T, S>(store: S, effects: &[TransactionEffects]) -> Accumulator
 where
     S: std::ops::Deref<Target = T>,
     T: AccumulatorStore + ?Sized,
@@ -341,7 +341,7 @@ where
     acc
 }
 
-fn accumulate_effects_v3(effects: Vec<TransactionEffects>) -> Accumulator {
+fn accumulate_effects_v3(effects: &[TransactionEffects]) -> Accumulator {
     let mut acc = Accumulator::default();
 
     // process insertions to the set
@@ -393,9 +393,9 @@ impl StateAccumulator {
     /// Accumulates the effects of a single checkpoint and persists the accumulator.
     pub fn accumulate_checkpoint(
         &self,
-        effects: Vec<TransactionEffects>,
+        effects: &[TransactionEffects],
         checkpoint_seq_num: CheckpointSequenceNumber,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Accumulator> {
         let _scope = monitored_scope("AccumulateCheckpoint");
         if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
@@ -586,7 +586,7 @@ impl StateAccumulator {
 
     pub fn accumulate_effects(
         &self,
-        effects: Vec<TransactionEffects>,
+        effects: &[TransactionEffects],
         protocol_config: &ProtocolConfig,
     ) -> Accumulator {
         accumulate_effects(&*self.store, effects, protocol_config)

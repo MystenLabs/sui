@@ -617,6 +617,14 @@ module sui_system::sui_system {
         sui_system_state_inner::active_validator_voting_powers(self)
     }
 
+    #[allow(unused_function)]
+    /// Saves the given execution time estimate blob to the SuiSystemState object, for system use
+    /// at the start of the next epoch.
+    fun store_execution_time_estimates(wrapper: &mut SuiSystemState, estimates_bytes: vector<u8>) {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::store_execution_time_estimates(self, estimates_bytes)
+    }
+
     #[test_only]
     public fun validator_voting_powers_for_testing(wrapper: &mut SuiSystemState): VecMap<address, u64> {
         validator_voting_powers(wrapper)

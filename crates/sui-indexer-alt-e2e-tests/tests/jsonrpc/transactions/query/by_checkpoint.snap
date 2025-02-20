@@ -423,7 +423,7 @@ Response: {
   "id": 19,
   "result": {
     "data": [],
-    "nextCursor": null,
+    "nextCursor": "Ng==",
     "hasNextPage": false
   }
 }
@@ -435,7 +435,7 @@ Response: {
   "id": 20,
   "result": {
     "data": [],
-    "nextCursor": null,
+    "nextCursor": "MA==",
     "hasNextPage": false
   }
 }

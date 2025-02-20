@@ -23,7 +23,7 @@ pub use worker_pool::WorkerPool;
 
 #[async_trait]
 pub trait Worker: Send + Sync {
-    type Result: Send + Sync;
+    type Result: Send + Sync + Clone;
     async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<Self::Result>;
 
     fn preprocess_hook(&self, _: &CheckpointData) -> Result<()> {

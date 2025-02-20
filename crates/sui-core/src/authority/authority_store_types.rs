@@ -2,18 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use serde_with::Bytes;
 use sui_types::base_types::MoveObjectType;
-use sui_types::base_types::{ObjectDigest, SequenceNumber, TransactionDigest};
+use sui_types::base_types::TransactionDigest;
 use sui_types::coin::Coin;
-use sui_types::crypto::{default_hash, Signable};
 use sui_types::error::SuiError;
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Data, MoveObject, Object, ObjectInner, Owner};
 use sui_types::storage::ObjectKey;
-
-pub type ObjectContentDigest = ObjectDigest;
 
 // Versioning process:
 //
@@ -105,118 +100,16 @@ pub struct StoreObjectValue {
 pub enum StoreData {
     Move(MoveObject),
     Package(MovePackage),
-    IndirectObject(IndirectObjectMetadata),
+    IndirectObjectDeprecated,
     Coin(u64),
 }
 
-/// Metadata of stored moved object
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
-pub struct IndirectObjectMetadata {
-    version: SequenceNumber,
-    pub digest: ObjectContentDigest,
-}
-
-/// Enum wrapper for versioning
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
-pub enum StoreMoveObjectWrapper {
-    V1(StoreMoveObjectV1),
-}
-
-// Always points to latest version.
-pub type StoreMoveObject = StoreMoveObjectV1;
-
-impl StoreMoveObjectWrapper {
-    pub fn migrate(self) -> Self {
-        // TODO: when there are multiple versions, we must iteratively migrate from version N to
-        // N+1 until we arrive at the latest version
-        self
-    }
-
-    // Always returns the most recent version. Older versions are migrated to the latest version at
-    // read time, so there is never a need to access older versions.
-    pub fn inner(&self) -> &StoreMoveObject {
-        match self {
-            Self::V1(v1) => v1,
-
-            // can remove #[allow] when there are multiple versions
-            #[allow(unreachable_patterns)]
-            _ => panic!("object should have been migrated to latest version at read time"),
-        }
-    }
-    pub fn into_inner(self) -> StoreMoveObject {
-        match self {
-            Self::V1(v1) => v1,
-
-            // can remove #[allow] when there are multiple versions
-            #[allow(unreachable_patterns)]
-            _ => panic!("object should have been migrated to latest version at read time"),
-        }
-    }
-}
-
-impl From<StoreMoveObject> for StoreMoveObjectWrapper {
-    fn from(o: StoreMoveObject) -> Self {
-        StoreMoveObjectWrapper::V1(o)
-    }
-}
-
-/// Separately stored move object
-#[serde_as]
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
-pub struct StoreMoveObjectV1 {
-    pub type_: MoveObjectType,
-    has_public_transfer: bool,
-    #[serde_as(as = "Bytes")]
-    contents: Vec<u8>,
-    /// reference count of `MoveMetadata` that point to the same content
-    /// once it hits 0, the object gets deleted by a compaction job
-    ref_count: usize,
-}
-
-impl<W> Signable<W> for StoreMoveObject
-where
-    W: std::io::Write,
-{
-    fn write(&self, writer: &mut W) {
-        write!(writer, "StoreMoveObject::").expect("Hasher should not fail");
-        bcs::serialize_into(writer, &self).expect("Message serialization should not fail");
-    }
-}
-
-impl StoreMoveObject {
-    pub fn digest(&self) -> ObjectContentDigest {
-        // expected to be called on constructed object with default ref count 1
-        assert_eq!(self.ref_count, 1);
-        ObjectContentDigest::new(default_hash(self))
-    }
-}
-
-pub struct StoreObjectPair(pub StoreObjectWrapper, pub Option<StoreMoveObjectWrapper>);
-
-pub fn get_store_object_pair(object: Object, indirect_objects_threshold: usize) -> StoreObjectPair {
-    let mut indirect_object = None;
-
+pub fn get_store_object(object: Object) -> StoreObjectWrapper {
     let object = object.into_inner();
-
     let data = match object.data {
         Data::Package(package) => StoreData::Package(package),
         Data::Move(move_obj) => {
-            if indirect_objects_threshold > 0
-                && move_obj.contents().len() >= indirect_objects_threshold
-            {
-                let has_public_transfer = move_obj.has_public_transfer();
-                let version = move_obj.version();
-                let (type_, contents) = move_obj.into_inner();
-                let move_object = StoreMoveObject {
-                    type_,
-                    has_public_transfer,
-                    contents,
-                    ref_count: 1,
-                };
-                let digest = move_object.digest();
-                indirect_object = Some(move_object);
-                StoreData::IndirectObject(IndirectObjectMetadata { version, digest })
-            } else if move_obj.type_().is_gas_coin() {
+            if move_obj.type_().is_gas_coin() {
                 StoreData::Coin(
                     Coin::from_bcs_bytes(move_obj.contents())
                         .expect("failed to deserialize coin")
@@ -234,31 +127,17 @@ pub fn get_store_object_pair(object: Object, indirect_objects_threshold: usize) 
         previous_transaction: object.previous_transaction,
         storage_rebate: object.storage_rebate,
     };
-    StoreObjectPair(
-        StoreObject::Value(store_object).into(),
-        indirect_object.map(|i| i.into()),
-    )
+    StoreObject::Value(store_object).into()
 }
 
 pub(crate) fn try_construct_object(
     object_key: &ObjectKey,
     store_object: StoreObjectValue,
-    indirect_object: Option<StoreMoveObject>,
 ) -> Result<Object, SuiError> {
-    let data = match (store_object.data, indirect_object) {
-        (StoreData::Move(object), None) => Data::Move(object),
-        (StoreData::Package(package), None) => Data::Package(package),
-        (StoreData::IndirectObject(metadata), Some(indirect_obj)) => unsafe {
-            Data::Move(MoveObject::new_from_execution_with_limit(
-                indirect_obj.type_,
-                indirect_obj.has_public_transfer,
-                metadata.version,
-                indirect_obj.contents,
-                // verification is already done during initial execution
-                u64::MAX,
-            )?)
-        },
-        (StoreData::Coin(balance), None) => unsafe {
+    let data = match store_object.data {
+        StoreData::Move(object) => Data::Move(object),
+        StoreData::Package(package) => Data::Package(package),
+        StoreData::Coin(balance) => unsafe {
             Data::Move(MoveObject::new_from_execution_with_limit(
                 MoveObjectType::gas_coin(),
                 true,

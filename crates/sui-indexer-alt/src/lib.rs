@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context;
 use bootstrap::bootstrap;
 use config::{IndexerConfig, PipelineLayer};
 use handlers::coin_balance_buckets::CoinBalanceBuckets;
@@ -25,7 +24,6 @@ use sui_indexer_alt_framework::pipeline::{
 use sui_indexer_alt_framework::{Indexer, IndexerArgs};
 use sui_indexer_alt_schema::MIGRATIONS;
 use sui_pg_db::DbArgs;
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 pub mod args;
@@ -36,7 +34,7 @@ pub mod config;
 pub(crate) mod consistent_pruning;
 pub(crate) mod handlers;
 
-pub async fn start_indexer(
+pub async fn setup_indexer(
     db_args: DbArgs,
     indexer_args: IndexerArgs,
     client_args: ClientArgs,
@@ -48,7 +46,7 @@ pub async fn start_indexer(
     with_genesis: bool,
     registry: &Registry,
     cancel: CancellationToken,
-) -> anyhow::Result<JoinHandle<()>> {
+) -> anyhow::Result<Indexer> {
     let IndexerConfig {
         ingestion,
         consistency,
@@ -197,5 +195,5 @@ pub async fn start_indexer(
     add_concurrent!(TxDigests, tx_digests);
     add_concurrent!(TxKinds, tx_kinds);
 
-    indexer.run().await.context("Failed to start indexer")
+    Ok(indexer)
 }

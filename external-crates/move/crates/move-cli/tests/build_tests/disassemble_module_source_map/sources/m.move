@@ -22,6 +22,8 @@ public fun foo(e: SomeEnum, p1: u64, p2: SomeStruct<u64, u8>): (u64, u64) {
     }
 }
 
+public native fun bar();
+
 #[test]
 public fun test() {
     let e = SomeEnum::NamedVariant { field: 42 };

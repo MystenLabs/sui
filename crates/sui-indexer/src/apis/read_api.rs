@@ -242,7 +242,7 @@ impl ReadApiServer for ReadApi {
         _intent_scope: ZkLoginIntentScope,
         _author: SuiAddress,
     ) -> RpcResult<ZkLoginVerifyResult> {
-        todo!()
+        Err(jsonrpsee::types::error::ErrorCode::MethodNotFound.into())
     }
 }
 

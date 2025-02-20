@@ -57,6 +57,7 @@ impl SingleValidator {
                 Arc::downgrade(&validator),
                 consensus_mode,
             )),
+            validator.checkpoint_store.clone(),
             validator.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,

@@ -25,6 +25,7 @@ use sui_json_rpc_types::{
     SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseQuery, TransactionBlocksPage, TransactionFilter,
 };
+use sui_name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError};
 use sui_open_rpc::Module;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::{
@@ -40,7 +41,6 @@ use tracing::{instrument, warn};
 use crate::{
     authority_state::{StateRead, StateReadResult},
     error::{Error, SuiRpcInputError},
-    name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError},
     with_tracing, SuiRpcModule,
 };
 

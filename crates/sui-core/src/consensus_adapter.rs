@@ -48,6 +48,7 @@ use tokio::time::{self};
 use tracing::{debug, info, trace, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::checkpoints::CheckpointStore;
 use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
 use crate::consensus_throughput_calculator::{ConsensusThroughputProfiler, Level};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
@@ -225,6 +226,8 @@ pub trait ConsensusClient: Sync + Send + 'static {
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
     consensus_client: Arc<dyn ConsensusClient>,
+    /// The checkpoint store for the validator
+    checkpoint_store: Arc<CheckpointStore>,
     /// Authority pubkey.
     authority: AuthorityName,
     /// The limit to number of inflight transactions at this node.
@@ -273,6 +276,7 @@ impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
         consensus_client: Arc<dyn ConsensusClient>,
+        checkpoint_store: Arc<CheckpointStore>,
         authority: AuthorityName,
         connection_monitor_status: Arc<dyn CheckConnection>,
         max_pending_transactions: usize,
@@ -287,6 +291,7 @@ impl ConsensusAdapter {
             ArcSwap::from_pointee(Arc::new(ArcSwap::from_pointee(HashMap::new())));
         Self {
             consensus_client,
+            checkpoint_store,
             authority,
             max_pending_transactions,
             max_submit_position,
@@ -313,7 +318,6 @@ impl ConsensusAdapter {
         self.consensus_throughput_profiler.store(Some(profiler))
     }
 
-    // todo - this probably need to hold some kind of lock to make sure epoch does not change while we are recovering
     pub fn submit_recovered(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
         // Currently narwhal worker might lose transactions on restart, so we need to resend them
         // todo - get_all_pending_consensus_transactions is called twice when
@@ -984,7 +988,10 @@ impl ConsensusAdapter {
             {
                 // If the transaction is a checkpoint signature, we can also wait to get notified when a checkpoint with equal or higher sequence
                 // number has been already synced. This way we don't try to unnecessarily sequence the signature for an already verified checkpoint.
-                Either::Left(epoch_store.synced_checkpoint_notify(checkpoint_sequence_number))
+                Either::Left(
+                    self.checkpoint_store
+                        .notify_read_synced_checkpoint(checkpoint_sequence_number),
+                )
             } else {
                 Either::Right(future::pending())
             };
@@ -1003,8 +1010,7 @@ impl ConsensusAdapter {
                         processed.expect("Storage error when waiting for transaction executed in checkpoint");
                         self.metrics.sequencing_certificate_processed.with_label_values(&["checkpoint"]).inc();
                     }
-                    processed = checkpoint_synced_future => {
-                        processed.expect("Error when waiting for checkpoint sequence number");
+                    _ = checkpoint_synced_future => {
                         self.metrics.sequencing_certificate_processed.with_label_values(&["synced_checkpoint"]).inc();
                     }
                 }
@@ -1295,6 +1301,7 @@ pub fn position_submit_certificate(
 #[cfg(test)]
 mod adapter_tests {
     use super::position_submit_certificate;
+    use crate::checkpoints::CheckpointStore;
     use crate::consensus_adapter::{
         ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
     };
@@ -1336,6 +1343,7 @@ mod adapter_tests {
         // When we define max submit position and delay step
         let consensus_adapter = ConsensusAdapter::new(
             Arc::new(LazyMysticetiClient::new()),
+            CheckpointStore::new_for_tests(),
             *committee.authority_by_index(0).unwrap(),
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
@@ -1366,6 +1374,7 @@ mod adapter_tests {
         // Without submit position and delay step
         let consensus_adapter = ConsensusAdapter::new(
             Arc::new(LazyMysticetiClient::new()),
+            CheckpointStore::new_for_tests(),
             *committee.authority_by_index(0).unwrap(),
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,

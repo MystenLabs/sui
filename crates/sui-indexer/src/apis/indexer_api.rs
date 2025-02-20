@@ -7,7 +7,6 @@ use jsonrpsee::core::SubscriptionResult;
 use jsonrpsee::{PendingSubscriptionSink, RpcModule};
 use tap::TapFallible;
 
-use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_api::{cap_page_limit, IndexerApiServer};
 use sui_json_rpc_types::{
@@ -15,6 +14,7 @@ use sui_json_rpc_types::{
     SuiObjectResponseQuery, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
     TransactionFilter,
 };
+use sui_name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError};
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;

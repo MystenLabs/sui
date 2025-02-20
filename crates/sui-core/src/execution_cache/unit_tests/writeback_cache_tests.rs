@@ -356,12 +356,9 @@ impl Scenario {
 
     // commit a transaction to the database
     pub async fn commit(&mut self, tx: TransactionDigest) -> SuiResult {
-        let res = self
-            .cache()
-            .commit_transaction_outputs(1, &[tx], true)
-            .await;
+        self.cache().commit_transaction_outputs(1, &[tx], true);
         self.count_action();
-        Ok(res)
+        Ok(())
     }
 
     pub fn clear_state_end_of_epoch(&self) {
@@ -557,7 +554,7 @@ async fn test_committed() {
 
         s.assert_live(&[1, 2]);
         s.assert_dirty(&[1, 2]);
-        s.cache().commit_transaction_outputs(1, &[tx], true).await;
+        s.cache().commit_transaction_outputs(1, &[tx], true);
         s.assert_not_dirty(&[1, 2]);
         s.assert_cached(&[1, 2]);
 

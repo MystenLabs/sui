@@ -737,7 +737,6 @@ impl SuiNode {
             genesis.objects(),
             &db_checkpoint_config,
             config.clone(),
-            config.indirect_objects_threshold,
             archive_readers,
             validator_tx_finalizer,
             chain_identifier,
@@ -1062,7 +1061,6 @@ impl SuiNode {
                     db_checkpoint_config
                         .prune_and_compact_before_upload
                         .unwrap_or(true),
-                    config.indirect_objects_threshold,
                     config.authority_store_pruning_config.clone(),
                     prometheus_registry,
                     state_snapshot_enabled,
@@ -1255,6 +1253,7 @@ impl SuiNode {
             &registry_service.default_registry(),
             epoch_store.protocol_config().clone(),
             client.clone(),
+            checkpoint_store.clone(),
         ));
         let consensus_manager =
             ConsensusManager::new(&config, consensus_config, registry_service, client);
@@ -1506,12 +1505,14 @@ impl SuiNode {
         prometheus_registry: &Registry,
         protocol_config: ProtocolConfig,
         consensus_client: Arc<dyn ConsensusClient>,
+        checkpoint_store: Arc<CheckpointStore>,
     ) -> ConsensusAdapter {
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
 
         ConsensusAdapter::new(
             consensus_client,
+            checkpoint_store,
             authority,
             connection_monitor_status,
             consensus_config.max_pending_transactions(),
@@ -2226,16 +2227,16 @@ pub async fn build_http_server(
                 config.name_service_registry_id,
                 config.name_service_reverse_registry_id,
             ) {
-                sui_json_rpc::name_service::NameServiceConfig::new(
+                sui_name_service::NameServiceConfig::new(
                     package_address,
                     registry_id,
                     reverse_registry_id,
                 )
             } else {
                 match state.get_chain_identifier().chain() {
-                    Chain::Mainnet => sui_json_rpc::name_service::NameServiceConfig::mainnet(),
-                    Chain::Testnet => sui_json_rpc::name_service::NameServiceConfig::testnet(),
-                    Chain::Unknown => sui_json_rpc::name_service::NameServiceConfig::default(),
+                    Chain::Mainnet => sui_name_service::NameServiceConfig::mainnet(),
+                    Chain::Testnet => sui_name_service::NameServiceConfig::testnet(),
+                    Chain::Unknown => sui_name_service::NameServiceConfig::default(),
                 }
             };
 
@@ -2286,7 +2287,14 @@ pub async fn build_http_server(
             }
             request
         })
-        .layer(axum::middleware::from_fn(server_timing_middleware));
+        .layer(axum::middleware::from_fn(server_timing_middleware))
+        // Setup a permissive CORS policy
+        .layer(
+            tower_http::cors::CorsLayer::new()
+                .allow_methods([http::Method::GET, http::Method::POST])
+                .allow_origin(tower_http::cors::Any)
+                .allow_headers(tower_http::cors::Any),
+        );
 
     router = router.merge(rpc_router).layer(layers);
 

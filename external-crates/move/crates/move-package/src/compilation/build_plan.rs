@@ -34,10 +34,10 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
-pub struct BuildPlan {
+pub struct BuildPlan<'a> {
     root: PackageName,
     sorted_deps: Vec<PackageName>,
-    resolution_graph: ResolvedGraph,
+    resolution_graph: &'a ResolvedGraph,
     compiler_vfs_root: Option<VfsPath>,
 }
 
@@ -58,8 +58,8 @@ impl<'a> CompilationDependencies<'a> {
     }
 }
 
-impl BuildPlan {
-    pub fn create(resolution_graph: ResolvedGraph) -> Result<Self> {
+impl<'a> BuildPlan<'a> {
+    pub fn create(resolution_graph: &'a ResolvedGraph) -> Result<Self> {
         let mut sorted_deps = resolution_graph.topological_order();
         sorted_deps.reverse();
 
@@ -109,7 +109,7 @@ impl BuildPlan {
             self.compiler_vfs_root.clone(),
             root_package,
             transitive_dependencies,
-            &self.resolution_graph,
+            self.resolution_graph,
             |compiler| compiler.generate_migration_patch(&self.root),
         )?;
         let migration = match res {
@@ -177,7 +177,7 @@ impl BuildPlan {
             None => self.resolution_graph.graph.root_path.clone(),
         };
         let immediate_dependencies_names =
-            root_package.immediate_dependencies(&self.resolution_graph);
+            root_package.immediate_dependencies(self.resolution_graph);
         let transitive_dependencies = self
             .resolution_graph
             .topological_order()
@@ -256,7 +256,7 @@ impl BuildPlan {
             &project_root,
             root_package,
             transitive_dependencies,
-            &self.resolution_graph,
+            self.resolution_graph,
             compiler_driver,
         )?;
 

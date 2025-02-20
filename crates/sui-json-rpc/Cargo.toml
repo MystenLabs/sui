@@ -47,6 +47,7 @@ sui-storage.workspace = true
 sui-types.workspace = true
 sui-json.workspace = true
 sui-json-rpc-api.workspace = true
+sui-name-service.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
 sui-protocol-config.workspace = true

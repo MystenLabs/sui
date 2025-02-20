@@ -123,9 +123,7 @@ impl Handler for ObjInfo {
             return Ok(0);
         }
 
-        // For each (object_id, cp_sequence_number_exclusive), delete all entries in obj_info with
-        // cp_sequence_number less than cp_sequence_number_exclusive that match the object_id.
-
+        // For each (object_id, cp_sequence_number), find and delete its immediate predecessor
         let values = to_prune
             .iter()
             .map(|(object_id, seq_number)| {
@@ -134,20 +132,31 @@ impl Handler for ObjInfo {
             })
             .collect::<Vec<_>>()
             .join(",");
+
         let query = format!(
             "
-            WITH to_prune_data (object_id, cp_sequence_number_exclusive) AS (
+            WITH modifications(object_id, cp_sequence_number) AS (
                 VALUES {}
             )
-            DELETE FROM obj_info
-            USING to_prune_data
-            WHERE obj_info.{:?} = to_prune_data.object_id
-              AND obj_info.{:?} < to_prune_data.cp_sequence_number_exclusive
+            DELETE FROM obj_info oi
+            USING modifications m
+            WHERE oi.{:?} = m.object_id
+              AND oi.{:?} = (
+                SELECT oi2.cp_sequence_number
+                FROM obj_info oi2
+                WHERE oi2.{:?} = m.object_id
+                  AND oi2.{:?} < m.cp_sequence_number
+                ORDER BY oi2.cp_sequence_number DESC
+                LIMIT 1
+              )
             ",
             values,
             dsl::object_id,
             dsl::cp_sequence_number,
+            dsl::object_id,
+            dsl::cp_sequence_number,
         );
+
         let rows_deleted = sql_query(query).execute(conn).await?;
         self.pruning_lookup_table.gc_prune_info(from, to_exclusive);
         Ok(rows_deleted)

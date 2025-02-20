@@ -68,8 +68,8 @@ pub struct IngestionLayer {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct SequentialLayer {
-    committer: Option<CommitterLayer>,
-    checkpoint_lag: Option<u64>,
+    pub committer: Option<CommitterLayer>,
+    pub checkpoint_lag: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -78,8 +78,8 @@ pub struct SequentialLayer {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct ConcurrentLayer {
-    committer: Option<CommitterLayer>,
-    pruner: Option<PrunerLayer>,
+    pub committer: Option<CommitterLayer>,
+    pub pruner: Option<PrunerLayer>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -88,9 +88,9 @@ pub struct ConcurrentLayer {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct CommitterLayer {
-    write_concurrency: Option<usize>,
-    collect_interval_ms: Option<u64>,
-    watermark_interval_ms: Option<u64>,
+    pub write_concurrency: Option<usize>,
+    pub collect_interval_ms: Option<u64>,
+    pub watermark_interval_ms: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -161,6 +161,36 @@ impl IndexerConfig {
         example.pipeline = PipelineLayer::example();
 
         example
+    }
+
+    /// Generate a configuration suitable for testing. This is the same as the example
+    /// configuration, but with reduced concurrency and faster polling intervals so tests spend
+    /// less time waiting.
+    pub fn for_test() -> Self {
+        Self::example().merge(IndexerConfig {
+            ingestion: IngestionLayer {
+                retry_interval_ms: Some(10),
+                ingest_concurrency: Some(1),
+                ..Default::default()
+            },
+            committer: CommitterLayer {
+                collect_interval_ms: Some(50),
+                watermark_interval_ms: Some(50),
+                write_concurrency: Some(1),
+                ..Default::default()
+            },
+            consistency: PrunerLayer {
+                interval_ms: Some(50),
+                delay_ms: Some(0),
+                ..Default::default()
+            },
+            pruner: PrunerLayer {
+                interval_ms: Some(50),
+                delay_ms: Some(0),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
     }
 
     pub fn finish(mut self) -> IndexerConfig {

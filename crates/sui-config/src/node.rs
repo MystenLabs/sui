@@ -123,9 +123,6 @@ pub struct NodeConfig {
     pub db_checkpoint_config: DBCheckpointConfig,
 
     #[serde(default)]
-    pub indirect_objects_threshold: usize,
-
-    #[serde(default)]
     pub expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 
     #[serde(skip_serializing_if = "Option::is_none")]

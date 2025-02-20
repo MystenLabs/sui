@@ -451,16 +451,14 @@ impl CheckpointExecutor {
         // Commit all transaction effects to disk
         let cache_commit = self.state.get_cache_commit();
         debug!("committing checkpoint transactions to disk");
-        cache_commit
-            .commit_transaction_outputs(
-                epoch_store.epoch(),
-                all_tx_digests,
-                epoch_store
-                    .protocol_config()
-                    .use_object_per_epoch_marker_table_v2_as_option()
-                    .unwrap_or(false),
-            )
-            .await;
+        cache_commit.commit_transaction_outputs(
+            epoch_store.epoch(),
+            all_tx_digests,
+            epoch_store
+                .protocol_config()
+                .use_object_per_epoch_marker_table_v2_as_option()
+                .unwrap_or(false),
+        );
 
         epoch_store
             .handle_finalized_checkpoint(checkpoint.data(), all_tx_digests)
@@ -594,8 +592,6 @@ impl CheckpointExecutor {
         let state = self.state.clone();
         let subscription_service_enabled = self.subscription_service_checkpoint_sender.is_some();
 
-        epoch_store.notify_synced_checkpoint(*checkpoint.sequence_number());
-
         pending.push_back(spawn_monitored_task!(async move {
             let epoch_store = epoch_store.clone();
             let (tx_digests, checkpoint_acc, checkpoint_data, randomness_rounds) = loop {
@@ -664,7 +660,6 @@ impl CheckpointExecutor {
                     &change_epoch_fx,
                     self.object_cache_reader.as_ref(),
                 )
-                .await
                 .expect("Acquiring shared version assignments for change_epoch tx cannot fail");
         }
 
@@ -728,16 +723,14 @@ impl CheckpointExecutor {
                     .await;
 
                     let cache_commit = self.state.get_cache_commit();
-                    cache_commit
-                        .commit_transaction_outputs(
-                            cur_epoch,
-                            &[change_epoch_tx_digest],
-                            epoch_store
-                                .protocol_config()
-                                .use_object_per_epoch_marker_table_v2_as_option()
-                                .unwrap_or(false),
-                        )
-                        .await;
+                    cache_commit.commit_transaction_outputs(
+                        cur_epoch,
+                        &[change_epoch_tx_digest],
+                        epoch_store
+                            .protocol_config()
+                            .use_object_per_epoch_marker_table_v2_as_option()
+                            .unwrap_or(false),
+                    );
                     fail_point_async!("prune-and-compact");
 
                     // For finalizing the checkpoint, we need to pass in all checkpoint
@@ -1323,13 +1316,11 @@ async fn execute_transactions(
 
     for (tx, _) in &executable_txns {
         if tx.contains_shared_object() {
-            epoch_store
-                .acquire_shared_version_assignments_from_effects(
-                    tx,
-                    digest_to_effects.get(tx.digest()).unwrap(),
-                    object_cache_reader,
-                )
-                .await?;
+            epoch_store.acquire_shared_version_assignments_from_effects(
+                tx,
+                digest_to_effects.get(tx.digest()).unwrap(),
+                object_cache_reader,
+            )?;
         }
     }
 
@@ -1410,7 +1401,7 @@ async fn finalize_checkpoint(
         );
 
     let checkpoint_acc =
-        accumulator.accumulate_checkpoint(effects, checkpoint.sequence_number, epoch_store)?;
+        accumulator.accumulate_checkpoint(&effects, checkpoint.sequence_number, epoch_store)?;
 
     let checkpoint_data = if subscription_service_enabled
         || state.rpc_index.is_some()
@@ -1431,7 +1422,7 @@ async fn finalize_checkpoint(
                 PackageStoreWithFallback::new(state.get_backing_package_store(), &checkpoint_data),
             ));
 
-            rpc_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut())?;
+            rpc_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut());
         }
 
         if let Some(path) = data_ingestion_dir {

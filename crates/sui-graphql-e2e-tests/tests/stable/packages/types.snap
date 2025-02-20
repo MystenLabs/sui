@@ -185,7 +185,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Internal error occurred while processing request: Error calculating layout for 0x0000000000000000000000000000000000000000000000000000000000000042::not::Here: Package not found: 0000000000000000000000000000000000000000000000000000000000000042",
+      "message": "Internal error occurred while processing request: Error calculating layout for 0x0000000000000000000000000000000000000000000000000000000000000042::not::Here: Package not found: 0x0000000000000000000000000000000000000000000000000000000000000042",
       "locations": [
         {
           "line": 12,

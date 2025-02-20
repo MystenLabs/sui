@@ -13,16 +13,11 @@ use std::time::Duration;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::list_tables;
 use typed_store::rocks::DBMap;
-use typed_store::rocks::RocksDBAccessType;
 use typed_store::rocks::{be_fix_int_ser, MetricConf};
-use typed_store::sally::SallyColumn;
-use typed_store::sally::SallyDBOptions;
-use typed_store::sally::SallyReadOnlyDBOptions;
 use typed_store::traits::Map;
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
 use typed_store::DBMapUtils;
-use typed_store::SallyDB;
 
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
@@ -226,93 +221,6 @@ async fn deprecate_test() {
         );
         assert_eq!(db.table1.get(&key), Ok(Some(value.clone())));
     }
-}
-
-#[derive(SallyDB)]
-pub struct SallyDBExample {
-    col1: SallyColumn<String, String>,
-    col2: SallyColumn<i32, String>,
-}
-
-#[tokio::test]
-async fn test_sallydb() {
-    let primary_path = temp_dir();
-    let example_db = SallyDBExample::init(SallyDBOptions::RocksDB((
-        primary_path.clone(),
-        MetricConf::default(),
-        RocksDBAccessType::Primary,
-        None,
-        None,
-    )));
-
-    // Write to both columns
-    let keys_vals_1 = (1..10).map(|i| (i.to_string(), i.to_string()));
-    let mut wb = example_db.col1.batch();
-    wb.insert_batch(&example_db.col1, keys_vals_1.clone())
-        .expect("Failed to insert");
-
-    let keys_vals_2 = (3..10).map(|i| (i, i.to_string()));
-    wb.insert_batch(&example_db.col2, keys_vals_2.clone())
-        .expect("Failed to insert");
-
-    wb.write().await.expect("Failed to commit write batch");
-
-    // Open in secondary mode
-    let example_db_secondary =
-        SallyDBExample::get_read_only_handle(SallyReadOnlyDBOptions::RocksDB(Box::new((
-            primary_path.clone(),
-            MetricConf::default(),
-            None,
-            None,
-        ))));
-
-    // Check all the tables can be listed
-    let actual_table_names: HashSet<_> = list_tables(primary_path).unwrap().into_iter().collect();
-    let observed_table_names: HashSet<_> = SallyDBExample::describe_tables()
-        .iter()
-        .map(|q| q.0.clone())
-        .collect();
-
-    let exp: HashSet<String> =
-        HashSet::from_iter(vec!["col1", "col2"].into_iter().map(|s| s.to_owned()));
-    assert_eq!(HashSet::from_iter(actual_table_names), exp);
-    assert_eq!(HashSet::from_iter(observed_table_names), exp);
-
-    // Check the counts
-    assert_eq!(9, example_db_secondary.count_keys("col1").unwrap());
-    assert_eq!(7, example_db_secondary.count_keys("col2").unwrap());
-
-    // Test all entries
-    let m = example_db_secondary.dump("col1", 100, 0).unwrap();
-    for (k, v) in keys_vals_1 {
-        assert_eq!(format!("\"{v}\""), *m.get(&format!("\"{k}\"")).unwrap());
-    }
-
-    let m = example_db_secondary.dump("col2", 100, 0).unwrap();
-    for (k, v) in keys_vals_2 {
-        assert_eq!(format!("\"{v}\""), *m.get(&k.to_string()).unwrap());
-    }
-
-    // Check that catchup logic works
-    let keys_vals_1 = (100..110).map(|i| (i.to_string(), i.to_string()));
-    let mut wb = example_db.col1.batch();
-    wb.insert_batch(&example_db.col1, keys_vals_1.clone())
-        .expect("Failed to insert");
-    wb.write().await.expect("Failed to commit write batch");
-
-    // New entries should be present in secondary
-    assert_eq!(19, example_db_secondary.count_keys("col1").unwrap());
-
-    // Test pagination
-    let m = example_db_secondary.dump("col1", 2, 0).unwrap();
-    assert_eq!(2, m.len());
-    assert_eq!(format!("\"1\""), *m.get("\"1\"").unwrap());
-    assert_eq!(format!("\"2\""), *m.get("\"2\"").unwrap());
-
-    let m = example_db_secondary.dump("col1", 3, 2).unwrap();
-    assert_eq!(3, m.len());
-    assert_eq!(format!("\"7\""), *m.get("\"7\"").unwrap());
-    assert_eq!(format!("\"8\""), *m.get("\"8\"").unwrap());
 }
 
 #[tokio::test]

@@ -449,6 +449,10 @@ export function readTrace(
             if (!srcFunEntry) {
                 throw new Error('Cannot find function entry in source map for function '
                     + frame.function_name
+                    + ' in module '
+                    + modInfo.name
+                    + ' in package '
+                    + modInfo.addr
                     + ' when processing OpenFrame event');
             }
 

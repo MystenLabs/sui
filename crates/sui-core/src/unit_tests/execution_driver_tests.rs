@@ -8,6 +8,7 @@ use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
 };
 use crate::authority_server::{ValidatorService, ValidatorServiceMetrics};
+use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::consensus_adapter::ConsensusAdapterMetrics;
 use crate::consensus_adapter::{ConnectionMonitorStatusForTests, MockConsensusClient};
@@ -757,6 +758,7 @@ async fn test_authority_txn_signing_pushback() {
     let epoch_store = authority_state.epoch_store_for_testing();
     let consensus_adapter = Arc::new(ConsensusAdapter::new(
         Arc::new(MockConsensusClient::new()),
+        CheckpointStore::new_for_tests(),
         authority_state.name,
         Arc::new(ConnectionMonitorStatusForTests {}),
         100_000,
@@ -886,6 +888,7 @@ async fn test_authority_txn_execution_pushback() {
     let epoch_store = authority_state.epoch_store_for_testing();
     let consensus_adapter = Arc::new(ConsensusAdapter::new(
         Arc::new(MockConsensusClient::new()),
+        CheckpointStore::new_for_tests(),
         authority_state.name,
         Arc::new(ConnectionMonitorStatusForTests {}),
         100_000,
