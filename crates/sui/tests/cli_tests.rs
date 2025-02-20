@@ -280,6 +280,7 @@ pub async fn fetch_move_packages(
 fn add_published_id_to_manifest(
     package_path: &Path,
     package_id: &ObjectID,
+    add_to_address_section: bool,
 ) -> Result<(), anyhow::Error> {
     let content = std::fs::read_to_string(package_path.join("Move.toml"))?;
     let mut toml: toml::Value = toml::from_str(&content)?;
@@ -292,12 +293,14 @@ fn add_published_id_to_manifest(
         }
     }
 
-    if let Some(tbl) = toml.get_mut("addresses") {
-        if let Some(tbl) = tbl.as_table_mut() {
-            tbl.insert(
-                "a".to_string(),
-                toml::Value::String(package_id.to_hex_uncompressed()),
-            );
+    if add_to_address_section {
+        if let Some(tbl) = toml.get_mut("addresses") {
+            if let Some(tbl) = tbl.as_table_mut() {
+                tbl.insert(
+                    "a".to_string(),
+                    toml::Value::String(package_id.to_hex_uncompressed()),
+                );
+            }
         }
     }
 
@@ -4243,11 +4246,14 @@ async fn test_tree_shaking_package_with_bytecode_deps() -> Result<(), anyhow::Er
     // make pkg a to be a bytecode dep for package F
     // set published-at field to package id and addresses a to package id
     let package_path = test.package_path("A");
-    add_published_id_to_manifest(&package_path, &package_a_id)?;
+    add_published_id_to_manifest(&package_path, &package_a_id, true)?;
 
     // delete the sources folder from pkg A to setup A as bytecode dep for package F
     fs::remove_file(package_path.join("Move.lock"))?;
-    fs::remove_dir_all(package_path.join("build"))?;
+    let build_folder = package_path.join("build");
+    if build_folder.exists() {
+        fs::remove_dir_all(&build_folder)?;
+    }
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     // now build the package which will create the build folder and a new Move.lock file
     BuildConfig::default().build(&package_path).unwrap();
@@ -4455,6 +4461,8 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
 
     // Publish package A and D_depends_on_A_v1_but_no_code_references_A
     let (package_a_id, cap) = test.publish_package("A", false).await?;
+    let package_path = test.package_path("A");
+    add_published_id_to_manifest(&package_path, &package_a_id, false)?;
     // Upgrade package A (named A_v1)
     std::fs::copy(
         test.package_path("A").join("Move.lock"),
@@ -4462,17 +4470,8 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     )?;
     let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
 
-    // Upgrade package A (named A_v2)
-    std::fs::copy(
-        test.package_path("A_v1").join("Move.lock"),
-        test.package_path("A_v2").join("Move.lock"),
-    )?;
-    let package_a_v2_id = test.upgrade_package("A_v2", cap).await?;
-
-    // the old code for publishjing a package from sui-test-transaction-builder does not know about
-    // move.lock and so on, so we need to add manually the published-at address.
     let package_path = test.package_path("A_v1");
-    add_published_id_to_manifest(&package_path, &package_a_v1_id)?;
+    add_published_id_to_manifest(&package_path, &package_a_v1_id, false)?;
 
     let package_d_id = test
         .publish_package_without_tree_shaking("D_depends_on_A_v1_but_no_code_references_A")
@@ -4488,19 +4487,35 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     add_published_id_to_manifest(
         &test.package_path("D_depends_on_A_v1_but_no_code_references_A"),
         &package_d_id,
+        false,
     )?;
+
+    // Upgrade package A (named A_v2)
+    std::fs::copy(
+        test.package_path("A_v1").join("Move.lock"),
+        test.package_path("A_v2").join("Move.lock"),
+    )?;
+    let package_a_v2_id = test.upgrade_package("A_v2", cap).await?;
+
+    // the old code for publishing a package from sui-test-transaction-builder does not know about
+    // move.lock and so on, so we need to add manually the published-at address.
+    let package_path = test.package_path("A_v2");
+    add_published_id_to_manifest(&package_path, &package_a_v2_id, false)?;
 
     let (package_i_id, _) = test
         .publish_package(
-            "I_depends_on_D_depends_on_A_v1_but_no_code_references_A",
+            "I_depends_on_D_depends_on_A_v1_but_no_code_references_A_and_on_A_v2",
             false,
         )
         .await?;
     let linkage_table_i = test.fetch_linkage_table(package_i_id).await;
     assert!(
-        linkage_table_i.contains_key(&package_a_v2_id),
-        "Package I should have A_v2"
+        linkage_table_i.contains_key(&package_a_id),
+        "Package I linkage table should have A"
     );
+    assert!(linkage_table_i
+        .get(&package_a_id)
+        .is_some_and(|x| x.upgraded_id == package_a_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
 
     Ok(())
 }
