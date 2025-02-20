@@ -36,7 +36,7 @@ const descriptionPlugin = (context, options) => {
         return files;
       }
 
-      // Creates a default section name if one is not provided
+      // Creates a default section name if one is not provided in frontmatter
       // The section name is currently only used in the llm text file
       function createSection(path) {
         const parts = path.replace(/^\//, "").split("/");
@@ -103,6 +103,7 @@ const descriptionPlugin = (context, options) => {
     // Create llm text file after build so that all processed content like
     // imports and tabs are included
     async postBuild({ content, siteConfig, routesPaths = [], outDir }) {
+      // Build a doc that adheres to the early spec: https://llmstxt.org/
       let llms = [`# ${siteConfig.title}\n`, `${siteConfig.tagline}`];
       const grouped = content.descriptions.reduce((acc, item) => {
         if (!acc[item.llmSection]) {
@@ -124,6 +125,7 @@ const descriptionPlugin = (context, options) => {
         });
       fs.writeFileSync(`${outDir}/llms.txt`, llms.join(`\n`));
 
+      // Build a doc that puts all site content into a text file
       // Array of pages that don't need to be included in the llm file
       const skips = ["/404.html", "/search", "/sui-api-ref", "/"];
       let llmsFull = [`# ${siteConfig.title}\n`, `${siteConfig.tagline}`];
@@ -132,9 +134,9 @@ const descriptionPlugin = (context, options) => {
         preformattedCode: true,
       });
       turndownService.keep(["table"]);
-      for (const c of routesPaths) {
-        if (!skips.includes(c)) {
-          const pathToFile = path.join(outDir, path.join(c, "index.html"));
+      for (const route of routesPaths) {
+        if (!skips.includes(route)) {
+          const pathToFile = path.join(outDir, path.join(route, "index.html"));
           const raw = fs.readFileSync(`${pathToFile}`, "utf-8");
           let start = raw.match(/<div class="theme-doc-markdown markdown">/);
           if (!start) {
