@@ -296,7 +296,9 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
             signatures,
         };
 
-        let options = request.options.unwrap_or_default().into();
+        let options = crate::types::ExecuteTransactionOptions::from_read_mask(
+            request.read_mask.unwrap_or_default(),
+        );
 
         self.execute_transaction(signed_transaction, None, &options)
             .await

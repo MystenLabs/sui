@@ -513,42 +513,10 @@ pub struct ExecuteTransactionRequest {
     /// transaction, encoded as bytes.
     #[prost(bytes = "bytes", repeated, tag = "4")]
     pub signatures_bytes: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "5")]
-    pub options: ::core::option::Option<ExecuteTransactionOptions>,
     /// Optional. Mask for specifying which parts of the
     /// `ExecuteTransactionResponse` should be returned.
     #[prost(message, optional, tag = "6")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
-}
-/// DEPRECATED To be removed in the next release
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct ExecuteTransactionOptions {
-    /// Include the `sui.types.TransactionEffects` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "4")]
-    pub effects: ::core::option::Option<bool>,
-    /// Include the `TransactionEffects` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "5")]
-    pub effects_bcs: ::core::option::Option<bool>,
-    /// Include the `sui.types.TransactionEvents` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "6")]
-    pub events: ::core::option::Option<bool>,
-    /// Include the `TransactionEvents` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "7")]
-    pub events_bcs: ::core::option::Option<bool>,
-    /// Include the `BalanceChange`s in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "8")]
-    pub balance_changes: ::core::option::Option<bool>,
 }
 /// Response message for `NodeService.ExecuteTransaction`.
 #[derive(Clone, PartialEq, ::prost::Message)]

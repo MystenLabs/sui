@@ -14,7 +14,6 @@ use crate::proto::node::v2::{
 };
 use crate::proto::types::Bcs;
 use crate::proto::TryFromProtoError;
-use crate::types::ExecuteTransactionOptions;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -205,7 +204,6 @@ impl Client {
 
     pub async fn execute_transaction(
         &self,
-        parameters: &ExecuteTransactionOptions,
         transaction: &Transaction,
     ) -> Result<TransactionExecutionResponse> {
         let signatures = transaction
@@ -223,14 +221,6 @@ impl Client {
             ),
             signatures: Vec::new(),
             signatures_bytes: signatures,
-
-            options: Some(crate::proto::node::v2::ExecuteTransactionOptions {
-                effects: Some(false),
-                effects_bcs: Some(true),
-                events: Some(false),
-                events_bcs: Some(true),
-                ..(parameters.to_owned().into())
-            }),
             read_mask: FieldMaskUtil::from_paths(["effects_bcs", "events_bcs", "balance_changes"])
                 .pipe(Some),
         };
