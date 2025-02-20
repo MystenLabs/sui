@@ -16516,6 +16516,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "move-binary-format",
+ "mysten-common",
  "prometheus",
  "rand 0.8.5",
  "sui-config",
