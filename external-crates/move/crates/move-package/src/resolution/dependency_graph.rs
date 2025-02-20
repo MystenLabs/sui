@@ -208,14 +208,14 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         skip_fetch_latest_git_deps: bool,
         progress_output: Progress,
         install_dir: PathBuf,
-        implicit_deps: &Dependencies,
+        implicit_deps: Dependencies,
     ) -> Self {
         DependencyGraphBuilder {
             dependency_cache: DependencyCache::new(skip_fetch_latest_git_deps),
             progress_output,
             visited_dependencies: VecDeque::new(),
             install_dir,
-            implicit_deps: implicit_deps.clone(),
+            implicit_deps,
         }
     }
 
@@ -251,7 +251,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         // root package here is to ensure that they and their dependencies are correctly processed.
         //
         // implicits deps should be skipped entirely if the root manifest contains any of them explicitly
-        let add_implicits: bool = self
+        let add_implicits: bool = !self
             .implicit_deps
             .iter()
             .any(|(name, _)| root_manifest.dependencies.contains_key(name));
@@ -297,8 +297,8 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
         // smash implicit dependencies into the collected subgraphs
         if add_implicits {
-            self.add_implicit_defs(&mut dep_graphs);
-            self.add_implicit_defs(&mut dev_dep_graphs);
+            self.add_implicit_deps(&mut dep_graphs);
+            self.add_implicit_deps(&mut dev_dep_graphs);
         }
 
         // compute new digests and return early if the manifest and deps digests are unchanged
@@ -390,26 +390,28 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
     }
 
     /// Update each node of [dep_graphs] to include links to the implicit dependencies
-    fn add_implicit_defs(&self, dep_graphs: &mut BTreeMap<Symbol, DependencyGraphInfo>) {
+    fn add_implicit_deps(&self, dep_graphs: &mut BTreeMap<Symbol, DependencyGraphInfo>) {
         // find the graph nodes corresponding to the implicit deps
         for graph_info in dep_graphs.values_mut() {
             let graph = &mut graph_info.g.package_graph;
             let nodes: Vec<_> = graph.nodes().collect();
             for n in nodes {
-                if !self.implicit_deps.contains_key(&n) {
-                    for implicit in self.implicit_deps.keys() {
-                        graph.add_edge(
-                            n,
-                            *implicit,
-                            Dependency {
-                                mode: DependencyMode::Always,
-                                subst: None,
-                                digest: None,
-                                dep_override: true,
-                                dep_name: *implicit,
-                            },
-                        );
-                    }
+                if self.implicit_deps.contains_key(&n) {
+                    continue;
+                }
+
+                for implicit in self.implicit_deps.keys() {
+                    graph.add_edge(
+                        n,
+                        *implicit,
+                        Dependency {
+                            mode: DependencyMode::Always,
+                            subst: None,
+                            digest: None,
+                            dep_override: true,
+                            dep_name: *implicit,
+                        },
+                    );
                 }
             }
         }

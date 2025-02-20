@@ -296,7 +296,7 @@ impl BuildConfig {
             self.skip_fetch_latest_git_deps,
             writer,
             install_dir.clone(),
-            &self.implicit_dependencies,
+            self.implicit_dependencies.clone(),
         );
         let (dependency_graph, modified) = dep_graph_builder.get_graph(
             &DependencyKind::default(),
