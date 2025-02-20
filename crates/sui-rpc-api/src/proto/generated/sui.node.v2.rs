@@ -163,42 +163,10 @@ pub struct GetCheckpointRequest {
     /// Optional. The digest of the requested checkpoint.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "3")]
-    pub options: ::core::option::Option<GetCheckpointOptions>,
     /// Optional. Mask for specifying which parts of the `GetCheckpointResponse`
     /// should be returned.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
-}
-/// DEPRECATED To be removed in the next release
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct GetCheckpointOptions {
-    /// Include the `sui.types.CheckpointSummary` in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "3")]
-    pub summary: ::core::option::Option<bool>,
-    /// Include the `CheckpointSummary` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "4")]
-    pub summary_bcs: ::core::option::Option<bool>,
-    /// Include the `sui.types.ValidatorAggregatedSignature` in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "5")]
-    pub signature: ::core::option::Option<bool>,
-    /// Include the `sui.types.CheckpointContents` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "6")]
-    pub contents: ::core::option::Option<bool>,
-    /// Include the `CheckpointContents` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "7")]
-    pub contents_bcs: ::core::option::Option<bool>,
 }
 /// Response message for `NodeService.GetCheckpoint`.
 #[derive(Clone, PartialEq, ::prost::Message)]

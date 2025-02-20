@@ -253,122 +253,6 @@ impl TryFrom<&GetObjectResponse> for crate::types::ObjectResponse {
 }
 
 //
-// GetCheckpointOptions
-//
-
-impl GetCheckpointOptions {
-    pub fn all() -> Self {
-        Self {
-            summary: Some(true),
-            summary_bcs: Some(true),
-            signature: Some(true),
-            contents: Some(true),
-            contents_bcs: Some(true),
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            summary: Some(false),
-            summary_bcs: Some(false),
-            signature: Some(false),
-            contents: Some(false),
-            contents_bcs: Some(false),
-        }
-    }
-
-    pub fn with_summary(mut self) -> Self {
-        self.summary = Some(true);
-        self
-    }
-
-    pub fn without_summary(mut self) -> Self {
-        self.summary = Some(false);
-        self
-    }
-
-    pub fn with_summary_bcs(mut self) -> Self {
-        self.summary_bcs = Some(true);
-        self
-    }
-
-    pub fn without_summary_bcs(mut self) -> Self {
-        self.summary_bcs = Some(false);
-        self
-    }
-
-    pub fn with_signature(mut self) -> Self {
-        self.signature = Some(true);
-        self
-    }
-
-    pub fn without_signature(mut self) -> Self {
-        self.signature = Some(false);
-        self
-    }
-
-    pub fn with_contents(mut self) -> Self {
-        self.contents = Some(true);
-        self
-    }
-
-    pub fn without_contents(mut self) -> Self {
-        self.contents = Some(false);
-        self
-    }
-
-    pub fn with_contents_bcs(mut self) -> Self {
-        self.contents_bcs = Some(true);
-        self
-    }
-
-    pub fn without_contents_bcs(mut self) -> Self {
-        self.contents_bcs = Some(false);
-        self
-    }
-}
-
-impl From<crate::types::GetCheckpointOptions> for GetCheckpointOptions {
-    fn from(
-        crate::types::GetCheckpointOptions {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-        }: crate::types::GetCheckpointOptions,
-    ) -> Self {
-        Self {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-        }
-    }
-}
-
-impl From<GetCheckpointOptions> for crate::types::GetCheckpointOptions {
-    fn from(
-        GetCheckpointOptions {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-        }: GetCheckpointOptions,
-    ) -> Self {
-        Self {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-        }
-    }
-}
-
-//
 // GetCheckpointRequest
 //
 
@@ -377,7 +261,6 @@ impl GetCheckpointRequest {
         Self {
             sequence_number: None,
             digest: None,
-            options: None,
             read_mask: None,
         }
     }
@@ -386,7 +269,6 @@ impl GetCheckpointRequest {
         Self {
             sequence_number: None,
             digest: Some(digest.into()),
-            options: None,
             read_mask: None,
         }
     }
@@ -395,13 +277,12 @@ impl GetCheckpointRequest {
         Self {
             sequence_number: Some(sequence_number),
             digest: None,
-            options: None,
             read_mask: None,
         }
     }
 
-    pub fn with_options(mut self, options: GetCheckpointOptions) -> Self {
-        self.options = Some(options);
+    pub fn with_read_mask(mut self, read_mask: FieldMask) -> Self {
+        self.read_mask = Some(read_mask);
         self
     }
 }
