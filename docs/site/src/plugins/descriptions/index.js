@@ -102,7 +102,7 @@ const descriptionPlugin = (context, options) => {
     },
     // Create llm text file after build so that all processed content like
     // imports and tabs are included
-    /*async postBuild({ content, siteConfig, routesPaths = [], outDir }) {
+    async postBuild({ content, siteConfig, routesPaths = [], outDir }) {
       // Build a doc that adheres to the early spec: https://llmstxt.org/
       let llms = [`# ${siteConfig.title}\n`, `${siteConfig.tagline}`];
       const grouped = content.descriptions.reduce((acc, item) => {
@@ -151,7 +151,7 @@ const descriptionPlugin = (context, options) => {
         }
       }
       fs.writeFileSync(`${outDir}/llms-full.txt`, llmsFull.join("\n\n"));
-    },/*/
+    },
   };
 };
 
