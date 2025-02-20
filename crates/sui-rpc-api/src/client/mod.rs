@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod response_ext;
-use prost_types::FieldMask;
 pub use response_ext::ResponseExt;
 
 use tap::Pipe;
 use tonic::metadata::MetadataMap;
 
+use crate::field_mask::FieldMaskUtil;
 use crate::proto::node::v2::node_service_client::NodeServiceClient;
 use crate::proto::node::v2::{
     ExecuteTransactionResponse, GetCheckpointResponse, GetFullCheckpointResponse, GetObjectResponse,
@@ -100,12 +100,7 @@ impl Client {
                 contents: Some(false),
                 contents_bcs: Some(false),
             }),
-            read_mask: Some(FieldMask {
-                paths: ["summary_bcs", "signature"]
-                    .into_iter()
-                    .map(ToOwned::to_owned)
-                    .collect(),
-            }),
+            read_mask: FieldMaskUtil::from_paths(["summary_bcs", "signature"]).pipe(Some),
         };
 
         let (
@@ -150,21 +145,17 @@ impl Client {
                 object: Some(false),
                 object_bcs: Some(true),
             }),
-            read_mask: Some(FieldMask {
-                paths: [
-                    "summary_bcs",
-                    "signature",
-                    "contents_bcs",
-                    "transactions.transaction_bcs",
-                    "transactions.effects_bcs",
-                    "transactions.events_bcs",
-                    "transactions.input_objects.object_bcs",
-                    "transactions.output_objects.object_bcs",
-                ]
-                .into_iter()
-                .map(ToOwned::to_owned)
-                .collect(),
-            }),
+            read_mask: FieldMaskUtil::from_paths([
+                "summary_bcs",
+                "signature",
+                "contents_bcs",
+                "transactions.transaction_bcs",
+                "transactions.effects_bcs",
+                "transactions.events_bcs",
+                "transactions.input_objects.object_bcs",
+                "transactions.output_objects.object_bcs",
+            ])
+            .pipe(Some),
         };
 
         let (metadata, response, _extentions) = self
@@ -203,9 +194,7 @@ impl Client {
                 object: Some(false),
                 object_bcs: Some(true),
             }),
-            read_mask: Some(FieldMask {
-                paths: ["object_bcs"].into_iter().map(ToOwned::to_owned).collect(),
-            }),
+            read_mask: FieldMaskUtil::from_paths(["object_bcs"]).pipe(Some),
         };
 
         let (metadata, GetObjectResponse { object_bcs, .. }, _extentions) =
@@ -242,12 +231,8 @@ impl Client {
                 events_bcs: Some(true),
                 ..(parameters.to_owned().into())
             }),
-            read_mask: Some(FieldMask {
-                paths: ["effects_bcs", "events_bcs", "balance_changes"]
-                    .into_iter()
-                    .map(ToOwned::to_owned)
-                    .collect(),
-            }),
+            read_mask: FieldMaskUtil::from_paths(["effects_bcs", "events_bcs", "balance_changes"])
+                .pipe(Some),
         };
 
         let (metadata, response, _extentions) = self
