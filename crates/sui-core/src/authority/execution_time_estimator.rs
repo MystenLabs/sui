@@ -3,7 +3,7 @@
 
 use std::{
     collections::HashMap,
-    num::NonZeroUsize,
+    num::{NonZero, NonZeroUsize},
     sync::{Arc, Weak},
     time::{Duration, Instant},
 };
@@ -11,6 +11,7 @@ use std::{
 use super::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::SubmitToConsensus;
 use itertools::Itertools;
+use lru::LruCache;
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_scope;
 use simple_moving_average::{SingleSumSMA, SMA};
@@ -42,7 +43,7 @@ pub struct ExecutionTimeObserver {
     epoch_store: Weak<AuthorityPerEpochStore>,
     consensus_adapter: Box<dyn SubmitToConsensus>,
 
-    local_observations: HashMap<ExecutionTimeObservationKey, LocalObservations>,
+    local_observations: LruCache<ExecutionTimeObservationKey, LocalObservations>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +58,7 @@ impl ExecutionTimeObserver {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         consensus_adapter: Box<dyn SubmitToConsensus>,
         channel_size: usize,
+        lru_cache_size: usize,
     ) {
         if epoch_store
             .protocol_config()
@@ -74,7 +76,9 @@ impl ExecutionTimeObserver {
         let mut observer = Self {
             epoch_store: Arc::downgrade(epoch_store),
             consensus_adapter,
-            local_observations: HashMap::new(),
+            local_observations: LruCache::new(
+                NonZero::new(lru_cache_size).expect("lru_cache_size must be non-zero"),
+            ),
         };
         tokio::spawn(async move {
             while let Some((tx, timings, total_duration)) = rx_local_execution_time.recv().await {
@@ -94,7 +98,7 @@ impl ExecutionTimeObserver {
         Self {
             epoch_store: Arc::downgrade(&epoch_store),
             consensus_adapter,
-            local_observations: HashMap::new(),
+            local_observations: LruCache::new(NonZero::new(10000).unwrap()),
         }
     }
 
@@ -138,8 +142,7 @@ impl ExecutionTimeObserver {
             let key = ExecutionTimeObservationKey::from_command(command);
             let local_observation =
                 self.local_observations
-                    .entry(key.clone())
-                    .or_insert_with(|| LocalObservations {
+                    .get_or_insert_mut(key.clone(), || LocalObservations {
                         moving_average: SingleSumSMA::from_zero(Duration::ZERO),
                         last_shared: None,
                     });

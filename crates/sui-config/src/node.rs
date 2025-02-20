@@ -207,6 +207,12 @@ pub struct NodeConfig {
     /// If unspecified, this will default to `128`.
     #[serde(default = "default_local_execution_time_channel_capacity")]
     pub local_execution_time_channel_capacity: usize,
+
+    /// Size of the LRU cache used for storing local execution time observations.
+    ///
+    /// If unspecified, this will default to `10000`.
+    #[serde(default = "default_local_execution_time_lru_cache_size")]
+    pub local_execution_time_lru_cache_size: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -549,6 +555,10 @@ pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
 
 pub fn default_local_execution_time_channel_capacity() -> usize {
     128
+}
+
+pub fn default_local_execution_time_lru_cache_size() -> usize {
+    10000
 }
 
 pub fn bool_true() -> bool {

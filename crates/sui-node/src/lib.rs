@@ -1372,6 +1372,7 @@ impl SuiNode {
             &epoch_store,
             Box::new(consensus_adapter.clone()),
             config.local_execution_time_channel_capacity,
+            config.local_execution_time_lru_cache_size,
         );
 
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
