@@ -52,7 +52,7 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
-    gather_published_ids, implicit_deps, BuildConfig, CompiledPackage, PackageDependencies,
+    gather_published_ids, implicit_deps, BuildConfig, CompiledPackage,
 };
 use sui_package_management::{
     system_package_versions::{latest_system_packages, system_packages_for_protocol},
