@@ -211,8 +211,6 @@ async fn get_full_checkpoint() {
         events_bcs,
         input_objects,
         output_objects,
-        input_objects_old,
-        output_objects_old,
     } in transactions
     {
         assert!(digest.is_some());
@@ -227,8 +225,6 @@ async fn get_full_checkpoint() {
         assert!(events_bcs.is_none());
         assert!(input_objects.is_empty());
         assert!(output_objects.is_empty());
-        assert!(input_objects_old.is_none());
-        assert!(output_objects_old.is_none());
     }
     // Ensure we found the transaction we used for picking the checkpoint to test against
     assert!(found_transaction);
@@ -271,8 +267,6 @@ async fn get_full_checkpoint() {
         events_bcs,
         input_objects,
         output_objects,
-        input_objects_old,
-        output_objects_old,
     } in transactions
     {
         assert!(digest.is_some());
@@ -287,8 +281,6 @@ async fn get_full_checkpoint() {
         assert!(events_bcs.is_none());
         assert!(input_objects.is_empty());
         assert!(output_objects.is_empty());
-        assert!(input_objects_old.is_none());
-        assert!(output_objects_old.is_none());
     }
     // Ensure we found the transaction we used for picking the checkpoint to test against
     assert!(found_transaction);
@@ -333,8 +325,6 @@ async fn get_full_checkpoint() {
         events_bcs,
         input_objects,
         output_objects,
-        input_objects_old,
-        output_objects_old,
     } in transactions
     {
         assert!(digest.is_some());
@@ -349,8 +339,6 @@ async fn get_full_checkpoint() {
         }
         assert!(!input_objects.is_empty());
         assert!(!output_objects.is_empty());
-        assert!(input_objects_old.is_some());
-        assert!(output_objects_old.is_some());
 
         for FullCheckpointObject {
             object_id,

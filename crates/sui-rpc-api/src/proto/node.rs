@@ -1345,12 +1345,6 @@ impl From<crate::types::FullCheckpointTransaction> for FullCheckpointTransaction
             output_objects,
         }: crate::types::FullCheckpointTransaction,
     ) -> Self {
-        let input_objects_old = input_objects.clone().map(|objects| FullCheckpointObjects {
-            objects: objects.into_iter().map(Into::into).collect(),
-        });
-        let output_objects_old = output_objects.clone().map(|objects| FullCheckpointObjects {
-            objects: objects.into_iter().map(Into::into).collect(),
-        });
         let input_objects = input_objects
             .map(|objects| objects.into_iter().map(Into::into).collect())
             .unwrap_or_default();
@@ -1367,8 +1361,6 @@ impl From<crate::types::FullCheckpointTransaction> for FullCheckpointTransaction
             events_bcs: events_bcs.map(Into::into),
             input_objects,
             output_objects,
-            input_objects_old,
-            output_objects_old,
         }
     }
 }
@@ -1387,8 +1379,6 @@ impl TryFrom<&FullCheckpointTransaction> for crate::types::FullCheckpointTransac
             events_bcs,
             input_objects,
             output_objects,
-            input_objects_old: _,
-            output_objects_old: _,
         }: &FullCheckpointTransaction,
     ) -> Result<Self, Self::Error> {
         let digest = digest
