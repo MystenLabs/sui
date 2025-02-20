@@ -644,50 +644,6 @@ impl GetTransactionRequest {
 }
 
 //
-// ExecuteTransactionOptions
-//
-
-impl From<crate::types::ExecuteTransactionOptions> for ExecuteTransactionOptions {
-    fn from(
-        crate::types::ExecuteTransactionOptions {
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            balance_changes,
-        }: crate::types::ExecuteTransactionOptions,
-    ) -> Self {
-        Self {
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            balance_changes,
-        }
-    }
-}
-
-impl From<ExecuteTransactionOptions> for crate::types::ExecuteTransactionOptions {
-    fn from(
-        ExecuteTransactionOptions {
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            balance_changes,
-        }: ExecuteTransactionOptions,
-    ) -> Self {
-        Self {
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            balance_changes,
-        }
-    }
-}
-
-//
 // GetFullCheckpointOptions
 //
 
