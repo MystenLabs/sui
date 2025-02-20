@@ -149,32 +149,32 @@ message GetTransactionResponse {
   // The digest of this [Transaction](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html).
   optional sui.types.Digest digest = 1;
 
-  // Optional. The transaction itself.
+  // The transaction itself.
   optional sui.types.Transaction transaction = 2;
 
-  // Optional. The
+  // The
   // [Transaction](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html)
   // encoded as BCS bytes.
   optional sui.types.Bcs transaction_bcs = 3;
 
-  // Optional. List of user signatures that are used to authorize the
+  // List of user signatures that are used to authorize the
   // execution of this transaction.
   repeated sui.types.UserSignature signatures = 4;
 
-  // Optional. List of
+  // List of
   // [UserSignature](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.UserSignature.html)s
   // encoded as bytes.
   repeated bytes signatures_bytes = 11;
 
-  // Optional. The `TransactionEffects` for this transaction.
+  // The `TransactionEffects` for this transaction.
   optional sui.types.TransactionEffects effects = 5;
 
-  // Optional. The
+  // The
   // [TransactionEffects](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html)
   // for this transaction encoded as BCS bytes.
   optional sui.types.Bcs effects_bcs = 6;
 
-  // Optional. The `TransactionEvents` for this transaction.
+  // The `TransactionEvents` for this transaction.
   //
   // This field might be empty, even if it was explicitly requested, if the
   // transaction didn't produce any events.
@@ -182,7 +182,7 @@ message GetTransactionResponse {
   // transaction produced any events.
   optional sui.types.TransactionEvents events = 7;
 
-  // Optional. The
+  // The
   // [TransactionEvents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html)
   // for this transaction encoded as BCS bytes.
   optional sui.types.Bcs events_bcs = 8;
@@ -220,10 +220,10 @@ message GetObjectResponse {
   // The digest of this object.
   optional sui.types.Digest digest = 3;
 
-  // Optional. The object itself.
+  // The object itself.
   optional sui.types.Object object = 4;
 
-  // Optional. The
+  // The
   // [Object](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Object.html)
   // encoded as BCS bytes.
   optional sui.types.Bcs object_bcs = 5;
@@ -254,22 +254,22 @@ message GetCheckpointResponse {
   // The digest of this checkpoint's `CheckpointSummary`.
   optional sui.types.Digest digest = 2;
 
-  // Optional. The `CheckpointSummary` for this checkpoint.
+  // The `CheckpointSummary` for this checkpoint.
   optional sui.types.CheckpointSummary summary = 3;
 
-  // Optional. The
+  // The
   // [CheckpointSummary](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointSummary.html)
   // for this checkpoint encoded as BCS bytes.
   optional sui.types.Bcs summary_bcs = 4;
 
-  // Optional. An aggregated quorum signature from the validator committee that
+  // An aggregated quorum signature from the validator committee that
   // certifies this checkpoint.
   optional sui.types.ValidatorAggregatedSignature signature = 5;
 
-  // Optional. The `CheckpointContents` for this checkpoint.
+  // The `CheckpointContents` for this checkpoint.
   optional sui.types.CheckpointContents contents = 6;
 
-  // Optional. The
+  // The
   // [CheckpointContents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointContents.html)
   // for this checkpoint encoded as BCS bytes.
   optional sui.types.Bcs contents_bcs = 7;
@@ -299,22 +299,22 @@ message GetFullCheckpointResponse {
   // The digest of this checkpoint's `CheckpointSummary`.
   optional sui.types.Digest digest = 2;
 
-  // Optional. The `CheckpointSummary` for this checkpoint.
+  // The `CheckpointSummary` for this checkpoint.
   optional sui.types.CheckpointSummary summary = 3;
 
-  // Optional. The
+  // The
   // [CheckpointSummary](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointSummary.html)
   // for this checkpoint encoded as BCS bytes.
   optional sui.types.Bcs summary_bcs = 4;
 
-  // Optional. An aggregated quorum signature from the validator committee that
+  // An aggregated quorum signature from the validator committee that
   // certifies this checkpoint.
   optional sui.types.ValidatorAggregatedSignature signature = 5;
 
-  // Optional. The `CheckpointContents` for this checkpoint.
+  // The `CheckpointContents` for this checkpoint.
   optional sui.types.CheckpointContents contents = 6;
 
-  // Optional. The
+  // The
   // [CheckpointContents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointContents.html)
   // for this checkpoint encoded as BCS bytes.
   optional sui.types.Bcs contents_bcs = 7;
@@ -328,23 +328,23 @@ message FullCheckpointTransaction {
   // The digest of this transaction.
   optional sui.types.Digest digest = 1;
 
-  // Optional. The transaction itself.
+  // The transaction itself.
   optional sui.types.Transaction transaction = 2;
 
-  // Optional. The
+  // The
   // [Transaction](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html)
   // encoded as BCS bytes.
   optional sui.types.Bcs transaction_bcs = 3;
 
-  // Optional. The `TransactionEffects` for this transaction.
+  // The `TransactionEffects` for this transaction.
   optional sui.types.TransactionEffects effects = 5;
 
-  // Optional. The
+  // The
   // [TransactionEffects](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html)
   // for this transaction encoded as BCS bytes.
   optional sui.types.Bcs effects_bcs = 6;
 
-  // Optional. The `TransactionEvents` for this transaction.
+  // The `TransactionEvents` for this transaction.
   //
   // This field might be empty, even if it was explicitly requested, if the
   // transaction didn't produce any events.
@@ -352,15 +352,15 @@ message FullCheckpointTransaction {
   // transaction produced any events.
   optional sui.types.TransactionEvents events = 7;
 
-  // Optional. The
+  // The
   // [TransactionEvents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html)
   // for this transaction encoded as BCS bytes.
   optional sui.types.Bcs events_bcs = 8;
 
-  // Optional. Set of input objects used during the execution of this transaction.
+  // Set of input objects used during the execution of this transaction.
   repeated FullCheckpointObject input_objects = 13;
 
-  // Optional. Set of output objects produced from the execution of this transaction.
+  // Set of output objects produced from the execution of this transaction.
   repeated FullCheckpointObject output_objects = 14;
 }
 
@@ -375,10 +375,10 @@ message FullCheckpointObject {
   // The digest of this object.
   optional sui.types.Digest digest = 3;
 
-  // Optional. The object itself.
+  // The object itself.
   optional sui.types.Object object = 4;
 
-  // Optional. The
+  // The
   // [object](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Object.html)
   // encoded as BCS bytes.
   optional sui.types.Bcs object_bcs = 5;
@@ -412,15 +412,15 @@ message ExecuteTransactionResponse {
   // Indicates the finality of the executed transaction.
   optional EffectsFinality finality = 1;
 
-  // Optional. The `TransactionEffects` for this transaction.
+  // The `TransactionEffects` for this transaction.
   optional sui.types.TransactionEffects effects = 2;
 
-  // Optional. The
+  // The
   // [TransactionEffects](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html)
   // for this transaction encoded as BCS bytes.
   optional sui.types.Bcs effects_bcs = 3;
 
-  // Optional. The `TransactionEvents` for this transaction.
+  // The `TransactionEvents` for this transaction.
   //
   // This field might be empty, even if it was explicitly requested, if the
   // transaction didn't produce any events.
@@ -428,12 +428,12 @@ message ExecuteTransactionResponse {
   // transaction produced any events.
   optional sui.types.TransactionEvents events = 4;
 
-  // Optional. The
+  // The
   // [TransactionEvents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html)
   // for this transaction encoded as BCS bytes.
   optional sui.types.Bcs events_bcs = 5;
 
-  // Optional. Set of balance change events as a result of this transaction.
+  // Set of balance change events as a result of this transaction.
   //
   // This set of events are calculated by analyzing all input and output `Coin`
   // type objects.

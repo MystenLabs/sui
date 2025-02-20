@@ -9,10 +9,18 @@ SCRIPT_PATH=$(realpath "$0")
 SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 
 PROTO_FILES=(
-proto/sui.node.v2.proto
-proto/sui.types.proto
+proto/google/protobuf/any.proto
+proto/google/protobuf/duration.proto
 proto/google/protobuf/empty.proto
+proto/google/protobuf/field_mask.proto
 proto/google/protobuf/timestamp.proto
+proto/google/rpc/error_details.proto
+proto/google/rpc/status.proto
+proto/sui/node/v2/node_service.proto
+proto/sui/node/v2alpha/node_service.proto
+proto/sui/node/v2alpha/subscription_service.proto
+proto/sui/types/signature_scheme.proto
+proto/sui/types/types.proto
 )
 
 # requires that protoc as well as the protoc-gen-doc plugin is installed and

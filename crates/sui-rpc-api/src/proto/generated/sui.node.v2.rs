@@ -68,32 +68,32 @@ pub struct GetTransactionResponse {
     /// The digest of this [Transaction](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html>).
     #[prost(message, optional, tag = "1")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The transaction itself.
+    /// The transaction itself.
     #[prost(message, optional, tag = "2")]
     pub transaction: ::core::option::Option<super::super::types::Transaction>,
-    /// Optional. The
+    /// The
     /// [Transaction](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html>)
     /// encoded as BCS bytes.
     #[prost(message, optional, tag = "3")]
     pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. List of user signatures that are used to authorize the
+    /// List of user signatures that are used to authorize the
     /// execution of this transaction.
     #[prost(message, repeated, tag = "4")]
     pub signatures: ::prost::alloc::vec::Vec<super::super::types::UserSignature>,
-    /// Optional. List of
+    /// List of
     /// [UserSignature](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.UserSignature.html>)s
     /// encoded as bytes.
     #[prost(bytes = "bytes", repeated, tag = "11")]
     pub signatures_bytes: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
-    /// Optional. The `TransactionEffects` for this transaction.
+    /// The `TransactionEffects` for this transaction.
     #[prost(message, optional, tag = "5")]
     pub effects: ::core::option::Option<super::super::types::TransactionEffects>,
-    /// Optional. The
+    /// The
     /// [TransactionEffects](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "6")]
     pub effects_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. The `TransactionEvents` for this transaction.
+    /// The `TransactionEvents` for this transaction.
     ///
     /// This field might be empty, even if it was explicitly requested, if the
     /// transaction didn't produce any events.
@@ -101,7 +101,7 @@ pub struct GetTransactionResponse {
     /// transaction produced any events.
     #[prost(message, optional, tag = "7")]
     pub events: ::core::option::Option<super::super::types::TransactionEvents>,
-    /// Optional. The
+    /// The
     /// [TransactionEvents](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "8")]
@@ -141,10 +141,10 @@ pub struct GetObjectResponse {
     /// The digest of this object.
     #[prost(message, optional, tag = "3")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The object itself.
+    /// The object itself.
     #[prost(message, optional, tag = "4")]
     pub object: ::core::option::Option<super::super::types::Object>,
-    /// Optional. The
+    /// The
     /// [Object](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Object.html>)
     /// encoded as BCS bytes.
     #[prost(message, optional, tag = "5")]
@@ -177,24 +177,24 @@ pub struct GetCheckpointResponse {
     /// The digest of this checkpoint's `CheckpointSummary`.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The `CheckpointSummary` for this checkpoint.
+    /// The `CheckpointSummary` for this checkpoint.
     #[prost(message, optional, tag = "3")]
     pub summary: ::core::option::Option<super::super::types::CheckpointSummary>,
-    /// Optional. The
+    /// The
     /// [CheckpointSummary](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointSummary.html>)
     /// for this checkpoint encoded as BCS bytes.
     #[prost(message, optional, tag = "4")]
     pub summary_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. An aggregated quorum signature from the validator committee that
+    /// An aggregated quorum signature from the validator committee that
     /// certifies this checkpoint.
     #[prost(message, optional, tag = "5")]
     pub signature: ::core::option::Option<
         super::super::types::ValidatorAggregatedSignature,
     >,
-    /// Optional. The `CheckpointContents` for this checkpoint.
+    /// The `CheckpointContents` for this checkpoint.
     #[prost(message, optional, tag = "6")]
     pub contents: ::core::option::Option<super::super::types::CheckpointContents>,
-    /// Optional. The
+    /// The
     /// [CheckpointContents](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointContents.html>)
     /// for this checkpoint encoded as BCS bytes.
     #[prost(message, optional, tag = "7")]
@@ -227,24 +227,24 @@ pub struct GetFullCheckpointResponse {
     /// The digest of this checkpoint's `CheckpointSummary`.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The `CheckpointSummary` for this checkpoint.
+    /// The `CheckpointSummary` for this checkpoint.
     #[prost(message, optional, tag = "3")]
     pub summary: ::core::option::Option<super::super::types::CheckpointSummary>,
-    /// Optional. The
+    /// The
     /// [CheckpointSummary](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointSummary.html>)
     /// for this checkpoint encoded as BCS bytes.
     #[prost(message, optional, tag = "4")]
     pub summary_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. An aggregated quorum signature from the validator committee that
+    /// An aggregated quorum signature from the validator committee that
     /// certifies this checkpoint.
     #[prost(message, optional, tag = "5")]
     pub signature: ::core::option::Option<
         super::super::types::ValidatorAggregatedSignature,
     >,
-    /// Optional. The `CheckpointContents` for this checkpoint.
+    /// The `CheckpointContents` for this checkpoint.
     #[prost(message, optional, tag = "6")]
     pub contents: ::core::option::Option<super::super::types::CheckpointContents>,
-    /// Optional. The
+    /// The
     /// [CheckpointContents](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointContents.html>)
     /// for this checkpoint encoded as BCS bytes.
     #[prost(message, optional, tag = "7")]
@@ -259,23 +259,23 @@ pub struct FullCheckpointTransaction {
     /// The digest of this transaction.
     #[prost(message, optional, tag = "1")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The transaction itself.
+    /// The transaction itself.
     #[prost(message, optional, tag = "2")]
     pub transaction: ::core::option::Option<super::super::types::Transaction>,
-    /// Optional. The
+    /// The
     /// [Transaction](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html>)
     /// encoded as BCS bytes.
     #[prost(message, optional, tag = "3")]
     pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. The `TransactionEffects` for this transaction.
+    /// The `TransactionEffects` for this transaction.
     #[prost(message, optional, tag = "5")]
     pub effects: ::core::option::Option<super::super::types::TransactionEffects>,
-    /// Optional. The
+    /// The
     /// [TransactionEffects](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "6")]
     pub effects_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. The `TransactionEvents` for this transaction.
+    /// The `TransactionEvents` for this transaction.
     ///
     /// This field might be empty, even if it was explicitly requested, if the
     /// transaction didn't produce any events.
@@ -283,15 +283,15 @@ pub struct FullCheckpointTransaction {
     /// transaction produced any events.
     #[prost(message, optional, tag = "7")]
     pub events: ::core::option::Option<super::super::types::TransactionEvents>,
-    /// Optional. The
+    /// The
     /// [TransactionEvents](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "8")]
     pub events_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. Set of input objects used during the execution of this transaction.
+    /// Set of input objects used during the execution of this transaction.
     #[prost(message, repeated, tag = "13")]
     pub input_objects: ::prost::alloc::vec::Vec<FullCheckpointObject>,
-    /// Optional. Set of output objects produced from the execution of this transaction.
+    /// Set of output objects produced from the execution of this transaction.
     #[prost(message, repeated, tag = "14")]
     pub output_objects: ::prost::alloc::vec::Vec<FullCheckpointObject>,
 }
@@ -307,10 +307,10 @@ pub struct FullCheckpointObject {
     /// The digest of this object.
     #[prost(message, optional, tag = "3")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The object itself.
+    /// The object itself.
     #[prost(message, optional, tag = "4")]
     pub object: ::core::option::Option<super::super::types::Object>,
-    /// Optional. The
+    /// The
     /// [object](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Object.html>)
     /// encoded as BCS bytes.
     #[prost(message, optional, tag = "5")]
@@ -346,15 +346,15 @@ pub struct ExecuteTransactionResponse {
     /// Indicates the finality of the executed transaction.
     #[prost(message, optional, tag = "1")]
     pub finality: ::core::option::Option<EffectsFinality>,
-    /// Optional. The `TransactionEffects` for this transaction.
+    /// The `TransactionEffects` for this transaction.
     #[prost(message, optional, tag = "2")]
     pub effects: ::core::option::Option<super::super::types::TransactionEffects>,
-    /// Optional. The
+    /// The
     /// [TransactionEffects](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "3")]
     pub effects_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. The `TransactionEvents` for this transaction.
+    /// The `TransactionEvents` for this transaction.
     ///
     /// This field might be empty, even if it was explicitly requested, if the
     /// transaction didn't produce any events.
@@ -362,12 +362,12 @@ pub struct ExecuteTransactionResponse {
     /// transaction produced any events.
     #[prost(message, optional, tag = "4")]
     pub events: ::core::option::Option<super::super::types::TransactionEvents>,
-    /// Optional. The
+    /// The
     /// [TransactionEvents](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "5")]
     pub events_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. Set of balance change events as a result of this transaction.
+    /// Set of balance change events as a result of this transaction.
     ///
     /// This set of events are calculated by analyzing all input and output `Coin`
     /// type objects.
