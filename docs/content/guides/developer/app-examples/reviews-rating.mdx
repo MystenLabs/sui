@@ -95,7 +95,7 @@ public fun register_service(db: &mut Dashboard, service_id: ID) {
 
 A `Dashboard` is a [shared object](../../../concepts/object-ownership/shared.mdx), so any service owner can register their service to a dashboard.
 A service owner should look for dashboards that best match their service attribute and register.
-A [dynamic field](../../../concepts/dynamic-fields.mdx) stores the list of services that are registered to a dashboard.
+A dynamic field stores the list of services that are registered to a dashboard. Learn more about dynamic fields in [The Move Book](https://move-book.com/programmability/dynamic-fields.html).
 A service may be registered to multiple dashboards at the same time. For example, a Chinese-Italian fusion restaurant may be registered to both the Chinese and Italian dashboards.
 
 :::info
@@ -179,7 +179,7 @@ In other words, anyone can go to a transaction explorer and find a review object
 
 :::info
 
-See [Table and Bag](../../../concepts/dynamic-fields/tables-bags.mdx) for more information on the differences between `Table` and `ObjectTable`.
+See [Dynamic Collections](https://move-book.com/programmability/dynamic-collections.html) in The Move Book for more information on the differences between `Table` and `ObjectTable`.
 
 :::
 

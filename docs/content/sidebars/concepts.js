@@ -36,15 +36,6 @@ const concepts = [
 					},
 					{
 						type: 'category',
-						label: 'Dynamic Fields',
-						link: {
-							type: 'doc',
-							id: 'concepts/dynamic-fields',
-						},
-						items: ['concepts/dynamic-fields/tables-bags'],
-					},
-					{
-						type: 'category',
 						label: 'Transfers',
 						link: {
 							type: 'doc',

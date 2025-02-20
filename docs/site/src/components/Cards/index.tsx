@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState } from "react";
 import { useHistory } from "@docusaurus/router";
-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
-import {usePluginData} from '@docusaurus/useGlobalData';
+import { usePluginData } from "@docusaurus/useGlobalData";
 import styles from "./styles.module.css";
 
 export function Card(props) {
@@ -20,8 +19,8 @@ export function Card(props) {
 
   const { descriptions } = usePluginData("sui-description-plugin");
   let h = props.href;
-  if (h.match(/^\//)) {
-    h = h.substring(1);
+  if (!h.match(/^\//)) {
+    h = `/${h}`;
   }
   const d = descriptions.find((desc) => desc["id"] === h);
   let description = "";
@@ -51,7 +50,8 @@ export function Card(props) {
 }
 
 export function Cards({ children, ...props }) {
-  let twClassList = "grid-card gap-8 grid xl:grid-rows-${Math.ceil(children.length/3)} lg:grid-rows-${Math.ceil(children.length/2)} xl:grid-cols-3 lg:grid-cols-2 justify-start pb-8";
+  let twClassList =
+    "grid-card gap-8 grid xl:grid-rows-${Math.ceil(children.length/3)} lg:grid-rows-${Math.ceil(children.length/2)} xl:grid-cols-3 lg:grid-cols-2 justify-start pb-8";
   return (
     <div className={twClassList} {...props}>
       {children}
