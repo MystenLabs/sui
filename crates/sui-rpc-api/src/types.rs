@@ -671,6 +671,18 @@ impl GetFullCheckpointOptions {
                 "signature" => options.signature = Some(true),
                 "contents" => options.contents = Some(true),
                 "contents_bcs" => options.contents_bcs = Some(true),
+                "transactions" => {
+                    options.transaction = Some(true);
+                    options.transaction_bcs = Some(true);
+                    options.effects = Some(true);
+                    options.effects_bcs = Some(true);
+                    options.events = Some(true);
+                    options.events_bcs = Some(true);
+                    options.input_objects = Some(true);
+                    options.output_objects = Some(true);
+                    options.object = Some(true);
+                    options.object_bcs = Some(true);
+                }
                 "transactions.transaction" => options.transaction = Some(true),
                 "transactions.transaction_bcs" => options.transaction_bcs = Some(true),
                 "transactions.effects" => options.effects = Some(true),
@@ -698,6 +710,26 @@ impl GetFullCheckpointOptions {
         }
 
         options
+    }
+
+    pub fn all() -> Self {
+        Self {
+            summary: Some(true),
+            summary_bcs: Some(true),
+            signature: Some(true),
+            contents: Some(true),
+            contents_bcs: Some(true),
+            transaction: Some(true),
+            transaction_bcs: Some(true),
+            effects: Some(true),
+            effects_bcs: Some(true),
+            events: Some(true),
+            events_bcs: Some(true),
+            input_objects: Some(true),
+            output_objects: Some(true),
+            object: Some(true),
+            object_bcs: Some(true),
+        }
     }
 }
 

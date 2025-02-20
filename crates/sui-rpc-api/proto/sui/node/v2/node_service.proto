@@ -287,89 +287,9 @@ message GetFullCheckpointRequest {
   // Optional. The digest of the requested checkpoint.
   optional sui.types.Digest digest = 2;
 
-  // DEPRECATED To be removed in the next release
-  optional GetFullCheckpointOptions options = 3;
   // Optional. Mask for specifying which parts of the `GetFullCheckpointResponse`
   // should be returned.
   optional google.protobuf.FieldMask read_mask = 4;
-}
-
-// DEPRECATED To be removed in the next release
-message GetFullCheckpointOptions {
-  // Include the `sui.types.CheckpointSummary` in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool summary = 3;
-
-  // Include the `CheckpointSummary` formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool summary_bcs = 4;
-
-  // Include the `sui.types.ValidatorAggregatedSignature` in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool signature = 5;
-
-  // Include the `sui.types.CheckpointContents` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool contents = 6;
-
-  // Include the `CheckpointContents` formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool contents_bcs = 7;
-
-  // Include the `sui.types.Transaction` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool transaction = 8;
-
-  // Include the transaction formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool transaction_bcs = 9;
-
-  // Include the `sui.types.TransactionEffects` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool effects = 10;
-
-  // Include the `TransactionEffects` formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool effects_bcs = 11;
-
-  // Include the `sui.types.TransactionEvents` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool events = 12;
-
-  // Include the `TransactionEvents` formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool events_bcs = 13;
-
-  // Include the input objects for transactions in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool input_objects = 14;
-
-  // Include the output objects for transactions in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool output_objects = 15;
-
-  // Include the `sui.types.Object` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool object = 16;
-
-  // Include the object formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool object_bcs = 17;
 }
 
 // Response message for `NodeService.GetFullCheckpoint`.

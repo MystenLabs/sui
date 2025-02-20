@@ -7,7 +7,7 @@ use sui_rpc_api::field_mask::FieldMaskUtil;
 use sui_rpc_api::proto::node::v2::node_service_client::NodeServiceClient;
 use sui_rpc_api::proto::node::v2::{
     FullCheckpointObject, FullCheckpointTransaction, GetCheckpointRequest, GetCheckpointResponse,
-    GetFullCheckpointOptions, GetFullCheckpointRequest, GetFullCheckpointResponse,
+    GetFullCheckpointRequest, GetFullCheckpointResponse,
 };
 use test_cluster::TestClusterBuilder;
 
@@ -245,10 +245,7 @@ async fn get_full_checkpoint() {
         contents_bcs,
         transactions,
     } = grpc_client
-        .get_full_checkpoint(
-            GetFullCheckpointRequest::by_sequence_number(checkpoint)
-                .with_options(GetFullCheckpointOptions::none()),
-        )
+        .get_full_checkpoint(GetFullCheckpointRequest::by_sequence_number(checkpoint))
         .await
         .unwrap()
         .into_inner();
@@ -293,8 +290,18 @@ async fn get_full_checkpoint() {
     // Request all fields
     let response = grpc_client
         .get_full_checkpoint(
-            GetFullCheckpointRequest::by_sequence_number(checkpoint)
-                .with_options(GetFullCheckpointOptions::all()),
+            GetFullCheckpointRequest::by_sequence_number(checkpoint).with_read_mask(
+                FieldMaskUtil::from_paths([
+                    "sequence_number",
+                    "digest",
+                    "summary",
+                    "summary_bcs",
+                    "signature",
+                    "contents",
+                    "contents_bcs",
+                    "transactions",
+                ]),
+            ),
         )
         .await
         .unwrap()
@@ -368,10 +375,7 @@ async fn get_full_checkpoint() {
 
     // Request by digest
     let response = grpc_client
-        .get_full_checkpoint(
-            GetFullCheckpointRequest::by_digest(digest.clone().unwrap())
-                .with_options(GetFullCheckpointOptions::none()),
-        )
+        .get_full_checkpoint(GetFullCheckpointRequest::by_digest(digest.clone().unwrap()))
         .await
         .unwrap()
         .into_inner();
@@ -379,10 +383,9 @@ async fn get_full_checkpoint() {
 
     // Request by sequence_number
     let response = grpc_client
-        .get_full_checkpoint(
-            GetFullCheckpointRequest::by_sequence_number(sequence_number.unwrap())
-                .with_options(GetFullCheckpointOptions::none()),
-        )
+        .get_full_checkpoint(GetFullCheckpointRequest::by_sequence_number(
+            sequence_number.unwrap(),
+        ))
         .await
         .unwrap()
         .into_inner();
@@ -394,7 +397,6 @@ async fn get_full_checkpoint() {
         .get_full_checkpoint(GetFullCheckpointRequest {
             sequence_number: Some(sequence_number.unwrap()),
             digest: Some(digest.clone().unwrap()),
-            options: None,
             read_mask: None,
         })
         .await
