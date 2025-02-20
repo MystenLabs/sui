@@ -19,10 +19,6 @@
 // [field presence](https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md),
 // these definitions follow the convention of having all fields marked
 // `optional`, and wrapping `repeated` fields in a message as needed.
-//
-// Even if a field is marked as `optional`, it might not actually be optional from
-// the perspective of the Sui protocol. Such fields are explicitly labled
-// as `Required` or `Optional` in their documentation.
 syntax = "proto3";
 
 package sui.types;
@@ -36,7 +32,7 @@ import "google/protobuf/empty.proto";
 // hexadecimal with a `0x` prefix. For example, this is a valid Sui address:
 // `0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331`.
 message Address {
-  // Required. 32-byte address.
+  // 32-byte address.
   optional bytes address = 1;
 }
 
@@ -45,13 +41,13 @@ message Address {
 // An `ObjectId` is a 32-byte identifier used to uniquely identify an object on the Sui
 // blockchain.
 message ObjectId {
-  // Required. 32-byte object-id.
+  // 32-byte object-id.
   optional bytes object_id = 1;
 }
 
 // 32-byte output of hashing a Sui structure using the Blake2b256 hash function.
 message Digest {
-  // Required. 32-byte hash.
+  // 32-byte hash.
   optional bytes digest = 1;
 }
 
@@ -59,7 +55,7 @@ message Digest {
 // [BCS](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/index.html#bcs)
 // format.
 message Bcs {
-  // Required. Bytes of a BCS encoded value.
+  // Bytes of a BCS encoded value.
   optional bytes bcs = 1;
 }
 
@@ -67,19 +63,19 @@ message Bcs {
 
 // An unsigned 128-bit integer encoded in little-endian using 16-bytes.
 message U128 {
-  // Required. 16-byte little-endian bytes.
+  // 16-byte little-endian bytes.
   optional bytes bytes = 1;
 }
 
 // A signed 128-bit integer encoded in little-endian using 16-bytes.
 message I128 {
-  // Required. 16-byte little-endian bytes.
+  // 16-byte little-endian bytes.
   optional bytes bytes = 1;
 }
 
 // An unsigned 256-bit integer encoded in little-endian using 32-bytes.
 message U256 {
-  // Required. 16-byte little-endian bytes.
+  // 16-byte little-endian bytes.
   optional bytes bytes = 1;
 }
 
@@ -987,17 +983,17 @@ message TransactionEffectsV1 {
 
 // An object reference with owner information.
 message ObjectReferenceWithOwner {
-  // Required. `ObjectReference`.
+  // `ObjectReference`.
   optional ObjectReference reference = 1;
-  // Required. `Owner`.
+  // `Owner`.
   optional Owner owner = 2;
 }
 
 // Indicates that an object was modified at a specific version.
 message ModifiedAtVersion {
-  // Required. `ObjectId` of the object.
+  // `ObjectId` of the object.
   optional ObjectId object_id = 1;
-  // Required. Version of the object prior to this transaction.
+  // Version of the object prior to this transaction.
   optional uint64 version = 2;
 }
 
@@ -1043,10 +1039,10 @@ message TransactionEffectsV2 {
 
 /// Input/output state of an object that was changed during execution.
 message ChangedObject {
-  // Required. ID of the object.
+  // ID of the object.
   optional ObjectId object_id = 1;
 
-  // Required. State of the object in the store prior to this transaction.
+  // State of the object in the store prior to this transaction.
   oneof input_state {
     // Object did not exist prior to this transaction.
     google.protobuf.Empty not_exist = 2;
@@ -1054,7 +1050,7 @@ message ChangedObject {
     ObjectExist exist = 3;
   }
 
-  // Required. State of the object in the store after this transaction.
+  // State of the object in the store after this transaction.
   oneof output_state {
     // Object was removed from the store due to this transaction.
     google.protobuf.Empty removed = 4;
@@ -1064,7 +1060,7 @@ message ChangedObject {
     PackageWrite package_write = 6;
   }
 
-  // Required. What happened to an `ObjectId` during execution.
+  // What happened to an `ObjectId` during execution.
   oneof id_operation {
     google.protobuf.Empty none = 7;
     google.protobuf.Empty created = 8;
@@ -1074,19 +1070,19 @@ message ChangedObject {
 
 // Information about the old version of the object.
 message ObjectExist {
-  // Required. Version of the object.
+  // Version of the object.
   optional uint64 version = 1;
-  // Required. Digest of the object.
+  // Digest of the object.
   optional Digest digest = 2;
-  // Required. Owner of the object.
+  // Owner of the object.
   optional Owner owner = 3;
 }
 
 // Object write, including all of mutated, created, unwrapped.
 message ObjectWrite {
-  // Required. Digest of the new version of the object.
+  // Digest of the new version of the object.
   optional Digest digest = 2;
-  // Required. Owner of the new version of the object.
+  // Owner of the new version of the object.
   optional Owner owner = 3;
 }
 
@@ -1094,13 +1090,13 @@ message ObjectWrite {
 message PackageWrite {
   // Version of the new package.
   optional uint64 version = 1;
-  // Required. Digest of the new package.
+  // Digest of the new package.
   optional Digest digest = 2;
 }
 
 // A shared object that wasn't changed during execution.
 message UnchangedSharedObject {
-  // Required. ObjectId of the shared object.
+  // ObjectId of the shared object.
   optional ObjectId object_id = 1;
 
   oneof kind {
@@ -1124,9 +1120,9 @@ message UnchangedSharedObject {
 
 // Read-only shared object from the input.
 message ReadOnlyRoot {
-  // Required. Version of the shared object.
+  // Version of the shared object.
   optional uint64 version = 1;
-  // Required. Digest of the shared object.
+  // Digest of the shared object.
   optional Digest digest = 2;
 }
 
@@ -1136,18 +1132,18 @@ message ReadOnlyRoot {
 
 /// The status of an executed transaction.
 message ExecutionStatus {
-  // Required. Indicates if the transaction was successful or not.
+  // Indicates if the transaction was successful or not.
   optional bool success = 1;
 
-  // Optional. The error if `success` is false.
+  // The error if `success` is false.
   optional FailureStatus status = 2;
 }
 
 // A size error.
 message SizeError {
-  // Required. The offending size.
+  // The offending size.
   optional uint64 size = 1;
-  // Required. The maximum allowable size.
+  // The maximum allowable size.
   optional uint64 max_size = 2;
 }
 
@@ -1287,9 +1283,9 @@ message FailureStatus {
 
 // Address is denied for this coin type.
 message AddressDeniedForCoinError {
-  // Required. Denied address.
+  // Denied address.
   optional Address address = 1;
-  // Required. Coin type.
+  // Coin type.
   optional string coin_type = 2;
 }
 
@@ -1301,21 +1297,21 @@ message CongestedObjectsError {
 
 /// Location in Move bytecode where an error occurred.s
 message MoveLocation {
-  // Required. The package ID.
+  // The package ID.
   optional ObjectId package = 1;
-  // Required. The module name.
+  // The module name.
   optional Identifier module = 2;
-  // Required. The function index.
+  // The function index.
   optional uint32 function = 3;
-  // Required. Offset of the instruction where the error occurred.
+  // Offset of the instruction where the error occurred.
   optional uint32 instruction = 4;
-  // Optional. The name of the function, if available.
+  // The name of the function, if available.
   optional Identifier function_name = 5;
 }
 
 // An error with an argument to a command.
 message CommandArgumentError {
-  // Required. Position of the problematic argument.
+  // Position of the problematic argument.
   optional uint32 argument = 1;
 
   oneof kind {
@@ -1373,15 +1369,15 @@ message PackageUpgradeError {
 
 // Package ID does not match `PackageId` in upgrade ticket.
 message PackageIdDoesNotMatch {
-  // Required. The package ID.
+  // The package ID.
   optional ObjectId package_id = 1;
-  // Required. The ticket ID.
+  // The ticket ID.
   optional ObjectId ticket_id = 2;
 }
 
 // Type argument error.
 message TypeArgumentError {
-  // Required. Index of the problematic type argument.
+  // Index of the problematic type argument.
   optional uint32 type_argument = 1;
 
   oneof kind {
@@ -1422,9 +1418,7 @@ message SimpleSignature {
 
 // Public key equivalent for zklogin authenticators.
 message ZkLoginPublicIdentifier {
-  // Required.
   optional string iss = 1;
-  // Required.
   optional Bn254FieldElement address_seed = 2;
 }
 
@@ -1444,9 +1438,9 @@ message MultisigMemberPublicKey {
 
 // A member in a multisig committee.
 message MultisigMember {
-  // Required. The public key of the committee member.
+  // The public key of the committee member.
   optional MultisigMemberPublicKey public_key = 1;
-  // Required. The weight of this member's signature.
+  // The weight of this member's signature.
   optional uint32 weight = 2;
 }
 
@@ -1454,7 +1448,7 @@ message MultisigMember {
 message MultisigCommittee {
   // A list of committee members and their corresponding weight.
   repeated MultisigMember members = 1;
-  // Required. The threshold of signatures needed to validate a signature from
+  // The threshold of signatures needed to validate a signature from
   // this committee.
   optional uint32 threshold = 2;
 }
@@ -1466,13 +1460,13 @@ message MultisigAggregatedSignature {
   // The signatures must be in the same order as they are listed in the committee.
   repeated MultisigMemberSignature signatures = 1;
 
-  // Required. Bitmap indicating which committee members contributed to the
+  // Bitmap indicating which committee members contributed to the
   // signature.
   optional uint32 bitmap = 2;
-  // Optional. If present, means this signature's on-chain format uses the old
+  // If present, means this signature's on-chain format uses the old
   // legacy multisig format.
   optional RoaringBitmap legacy_bitmap = 3;
-  // Required. The committee to use to validate this signature.
+  // The committee to use to validate this signature.
   optional MultisigCommittee committee = 4;
 }
 
@@ -1492,75 +1486,57 @@ message MultisigMemberSignature {
 
 // A zklogin authenticator.
 message ZkLoginAuthenticator {
-  // Required. Zklogin proof and inputs required to perform proof verification.
+  // Zklogin proof and inputs required to perform proof verification.
   optional ZkLoginInputs inputs = 1;
-  // Required. Maximum epoch for which the proof is valid.
+  // Maximum epoch for which the proof is valid.
   optional uint64 max_epoch = 2;
-  // Required. User signature with the public key attested to by the provided proof.
+  // User signature with the public key attested to by the provided proof.
   optional SimpleSignature signature = 3;
 }
 
 // A zklogin groth16 proof and the required inputs to perform proof verification.
 message ZkLoginInputs {
-  // Required.
   optional ZkLoginProof proof_points = 1;
-  // Required.
   optional ZkLoginClaim iss_base64_details = 2;
-  // Required.
   optional string header_base64 = 3;
-  // Required.
   optional Bn254FieldElement address_seed = 4;
 }
 
 // A zklogin groth16 proof.
 message ZkLoginProof {
-  // Required.
   optional CircomG1 a = 1;
-  // Required.
   optional CircomG2 b = 2;
-  // Required.
   optional CircomG1 c = 3;
 }
 
 // A claim of the iss in a zklogin proof.
 message ZkLoginClaim {
-  // Required.
   optional string value = 1;
-  // Required.
   optional uint32 index_mod_4 = 2;
 }
 
 // A G1 point.
 message CircomG1 {
-  // Required.
   optional Bn254FieldElement e0 = 1;
-  // Required.
   optional Bn254FieldElement e1 = 2;
-  // Required.
   optional Bn254FieldElement e2 = 3;
 }
 
 // A G2 point.
 message CircomG2 {
-  // Required.
   optional Bn254FieldElement e00 = 1;
-  // Required.
   optional Bn254FieldElement e01 = 2;
 
-  // Required.
   optional Bn254FieldElement e10 = 3;
-  // Required.
   optional Bn254FieldElement e11 = 4;
 
-  // Required.
   optional Bn254FieldElement e20 = 5;
-  // Required.
   optional Bn254FieldElement e21 = 6;
 }
 
 // A point on the BN254 elliptic curve.
 message Bn254FieldElement {
-  // Required. 32-byte big-endian field element.
+  // 32-byte big-endian field element.
   optional bytes element = 1;
 }
 
@@ -1571,25 +1547,25 @@ message Bn254FieldElement {
 // for more information on the requirements on the shape of the
 // `client_data_json` field.
 message PasskeyAuthenticator {
-  // Required. Opaque authenticator data for this passkey signature.
+  // Opaque authenticator data for this passkey signature.
   //
   // See [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) for
   // more information on this field.
   optional bytes authenticator_data = 1;
 
-  // Required. Structured, unparsed, JSON for this passkey signature.
+  // Structured, unparsed, JSON for this passkey signature.
   //
   // See [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata)
   // for more information on this field.
   optional string client_data_json = 2;
 
-  // Required. A secp256r1 signature.
+  // A secp256r1 signature.
   optional SimpleSignature signature = 3;
 }
 
 // The validator set for a particular epoch.
 message ValidatorCommittee {
-  // Required. The epoch where this committee governs.
+  // The epoch where this committee governs.
   optional uint64 epoch = 1;
 
   // The committee members.
@@ -1598,25 +1574,25 @@ message ValidatorCommittee {
 
 // A member of a validator committee.
 message ValidatorCommitteeMember {
-  // Required. The 96-byte Bls12381 public key for this validator.
+  // The 96-byte Bls12381 public key for this validator.
   optional bytes public_key = 1;
 
-  // Required. Stake weight this validator possesses.
+  // Stake weight this validator possesses.
   optional uint64 stake = 2;
 }
 
 /// An aggregated signature from multiple validators.
 message ValidatorAggregatedSignature {
-  // Required. The epoch when this signature was produced.
+  // The epoch when this signature was produced.
   //
   // This can be used to lookup the `ValidatorCommittee` from this epoch
   // to verify this signature.
   optional uint64 epoch = 1;
 
-  // Required. The 48-byte Bls12381 aggregated signature.
+  // The 48-byte Bls12381 aggregated signature.
   optional bytes signature = 2;
 
-  // Required. Bitmap indicating which members of the committee contributed to
+  // Bitmap indicating which members of the committee contributed to
   // this signature.
   optional RoaringBitmap bitmap = 3;
 }
@@ -1625,7 +1601,7 @@ message ValidatorAggregatedSignature {
 // [RoaringFormatSpec](https://github.com/RoaringBitmap/RoaringFormatSpec) for the
 // specification for the serialized format of `RoaringBitmap`s.
 message RoaringBitmap {
-  // Required. Serialized `RoaringBitmap`.
+  // Serialized `RoaringBitmap`.
   optional bytes bitmap = 1;
 }
 
