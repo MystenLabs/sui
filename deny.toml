@@ -22,14 +22,10 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 # output a note when they are encountered.
 ignore = [
     # "RUSTSEC-0000-0000",
-    # rusoto is unmaintained, use aws crates
-    "RUSTSEC-2022-0071",
     # `tui` is unmaintained; use `ratatui` instead
     "RUSTSEC-2023-0049",
     # we don't do RSA signing on Sui (only verifying for zklogin)
     "RUSTSEC-2023-0071",
-    # A few dependencies use unpatched rustls.
-    "RUSTSEC-2024-0336",
     # allow yaml-rust being unmaintained
     "RUSTSEC-2024-0320",
     # allow unmaintained proc-macro-error used in transitive dependencies
@@ -76,6 +72,7 @@ allow = [
     "BSL-1.0",
     "Unicode-DFS-2016",
     "Unicode-3.0",
+    "Zlib",
     #"Apache-2.0 WITH LLVM-exception",
 ]
 # The confidence threshold for detecting a license from license text.

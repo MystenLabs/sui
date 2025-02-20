@@ -273,11 +273,13 @@ async-recursion = "1.0.4"
 async-stream = "0.3.6"
 async-trait = "0.1.61"
 atomic_float = "0.1"
-aws-config = "0.56"
-aws-sdk-ec2 = "0.29.0"
-aws-sdk-dynamodb = "0.29.0"
-aws-smithy-http = "0.56"
-aws-smithy-runtime-api = "0.56"
+aws-config = { version = "1.5.16", features = ["behavior-version-latest"] }
+aws-runtime = "1.5.5"
+aws-sdk-dynamodb = "1.65.0"
+aws-sdk-ec2 = "1.110.0"
+aws-sdk-kms = "1.60.0"
+aws-smithy-http = "0.60.12"
+aws-smithy-runtime-api = "1.7.3"
 axum = { version = "0.7", default-features = false, features = [
     "macros",
     "tokio",
@@ -446,12 +448,6 @@ reqwest = { version = "0.12", default-features = false, features = [
 roaring = "0.10.6"
 ron = "0.8.0"
 rstest = "0.16.0"
-rusoto_core = { version = "0.48.0", default-features = false, features = [
-    "rustls",
-] }
-rusoto_kms = { version = "0.48.0", default-features = false, features = [
-    "rustls",
-] }
 russh = "0.38.0"
 russh-keys = "0.38.0"
 rust-version = "1.56.1"
