@@ -12,10 +12,7 @@ use sui_types::{
 };
 
 use super::{address::Address, big_int::BigInt, object::Object, sui_address::SuiAddress};
-use super::{
-    cursor::Page,
-    object::{self, ObjectKey},
-};
+use super::{cursor::Page, object::ObjectKey};
 use crate::consistency::ConsistentIndexCursor;
 use crate::types::cursor::JsonCursor;
 
@@ -68,6 +65,13 @@ impl GasInput {
         last: Option<u64>,
         before: Option<CGasPayment>,
     ) -> Result<Connection<String, Object>> {
+        // A possible user error during dry run or execution would be to supply a gas payment that
+        // is not a Move object (i.e a package). Even though the transaction would fail to run, this
+        // service will still attempt to present execution results. If the return type of this field
+        // is a `MoveObject`, then GraphQL will fail on the top-level with an internal error.
+        // Instead, we return an `Object` here, so that the rest of the `TransactionBlock` will
+        // still be viewable.
+
         let mut connection = Connection::new(false, false);
         // Return empty connection if no payment objects
         if self.payment_obj_keys.is_empty() {
@@ -87,16 +91,15 @@ impl GasInput {
         // Collect cursors since we need them twice
         let cursors: Vec<_> = cs.collect();
 
-        // Get the keys for this page
-        let keys: Vec<ObjectKey> = cursors
-            .iter()
-            .map(|c| object::ObjectKey {
-                object_id: self.payment_obj_keys[c.ix].object_id,
-                version: self.payment_obj_keys[c.ix].version,
-            })
-            .collect();
-
-        let objects = Object::query_many(ctx, keys, self.checkpoint_viewed_at).await?;
+        let objects = Object::query_many(
+            ctx,
+            cursors
+                .iter()
+                .map(|c| self.payment_obj_keys[c.ix].clone())
+                .collect(),
+            self.checkpoint_viewed_at,
+        )
+        .await?;
 
         for (c, obj) in cursors.into_iter().zip(objects) {
             connection.edges.push(Edge::new(c.encode_cursor(), obj));
