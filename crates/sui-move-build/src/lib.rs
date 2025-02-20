@@ -33,7 +33,9 @@ use move_package::{
     },
     package_hooks::{PackageHooks, PackageIdentifier},
     resolution::resolution_graph::ResolvedGraph,
-    source_package::parsed_manifest::{Dependencies, PackageName},
+    source_package::parsed_manifest::{
+        Dependencies, Dependency, DependencyKind, GitInfo, InternalDependency, PackageName,
+    },
     BuildConfig as MoveBuildConfig,
 };
 use move_package::{
@@ -41,7 +43,11 @@ use move_package::{
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
-use sui_package_management::{resolve_published_id, PublishedAtError};
+use sui_package_management::{
+    resolve_published_id,
+    system_package_versions::{SystemPackagesVersion, SYSTEM_GIT_REPO},
+    PublishedAtError,
+};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::ObjectID,
@@ -107,17 +113,25 @@ pub struct BuildConfig {
 impl BuildConfig {
     pub fn new_for_testing() -> Self {
         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-        let mut build_config: Self = Default::default();
         let install_dir = tempfile::tempdir().unwrap().into_path();
-        let lock_file = install_dir.join("Move.lock");
-        build_config.config.install_dir = Some(install_dir);
-        build_config.config.lock_file = Some(lock_file);
-        build_config
-            .config
-            .lint_flag
-            .set(move_compiler::linters::LintLevel::None);
-        build_config.config.silence_warnings = true;
-        build_config
+
+        let config = MoveBuildConfig {
+            default_flavor: Some(move_compiler::editions::Flavor::Sui),
+
+            lock_file: Some(install_dir.join("Move.lock")),
+            install_dir: Some(install_dir),
+            silence_warnings: true,
+            lint_flag: move_package::LintFlag::LEVEL_NONE,
+            // TODO: in the future this should probably be changed to a set of local deps:
+            implicit_dependencies: Dependencies::new(),
+            ..MoveBuildConfig::default()
+        };
+        BuildConfig {
+            config,
+            run_bytecode_verifier: true,
+            print_diags_to_stderr: false,
+            chain_id: None,
+        }
     }
 
     pub fn new_for_testing_replace_addresses<I, S>(dep_original_addresses: I) -> Self
@@ -622,20 +636,28 @@ impl CompiledPackage {
     }
 }
 
-impl Default for BuildConfig {
-    fn default() -> Self {
-        let config = MoveBuildConfig {
-            default_flavor: Some(move_compiler::editions::Flavor::Sui),
-            implicit_dependencies: Dependencies::new(),
-            ..MoveBuildConfig::default()
-        };
-        BuildConfig {
-            config,
-            run_bytecode_verifier: true,
-            print_diags_to_stderr: false,
-            chain_id: None,
-        }
-    }
+/// Create a set of [Dependencies] from a [SystemPackagesVersion]; the dependencies are override git
+/// dependencies to the specific revision given by the [SystemPackagesVersion]
+pub fn implicit_deps(packages: &SystemPackagesVersion) -> Dependencies {
+    packages
+        .packages
+        .iter()
+        .map(|package| {
+            (
+                package.package_name.clone().into(),
+                Dependency::Internal(InternalDependency {
+                    kind: DependencyKind::Git(GitInfo {
+                        git_url: SYSTEM_GIT_REPO.into(),
+                        git_rev: packages.git_revision.clone().into(),
+                        subdir: package.repo_path.clone().into(),
+                    }),
+                    subst: None,
+                    digest: None,
+                    dep_override: true,
+                }),
+            )
+        })
+        .collect()
 }
 
 impl GetModule for CompiledPackage {

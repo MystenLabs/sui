@@ -31,7 +31,7 @@ use reqwest::StatusCode;
 use move_binary_format::CompiledModule;
 use move_bytecode_verifier_meter::Scope;
 use move_core_types::{account_address::AccountAddress, language_storage::TypeTag};
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package::{source_package::parsed_manifest::Dependencies, BuildConfig as MoveBuildConfig};
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -52,9 +52,12 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
-    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies,
+    gather_published_ids, implicit_deps, BuildConfig, CompiledPackage, PackageDependencies,
 };
-use sui_package_management::{LockCommand, PublishedAtError};
+use sui_package_management::{
+    system_package_versions::{latest_system_packages, system_packages_for_protocol},
+    LockCommand, PublishedAtError,
+};
 use sui_replay::ReplayToolCommand;
 use sui_sdk::{
     apis::ReadApi,
@@ -1674,7 +1677,7 @@ impl SuiClientCommands {
             ),
             SuiClientCommands::VerifySource {
                 package_path,
-                build_config,
+                mut build_config,
                 verify_deps,
                 skip_source,
                 address_override,
@@ -1691,6 +1694,7 @@ impl SuiClientCommands {
                     (true, true, Some(at)) => ValidationMode::root_and_deps_at(*at),
                 };
 
+                build_config.implicit_dependencies = implicit_deps(latest_system_packages());
                 let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let chain_id = context
                     .get_client()
@@ -1760,10 +1764,11 @@ fn check_dep_verification_flags(
 }
 
 fn compile_package_simple(
-    build_config: MoveBuildConfig,
+    mut build_config: MoveBuildConfig,
     package_path: &Path,
     chain_id: Option<String>,
 ) -> Result<CompiledPackage, anyhow::Error> {
+    build_config.implicit_dependencies = implicit_deps(latest_system_packages());
     let config = BuildConfig {
         config: resolve_lock_file_path(build_config, Some(package_path))?,
         run_bytecode_verifier: false,
@@ -1871,7 +1876,7 @@ pub(crate) async fn upgrade_package(
 
 pub(crate) async fn compile_package(
     read_api: &ReadApi,
-    build_config: MoveBuildConfig,
+    mut build_config: MoveBuildConfig,
     package_path: &Path,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
@@ -1884,6 +1889,11 @@ pub(crate) async fn compile_package(
     ),
     anyhow::Error,
 > {
+    let protocol_config = read_api.get_protocol_config(None).await?;
+    let protocol_version = protocol_config.protocol_version;
+
+    build_config.implicit_dependencies = implicit_deps_for_protocol_version(protocol_version)?;
+
     let config = resolve_lock_file_path(build_config, Some(package_path))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;
@@ -1906,7 +1916,6 @@ pub(crate) async fn compile_package(
         print_diags_to_stderr,
         chain_id,
     )?;
-    let protocol_config = read_api.get_protocol_config(None).await?;
 
     // Check that the package's Move version is compatible with the chain's
     if let Some(Some(SuiProtocolConfigValue::U32(min_version))) = protocol_config
@@ -2011,6 +2020,21 @@ pub(crate) async fn compile_package(
         })?;
 
     Ok((dependencies, compiled_modules, compiled_package, package_id))
+}
+
+/// Return the correct implicit dependencies for the [version], producing a warning or error if the
+/// protocol version is unknown or old
+fn implicit_deps_for_protocol_version(version: ProtocolVersion) -> anyhow::Result<Dependencies> {
+    if version > ProtocolVersion::MAX + 2 {
+        eprintln!(
+            "[{}]: The network is using protocol version {:?}, which is newer than this binary; \
+            the system packages used for compilation (e.g. MoveStdlib) may be out of date.",
+            "warning".bold().yellow(),
+            version
+        )
+    }
+
+    Ok(implicit_deps(system_packages_for_protocol(version)?.0))
 }
 
 impl Display for SuiClientCommandResult {
