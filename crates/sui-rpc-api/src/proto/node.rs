@@ -306,282 +306,6 @@ impl GetTransactionRequest {
 }
 
 //
-// GetFullCheckpointOptions
-//
-
-impl GetFullCheckpointOptions {
-    pub fn all() -> Self {
-        Self {
-            summary: Some(true),
-            summary_bcs: Some(true),
-            signature: Some(true),
-            contents: Some(true),
-            contents_bcs: Some(true),
-            transaction: Some(true),
-            transaction_bcs: Some(true),
-            effects: Some(true),
-            effects_bcs: Some(true),
-            events: Some(true),
-            events_bcs: Some(true),
-            input_objects: Some(true),
-            output_objects: Some(true),
-            object: Some(true),
-            object_bcs: Some(true),
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            summary: Some(false),
-            summary_bcs: Some(false),
-            signature: Some(false),
-            contents: Some(false),
-            contents_bcs: Some(false),
-            transaction: Some(false),
-            transaction_bcs: Some(false),
-            effects: Some(false),
-            effects_bcs: Some(false),
-            events: Some(false),
-            events_bcs: Some(false),
-            input_objects: Some(false),
-            output_objects: Some(false),
-            object: Some(false),
-            object_bcs: Some(false),
-        }
-    }
-
-    pub fn with_summary(mut self) -> Self {
-        self.summary = Some(true);
-        self
-    }
-
-    pub fn without_summary(mut self) -> Self {
-        self.summary = Some(false);
-        self
-    }
-
-    pub fn with_summary_bcs(mut self) -> Self {
-        self.summary_bcs = Some(true);
-        self
-    }
-
-    pub fn without_summary_bcs(mut self) -> Self {
-        self.summary_bcs = Some(false);
-        self
-    }
-
-    pub fn with_signature(mut self) -> Self {
-        self.signature = Some(true);
-        self
-    }
-
-    pub fn without_signature(mut self) -> Self {
-        self.signature = Some(false);
-        self
-    }
-
-    pub fn with_contents(mut self) -> Self {
-        self.contents = Some(true);
-        self
-    }
-
-    pub fn without_contents(mut self) -> Self {
-        self.contents = Some(false);
-        self
-    }
-
-    pub fn with_contents_bcs(mut self) -> Self {
-        self.contents_bcs = Some(true);
-        self
-    }
-
-    pub fn without_contents_bcs(mut self) -> Self {
-        self.contents_bcs = Some(false);
-        self
-    }
-
-    pub fn with_transaction(mut self) -> Self {
-        self.transaction = Some(true);
-        self
-    }
-
-    pub fn without_transaction(mut self) -> Self {
-        self.transaction = Some(false);
-        self
-    }
-
-    pub fn with_transaction_bcs(mut self) -> Self {
-        self.transaction_bcs = Some(true);
-        self
-    }
-
-    pub fn without_transaction_bcs(mut self) -> Self {
-        self.transaction_bcs = Some(false);
-        self
-    }
-
-    pub fn with_effects(mut self) -> Self {
-        self.effects = Some(true);
-        self
-    }
-
-    pub fn without_effects(mut self) -> Self {
-        self.effects = Some(false);
-        self
-    }
-
-    pub fn with_effects_bcs(mut self) -> Self {
-        self.effects_bcs = Some(true);
-        self
-    }
-
-    pub fn without_effects_bcs(mut self) -> Self {
-        self.effects_bcs = Some(false);
-        self
-    }
-
-    pub fn with_events(mut self) -> Self {
-        self.events = Some(true);
-        self
-    }
-
-    pub fn without_events(mut self) -> Self {
-        self.events = Some(false);
-        self
-    }
-
-    pub fn with_events_bcs(mut self) -> Self {
-        self.events_bcs = Some(true);
-        self
-    }
-
-    pub fn without_events_bcs(mut self) -> Self {
-        self.events_bcs = Some(false);
-        self
-    }
-
-    pub fn with_input_objects(mut self) -> Self {
-        self.input_objects = Some(true);
-        self
-    }
-
-    pub fn without_input_objects(mut self) -> Self {
-        self.input_objects = Some(false);
-        self
-    }
-
-    pub fn with_output_objects(mut self) -> Self {
-        self.output_objects = Some(true);
-        self
-    }
-
-    pub fn without_output_objects(mut self) -> Self {
-        self.output_objects = Some(false);
-        self
-    }
-
-    pub fn with_object(mut self) -> Self {
-        self.object = Some(true);
-        self
-    }
-
-    pub fn without_object(mut self) -> Self {
-        self.object = Some(false);
-        self
-    }
-
-    pub fn with_object_bcs(mut self) -> Self {
-        self.object_bcs = Some(true);
-        self
-    }
-
-    pub fn without_object_bcs(mut self) -> Self {
-        self.object = Some(false);
-        self
-    }
-}
-
-impl From<crate::types::GetFullCheckpointOptions> for GetFullCheckpointOptions {
-    fn from(
-        crate::types::GetFullCheckpointOptions {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-            transaction,
-            transaction_bcs,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            input_objects,
-            output_objects,
-            object,
-            object_bcs,
-        }: crate::types::GetFullCheckpointOptions,
-    ) -> Self {
-        Self {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-            transaction,
-            transaction_bcs,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            input_objects,
-            output_objects,
-            object,
-            object_bcs,
-        }
-    }
-}
-
-impl From<GetFullCheckpointOptions> for crate::types::GetFullCheckpointOptions {
-    fn from(
-        GetFullCheckpointOptions {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-            transaction,
-            transaction_bcs,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            input_objects,
-            output_objects,
-            object,
-            object_bcs,
-        }: GetFullCheckpointOptions,
-    ) -> Self {
-        Self {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-            transaction,
-            transaction_bcs,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            input_objects,
-            output_objects,
-            object,
-            object_bcs,
-        }
-    }
-}
-
-//
 // GetFullCheckpointRequest
 //
 
@@ -590,7 +314,6 @@ impl GetFullCheckpointRequest {
         Self {
             sequence_number: None,
             digest: None,
-            options: None,
             read_mask: None,
         }
     }
@@ -599,7 +322,6 @@ impl GetFullCheckpointRequest {
         Self {
             sequence_number: None,
             digest: Some(digest.into()),
-            options: None,
             read_mask: None,
         }
     }
@@ -608,13 +330,12 @@ impl GetFullCheckpointRequest {
         Self {
             sequence_number: Some(sequence_number),
             digest: None,
-            options: None,
             read_mask: None,
         }
     }
 
-    pub fn with_options(mut self, options: GetFullCheckpointOptions) -> Self {
-        self.options = Some(options);
+    pub fn with_read_mask(mut self, read_mask: FieldMask) -> Self {
+        self.read_mask = Some(read_mask);
         self
     }
 }

@@ -120,23 +120,6 @@ impl Client {
         let request = crate::proto::node::v2::GetFullCheckpointRequest {
             sequence_number: Some(sequence_number),
             digest: None,
-            options: Some(crate::proto::node::v2::GetFullCheckpointOptions {
-                summary: Some(false),
-                summary_bcs: Some(true),
-                signature: Some(true),
-                contents: Some(false),
-                contents_bcs: Some(true),
-                transaction: Some(false),
-                transaction_bcs: Some(true),
-                effects: Some(false),
-                effects_bcs: Some(true),
-                events: Some(false),
-                events_bcs: Some(true),
-                input_objects: Some(true),
-                output_objects: Some(true),
-                object: Some(false),
-                object_bcs: Some(true),
-            }),
             read_mask: FieldMaskUtil::from_paths([
                 "summary_bcs",
                 "signature",
