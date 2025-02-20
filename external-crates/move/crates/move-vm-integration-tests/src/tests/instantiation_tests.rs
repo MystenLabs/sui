@@ -185,7 +185,7 @@ fn test_runner(
     // assert_eq!(err, StatusCode::OUT_OF_GAS, "Must finish OutOfGas");
     assert!(
         check_result(time, ref_time),
-        "Instantion test taking too long {}",
+        "Instantiation test taking too long {}",
         time
     );
 }
