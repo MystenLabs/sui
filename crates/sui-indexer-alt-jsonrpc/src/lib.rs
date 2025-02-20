@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use api::checkpoints::Checkpoints;
+use api::coin::{Coins, CoinsConfig};
 use api::dynamic_fields::DynamicFields;
 use api::move_utils::MoveUtils;
 use api::name_service::NameService;
@@ -217,6 +218,7 @@ pub async fn start_rpc(
         objects,
         transactions,
         name_service,
+        coins,
         bigtable_config,
         extra: _,
     } = rpc_config.finish();
@@ -224,6 +226,7 @@ pub async fn start_rpc(
     let objects_config = objects.finish(ObjectsConfig::default());
     let transactions_config = transactions.finish(TransactionsConfig::default());
     let name_service_config = name_service.finish(NameServiceConfig::default());
+    let coins_config = coins.finish(CoinsConfig::default());
 
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
@@ -237,6 +240,7 @@ pub async fn start_rpc(
     );
 
     rpc.add_module(Checkpoints(context.clone()))?;
+    rpc.add_module(Coins(context.clone(), coins_config))?;
     rpc.add_module(DynamicFields(context.clone()))?;
     rpc.add_module(Governance(context.clone()))?;
     rpc.add_module(MoveUtils(context.clone()))?;

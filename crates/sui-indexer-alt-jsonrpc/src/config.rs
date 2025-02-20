@@ -7,7 +7,7 @@ use sui_default_config::DefaultConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use tracing::warn;
 
-use crate::api::{objects::ObjectsConfig, transactions::TransactionsConfig};
+use crate::api::{coin::CoinsConfig, objects::ObjectsConfig, transactions::TransactionsConfig};
 
 pub use sui_name_service::NameServiceConfig;
 
@@ -22,6 +22,9 @@ pub struct RpcConfig {
 
     /// Configuration for SuiNS related RPC methods.
     pub name_service: NameServiceLayer,
+
+    /// Configuration for coin-related RPC methods.
+    pub coins: CoinsLayer,
 
     /// Configuration for bigtable kv store, if it is used.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,6 +68,16 @@ pub struct NameServiceLayer {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+pub struct CoinsLayer {
+    pub default_page_size: Option<usize>,
+    pub max_page_size: Option<usize>,
+
+    #[serde(flatten)]
+    pub extra: toml::Table,
+}
+
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
 pub struct BigtableConfig {
     /// The instance id of the Bigtable instance to connect to.
     pub instance_id: String,
@@ -78,6 +91,7 @@ impl RpcConfig {
             objects: ObjectsConfig::default().into(),
             transactions: TransactionsConfig::default().into(),
             name_service: NameServiceConfig::default().into(),
+            coins: CoinsConfig::default().into(),
             bigtable_config: None,
             extra: Default::default(),
         }
@@ -123,6 +137,16 @@ impl NameServiceLayer {
     }
 }
 
+impl CoinsLayer {
+    pub fn finish(self, base: CoinsConfig) -> CoinsConfig {
+        check_extra("coins", self.extra);
+        CoinsConfig {
+            default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
+            max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
+        }
+    }
+}
+
 impl From<ObjectsConfig> for ObjectsLayer {
     fn from(config: ObjectsConfig) -> Self {
         Self {
@@ -150,6 +174,16 @@ impl From<NameServiceConfig> for NameServiceLayer {
             package_address: Some(config.package_address),
             registry_id: Some(config.registry_id),
             reverse_registry_id: Some(config.reverse_registry_id),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl From<CoinsConfig> for CoinsLayer {
+    fn from(config: CoinsConfig) -> Self {
+        Self {
+            default_page_size: Some(config.default_page_size),
+            max_page_size: Some(config.max_page_size),
             extra: Default::default(),
         }
     }
