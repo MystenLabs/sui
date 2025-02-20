@@ -12,7 +12,7 @@ use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
 use sui_types::base_types::ObjectID;
 
 use super::pg_reader::PgReader;
-use crate::data::read_error::ReadError;
+use crate::data::error::Error;
 
 /// Key for fetching the latest version of an object, not accounting for deletions or wraps. If the
 /// object has been deleted or wrapped, the version before the delete/wrap is returned.
@@ -22,7 +22,7 @@ pub(crate) struct LatestObjectVersionKey(pub ObjectID);
 #[async_trait::async_trait]
 impl Loader<LatestObjectVersionKey> for PgReader {
     type Value = StoredObjVersion;
-    type Error = Arc<ReadError>;
+    type Error = Arc<Error>;
 
     async fn load(
         &self,

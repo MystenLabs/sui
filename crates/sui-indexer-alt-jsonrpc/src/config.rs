@@ -22,7 +22,8 @@ pub struct RpcConfig {
 
     /// Configuration for SuiNS related RPC methods.
     pub name_service: NameServiceLayer,
-    /// Configuration for bigtable kv store, if it is used..
+
+    /// Configuration for bigtable kv store, if it is used.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_config: Option<BigtableConfig>,
 
@@ -65,8 +66,8 @@ pub struct NameServiceLayer {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct BigtableConfig {
+    /// The instance id of the Bigtable instance to connect to.
     pub instance_id: String,
-    pub credentials: String,
 }
 
 impl RpcConfig {

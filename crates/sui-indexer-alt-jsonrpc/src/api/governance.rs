@@ -89,10 +89,9 @@ async fn rgp_response(ctx: &Context) -> Result<BigInt<u64>, RpcError> {
 async fn latest_sui_system_state_response(
     ctx: &Context,
 ) -> Result<SuiSystemStateSummary, RpcError> {
-    let wrapper: SuiSystemStateWrapper =
-        load_latest_deserialized(ctx, SUI_SYSTEM_STATE_OBJECT_ID)
-            .await
-            .context("Failed to fetch system state wrapper object")?;
+    let wrapper: SuiSystemStateWrapper = load_latest_deserialized(ctx, SUI_SYSTEM_STATE_OBJECT_ID)
+        .await
+        .context("Failed to fetch system state wrapper object")?;
 
     let inner_id = derive_dynamic_field_id(
         SUI_SYSTEM_STATE_OBJECT_ID,

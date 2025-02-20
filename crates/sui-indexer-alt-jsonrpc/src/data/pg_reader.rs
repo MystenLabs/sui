@@ -16,7 +16,7 @@ use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db as db;
 use tracing::debug;
 
-use crate::data::read_error::ReadError;
+use crate::data::error::Error;
 use crate::metrics::RpcMetrics;
 /// This wrapper type exists to perform error conversion between the data fetching layer and the
 /// RPC layer, metrics collection, and debug logging of database queries.
@@ -36,17 +36,15 @@ impl PgReader {
         db_args: db::DbArgs,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
-    ) -> Result<Self, ReadError> {
-        let db = db::Db::for_read(db_args)
-            .await
-            .map_err(ReadError::PgCreate)?;
+    ) -> Result<Self, Error> {
+        let db = db::Db::for_read(db_args).await.map_err(Error::PgCreate)?;
 
         registry
             .register(Box::new(DbConnectionStatsCollector::new(
                 Some("rpc_db"),
                 db.clone(),
             )))
-            .map_err(|e| ReadError::PgCreate(e.into()))?;
+            .map_err(|e| Error::PgCreate(e.into()))?;
 
         Ok(Self { db, metrics })
     }
@@ -56,16 +54,16 @@ impl PgReader {
         DataLoader::new(self.clone(), tokio::spawn)
     }
 
-    pub(crate) async fn connect(&self) -> Result<Connection<'_>, ReadError> {
+    pub(crate) async fn connect(&self) -> Result<Connection<'_>, Error> {
         Ok(Connection {
-            conn: self.db.connect().await.map_err(ReadError::PgConnect)?,
+            conn: self.db.connect().await.map_err(Error::PgConnect)?,
             metrics: self.metrics.clone(),
         })
     }
 }
 
 impl<'p> Connection<'p> {
-    pub(crate) async fn first<'q, Q, ST, U>(&mut self, query: Q) -> Result<U, ReadError>
+    pub(crate) async fn first<'q, Q, ST, U>(&mut self, query: Q) -> Result<U, Error>
     where
         Q: LimitDsl,
         Q::Output: Query + QueryFragment<Pg> + QueryId + Send + 'q,
@@ -89,7 +87,7 @@ impl<'p> Connection<'p> {
         Ok(res?)
     }
 
-    pub(crate) async fn results<'q, Q, ST, U>(&mut self, query: Q) -> Result<Vec<U>, ReadError>
+    pub(crate) async fn results<'q, Q, ST, U>(&mut self, query: Q) -> Result<Vec<U>, Error>
     where
         Q: Query + QueryFragment<Pg> + QueryId + Send + 'q,
         Q::SqlType: CompatibleType<U, Pg, SqlType = ST>,

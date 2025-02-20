@@ -23,11 +23,12 @@ use sui_json_rpc_types::{Page as PageResponse, SuiTransactionBlockResponseOption
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
+    messages_checkpoint::CheckpointSequenceNumber,
     sui_serde::{BigInt, Readable},
 };
 
 use crate::{
-    data::{checkpoints::CheckpointKey, tx_digests::TxDigestKey},
+    data::tx_digests::TxDigestKey,
     error::{invalid_params, RpcError},
     paginate::{Cursor as _, JsonCursor, Page},
 };
@@ -146,7 +147,7 @@ async fn by_checkpoint(
 ) -> Result<Digests, RpcError<Error>> {
     let Some((summary, contents, _)) = ctx
         .kv_loader()
-        .load_one_checkpoint(CheckpointKey(checkpoint))
+        .load_one_checkpoint(checkpoint)
         .await
         .context("Failed to load checkpoint")?
     else {

@@ -11,7 +11,6 @@ use sui_types::sui_serde::BigInt;
 
 use crate::{
     context::Context,
-    data::checkpoints::CheckpointKey,
     error::{invalid_params, InternalContext, RpcError},
 };
 
@@ -61,7 +60,7 @@ impl RpcModule for Checkpoints {
 async fn response(ctx: &Context, seq: u64) -> Result<Checkpoint, RpcError<Error>> {
     let (summary, contents, signature) = ctx
         .kv_loader()
-        .load_one_checkpoint(CheckpointKey(seq))
+        .load_one_checkpoint(seq)
         .await
         .context("Failed to load checkpoint")?
         .ok_or_else(|| invalid_params(Error::NotFound(seq)))?;

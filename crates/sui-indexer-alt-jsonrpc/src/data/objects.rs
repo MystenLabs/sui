@@ -10,11 +10,8 @@ use serde::de::DeserializeOwned;
 use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
 
 use super::{
-    object_info::LatestObjectInfoKey,
-    object_versions::LatestObjectVersionKey,
-    bigtable_reader::BigtableReader,
-    pg_reader::PgReader,
-    read_error::ReadError,
+    bigtable_reader::BigtableReader, error::Error, object_info::LatestObjectInfoKey,
+    object_versions::LatestObjectVersionKey, pg_reader::PgReader,
 };
 use crate::Context;
 use sui_kvstore::KeyValueStoreReader;
@@ -27,7 +24,7 @@ pub(crate) struct VersionedObjectKey(pub ObjectID, pub u64);
 #[async_trait::async_trait]
 impl Loader<VersionedObjectKey> for PgReader {
     type Value = StoredObject;
-    type Error = Arc<ReadError>;
+    type Error = Arc<Error>;
 
     async fn load(
         &self,
@@ -76,7 +73,7 @@ impl Loader<VersionedObjectKey> for PgReader {
 #[async_trait::async_trait]
 impl Loader<VersionedObjectKey> for BigtableReader {
     type Value = Object;
-    type Error = Arc<ReadError>;
+    type Error = Arc<Error>;
 
     async fn load(
         &self,
@@ -91,25 +88,16 @@ impl Loader<VersionedObjectKey> for BigtableReader {
             .map(|key| ObjectKey(key.0, key.1.into()))
             .collect();
 
-        let objects: Vec<Object>;
-
-        // let client = self.0.clone();
-        objects = self
+        let objects = self
             .0
             .clone()
             .get_objects(&object_keys)
             .await
-            .map_err(|e| Arc::new(ReadError::BigtableRead(e.into())))?;
+            .map_err(|e| Arc::new(Error::BigtableRead(e.into())))?;
 
-        let key_to_result: HashMap<_, _> =
-            objects.iter().map(|o| ((o.id(), o.version()), o)).collect();
-
-        Ok(keys
-            .iter()
-            .filter_map(|key| {
-                let object = *key_to_result.get(&(key.0, key.1.into()))?;
-                Some((*key, object.clone()))
-            })
+        Ok(objects
+            .into_iter()
+            .map(|o| (VersionedObjectKey(o.id(), o.version().into()), o))
             .collect())
     }
 }
@@ -133,10 +121,7 @@ pub(crate) async fn load_latest(
 
     let object = ctx
         .kv_loader()
-        .load_one_object(VersionedObjectKey(
-            object_id,
-            latest_version.object_version as u64,
-        ))
+        .load_one_object(object_id, latest_version.object_version as u64)
         .await
         .context("Failed to load latest object")?;
 

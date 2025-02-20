@@ -12,7 +12,7 @@ use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 use sui_types::base_types::ObjectID;
 
 use super::pg_reader::PgReader;
-use crate::data::read_error::ReadError;
+use crate::data::error::Error;
 
 /// Key for fetching the latest object info record for an object. This record corresponds to the
 /// last time the object's ownership information changed.
@@ -22,7 +22,7 @@ pub(crate) struct LatestObjectInfoKey(pub ObjectID);
 #[async_trait::async_trait]
 impl Loader<LatestObjectInfoKey> for PgReader {
     type Value = StoredObjInfo;
-    type Error = Arc<ReadError>;
+    type Error = Arc<Error>;
 
     async fn load(
         &self,

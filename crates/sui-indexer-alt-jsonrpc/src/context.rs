@@ -12,10 +12,10 @@ use crate::{
     config::BigtableConfig,
     data::{
         bigtable_reader::BigtableReader,
-        kv_loader::KVLoader,
+        error::Error,
+        kv_loader::KvLoader,
         package_resolver::{DbPackageStore, PackageCache, PackageResolver},
         pg_reader::PgReader,
-        read_error::ReadError,
     },
     metrics::RpcMetrics,
 };
@@ -33,7 +33,7 @@ pub(crate) struct Context {
 
     /// Access to the kv store for performing point look-ups. This may either be backed by Bigtable
     /// or Postgres db, depending on the configuration.
-    kv_loader: KVLoader,
+    kv_loader: KvLoader,
 
     /// Access to the database for accessing information about types from their packages (again
     /// through the same connection pool as `reader`).
@@ -47,16 +47,15 @@ impl Context {
         bigtable_config: Option<BigtableConfig>,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
-    ) -> Result<Self, ReadError> {
+    ) -> Result<Self, Error> {
         let pg_reader = PgReader::new(db_args, metrics, registry).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(config) = bigtable_config {
-            let bigtable_reader =
-                BigtableReader::new(config.instance_id, config.credentials).await?;
-            KVLoader::new_with_bigtable(bigtable_reader)
+            let bigtable_reader = BigtableReader::new(config.instance_id).await?;
+            KvLoader::new_with_bigtable(Arc::new(bigtable_reader.as_data_loader()))
         } else {
-            KVLoader::new_with_pg(pg_reader.clone())
+            KvLoader::new_with_pg(pg_loader.clone())
         };
 
         let store = PackageCache::new(DbPackageStore::new(pg_loader.clone()));
@@ -70,18 +69,20 @@ impl Context {
         })
     }
 
-    /// For performing arbitrary SQL queries.
+    /// For performing arbitrary SQL queries on the Postgres db.
     pub(crate) fn pg_reader(&self) -> &PgReader {
         &self.pg_reader
     }
 
-    /// For performing point look-ups.
+    /// For performing point look-ups on the Postgres db only.
     pub(crate) fn pg_loader(&self) -> &Arc<DataLoader<PgReader>> {
         &self.pg_loader
     }
 
     /// For performing point look-ups on the kv store.
-    pub(crate) fn kv_loader(&self) -> &KVLoader {
+    /// Depends on the configuration of the indexer, the kv store may be backed by
+    /// eitherBigtable or Postgres.
+    pub(crate) fn kv_loader(&self) -> &KvLoader {
         &self.kv_loader
     }
 

@@ -12,7 +12,7 @@ use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransa
 use sui_types::digests::TransactionDigest;
 
 use super::pg_reader::PgReader;
-use crate::data::read_error::ReadError;
+use crate::data::error::Error;
 
 /// Key for fetching transaction contents (TransactionData, Effects, and Events) by digest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -21,7 +21,7 @@ pub(crate) struct TransactionKey(pub TransactionDigest);
 #[async_trait::async_trait]
 impl Loader<TransactionKey> for PgReader {
     type Value = StoredTransaction;
-    type Error = Arc<ReadError>;
+    type Error = Arc<Error>;
 
     async fn load(
         &self,

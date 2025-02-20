@@ -18,10 +18,7 @@ use tokio::join;
 
 use crate::{
     context::Context,
-    data::{
-        object_info::LatestObjectInfoKey,
-        objects::{load_latest, VersionedObjectKey},
-    },
+    data::{object_info::LatestObjectInfoKey, objects::load_latest},
     error::{rpc_bail, RpcError},
 };
 
@@ -88,7 +85,7 @@ pub(super) async fn past_object(
 ) -> Result<SuiPastObjectResponse, RpcError> {
     let Some(object) = ctx
         .kv_loader()
-        .load_one_object(VersionedObjectKey(object_id, version.value()))
+        .load_one_object(object_id, version.value())
         .await
         .context("Failed to load object from store")?
     else {

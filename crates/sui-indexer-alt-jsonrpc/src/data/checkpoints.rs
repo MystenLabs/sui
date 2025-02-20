@@ -15,7 +15,7 @@ use sui_types::{
     messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber, CheckpointSummary},
 };
 
-use super::read_error::ReadError;
+use super::error::Error;
 use super::{bigtable_reader::BigtableReader, pg_reader::PgReader};
 
 /// Key for fetching a checkpoint's content by its sequence number.
@@ -25,7 +25,7 @@ pub(crate) struct CheckpointKey(pub u64);
 #[async_trait::async_trait]
 impl Loader<CheckpointKey> for PgReader {
     type Value = StoredCheckpoint;
-    type Error = Arc<ReadError>;
+    type Error = Arc<Error>;
 
     async fn load(
         &self,
@@ -59,7 +59,7 @@ impl Loader<CheckpointKey> for BigtableReader {
         CheckpointContents,
         AuthorityQuorumSignInfo<true>,
     );
-    type Error = Arc<ReadError>;
+    type Error = Arc<Error>;
 
     async fn load(
         &self,
@@ -76,7 +76,7 @@ impl Loader<CheckpointKey> for BigtableReader {
             .clone()
             .get_checkpoints(&checkpoint_keys)
             .await
-            .map_err(|e| Arc::new(ReadError::BigtableRead(e.into())))?;
+            .map_err(|e| Arc::new(Error::BigtableRead(e.into())))?;
 
         Ok(checkpoints
             .into_iter()
