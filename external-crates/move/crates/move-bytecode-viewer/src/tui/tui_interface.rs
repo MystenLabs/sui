@@ -8,9 +8,9 @@ use std::{error::Error, io};
 use crossterm::{
     event::EnableMouseCapture,
     execute,
-    terminal::{EnterAlternateScreen, enable_raw_mode},
+    terminal::{enable_raw_mode, EnterAlternateScreen},
 };
-use ratatui::{Terminal, backend::CrosstermBackend, text::Line};
+use ratatui::{backend::CrosstermBackend, text::Line, Terminal};
 
 use crate::tui::TUI;
 
