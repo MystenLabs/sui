@@ -129,6 +129,7 @@ impl Test<'_> {
 /// Return the dependencies contained in the file at `path`, if any
 fn load_implicits(path: &Path) -> Dependencies {
     let deps_toml = fs::read_to_string(path).unwrap_or("# no implicit deps".to_string());
+
     toml::from_str(&deps_toml)
         .unwrap_or_else(|_| panic!("{path:?} contains a TOML-formatted set of dependencies"))
 }

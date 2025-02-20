@@ -39,7 +39,7 @@ pub fn download_dependency_repos<Progress: Write>(
         build_options.skip_fetch_latest_git_deps,
         progress_output,
         install_dir,
-        implicit_deps,
+        implicit_deps.clone(),
     );
     let (graph, _) = dep_graph_builder.get_graph(
         &DependencyKind::default(),
