@@ -124,27 +124,10 @@ pub struct GetObjectRequest {
     /// the object is returned.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "3")]
-    pub options: ::core::option::Option<GetObjectOptions>,
     /// Optional. Mask for specifying which parts of the `GetObjectResponse`
     /// should be returned.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
-}
-/// DEPRECATED To be removed in the next release
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct GetObjectOptions {
-    /// Include the `sui.types.Object` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "1")]
-    pub object: ::core::option::Option<bool>,
-    /// Include the object formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "2")]
-    pub object_bcs: ::core::option::Option<bool>,
 }
 /// Response message for `NodeService.GetObject`.
 #[derive(Clone, PartialEq, ::prost::Message)]

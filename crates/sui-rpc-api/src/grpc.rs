@@ -91,13 +91,8 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
             .try_into()
             .map_err(|_| tonic::Status::new(tonic::Code::InvalidArgument, "invalid object_id"))?;
         let version = request.version;
-        let options = if let Some(read_mask) = request.read_mask {
-            crate::types::GetObjectOptions::from_read_mask(read_mask)
-        } else if let Some(options) = request.options {
-            options.into()
-        } else {
-            Default::default()
-        };
+        let options =
+            crate::types::GetObjectOptions::from_read_mask(request.read_mask.unwrap_or_default());
 
         self.get_object(object_id, version, options)
             .map(Into::into)
