@@ -1,0 +1,147 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:1:1
+  │  
+1 │ ╭ module a::m {
+2 │ │     public struct S<T> { x: T }
+3 │ │     public struct A {}
+4 │ │ }
+  │ ╰─^ Possible in-scope names
+  │  
+  = members: 'A -> a::m::A', 'Option -> std::option::Option', or 'S -> a::m::S'
+  = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:2:29
+  │
+2 │     public struct S<T> { x: T }
+  │                             ^ Possible in-scope names
+  │
+  = members: 'A -> a::m::A', 'Option -> std::option::Option', or 'S -> a::m::S'
+  = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 'T'
+
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:6:1
+   │  
+ 6 │ ╭ module a::test {
+ 7 │ │     use a::m::{Self, S, A};
+ 8 │ │ 
+ 9 │ │     public fun p(): vector<S
+10 │ │ 
+11 │ │     public fun q(x: S<A
+12 │ │ }
+   │ ╰─^ Possible in-scope names
+   │  
+   = members: 'A -> a::m::A', 'Option -> std::option::Option', 'S -> a::m::S', 'p -> a::test::p', or 'q -> a::test::q'
+   = modules: 'Self -> a::test', 'm -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:7:16
+  │
+7 │     use a::m::{Self, S, A};
+  │                ^^^^ Unused 'use' of alias 'm'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:9:28
+  │
+9 │     public fun p(): vector<S
+  │                            ^ Possible in-scope names
+  │
+  = members: 'A -> a::m::A', 'Option -> std::option::Option', 'S -> a::m::S', 'p -> a::test::p', or 'q -> a::test::q'
+  = modules: 'Self -> a::test', 'm -> a::m', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 
+
+error[E03008]: too few type arguments
+  ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:9:28
+  │
+9 │     public fun p(): vector<S
+  │                            ^ Invalid instantiation of 'a::m::S'. Expected 1 type argument(s) but got 0
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:11:5
+   │
+ 9 │     public fun p(): vector<S
+   │                           - To match this '<'
+10 │ 
+11 │     public fun q(x: S<A
+   │     ^ Expected '>'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:11:5
+   │
+11 │     public fun q(x: S<A
+   │     ^^^^^^
+   │     │
+   │     Unexpected 'public'
+   │     Expected '{'
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:11:18
+   │
+11 │     public fun q(x: S<A
+   │                  ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:11:21
+   │
+11 │     public fun q(x: S<A
+   │                     ^ Possible in-scope names
+   │
+   = members: 'A -> a::m::A', 'Option -> std::option::Option', 'S -> a::m::S', 'p -> a::test::p', or 'q -> a::test::q'
+   = modules: 'Self -> a::test', 'm -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
+
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:11:23
+   │
+11 │     public fun q(x: S<A
+   │                       ^ Possible in-scope names
+   │
+   = members: 'A -> a::m::A', 'Option -> std::option::Option', 'S -> a::m::S', 'p -> a::test::p', or 'q -> a::test::q'
+   = modules: 'Self -> a::test', 'm -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:12:1
+   │
+11 │     public fun q(x: S<A
+   │                      - To match this '<'
+12 │ }
+   │ ^ Expected '>'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:12:1
+   │
+12 │ }
+   │ ^
+   │ │
+   │ Unexpected '}'
+   │ Expected ',' or ')'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/partial_type_suggestions.move:14:1
+   │
+11 │     public fun q(x: S<A
+   │                 - To match this '('
+   ·
+14 │ 
+   │ ^ Expected ')'

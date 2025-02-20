@@ -28,7 +28,7 @@ chrono.workspace = true
 object_store.workspace = true
 backoff.workspace = true
 bytes.workspace = true
-parking_lot.workspace = true
+parking_lot = { workspace = true, features = ["arc_lock"] }
 bcs.workspace = true
 prometheus.workspace = true
 itertools.workspace = true

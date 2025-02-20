@@ -1,5 +1,5 @@
 // Test abort on an invalid math operation when continuing
-// the the end of the program.
+// the end of the program.
 module abort_math::m;
 
 fun foo(p: u64): u64 {

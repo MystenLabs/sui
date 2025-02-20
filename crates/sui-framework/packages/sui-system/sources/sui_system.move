@@ -99,7 +99,7 @@ module sui_system::sui_system {
 
     // ==== entry functions ====
 
-    /// Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
+    /// Can be called by anyone who wishes to become a validator candidate and starts accruing delegated
     /// stakes in their staking pool. Once they have at least `MIN_VALIDATOR_JOINING_STAKE` amount of stake they
     /// can call `request_add_validator` to officially become an active validator at the next epoch.
     /// Aborts if the caller is already a pending or active validator, or a validator candidate.
@@ -615,6 +615,14 @@ module sui_system::sui_system {
     fun validator_voting_powers(wrapper: &mut SuiSystemState): VecMap<address, u64> {
         let self = load_system_state(wrapper);
         sui_system_state_inner::active_validator_voting_powers(self)
+    }
+
+    #[allow(unused_function)]
+    /// Saves the given execution time estimate blob to the SuiSystemState object, for system use
+    /// at the start of the next epoch.
+    fun store_execution_time_estimates(wrapper: &mut SuiSystemState, estimates_bytes: vector<u8>) {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::store_execution_time_estimates(self, estimates_bytes)
     }
 
     #[test_only]

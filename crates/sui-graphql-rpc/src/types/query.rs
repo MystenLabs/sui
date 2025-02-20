@@ -17,6 +17,7 @@ use super::move_package::{
 };
 use super::move_registry::named_move_package::NamedMovePackage;
 use super::move_registry::named_type::NamedType;
+use super::object::ObjectKey;
 use super::suins_registration::NameService;
 use super::uint53::UInt53;
 use super::{
@@ -325,6 +326,26 @@ impl Query {
         let Watermark { hi_cp, .. } = *ctx.data()?;
         let lookup = TransactionBlock::by_digest(digest, hi_cp);
         TransactionBlock::query(ctx, lookup).await.extend()
+    }
+
+    /// Fetch a list of objects by their IDs and versions.
+    async fn multi_get_objects(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<ObjectKey>,
+    ) -> Result<Vec<Object>> {
+        let cfg: &ServiceConfig = ctx.data_unchecked();
+        if keys.len() > cfg.limits.max_multi_get_objects_keys as usize {
+            return Err(Error::Client(format!(
+                "Number of keys exceeds max limit of '{}'",
+                cfg.limits.max_multi_get_objects_keys
+            ))
+            .into());
+        }
+
+        let Watermark { hi_cp, .. } = *ctx.data()?;
+
+        Object::query_many(ctx, keys, hi_cp).await.extend()
     }
 
     /// The coin objects that exist in the network.

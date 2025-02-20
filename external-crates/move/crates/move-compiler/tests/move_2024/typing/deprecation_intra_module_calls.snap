@@ -1,0 +1,134 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W04037]: deprecated usage
+  ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:8:21
+  │
+8 │     public struct Z(Y) has drop;
+  │                     ^ The struct '0x7::l::Y' is deprecated: Use the other struct instead.
+  │
+  = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:15:26
+   │
+15 │     public fun other(y: &Y): &Y { y }
+   │                          ^ The struct '0x7::l::Y' is deprecated: Use the other struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:15:31
+   │
+15 │     public fun other(y: &Y): &Y { y }
+   │                               ^ The struct '0x7::l::Y' is deprecated: Use the other struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:21:9
+   │
+21 │         internal();
+   │         ^^^^^^^^ The function '0x7::l::internal' is deprecated: This is a deprecated function within a deprecated module.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:23:17
+   │
+23 │         let y = other(&Y());
+   │                 ^^^^^ The function '0x7::l::other' is deprecated: Use the other function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:23:24
+   │
+23 │         let y = other(&Y());
+   │                        ^ The struct '0x7::l::Y' is deprecated: Use the other struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:9
+   │
+26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
+   │         ^^^^^ The function '0x7::l::other' is deprecated: Use the other function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:15
+   │
+26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
+   │               ^^^^^ The function '0x7::l::other' is deprecated: Use the other function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:21
+   │
+26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
+   │                     ^^^^^ The function '0x7::l::other' is deprecated: Use the other function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:27
+   │
+26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
+   │                           ^^^^^ The function '0x7::l::other' is deprecated: Use the other function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:33
+   │
+26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
+   │                                 ^^^^^ The function '0x7::l::other' is deprecated: Use the other function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:39
+   │
+26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
+   │                                       ^^^^^ The function '0x7::l::other' is deprecated: Use the other function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:45
+   │
+26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
+   │                                             ^^^^^ The function '0x7::l::other' is deprecated: Use the other function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:51
+   │
+26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
+   │                                                   ^^^^^ The function '0x7::l::other' is deprecated: Use the other function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:57
+   │
+26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
+   │                                                         ^^^^^ The function '0x7::l::other' is deprecated: Use the other function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:63
+   │
+26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
+   │                                                               ^^^^^ The function '0x7::l::other' is deprecated: Use the other function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

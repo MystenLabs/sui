@@ -128,7 +128,7 @@ impl<'extensions> MoveVM<'extensions> {
         )
     }
 
-    /// Similar to execute_entry_function, but it bypasses visibility checks
+    /// Similar to execute_entry_function, but it bypasses visibility checks and accepts a tracer
     pub fn execute_function_bypass_visibility(
         &mut self,
         module: &ModuleId,
@@ -136,40 +136,7 @@ impl<'extensions> MoveVM<'extensions> {
         ty_args: Vec<Type>,
         args: Vec<impl Borrow<[u8]>>,
         gas_meter: &mut impl GasMeter,
-    ) -> VMResult<SerializedReturnValues> {
-        move_vm_profiler::tracing_feature_enabled! {
-            use move_vm_profiler::GasProfiler;
-            if gas_meter.get_profiler_mut().is_none() {
-                gas_meter.set_profiler(GasProfiler::init_default_cfg(
-                    function_name.to_string(),
-                    gas_meter.remaining_gas().into(),
-                ));
-            }
-        }
-
-        dbg_println!("running {module}::{function_name}");
-        dbg_println!("tables: {:#?}", self.virtual_tables.loaded_packages);
-        let bypass_declared_entry_check = true;
-        self.execute_function(
-            module,
-            function_name,
-            ty_args,
-            args,
-            None,
-            gas_meter,
-            bypass_declared_entry_check,
-        )
-    }
-
-    /// Similar to execute_entry_function, but it bypasses visibility checks and accepts a tracer
-    pub fn execute_function_bypass_visibility_with_tracer_if_enabled(
-        &mut self,
-        module: &ModuleId,
-        function_name: &IdentStr,
-        ty_args: Vec<Type>,
-        args: Vec<impl Borrow<[u8]>>,
         tracer: Option<&mut MoveTraceBuilder>,
-        gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
         move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;

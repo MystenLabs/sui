@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/spec_parsing_index_fail.move:2:23
+  │
+2 │     fun index_in_prog(x: u64) {
+  │                       ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E00002]: DEPRECATED. unexpected spec item
+  ┌─ tests/move_check/parser/spec_parsing_index_fail.move:3:15
+  │
+3 │       let _ = x[1];
+  │               ^^^^ Specification blocks are deprecated and are no longer used
+  │
+  = If this was intended to be a 'syntax' index call, consider updating your Move edition to '2024.alpha, 2024.beta, 2024'
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.

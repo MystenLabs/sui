@@ -16,7 +16,7 @@ The loyalty.move source file contains the `examples::loyalty` module code that c
 
 {@inject: examples/move/token/sources/loyalty.move#struct=loyalty noComments}
 
-The `init` function of the module uses the `LOYALTY` OTW to create the token. All `init` functions run one time only at the package publish event. The initializer function makes use of the OTW `LOYALTY` type defined previously in its call to `create_currency`. The function also defines a policy, sending both the policy capability and trasury capability to the address associated with the publish event. The holder of these transferrable capabilities can mint new `LOYALTY` tokens and modify their policies.
+The `init` function of the module uses the `LOYALTY` OTW to create the token. All `init` functions run one time only at the package publish event. The initializer function makes use of the OTW `LOYALTY` type defined previously in its call to `create_currency`. The function also defines a policy, sending both the policy capability and treasury capability to the address associated with the publish event. The holder of these transferrable capabilities can mint new `LOYALTY` tokens and modify their policies.
 
 {@inject: examples/move/token/sources/loyalty.move#fun=init noComments}
 

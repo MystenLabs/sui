@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/expansion/duplicate_abilities.move:4:26
+  │
+4 │     struct Foo has copy, copy {}
+  │                    ----  ^^^^ Duplicate 'copy' ability modifier
+  │                    │      
+  │                    Ability previously given here
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/expansion/duplicate_abilities.move:5:26
+  │
+5 │     struct Bar<T: drop + drop> { f: T }
+  │                   ----   ^^^^ Duplicate 'drop' ability constraint
+  │                   │       
+  │                   Ability previously given here
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/expansion/duplicate_abilities.move:6:24
+  │
+6 │     fun baz<T: store + store>() {}
+  │                -----   ^^^^^ Duplicate 'store' ability constraint
+  │                │        
+  │                Ability previously given here

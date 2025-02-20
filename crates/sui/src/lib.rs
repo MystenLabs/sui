@@ -15,6 +15,7 @@ pub mod key_identity;
 pub mod keytool;
 pub mod shell;
 pub mod sui_commands;
+pub mod upgrade_compatibility;
 pub mod validator_commands;
 mod verifier_meter;
 pub mod zklogin_commands_util;

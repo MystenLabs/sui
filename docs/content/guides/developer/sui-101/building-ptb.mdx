@@ -111,6 +111,14 @@ With PTBs, you can use the gas payment coin to construct coins with a set balanc
 
 You can also transfer the gas coin using `transferObjects`, in the event that you want to transfer all of your coin balance to another address.
 
+Of course, you can also transfer other coins in your wallet using their `Object ID`. For example,
+
+```ts
+const otherCoin = tx.object('0xCoinObjectId');
+const coin = tx.splitCoins(otherCoin, [tx.pure(100)]);
+tx.transferObjects([coin], tx.pure(address));
+```
+
 ## Get PTB bytes
 
 If you need the PTB bytes, instead of signing or executing the PTB, you can use the `build` method on the transaction builder itself.

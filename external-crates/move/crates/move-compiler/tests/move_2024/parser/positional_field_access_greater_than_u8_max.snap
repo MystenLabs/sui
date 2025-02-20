@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03010]: unbound field
+  ┌─ tests/move_2024/parser/positional_field_access_greater_than_u8_max.move:5:9
+  │
+5 │         y.256
+  │         ^^^^^ Unbound field '256' in '0x42::M::Foo'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/positional_field_access_greater_than_u8_max.move:5:11
+  │
+5 │         y.256
+  │           ^^^ Invalid field access. Expected a number less than or equal to 255
+  │
+  = Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`

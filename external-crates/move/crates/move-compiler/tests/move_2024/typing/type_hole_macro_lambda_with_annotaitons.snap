@@ -1,0 +1,52 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/type_hole_macro_lambda_with_annotaitons.move:6:37
+   │
+ 6 │     macro fun applyu64($f: |u64| -> u64): u64 {
+   │                                     ^^^
+   │                                     │
+   │                                     Invalid type annotation
+   │                                     Expected: 'u64'
+   ·
+20 │         applyu64!(|_: _| -> _ { 0u8 });
+   │                                 --- Given: 'u8'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/type_hole_macro_lambda_with_annotaitons.move:6:37
+   │
+ 6 │     macro fun applyu64($f: |u64| -> u64): u64 {
+   │                                     ^^^
+   │                                     │
+   │                                     Invalid type annotation
+   │                                     Expected: 'u64'
+   ·
+21 │         applyu64!(|_: _| -> _ { b"hello" });
+   │                                 -------- Given: 'vector<u8>'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/type_hole_macro_lambda_with_annotaitons.move:10:46
+   │
+10 │     macro fun applyvu64($f: |vector<u64>| -> vector<u64>): vector<u64> {
+   │                                              ^^^^^^^^^^^
+   │                                              │      │
+   │                                              │      Expected: 'u64'
+   │                                              Invalid type annotation
+   ·
+22 │         applyvu64!(|_: vector<_>| -> vector<_> { b"hello" });
+   │                                                  -------- Given: 'u8'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/type_hole_macro_lambda_with_annotaitons.move:23:9
+   │
+23 │         applyt!(0u64, |_: vector<_>| -> vector<_> { b"hello" });
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │       │         │
+   │         │       │         Expected: 'vector<_>'
+   │         │       Given: 'u64'
+   │         Invalid type annotation

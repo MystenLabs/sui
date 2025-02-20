@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04024]: invalid usage of immutable variable
+  ┌─ tests/move_2024/typing/let_mut_borrow_mut.move:7:13
+  │
+3 │     public fun t(x: u64, s: S) {
+  │                  - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+  ·
+7 │         foo(&mut x);
+  │             ^^^^^^ Invalid mutable borrow of immutable variable 'x'
+
+error[E04024]: invalid usage of immutable variable
+  ┌─ tests/move_2024/typing/let_mut_borrow_mut.move:8:13
+  │
+4 │         let y = 0;
+  │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut y'
+  ·
+8 │         foo(&mut y);
+  │             ^^^^^^ Invalid mutable borrow of immutable variable 'y'
+
+error[E04024]: invalid usage of immutable variable
+  ┌─ tests/move_2024/typing/let_mut_borrow_mut.move:9:13
+  │
+5 │         let S { f } = s;
+  │                 - To use the variable mutably, it must be declared 'mut', e.g. 'mut f'
+  ·
+9 │         foo(&mut f);
+  │             ^^^^^^ Invalid mutable borrow of immutable variable 'f'

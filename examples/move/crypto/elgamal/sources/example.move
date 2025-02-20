@@ -18,7 +18,7 @@ public fun elgamal_decrypt(sk: &Element<Scalar>, enc: &ElGamalEncryption): Eleme
 }
 
 /// Basic sigma protocol for proving equality of two ElGamal encryptions.
-// See https://crypto.stackexchange.com/questions/30010/is-there-a-way-to-prove-equality-of-plaintext-that-was-encrypted-using-different
+/// See https://crypto.stackexchange.com/questions/30010/is-there-a-way-to-prove-equality-of-plaintext-that-was-encrypted-using-different
 public struct EqualityProof has drop, store {
     a1: Element<G1>,
     a2: Element<G1>,

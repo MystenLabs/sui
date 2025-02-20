@@ -37,8 +37,7 @@ use move_package::{
     BuildConfig as MoveBuildConfig,
 };
 use move_package::{
-    resolution::resolution_graph::Package, source_package::parsed_manifest::OnChainInfo,
-    source_package::parsed_manifest::SourceManifest,
+    source_package::parsed_manifest::OnChainInfo, source_package::parsed_manifest::SourceManifest,
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
@@ -57,6 +56,27 @@ use sui_verifier::verifier as sui_bytecode_verifier;
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
 mod build_tests;
+
+pub mod test_utils {
+    use crate::{BuildConfig, CompiledPackage, SuiPackageHooks};
+    use std::path::PathBuf;
+
+    pub fn compile_basics_package() -> CompiledPackage {
+        compile_example_package("../../examples/move/basics")
+    }
+
+    pub fn compile_managed_coin_package() -> CompiledPackage {
+        compile_example_package("../../crates/sui-core/src/unit_tests/data/managed_coin")
+    }
+
+    pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
+        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push(relative_path);
+
+        BuildConfig::new_for_testing().build(&path).unwrap()
+    }
+}
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
 #[derive(Debug, Clone)]
@@ -587,10 +607,6 @@ impl CompiledPackage {
             error: error_message.join("\n"),
         })
     }
-
-    pub fn published_dependency_ids(&self) -> Vec<ObjectID> {
-        self.dependency_ids.published.values().cloned().collect()
-    }
 }
 
 impl Default for BuildConfig {
@@ -724,9 +740,8 @@ pub fn gather_published_ids(
     )
 }
 
-pub fn published_at_property(package: &Package) -> Result<ObjectID, PublishedAtError> {
-    let Some(value) = package
-        .source_package
+pub fn published_at_property(manifest: &SourceManifest) -> Result<ObjectID, PublishedAtError> {
+    let Some(value) = manifest
         .package
         .custom_properties
         .get(&Symbol::from(PUBLISHED_AT_MANIFEST_FIELD))

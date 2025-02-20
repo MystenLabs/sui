@@ -23,7 +23,7 @@ use crate::Page;
 pub type EpochPage = Page<EpochInfo, BigInt<u64>>;
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EpochInfo {
     /// epoch number
@@ -59,7 +59,7 @@ impl EpochInfo {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct EndOfEpochInfo {
     #[schemars(with = "BigInt<u64>")]
@@ -105,7 +105,7 @@ pub struct EndOfEpochInfo {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct MoveFunctionName {
     pub package: ObjectID,

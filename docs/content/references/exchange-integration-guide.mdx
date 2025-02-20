@@ -28,8 +28,8 @@ Run the command in this section using the same branch of the repository for each
 
 1.  Install [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/). Docker Desktop version installs Docker Compose.
 1.  Install dependencies for Linux:
-    ```bash
-    apt update \
+    ```sh
+    $ apt update \
     && apt install -y --no-install-recommends \
     tzdata \
     ca-certificates \
@@ -38,20 +38,20 @@ Run the command in this section using the same branch of the repository for each
     cmake
     ```
 1.  Download the docker-compose.yaml file:
-    ```bash
-    wget https://github.com/MystenLabs/sui/blob/branch-name/docker/fullnode/docker-compose.yaml
+    ```sh
+    $ wget https://github.com/MystenLabs/sui/blob/branch-name/docker/fullnode/docker-compose.yaml
     ```
 1.  Download the fullnode-template.yaml file:
-    ```bash
-    wget https://github.com/MystenLabs/sui/raw/branch-name/crates/sui-config/data/fullnode-template.yaml
+    ```sh
+    $ wget https://github.com/MystenLabs/sui/raw/branch-name/crates/sui-config/data/fullnode-template.yaml
     ```
 1.  Download the genesis.blob file:
-    ```bash
-    wget https://github.com/MystenLabs/sui-genesis/raw/main/branch-name/genesis.blob
+    ```sh
+    $ wget https://github.com/MystenLabs/sui-genesis/raw/main/branch-name/genesis.blob
     ```
 1.  Start the Full node. The -d switch starts it in the background (detached mode).
-    ```bash
-    docker-compose up -d
+    ```sh
+    $ docker-compose up -d
     ```
 
 ## Install a Sui Full node from source {#install-full-node-source}
@@ -60,29 +60,29 @@ Use the steps in this section to install and configure a Sui Full node directly 
 
 1.  Install prerequisites for Sui.
 1.  Clone the Sui repository:
-    ```bash
-    git clone https://github.com/MystenLabs/sui.git -b branch-name
+    ```sh
+    $ git clone https://github.com/MystenLabs/sui.git -b branch-name
     ```
     Replace `branch-name` with the branch to use. You should use the same branch for all commands.
 1.  Change directories to /sui:
-    ```bash
-    cd sui
+    ```sh
+    $ cd sui
     ```
 1.  Copy the fullnode.yaml template:
-    ```bash
-    cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
+    ```sh
+    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
     ```
 1.  Download the genesis.blob file:
-    ```bash
-    wget https://github.com/MystenLabs/sui-genesis/raw/main/branch-name/genesis.blob
+    ```sh
+    $ wget https://github.com/MystenLabs/sui-genesis/raw/main/branch-name/genesis.blob
     ```
     Change branch-name to the same branch you used for previous commands.
 1.  Optionally, if you installed Sui to a path other than the default, modify the fullnode.yaml file to use the path you used. Update the path to the folder where you installed sui-fullnode for the `db-path` and `genesis-file-location` as appropriate:
     `db-path: "/db-files/sui-fullnode-folder"`
     `genesis-file-location: "/sui-fullnode-folder/genesis.blob"`
 1.  Start you Sui Full node:
-    ```bash
-    cargo run --release --bin sui-node -- --config-path fullnode.yaml
+    ```sh
+    $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
 
 ## Set up Sui addresses {#setup-sui-addresses}
@@ -113,7 +113,7 @@ You can track balance changes by calling `sui_getBalance` at predefined interval
 
 The following bash example demonstrates how to use `sui_getBalance` for address 0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate Full node.
 
-```bash
+```sh
 rpc="https://fullnode.devnet.sui.io:443"
 address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
 data="{\"jsonrpc\": \"2.0\", \"method\": \"sui_getBalance\", \"id\": 1, \"params\": [\"$address\"]}"
@@ -160,7 +160,7 @@ async fn main() -> Result<(), anyhow::Error> {
 You can also track the balance for an address by subscribing to all of the events emitted from it. Use a filter to include only the events related to SUI coins, such as when the address acquires a coin or pays for a gas fee.
 The following example demonstrates how to filter events for an address using bash and cURL:
 
-```bash
+```sh
 rpc="https://fullnode.devnet.sui.io:443"
 address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
 data="{\"jsonrpc\": \"2.0\", \"id\":1, \"method\": \"sui_getEvents\", \"params\": [{\"Recipient\": {\"AddressOwner\": \"0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3\"}}, null, null, true ]}"
@@ -173,16 +173,16 @@ You can add the `txDigest` value instead of the first `null` within the `params`
 
 The `id` field of any transaction looks like:
 
-```bash
+```json
 "id": {
-         "txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2",
-         "eventSeq": 6019
-       }
+  "txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2",
+  "eventSeq": 6019
+}
 ```
 
-With this data, create a nextCursor as follows:
+With this data, create a `nextCursor` as follows:
 
-```bash
+```sh
 nextCursor : {"txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2","eventSeq": 6019}
 ```
 

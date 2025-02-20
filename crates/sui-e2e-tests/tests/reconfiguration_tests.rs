@@ -45,6 +45,8 @@ async fn advance_epoch_tx_test() {
                     &GasCostSummary::new(0, 0, 0, 0),
                     0, // checkpoint
                     0, // epoch_start_timestamp_ms
+                    vec![],
+                    0, // last_checkpoint
                 )
                 .await
                 .unwrap();
@@ -737,8 +739,9 @@ async fn test_epoch_flag_upgrade() {
             return None;
         }
 
-        // start with no flags set
-        Some(Vec::<EpochFlag>::new())
+        // start with only UseVersionAssignmentTablesV3
+        let flags: Vec<EpochFlag> = vec![EpochFlag::UseVersionAssignmentTablesV3];
+        Some(flags)
     });
 
     let test_cluster = TestClusterBuilder::new()
@@ -746,18 +749,25 @@ async fn test_epoch_flag_upgrade() {
         .build()
         .await;
 
-    let mut any_empty = false;
+    let mut all_flags = vec![];
     for node in test_cluster.all_node_handles() {
-        any_empty = any_empty
-            || node.with(|node| {
-                node.state()
-                    .epoch_store_for_testing()
-                    .epoch_start_config()
-                    .flags()
-                    .is_empty()
-            });
+        all_flags.push(node.with(|node| {
+            node.state()
+                .epoch_store_for_testing()
+                .epoch_start_config()
+                .flags()
+                .to_vec()
+        }));
     }
-    assert!(any_empty);
+    all_flags.iter_mut().for_each(|flags| flags.sort());
+    all_flags.sort();
+    all_flags.dedup();
+    assert_eq!(
+        all_flags.len(),
+        2,
+        "expected 2 different sets of flags: {:?}",
+        all_flags
+    );
 
     test_cluster.wait_for_epoch_all_nodes(1).await;
 

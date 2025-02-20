@@ -13,8 +13,8 @@ Nodes expose on `localhost:9184/metrics` by default.
 
 You can view the metrics in the metrics UI, or you can use a tool like `curl` to get the metrics in a format that is easy to parse.
 
-```bash
-curl -s http://localhost:9184/metrics | grep -E 'sui_validator|sui_fullnode'
+```sh
+$ curl -s http://localhost:9184/metrics | grep -E 'sui_validator|sui_fullnode'
 ```
 
 ## Production monitoring

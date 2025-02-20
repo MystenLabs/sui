@@ -25,12 +25,14 @@ mod checked {
         language_storage::{ModuleId, TypeTag},
         u256::U256,
     };
+    use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::execution::vm::LoadedFunctionInformation;
     use move_vm_runtime::execution::{Type, TypeSubst};
     use move_vm_runtime::natives::extensions::NativeContextMut;
     use move_vm_runtime::runtime::MoveRuntime;
     use move_vm_runtime::shared::serialization::SerializedReturnValues;
     use serde::{de::DeserializeSeed, Deserialize};
+    use std::time::Instant;
     use std::{
         collections::{BTreeMap, BTreeSet},
         fmt,
@@ -38,6 +40,7 @@ mod checked {
     };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::execution::{ExecutionTiming, ResultWithTimings};
     use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::{
         CommandArgumentError, PackageUpgradeError, TypeArgumentError,
@@ -46,12 +49,13 @@ mod checked {
     use sui_types::type_input::{StructInput, TypeInput};
     use sui_types::{
         base_types::{
-            MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
-            RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+            MoveLegacyTxContext, MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind,
+            RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME,
+            TX_CONTEXT_STRUCT_NAME,
         },
         coin::Coin,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},
-        id::{RESOLVED_SUI_ID, UID},
+        id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
             normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
@@ -78,6 +82,37 @@ mod checked {
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
+        let mut timings = vec![];
+        let result = execute_inner::<Mode>(
+            &mut timings,
+            protocol_config,
+            metrics,
+            vm,
+            state_view,
+            tx_context,
+            gas_charger,
+            pt,
+            trace_builder_opt,
+        );
+
+        match result {
+            Ok(result) => Ok((result, timings)),
+            Err(e) => Err((e, timings)),
+        }
+    }
+
+    pub fn execute_inner<Mode: ExecutionMode>(
+        timings: &mut Vec<ExecutionTiming>,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+        vm: &MoveRuntime,
+        state_view: &mut dyn ExecutionState,
+        tx_context: &mut TxContext,
+        gas_charger: &mut GasCharger,
+        pt: ProgrammableTransaction,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         let ProgrammableTransaction { inputs, commands } = pt;
         let mut linkage_resolver =
@@ -114,9 +149,13 @@ mod checked {
                 .with_command_index(idx)
             })?;
 
-            if let Err(err) =
-                execute_command::<Mode>(&mut linked_context, &mut mode_results, command)
-            {
+            let start = Instant::now();
+            if let Err(err) = execute_command::<Mode>(
+                &mut linked_context,
+                &mut mode_results,
+                command,
+                trace_builder_opt,
+            ) {
                 drop(linked_context);
                 let object_runtime: &NativeContextMut<ObjectRuntime> =
                     context
@@ -127,8 +166,10 @@ mod checked {
                 // we do not save the wrapped objects since on error, they should not be modified
                 drop(context);
                 state_view.save_loaded_runtime_objects(loaded_runtime_objects);
+                timings.push(ExecutionTiming::Abort(start.elapsed()));
                 return Err(err.with_command_index(idx));
             };
+            timings.push(ExecutionTiming::Success(start.elapsed()));
         }
 
         // Save loaded objects table in case we fail in post execution
@@ -159,6 +200,7 @@ mod checked {
         linked_context: &mut LinkedContext<'_, '_, '_, '_>,
         mode_results: &mut Mode::ExecutionResults,
         command: Command,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let mut argument_updates = Mode::empty_arguments();
 
@@ -255,7 +297,7 @@ mod checked {
                         let amount: u64 =
                             linked_context.by_value_arg(CommandKind::SplitCoins, 1, amount_arg)?;
                         let new_coin_id = linked_context.fresh_id()?;
-                        let new_coin = coin.split(amount, UID::new(new_coin_id))?;
+                        let new_coin = coin.split(amount, new_coin_id)?;
                         let coin_type = obj.type_.clone();
                         // safe because we are propagating the coin type, and relying on the internal
                         // invariant that coin values have a coin type
@@ -316,12 +358,14 @@ mod checked {
                 linked_context,
                 &mut argument_updates,
                 *move_call,
+                trace_builder_opt,
             )?,
             Command::Publish(modules, dep_ids) => execute_move_publish::<Mode>(
                 linked_context,
                 &mut argument_updates,
                 modules,
                 dep_ids,
+                trace_builder_opt,
             )?,
             Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
                 execute_move_upgrade::<Mode>(
@@ -348,6 +392,7 @@ mod checked {
         context: &mut LinkedContext<'_, '_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         move_call: ProgrammableMoveCall,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         let ProgrammableMoveCall {
             package,
@@ -387,6 +432,7 @@ mod checked {
             loaded_type_arguments,
             arguments,
             /* is_init */ false,
+            trace_builder_opt,
         )
     }
 
@@ -400,6 +446,7 @@ mod checked {
         type_arguments: Vec<Type>,
         arguments: Vec<Argument>,
         is_init: bool,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         // check that the function is either an entry function or a valid public function
         let LoadedFunctionInfo {
@@ -433,6 +480,7 @@ mod checked {
             type_arguments,
             tx_context_kind,
             serialized_arguments,
+            trace_builder_opt,
         )?;
         assert_invariant!(
             by_mut_ref.len() == mutable_reference_outputs.len(),
@@ -541,6 +589,7 @@ mod checked {
         argument_updates: &mut Mode::ArgumentUpdates,
         module_bytes: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         assert_invariant!(
             !module_bytes.is_empty(),
@@ -571,13 +620,18 @@ mod checked {
         let package =
             context.new_package(&modules, dependencies.iter().map(|p| p.move_package()))?;
 
-        // Here we optimistacally push the package that is being published/upgraded
+        // Here we optimistically push the package that is being published/upgraded
         // and if there is an error of any kind (verification or module init) we
         // remove it.
         // context.write_package(package);
         let (mut new_context, package) =
             publish_and_verify_modules(context, runtime_id, package, &modules)?;
-        init_modules::<Mode>(&mut new_context, argument_updates, &modules)?;
+        init_modules::<Mode>(
+            &mut new_context,
+            argument_updates,
+            &modules,
+            trace_builder_opt,
+        )?;
         // If we have successfully published and initialized the modules, we can write the package
         // to the context.
         new_context.write_package(package);
@@ -843,11 +897,12 @@ mod checked {
         type_arguments: Vec<Type>,
         tx_context_kind: TxContextKind,
         mut serialized_arguments: Vec<Vec<u8>>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<SerializedReturnValues, ExecutionError> {
         match tx_context_kind {
             TxContextKind::None => (),
             TxContextKind::Mutable | TxContextKind::Immutable => {
-                serialized_arguments.push(context.ctx.tx_context.to_vec());
+                serialized_arguments.push(context.ctx.tx_context.to_bcs_legacy_context());
             }
         }
         // script visibility checked manually for entry points
@@ -857,6 +912,7 @@ mod checked {
                 function,
                 type_arguments,
                 serialized_arguments,
+                trace_builder_opt,
             )
             .map_err(|e| context.convert_vm_error(e))?;
 
@@ -871,7 +927,7 @@ mod checked {
             let Some((_, ctx_bytes, _)) = result.mutable_reference_outputs.pop() else {
                 invariant_violation!("Missing TxContext in reference outputs");
             };
-            let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).map_err(|e| {
+            let updated_ctx: MoveLegacyTxContext = bcs::from_bytes(&ctx_bytes).map_err(|e| {
                 ExecutionError::invariant_violation(format!(
                     "Unable to deserialize TxContext bytes. {e}"
                 ))
@@ -934,6 +990,7 @@ mod checked {
         context: &mut LinkedContext<'_, '_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         modules: &[CompiledModule],
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let modules_to_init = modules.iter().filter_map(|module| {
             for fdef in &module.function_defs {
@@ -959,6 +1016,7 @@ mod checked {
                 vec![],
                 vec![],
                 /* is_init */ true,
+                trace_builder_opt,
             )?;
 
             assert_invariant!(

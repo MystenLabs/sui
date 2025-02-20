@@ -90,7 +90,13 @@ impl<'a> Inner<'a> {
     ) -> PartialVMResult<LoadedWithMetadataResult<MoveObject>> {
         let child_opt = self
             .resolver
-            .get_object_received_at_version(&owner, &child, version, self.current_epoch_id)
+            .get_object_received_at_version(
+                &owner,
+                &child,
+                version,
+                self.current_epoch_id,
+                false, // invariant verified in LocalProtocolConfig::new
+            )
             .map_err(|msg| {
                 PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
             })?;

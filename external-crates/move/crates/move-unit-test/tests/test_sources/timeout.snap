@@ -1,0 +1,32 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
+Running Move unit tests
+[ PASS    ] 0x6::M::no_timeout
+[ FAIL    ] 0x6::M::no_timeout_fail
+[ PASS    ] 0x6::M::no_timeout_while_loop
+[ TIMEOUT ] 0x6::M::timeout_fail
+[ PASS    ] 0x6::M::timeout_fail_with_expected_failure
+
+Test failures:
+
+Failures in 0x6::M:
+
+┌── no_timeout_fail ──────
+│ error[E11001]: test failure
+│    ┌─ timeout.move:17:29
+│    │
+│ 17 │     fun no_timeout_fail() { abort 0 }
+│    │         ---------------     ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 0x6::M rooted here
+│    │         │                    
+│    │         In this function in 0x6::M
+│ 
+│ 
+└──────────────────
+
+
+┌── timeout_fail ──────
+│ Test timed out
+└──────────────────
+
+Test result: FAILED. Total tests: 5; passed: 3; failed: 2

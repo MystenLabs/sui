@@ -1,0 +1,31 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/unit_test/expected_failure_out_of_range_value.move:6:24
+  │
+6 │     #[expected_failure(abort_code=18446744073709551614)]
+  │                        ^^^^^^^^^^ -------------------- Replace value with constant from expected module or add `location=...` attribute.
+  │                        │           
+  │                        WARNING: passes for an abort from any module.
+
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_check/unit_test/expected_failure_out_of_range_value.move:11:24
+   │
+11 │     #[expected_failure(abort_code=18446744073709551615)]
+   │                        ^^^^^^^^^^ -------------------- Replace value with constant from expected module or add `location=...` attribute.
+   │                        │           
+   │                        WARNING: passes for an abort from any module.
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/expected_failure_out_of_range_value.move:16:24
+   │
+16 │     #[expected_failure(abort_code=18446744073709551616)]
+   │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                        │          │
+   │                        │          Unsupported value in this assignment
+   │                        Invalid value in attribute assignment

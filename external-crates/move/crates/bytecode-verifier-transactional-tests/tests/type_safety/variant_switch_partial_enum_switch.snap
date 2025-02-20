@@ -1,0 +1,25 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/variant_switch_partial_enum_switch.mvir
+---
+processed 3 tasks
+
+task 1, lines 16-28:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: INVALID_ENUM_SWITCH,
+    sub_status: None,
+    location: undefined,
+    indices: [(VariantTag, 0)],
+    offsets: [],
+}
+
+task 2, lines 30-43:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: INVALID_ENUM_SWITCH,
+    sub_status: None,
+    location: undefined,
+    indices: [(VariantTag, 1)],
+    offsets: [],
+}

@@ -1,0 +1,1682 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 17-34:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5479600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 36-37:
+//# programmable --sender A --inputs 0 1 @A
+//> 0: Test::M1::create(Input(0), Input(2));
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 39:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 41-44:
+//# programmable --sender A --inputs object(2,0) 100 2 3 @A
+//> Test::M1::set_value(Input(0), Input(1));
+//> Test::M1::create(Input(2), Input(4));
+//> Test::M1::create(Input(3), Input(4));
+created: object(4,0), object(4,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 4932400,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 5, line 46:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 48-52:
+//# programmable --sender A --inputs object(2,0) 200 4 5 6 @A
+//> Test::M1::set_value(Input(0), Input(1));
+//> Test::M1::create(Input(2), Input(5));
+//> Test::M1::create(Input(3), Input(5));
+//> Test::M1::create(Input(4), Input(5));
+created: object(6,0), object(6,1), object(6,2)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 7, line 54:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 9, line 58:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 10, lines 60-134:
+//# run-graphql
+Response: {
+  "data": {
+    "address_at_latest_checkpoint_4": {
+      "objects": {
+        "nodes": [
+          {
+            "contents": {
+              "json": {
+                "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                "value": "2"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                "value": "5"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                "value": "3"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                "value": "6"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                "value": "200"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                "value": "4"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "latest_tx_at_checkpoint_3": {
+      "nodes": [
+        {
+          "sender": {
+            "objects_consistent_with_address_at_latest_checkpoint_4": {
+              "nodes": [
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                      "value": "2"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                      "value": "5"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                      "value": "3"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                      "value": "6"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                      "value": "200"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                      "value": "4"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "gasInput": {
+            "gasSponsor": {
+              "objects": {
+                "nodes": [
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                        "value": "2"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                        "value": "5"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                        "value": "3"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                        "value": "6"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                        "value": "200"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                        "value": "4"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "gasPayment": {
+              "nodes": [
+                {
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      },
+                      "json": {
+                        "id": "0x473bfc6949d0ecd8bcba17ad86fc8b96b86c7fc6255fab7f739d08dd326cae81",
+                        "balance": {
+                          "value": "299999993044572"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "object_at_checkpoint_2": {
+      "owner": {
+        "owner": {
+          "objects": {
+            "nodes": [
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                    "value": "2"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                    "value": "5"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                    "value": "3"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                    "value": "6"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                    "value": "200"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                    "value": "4"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+
+task 11, lines 136-180:
+//# run-graphql
+Response: {
+  "data": {
+    "all_transactions": {
+      "nodes": [
+        {
+          "sender": {
+            "objects": {
+              "nodes": [
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                      "value": "2"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                      "value": "5"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                      "value": "3"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                      "value": "6"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                      "value": "200"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                      "value": "4"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "gasInput": {
+            "gasSponsor": {
+              "objects": {
+                "nodes": [
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                        "value": "2"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                        "value": "5"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                        "value": "3"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                        "value": "6"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                        "value": "200"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                        "value": "4"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "gasPayment": {
+              "nodes": [
+                {
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      },
+                      "json": {
+                        "id": "0x473bfc6949d0ecd8bcba17ad86fc8b96b86c7fc6255fab7f739d08dd326cae81",
+                        "balance": {
+                          "value": "300000000000000"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "objects": {
+              "nodes": [
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                      "value": "2"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                      "value": "5"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                      "value": "3"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                      "value": "6"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                      "value": "200"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                      "value": "4"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "gasInput": {
+            "gasSponsor": {
+              "objects": {
+                "nodes": [
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                        "value": "2"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                        "value": "5"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                        "value": "3"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                        "value": "6"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                        "value": "200"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                        "value": "4"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "gasPayment": {
+              "nodes": [
+                {
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      },
+                      "json": {
+                        "id": "0x473bfc6949d0ecd8bcba17ad86fc8b96b86c7fc6255fab7f739d08dd326cae81",
+                        "balance": {
+                          "value": "299999996697200"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "objects": {
+              "nodes": [
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                      "value": "2"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                      "value": "5"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                      "value": "3"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                      "value": "6"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                      "value": "200"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                      "value": "4"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "gasInput": {
+            "gasSponsor": {
+              "objects": {
+                "nodes": [
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                        "value": "2"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                        "value": "5"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                        "value": "3"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                        "value": "6"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                        "value": "200"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                        "value": "4"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "gasPayment": {
+              "nodes": [
+                {
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      },
+                      "json": {
+                        "id": "0x473bfc6949d0ecd8bcba17ad86fc8b96b86c7fc6255fab7f739d08dd326cae81",
+                        "balance": {
+                          "value": "299999993044572"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12, line 182:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 13, lines 184-258:
+//# run-graphql
+Response: {
+  "data": {
+    "address_at_latest_checkpoint_4": {
+      "objects": {
+        "nodes": [
+          {
+            "contents": {
+              "json": {
+                "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                "value": "2"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                "value": "5"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                "value": "3"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                "value": "6"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                "value": "200"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                "value": "4"
+              },
+              "type": {
+                "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "latest_tx_at_checkpoint_3": {
+      "nodes": [
+        {
+          "sender": {
+            "objects": {
+              "nodes": [
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                      "value": "2"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                      "value": "5"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                      "value": "3"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                      "value": "6"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                      "value": "200"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                      "value": "4"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "gasInput": {
+            "gasSponsor": {
+              "objects": {
+                "nodes": [
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                        "value": "2"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                        "value": "5"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                        "value": "3"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                        "value": "6"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                        "value": "200"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                        "value": "4"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "gasPayment": {
+              "nodes": [
+                {
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      },
+                      "json": {
+                        "id": "0x473bfc6949d0ecd8bcba17ad86fc8b96b86c7fc6255fab7f739d08dd326cae81",
+                        "balance": {
+                          "value": "299999993044572"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "object_at_checkpoint_2": {
+      "owner": {
+        "owner": {
+          "objects": {
+            "nodes": [
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                    "value": "2"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                    "value": "5"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                    "value": "3"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                    "value": "6"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                    "value": "200"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                    "value": "4"
+                  },
+                  "type": {
+                    "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+
+task 14, line 260:
+//# create-checkpoint
+Checkpoint created: 6
+
+task 15, lines 262-295:
+//# run-graphql
+Response: {
+  "data": {
+    "all_transactions": {
+      "nodes": [
+        {
+          "sender": {
+            "objects": {
+              "nodes": [
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                      "value": "2"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                      "value": "5"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                      "value": "3"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                      "value": "6"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                      "value": "200"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                      "value": "4"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "gasInput": {
+            "gasSponsor": {
+              "objects": {
+                "nodes": [
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                        "value": "2"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                        "value": "5"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                        "value": "3"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                        "value": "6"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                        "value": "200"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                        "value": "4"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "sender": {
+            "objects": {
+              "nodes": [
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                      "value": "2"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                      "value": "5"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                      "value": "3"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                      "value": "6"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                      "value": "200"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                      "value": "4"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "gasInput": {
+            "gasSponsor": {
+              "objects": {
+                "nodes": [
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                        "value": "2"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                        "value": "5"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                        "value": "3"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                        "value": "6"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                        "value": "200"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                        "value": "4"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "sender": {
+            "objects": {
+              "nodes": [
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                      "value": "2"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                      "value": "5"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                      "value": "3"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                      "value": "6"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                      "value": "200"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                      "value": "4"
+                    },
+                    "type": {
+                      "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "gasInput": {
+            "gasSponsor": {
+              "objects": {
+                "nodes": [
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x061f33f54b5739b9e1f07c6f6e7920190c479ca4ac891072bbf064f7ea0acc2d",
+                        "value": "2"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x0ce458859f0a77b9d37bd9314e8d84a16031681b2f4bffbdfd593f07bbe4ef3a",
+                        "value": "5"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x48c00039edcf263d27eb7f2acd79fe0725b23d28496cd71f62501034eec3204e",
+                        "value": "3"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x7588dfba122235fc33c51c5d220af6031f8f735456ab1e76741856c7f3f416d6",
+                        "value": "6"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0x96a0f7ec0384968bad48e98227bcf85607ca88ecf0b579676af72e40a1e7d83a",
+                        "value": "200"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "json": {
+                        "id": "0xfc4ac7a73983267a4e4c29b1b75767ecc1047ceba8b5ac68a201016558df2960",
+                        "value": "4"
+                      },
+                      "type": {
+                        "repr": "0x8c554cf17f642954470b874c3846d3e0d81bb9b5401e86ecda92924b766277c1::M1::Object"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -9,6 +9,7 @@ use crate::crypto::{
 use crate::error::{SuiError, SuiResult};
 use crate::multiaddr::Multiaddr;
 use fastcrypto::traits::KeyPair;
+use itertools::Itertools;
 use once_cell::sync::OnceCell;
 use rand::rngs::{StdRng, ThreadRng};
 use rand::seq::SliceRandom;
@@ -135,6 +136,12 @@ impl Committee {
         self.voting_rights.get(index as usize).map(|(name, _)| name)
     }
 
+    pub fn stake_by_index(&self, index: u32) -> Option<StakeUnit> {
+        self.voting_rights
+            .get(index as usize)
+            .map(|(_, stake)| *stake)
+    }
+
     pub fn epoch(&self) -> EpochId {
         self.epoch
     }
@@ -253,6 +260,24 @@ impl Committee {
                 .map(|key| {
                     (AuthorityName::from(key.public()), /* voting right */ 1)
                 })
+                .collect(),
+        );
+        (committee, key_pairs)
+    }
+
+    pub fn new_simple_test_committee_with_normalized_voting_power(
+        voting_weights: Vec<StakeUnit>,
+    ) -> (Self, Vec<AuthorityKeyPair>) {
+        let key_pairs: Vec<_> = random_committee_key_pairs_of_size(voting_weights.len())
+            .into_iter()
+            .sorted_by_key(|key| key.public().clone())
+            .collect();
+        let committee = Self::new_for_testing_with_normalized_voting_power(
+            0,
+            voting_weights
+                .iter()
+                .enumerate()
+                .map(|(idx, weight)| (AuthorityName::from(key_pairs[idx].public()), *weight))
                 .collect(),
         );
         (committee, key_pairs)

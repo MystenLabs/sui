@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/use_inner_scope_invalid.move:4:13
+  │
+4 │         let x = 0;
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/use_inner_scope_invalid.move:6:9
+  │
+6 │         use 0x1::M::foo;
+  │         ^^^
+  │         │
+  │         Unexpected 'use'
+  │         Expected an expression term
+
+error[E03002]: unbound module
+  ┌─ tests/move_check/parser/use_inner_scope_invalid.move:6:13
+  │
+6 │         use 0x1::M::foo;
+  │             ^^^^^^ Invalid 'use'. Unbound module: '0x1::M'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/use_inner_scope_invalid.move:7:9
+  │
+7 │         foo(x)
+  │         ^^^
+  │         │
+  │         Unexpected 'foo'
+  │         Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'

@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09014]: unused mutable reference '&mut' parameter
+  ┌─ tests/move_check/borrows/unused_mut_ref_simple_invalid.move:3:34
+  │
+3 │     public(friend) fun unused(x: &mut u64) {
+  │                               -  ^^^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+  │                               │   
+  │                               For parameters, this can be silenced by prefixing the name with an underscore, e.g. '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_mut_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09013]: unused mutable reference '&mut'
+  ┌─ tests/move_check/borrows/unused_mut_ref_simple_invalid.move:5:17
+  │
+5 │         let r = &mut i;
+  │                 ^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+  │
+  = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09013]: unused mutable reference '&mut'
+  ┌─ tests/move_check/borrows/unused_mut_ref_simple_invalid.move:7:9
+  │
+7 │         &mut 0;
+  │         ^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+  │
+  = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09014]: unused mutable reference '&mut' parameter
+   ┌─ tests/move_check/borrows/unused_mut_ref_simple_invalid.move:13:31
+   │
+13 │     public(friend) fun ret(x: &mut u64): &u64 {
+   │                            -  ^^^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+   │                            │   
+   │                            For parameters, this can be silenced by prefixing the name with an underscore, e.g. '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_mut_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

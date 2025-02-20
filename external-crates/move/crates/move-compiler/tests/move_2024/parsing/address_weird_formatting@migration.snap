@@ -1,0 +1,19 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.migration
+  lint: false
+---
+--- tests/move_2024/parsing/address_weird_formatting.move
++++ tests/move_2024/parsing/address_weird_formatting.move
+@@ -1 +1 @@
+-address 
++/* address 
+@@ -5,3 +5,3 @@
+-{
+-    module m {
+-    }}
++{ */
++    module 0x2::m {
++    }/* } */

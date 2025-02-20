@@ -45,10 +45,9 @@ pub fn run() {
 
     let (connection, io_threads) = Connection::stdio();
     let symbols_map = Arc::new(Mutex::new(BTreeMap::new()));
-    let pkg_deps = Arc::new(Mutex::new(BTreeMap::<
-        PathBuf,
-        symbols::PrecomputedPkgDepsInfo,
-    >::new()));
+    let pkg_deps = Arc::new(Mutex::new(
+        BTreeMap::<PathBuf, symbols::PrecomputedPkgInfo>::new(),
+    ));
     let ide_files_root: VfsPath = MemoryFS::new().into();
 
     let (id, client_response) = connection
@@ -154,6 +153,7 @@ pub fn run() {
                 Arc::new(Mutex::new(BTreeMap::new())),
                 ide_files_root.clone(),
                 p.as_path(),
+                None,
                 lint,
                 None,
             ) {
@@ -279,7 +279,7 @@ fn on_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecomputedPkgDepsInfo>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecomputedPkgInfo>>>,
     shutdown_request_received: bool,
 ) -> bool {
     if shutdown_request_received {

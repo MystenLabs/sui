@@ -1,0 +1,47 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:2:5
+  │
+2 │     struct S {}
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:7:26
+  │
+7 │     use 0x2::X::{Self as B, foo, S};
+  │                          ^ Unused 'use' of alias 'B'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:9:5
+  │
+9 │     struct X { f: X::S, f2: S }
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:9:19
+  │
+9 │     struct X { f: X::S, f2: S }
+  │                   ^^^^ Unexpected enum variant identifier. An enum variant identifier is not a valid type
+  │
+  = Variants may not be used as types. Use the enum instead.
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:11:9
+   │
+ 9 │     struct X { f: X::S, f2: S }
+   │            - But 'X' is an struct
+10 │     fun bar() {
+11 │         X::foo();
+   │         ^ Invalid construction. Expected an enum

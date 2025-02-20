@@ -1,0 +1,8 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 1-8:
+//# run --signers 0x1
+return values: { 0000000000000000000000000000000000000000000000000000000000000001 }

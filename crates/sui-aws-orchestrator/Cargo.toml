@@ -28,9 +28,9 @@ tokio = { workspace = true, features = ["full"] }
 prometheus-parse.workspace = true
 
 mysten-metrics.workspace = true
-sui-config = { path = "../sui-config" }
-sui-types = { path = "../sui-types" }
-sui-swarm-config = { path = "../sui-swarm-config" }
+sui-config.workspace = true
+sui-types.workspace = true
+sui-swarm-config.workspace = true
 
 [dev-dependencies]
 tempfile = "3.6.0"

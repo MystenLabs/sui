@@ -1,0 +1,70 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W04028]: implicit copy of a constant
+  ┌─ tests/move_check/typing/implicit_const_copy.move:7:10
+  │
+7 │         &C;
+  │          ^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+  │
+  = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+  ┌─ tests/move_check/typing/implicit_const_copy.move:8:10
+  │
+8 │         &BYTES;
+  │          ^^^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+  │
+  = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+  ┌─ tests/move_check/typing/implicit_const_copy.move:9:11
+  │
+9 │         *&C;
+  │           ^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+  │
+  = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_check/typing/implicit_const_copy.move:10:11
+   │
+10 │         *&BYTES;
+   │           ^^^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_check/typing/implicit_const_copy.move:11:14
+   │
+11 │         &mut C;
+   │              ^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_check/typing/implicit_const_copy.move:12:14
+   │
+12 │         &mut BYTES;
+   │              ^^^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_check/typing/implicit_const_copy.move:13:15
+   │
+13 │         *&mut C = 1;
+   │               ^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_check/typing/implicit_const_copy.move:14:15
+   │
+14 │         *&mut BYTES = b"bye";
+   │               ^^^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

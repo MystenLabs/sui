@@ -3,14 +3,14 @@
 
 use std::{path::PathBuf, time::Instant};
 
-use sui_indexer_alt_framework::{
-    db::{reset_database, DbArgs},
-    ingestion::ClientArgs,
-    IndexerArgs,
-};
+use prometheus::Registry;
+use sui_indexer_alt_framework::{ingestion::ClientArgs, Indexer, IndexerArgs};
+use sui_indexer_alt_schema::MIGRATIONS;
+use sui_pg_db::{reset_database, DbArgs};
 use sui_synthetic_ingestion::synthetic_ingestion::read_ingestion_data;
+use tokio_util::sync::CancellationToken;
 
-use crate::{config::IndexerConfig, models::MIGRATIONS, start_indexer};
+use crate::{config::IndexerConfig, setup_indexer};
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct BenchmarkArgs {
@@ -39,7 +39,11 @@ pub async fn run_benchmark(
     let last_checkpoint = *ingestion_data.keys().last().unwrap();
     let num_transactions: usize = ingestion_data.values().map(|c| c.transactions.len()).sum();
 
-    reset_database(db_args.clone(), Some(&MIGRATIONS)).await?;
+    reset_database(
+        db_args.clone(),
+        Some(Indexer::migrations(Some(&MIGRATIONS))),
+    )
+    .await?;
 
     let indexer_args = IndexerArgs {
         first_checkpoint: Some(first_checkpoint),
@@ -55,13 +59,18 @@ pub async fn run_benchmark(
 
     let cur_time = Instant::now();
 
-    start_indexer(
+    setup_indexer(
         db_args,
         indexer_args,
         client_args,
         indexer_config,
         false, /* with_genesis */
+        &Registry::new(),
+        CancellationToken::new(),
     )
+    .await?
+    .run()
+    .await?
     .await?;
 
     let elapsed = Instant::now().duration_since(cur_time);

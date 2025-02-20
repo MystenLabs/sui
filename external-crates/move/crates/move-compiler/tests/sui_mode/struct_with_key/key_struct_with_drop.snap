@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/sui_mode/struct_with_key/key_struct_with_drop.move:6:13
+   │
+ 6 │         id: object::UID,
+   │             ^^^^^^^^^^^
+   │             │
+   │             Invalid field type. The struct was declared with the ability 'drop' so all fields require the ability 'drop'
+   │             The type 'sui::object::UID' does not have the ability 'drop'
+   ·
+12 │     struct UID has store {
+   │            --- To satisfy the constraint, the 'drop' ability would need to be added here

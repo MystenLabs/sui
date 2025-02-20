@@ -13,7 +13,7 @@ use mysten_common::fatal;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, TransactionDigest},
+    base_types::{FullObjectID, SequenceNumber, TransactionDigest},
     committee::EpochId,
     digests::TransactionEffectsDigest,
     error::{SuiError, SuiResult},
@@ -83,10 +83,10 @@ pub struct PendingCertificate {
 }
 
 struct CacheInner {
-    versioned_cache: LruCache<ObjectID, SequenceNumber>,
+    versioned_cache: LruCache<FullObjectID, SequenceNumber>,
     // we cache packages separately, because they are more expensive to look up in the db, so we
     // don't want to evict packages in favor of mutable objects.
-    unversioned_cache: LruCache<ObjectID, ()>,
+    unversioned_cache: LruCache<FullObjectID, ()>,
 
     max_size: usize,
     metrics: Arc<AuthorityMetrics>,
@@ -228,7 +228,7 @@ struct Inner {
     // Stores age info for all transactions depending on each object.
     // Used for throttling signing and submitting transactions depending on hot objects.
     // An `IndexMap` is used to ensure that the insertion order is preserved.
-    input_objects: HashMap<ObjectID, TransactionQueue>,
+    input_objects: HashMap<FullObjectID, TransactionQueue>,
 
     // Maps object IDs to the highest observed sequence number of the object. When the value is
     // None, indicates that the object is immutable, corresponding to an InputKey with no sequence
@@ -461,7 +461,8 @@ impl TransactionManager {
                     cert.data().intent_message().value.receiving_objects();
                 for entry in receiving_object_entries {
                     let key = InputKey::VersionedObject {
-                        id: entry.0,
+                        // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+                        id: FullObjectID::new(entry.0, None),
                         version: entry.1,
                     };
                     receiving_objects.insert(key);
@@ -510,6 +511,10 @@ impl TransactionManager {
                 &input_object_cache_misses,
                 receiving_objects,
                 epoch_store.epoch(),
+                epoch_store
+                    .protocol_config()
+                    .use_object_per_epoch_marker_table_v2_as_option()
+                    .unwrap_or(false),
             )
             .into_iter()
             .zip(input_object_cache_misses);
@@ -786,8 +791,8 @@ impl TransactionManager {
     // Returns the number of transactions waiting on each object ID, as well as the age of the oldest transaction in the queue.
     pub(crate) fn objects_queue_len_and_age(
         &self,
-        keys: Vec<ObjectID>,
-    ) -> Vec<(ObjectID, usize, Option<Duration>)> {
+        keys: Vec<FullObjectID>,
+    ) -> Vec<(FullObjectID, usize, Option<Duration>)> {
         let reconfig_lock = self.inner.read();
         let inner = reconfig_lock.read();
         keys.into_iter()
@@ -839,7 +844,10 @@ impl TransactionManager {
                 .transaction_data()
                 .shared_input_objects()
                 .into_iter()
-                .filter_map(|r| r.mutable.then_some(r.id))
+                .filter_map(|r| {
+                    r.mutable
+                        .then_some(FullObjectID::new(r.id, Some(r.initial_shared_version)))
+                })
                 .collect(),
         ) {
             // When this occurs, most likely transactions piled up on a shared object.
@@ -849,7 +857,7 @@ impl TransactionManager {
                     object_id, queue_len
                 );
                 fp_bail!(SuiError::TooManyTransactionsPendingOnObject {
-                    object_id,
+                    object_id: object_id.id(),
                     queue_len,
                     threshold: overload_config.max_transaction_manager_per_object_queue_length,
                 });
@@ -863,7 +871,7 @@ impl TransactionManager {
                         age.as_millis()
                     );
                     fp_bail!(SuiError::TooOldTransactionPendingOnObject {
-                        object_id,
+                        object_id: object_id.id(),
                         txn_age_sec: age.as_secs(),
                         threshold: overload_config.max_txn_age_in_queue.as_secs(),
                     });
@@ -1012,6 +1020,7 @@ mod test {
     use super::*;
     use prometheus::Registry;
     use rand::{Rng, RngCore};
+    use sui_types::base_types::ObjectID;
 
     #[test]
     #[cfg_attr(msim, ignore)]
@@ -1037,7 +1046,7 @@ mod test {
 
         // insert 10 unique versioned objects
         for i in 0..10 {
-            let object = ObjectID::new([i; 32]);
+            let object = FullObjectID::new(ObjectID::new([i; 32]), None);
             let input_key = InputKey::VersionedObject {
                 id: object,
                 version: (i as u64).into(),
@@ -1049,7 +1058,7 @@ mod test {
 
         // first 5 versioned objects have been evicted
         for i in 0..5 {
-            let object = ObjectID::new([i; 32]);
+            let object = FullObjectID::new(ObjectID::new([i; 32]), None);
             let input_key = InputKey::VersionedObject {
                 id: object,
                 version: (i as u64).into(),
@@ -1065,7 +1074,7 @@ mod test {
         }
 
         // object 9 is available at version 9
-        let object = ObjectID::new([9; 32]);
+        let object = FullObjectID::new(ObjectID::new([9; 32]), None);
         let input_key = InputKey::VersionedObject {
             id: object,
             version: 9.into(),

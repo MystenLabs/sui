@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99009]: prefer '&mut TxContext' over '&TxContext'
+  ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:8:37
+  │
+8 │     public fun incorrect_mint(_ctx: &TxContext) {
+  │                                     ^^^^^^^^^^ 'public' functions should prefer '&mut TxContext' over '&TxContext' for better upgradability.
+  │
+  = When upgrading, the public function cannot be modified to take '&mut TxContext' instead of '&TxContext'. As such, it is recommended to consider using '&mut TxContext' to future-proof the function.
+  = This warning can be suppressed with '#[allow(lint(prefer_mut_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99009]: prefer '&mut TxContext' over '&TxContext'
+   ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:11:47
+   │
+11 │     public fun another_incorrect(_a: u64, _b: &TxContext, _c: u64) {
+   │                                               ^^^^^^^^^^ 'public' functions should prefer '&mut TxContext' over '&TxContext' for better upgradability.
+   │
+   = When upgrading, the public function cannot be modified to take '&mut TxContext' instead of '&TxContext'. As such, it is recommended to consider using '&mut TxContext' to future-proof the function.
+   = This warning can be suppressed with '#[allow(lint(prefer_mut_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99009]: prefer '&mut TxContext' over '&TxContext'
+   ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:14:54
+   │
+14 │     public fun mixed_function(_a: &CustomStruct, _b: &TxContext, _c: &mut TxContext) {}
+   │                                                      ^^^^^^^^^^ 'public' functions should prefer '&mut TxContext' over '&TxContext' for better upgradability.
+   │
+   = When upgrading, the public function cannot be modified to take '&mut TxContext' instead of '&TxContext'. As such, it is recommended to consider using '&mut TxContext' to future-proof the function.
+   = This warning can be suppressed with '#[allow(lint(prefer_mut_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99009]: prefer '&mut TxContext' over '&TxContext'
+   ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:20:13
+   │
+20 │         _b: &TxContext, // Should warn
+   │             ^^^^^^^^^^ 'public' functions should prefer '&mut TxContext' over '&TxContext' for better upgradability.
+   │
+   = When upgrading, the public function cannot be modified to take '&mut TxContext' instead of '&TxContext'. As such, it is recommended to consider using '&mut TxContext' to future-proof the function.
+   = This warning can be suppressed with '#[allow(lint(prefer_mut_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

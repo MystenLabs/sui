@@ -1,0 +1,60 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/restricted_function_names.move:2:9
+  │
+2 │     fun address() { abort 0 }
+  │         ^^^^^^^ Invalid function name 'address'. 'address' is restricted and cannot be used to name a function
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/restricted_function_names.move:3:9
+  │
+3 │     fun signer() { abort 0 }
+  │         ^^^^^^ Invalid function name 'signer'. 'signer' is restricted and cannot be used to name a function
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/restricted_function_names.move:4:9
+  │
+4 │     fun u8() { abort 0 }
+  │         ^^ Invalid function name 'u8'. 'u8' is restricted and cannot be used to name a function
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/restricted_function_names.move:5:9
+  │
+5 │     fun u64() { abort 0 }
+  │         ^^^ Invalid function name 'u64'. 'u64' is restricted and cannot be used to name a function
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/restricted_function_names.move:6:9
+  │
+6 │     fun u128() { abort 0 }
+  │         ^^^^ Invalid function name 'u128'. 'u128' is restricted and cannot be used to name a function
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/restricted_function_names.move:7:9
+  │
+7 │     fun vector<T>() { abort 0 }
+  │         ^^^^^^ Invalid function name 'vector'. 'vector' is restricted and cannot be used to name a function
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/restricted_function_names.move:8:9
+  │
+8 │     fun freeze() { abort 0 }
+  │         ^^^^^^ Invalid function name 'freeze'. 'freeze' is restricted and cannot be used to name a function
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/restricted_function_names.move:9:9
+  │
+9 │     fun assert() { abort 0 }
+  │         ^^^^^^ Invalid function name 'assert'. 'assert' is restricted and cannot be used to name a function
+
+error[E03011]: invalid use of reserved name
+   ┌─ tests/move_check/expansion/restricted_function_names.move:10:9
+   │
+10 │     fun Self() { abort 0}
+   │         ^^^^ Invalid function name 'Self'. 'Self' is restricted and cannot be used to name a function

@@ -63,7 +63,7 @@ public fun remove<K: copy + drop + store, V: key + store>(table: &mut ObjectTabl
     v
 }
 
-/// Returns true iff there is a value associated with the key `k: K` in table
+/// Returns true if there is a value associated with the key `k: K` in table
 /// `table: &ObjectTable<K, V>`
 public fun contains<K: copy + drop + store, V: key + store>(table: &ObjectTable<K, V>, k: K): bool {
     ofield::exists_<K>(&table.id, k)
@@ -74,7 +74,7 @@ public fun length<K: copy + drop + store, V: key + store>(table: &ObjectTable<K,
     table.size
 }
 
-/// Returns true iff the table is empty (if `length` returns `0`)
+/// Returns true if the table is empty (if `length` returns `0`)
 public fun is_empty<K: copy + drop + store, V: key + store>(table: &ObjectTable<K, V>): bool {
     table.size == 0
 }

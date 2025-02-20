@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/struct_type_misspelled_key_constraint.move:3:17
+  │
+3 │     struct S<T: ky> { }
+  │                 ^^ Unexpected 'ky'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'

@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/macro_identifier_invalid_position.move:1:8
+  │
+1 │ module $a::m {}
+  │        ^^ Invalid address name '$a'. Identifiers starting with '$' can be used only for parameters and type paramters
+
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/macro_identifier_invalid_position.move:2:8
+  │
+2 │ module $b::m {}
+  │        ^^ Invalid address name '$b'. Identifiers starting with '$' can be used only for parameters and type paramters

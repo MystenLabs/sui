@@ -31,7 +31,7 @@ pub struct ConfigReadSettingImplCostParams {
     pub config_read_setting_impl_cost_per_byte: Option<InternalGas>,
 }
 
-#[instrument(level = "trace", skip_all, err)]
+#[instrument(level = "trace", skip_all)]
 pub fn read_setting_impl(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -170,7 +170,7 @@ fn unpack_struct<const N: usize>(s: Value) -> PartialVMResult<[Value; N]> {
     let s: Struct = s.value_as()?;
     s.unpack()?.collect::<Vec<_>>().try_into().map_err(|e| {
         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-            .with_message(format!("struct expected to have have {N} fields: {e:?}"))
+            .with_message(format!("struct expected to have {N} fields: {e:?}"))
     })
 }
 

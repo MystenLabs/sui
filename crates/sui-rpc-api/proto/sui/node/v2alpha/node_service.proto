@@ -1,0 +1,218 @@
+// The sui.node.v2alpha package contains experimental services that have yet to
+// stabilize
+//
+// Everything in here is subject to change and there is no gaurentee about
+// stability or breaking changes.
+syntax = "proto3";
+
+package sui.node.v2alpha;
+
+import "google/protobuf/field_mask.proto";
+import "sui/node/v2/node_service.proto";
+import "sui/types/types.proto";
+
+// Service for reading data from a Sui Full node.
+service NodeService {
+  // Request information for the specified coin type.
+  rpc GetCoinInfo(GetCoinInfoRequest) returns (GetCoinInfoResponse);
+
+  // List the dynamic fields for provided parent.
+  rpc ListDynamicFields(ListDynamicFieldsRequest) returns (ListDynamicFieldsResponse);
+
+  rpc ListAccountObjects(ListAccountObjectsRequest) returns (ListAccountObjectsResponse);
+
+  rpc GetProtocolConfig(GetProtocolConfigRequest) returns (GetProtocolConfigResponse);
+
+  rpc GetGasInfo(GetGasInfoRequest) returns (GetGasInfoResponse);
+
+  rpc SimulateTransaction(SimulateTransactionRequest) returns (SimulateTransactionResponse);
+
+  rpc ResolveTransaction(ResolveTransactionRequest) returns (ResolveTransactionResponse);
+}
+
+// Request message for `NodeService.GetCoinInfo`.
+message GetCoinInfoRequest {
+  // The coin type to request information about
+  optional sui.types.TypeTag coin_type = 1;
+}
+
+// Response message for `NodeService.GetCoinInfo`.
+message GetCoinInfoResponse {
+  // Required. The coin type.
+  optional sui.types.TypeTag coin_type = 1;
+
+  // Optional. This field will be populated with information about this coin
+  // type's `0x2::coin::CoinMetadata` if it exists and has not been wrapped.
+  optional CoinMetadata metadata = 2;
+
+  // Optional. This field will be populated with information about this coin
+  // type's `0x2::coin::TreasuryCap` if it exists and has not been wrapped.
+  optional CoinTreasury treasury = 3;
+
+  // TODO add support for tracking RegulatedCoinMetadata
+  // Optional. If this coin type is a regulated coin, this field will be
+  // populated with information about its `0x2::coin::RegulatedCoinMetadata`
+  // object.
+  // optional RegulatedCoinMetadata regulated_metadata = 4;
+}
+
+// Metadata for a coin type
+message CoinMetadata {
+  // ObjectId of the `0x2::coin::CoinMetadata` object.
+  optional sui.types.ObjectId id = 1;
+  // Number of decimal places to coin uses.
+  optional uint32 decimals = 2;
+  // Name for the token
+  optional string name = 3;
+  // Symbol for the token
+  optional string symbol = 4;
+  // Description of the token
+  optional string description = 5;
+  // URL for the token logo
+  optional string icon_url = 6;
+}
+
+// Information about a coin type's `0x2::coin::TreasuryCap` and its total available supply
+message CoinTreasury {
+  // ObjectId of the `0x2::coin::TreasuryCap` object.
+  optional sui.types.ObjectId id = 1;
+  // Total available supply for this coin type.
+  optional uint64 total_supply = 2;
+}
+
+// Information about a regulated coin, which indicates that it makes use of the transfer deny list.
+message RegulatedCoinMetadata {
+  // ObjectId of the `0x2::coin::RegulatedCoinMetadata` object.
+  optional sui.types.ObjectId id = 1;
+  // The ID of the coin's `CoinMetadata` object.
+  optional sui.types.ObjectId coin_metadata_object = 2;
+  // The ID of the coin's `DenyCap` object.
+  optional sui.types.ObjectId deny_cap_object = 3;
+}
+
+// Request message for `NodeService.ListDynamicFields`
+message ListDynamicFieldsRequest {
+  // Required. The `UID` of the parent, which owns the collections of dynamic fields.
+  optional sui.types.ObjectId parent = 1;
+
+  // The maximum number of dynamic fields to return. The service may return fewer than this value.
+  // If unspecified, at most `50` entries will be returned.
+  // The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+  optional uint32 page_size = 2;
+
+  // A page token, received from a previous `ListDynamicFields` call.
+  // Provide this to retrieve the subsequent page.
+  //
+  // When paginating, all other parameters provided to `ListDynamicFields` must
+  // match the call that provided the page token.
+  optional string page_token = 3;
+}
+
+// Response message for `NodeService.ListDynamicFields`
+message ListDynamicFieldsResponse {
+  // Page of dynamic fields owned by the specified parent.
+  repeated DynamicField dynamic_fields = 1;
+
+  // A token, which can be sent as `page_token` to retrieve the next page.
+  // If this field is omitted, there are no subsequent pages.
+  optional string next_page_token = 2;
+}
+
+message DynamicField {
+  // Required. ObjectId of this dynamic field's parent.
+  optional sui.types.ObjectId parent = 1;
+
+  // Required. ObjectId of this dynamic field.
+  optional sui.types.ObjectId field_id = 2;
+
+  // Required. The type of the dynamic field "name"
+  optional sui.types.TypeTag name_type = 3;
+
+  // Required. The serialized move value of "name"
+  optional bytes name_value = 4;
+
+  // Optional. The ObjectId of the child object when a child is a dynamic
+  // object field.
+  //
+  // The presence or absence of this field can be used to determine if a child
+  // is a dynamic field or a dynamic child object
+  optional sui.types.ObjectId dynamic_object_id = 5;
+}
+
+message GetProtocolConfigRequest {
+  optional uint64 version = 1;
+}
+
+message GetProtocolConfigResponse {
+  optional uint64 protocol_version = 1;
+  map<string, bool> feature_flags = 2;
+  map<string, string> attributes = 3;
+
+  optional uint64 max_suppported_protocol_version = 4;
+  optional uint64 min_suppported_protocol_version = 5;
+}
+
+message GetGasInfoRequest {}
+
+message GetGasInfoResponse {
+  // Reference gas price denominated in MIST
+  optional uint64 reference_gas_price = 1;
+}
+
+message SimulateTransactionRequest {
+  optional sui.types.Bcs transaction_bcs = 2;
+  optional google.protobuf.FieldMask read_mask = 3;
+}
+
+message SimulateTransactionResponse {
+  optional sui.types.Bcs effects_bcs = 3;
+  optional sui.types.Bcs events_bcs = 5;
+  repeated sui.node.v2.BalanceChange balance_changes = 6;
+}
+
+message ResolveTransactionRequest {
+  // TODO FIX TYPE
+  // Json unresolved transaction type
+  optional string unresolved_transaction = 1;
+  optional google.protobuf.FieldMask read_mask = 3;
+}
+
+message ResolveTransactionResponse {
+  optional sui.types.Bcs transaction_bcs = 2;
+  optional SimulateTransactionResponse simulation = 3;
+}
+
+// Request message for `NodeService.ListAccountObjects`
+message ListAccountObjectsRequest {
+  // Required. The address of the account that owns the objects.
+  optional sui.types.Address owner = 1;
+
+  // The maximum number of entries return. The service may return fewer than this value.
+  // If unspecified, at most `50` entries will be returned.
+  // The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+  optional uint32 page_size = 2;
+
+  // A page token, received from a previous `ListAccountObjects` call.
+  // Provide this to retrieve the subsequent page.
+  //
+  // When paginating, all other parameters provided to `ListAccountObjects` must
+  // match the call that provided the page token.
+  optional string page_token = 3;
+}
+
+// Response message for `NodeService.ListAccountObjects`
+message ListAccountObjectsResponse {
+  // Page of dynamic fields owned by the specified parent.
+  repeated AccountObject objects = 1;
+
+  // A token, which can be sent as `page_token` to retrieve the next page.
+  // If this field is omitted, there are no subsequent pages.
+  optional string next_page_token = 2;
+}
+
+message AccountObject {
+  optional sui.types.Address owner = 1;
+  optional sui.types.ObjectId object_id = 2;
+  optional uint64 version = 3;
+  optional sui.types.StructTag object_type = 4;
+}

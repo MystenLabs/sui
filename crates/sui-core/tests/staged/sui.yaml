@@ -305,6 +305,18 @@ ConsensusDeterminedVersionAssignments:
                   TUPLE:
                     - TYPENAME: ObjectID
                     - TYPENAME: SequenceNumber
+    1:
+      CancelledTransactionsV2:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: TransactionDigest
+              - SEQ:
+                  TUPLE:
+                    - TUPLE:
+                        - TYPENAME: ObjectID
+                        - TYPENAME: SequenceNumber
+                    - TYPENAME: SequenceNumber
 Data:
   ENUM:
     0:
@@ -325,6 +337,10 @@ DeleteKind:
       Wrap: UNIT
 Digest:
   NEWTYPESTRUCT: BYTES
+Duration:
+  STRUCT:
+    - secs: U64
+    - nanos: U32
 ECMHLiveObjectSetDigest:
   STRUCT:
     - digest:
@@ -378,6 +394,10 @@ EndOfEpochTransactionKind:
       BridgeCommitteeInit:
         NEWTYPE:
           TYPENAME: SequenceNumber
+    7:
+      StoreExecutionTimeObservations:
+        NEWTYPE:
+          TYPENAME: StoredExecutionTimeObservations
 Event:
   STRUCT:
     - package_id:
@@ -521,6 +541,12 @@ ExecutionFailureStatus:
           - coin_type: STR
     36:
       ExecutionCancelledDueToRandomnessUnavailable: UNIT
+    37:
+      InvalidLinkage: UNIT
+    38:
+      DuplicateModuleName:
+        STRUCT:
+          - duplicate_module_name: STR
 ExecutionStatus:
   ENUM:
     0:
@@ -532,6 +558,30 @@ ExecutionStatus:
               TYPENAME: ExecutionFailureStatus
           - command:
               OPTION: U64
+ExecutionTimeObservationKey:
+  ENUM:
+    0:
+      MoveEntryPoint:
+        STRUCT:
+          - package:
+              TYPENAME: ObjectID
+          - module: STR
+          - function: STR
+          - type_arguments:
+              SEQ:
+                TYPENAME: TypeInput
+    1:
+      TransferObjects: UNIT
+    2:
+      SplitCoins: UNIT
+    3:
+      MergeCoins: UNIT
+    4:
+      Publish: UNIT
+    5:
+      MakeMoveVec: UNIT
+    6:
+      Upgrade: UNIT
 FullCheckpointContents:
   STRUCT:
     - transactions:
@@ -881,6 +931,18 @@ SenderSignedTransaction:
           TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
+StoredExecutionTimeObservations:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: ExecutionTimeObservationKey
+              - SEQ:
+                  TUPLE:
+                    - TYPENAME: AuthorityPublicKeyBytes
+                    - TYPENAME: Duration
 StructInput:
   STRUCT:
     - address:
@@ -1108,29 +1170,29 @@ TypeInput:
     0:
       bool: UNIT
     1:
-      u8: UNIT
+      U8: UNIT
     2:
-      u64: UNIT
+      U64: UNIT
     3:
-      u128: UNIT
+      U128: UNIT
     4:
-      address: UNIT
+      Address: UNIT
     5:
-      signer: UNIT
+      Signer: UNIT
     6:
-      vector:
+      Vector:
         NEWTYPE:
           TYPENAME: TypeInput
     7:
-      struct:
+      Struct:
         NEWTYPE:
           TYPENAME: StructInput
     8:
-      u16: UNIT
+      U16: UNIT
     9:
-      u32: UNIT
+      U32: UNIT
     10:
-      u256: UNIT
+      U256: UNIT
 TypeOrigin:
   STRUCT:
     - module_name: STR
@@ -1140,19 +1202,19 @@ TypeOrigin:
 TypeTag:
   ENUM:
     0:
-      bool: UNIT
+      Bool: UNIT
     1:
-      u8: UNIT
+      U8: UNIT
     2:
-      u64: UNIT
+      U64: UNIT
     3:
-      u128: UNIT
+      U128: UNIT
     4:
-      address: UNIT
+      Address: UNIT
     5:
-      signer: UNIT
+      Signer: UNIT
     6:
-      vector:
+      Vector:
         NEWTYPE:
           TYPENAME: TypeTag
     7:
@@ -1160,11 +1222,11 @@ TypeTag:
         NEWTYPE:
           TYPENAME: StructTag
     8:
-      u16: UNIT
+      U16: UNIT
     9:
-      u32: UNIT
+      U32: UNIT
     10:
-      u256: UNIT
+      U256: UNIT
 TypedStoreError:
   ENUM:
     0:

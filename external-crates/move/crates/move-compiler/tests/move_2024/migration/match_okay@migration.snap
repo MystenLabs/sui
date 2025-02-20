@@ -1,0 +1,19 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.migration
+  lint: false
+---
+--- tests/move_2024/migration/match_okay.move
++++ tests/move_2024/migration/match_okay.move
+@@ -3,2 +3,2 @@
+-    fun t1(t: u64, match: u64): bool {
+-        t == match
++    fun t1(t: u64, `match`: u64): bool {
++        t == `match`
+@@ -7,2 +7,2 @@
+-    fun t2(t: u64, match: u64): bool {
+-        if (t == match) { true } else { false }
++    fun t2(t: u64, `match`: u64): bool {
++        if (t == `match`) { true } else { false }

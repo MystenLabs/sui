@@ -1,0 +1,54 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:13
+   │
+ 4 │     public struct Bar<T> {
+   │                   --- 'Bar' is declared here
+   ·
+26 │         let Bar(Foo(Bar(Foo(x, y)), z)) = y;
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:13
+   │
+26 │         let Bar(Foo(Bar(Foo(x, y)), z)) = y;
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unbound field '0' in '0x42::M::Bar'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:13
+   │
+26 │         let Bar(Foo(Bar(Foo(x, y)), z)) = y;
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing binding for field 'f' in '0x42::M::Bar'
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:21
+   │
+ 4 │     public struct Bar<T> {
+   │                   --- 'Bar' is declared here
+   ·
+26 │         let Bar(Foo(Bar(Foo(x, y)), z)) = y;
+   │                     ^^^^^^^^^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:21
+   │
+26 │         let Bar(Foo(Bar(Foo(x, y)), z)) = y;
+   │                     ^^^^^^^^^^^^^^ Unbound field '0' in '0x42::M::Bar'
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:21
+   │
+26 │         let Bar(Foo(Bar(Foo(x, y)), z)) = y;
+   │                     ^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:21
+   │
+26 │         let Bar(Foo(Bar(Foo(x, y)), z)) = y;
+   │                     ^^^^^^^^^^^^^^ Missing binding for field 'f' in '0x42::M::Bar'

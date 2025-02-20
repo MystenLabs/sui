@@ -1,0 +1,41 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04005]: expected a single type
+  ┌─ tests/move_check/typing/declare_wrong_arity.move:5:13
+  │
+5 │         let _x: ();
+  │             ^^  -- Expected a single type, but found expression list type: '()'
+  │             │    
+  │             Invalid type for local
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/declare_wrong_arity.move:6:13
+  │
+6 │         let (): u64;
+  │             ^^  --- Given: 'u64'
+  │             │    
+  │             Invalid value for binding
+  │             Expected: '()'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/declare_wrong_arity.move:7:13
+  │
+7 │         let (x, b, R{f}): (u64, bool, R, R); x; b; f;
+  │             ^^^^^^^^^^^^  ----------------- Given expression list of length 4: '(u64, bool, 0x8675309::M::R, 0x8675309::M::R)'
+  │             │              
+  │             Invalid value for binding
+  │             Expected expression list of length 3: '(_, _, _)'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/declare_wrong_arity.move:8:13
+  │
+8 │         let (x, b, R{f}): (u64, bool); x; b; f;
+  │             ^^^^^^^^^^^^  ----------- Given expression list of length 2: '(u64, bool)'
+  │             │              
+  │             Invalid value for binding
+  │             Expected expression list of length 3: '(_, _, _)'

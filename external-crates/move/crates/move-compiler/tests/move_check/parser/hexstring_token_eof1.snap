@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01008]: invalid hex string
+  ┌─ tests/move_check/parser/hexstring_token_eof1.move:3:9
+  │
+3 │         x"
+  │         ^^ Missing closing quote (") after byte string
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/hexstring_token_eof1.move:4:1
+  │
+4 │ 
+  │ ^
+  │ 
+  │ Unexpected end-of-file
+  │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'

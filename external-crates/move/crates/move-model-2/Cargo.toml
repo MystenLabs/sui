@@ -1,0 +1,28 @@
+[package]
+name = "move-model-2"
+version = "0.1.0"
+authors = ["The Move Contributors"]
+publish = false
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+move-compiler.workspace = true
+move-binary-format.workspace = true
+move-bytecode-source-map.workspace = true
+move-ir-types.workspace = true
+move-core-types.workspace = true
+move-disassembler.workspace = true
+move-command-line-common.workspace = true
+move-symbol-pool.workspace = true
+
+bcs.workspace = true
+codespan.workspace = true
+codespan-reporting.workspace = true
+num.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+vfs.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true

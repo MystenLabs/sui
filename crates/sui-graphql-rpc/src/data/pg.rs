@@ -249,7 +249,7 @@ mod tests {
         database::Connection, db::reset_database, models::objects::StoredObject, schema::objects,
         types::IndexedObject,
     };
-    use sui_pg_temp_db::TempDb;
+    use sui_pg_db::temp::TempDb;
 
     #[tokio::test]
     async fn test_query_cost() {

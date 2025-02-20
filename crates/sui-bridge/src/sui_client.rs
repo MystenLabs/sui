@@ -658,6 +658,7 @@ mod tests {
     use move_core_types::account_address::AccountAddress;
     use serde::{Deserialize, Serialize};
     use std::str::FromStr;
+    use sui_json_rpc_types::BcsEvent;
     use sui_types::bridge::{BridgeChainId, TOKEN_ID_SUI, TOKEN_ID_USDC};
     use sui_types::crypto::get_key_pair;
 
@@ -698,7 +699,7 @@ mod tests {
 
         let mut sui_event_1 = SuiEvent::random_for_testing();
         sui_event_1.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();
-        sui_event_1.bcs = bcs::to_bytes(&emitted_event_1).unwrap();
+        sui_event_1.bcs = BcsEvent::new(bcs::to_bytes(&emitted_event_1).unwrap());
 
         #[derive(Serialize, Deserialize)]
         struct RandomStruct {}
@@ -708,7 +709,7 @@ mod tests {
         let mut sui_event_2 = SuiEvent::random_for_testing();
         sui_event_2.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();
         sui_event_2.type_.module = Identifier::from_str("unrecognized_module").unwrap();
-        sui_event_2.bcs = bcs::to_bytes(&event_2).unwrap();
+        sui_event_2.bcs = BcsEvent::new(bcs::to_bytes(&event_2).unwrap());
 
         // Event 3 is defined in non-bridge package
         let mut sui_event_3 = sui_event_1.clone();

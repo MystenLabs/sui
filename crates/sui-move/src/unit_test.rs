@@ -42,6 +42,8 @@ impl Test {
                 "The --coverage flag is currently supported only in debug builds. Please build the Sui CLI from source in debug mode."
             ));
         }
+        // save disassembly if trace execution is enabled
+        let save_disassembly = self.test.trace_execution.is_some();
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
         let unit_test_config = self.test.unit_test_config();
@@ -50,6 +52,7 @@ impl Test {
             build_config,
             Some(unit_test_config),
             compute_coverage,
+            save_disassembly,
         )
     }
 }
@@ -71,6 +74,7 @@ pub fn run_move_unit_tests(
     build_config: BuildConfig,
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
+    save_disassembly: bool,
 ) -> anyhow::Result<UnitTestResult> {
     // bind the extension hook if it has not yet been done
     Lazy::force(&SET_EXTENSION_HOOK);
@@ -91,6 +95,7 @@ pub fn run_move_unit_tests(
         ),
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
+        save_disassembly,
         &mut std::io::stdout(),
     );
     result.map(|(test_result, warning_diags)| {

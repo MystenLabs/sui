@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03019]: invalid pattern
+  ┌─ tests/move_2024/expansion/or_pat_mutability_mismatch.move:9:18
+  │
+9 │             X::A(mut x) | X::B(x, _) => {
+  │                  ^^^      ---------- right or-pattern binds it immutably
+  │                  │         
+  │                  left or-pattern binds variable x mutably
+  │
+  = Both sides of an or-pattern must bind the same variables with the same mutability.
+
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/expansion/or_pat_mutability_mismatch.move:18:28
+   │
+18 │             X::A(x) | X::B(mut x, _) => {
+   │                  -         ^^^ right or-pattern binds variable x mutably
+   │                  │          
+   │                  left or-pattern binds it immutably
+   │
+   = Both sides of an or-pattern must bind the same variables with the same mutability.

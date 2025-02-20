@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04032]: unable to expand macro function
+  ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_deref.move:4:9
+  │
+4 │         $_x = 0;
+  │         ^^^ Cannot assign to argument for parameter '$_x'. Arguments must be used in value positions
+  │
+  = 'macro' parameters are substituted without being evaluated. There is no local variable to assign to
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_deref.move:9:14
+  │
+9 │         foo!(*x);
+  │              ^^ Unused macro argument. Its expression will not be type checked and it will not evaluated
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -1,0 +1,86 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+task 1, lines 6-45:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6900800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 47:
+//# run t2::o2::create
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 49:
+//# run t2::o2::create
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 51:
+//# view-object 2,0
+Owner: Shared( 3 )
+Version: 3
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 5, lines 53-55:
+//# view-object 3,0
+Owner: Shared( 4 )
+Version: 4
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 6, lines 56-58:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
+//> 1: t2::o2::delete(Result(0));
+mutated: object(0,0), object(2,0)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
+
+task 7, line 60:
+//# run t2::o2::mint_shared_coin
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 62-64:
+//# view-object 7,0
+Owner: Shared( 6 )
+Version: 6
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
+
+task 9, lines 65-70:
+//# programmable --inputs 0 object(7,0) @0x0
+//> 0: MakeMoveVec([Input(1)]);
+//> 1: t2::o2::pop_coin(Result(0));
+//> 2: SplitCoins(Result(1), [Input(0)]);
+//> 3: TransferObjects([Result(2)], Input(2));
+//> 4: t2::o2::share_coin(Result(1));
+created: object(9,0)
+mutated: object(0,0), object(7,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760

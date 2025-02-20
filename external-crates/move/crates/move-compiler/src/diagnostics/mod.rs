@@ -201,7 +201,7 @@ pub fn report_diagnostics_to_buffer_with_mapped_files(
     writer.into_inner()
 }
 
-fn env_color() -> ColorChoice {
+pub fn env_color() -> ColorChoice {
     match read_env_var(COLOR_MODE_ENV_VAR).as_str() {
         "NONE" => ColorChoice::Never,
         "ANSI" => ColorChoice::AlwaysAnsi,
@@ -832,7 +832,7 @@ macro_rules! diag {
 
 pub const ICE_BUG_REPORT_MESSAGE: &str =
     "The Move compiler has encountered an internal compiler error.\n \
-    Please report this this issue to the Mysten Labs Move language team,\n \
+    Please report this issue to the Mysten Labs Move language team,\n \
     including this error and any relevant code, to the Mysten Labs issue tracker\n \
     at : https://github.com/MystenLabs/sui/issues";
 

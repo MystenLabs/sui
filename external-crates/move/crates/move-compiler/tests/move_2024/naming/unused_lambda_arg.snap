@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/unused_lambda_arg.move:12:13
+   │
+12 │         p!(|p| 0);
+   │             ^ Unused local variable 'p'. Consider removing or prefixing with an underscore: '_p'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/unused_lambda_arg.move:13:24
+   │
+13 │         p!(|Point { x, y }| x);
+   │                        ^ Unused local variable 'y'. Consider removing or prefixing with an underscore: '_y'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/unused_lambda_arg.move:14:13
+   │
+14 │         r!(|p| 0);
+   │             ^ Unused local variable 'p'. Consider removing or prefixing with an underscore: '_p'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/unused_lambda_arg.move:15:24
+   │
+15 │         r!(|Point { x, y }| *x);
+   │                        ^ Unused local variable 'y'. Consider removing or prefixing with an underscore: '_y'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

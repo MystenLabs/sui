@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03019]: invalid pattern
+  ┌─ tests/move_2024/matching/invalid_or_binding.move:9:24
+  │
+9 │             Two::Tuple(x, _) | Two::Tuple(_, _y) => { let _y = x; },
+  │                        ^       ----------------- right or-pattern does not
+  │                        │        
+  │                        left or-pattern binds variable x
+  │
+  = Both sides of an or-pattern must bind the same variables.
+
+error[E03019]: invalid pattern
+  ┌─ tests/move_2024/matching/invalid_or_binding.move:9:46
+  │
+9 │             Two::Tuple(x, _) | Two::Tuple(_, _y) => { let _y = x; },
+  │             ----------------                 ^^ right or-pattern binds variable _y
+  │             │                                 
+  │             left or-pattern does not
+  │
+  = Both sides of an or-pattern must bind the same variables.

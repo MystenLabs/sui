@@ -27,6 +27,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let sui_devnet = SuiClientBuilder::default().build_devnet().await?;
     println!("Sui devnet version: {}", sui_devnet.api_version());
 
+    // Sui mainnet -- https://fullnode.mainnet.sui.io:443
+    let sui_mainnet = SuiClientBuilder::default().build_mainnet().await?;
+    println!("Sui mainnet version: {}", sui_mainnet.api_version());
+
     Ok(())
 }
 
@@ -126,7 +130,7 @@ async fn main() -> Result<(), anyhow::Error> {
       .coin_read_api()
       .get_all_balances(active_address)
       .await?;
-   println!("The balances for all coins owned by address: {active_address} are {}", total_balance);
+   println!("The balances for all coins owned by address: {active_address} are {:#?}", total_balance);
    Ok(())
 }
 ```

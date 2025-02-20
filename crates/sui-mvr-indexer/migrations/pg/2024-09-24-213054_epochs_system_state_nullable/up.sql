@@ -1,1 +1,0 @@
-ALTER TABLE epochs ALTER COLUMN system_state DROP NOT NULL;

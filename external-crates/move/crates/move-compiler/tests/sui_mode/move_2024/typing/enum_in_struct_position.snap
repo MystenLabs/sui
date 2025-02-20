@@ -1,0 +1,45 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: 2024.alpha
+  lint: false
+---
+error[Sui E02007]: invalid object declaration
+   ┌─ tests/sui_mode/move_2024/typing/enum_in_struct_position.move:11:13
+   │
+11 │ public enum Obj has key, store {
+   │             ^^^     --- Enums cannot have the 'key' ability.
+   │             │        
+   │             Invalid object 'Obj'
+
+error[Sui E02002]: invalid 'entry' function signature
+   ┌─ tests/sui_mode/move_2024/typing/enum_in_struct_position.move:18:1
+   │
+ 3 │ public enum E {
+   │             - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+18 │ entry fun ret(): E {
+   │ ^^^^^            - The type 'a::m::E' does not have the ability 'drop'
+   │ │                 
+   │ Invalid return type for entry function 'ret'
+
+error[Sui E02002]: invalid 'entry' function signature
+   ┌─ tests/sui_mode/move_2024/typing/enum_in_struct_position.move:22:14
+   │
+22 │ entry fun x3(_: E) {
+   │ -----        ^  - 'entry' parameters must be primitives (by-value), vectors of primitives, objects (by-reference or by-value), vectors of objects, or 'Receiving' arguments (by-reference or by-value)
+   │ │            │   
+   │ │            Invalid 'entry' parameter type for parameter '_'
+   │ 'x3' was declared 'entry' here
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/move_2024/typing/enum_in_struct_position.move:30:5
+   │
+11 │ public enum Obj has key, store {
+   │                          ----- The object has 'store' so 'sui::transfer::public_transfer' can be called instead
+   ·
+29 │ public fun transfer(o: a::m::Obj) {
+   │                        --------- The type 'a::m::Obj' is not declared in the current module
+30 │     transfer::transfer(o, @0)
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::transfer' is restricted to being called in the object's module, 'a::m'

@@ -1,0 +1,386 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-28:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5251600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 30:
+//# run Test::M1::emit_1 --sender A --args 1
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 32:
+//# run Test::M1::emit_2 --sender A --args 10
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [10, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [11, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 34:
+//# run Test::M1::emit_3 --sender A --args 100
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [100, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [101, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [102, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 36:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 38-59:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "events": {
+              "edges": [
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "contents": {
+                      "json": {
+                        "new_value": "1"
+                      },
+                      "bcs": "AQAAAAAAAAA="
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "events": {
+              "edges": [
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "contents": {
+                      "json": {
+                        "new_value": "10"
+                      },
+                      "bcs": "CgAAAAAAAAA="
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "contents": {
+                      "json": {
+                        "new_value": "11"
+                      },
+                      "bcs": "CwAAAAAAAAA="
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "events": {
+              "edges": [
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "contents": {
+                      "json": {
+                        "new_value": "100"
+                      },
+                      "bcs": "ZAAAAAAAAAA="
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "contents": {
+                      "json": {
+                        "new_value": "101"
+                      },
+                      "bcs": "ZQAAAAAAAAA="
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "contents": {
+                      "json": {
+                        "new_value": "102"
+                      },
+                      "bcs": "ZgAAAAAAAAA="
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 7, lines 61-74:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "contents": {
+            "json": {
+              "new_value": "1"
+            },
+            "bcs": "AQAAAAAAAAA="
+          }
+        },
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "contents": {
+            "json": {
+              "new_value": "10"
+            },
+            "bcs": "CgAAAAAAAAA="
+          }
+        },
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "contents": {
+            "json": {
+              "new_value": "11"
+            },
+            "bcs": "CwAAAAAAAAA="
+          }
+        },
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "contents": {
+            "json": {
+              "new_value": "100"
+            },
+            "bcs": "ZAAAAAAAAAA="
+          }
+        },
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "contents": {
+            "json": {
+              "new_value": "101"
+            },
+            "bcs": "ZQAAAAAAAAA="
+          }
+        },
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "contents": {
+            "json": {
+              "new_value": "102"
+            },
+            "bcs": "ZgAAAAAAAAA="
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 8, lines 76-97:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "events": {
+              "edges": [
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "contents": {
+                      "json": {
+                        "new_value": "1"
+                      },
+                      "bcs": "AQAAAAAAAAA="
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 9, lines 99-120:
+//# run-graphql --cursors {"i":0,"c":1}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "events": {
+              "edges": [
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "contents": {
+                      "json": {
+                        "new_value": "101"
+                      },
+                      "bcs": "ZQAAAAAAAAA="
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "contents": {
+                      "json": {
+                        "new_value": "102"
+                      },
+                      "bcs": "ZgAAAAAAAAA="
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 10, lines 122-138:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "digest": "FPhSSzT7tHmrPhs3H9GT1n4Dqj3eyCgaFLkQSc9FEDVV",
+          "effects": {
+            "events": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "digest": "GJMTYHH46d31ohELwH3ZfvGvbiDZ7GCqNcyg4fGGFJJQ",
+          "effects": {
+            "events": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "digest": "48LNnMV9MFXiXfXwDRWzu6SndwxY3ZfKUNEKJiDqJqM7",
+          "effects": {
+            "events": {
+              "nodes": [
+                {
+                  "transactionBlock": {
+                    "digest": "48LNnMV9MFXiXfXwDRWzu6SndwxY3ZfKUNEKJiDqJqM7"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "digest": "FhpR5hSSP2wf8ABXKcDVVTzo7H1DZYUUgABWPtADHcQA",
+          "effects": {
+            "events": {
+              "nodes": [
+                {
+                  "transactionBlock": {
+                    "digest": "FhpR5hSSP2wf8ABXKcDVVTzo7H1DZYUUgABWPtADHcQA"
+                  }
+                },
+                {
+                  "transactionBlock": {
+                    "digest": "FhpR5hSSP2wf8ABXKcDVVTzo7H1DZYUUgABWPtADHcQA"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX",
+          "effects": {
+            "events": {
+              "nodes": [
+                {
+                  "transactionBlock": {
+                    "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX"
+                  }
+                },
+                {
+                  "transactionBlock": {
+                    "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX"
+                  }
+                },
+                {
+                  "transactionBlock": {
+                    "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

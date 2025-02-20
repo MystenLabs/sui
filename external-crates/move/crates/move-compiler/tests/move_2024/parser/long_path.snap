@@ -1,0 +1,39 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/parser/long_path.move:7:26
+  │
+7 │     public struct A { y: 0x42::m::X::Y }
+  │                          ^^^^^^^^^^^^^ Unexpected enum variant identifier. An enum variant identifier is not a valid type
+  │
+  = Variants may not be used as types. Use the enum instead.
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/parser/long_path.move:8:26
+  │
+8 │     public struct B { x: 0x42::m::X::X }
+  │                          ^^^^^^^^^^^^^ Unexpected enum variant identifier. An enum variant identifier is not a valid type
+  │
+  = Variants may not be used as types. Use the enum instead.
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/parser/long_path.move:10:27
+   │
+10 │     fun foo(): 0x42::m::X<042::m::Y::Y> {
+   │                           ^^^^^^^^^^^^ Unexpected enum variant identifier. An enum variant identifier is not a valid type
+   │
+   = Variants may not be used as types. Use the enum instead.
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/parser/long_path.move:11:9
+   │
+ 2 │     public struct X<T> { t: T }
+   │                   - But 'X' is an struct
+   ·
+11 │         0x42::m::X<u64>::X { t: abort 0 }
+   │         ^^^^^^^^^^ Invalid construction. Expected an enum

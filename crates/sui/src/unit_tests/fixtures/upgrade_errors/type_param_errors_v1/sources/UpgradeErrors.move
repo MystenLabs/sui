@@ -53,5 +53,16 @@ module upgrades::upgrades {
 
     // remove constraint (no effect)
     public fun remove_constraint<T: copy>(a: T): T { return a }
-}
 
+    // swap type params
+    public fun swap_type_params<T: drop, U: drop + copy>(a: T, b: U): T { return a }
+    
+    // swap return type params
+    public fun swap_type_params_return<T: drop, U: drop + copy>(a: T, b: U): T { return a }
+
+    // change type on vector
+    public fun vec_changed(_: vector<u32>) {}
+
+    // change type param on vector
+    public fun vec_changed_type_param<T: drop, U: drop + copy>(_: vector<T>) {}
+}

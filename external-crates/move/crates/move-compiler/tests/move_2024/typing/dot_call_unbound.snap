@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04023]: invalid method call
+  ┌─ tests/move_2024/typing/dot_call_unbound.move:6:5
+  │
+6 │     x.f();
+  │     ^^^^^
+  │     │ │
+  │     │ No local 'use fun' alias was found for '0x42::t::X.f', and no function 'f' was found in the defining module '0x42::t'
+  │     Invalid method call. No known method 'f' on type '0x42::t::X'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_unbound.move:18:5
+   │
+18 │     x.f();
+   │     ^^^^^
+   │     │ │
+   │     │ No local 'use fun' alias was found for '0x42::t::X.f', and no function 'f' was found in the defining module '0x42::t'
+   │     Invalid method call. No known method 'f' on type '0x42::t::X'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_unbound.move:19:5
+   │
+19 │     y.x.f();
+   │     ^^^^^^^
+   │     │   │
+   │     │   No local 'use fun' alias was found for '0x42::t::X.f', and no function 'f' was found in the defining module '0x42::t'
+   │     Invalid method call. No known method 'f' on type '0x42::t::X'

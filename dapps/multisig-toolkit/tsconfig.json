@@ -21,9 +21,5 @@
 		}
 	},
 	"include": ["src"],
-	"references": [
-		{ "path": "./tsconfig.node.json" },
-		{ "path": "../../sdk/typescript" },
-		{ "path": "../../sdk/dapp-kit" }
-	]
+	"references": [{ "path": "./tsconfig.node.json" }]
 }

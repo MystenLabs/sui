@@ -232,7 +232,7 @@ impl<'a> Context<'a> {
         let N::StructFields::Defined(_, sfields) = &sdef.fields else {
             return None;
         };
-        sfields.iter().find_map(|(_, fname, (_, ftype))| {
+        sfields.iter().find_map(|(_, fname, (_, (_, ftype)))| {
             let res = self.wraps_object(ftype);
             res.map(|(wrapped_tloc, direct)| {
                 WrappingFieldInfo::new(*fname, ftype.loc, wrapped_tloc, direct)

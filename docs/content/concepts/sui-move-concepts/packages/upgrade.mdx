@@ -11,7 +11,7 @@ The inability to change package objects, however, becomes a problem when conside
 
 There are some details of the process that you should consider before upgrading your packages.
 
-For example, [module initializers](../init.mdx) do not re-run with package upgrades. When you publish your initial package, Move runs the `init` function you define for the package once (and only once) at the time of the publish event. Any `init` functions you might include in subsequent versions of your package are ignored.
+For example, module initializers do not re-run with package upgrades. When you publish your initial package, Move runs the `init` function you define for the package once (and only once) at the time of the publish event. Any `init` functions you might include in subsequent versions of your package are ignored. See [Module Initializer](https://move-book.com/programmability/module-initializer.html) in The Move Book for more information.
 
 As alluded to previously, all packages on the Sui network are immutable. Because of this fact, you cannot delete old packages from the chain. As a result, there is nothing that prevents other packages from accessing the methods and types defined in the old versions of your upgraded packages. By default, users can choose to keep using the old version of a package, as well. As a package developer, you must be aware of and account for this possibility.
 
@@ -210,9 +210,9 @@ module example::counter {
 }
 ```
 
-Upgrading to this version of the package requires performing the package upgrade, and calling the `migrate` function in a follow-up transaction.  Note that the `migrate` function:
+Upgrading to this version of the package requires performing the package upgrade, and calling the `migrate` function in a follow-up transaction. Note that the `migrate` function:
 
-- Is an `entry` function and **not `public`**.  This allows it to be entirely changed (including changing its signature or removing it entirely) in later upgrades.
+- Is an `entry` function and **not `public`**. This allows it to be entirely changed (including changing its signature or removing it entirely) in later upgrades.
 - Accepts an `AdminCap` and checks that its ID matches the ID of the counter being migrated, making it a privileged operation.
 - Includes a sanity check that the version of the module is actually an upgrade for the object. This helps catch errors such as failing to bump the module version before upgrading.
 
@@ -234,14 +234,15 @@ This pattern forms the basis for upgradeable packages involving shared objects, 
 ## Upgrade requirements
 
 To upgrade a package, your package must satisfy the following requirements:
+
 - You must have an `UpgradeTicket` for the package you want to upgrade. The Sui network issues `UpgradeCap`s when you publish a package, then you can issue `UpgradeTicket`s as the owner of that `UpgradeCap`. The Sui Client CLI handles this requirement automatically.
 - Your changes must be layout-compatible with the previous version.
-    - Existing `public` function signatures must remain the same.
-    - Existing struct layouts (including struct abilities) must remain the same.
-    - You can add new structs and functions.
-    - You can remove generic type constraints from existing functions (public or otherwise).
-    - You can change function implementations.
-    - You can change non-`public` function signatures, including `friend` and `entry` function signatures.
+  - Existing `public` function signatures must remain the same.
+  - Existing struct layouts (including struct abilities) must remain the same.
+  - You can add new structs and functions.
+  - You can remove generic type constraints from existing functions (public or otherwise).
+  - You can change function implementations.
+  - You can change non-`public` function signatures, including `friend` and `entry` function signatures.
 
 :::info
 
@@ -258,9 +259,9 @@ Use the `sui client upgrade` command to upgrade packages that meet the previous 
 - `--gas-budget`: The maximum number of gas units that can be expended before the network cancels the transaction.
 - `--cap`: The ID of the `UpgradeCap`. You receive this ID as a return from the publish command.
 
-Developers upgrading packages using Move code have access to types and functions to define custom upgrade policies. For example, a Move developer might want to disallow upgrading a package, regardless of the current package owner. The [`make_immutable` function](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/package.md#0x2_package_make_immutable) is available to them to create this behavior. More advanced policies using available types like `UpgradeTicket` and `Upgrade Receipt` are also possible. For an example, see this [custom upgrade policy](https://github.com/MystenLabs/sui/issues/2045#:~:text=Implement%20a%20custom%20upgrade%20policy) on GitHub.
+Developers upgrading packages using Move code have access to types and functions to define custom upgrade policies. For example, a Move developer might want to disallow upgrading a package, regardless of the current package owner. The [`make_immutable` function](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/package.md#0x2_package_make_immutable) is available to them to create this behavior. More advanced policies using available types like `UpgradeTicket` and `Upgrade Receipt` are also possible. For an example, see this [custom upgrade policy](https://github.com/MystenLabs/sui/issues/2045#:~:text=Implement%20a%20custom%20upgrade%20policy) on GitHub.
 
-When you use the Sui Client CLI, the `upgrade` command handles generating the upgrade digest, authorizing the upgrade with the `UpgradeCap` to get an `UpgradeTicket`, and updating the `UpgradeCap` with the `UpgradeReceipt` after a successful upgrade. To learn more about these processes, see the Move documentation for the [package module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/package.md).
+When you use the Sui Client CLI, the `upgrade` command handles generating the upgrade digest, authorizing the upgrade with the `UpgradeCap` to get an `UpgradeTicket`, and updating the `UpgradeCap` with the `UpgradeReceipt` after a successful upgrade. To learn more about these processes, see the Move documentation for the [package module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/package.md).
 
 ## Example
 
@@ -277,12 +278,13 @@ sui_package = "0x0"
 
 When your package is ready, you publish it:
 
-```shell
-sui client publish
+```sh
+$ sui client publish
 ```
+
 And receive the response:
 
-```shell
+```sh
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING my_first_package
@@ -492,13 +494,13 @@ With the new manifest and code in place, you can proceed.
 
 Run `sui client upgrade` command to upgrade your package. Pass the `UpgradeCap` ID (the `<UPGRADE-CAP-ID>` value from the example) to the `--upgrade-capability` flag.
 
-```shell
-sui client upgrade --upgrade-capability <UPGRADE-CAP-ID>
+```sh
+$ sui client upgrade --upgrade-capability <UPGRADE-CAP-ID>
 ```
 
 The console alerts you if the new package doesn't satisfy [requirements](#requirements), otherwise the compiler publishes the upgraded package to the network and returns its result:
 
-```shell
+```sh
 Transaction Digest: 3NnJGryz2k2BJzjpndDVqVcdZmmefNMB8SJ9bCEQct22
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Transaction Data                                                                                                                                             │
@@ -667,7 +669,6 @@ If the package was published or upgraded with a Sui version prior to `v1.29.0`, 
 
 So that packages that depend on your `sui_package` know where to find the on-chain bytecode for verification, edit your manifest again. Provide the upgraded package ID for the `published-at` value and return the original `sui_package` ID value in the `[addresses]` section:
 
-
 ```toml
 [package]
 name = "sui_package"
@@ -685,5 +686,3 @@ The ID for the `sui_package` in the `[addresses]` section always points to the o
 </TabItem>
 
 </Tabs>
-
-

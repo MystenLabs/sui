@@ -1,0 +1,150 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: true
+---
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+  ┌─ tests/linter/true_positive_equal_operands.move:6:9
+  │
+6 │         x % copy x;
+  │         ^^^^^^^^^^
+  │         │   │
+  │         │   Will always evaluate to the same value as this expression
+  │         Always equal operands detected in binary operation, which will evaluate to '0'
+  │         This expression
+  │
+  = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+  ┌─ tests/linter/true_positive_equal_operands.move:7:9
+  │
+7 │         copy x ^ x;
+  │         ^^^^^^^^^^
+  │         │        │
+  │         │        Will always evaluate to the same value as this expression
+  │         Always equal operands detected in binary operation, which will evaluate to '0'
+  │         This expression
+  │
+  = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+  ┌─ tests/linter/true_positive_equal_operands.move:8:9
+  │
+8 │         x / x;
+  │         ^^^^^
+  │         │   │
+  │         │   Will always evaluate to the same value as this expression
+  │         Always equal operands detected in binary operation, which will evaluate to '1'
+  │         This expression
+  │
+  = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+   ┌─ tests/linter/true_positive_equal_operands.move:10:9
+   │
+10 │         x | x;
+   │         ^^^^^
+   │         │   │
+   │         │   Will always evaluate to the same value as this expression
+   │         Always equal operands detected in binary operation, which will evaluate to the same value
+   │         This expression
+   │
+   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+   ┌─ tests/linter/true_positive_equal_operands.move:11:9
+   │
+11 │         x & x;
+   │         ^^^^^
+   │         │   │
+   │         │   Will always evaluate to the same value as this expression
+   │         Always equal operands detected in binary operation, which will evaluate to the same value
+   │         This expression
+   │
+   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+   ┌─ tests/linter/true_positive_equal_operands.move:13:9
+   │
+13 │         x != x;
+   │         ^^^^^^
+   │         │    │
+   │         │    Will always evaluate to the same value as this expression
+   │         Always equal operands detected in binary operation, which will evaluate to 'false'
+   │         This expression
+   │
+   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+   ┌─ tests/linter/true_positive_equal_operands.move:14:9
+   │
+14 │         x < x;
+   │         ^^^^^
+   │         │   │
+   │         │   Will always evaluate to the same value as this expression
+   │         Always equal operands detected in binary operation, which will evaluate to 'false'
+   │         This expression
+   │
+   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+   ┌─ tests/linter/true_positive_equal_operands.move:15:9
+   │
+15 │         x > x;
+   │         ^^^^^
+   │         │   │
+   │         │   Will always evaluate to the same value as this expression
+   │         Always equal operands detected in binary operation, which will evaluate to 'false'
+   │         This expression
+   │
+   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+   ┌─ tests/linter/true_positive_equal_operands.move:17:9
+   │
+17 │         x == x;
+   │         ^^^^^^
+   │         │    │
+   │         │    Will always evaluate to the same value as this expression
+   │         Always equal operands detected in binary operation, which will evaluate to 'true'
+   │         This expression
+   │
+   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+   ┌─ tests/linter/true_positive_equal_operands.move:18:9
+   │
+18 │         x <= x;
+   │         ^^^^^^
+   │         │    │
+   │         │    Will always evaluate to the same value as this expression
+   │         Always equal operands detected in binary operation, which will evaluate to 'true'
+   │         This expression
+   │
+   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+   ┌─ tests/linter/true_positive_equal_operands.move:19:9
+   │
+19 │         copy x >= move x;
+   │         ^^^^^^^^^^^^^^^^
+   │         │         │
+   │         │         Will always evaluate to the same value as this expression
+   │         Always equal operands detected in binary operation, which will evaluate to 'true'
+   │         This expression
+   │
+   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: redundant, always-equal operands for binary operation
+   ┌─ tests/linter/true_positive_equal_operands.move:22:9
+   │
+22 │         x == x;
+   │         ^^^^^^
+   │         │    │
+   │         │    Will always evaluate to the same value as this expression
+   │         Always equal operands detected in binary operation, which will evaluate to 'true'
+   │         This expression
+   │
+   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

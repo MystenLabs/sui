@@ -20,6 +20,7 @@ serde.workspace = true
 dirs-next.workspace = true
 vfs.workspace = true
 bcs.workspace = true
+insta = { workspace = true, features = ["serde"] }
 
 move-core-types.workspace = true
 move-binary-format.workspace = true

@@ -1,0 +1,52 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02002]: invalid 'entry' function signature
+  ┌─ tests/sui_mode/entry_points/return_values_invalid.move:4:12
+  │
+4 │     public entry fun t0(): &u8 {
+  │            ^^^^^           --- Expected a non-reference type
+  │            │                
+  │            Invalid return type for entry function 't0'
+
+error[Sui E02002]: invalid 'entry' function signature
+  ┌─ tests/sui_mode/entry_points/return_values_invalid.move:7:12
+  │
+7 │     public entry fun t1(): &mut u8 {
+  │            ^^^^^           ------- Expected a non-reference type
+  │            │                
+  │            Invalid return type for entry function 't1'
+
+error[Sui E02002]: invalid 'entry' function signature
+   ┌─ tests/sui_mode/entry_points/return_values_invalid.move:14:12
+   │
+13 │     struct Copyable has copy, store {}
+   │            -------- To satisfy the constraint, the 'drop' ability would need to be added here
+14 │     public entry fun t3(): Copyable {
+   │            ^^^^^           -------- The type 'a::m::Copyable' does not have the ability 'drop'
+   │            │                
+   │            Invalid return type for entry function 't3'
+
+error[Sui E02002]: invalid 'entry' function signature
+   ┌─ tests/sui_mode/entry_points/return_values_invalid.move:18:12
+   │
+17 │     struct Obj has key, store { id: sui::object::UID }
+   │            --- To satisfy the constraint, the 'drop' ability would need to be added here
+18 │     public entry fun t4(): Obj {
+   │            ^^^^^           --- The type 'a::m::Obj' does not have the ability 'drop'
+   │            │                
+   │            Invalid return type for entry function 't4'
+
+error[Sui E02002]: invalid 'entry' function signature
+   ┌─ tests/sui_mode/entry_points/return_values_invalid.move:21:12
+   │
+21 │     public entry fun t5(): vector<Obj> {
+   │            ^^^^^           -----------
+   │            │               │      │
+   │            │               │      The type 'vector<a::m::Obj>' can have the ability 'drop' but the type argument 'a::m::Obj' does not have the required ability 'drop'
+   │            │               The type 'vector<a::m::Obj>' does not have the ability 'drop'
+   │            Invalid return type for entry function 't5'

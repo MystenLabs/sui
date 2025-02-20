@@ -7,6 +7,11 @@ use anyhow::{bail, Context, Result};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::task::graceful_shutdown;
+use sui_indexer_alt_schema::{
+    checkpoints::StoredGenesis,
+    epochs::StoredEpochStart,
+    schema::{kv_epoch_starts, kv_genesis},
+};
 use sui_types::{
     full_checkpoint_content::CheckpointData,
     sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
@@ -15,11 +20,7 @@ use sui_types::{
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::{
-    models::{checkpoints::StoredGenesis, epochs::StoredEpochStart},
-    schema::{kv_epoch_starts, kv_genesis},
-    Indexer,
-};
+use crate::Indexer;
 
 /// Ensures the genesis table has been populated before the rest of the indexer is run, and returns
 /// the information stored there. If the database has been bootstrapped before, this function will

@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 pub mod errors;
 pub(crate) mod iter;
-pub(crate) mod keys;
 pub(crate) mod safe_iter;
-pub mod util;
 pub(crate) mod values;
 
-use self::{iter::Iter, keys::Keys, values::Values};
+use self::{iter::Iter, values::Values};
 use crate::rocks::errors::typed_store_err_from_bcs_err;
 use crate::rocks::errors::typed_store_err_from_bincode_err;
 use crate::rocks::errors::typed_store_err_from_rocks_err;
@@ -150,7 +148,7 @@ macro_rules! retry_transaction {
             distributions::{Distribution, Uniform},
             rngs::ThreadRng,
         };
-        use tokio::time::{sleep, Duration};
+        use std::time::Duration;
         use tracing::{error, info};
 
         let mut retries = 0;
@@ -181,7 +179,7 @@ macro_rules! retry_transaction {
                             "transaction write conflict detected, sleeping"
                         );
                     }
-                    sleep(delay).await;
+                    std::thread::sleep(delay);
                 }
                 _ => break status,
             }
@@ -1468,7 +1466,6 @@ impl DBBatch {
     }
 }
 
-// TODO: Remove this entire implementation once we switch to sally
 impl DBBatch {
     pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
         &mut self,
@@ -1540,46 +1537,6 @@ impl DBBatch {
             .rocksdb_batch_put_bytes
             .with_label_values(&[&db.cf])
             .observe(total as f64);
-        Ok(self)
-    }
-
-    /// merges a range of (key, value) pairs given as an iterator
-    pub fn merge_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
-        &mut self,
-        db: &DBMap<K, V>,
-        new_vals: impl IntoIterator<Item = (J, U)>,
-    ) -> Result<&mut Self, TypedStoreError> {
-        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
-            return Err(TypedStoreError::CrossDBBatch);
-        }
-
-        new_vals
-            .into_iter()
-            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
-                let k_buf = be_fix_int_ser(k.borrow())?;
-                let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
-                self.batch.merge_cf(&db.cf(), k_buf, v_buf);
-                Ok(())
-            })?;
-        Ok(self)
-    }
-
-    /// similar to `merge_batch` but allows merge with partial values
-    pub fn partial_merge_batch<J: Borrow<K>, K: Serialize, V: Serialize, B: AsRef<[u8]>>(
-        &mut self,
-        db: &DBMap<K, V>,
-        new_vals: impl IntoIterator<Item = (J, B)>,
-    ) -> Result<&mut Self, TypedStoreError> {
-        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
-            return Err(TypedStoreError::CrossDBBatch);
-        }
-        new_vals
-            .into_iter()
-            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
-                let k_buf = be_fix_int_ser(k.borrow())?;
-                self.batch.merge_cf(&db.cf(), k_buf, v);
-                Ok(())
-            })?;
         Ok(self)
     }
 }
@@ -1735,19 +1692,6 @@ impl<'a> DBTransaction<'a> {
         )
     }
 
-    pub fn keys<K: DeserializeOwned, V: DeserializeOwned>(
-        &'a self,
-        db: &DBMap<K, V>,
-    ) -> Keys<'a, K> {
-        let mut db_iter = RocksDBRawIter::OptimisticTransaction(
-            self.transaction
-                .raw_iterator_cf_opt(&db.cf(), db.opts.readopts()),
-        );
-        db_iter.seek_to_first();
-
-        Keys::new(db_iter)
-    }
-
     pub fn values<K: DeserializeOwned, V: DeserializeOwned>(
         &'a self,
         db: &DBMap<K, V>,
@@ -1854,7 +1798,6 @@ where
     type Error = TypedStoreError;
     type Iterator = Iter<'a, K, V>;
     type SafeIterator = SafeIter<'a, K, V>;
-    type Keys = Keys<'a, K>;
     type Values = Values<'a, V>;
 
     #[instrument(level = "trace", skip_all, err)]
@@ -2192,15 +2135,6 @@ where
             keys_scanned,
             Some(self.db_metrics.clone()),
         )
-    }
-
-    fn keys(&'a self) -> Self::Keys {
-        let mut db_iter = self
-            .rocksdb
-            .raw_iterator_cf(&self.cf(), self.opts.readopts());
-        db_iter.seek_to_first();
-
-        Keys::new(db_iter)
     }
 
     fn values(&'a self) -> Self::Values {

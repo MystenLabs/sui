@@ -1,0 +1,674 @@
+// The sui.node.v2 package contains API definitions for services that are
+// expected to run on Fullnodes.
+syntax = "proto3";
+
+package sui.node.v2;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "sui/types/types.proto";
+
+//
+// RPC Node interface
+//
+
+// Service for reading data from a Sui Fullnode.
+service NodeService {
+  // Query a node for information about its current state.
+  rpc GetNodeInfo(GetNodeInfoRequest) returns (GetNodeInfoResponse);
+
+  // Request the validator committee for a particular epoch or for the current
+  // epoch.
+  rpc GetCommittee(GetCommitteeRequest) returns (GetCommitteeResponse);
+
+  // Request information for the specified object.
+  //
+  // Use this API to request an object by its `ObjectId`. The version of
+  // the object returned is dependent on if you request a specific version.
+  // If you do not request a specific version (GetObjectRequest.version is `None`),
+  // then the most recent version (if the
+  // object is live) is returned. If you do request a version, that version is
+  // returned if it historically existed, is available, and has not been pruned.
+  //
+  // Due to storage limitations, implementers of this service might prune older
+  // historical data, which can limit the data availability of this API. To
+  // determine the data availability range for historical objects,
+  // clients can look at `GetNodeInfoResponse.lowest_available_checkpoint_objects`
+  // to see the lowest checkpoint for which historical object data is available.
+  rpc GetObject(GetObjectRequest) returns (GetObjectResponse);
+
+  // Request information for the specified transaction.
+  //
+  // Use this API to request information about a transaction by its digest.
+  //
+  // Due to storage limitations, implementers of this service might prune older
+  // historical data, which can limit the data availability of this API. To
+  // determine the data availability range for historical
+  // transactions, clients can look at
+  // `GetNodeInfoResponse.lowest_available_checkpoint` to see the lowest
+  // checkpoint for which historical transaction data is available.
+  rpc GetTransaction(GetTransactionRequest) returns (GetTransactionResponse);
+
+  // Request information for the specified checkpoint.
+  //
+  // Use this API to request information about a checkpoint either by
+  // its digest or its sequence number (height).
+  //
+  // Due to storage limitations, implementers of this service might prune older
+  // historical data, which can limit the data availability of this API. To
+  // determine the data availability range for historical
+  // checkpoints, clients can look at
+  // `GetNodeInfoResponse.lowest_available_checkpoint` to see the lowest
+  // checkpoint for which historical checkpoint data is available.
+  rpc GetCheckpoint(GetCheckpointRequest) returns (GetCheckpointResponse);
+
+  // Request information for the entirety of the specified checkpoint.
+  //
+  // Use this API to request information about a checkpoint either by
+  // its digest or its sequence number (height). In particular, you can use
+  // this API to request information about all the transactions included in a
+  // checkpoint, as well as their input and output objects.
+  //
+  // Due to storage limitations, implementers of this service might prune older
+  // historical data, which can limit the data availability of this API. To
+  // determine the data availability range for historical checkpoints,
+  // clients can look at `GetNodeInfoResponse.lowest_available_checkpoint`
+  // to see the lowest checkpoint for which historical
+  // checkpoint/transaction data is available and
+  // `GetNodeInfoResponse.lowest_available_checkpoint_objects` for which
+  // historical object data is available.
+  rpc GetFullCheckpoint(GetFullCheckpointRequest) returns (GetFullCheckpointResponse);
+
+  // Request that the provided transaction be relayed to the validator set for
+  // execution and inclusion in the blockchain.
+  rpc ExecuteTransaction(ExecuteTransactionRequest) returns (ExecuteTransactionResponse);
+}
+
+// Request message for `NodeService.GetNodeInfo`.
+message GetNodeInfoRequest {}
+
+// Response message for `NodeService.GetNodeInfo`.
+message GetNodeInfoResponse {
+  // The chain identifier of the chain that this node is on.
+  //
+  // The chain identifier is the digest of the genesis checkpoint, the
+  // checkpoint with sequence number 0.
+  optional sui.types.Digest chain_id = 1;
+
+  // Human-readable name of the chain that this node is on.
+  //
+  // This is intended to be a human-readable name like `mainnet`, `testnet`, and so on.
+  optional string chain = 2;
+
+  // Current epoch of the node based on its highest executed checkpoint.
+  optional uint64 epoch = 3;
+
+  // Checkpoint height of the most recently executed checkpoint.
+  optional uint64 checkpoint_height = 4;
+
+  // Unix timestamp of the most recently executed checkpoint.
+  optional google.protobuf.Timestamp timestamp = 5;
+
+  // The lowest checkpoint for which checkpoints and transaction data are available.
+  optional uint64 lowest_available_checkpoint = 6;
+
+  // The lowest checkpoint for which object data is available.
+  optional uint64 lowest_available_checkpoint_objects = 7;
+
+  // Software version of the `sui-node` binary.
+  optional string software_version = 8;
+}
+
+// Request message for NodeService.GetCommittee.
+message GetCommitteeRequest {
+  // Optional. Request the sui.types.ValidatorCommittee corresponding to the
+  // provided epoch. If no epoch is provided the committee for the current
+  // epoch will be returned.
+  optional uint64 epoch = 1;
+}
+
+// Response message for `NodeService.GetCommittee`.
+message GetCommitteeResponse {
+  // The committee of either the requested epoch or the current epoch.
+  optional sui.types.ValidatorCommittee committee = 1;
+}
+
+// Request message for `NodeService.GetTransaction`.
+message GetTransactionRequest {
+  // Required. The digest of the requested transaction.
+  optional sui.types.Digest digest = 1;
+
+  // DEPRECATED To be removed in the next release
+  optional GetTransactionOptions options = 3;
+  // Optional. Mask for specifying which parts of the `GetTransactionResponse`
+  // should be returned.
+  optional google.protobuf.FieldMask read_mask = 4;
+}
+
+// DEPRECATED To be removed in the next release
+message GetTransactionOptions {
+  // Include the `sui.types.Transaction` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool transaction = 1;
+  // Include the transaction formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool transaction_bcs = 2;
+  // Include the set of `sui.types.UserSignature`s in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool signatures = 3;
+  // Include the set of `UserSignature`s encoded as bytes in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool signatures_bytes = 8;
+  // Include the `sui.types.TransactionEffects` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool effects = 4;
+  // Include the `TransactionEffects` formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool effects_bcs = 5;
+  // Include the `sui.types.TransactionEvents` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool events = 6;
+  // Include the `TransactionEvents` formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool events_bcs = 7;
+}
+
+// Response message for `NodeService.GetTransactio`n.
+message GetTransactionResponse {
+  // The digest of this [Transaction](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html).
+  optional sui.types.Digest digest = 1;
+
+  // Optional. The transaction itself.
+  optional sui.types.Transaction transaction = 2;
+
+  // Optional. The
+  // [Transaction](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html)
+  // encoded as BCS bytes.
+  optional sui.types.Bcs transaction_bcs = 3;
+
+  // Optional. List of user signatures that are used to authorize the
+  // execution of this transaction.
+  repeated sui.types.UserSignature signatures = 4;
+
+  // Optional. List of
+  // [UserSignature](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.UserSignature.html)s
+  // encoded as bytes.
+  repeated bytes signatures_bytes = 11;
+
+  // Optional. The `TransactionEffects` for this transaction.
+  optional sui.types.TransactionEffects effects = 5;
+
+  // Optional. The
+  // [TransactionEffects](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html)
+  // for this transaction encoded as BCS bytes.
+  optional sui.types.Bcs effects_bcs = 6;
+
+  // Optional. The `TransactionEvents` for this transaction.
+  //
+  // This field might be empty, even if it was explicitly requested, if the
+  // transaction didn't produce any events.
+  // `sui.types.TransactionEffects.events_digest` is populated if the
+  // transaction produced any events.
+  optional sui.types.TransactionEvents events = 7;
+
+  // Optional. The
+  // [TransactionEvents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html)
+  // for this transaction encoded as BCS bytes.
+  optional sui.types.Bcs events_bcs = 8;
+
+  // The sequence number for the checkpoint that includes this transaction.
+  optional uint64 checkpoint = 9;
+
+  // The Unix timestamp of the checkpoint that includes this transaction.
+  optional google.protobuf.Timestamp timestamp = 10;
+}
+
+// Request message for `NodeService.GetObject`.
+message GetObjectRequest {
+  // Required. The `ObjectId` of the requested object.
+  optional sui.types.ObjectId object_id = 1;
+
+  // Optional. Request that a specific version of the requested object is
+  // returned. If no version is provided, then then the latest version for
+  // the object is returned.
+  optional uint64 version = 2;
+
+  // DEPRECATED To be removed in the next release
+  optional GetObjectOptions options = 3;
+  // Optional. Mask for specifying which parts of the `GetObjectResponse`
+  // should be returned.
+  optional google.protobuf.FieldMask read_mask = 4;
+}
+
+// DEPRECATED To be removed in the next release
+message GetObjectOptions {
+  // Include the `sui.types.Object` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool object = 1;
+
+  // Include the object formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool object_bcs = 2;
+}
+
+// Response message for `NodeService.GetObject`.
+message GetObjectResponse {
+  // The `ObjectId` of this object.
+  optional sui.types.ObjectId object_id = 1;
+
+  // The version of this object.
+  optional uint64 version = 2;
+
+  // The digest of this object.
+  optional sui.types.Digest digest = 3;
+
+  // Optional. The object itself.
+  optional sui.types.Object object = 4;
+
+  // Optional. The
+  // [Object](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Object.html)
+  // encoded as BCS bytes.
+  optional sui.types.Bcs object_bcs = 5;
+}
+
+// Request message for `NodeService.GetCheckpoint`.
+//
+// At most, provide one of `sequence_number` or `digest`. An error is
+// returned if you attempt to provide both. If you provide neither, the service
+// returns the latest executed checkpoint.
+message GetCheckpointRequest {
+  // Optional. The sequence number of the requested checkpoint.
+  optional uint64 sequence_number = 1;
+
+  // Optional. The digest of the requested checkpoint.
+  optional sui.types.Digest digest = 2;
+
+  // DEPRECATED To be removed in the next release
+  optional GetCheckpointOptions options = 3;
+  // Optional. Mask for specifying which parts of the `GetCheckpointResponse`
+  // should be returned.
+  optional google.protobuf.FieldMask read_mask = 4;
+}
+
+// DEPRECATED To be removed in the next release
+message GetCheckpointOptions {
+  // Include the `sui.types.CheckpointSummary` in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool summary = 3;
+
+  // Include the `CheckpointSummary` formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool summary_bcs = 4;
+
+  // Include the `sui.types.ValidatorAggregatedSignature` in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool signature = 5;
+
+  // Include the `sui.types.CheckpointContents` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool contents = 6;
+
+  // Include the `CheckpointContents` formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool contents_bcs = 7;
+}
+
+// Response message for `NodeService.GetCheckpoint`.
+message GetCheckpointResponse {
+  // The sequence number of this checkpoint.
+  optional uint64 sequence_number = 1;
+
+  // The digest of this checkpoint's `CheckpointSummary`.
+  optional sui.types.Digest digest = 2;
+
+  // Optional. The `CheckpointSummary` for this checkpoint.
+  optional sui.types.CheckpointSummary summary = 3;
+
+  // Optional. The
+  // [CheckpointSummary](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointSummary.html)
+  // for this checkpoint encoded as BCS bytes.
+  optional sui.types.Bcs summary_bcs = 4;
+
+  // Optional. An aggregated quorum signature from the validator committee that
+  // certifies this checkpoint.
+  optional sui.types.ValidatorAggregatedSignature signature = 5;
+
+  // Optional. The `CheckpointContents` for this checkpoint.
+  optional sui.types.CheckpointContents contents = 6;
+
+  // Optional. The
+  // [CheckpointContents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointContents.html)
+  // for this checkpoint encoded as BCS bytes.
+  optional sui.types.Bcs contents_bcs = 7;
+}
+
+// Request message for `NodeService.GetFullCheckpoint`.
+//
+// At most, provide one of `sequence_number` or `digest`. An error is
+// returned if you provide both. If you provide neither, the service
+// returns the latest executed checkpoint.
+message GetFullCheckpointRequest {
+  // Optional. The sequence number of the requested checkpoint.
+  optional uint64 sequence_number = 1;
+
+  // Optional. The digest of the requested checkpoint.
+  optional sui.types.Digest digest = 2;
+
+  // DEPRECATED To be removed in the next release
+  optional GetFullCheckpointOptions options = 3;
+  // Optional. Mask for specifying which parts of the `GetFullCheckpointResponse`
+  // should be returned.
+  optional google.protobuf.FieldMask read_mask = 4;
+}
+
+// DEPRECATED To be removed in the next release
+message GetFullCheckpointOptions {
+  // Include the `sui.types.CheckpointSummary` in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool summary = 3;
+
+  // Include the `CheckpointSummary` formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool summary_bcs = 4;
+
+  // Include the `sui.types.ValidatorAggregatedSignature` in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool signature = 5;
+
+  // Include the `sui.types.CheckpointContents` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool contents = 6;
+
+  // Include the `CheckpointContents` formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool contents_bcs = 7;
+
+  // Include the `sui.types.Transaction` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool transaction = 8;
+
+  // Include the transaction formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool transaction_bcs = 9;
+
+  // Include the `sui.types.TransactionEffects` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool effects = 10;
+
+  // Include the `TransactionEffects` formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool effects_bcs = 11;
+
+  // Include the `sui.types.TransactionEvents` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool events = 12;
+
+  // Include the `TransactionEvents` formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool events_bcs = 13;
+
+  // Include the input objects for transactions in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool input_objects = 14;
+
+  // Include the output objects for transactions in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool output_objects = 15;
+
+  // Include the `sui.types.Object` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool object = 16;
+
+  // Include the object formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool object_bcs = 17;
+}
+
+// Response message for `NodeService.GetFullCheckpoint`.
+message GetFullCheckpointResponse {
+  // The sequence number of this checkpoint.
+  optional uint64 sequence_number = 1;
+  // The digest of this checkpoint's `CheckpointSummary`.
+  optional sui.types.Digest digest = 2;
+
+  // Optional. The `CheckpointSummary` for this checkpoint.
+  optional sui.types.CheckpointSummary summary = 3;
+
+  // Optional. The
+  // [CheckpointSummary](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointSummary.html)
+  // for this checkpoint encoded as BCS bytes.
+  optional sui.types.Bcs summary_bcs = 4;
+
+  // Optional. An aggregated quorum signature from the validator committee that
+  // certifies this checkpoint.
+  optional sui.types.ValidatorAggregatedSignature signature = 5;
+
+  // Optional. The `CheckpointContents` for this checkpoint.
+  optional sui.types.CheckpointContents contents = 6;
+
+  // Optional. The
+  // [CheckpointContents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointContents.html)
+  // for this checkpoint encoded as BCS bytes.
+  optional sui.types.Bcs contents_bcs = 7;
+
+  // List of transactions included in this checkpoint.
+  repeated FullCheckpointTransaction transactions = 8;
+}
+
+// A transaction, with all of its inputs and outputs.
+message FullCheckpointTransaction {
+  // The digest of this transaction.
+  optional sui.types.Digest digest = 1;
+
+  // Optional. The transaction itself.
+  optional sui.types.Transaction transaction = 2;
+
+  // Optional. The
+  // [Transaction](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html)
+  // encoded as BCS bytes.
+  optional sui.types.Bcs transaction_bcs = 3;
+
+  // Optional. The `TransactionEffects` for this transaction.
+  optional sui.types.TransactionEffects effects = 5;
+
+  // Optional. The
+  // [TransactionEffects](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html)
+  // for this transaction encoded as BCS bytes.
+  optional sui.types.Bcs effects_bcs = 6;
+
+  // Optional. The `TransactionEvents` for this transaction.
+  //
+  // This field might be empty, even if it was explicitly requested, if the
+  // transaction didn't produce any events.
+  // `sui.types.TransactionEffects.events_digest` is populated if the
+  // transaction produced any events.
+  optional sui.types.TransactionEvents events = 7;
+
+  // Optional. The
+  // [TransactionEvents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html)
+  // for this transaction encoded as BCS bytes.
+  optional sui.types.Bcs events_bcs = 8;
+
+  // DEPRECATED To be removed in the next release
+  optional FullCheckpointObjects input_objects_old = 11;
+
+  // DEPRECATED To be removed in the next release
+  optional FullCheckpointObjects output_objects_old = 12;
+
+  // Optional. Set of input objects used during the execution of this transaction.
+  repeated FullCheckpointObject input_objects = 13;
+
+  // Optional. Set of output objects produced from the execution of this transaction.
+  repeated FullCheckpointObject output_objects = 14;
+}
+
+// Set of objects used by or produced from a transaction.
+// TODO remove next release
+message FullCheckpointObjects {
+  repeated FullCheckpointObject objects = 1;
+}
+
+// An object used by or produced from a transaction.
+message FullCheckpointObject {
+  // The `ObjectId` of this object.
+  optional sui.types.ObjectId object_id = 1;
+
+  // The version of this object.
+  optional uint64 version = 2;
+
+  // The digest of this object.
+  optional sui.types.Digest digest = 3;
+
+  // Optional. The object itself.
+  optional sui.types.Object object = 4;
+
+  // Optional. The
+  // [object](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Object.html)
+  // encoded as BCS bytes.
+  optional sui.types.Bcs object_bcs = 5;
+}
+
+// Request message for `NodeService.ExecuteTransaction`.
+//
+// Note: You must provide only one of `transaction` or `transaction_bcs`.
+message ExecuteTransactionRequest {
+  // Optional. The transaction to execute.
+  optional sui.types.Transaction transaction = 1;
+
+  // Optional. The transaction to execute, encoded as BCS bytes.
+  optional sui.types.Bcs transaction_bcs = 2;
+
+  // Optional. Set of `UserSiganture`s authorizing the execution of the provided
+  // transaction.
+  repeated sui.types.UserSignature signatures = 3;
+
+  // Optional. Set of `UserSiganture`s authorizing the execution of the provided
+  // transaction, encoded as bytes.
+  repeated bytes signatures_bytes = 4;
+
+  // DEPRECATED To be removed in the next release
+  optional ExecuteTransactionOptions options = 5;
+  // Optional. Mask for specifying which parts of the
+  // `ExecuteTransactionResponse` should be returned.
+  optional google.protobuf.FieldMask read_mask = 6;
+}
+
+// DEPRECATED To be removed in the next release
+message ExecuteTransactionOptions {
+  // Include the `sui.types.TransactionEffects` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool effects = 4;
+
+  // Include the `TransactionEffects` formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool effects_bcs = 5;
+
+  // Include the `sui.types.TransactionEvents` message in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool events = 6;
+
+  // Include the `TransactionEvents` formatted as BCS in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool events_bcs = 7;
+
+  // Include the `BalanceChange`s in the response.
+  //
+  // Defaults to `false` if not included.
+  optional bool balance_changes = 8;
+}
+
+// Response message for `NodeService.ExecuteTransaction`.
+message ExecuteTransactionResponse {
+  // Indicates the finality of the executed transaction.
+  optional EffectsFinality finality = 1;
+
+  // Optional. The `TransactionEffects` for this transaction.
+  optional sui.types.TransactionEffects effects = 2;
+
+  // Optional. The
+  // [TransactionEffects](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html)
+  // for this transaction encoded as BCS bytes.
+  optional sui.types.Bcs effects_bcs = 3;
+
+  // Optional. The `TransactionEvents` for this transaction.
+  //
+  // This field might be empty, even if it was explicitly requested, if the
+  // transaction didn't produce any events.
+  // `sui.types.TransactionEffects.events_digest` is populated if the
+  // transaction produced any events.
+  optional sui.types.TransactionEvents events = 4;
+
+  // Optional. The
+  // [TransactionEvents](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html)
+  // for this transaction encoded as BCS bytes.
+  optional sui.types.Bcs events_bcs = 5;
+
+  // Optional. Set of balance change events as a result of this transaction.
+  //
+  // This set of events are calculated by analyzing all input and output `Coin`
+  // type objects.
+  repeated BalanceChange balance_changes = 6;
+}
+
+// The delta, or change, in balance for an address for a particular `Coin` type.
+message BalanceChange {
+  // The account address that is affected by this balance change event.
+  optional sui.types.Address address = 1;
+
+  // The `Coin` type of this balance change event.
+  optional sui.types.TypeTag coin_type = 2;
+
+  // The amount or change in balance.
+  optional sui.types.I128 amount = 3;
+}
+
+// Indicates the finality of the executed transaction.
+message EffectsFinality {
+  oneof finality {
+    // A quorum certificate certifying that a transaction is final but might not
+    // be included in a checkpoint yet.
+    sui.types.ValidatorAggregatedSignature certified = 1;
+
+    // Sequence number of the checkpoint that includes the transaction.
+    uint64 checkpointed = 2;
+
+    // Indicates that a quorum of validators has executed the transaction but
+    // that it might not be included in a checkpoint yet.
+    google.protobuf.Empty quorum_executed = 3;
+  }
+}

@@ -49,6 +49,7 @@ fn publish_package_and_initialize() {
         vec![],
         Vec::<Vec<u8>>::new(),
         &mut UnmeteredGasMeter,
+        None,
     )
     .expect("Executed initialize function");
     adapter
@@ -76,6 +77,7 @@ fn publish_package_and_abort_initialize() {
         vec![],
         Vec::<Vec<u8>>::new(),
         &mut UnmeteredGasMeter,
+        None,
     )
     .expect_err("Executed initialize function that should have aborted");
 }

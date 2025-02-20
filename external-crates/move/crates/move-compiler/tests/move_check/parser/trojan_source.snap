@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01001]: invalid character
+  ┌─ tests/move_check/parser/trojan_source.move:3:24
+  │
+3 │         agent == b"user‮ ⁦// Check if user⁩ ⁦"
+  │                         Invalid character '\u{202e}' found when reading file. For ASCII, only printable characters (tabs '\t', lf '\n' and crlf '\r'+'\n') are permitted. Unicode can be used in comments and string literals, excluding certain control characters.

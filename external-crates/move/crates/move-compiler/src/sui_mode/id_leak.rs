@@ -14,9 +14,9 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
     editions::Flavor,
-    expansion::ast::{ModuleIdent, TargetKind},
+    expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
-    parser::ast::Ability_,
+    parser::ast::{Ability_, TargetKind},
     shared::{program_info::TypingProgramInfo, Identifier},
     sui_mode::{
         AUTHENTICATOR_STATE_CREATE, AUTHENTICATOR_STATE_MODULE_NAME, BRIDGE_ADDR_VALUE,

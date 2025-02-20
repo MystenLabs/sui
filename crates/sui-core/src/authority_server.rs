@@ -44,12 +44,11 @@ use sui_types::{
     },
 };
 use tap::TapFallible;
-use tokio::task::JoinHandle;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{error, error_span, info, Instrument};
 
 use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore,
+    authority::authority_per_epoch_store::AuthorityPerEpochStore, checkpoints::CheckpointStore,
     mysticeti_adapter::LazyMysticetiClient,
 };
 use crate::{
@@ -72,32 +71,22 @@ use tonic::transport::server::TcpConnectInfo;
 mod server_tests;
 
 pub struct AuthorityServerHandle {
-    tx_cancellation: tokio::sync::oneshot::Sender<()>,
-    local_addr: Multiaddr,
-    handle: JoinHandle<Result<(), tonic::transport::Error>>,
+    server_handle: mysten_network::server::Server,
 }
 
 impl AuthorityServerHandle {
     pub async fn join(self) -> Result<(), io::Error> {
-        // Note that dropping `self.complete` would terminate the server.
-        self.handle
-            .await?
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        self.server_handle.handle().wait_for_shutdown().await;
         Ok(())
     }
 
     pub async fn kill(self) -> Result<(), io::Error> {
-        self.tx_cancellation.send(()).map_err(|_e| {
-            io::Error::new(io::ErrorKind::Other, "could not send cancellation signal!")
-        })?;
-        self.handle
-            .await?
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        self.server_handle.handle().shutdown().await;
         Ok(())
     }
 
     pub fn address(&self) -> &Multiaddr {
-        &self.local_addr
+        self.server_handle.local_addr()
     }
 }
 
@@ -127,6 +116,7 @@ impl AuthorityServer {
     pub fn new_for_test(state: Arc<AuthorityState>) -> Self {
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(LazyMysticetiClient::new()),
+            CheckpointStore::new_for_tests(),
             state.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
@@ -151,9 +141,8 @@ impl AuthorityServer {
         let tls_config = sui_tls::create_rustls_server_config(
             self.state.config.network_key_pair().copy().private(),
             SUI_TLS_SERVER_NAME.to_string(),
-            sui_tls::AllowAll,
         );
-        let mut server = mysten_network::config::Config::new()
+        let server = mysten_network::config::Config::new()
             .server_builder()
             .add_service(ValidatorServer::new(ValidatorService::new_for_tests(
                 self.state,
@@ -166,9 +155,7 @@ impl AuthorityServer {
         let local_addr = server.local_addr().to_owned();
         info!("Listening to traffic on {local_addr}");
         let handle = AuthorityServerHandle {
-            tx_cancellation: server.take_cancel_handle().unwrap(),
-            local_addr,
-            handle: spawn_monitored_task!(server.serve()),
+            server_handle: server,
         };
         Ok(handle)
     }
@@ -426,7 +413,7 @@ impl ValidatorService {
     }
 
     // When making changes to this function, see if the changes should be applied to
-    // `handle_transaction_v2()` and `SuiTxValidator::vote_transaction()` as well.
+    // `Self::handle_transaction_v2()` and `SuiTxValidator::vote_transaction()` as well.
     async fn handle_transaction(
         &self,
         request: tonic::Request<Transaction>,
@@ -547,20 +534,19 @@ impl ValidatorService {
 
         let _handle_tx_metrics_guard = metrics.handle_transaction_v2_latency.start_timer();
 
-        let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
-        let transaction = epoch_store.verify_transaction(transaction).tap_err(|_| {
-            metrics.signature_errors.inc();
-        })?;
-        drop(tx_verif_metrics_guard);
+        let transaction = {
+            let _metrics_guard = metrics.tx_verification_latency.start_timer();
+            epoch_store.verify_transaction(transaction).tap_err(|_| {
+                metrics.signature_errors.inc();
+            })?
+        };
 
         // Enable Trace Propagation across spans/processes using tx_digest
         let tx_digest = transaction.digest();
-        let span = error_span!("validator_state_process_tx_v2", ?tx_digest);
+        let _span = error_span!("validator_state_handle_tx_v2", ?tx_digest);
 
         let tx_output = state
-            .handle_transaction_v2(&epoch_store, transaction.clone())
-            .instrument(span)
-            .await
+            .handle_vote_transaction(&epoch_store, transaction.clone())
             .tap_err(|e| {
                 if let SuiError::ValidatorHaltedAtEpochEnd = e {
                     metrics.num_rejected_tx_in_epoch_boundary.inc();

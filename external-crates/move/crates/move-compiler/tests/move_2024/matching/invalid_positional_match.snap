@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/matching/invalid_positional_match.move:9:13
+  │
+9 │             Entry::One => ()
+  │             ^^^^^^^^^^ Missing pattern for field '0' in '0x42::m::Entry::One'

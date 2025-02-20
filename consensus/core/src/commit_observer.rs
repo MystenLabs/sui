@@ -53,8 +53,12 @@ impl CommitObserver {
         leader_schedule: Arc<LeaderSchedule>,
     ) -> Self {
         let mut observer = Self {
+            commit_interpreter: Linearizer::new(
+                context.clone(),
+                dag_state.clone(),
+                leader_schedule.clone(),
+            ),
             context,
-            commit_interpreter: Linearizer::new(dag_state.clone(), leader_schedule.clone()),
             sender: commit_consumer.commit_sender,
             store,
             leader_schedule,

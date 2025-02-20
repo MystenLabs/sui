@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package sui.types;
+
+// Flag use to disambiguate the signature schemes supported by Sui.
+//
+// Note: the enum values defined by this proto message exactly match their
+// expected BCS serialized values when serialized as a u8. See
+// [enum.SignatureScheme](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/enum.SignatureScheme.html)
+// for more information about signature schemes.
+enum SignatureScheme {
+  ED25519 = 0;
+  SECP256K1 = 1;
+  SECP256R1 = 2;
+  MULTISIG = 3;
+  BLS12381 = 4;
+  ZKLOGIN = 5;
+  PASSKEY = 6;
+}

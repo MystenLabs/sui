@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/parser/top_level_module_address_invalid.move:1:1
+  │
+1 │ address a {
+  │ ^^^^^^^ 'address' blocks are deprecated. Use addresses directly in module definitions instead.
+2 │     module m;
+  │            - Replace with 'a::m'
+
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_2024/parser/top_level_module_address_invalid.move:2:12
+  │
+2 │     module m;
+  │            ^ Cannot define 'module' label in address block

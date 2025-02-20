@@ -1937,6 +1937,7 @@ impl DeprecatedNominalResourceFlag {
 }
 #[rustfmt::skip]
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 #[repr(u8)]
 enum DeprecatedKind {
     ALL                     = 0x1,

@@ -19,7 +19,7 @@ pub use sui_indexer::config::SnapshotLagConfig;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::store::PgIndexerStore;
 use sui_indexer::test_utils::start_indexer_writer_for_testing_with_mvr_mode;
-use sui_pg_temp_db::{get_available_port, TempDb};
+use sui_pg_db::temp::{get_available_port, TempDb};
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_types::storage::RpcStateReader;
 use tempfile::tempdir;
@@ -32,7 +32,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 const VALIDATOR_COUNT: usize = 4;
-const EPOCH_DURATION_MS: u64 = 10000;
+/// Set default epoch duration to 300s. This high value is to turn the TestCluster into a lockstep
+/// network of sorts. Tests should call `trigger_reconfiguration` to advance the network's epoch.
+const EPOCH_DURATION_MS: u64 = 300_000;
 
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;

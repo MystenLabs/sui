@@ -46,6 +46,8 @@ pub const SOURCE_MAP_EXTENSION: &str = "mvsm";
 pub const MOVE_ERROR_DESC_EXTENSION: &str = "errmap";
 /// Extension for coverage maps
 pub const MOVE_COVERAGE_MAP_EXTENSION: &str = "mvcov";
+/// Extension for disassembled Move bytecode files
+pub const MOVE_BYTECODE_EXTENSION: &str = "mvb";
 
 /// Determine if the path at `path` exists distinguishing between whether the path did not exist,
 /// or if there were other errors in determining if the path existed.

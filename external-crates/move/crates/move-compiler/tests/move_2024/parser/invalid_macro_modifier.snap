@@ -1,0 +1,46 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/invalid_macro_modifier.move:2:5
+  │
+2 │     macro const X: u64 = 0;
+  │     ^^^^^ Invalid constant declaration. 'macro' is used only on functions
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/invalid_macro_modifier.move:3:5
+  │
+3 │     macro public struct S()
+  │     ^^^^^ Invalid struct declaration. 'macro' is used only on functions
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/invalid_macro_modifier.move:4:5
+  │
+4 │     macro use a::m as n;
+  │     ^^^^^ Invalid use declaration. 'macro' is used only on functions
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/parser/invalid_macro_modifier.move:4:23
+  │
+4 │     macro use a::m as n;
+  │                       ^ Unused 'use' of alias 'n'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/invalid_macro_modifier.move:5:5
+  │
+5 │     macro use fun foo as S.bar;
+  │     ^^^^^ Invalid use declaration. 'macro' is used only on functions
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/parser/invalid_macro_modifier.move:5:5
+  │
+5 │     macro use fun foo as S.bar;
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unused 'use fun' of 'a::m::S.bar'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

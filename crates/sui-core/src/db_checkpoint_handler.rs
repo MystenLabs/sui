@@ -20,13 +20,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
-use sui_storage::mutex_table::RwLockTable;
 use sui_storage::object_store::util::{
     copy_recursively, find_all_dirs_with_epoch_prefix, find_missing_epochs_dirs,
     path_to_filesystem, put, run_manifest_update_loop, write_snapshot_manifest,
 };
 use tracing::{debug, error, info};
-use typed_store::rocks::MetricConf;
 
 pub const SUCCESS_MARKER: &str = "_SUCCESS";
 pub const TEST_MARKER: &str = "_TEST";
@@ -71,8 +69,6 @@ pub struct DBCheckpointHandler {
     gc_markers: Vec<String>,
     /// Boolean flag to enable/disable object pruning and manual compaction before upload
     prune_and_compact_before_upload: bool,
-    /// Indirect object config for pruner
-    indirect_objects_threshold: usize,
     /// If true, upload will block on state snapshot upload completed marker
     state_snapshot_enabled: bool,
     /// Pruning objects
@@ -86,7 +82,6 @@ impl DBCheckpointHandler {
         output_object_store_config: Option<&ObjectStoreConfig>,
         interval_s: u64,
         prune_and_compact_before_upload: bool,
-        indirect_objects_threshold: usize,
         pruning_config: AuthorityStorePruningConfig,
         registry: &Registry,
         state_snapshot_enabled: bool,
@@ -108,7 +103,6 @@ impl DBCheckpointHandler {
             interval: Duration::from_secs(interval_s),
             gc_markers,
             prune_and_compact_before_upload,
-            indirect_objects_threshold,
             state_snapshot_enabled,
             pruning_config,
             metrics: DBCheckpointMetrics::new(registry),
@@ -133,7 +127,6 @@ impl DBCheckpointHandler {
             interval: Duration::from_secs(interval_s),
             gc_markers: vec![UPLOAD_COMPLETED_MARKER.to_string(), TEST_MARKER.to_string()],
             prune_and_compact_before_upload,
-            indirect_objects_threshold: 0,
             state_snapshot_enabled,
             pruning_config: AuthorityStorePruningConfig::default(),
             metrics: DBCheckpointMetrics::new(&Registry::default()),
@@ -257,15 +250,11 @@ impl DBCheckpointHandler {
         epoch_duration_ms: u64,
     ) -> Result<()> {
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
-        let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
-            db_path.join("checkpoints"),
-            MetricConf::new("db_checkpoint"),
-            None,
-            None,
+        let checkpoint_store = Arc::new(CheckpointStore::new_for_db_checkpoint_handler(
+            &db_path.join("checkpoints"),
         ));
         let rpc_index = RpcIndexStore::new_without_init(&db_path);
         let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
-        let lock_table = Arc::new(RwLockTable::new(1));
         info!(
             "Pruning db checkpoint in {:?} for epoch: {epoch}",
             db_path.display()
@@ -274,10 +263,9 @@ impl DBCheckpointHandler {
             &perpetual_db,
             &checkpoint_store,
             Some(&rpc_index),
-            &lock_table,
+            None,
             self.pruning_config.clone(),
             metrics,
-            self.indirect_objects_threshold,
             epoch_duration_ms,
         )
         .await?;

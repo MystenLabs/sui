@@ -57,6 +57,7 @@ impl SingleValidator {
                 Arc::downgrade(&validator),
                 consensus_mode,
             )),
+            validator.checkpoint_store.clone(),
             validator.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
@@ -132,7 +133,6 @@ impl SingleValidator {
                 transaction.data().intent_message().value.clone(),
                 *transaction.digest(),
             )
-            .await
             .unwrap()
             .2;
         assert!(effects.status().is_ok());
@@ -192,7 +192,7 @@ impl SingleValidator {
     ) -> TransactionEffects {
         let input_objects = transaction.transaction_data().input_objects().unwrap();
         let objects = store
-            .read_objects_for_execution(&*self.epoch_store, &transaction.key(), &input_objects)
+            .read_objects_for_execution(&self.epoch_store, &transaction.key(), &input_objects)
             .unwrap();
 
         let executable = VerifiedExecutableTransaction::new_from_certificate(
@@ -206,7 +206,7 @@ impl SingleValidator {
         )
         .unwrap();
         let (kind, signer, gas) = executable.transaction_data().execution_parts();
-        let (inner_temp_store, _, effects, _) =
+        let (inner_temp_store, _, effects, _timings, _) =
             self.epoch_store.executor().execute_transaction_to_effects(
                 &store,
                 self.epoch_store.protocol_config(),
@@ -221,6 +221,7 @@ impl SingleValidator {
                 kind,
                 signer,
                 *executable.digest(),
+                &mut None,
             );
         assert!(effects.status().is_ok());
         store.commit_objects(inner_temp_store);
@@ -277,7 +278,6 @@ impl SingleValidator {
             validator.clone(),
             Arc::new(StateAccumulator::new_for_tests(
                 validator.get_accumulator_store().clone(),
-                self.get_epoch_store(),
             )),
         );
         (checkpoint_executor, ckpt_sender)
@@ -313,7 +313,6 @@ impl SingleValidator {
                 self.get_validator().get_object_cache_reader().as_ref(),
                 &transactions,
             )
-            .await
             .unwrap();
     }
 }

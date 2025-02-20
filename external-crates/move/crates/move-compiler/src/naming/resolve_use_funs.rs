@@ -5,7 +5,7 @@ use crate::diagnostics::warning_filters::WarningFilters;
 use crate::diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics};
 use crate::expansion::ast::{self as E, ModuleIdent};
 use crate::naming::ast as N;
-use crate::parser::ast::{FunctionName, Visibility};
+use crate::parser::ast::{DocComment, FunctionName, Visibility};
 use crate::shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *};
 use crate::typing::core;
 use crate::{diag, ice};
@@ -230,6 +230,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             }
         };
         let nuf = N::UseFun {
+            doc: DocComment::empty(),
             loc,
             attributes,
             is_public,

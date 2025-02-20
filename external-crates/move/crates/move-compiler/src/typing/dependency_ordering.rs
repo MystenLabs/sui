@@ -287,14 +287,18 @@ fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
 
 fn struct_def(context: &mut Context, sdef: &N::StructDefinition) {
     if let N::StructFields::Defined(_, fields) = &sdef.fields {
-        fields.iter().for_each(|(_, _, (_, bt))| type_(context, bt));
+        fields
+            .iter()
+            .for_each(|(_, _, (_, (_, bt)))| type_(context, bt));
     }
 }
 
 fn enum_def(context: &mut Context, edef: &N::EnumDefinition) {
     for (_, _, variant) in &edef.variants {
         if let N::VariantFields::Defined(_, fields) = &variant.fields {
-            fields.iter().for_each(|(_, _, (_, bt))| type_(context, bt));
+            fields
+                .iter()
+                .for_each(|(_, _, (_, (_, bt)))| type_(context, bt));
         }
     }
 }

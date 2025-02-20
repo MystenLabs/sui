@@ -1,0 +1,50 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:9:13
+  │
+9 │         01u8::X::bar()
+  │             ^^
+  │             │
+  │             Unexpected '::'
+  │             Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:13:14
+   │
+13 │         false::X::bar()
+   │              ^^
+   │              │
+   │              Unexpected '::'
+   │              Expected ';'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:17:9
+   │
+17 │         foo().bar().X::bar()
+   │         ^^^^^^^^^^^ Method syntax is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04023]: invalid method call
+   ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:17:9
+   │
+ 8 │     fun foo() {
+   │         --- Method calls are only supported on single types. Got an expression of type: '()'
+   ·
+17 │         foo().bar().X::bar()
+   │         ^^^^^^^^^^^ Invalid method call
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:17:22
+   │
+17 │         foo().bar().X::bar()
+   │                      ^^
+   │                      │
+   │                      Unexpected '::'
+   │                      Expected ';'

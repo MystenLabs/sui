@@ -40,6 +40,8 @@ pub struct VMConfig {
     /// Maximal nodes which are allowed when converting to layout. This includes the types of
     /// fields for struct types.
     pub max_type_to_layout_nodes: Option<u64>,
+    /// Count variants as nodes.
+    pub variant_nodes: bool,
     /// Enable or disable bytecode optimization passes while caching bytecode in the Move Runtime.
     pub optimize_bytecode: bool,
 }
@@ -57,6 +59,7 @@ impl Default for VMConfig {
             binary_config: BinaryConfig::with_extraneous_bytes_check(false),
             rethrow_serialization_type_layout_errors: false,
             max_type_to_layout_nodes: Some(512),
+            variant_nodes: true,
             // FIXME FIXME FIXME
             // FEATURE GATE THIS AFTER GAS BLOCKS
             // FIXME FIXME FIXME

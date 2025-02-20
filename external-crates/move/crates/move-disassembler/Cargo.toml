@@ -19,6 +19,7 @@ move-binary-format.workspace = true
 move-coverage.workspace = true
 move-compiler.workspace = true
 move-abstract-interpreter.workspace = true
+move-symbol-pool.workspace = true
 
 bcs.workspace = true
 clap.workspace = true

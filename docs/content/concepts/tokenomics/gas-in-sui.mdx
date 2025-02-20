@@ -9,7 +9,7 @@ A Sui transaction must pay for both the computational cost of execution and the 
 
 While computation and storage fees are separate, they are conceptually similar in that they each translate computation or storage into SUI terms by multiplying computation or storage units by the relevant price.
 
-Finally, Sui [Storage mechanics](storage-fund.mdx#storage-fund-rewards) provide storage fee rebates whenever a transaction deletes previously stored objects. Hence, the net fees that a user pays equals gas fees minus the rebates associated with data deletion:
+Finally, Sui storage mechanics provide storage fee rebates whenever a transaction deletes previously stored objects. Hence, the net fees that a user pays equals gas fees minus the rebates associated with data deletion:
 
 `net_gas_fees = computation_gas_fee + storage_gas_fee - storage_rebate`
 
@@ -56,7 +56,7 @@ Using coarse bucketing accomplishes two important goals:
 
 Similarly, Sui transactions vary depending on the amount of new data written into on-chain storage. The variable storage units capture these differences by mapping the amount of bytes held in storage into storage units. The current Sui schedule is linear and maps each byte into 100 storage units. So, for example, a transaction that stores 25 bytes costs 2,500 storage units, while a transaction that stores 75 bytes costs 7,500 units.
 
-Importantly, in the Sui [Storage Fund](storage-fund.mdx) model users pay up front for the cost of storing data in perpetuity but can also get a partial rebate on previously stored data, if that data is deleted. Hence, the amount of storage fees that you pay can be split into a rebateable and non-rebateable amount. Initially, the rebateable amount equals 99% of the storage fees, while the non-rebateable amount equals the remaining 1%.
+Importantly, in the Sui [storage fund](../tokenomics.mdx#storage-fund) model users pay up front for the cost of storing data in perpetuity but can also get a partial rebate on previously stored data, if that data is deleted. Hence, the amount of storage fees that you pay can be split into a rebateable and non-rebateable amount. Initially, the rebateable amount equals 99% of the storage fees, while the non-rebateable amount equals the remaining 1%.
 
 ### Gas budgets {#gas-budgets}
 

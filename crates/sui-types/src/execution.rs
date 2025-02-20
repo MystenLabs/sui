@@ -8,12 +8,14 @@ use crate::{
     is_system_package,
     object::{Data, Object, Owner},
     storage::{BackingPackageStore, ObjectChange},
-    transaction::Argument,
+    transaction::{Argument, Command},
+    type_input::TypeInput,
 };
 use move_core_types::language_storage::TypeTag;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::time::Duration;
 
 /// A type containing all of the information needed to work with a deleted shared object in
 /// execution and when committing the execution effects of the transaction. This holds:
@@ -169,6 +171,89 @@ impl ExecutionResultsV2 {
         }
     }
 }
+
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Serialize, Deserialize)]
+pub enum ExecutionTimeObservationKey {
+    // Containts all the fields from `ProgrammableMoveCall` besides `arguments`.
+    MoveEntryPoint {
+        /// The package containing the module and function.
+        package: ObjectID,
+        /// The specific module in the package containing the function.
+        module: String,
+        /// The function to be called.
+        function: String,
+        /// The type arguments to the function.
+        type_arguments: Vec<TypeInput>,
+    },
+    TransferObjects,
+    SplitCoins,
+    MergeCoins,
+    Publish,
+    MakeMoveVec,
+    Upgrade,
+}
+
+impl std::fmt::Display for ExecutionTimeObservationKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExecutionTimeObservationKey::MoveEntryPoint {
+                module, function, ..
+            } => {
+                write!(f, "{}:{}", module, function)
+            }
+            ExecutionTimeObservationKey::TransferObjects => write!(f, "TransferObjects"),
+            ExecutionTimeObservationKey::SplitCoins => write!(f, "SplitCoins"),
+            ExecutionTimeObservationKey::MergeCoins => write!(f, "MergeCoins"),
+            ExecutionTimeObservationKey::Publish => write!(f, "Publish"),
+            ExecutionTimeObservationKey::MakeMoveVec => write!(f, "MakeMoveVec"),
+            ExecutionTimeObservationKey::Upgrade => write!(f, "Upgrade"),
+        }
+    }
+}
+
+impl ExecutionTimeObservationKey {
+    pub fn is_move_call(&self) -> bool {
+        matches!(self, ExecutionTimeObservationKey::MoveEntryPoint { .. })
+    }
+
+    pub fn from_command(command: &Command) -> Self {
+        match command {
+            Command::MoveCall(call) => ExecutionTimeObservationKey::MoveEntryPoint {
+                package: call.package,
+                module: call.module.clone(),
+                function: call.function.clone(),
+                type_arguments: vec![],
+            },
+            Command::TransferObjects(_, _) => ExecutionTimeObservationKey::TransferObjects,
+            Command::SplitCoins(_, _) => ExecutionTimeObservationKey::SplitCoins,
+            Command::MergeCoins(_, _) => ExecutionTimeObservationKey::MergeCoins,
+            Command::Publish(_, _) => ExecutionTimeObservationKey::Publish,
+            Command::MakeMoveVec(_, _) => ExecutionTimeObservationKey::MakeMoveVec,
+            Command::Upgrade(_, _, _, _) => ExecutionTimeObservationKey::Upgrade,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ExecutionTiming {
+    Success(Duration),
+    Abort(Duration),
+}
+
+impl ExecutionTiming {
+    pub fn is_abort(&self) -> bool {
+        matches!(self, ExecutionTiming::Abort(_))
+    }
+
+    pub fn duration(&self) -> Duration {
+        match self {
+            ExecutionTiming::Success(duration) => *duration,
+            ExecutionTiming::Abort(duration) => *duration,
+        }
+    }
+}
+
+pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
 
 /// If a transaction digest shows up in this list, when executing such transaction,
 /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do

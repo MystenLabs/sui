@@ -1,0 +1,482 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-10:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "epoch": "0",
+    "protocolVersion": "70",
+    "systemStateVersion": "1",
+    "storageFundTotalObjectStorageRebates": "0",
+    "storageFundNonRefundableBalance": "0",
+    "referenceGasPrice": "1000",
+    "safeMode": false,
+    "safeModeStorageRewards": "0",
+    "safeModeComputationRewards": "0",
+    "safeModeStorageRebates": "0",
+    "safeModeNonRefundableStorageFee": "0",
+    "epochStartTimestampMs": "0",
+    "epochDurationMs": "86400000",
+    "stakeSubsidyStartEpoch": "0",
+    "maxValidatorCount": "150",
+    "minValidatorJoiningStake": "30000000000000000",
+    "validatorLowStakeThreshold": "20000000000000000",
+    "validatorVeryLowStakeThreshold": "15000000000000000",
+    "validatorLowStakeGracePeriod": "7",
+    "stakeSubsidyBalance": "9949400000000000000",
+    "stakeSubsidyDistributionCounter": "0",
+    "stakeSubsidyCurrentDistributionAmount": "1000000000000000",
+    "stakeSubsidyPeriodLength": "10",
+    "stakeSubsidyDecreaseRate": 1000,
+    "totalStake": "20000000000000000",
+    "activeValidators": [
+      {
+        "suiAddress": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+        "protocolPubkeyBytes": "qqgbtEP57SCwGrO7tmcKwy/daeoOFwANmrMTm1Qu4jUJRhi2VePz/brF9YAcjmJ7BLOpN8c5Ia7zYzTNmGtGoaUnjoYrbvDG9E05s9antwSmkHAIGsM8mkmeBkSjSBrt",
+        "networkPubkeyBytes": "ZeETulurG5EpRBoewpF26pyLQtpUqwH1T6LqgugHBIU=",
+        "workerPubkeyBytes": "3sE4/d+MbOSh9pesKr7b89TSO5gFBuyGUjVa4GldmFU=",
+        "proofOfPossessionBytes": "sIupbWI7yiRvXM22F2E5sJFRricflowHFu7yqXnzglaAvYTxInm4MSDNAgeMzHyJ",
+        "name": "validator-0",
+        "description": "",
+        "imageUrl": "",
+        "projectUrl": "",
+        "netAddress": "/ip4/127.0.0.1/tcp/8000/http",
+        "p2pAddress": "/ip4/127.0.0.1/udp/8001/http",
+        "primaryAddress": "/ip4/127.0.0.1/udp/8004/http",
+        "workerAddress": "/ip4/127.0.0.1/udp/8005/http",
+        "nextEpochProtocolPubkeyBytes": null,
+        "nextEpochProofOfPossession": null,
+        "nextEpochNetworkPubkeyBytes": null,
+        "nextEpochWorkerPubkeyBytes": null,
+        "nextEpochNetAddress": null,
+        "nextEpochP2pAddress": null,
+        "nextEpochPrimaryAddress": null,
+        "nextEpochWorkerAddress": null,
+        "votingPower": "10000",
+        "operationCapId": "0x03c47745906988d806cf7b623cebf960c79b370bb8b95c3ad24616e2aa29ca7b",
+        "gasPrice": "1000",
+        "commissionRate": "200",
+        "nextEpochStake": "20000000000000000",
+        "nextEpochGasPrice": "1000",
+        "nextEpochCommissionRate": "200",
+        "stakingPoolId": "0x2f4c0b14e06a9dd4724e823b2289e3356b2e987fd0f3435e3e00b616bbec111f",
+        "stakingPoolActivationEpoch": "0",
+        "stakingPoolDeactivationEpoch": null,
+        "stakingPoolSuiBalance": "20000000000000000",
+        "rewardsPool": "0",
+        "poolTokenBalance": "20000000000000000",
+        "pendingStake": "0",
+        "pendingTotalSuiWithdraw": "0",
+        "pendingPoolTokenWithdraw": "0",
+        "exchangeRatesId": "0x94071141bae9afff56a839bc873ae0b51333c8eec79314f79334fa137b317f6a",
+        "exchangeRatesSize": "1"
+      }
+    ],
+    "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+    "pendingActiveValidatorsSize": "0",
+    "pendingRemovals": [],
+    "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+    "stakingPoolMappingsSize": "1",
+    "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+    "inactivePoolsSize": "0",
+    "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+    "validatorCandidatesSize": "0",
+    "atRiskValidators": [],
+    "validatorReportRecords": []
+  }
+}
+
+task 2, lines 12-14:
+//# programmable --sender A --inputs 1000000000 object(0x5) @validator_0
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui_system::sui_system::request_add_stake(Input(1), Result(0), Input(2))
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: A, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [47, 76, 11, 20, 224, 106, 157, 212, 114, 78, 130, 59, 34, 137, 227, 53, 107, 46, 152, 127, 208, 243, 67, 94, 62, 0, 182, 22, 187, 236, 17, 31, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 202, 154, 59, 0, 0, 0, 0] }
+created: object(2,0), object(2,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0)
+deleted: object(_)
+gas summary: computation_cost: 1000000, storage_cost: 15078400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 16:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 18-22:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "epoch": "0",
+    "protocolVersion": "70",
+    "systemStateVersion": "2",
+    "storageFundTotalObjectStorageRebates": "0",
+    "storageFundNonRefundableBalance": "0",
+    "referenceGasPrice": "1000",
+    "safeMode": false,
+    "safeModeStorageRewards": "0",
+    "safeModeComputationRewards": "0",
+    "safeModeStorageRebates": "0",
+    "safeModeNonRefundableStorageFee": "0",
+    "epochStartTimestampMs": "0",
+    "epochDurationMs": "86400000",
+    "stakeSubsidyStartEpoch": "0",
+    "maxValidatorCount": "150",
+    "minValidatorJoiningStake": "30000000000000000",
+    "validatorLowStakeThreshold": "20000000000000000",
+    "validatorVeryLowStakeThreshold": "15000000000000000",
+    "validatorLowStakeGracePeriod": "7",
+    "stakeSubsidyBalance": "9949400000000000000",
+    "stakeSubsidyDistributionCounter": "0",
+    "stakeSubsidyCurrentDistributionAmount": "1000000000000000",
+    "stakeSubsidyPeriodLength": "10",
+    "stakeSubsidyDecreaseRate": 1000,
+    "totalStake": "20000000000000000",
+    "activeValidators": [
+      {
+        "suiAddress": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+        "protocolPubkeyBytes": "qqgbtEP57SCwGrO7tmcKwy/daeoOFwANmrMTm1Qu4jUJRhi2VePz/brF9YAcjmJ7BLOpN8c5Ia7zYzTNmGtGoaUnjoYrbvDG9E05s9antwSmkHAIGsM8mkmeBkSjSBrt",
+        "networkPubkeyBytes": "ZeETulurG5EpRBoewpF26pyLQtpUqwH1T6LqgugHBIU=",
+        "workerPubkeyBytes": "3sE4/d+MbOSh9pesKr7b89TSO5gFBuyGUjVa4GldmFU=",
+        "proofOfPossessionBytes": "sIupbWI7yiRvXM22F2E5sJFRricflowHFu7yqXnzglaAvYTxInm4MSDNAgeMzHyJ",
+        "name": "validator-0",
+        "description": "",
+        "imageUrl": "",
+        "projectUrl": "",
+        "netAddress": "/ip4/127.0.0.1/tcp/8000/http",
+        "p2pAddress": "/ip4/127.0.0.1/udp/8001/http",
+        "primaryAddress": "/ip4/127.0.0.1/udp/8004/http",
+        "workerAddress": "/ip4/127.0.0.1/udp/8005/http",
+        "nextEpochProtocolPubkeyBytes": null,
+        "nextEpochProofOfPossession": null,
+        "nextEpochNetworkPubkeyBytes": null,
+        "nextEpochWorkerPubkeyBytes": null,
+        "nextEpochNetAddress": null,
+        "nextEpochP2pAddress": null,
+        "nextEpochPrimaryAddress": null,
+        "nextEpochWorkerAddress": null,
+        "votingPower": "10000",
+        "operationCapId": "0x03c47745906988d806cf7b623cebf960c79b370bb8b95c3ad24616e2aa29ca7b",
+        "gasPrice": "1000",
+        "commissionRate": "200",
+        "nextEpochStake": "20000001000000000",
+        "nextEpochGasPrice": "1000",
+        "nextEpochCommissionRate": "200",
+        "stakingPoolId": "0x2f4c0b14e06a9dd4724e823b2289e3356b2e987fd0f3435e3e00b616bbec111f",
+        "stakingPoolActivationEpoch": "0",
+        "stakingPoolDeactivationEpoch": null,
+        "stakingPoolSuiBalance": "20000000000000000",
+        "rewardsPool": "0",
+        "poolTokenBalance": "20000000000000000",
+        "pendingStake": "1000000000",
+        "pendingTotalSuiWithdraw": "0",
+        "pendingPoolTokenWithdraw": "0",
+        "exchangeRatesId": "0x94071141bae9afff56a839bc873ae0b51333c8eec79314f79334fa137b317f6a",
+        "exchangeRatesSize": "1"
+      }
+    ],
+    "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+    "pendingActiveValidatorsSize": "0",
+    "pendingRemovals": [],
+    "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+    "stakingPoolMappingsSize": "1",
+    "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+    "inactivePoolsSize": "0",
+    "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+    "validatorCandidatesSize": "0",
+    "atRiskValidators": [],
+    "validatorReportRecords": []
+  }
+}
+
+task 6, line 26:
+//# advance-epoch
+Epoch advanced: 0
+
+task 7, lines 28-32:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "epoch": "1",
+    "protocolVersion": "70",
+    "systemStateVersion": "2",
+    "storageFundTotalObjectStorageRebates": "15078400",
+    "storageFundNonRefundableBalance": "0",
+    "referenceGasPrice": "1000",
+    "safeMode": false,
+    "safeModeStorageRewards": "0",
+    "safeModeComputationRewards": "0",
+    "safeModeStorageRebates": "0",
+    "safeModeNonRefundableStorageFee": "0",
+    "epochStartTimestampMs": "1",
+    "epochDurationMs": "86400000",
+    "stakeSubsidyStartEpoch": "0",
+    "maxValidatorCount": "150",
+    "minValidatorJoiningStake": "30000000000000000",
+    "validatorLowStakeThreshold": "20000000000000000",
+    "validatorVeryLowStakeThreshold": "15000000000000000",
+    "validatorLowStakeGracePeriod": "7",
+    "stakeSubsidyBalance": "9949400000000000000",
+    "stakeSubsidyDistributionCounter": "0",
+    "stakeSubsidyCurrentDistributionAmount": "1000000000000000",
+    "stakeSubsidyPeriodLength": "10",
+    "stakeSubsidyDecreaseRate": 1000,
+    "totalStake": "20000001001000000",
+    "activeValidators": [
+      {
+        "suiAddress": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+        "protocolPubkeyBytes": "qqgbtEP57SCwGrO7tmcKwy/daeoOFwANmrMTm1Qu4jUJRhi2VePz/brF9YAcjmJ7BLOpN8c5Ia7zYzTNmGtGoaUnjoYrbvDG9E05s9antwSmkHAIGsM8mkmeBkSjSBrt",
+        "networkPubkeyBytes": "ZeETulurG5EpRBoewpF26pyLQtpUqwH1T6LqgugHBIU=",
+        "workerPubkeyBytes": "3sE4/d+MbOSh9pesKr7b89TSO5gFBuyGUjVa4GldmFU=",
+        "proofOfPossessionBytes": "sIupbWI7yiRvXM22F2E5sJFRricflowHFu7yqXnzglaAvYTxInm4MSDNAgeMzHyJ",
+        "name": "validator-0",
+        "description": "",
+        "imageUrl": "",
+        "projectUrl": "",
+        "netAddress": "/ip4/127.0.0.1/tcp/8000/http",
+        "p2pAddress": "/ip4/127.0.0.1/udp/8001/http",
+        "primaryAddress": "/ip4/127.0.0.1/udp/8004/http",
+        "workerAddress": "/ip4/127.0.0.1/udp/8005/http",
+        "nextEpochProtocolPubkeyBytes": null,
+        "nextEpochProofOfPossession": null,
+        "nextEpochNetworkPubkeyBytes": null,
+        "nextEpochWorkerPubkeyBytes": null,
+        "nextEpochNetAddress": null,
+        "nextEpochP2pAddress": null,
+        "nextEpochPrimaryAddress": null,
+        "nextEpochWorkerAddress": null,
+        "votingPower": "10000",
+        "operationCapId": "0x03c47745906988d806cf7b623cebf960c79b370bb8b95c3ad24616e2aa29ca7b",
+        "gasPrice": "1000",
+        "commissionRate": "200",
+        "nextEpochStake": "20000001001000000",
+        "nextEpochGasPrice": "1000",
+        "nextEpochCommissionRate": "200",
+        "stakingPoolId": "0x2f4c0b14e06a9dd4724e823b2289e3356b2e987fd0f3435e3e00b616bbec111f",
+        "stakingPoolActivationEpoch": "0",
+        "stakingPoolDeactivationEpoch": null,
+        "stakingPoolSuiBalance": "20000001001000000",
+        "rewardsPool": "980000",
+        "poolTokenBalance": "20000001000019999",
+        "pendingStake": "0",
+        "pendingTotalSuiWithdraw": "0",
+        "pendingPoolTokenWithdraw": "0",
+        "exchangeRatesId": "0x94071141bae9afff56a839bc873ae0b51333c8eec79314f79334fa137b317f6a",
+        "exchangeRatesSize": "2"
+      }
+    ],
+    "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+    "pendingActiveValidatorsSize": "0",
+    "pendingRemovals": [],
+    "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+    "stakingPoolMappingsSize": "1",
+    "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+    "inactivePoolsSize": "0",
+    "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+    "validatorCandidatesSize": "0",
+    "atRiskValidators": [],
+    "validatorReportRecords": []
+  }
+}
+
+task 8, lines 34-35:
+//# programmable --sender A --inputs object(0x5) object(2,1)
+//> 0: sui_system::sui_system::request_withdraw_stake(Input(0), Input(1))
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: A, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("UnstakingRequestEvent"), type_params: [] }, contents: [47, 76, 11, 20, 224, 106, 157, 212, 114, 78, 130, 59, 34, 137, 227, 53, 107, 46, 152, 127, 208, 243, 67, 94, 62, 0, 182, 22, 187, 236, 17, 31, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 202, 154, 59, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+created: object(8,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0), object(2,0)
+deleted: object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 14774400,  storage_rebate: 14927616, non_refundable_storage_fee: 150784
+
+task 9, line 37:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 10, lines 39-43:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "epoch": "1",
+    "protocolVersion": "70",
+    "systemStateVersion": "2",
+    "storageFundTotalObjectStorageRebates": "15078400",
+    "storageFundNonRefundableBalance": "0",
+    "referenceGasPrice": "1000",
+    "safeMode": false,
+    "safeModeStorageRewards": "0",
+    "safeModeComputationRewards": "0",
+    "safeModeStorageRebates": "0",
+    "safeModeNonRefundableStorageFee": "0",
+    "epochStartTimestampMs": "1",
+    "epochDurationMs": "86400000",
+    "stakeSubsidyStartEpoch": "0",
+    "maxValidatorCount": "150",
+    "minValidatorJoiningStake": "30000000000000000",
+    "validatorLowStakeThreshold": "20000000000000000",
+    "validatorVeryLowStakeThreshold": "15000000000000000",
+    "validatorLowStakeGracePeriod": "7",
+    "stakeSubsidyBalance": "9949400000000000000",
+    "stakeSubsidyDistributionCounter": "0",
+    "stakeSubsidyCurrentDistributionAmount": "1000000000000000",
+    "stakeSubsidyPeriodLength": "10",
+    "stakeSubsidyDecreaseRate": 1000,
+    "totalStake": "20000001001000000",
+    "activeValidators": [
+      {
+        "suiAddress": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+        "protocolPubkeyBytes": "qqgbtEP57SCwGrO7tmcKwy/daeoOFwANmrMTm1Qu4jUJRhi2VePz/brF9YAcjmJ7BLOpN8c5Ia7zYzTNmGtGoaUnjoYrbvDG9E05s9antwSmkHAIGsM8mkmeBkSjSBrt",
+        "networkPubkeyBytes": "ZeETulurG5EpRBoewpF26pyLQtpUqwH1T6LqgugHBIU=",
+        "workerPubkeyBytes": "3sE4/d+MbOSh9pesKr7b89TSO5gFBuyGUjVa4GldmFU=",
+        "proofOfPossessionBytes": "sIupbWI7yiRvXM22F2E5sJFRricflowHFu7yqXnzglaAvYTxInm4MSDNAgeMzHyJ",
+        "name": "validator-0",
+        "description": "",
+        "imageUrl": "",
+        "projectUrl": "",
+        "netAddress": "/ip4/127.0.0.1/tcp/8000/http",
+        "p2pAddress": "/ip4/127.0.0.1/udp/8001/http",
+        "primaryAddress": "/ip4/127.0.0.1/udp/8004/http",
+        "workerAddress": "/ip4/127.0.0.1/udp/8005/http",
+        "nextEpochProtocolPubkeyBytes": null,
+        "nextEpochProofOfPossession": null,
+        "nextEpochNetworkPubkeyBytes": null,
+        "nextEpochWorkerPubkeyBytes": null,
+        "nextEpochNetAddress": null,
+        "nextEpochP2pAddress": null,
+        "nextEpochPrimaryAddress": null,
+        "nextEpochWorkerAddress": null,
+        "votingPower": "10000",
+        "operationCapId": "0x03c47745906988d806cf7b623cebf960c79b370bb8b95c3ad24616e2aa29ca7b",
+        "gasPrice": "1000",
+        "commissionRate": "200",
+        "nextEpochStake": "20000000001000000",
+        "nextEpochGasPrice": "1000",
+        "nextEpochCommissionRate": "200",
+        "stakingPoolId": "0x2f4c0b14e06a9dd4724e823b2289e3356b2e987fd0f3435e3e00b616bbec111f",
+        "stakingPoolActivationEpoch": "0",
+        "stakingPoolDeactivationEpoch": null,
+        "stakingPoolSuiBalance": "20000001001000000",
+        "rewardsPool": "980000",
+        "poolTokenBalance": "20000001000019999",
+        "pendingStake": "0",
+        "pendingTotalSuiWithdraw": "1000000000",
+        "pendingPoolTokenWithdraw": "999999999",
+        "exchangeRatesId": "0x94071141bae9afff56a839bc873ae0b51333c8eec79314f79334fa137b317f6a",
+        "exchangeRatesSize": "2"
+      }
+    ],
+    "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+    "pendingActiveValidatorsSize": "0",
+    "pendingRemovals": [],
+    "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+    "stakingPoolMappingsSize": "1",
+    "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+    "inactivePoolsSize": "0",
+    "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+    "validatorCandidatesSize": "0",
+    "atRiskValidators": [],
+    "validatorReportRecords": []
+  }
+}
+
+task 11, line 45:
+//# advance-epoch
+Epoch advanced: 1
+
+task 12, lines 47-51:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "epoch": "2",
+    "protocolVersion": "70",
+    "systemStateVersion": "2",
+    "storageFundTotalObjectStorageRebates": "14774400",
+    "storageFundNonRefundableBalance": "150784",
+    "referenceGasPrice": "1000",
+    "safeMode": false,
+    "safeModeStorageRewards": "0",
+    "safeModeComputationRewards": "0",
+    "safeModeStorageRebates": "0",
+    "safeModeNonRefundableStorageFee": "0",
+    "epochStartTimestampMs": "1",
+    "epochDurationMs": "86400000",
+    "stakeSubsidyStartEpoch": "0",
+    "maxValidatorCount": "150",
+    "minValidatorJoiningStake": "30000000000000000",
+    "validatorLowStakeThreshold": "20000000000000000",
+    "validatorVeryLowStakeThreshold": "15000000000000000",
+    "validatorLowStakeGracePeriod": "7",
+    "stakeSubsidyBalance": "9949400000000000000",
+    "stakeSubsidyDistributionCounter": "0",
+    "stakeSubsidyCurrentDistributionAmount": "1000000000000000",
+    "stakeSubsidyPeriodLength": "10",
+    "stakeSubsidyDecreaseRate": 1000,
+    "totalStake": "20000000002000000",
+    "activeValidators": [
+      {
+        "suiAddress": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+        "protocolPubkeyBytes": "qqgbtEP57SCwGrO7tmcKwy/daeoOFwANmrMTm1Qu4jUJRhi2VePz/brF9YAcjmJ7BLOpN8c5Ia7zYzTNmGtGoaUnjoYrbvDG9E05s9antwSmkHAIGsM8mkmeBkSjSBrt",
+        "networkPubkeyBytes": "ZeETulurG5EpRBoewpF26pyLQtpUqwH1T6LqgugHBIU=",
+        "workerPubkeyBytes": "3sE4/d+MbOSh9pesKr7b89TSO5gFBuyGUjVa4GldmFU=",
+        "proofOfPossessionBytes": "sIupbWI7yiRvXM22F2E5sJFRricflowHFu7yqXnzglaAvYTxInm4MSDNAgeMzHyJ",
+        "name": "validator-0",
+        "description": "",
+        "imageUrl": "",
+        "projectUrl": "",
+        "netAddress": "/ip4/127.0.0.1/tcp/8000/http",
+        "p2pAddress": "/ip4/127.0.0.1/udp/8001/http",
+        "primaryAddress": "/ip4/127.0.0.1/udp/8004/http",
+        "workerAddress": "/ip4/127.0.0.1/udp/8005/http",
+        "nextEpochProtocolPubkeyBytes": null,
+        "nextEpochProofOfPossession": null,
+        "nextEpochNetworkPubkeyBytes": null,
+        "nextEpochWorkerPubkeyBytes": null,
+        "nextEpochNetAddress": null,
+        "nextEpochP2pAddress": null,
+        "nextEpochPrimaryAddress": null,
+        "nextEpochWorkerAddress": null,
+        "votingPower": "10000",
+        "operationCapId": "0x03c47745906988d806cf7b623cebf960c79b370bb8b95c3ad24616e2aa29ca7b",
+        "gasPrice": "1000",
+        "commissionRate": "200",
+        "nextEpochStake": "20000000002000000",
+        "nextEpochGasPrice": "1000",
+        "nextEpochCommissionRate": "200",
+        "stakingPoolId": "0x2f4c0b14e06a9dd4724e823b2289e3356b2e987fd0f3435e3e00b616bbec111f",
+        "stakingPoolActivationEpoch": "0",
+        "stakingPoolDeactivationEpoch": null,
+        "stakingPoolSuiBalance": "20000000002000000",
+        "rewardsPool": "1960000",
+        "poolTokenBalance": "20000000000039999",
+        "pendingStake": "0",
+        "pendingTotalSuiWithdraw": "0",
+        "pendingPoolTokenWithdraw": "0",
+        "exchangeRatesId": "0x94071141bae9afff56a839bc873ae0b51333c8eec79314f79334fa137b317f6a",
+        "exchangeRatesSize": "3"
+      }
+    ],
+    "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+    "pendingActiveValidatorsSize": "0",
+    "pendingRemovals": [],
+    "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+    "stakingPoolMappingsSize": "1",
+    "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+    "inactivePoolsSize": "0",
+    "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+    "validatorCandidatesSize": "0",
+    "atRiskValidators": [],
+    "validatorReportRecords": []
+  }
+}

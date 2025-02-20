@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/friend_decl_address_only.move:3:12
+  │
+3 │     friend 0x42;
+  │            ^^^^ Expected '::' after the anonymous address in this module access chain

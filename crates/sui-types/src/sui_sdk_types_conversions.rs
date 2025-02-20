@@ -9,7 +9,7 @@
 //! directly to avoid going through the BCS machinery.
 
 use fastcrypto::traits::ToFromBytes;
-use sui_sdk_types::types::*;
+use sui_sdk_types::*;
 use tap::Pipe;
 
 #[derive(Debug)]

@@ -1,0 +1,27 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03004]: unbound type
+  ┌─ tests/move_2024/naming/macro_var_as_fun_invalid.move:3:13
+  │
+3 │         let $var = 0;
+  │             ^^^^ Unbound type '$var' in current scope
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/naming/macro_var_as_fun_invalid.move:3:18
+  │
+3 │         let $var = 0;
+  │                  ^
+  │                  │
+  │                  Unexpected '='
+  │                  Expected '{'
+
+error[E03005]: unbound unscoped name
+  ┌─ tests/move_2024/naming/macro_var_as_fun_invalid.move:4:9
+  │
+4 │         $var();
+  │         ^^^^ Unbound function '$var' in current scope

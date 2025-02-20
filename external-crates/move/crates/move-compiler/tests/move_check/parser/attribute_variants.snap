@@ -1,0 +1,66 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_variants.move:2:3
+  │
+2 │ #[attr0]
+  │   ^^^^^ Unknown attribute 'attr0'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr0)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_variants.move:3:3
+  │
+3 │ #[attr1=0, attr2=b"hello", attr3=x"0f", attr4=0x42, attr5(attr0, attr1, attr2(attr0, attr1=0))]
+  │   ^^^^^ Unknown attribute 'attr1'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr1)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_variants.move:3:12
+  │
+3 │ #[attr1=0, attr2=b"hello", attr3=x"0f", attr4=0x42, attr5(attr0, attr1, attr2(attr0, attr1=0))]
+  │            ^^^^^ Unknown attribute 'attr2'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr2)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_variants.move:3:28
+  │
+3 │ #[attr1=0, attr2=b"hello", attr3=x"0f", attr4=0x42, attr5(attr0, attr1, attr2(attr0, attr1=0))]
+  │                            ^^^^^ Unknown attribute 'attr3'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr3)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_variants.move:3:41
+  │
+3 │ #[attr1=0, attr2=b"hello", attr3=x"0f", attr4=0x42, attr5(attr0, attr1, attr2(attr0, attr1=0))]
+  │                                         ^^^^^ Unknown attribute 'attr4'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr4)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_variants.move:3:53
+  │
+3 │ #[attr1=0, attr2=b"hello", attr3=x"0f", attr4=0x42, attr5(attr0, attr1, attr2(attr0, attr1=0))]
+  │                                                     ^^^^^ Unknown attribute 'attr5'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr5)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_variants.move:4:3
+  │
+4 │ #[bttr0=false, bttr1=0u8, bttr2=0u64, bttr3=0u128]
+  │   ^^^^^ Unknown attribute 'bttr0'. Custom attributes must be wrapped in 'ext', e.g. #[ext(bttr0)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_variants.move:4:16
+  │
+4 │ #[bttr0=false, bttr1=0u8, bttr2=0u64, bttr3=0u128]
+  │                ^^^^^ Unknown attribute 'bttr1'. Custom attributes must be wrapped in 'ext', e.g. #[ext(bttr1)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_variants.move:4:27
+  │
+4 │ #[bttr0=false, bttr1=0u8, bttr2=0u64, bttr3=0u128]
+  │                           ^^^^^ Unknown attribute 'bttr2'. Custom attributes must be wrapped in 'ext', e.g. #[ext(bttr2)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_variants.move:4:39
+  │
+4 │ #[bttr0=false, bttr1=0u8, bttr2=0u64, bttr3=0u128]
+  │                                       ^^^^^ Unknown attribute 'bttr3'. Custom attributes must be wrapped in 'ext', e.g. #[ext(bttr3)]

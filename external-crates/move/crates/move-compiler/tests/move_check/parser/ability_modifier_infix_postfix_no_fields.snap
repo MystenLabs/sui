@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/ability_modifier_infix_postfix_no_fields.move:5:38
+  │
+5 │     native struct Foo has copy, drop has store;
+  │                                      ^^^
+  │                                      │
+  │                                      Unexpected 'has'
+  │                                      Expected one of: ',', '{', '(', or ';'

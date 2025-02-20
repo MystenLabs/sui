@@ -8,8 +8,18 @@ use std::sync::Arc;
 use std::{cmp::Ordering, hash::DefaultHasher};
 
 use moka::sync::Cache as MokaCache;
+use mysten_common::debug_fatal;
 use parking_lot::Mutex;
 use sui_types::base_types::SequenceNumber;
+
+pub enum CacheResult<T> {
+    /// Entry is in the cache
+    Hit(T),
+    /// Entry is not in the cache and is known to not exist
+    NegativeHit,
+    /// Entry is not in the cache and may or may not exist in the store
+    Miss,
+}
 
 /// CachedVersionMap is a map from version to value, with the additional contraints:
 /// - The key (SequenceNumber) must be monotonically increasing for each insert. If
@@ -159,6 +169,7 @@ pub struct MonotonicCache<K, V> {
     key_generation: Vec<AtomicU64>,
 }
 
+#[derive(Copy, Clone)]
 pub enum Ticket {
     // Read tickets are used when caching the result of a read from the db.
     // They are only valid if the generation number matches the current generation.
@@ -291,10 +302,12 @@ where
             let mut entry = entry.value().lock();
             check_ticket()?;
 
-            // Ticket expiry makes this assert impossible.
-            // TODO: relax to debug_assert?
-            assert!(!entry.is_newer_than(&value), "entry is newer than value");
-            *entry = value;
+            // Ticket expiry should make this assert impossible.
+            if entry.is_newer_than(&value) {
+                debug_fatal!("entry is newer than value");
+            } else {
+                *entry = value;
+            }
         }
 
         Ok(())

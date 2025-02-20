@@ -3,7 +3,7 @@
 
 use crate::{
     get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
-    object_runtime::{ObjectRuntime, RuntimeResults},
+    object_runtime::{object_store::ChildObjectEffects, ObjectRuntime, RuntimeResults},
 };
 use better_any::{Tid, TidAble};
 use indexmap::{IndexMap, IndexSet};
@@ -78,6 +78,8 @@ impl ChildObjectResolver for InMemoryTestStore {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: sui_types::committee::EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> sui_types::error::SuiResult<Option<Object>> {
         self.0.with_borrow(|store| {
             store.get_object_received_at_version(
@@ -85,6 +87,7 @@ impl ChildObjectResolver for InMemoryTestStore {
                 receiving_object_id,
                 receive_object_at_version,
                 epoch_id,
+                use_object_per_epoch_marker_table_v2,
             )
         })
     }
@@ -145,7 +148,7 @@ pub fn end_transaction(
     // Determine writes and deletes
     // We pass the received objects since they should be viewed as "loaded" for the purposes of of
     // calculating the effects of the transaction.
-    let results = object_runtime_state.finish(received, BTreeMap::new());
+    let results = object_runtime_state.finish(received, ChildObjectEffects::empty());
     let RuntimeResults {
         writes,
         user_events,

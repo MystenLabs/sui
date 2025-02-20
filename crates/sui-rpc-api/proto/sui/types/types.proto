@@ -1,0 +1,1632 @@
+// Protobuf definitions of public Sui core types.
+//
+// This file contains a complete set of protobuf definitions for all of the
+// public sui core types. All sui types are intended to have a 1:1 mapping to a
+// protobuf message defined in this file and be able to roundtrip to/from their
+// rust and protobuf definitions assuming a sufficiently up-to-date version of
+// both these definitions.
+//
+// For more information on the types these proto messages correspond with, see
+// the documentation for their rust versions defined in the
+// [`sui-sdk-types`](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/)
+// library.
+//
+// ## Use of `optional`
+//
+// These message definitions use protobuf version 3 (proto3). In proto3, fields
+// that are primitives (that is, they are not a `message`) and are not present
+// on the wire are zero-initialized. To gain the ability to detect
+// [field presence](https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md),
+// these definitions follow the convention of having all fields marked
+// `optional`, and wrapping `repeated` fields in a message as needed.
+//
+// Even if a field is marked as `optional`, it might not actually be optional from
+// the perspective of the Sui protocol. Such fields are explicitly labled
+// as `Required` or `Optional` in their documentation.
+syntax = "proto3";
+
+package sui.types;
+
+import "google/protobuf/empty.proto";
+
+// Unique identifier for an account on the Sui blockchain.
+//
+// An `Address` is a 32-byte pseudonymous identifier used to uniquely identify an account and
+// asset-ownership on the Sui blockchain. Often, human-readable addresses are encoded in
+// hexadecimal with a `0x` prefix. For example, this is a valid Sui address:
+// `0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331`.
+message Address {
+  // Required. 32-byte address.
+  optional bytes address = 1;
+}
+
+// Unique identifier for an object on the Sui blockchain.
+//
+// An `ObjectId` is a 32-byte identifier used to uniquely identify an object on the Sui
+// blockchain.
+message ObjectId {
+  // Required. 32-byte object-id.
+  optional bytes object_id = 1;
+}
+
+// 32-byte output of hashing a Sui structure using the Blake2b256 hash function.
+message Digest {
+  // Required. 32-byte hash.
+  optional bytes digest = 1;
+}
+
+// Message that represents a type that is serialized and encoded using the
+// [BCS](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/index.html#bcs)
+// format.
+message Bcs {
+  // Required. Bytes of a BCS encoded value.
+  optional bytes bcs = 1;
+}
+
+// Primitives {{{
+
+// An unsigned 128-bit integer encoded in little-endian using 16-bytes.
+message U128 {
+  // Required. 16-byte little-endian bytes.
+  optional bytes bytes = 1;
+}
+
+// A signed 128-bit integer encoded in little-endian using 16-bytes.
+message I128 {
+  // Required. 16-byte little-endian bytes.
+  optional bytes bytes = 1;
+}
+
+// An unsigned 256-bit integer encoded in little-endian using 32-bytes.
+message U256 {
+  // Required. 16-byte little-endian bytes.
+  optional bytes bytes = 1;
+}
+
+// End Primitives }}}
+
+// Checkpoint {{{
+
+// A header for a checkpoint on the Sui blockchain.
+//
+// On the Sui network, checkpoints define the history of the blockchain. They are quite similar to
+// the concept of blocks used by other blockchains like Bitcoin or Ethereum. The Sui blockchain,
+// however, forms checkpoints after transaction execution has already happened to provide a
+// certified history of the chain, instead of being formed before execution.
+//
+// Checkpoints commit to a variety of state, including but not limited to:
+// - The hash of the previous checkpoint.
+// - The set of transaction digests, their corresponding effects digests, as well as the set of
+//   user signatures that authorized its execution.
+// - The objects produced by a transaction.
+// - The set of live objects that make up the current state of the chain.
+// - On epoch transitions, the next validator committee.
+//
+// `CheckpointSummary`s themselves don't directly include all of the previous information but they
+// are the top-level type by which all the information is committed to transitively via cryptographic
+// hashes included in the summary. `CheckpointSummary`s are signed and certified by a quorum of
+// the validator committee in a given epoch to allow verification of the chain's state.
+message CheckpointSummary {
+  // Epoch that this checkpoint belongs to.
+  optional uint64 epoch = 1;
+
+  // The height of this checkpoint.
+  optional uint64 sequence_number = 2;
+
+  // Total number of transactions committed since genesis, including those in this
+  // checkpoint.
+  optional uint64 total_network_transactions = 3;
+
+  // The hash of the `CheckpointContents` for this checkpoint.
+  optional Digest content_digest = 4;
+
+  // The hash of the previous `CheckpointSummary`.
+  //
+  // This will be `None` only for the first, or genesis, checkpoint.
+  optional Digest previous_digest = 5;
+
+  // The running total gas costs of all transactions included in the current epoch so far
+  // until this checkpoint.
+  optional GasCostSummary epoch_rolling_gas_cost_summary = 6;
+
+  // Timestamp of the checkpoint - number of milliseconds from the Unix epoch
+  // Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
+  // checkpoints can have the same timestamp if they originate from the same underlining consensus commit.
+  optional uint64 timestamp_ms = 7;
+
+  // Commitments to checkpoint-specific state.
+  repeated CheckpointCommitment commitments = 8;
+
+  // Extra data only present in the final checkpoint of an epoch.
+  optional EndOfEpochData end_of_epoch_data = 9;
+
+  // `CheckpointSummary` is not an evolvable structure - it must be readable by any version of
+  // the code. Therefore, to allow extensions to be added to `CheckpointSummary`,
+  // opaque data can be added to checkpoints, which can be deserialized based on the current
+  // protocol version.
+  optional bytes version_specific_data = 10;
+}
+
+// A commitment made by a checkpoint.
+message CheckpointCommitment {
+  oneof commitment {
+    // An elliptic curve multiset hash attesting to the set of objects that comprise the live
+    // state of the Sui blockchain.
+    Digest ecmh_live_object_set = 1;
+  }
+}
+
+// Data, which when included in a `CheckpointSummary`, signals the end of an `Epoch`.
+message EndOfEpochData {
+  // The set of validators that will be in the `ValidatorCommittee` for the next epoch.
+  repeated ValidatorCommitteeMember next_epoch_committee = 1;
+  // The protocol version that is in effect during the next epoch.
+  optional uint64 next_epoch_protocol_version = 2;
+  // Commitments to epoch specific state (live object set)
+  repeated CheckpointCommitment epoch_commitments = 3;
+}
+
+// Transaction information committed to in a checkpoint.
+message CheckpointedTransactionInfo {
+  // Digest of the transaction.
+  optional Digest transaction = 1;
+  // Digest of the effects.
+  optional Digest effects = 2;
+  // Set of user signatures that authorized the transaction.
+  repeated UserSignature signatures = 3;
+}
+
+// The committed to contents of a checkpoint.
+message CheckpointContents {
+  // Version 1 of `CheckpointContents`.
+  message V1 {
+    repeated CheckpointedTransactionInfo transactions = 1;
+  }
+
+  oneof contents {
+    V1 v1 = 1;
+  }
+}
+
+// End Checkpoint }}}
+
+// TransactionEvents {{{
+
+// Events emitted during the successful execution of a transaction.
+message TransactionEvents {
+  repeated Event events = 1;
+}
+
+// An event.
+message Event {
+  // Package ID of the top-level function invoked by a `MoveCall` command that triggered this
+  // event to be emitted.
+  optional ObjectId package_id = 1;
+  // Module name of the top-level function invoked by a `MoveCall` command that triggered this
+  // event to be emitted.
+  optional Identifier module = 2;
+  // Address of the account that sent the transaction where this event was emitted.
+  optional Address sender = 3;
+  // The type of the event emitted.
+  optional StructTag event_type = 4;
+  // BCS serialized bytes of the event.
+  optional bytes contents = 5;
+}
+
+// End TransactionEvents }}}
+
+// Object {{{
+
+// Reference to an object.
+message ObjectReference {
+  // The object ID of this object.
+  optional ObjectId object_id = 1;
+  // The version of this object.
+  optional uint64 version = 2;
+  // The digest of this object.
+  optional Digest digest = 3;
+}
+
+// A Move package.
+message MovePackage {
+  // Address or ID of this package.
+  optional ObjectId id = 1;
+  // Version of the package.
+  optional uint64 version = 2;
+  // Set of modules defined by this package.
+  repeated MoveModule modules = 3;
+  // Maps struct/module to a package version where it was first defined, stored as a vector for
+  // simple serialization and deserialization.
+  repeated TypeOrigin type_origin_table = 4;
+  // For each dependency, maps original package ID to the info about the (upgraded) dependency
+  // version that this package is using.
+  repeated UpgradeInfo linkage_table = 5;
+}
+
+// Module defined by a package.
+message MoveModule {
+  // Name of the module.
+  optional Identifier name = 1;
+  // Serialized bytecode of the module.
+  optional bytes contents = 2;
+}
+
+// Identifies a struct and the module it was defined in.
+message TypeOrigin {
+  optional Identifier module_name = 1;
+  optional Identifier struct_name = 2;
+  optional ObjectId package_id = 3;
+}
+
+/// Upgraded package info for the linkage table.
+message UpgradeInfo {
+  // ID of the original package.
+  optional ObjectId original_id = 1;
+  // ID of the upgraded package.
+  optional ObjectId upgraded_id = 2;
+  // Version of the upgraded package.
+  optional uint64 upgraded_version = 3;
+}
+
+// Enum of different types of ownership for an object.
+message Owner {
+  oneof kind {
+    // Object is exclusively owned by a single address, and is mutable.
+    Address address = 1;
+    // Object is exclusively owned by a single object, and is mutable.
+    ObjectId object = 2;
+    // Object is shared, can be used by any address, and is mutable.
+    uint64 shared = 3;
+    // Object is immutable, and hence ownership doesn't matter.
+    google.protobuf.Empty immutable = 4;
+  }
+}
+
+// A Move struct.
+message MoveStruct {
+  // `ObjectId` for this object.
+  optional ObjectId object_id = 1;
+  // The type of this object.
+  optional StructTag object_type = 2;
+  // DEPRECATED this field is no longer used to determine whether a tx can transfer this
+  // object. Instead, it is always calculated from the objects type when loaded in execution.
+  optional bool has_public_transfer = 3;
+  // Version of the object.
+  optional uint64 version = 4;
+  // BCS bytes of a Move struct value.
+  optional bytes contents = 5;
+}
+
+// An object on the Sui blockchain.
+message Object {
+  // `ObjectId` for this object.
+  optional ObjectId object_id = 1;
+  // Version of the object.
+  optional uint64 version = 2;
+  // Owner of the object.
+  optional Owner owner = 3;
+
+  optional ObjectData object = 4;
+
+  // The digest of the transaction that created or last mutated this object
+  optional Digest previous_transaction = 5;
+  // The amount of SUI to rebate if this object gets deleted.
+  // This number is re-calculated each time the object is mutated based on
+  // the present storage gas price.
+  optional uint64 storage_rebate = 6;
+}
+
+// Object data, either a package or struct.
+message ObjectData {
+  oneof kind {
+    MoveStruct struct = 1;
+    MovePackage package = 2;
+  }
+}
+
+// An object part of the initial chain state.
+message GenesisObject {
+  optional ObjectId object_id = 1;
+  optional uint64 version = 2;
+  optional Owner owner = 3;
+  optional ObjectData object = 4;
+}
+
+// End Object }}}
+
+// GasCostSummary {{{
+
+// Summary of gas charges.
+//
+// Storage is charged independently of computation.
+// There are three parts to the storage charges:
+// - `storage_cost`: the charge of storage at the time the transaction is executed.
+//                 The cost of storage is the number of bytes of the objects being mutated
+//                 multiplied by a variable storage cost per byte.
+// - `storage_rebate`: the amount a user gets back when manipulating an object.
+//                   The `storage_rebate` is the `storage_cost` for an object minus fees.
+// - `non_refundable_storage_fee`: not all the value of the object storage cost is
+//                               given back to user and there is a small fraction that
+//                               is kept by the system. This value tracks that charge.
+//
+// When looking at a gas cost summary the amount charged to the user is
+// `computation_cost + storage_cost - storage_rebate`
+// and that is the amount that is deducted from the gas coins.
+// `non_refundable_storage_fee` is collected from the objects being mutated/deleted
+// and it is tracked by the system in storage funds.
+//
+// Objects deleted, including the older versions of objects mutated, have the storage field
+// on the objects added up to a pool of "potential rebate". This rebate then is reduced
+// by the "nonrefundable rate" such that:
+// `potential_rebate(storage cost of deleted/mutated objects) =
+// storage_rebate + non_refundable_storage_fee`
+message GasCostSummary {
+  // Cost of computation/execution.
+  optional uint64 computation_cost = 1;
+  // Storage cost, it's the sum of all storage cost for all objects created or mutated.
+  optional uint64 storage_cost = 2;
+  // The amount of storage cost refunded to the user for all objects deleted or mutated in the
+  // transaction.
+  optional uint64 storage_rebate = 3;
+  // The fee for the rebate. The portion of the storage rebate kept by the system.
+  optional uint64 non_refundable_storage_fee = 4;
+}
+
+// End GasCostSummary }}}
+
+// Move {{{
+
+// A Move identifier.
+//
+// Identifiers are only valid if they conform to the following ABNF:
+//
+// ```text
+// identifier = (ALPHA *127(ALPHA / DIGIT / UNDERSCORE)) /
+//              (UNDERSCORE 1*127(ALPHA / DIGIT / UNDERSCORE))
+// UNDERSCORE = %x95
+// ```
+message Identifier {
+  optional string identifier = 1;
+}
+
+// Type information for a Move struct.
+message StructTag {
+  // Address of the package where this type was defined.
+  optional Address address = 1;
+  // Name of the module where this type was defined.
+  optional Identifier module = 2;
+  // Name of the type itself.
+  optional Identifier name = 3;
+  // List of type parameters, if any.
+  repeated TypeTag type_parameters = 4;
+}
+
+// Type of a Move value.
+message TypeTag {
+  oneof tag {
+    google.protobuf.Empty u8 = 1;
+    google.protobuf.Empty u16 = 2;
+    google.protobuf.Empty u32 = 3;
+    google.protobuf.Empty u64 = 4;
+    google.protobuf.Empty u128 = 5;
+    google.protobuf.Empty u256 = 6;
+    google.protobuf.Empty bool = 7;
+    google.protobuf.Empty address = 8;
+    google.protobuf.Empty signer = 9;
+    TypeTag vector = 10;
+    StructTag struct = 11;
+  }
+}
+
+message MoveStructValue {
+  optional StructTag struct_type = 1;
+  repeated MoveField fields = 2;
+}
+
+message MoveField {
+  optional Identifier name = 1;
+  optional MoveValue value = 2;
+}
+
+message MoveVariant {
+  optional StructTag enum_type = 1;
+  optional Identifier variant_name = 2;
+  optional uint32 tag = 3;
+  repeated MoveField fields = 4;
+}
+
+message MoveValue {
+  oneof kind {
+    bool bool = 2;
+    uint32 u8 = 3;
+    uint32 u16 = 4;
+    uint32 u32 = 5;
+    uint64 u64 = 6;
+    U128 u128 = 7;
+    U256 u256 = 8;
+    Address address = 9;
+    MoveVector vector = 10;
+    MoveStructValue struct = 11;
+    Address signer = 12;
+    MoveVariant variant = 13;
+  }
+}
+
+message MoveVector {
+  repeated MoveValue values = 1;
+}
+
+// End Move }}}
+
+// Transaction {{{
+
+// A transaction.
+message Transaction {
+  // Version 1 of `Transaction`.
+  message TransactionV1 {
+    optional TransactionKind kind = 1;
+    optional Address sender = 2;
+    optional GasPayment gas_payment = 3;
+    optional TransactionExpiration expiration = 4;
+  }
+
+  oneof version {
+    TransactionV1 v1 = 1;
+  }
+}
+
+// Payment information for executing a transaction.
+message GasPayment {
+  // Set of gas objects to use for payment.
+  repeated ObjectReference objects = 1;
+
+  // Owner of the gas objects, either the transaction sender or a sponsor.
+  optional Address owner = 2;
+
+  // Gas unit price to use when charging for computation.
+  //
+  // Must be greater than or equal to the network's current RGP (reference gas price).
+  optional uint64 price = 3;
+
+  // Total budget willing to spend for the execution of a transaction.
+  optional uint64 budget = 4;
+}
+
+// A TTL for a transaction.
+message TransactionExpiration {
+  oneof expiration {
+    // The transaction has no expiration.
+    google.protobuf.Empty none = 1;
+
+    // Validators won't sign and execute transaction unless the expiration epoch
+    // is greater than or equal to the current epoch.
+    uint64 epoch = 2;
+  }
+}
+
+// Randomness update.
+message RandomnessStateUpdate {
+  // Epoch of the randomness state update transaction.
+  optional uint64 epoch = 1;
+
+  // Randomness round of the update.
+  optional uint64 randomness_round = 2;
+
+  // Updated random bytes.
+  optional bytes random_bytes = 3;
+
+  // The initial version of the randomness object that it was shared at.
+  optional uint64 randomness_object_initial_shared_version = 4;
+}
+
+// Transaction type.
+message TransactionKind {
+  oneof kind {
+    // A user transaction comprised of a list of native commands and Move calls.
+    ProgrammableTransaction programmable_transaction = 1;
+
+    // System transaction used to end an epoch.
+    //
+    // The `ChangeEpoch` variant is now deprecated (but the `ChangeEpoch` struct is still used by
+    // `EndOfEpochTransaction`).
+    ChangeEpoch change_epoch = 2;
+
+    // Transaction used to initialize the chain state.
+    //
+    // Only valid if in the genesis checkpoint (0) and if this is the very first transaction ever
+    // executed on the chain.
+    GenesisTransaction genesis = 200;
+
+    // V1 consensus commit update.
+    ConsensusCommitPrologue consensus_commit_prologue_v1 = 201;
+
+    // Update set of valid JWKs used for zklogin.
+    AuthenticatorStateUpdate authenticator_state_update = 3;
+
+    // Set of operations to run at the end of the epoch to close out the current epoch and start
+    // the next one.
+    EndOfEpochTransaction end_of_epoch = 4;
+
+    // Randomness update.
+    RandomnessStateUpdate randomness_state_update = 5;
+
+    // V2 consensus commit update.
+    ConsensusCommitPrologue consensus_commit_prologue_v2 = 202;
+
+    // V3 consensus commit update.
+    ConsensusCommitPrologue consensus_commit_prologue_v3 = 6;
+  }
+}
+
+// A user transaction.
+//
+// Contains a series of native commands and Move calls where the results of one command can be
+// used in future commands.
+message ProgrammableTransaction {
+  // Input objects or primitive values.
+  repeated Input inputs = 1;
+
+  // The commands to be executed sequentially. A failure in any command
+  // results in the failure of the entire transaction.
+  repeated Command commands = 2;
+}
+
+// An input to a user transaction.
+message Input {
+  oneof kind {
+    // A move value serialized as BCS.
+    //
+    // For normal operations this is required to be a move primitive type and not contain structs
+    // or objects.
+    bytes pure = 1;
+
+    // A Move object that is either immutable or address owned.
+    ObjectReference immutable_or_owned = 2;
+
+    // A Move object whose owner is "Shared".
+    SharedObjectInput shared = 3;
+
+    // A Move object that is attempted to be received in this transaction.
+    ObjectReference receiving = 4;
+  }
+}
+
+// A shared object input.
+message SharedObjectInput {
+  // `ObjectId` of the shared object.
+  optional ObjectId object_id = 1;
+
+  // Initial version of the object when it was shared.
+  optional uint64 initial_shared_version = 2;
+
+  // Controls whether the caller asks for a mutable reference to the shared object.
+  optional bool mutable = 3;
+}
+
+// A single command in a programmable transaction.
+message Command {
+  oneof command {
+    // A call to either an entry or a public Move function.
+    MoveCall move_call = 1;
+
+    // `(Vec<forall T:key+store. T>, address)`
+    // It sends n-objects to the specified address. These objects must have store
+    // (public transfer) and either the previous owner must be an address or the object must
+    // be newly created.
+    TransferObjects transfer_objects = 2;
+
+    // `(&mut Coin<T>, Vec<u64>)` -> `Vec<Coin<T>>`
+    // It splits off some amounts into new coins with those amounts.
+    SplitCoins split_coins = 3;
+
+    // `(&mut Coin<T>, Vec<Coin<T>>)`
+    // It merges n-coins into the first coin.
+    MergeCoins merge_coins = 4;
+
+    // Publishes a Move package. It takes the package bytes and a list of the package's transitive
+    // dependencies to link against on chain.
+    Publish publish = 5;
+
+    // `forall T: Vec<T> -> vector<T>`
+    // Given n-values of the same type, it constructs a vector. For non-objects or an empty vector,
+    // the type tag must be specified.
+    MakeMoveVector make_move_vector = 6;
+
+    // Upgrades a Move package.
+    // Takes (in order):
+    // 1. A vector of serialized modules for the package.
+    // 2. A vector of object ids for the transitive dependencies of the new package.
+    // 3. The object ID of the package being upgraded.
+    // 4. An argument holding the `UpgradeTicket` that must have been produced from an earlier command in the same
+    //    programmable transaction.
+    Upgrade upgrade = 7;
+  }
+}
+
+// Command to call a Move function.
+//
+// Functions that can be called by a `MoveCall` command are those that have a function signature
+// that is either `entry` or `public` (which don't have a reference return type).
+message MoveCall {
+  // The package containing the module and function.
+  optional ObjectId package = 1;
+  // The specific module in the package containing the function.
+  optional Identifier module = 2;
+  // The function to be called.
+  optional Identifier function = 3;
+  // The type arguments to the function.
+  repeated TypeTag type_arguments = 4;
+  // The arguments to the function.
+  repeated Argument arguments = 5;
+}
+
+// Command to transfer ownership of a set of objects to an address.
+message TransferObjects {
+  // Set of objects to transfer.
+  repeated Argument objects = 1;
+  // The address to transfer ownership to.
+  optional Argument address = 2;
+}
+
+// Command to split a single coin object into multiple coins.
+message SplitCoins {
+  // The coin to split.
+  optional Argument coin = 1;
+  // The amounts to split off.
+  repeated Argument amounts = 2;
+}
+
+// Command to merge multiple coins of the same type into a single coin.
+message MergeCoins {
+  // Coin to merge coins into.
+  optional Argument coin = 1;
+
+  // Set of coins to merge into `coin`.
+  //
+  // All listed coins must be of the same type and be the same type as `coin`
+  repeated Argument coins_to_merge = 2;
+}
+
+// Command to publish a new Move package.
+message Publish {
+  // The serialized Move modules.
+  repeated bytes modules = 1;
+
+  // Set of packages that the to-be published package depends on.
+  repeated ObjectId dependencies = 2;
+}
+
+// Command to build a Move vector out of a set of individual elements.
+message MakeMoveVector {
+  // Type of the individual elements.
+  //
+  // This is required to be set when the type can't be inferred, for example when the set of
+  // provided arguments are all pure input values.
+  optional TypeTag element_type = 1;
+
+  // The set individual elements to build the vector with.
+  repeated Argument elements = 2;
+}
+
+// Command to upgrade an already published package.
+message Upgrade {
+  // The serialized Move modules.
+  repeated bytes modules = 1;
+  // Set of packages that the to-be published package depends on.
+  repeated ObjectId dependencies = 2;
+  // Package ID of the package to upgrade.
+  optional ObjectId package = 3;
+  // Ticket authorizing the upgrade.
+  optional Argument ticket = 4;
+}
+
+// An argument to a programmable transaction command.
+message Argument {
+  oneof kind {
+    // The gas coin. The gas coin can only be used by-ref, except for with
+    // `TransferObjects`, which can use it by-value.
+    google.protobuf.Empty gas = 1;
+    // One of the input objects or primitive values (from
+    // `ProgrammableTransaction` inputs).
+    uint32 input = 2;
+    // The result of another command (from `ProgrammableTransaction` commands).
+    uint32 result = 3;
+    // Like a `Result` but it accesses a nested result. Currently, the only usage
+    // of this is to access a value from a Move call with multiple return values.
+    NestedResult nested_result = 4;
+  }
+}
+
+// An argument type for a nested result.
+message NestedResult {
+  // The command index.
+  optional uint32 result = 1;
+  // The index into the command's output.
+  optional uint32 subresult = 2;
+}
+
+// System transaction used to change the epoch.
+message ChangeEpoch {
+  // The next (to become) epoch ID.
+  optional uint64 epoch = 1;
+  // The protocol version in effect in the new epoch.
+  optional uint64 protocol_version = 2;
+  // The total amount of gas charged for storage during the epoch.
+  optional uint64 storage_charge = 3;
+  // The total amount of gas charged for computation during the epoch.
+  optional uint64 computation_charge = 4;
+  // The amount of storage rebate refunded to the txn senders.
+  optional uint64 storage_rebate = 5;
+  // The non-refundable storage fee.
+  optional uint64 non_refundable_storage_fee = 6;
+  // Unix timestamp when epoch started.
+  optional uint64 epoch_start_timestamp_ms = 7;
+  // System packages (specifically framework and Move stdlib) that are written before the new
+  // epoch starts. This tracks framework upgrades on chain. When executing the `ChangeEpoch` txn,
+  // the validator must write out the following modules.  Modules are provided with the version they
+  // will be upgraded to, their modules in serialized form (which include their package ID), and
+  // a list of their transitive dependencies.
+  repeated SystemPackage system_packages = 8;
+}
+
+// System package.
+message SystemPackage {
+  // Version of the package.
+  optional uint64 version = 1;
+  // Move modules.
+  repeated bytes modules = 2;
+  // Package dependencies.
+  repeated ObjectId dependencies = 3;
+}
+
+// The genesis transaction.
+message GenesisTransaction {
+  // Set of genesis objects.
+  repeated GenesisObject objects = 1;
+}
+
+// Consensus commit prologue system transaction.
+//
+// This message can represent V1, V2, and V3 prologue types.
+message ConsensusCommitPrologue {
+  // Epoch of the commit prologue transaction.
+  //
+  // Present in V1, V2, and V3.
+  optional uint64 epoch = 1;
+
+  // Consensus round of the commit.
+  //
+  // Present in V1, V2, and V3.
+  optional uint64 round = 2;
+
+  // Unix timestamp from consensus.
+  //
+  // Present in V1, V2, and V3.
+  optional uint64 commit_timestamp_ms = 3;
+
+  // Digest of consensus output.
+  //
+  // Present in V2 and V3.
+  optional Digest consensus_commit_digest = 4;
+
+  // The sub DAG index of the consensus commit. This field is populated if there
+  // are multiple consensus commits per round.
+  //
+  // Present in V3.
+  optional uint64 sub_dag_index = 5;
+
+  // Stores consensus handler determined shared object version assignments.
+  //
+  // Present in V3.
+  optional ConsensusDeterminedVersionAssignments consensus_determined_version_assignments = 6;
+}
+
+// Object version assignment from consensus.
+message VersionAssignment {
+  // `ObjectId` of the object.
+  optional ObjectId object_id = 1;
+  // Assigned version.
+  optional uint64 version = 2;
+}
+
+// A transaction that was cancelled.
+message CancelledTransaction {
+  // Digest of the cancelled transaction.
+  optional Digest digest = 1;
+  // List of object version assignments.
+  repeated VersionAssignment version_assignments = 2;
+}
+
+// Set of cancelled transactions.
+message CancelledTransactions {
+  repeated CancelledTransaction cancelled_transactions = 1;
+}
+
+// Version assignments performed by consensus.
+message ConsensusDeterminedVersionAssignments {
+  oneof kind {
+    // Cancelled transaction version assignment.
+    CancelledTransactions cancelled_transactions = 1;
+  }
+}
+
+// Update the set of valid JWKs.
+message AuthenticatorStateUpdate {
+  // Epoch of the authenticator state update transaction.
+  optional uint64 epoch = 1;
+  // Consensus round of the authenticator state update.
+  optional uint64 round = 2;
+  // Newly active JWKs.
+  repeated ActiveJwk new_active_jwks = 3;
+  // The initial version of the authenticator object that it was shared at.
+  optional uint64 authenticator_object_initial_shared_version = 4;
+}
+
+// A new JWK.
+message ActiveJwk {
+  // Identifier used to uniquely identify a JWK.
+  optional JwkId id = 1;
+  // The JWK.
+  optional Jwk jwk = 2;
+  // Most recent epoch in which the JWK was validated.
+  optional uint64 epoch = 3;
+}
+
+// Key to uniquely identify a JWK.
+message JwkId {
+  // The issuer or identity of the OIDC provider.
+  optional string iss = 1;
+  // A key ID used to uniquely identify a key from an OIDC provider.
+  optional string kid = 2;
+}
+
+// A JSON web key.
+//
+// Struct that contains info for a JWK. A list of them for different kinds can
+// be retrieved from the JWK endpoint (for example, <https://www.googleapis.com/oauth2/v3/certs>).
+// The JWK is used to verify the JWT token.
+message Jwk {
+  // Key type parameter, https://datatracker.ietf.org/doc/html/rfc7517#section-4.1.
+  optional string kty = 1;
+  // RSA public exponent, https://datatracker.ietf.org/doc/html/rfc7517#section-9.3.
+  optional string e = 2;
+  // RSA modulus, https://datatracker.ietf.org/doc/html/rfc7517#section-9.3.
+  optional string n = 3;
+  // Algorithm parameter, https://datatracker.ietf.org/doc/html/rfc7517#section-4.4.
+  optional string alg = 4;
+}
+
+// Set of operations run at the end of the epoch to close out the current epoch
+// and start the next one.
+message EndOfEpochTransaction {
+  repeated EndOfEpochTransactionKind transactions = 1;
+}
+
+// Operation run at the end of an epoch.
+message EndOfEpochTransactionKind {
+  oneof kind {
+    // End the epoch and start the next one.
+    ChangeEpoch change_epoch = 1;
+    // Expire JWKs used for zklogin.
+    AuthenticatorStateExpire authenticator_state_expire = 2;
+
+    // Use higher field numbers for kinds which happen infrequently.
+
+    // Create and initialize the authenticator object used for zklogin.
+    google.protobuf.Empty authenticator_state_create = 200;
+    // Create and initialize the randomness object.
+    google.protobuf.Empty randomness_state_create = 201;
+    // Create and initialize the deny list object.
+    google.protobuf.Empty deny_list_state_create = 202;
+    // Create and initialize the bridge object.
+    Digest bridge_state_create = 203;
+    // Initialize the bridge committee.
+    uint64 bridge_committee_init = 204;
+  }
+}
+
+// Expire old JWKs.
+message AuthenticatorStateExpire {
+  // Expire JWKs that have a lower epoch than this.
+  optional uint64 min_epoch = 1;
+  // The initial version of the authenticator object that it was shared at.
+  optional uint64 authenticator_object_initial_shared_version = 2;
+}
+
+// End Transaction }}}
+
+// TransactionEffects {{{
+
+// The output or effects of executing a transaction.
+message TransactionEffects {
+  oneof version {
+    TransactionEffectsV1 v1 = 1;
+    TransactionEffectsV2 v2 = 2;
+  }
+}
+
+// Version 1 of `TransactionEffects`.
+message TransactionEffectsV1 {
+  // The status of the execution.
+  optional ExecutionStatus status = 1;
+  // The epoch when this transaction was executed.
+  optional uint64 epoch = 2;
+  // The gas used by this transaction.
+  optional GasCostSummary gas_used = 3;
+  // The version that every modified (mutated or deleted) object had before it was modified by
+  // this transaction.
+  repeated ModifiedAtVersion modified_at_versions = 4;
+  // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
+  repeated ObjectReference shared_objects = 5;
+  // The transaction digest.
+  optional Digest transaction_digest = 6;
+
+  // `ObjectReference` and owner of new objects created.
+  repeated ObjectReferenceWithOwner created = 7;
+  // `ObjectReference` and owner of mutated objects, including gas object.
+  repeated ObjectReferenceWithOwner mutated = 8;
+  // `ObjectReference` and owner of objects that are unwrapped in this transaction.
+  // Unwrapped objects are objects that were wrapped into other objects in the past,
+  // and just got extracted out.
+  repeated ObjectReferenceWithOwner unwrapped = 9;
+  // Object refs of objects now deleted (the new refs).
+  repeated ObjectReference deleted = 10;
+  // Object refs of objects previously wrapped in other objects but now deleted.
+  repeated ObjectReference unwrapped_then_deleted = 11;
+  // Object refs of objects now wrapped in other objects.
+  repeated ObjectReference wrapped = 12;
+  // The updated gas object reference. Have a dedicated field for convenient access.
+  // It's also included in mutated.
+  optional ObjectReferenceWithOwner gas_object = 13;
+  // The digest of the events emitted during execution,
+  // can be `None` if the transaction does not emit any event.
+  optional Digest events_digest = 14;
+  // The set of transaction digests this transaction depends on.
+  repeated Digest dependencies = 15;
+}
+
+// An object reference with owner information.
+message ObjectReferenceWithOwner {
+  // Required. `ObjectReference`.
+  optional ObjectReference reference = 1;
+  // Required. `Owner`.
+  optional Owner owner = 2;
+}
+
+// Indicates that an object was modified at a specific version.
+message ModifiedAtVersion {
+  // Required. `ObjectId` of the object.
+  optional ObjectId object_id = 1;
+  // Required. Version of the object prior to this transaction.
+  optional uint64 version = 2;
+}
+
+// Version 2 of `TransactionEffects`.
+message TransactionEffectsV2 {
+  // The status of the execution.
+  optional ExecutionStatus status = 1;
+  // The epoch when this transaction was executed.
+  optional uint64 epoch = 2;
+  // The gas used by this transaction.
+  optional GasCostSummary gas_used = 3;
+  // The transaction digest.
+  optional Digest transaction_digest = 4;
+  // The updated gas object reference, as an index into the `changed_objects` vector.
+  // Having a dedicated field for convenient access.
+  // System transaction that don't require gas will leave this as `None`.
+  optional uint32 gas_object_index = 5;
+
+  // The digest of the events emitted during execution,
+  // can be `None` if the transaction does not emit any event.
+  optional Digest events_digest = 6;
+
+  // The set of transaction digests this transaction depends on.
+  repeated Digest dependencies = 7;
+
+  // The version number of all the written Move objects by this transaction.
+  optional uint64 lamport_version = 8;
+
+  // Objects whose state are changed in the object store.
+  repeated ChangedObject changed_objects = 9;
+
+  // Shared objects that are not mutated in this transaction. Unlike owned objects,
+  // read-only shared objects' version are not committed in the transaction,
+  // and in order for a node to catch up and execute it without consensus sequencing,
+  // the version needs to be committed in the effects.
+  repeated UnchangedSharedObject unchanged_shared_objects = 10;
+
+  // Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately.
+  // Storing it separately allows us to avoid bloating the effects with data that are not critical.
+  // It also provides more flexibility on the format and type of the data.
+  optional Digest auxiliary_data_digest = 11;
+}
+
+/// Input/output state of an object that was changed during execution.
+message ChangedObject {
+  // Required. ID of the object.
+  optional ObjectId object_id = 1;
+
+  // Required. State of the object in the store prior to this transaction.
+  oneof input_state {
+    // Object did not exist prior to this transaction.
+    google.protobuf.Empty not_exist = 2;
+    // Object existed prior to this transaction.
+    ObjectExist exist = 3;
+  }
+
+  // Required. State of the object in the store after this transaction.
+  oneof output_state {
+    // Object was removed from the store due to this transaction.
+    google.protobuf.Empty removed = 4;
+    // Object was written, including all of mutated, created, unwrapped.
+    ObjectWrite object_write = 5;
+    // Package was written.
+    PackageWrite package_write = 6;
+  }
+
+  // Required. What happened to an `ObjectId` during execution.
+  oneof id_operation {
+    google.protobuf.Empty none = 7;
+    google.protobuf.Empty created = 8;
+    google.protobuf.Empty deleted = 9;
+  }
+}
+
+// Information about the old version of the object.
+message ObjectExist {
+  // Required. Version of the object.
+  optional uint64 version = 1;
+  // Required. Digest of the object.
+  optional Digest digest = 2;
+  // Required. Owner of the object.
+  optional Owner owner = 3;
+}
+
+// Object write, including all of mutated, created, unwrapped.
+message ObjectWrite {
+  // Required. Digest of the new version of the object.
+  optional Digest digest = 2;
+  // Required. Owner of the new version of the object.
+  optional Owner owner = 3;
+}
+
+// Package write.
+message PackageWrite {
+  // Version of the new package.
+  optional uint64 version = 1;
+  // Required. Digest of the new package.
+  optional Digest digest = 2;
+}
+
+// A shared object that wasn't changed during execution.
+message UnchangedSharedObject {
+  // Required. ObjectId of the shared object.
+  optional ObjectId object_id = 1;
+
+  oneof kind {
+    // Read-only shared object from the input.
+    ReadOnlyRoot read_only_root = 2;
+
+    // Deleted shared objects that appear mutably/owned in the input.
+    uint64 mutate_deleted = 3;
+
+    // Deleted shared objects that appear as read-only in the input.
+    uint64 read_deleted = 4;
+
+    // Shared objects that was congested and resulted in this transaction being
+    // cancelled.
+    uint64 cancelled = 5;
+
+    // Read of a per-epoch config object that should remain the same during an epoch.
+    google.protobuf.Empty per_epoch_config = 6;
+  }
+}
+
+// Read-only shared object from the input.
+message ReadOnlyRoot {
+  // Required. Version of the shared object.
+  optional uint64 version = 1;
+  // Required. Digest of the shared object.
+  optional Digest digest = 2;
+}
+
+// End TransactionEffects }}}
+
+// ExecutionStatus {{{
+
+/// The status of an executed transaction.
+message ExecutionStatus {
+  // Required. Indicates if the transaction was successful or not.
+  optional bool success = 1;
+
+  // Optional. The error if `success` is false.
+  optional FailureStatus status = 2;
+}
+
+// A size error.
+message SizeError {
+  // Required. The offending size.
+  optional uint64 size = 1;
+  // Required. The maximum allowable size.
+  optional uint64 max_size = 2;
+}
+
+// Error that occurred in Move.
+message MoveError {
+  // Location in Move where the error occurred.
+  optional MoveLocation location = 1;
+  // Abort code from Move.
+  optional uint64 abort_code = 2;
+}
+
+// An error that can occur during the execution of a transaction.
+message FailureStatus {
+  // The command, if any, during which the error occurred.
+  optional uint64 command = 1;
+
+  oneof execution_error {
+    // Insufficient gas.
+    google.protobuf.Empty insufficient_gas = 2;
+    // Invalid `Gas` object.
+    google.protobuf.Empty invalid_gas_object = 3;
+    // Invariant violation.
+    google.protobuf.Empty invariant_violation = 4;
+    // Attempted to use feature that is not supported yet.
+    google.protobuf.Empty feature_not_yet_supported = 5;
+    // Move object is larger than the maximum allowed size.
+    SizeError object_too_big = 6;
+    // Package is larger than the maximum allowed size.
+    SizeError package_too_big = 7;
+    // Circular object ownership.
+    ObjectId circular_object_ownership = 8;
+
+    //
+    // Coin errors.
+    //
+    // Insufficient coin balance for requested operation.
+    google.protobuf.Empty insufficient_coin_balance = 9;
+    // Coin balance overflowed an u64.
+    google.protobuf.Empty coin_balance_overflow = 10;
+
+    //
+    // Publish/Upgrade errors.
+    //
+    // Publish error, non-zero address.
+    // The modules in the package must have their self-addresses set to zero.
+    google.protobuf.Empty publish_error_non_zero_address = 11;
+
+    // Sui Move bytecode verification error.
+    google.protobuf.Empty sui_move_verification_error = 12;
+
+    //
+    // MoveVm errors.
+    //
+    // Error from a non-abort instruction.
+    // Possible causes:
+    //     Arithmetic error, stack overflow, max value depth, or similar.
+    MoveError move_primitive_runtime_error = 13;
+    // Move runtime abort.
+    MoveError move_abort = 14;
+    // Bytecode verification error.
+    google.protobuf.Empty vm_verification_or_deserialization_error = 15;
+    // MoveVm invariant violation.
+    google.protobuf.Empty vm_invariant_violation = 16;
+
+    //
+    // Programmable transaction errors.
+    //
+    // Function not found.
+    google.protobuf.Empty function_not_found = 17;
+    // Parity mismatch for Move function.
+    // The number of arguments does not match the number of parameters.
+    google.protobuf.Empty arity_mismatch = 18;
+    // Type parity mismatch for Move function.
+    // Mismatch between the number of actual versus expected type arguments.
+    google.protobuf.Empty type_arity_mismatch = 19;
+    // Non-entry function invoked. Move Call must start with an entry function.
+    google.protobuf.Empty non_entry_function_invoked = 20;
+    // Invalid command argument.
+    CommandArgumentError command_argument_error = 21;
+    // Type argument error.
+    TypeArgumentError type_argument_error = 22;
+    // Unused result without the drop ability.
+    NestedResult unused_value_without_drop = 23;
+    // Invalid public Move function signature.
+    // Unsupported return type for return value.
+    uint32 invalid_public_function_return_type = 24;
+    // Invalid transfer object, object does not have public transfer.
+    google.protobuf.Empty invalid_transfer_object = 25;
+
+    //
+    // Post-execution errors.
+    //
+    // Effects from the transaction are too large.
+    SizeError effects_too_large = 26;
+
+    // Publish or Upgrade is missing dependency.
+    google.protobuf.Empty publish_upgrade_missing_dependency = 27;
+
+    // Publish or upgrade dependency downgrade.
+    //
+    // Indirect (transitive) dependency of published or upgraded package has been assigned an
+    // on-chain version that is less than the version required by one of the package's
+    // transitive dependencies.
+    google.protobuf.Empty publish_upgrade_dependency_downgrade = 28;
+
+    // Invalid package upgrade.
+    PackageUpgradeError package_upgrade_error = 29;
+
+    // Indicates the transaction tried to write objects too large to storage.
+    SizeError written_objects_too_large = 30;
+
+    // Certificate is on the deny list.
+    google.protobuf.Empty certificate_denied = 31;
+
+    // Sui Move bytecode verification timed out.
+    google.protobuf.Empty sui_move_verification_timedout = 32;
+
+    // The requested shared object operation is not allowed.
+    google.protobuf.Empty shared_object_operation_not_allowed = 33;
+
+    // Requested shared object has been deleted.
+    google.protobuf.Empty input_object_deleted = 34;
+
+    // Certificate is cancelled due to congestion on shared objects.
+    CongestedObjectsError execution_cancelled_due_to_shared_object_congestion = 35;
+
+    // Address is denied for this coin type.
+    AddressDeniedForCoinError address_denied_for_coin = 36;
+
+    // Coin type is globally paused for use.
+    string coin_type_global_pause = 37;
+
+    // Certificate is cancelled because randomness could not be generated this epoch.
+    google.protobuf.Empty execution_cancelled_due_to_randomness_unavailable = 38;
+  }
+}
+
+// Address is denied for this coin type.
+message AddressDeniedForCoinError {
+  // Required. Denied address.
+  optional Address address = 1;
+  // Required. Coin type.
+  optional string coin_type = 2;
+}
+
+// Set of objects that were congested, leading to the transaction's cancellation.
+message CongestedObjectsError {
+  // Set of congested objects.
+  repeated ObjectId congested_objects = 1;
+}
+
+/// Location in Move bytecode where an error occurred.s
+message MoveLocation {
+  // Required. The package ID.
+  optional ObjectId package = 1;
+  // Required. The module name.
+  optional Identifier module = 2;
+  // Required. The function index.
+  optional uint32 function = 3;
+  // Required. Offset of the instruction where the error occurred.
+  optional uint32 instruction = 4;
+  // Optional. The name of the function, if available.
+  optional Identifier function_name = 5;
+}
+
+// An error with an argument to a command.
+message CommandArgumentError {
+  // Required. Position of the problematic argument.
+  optional uint32 argument = 1;
+
+  oneof kind {
+    // The type of the value does not match the expected type.
+    google.protobuf.Empty type_mismatch = 2;
+    // The argument cannot be deserialized into a value of the specified type.
+    google.protobuf.Empty invalid_bcs_bytes = 3;
+    // The argument cannot be instantiated from raw bytes.
+    google.protobuf.Empty invalid_usage_of_pure_argument = 4;
+    // Invalid argument to private entry function.
+    // Private entry functions cannot take arguments from other Move functions.
+    google.protobuf.Empty invalid_argument_to_private_entry_function = 5;
+    // Out of bounds access to input or results.
+    uint32 index_out_of_bounds = 6;
+    // Out of bounds access to subresult.
+    NestedResult secondary_index_out_of_bounds = 7;
+    // Invalid usage of result.
+    // Expected a single result but found either no return value or multiple.
+    uint32 invalid_result_arity = 8;
+    // Invalid usage of gas coin.
+    // The gas coin can only be used by-value with a `TransferObject` command.
+    google.protobuf.Empty invalid_gas_coin_usage = 9;
+    // Invalid usage of Move value.
+    //    - Mutably borrowed values require unique usage.
+    //    - Immutably borrowed values cannot be taken or borrowed mutably.
+    //    - Taken values cannot be used again.
+    google.protobuf.Empty invalid_value_usage = 10;
+    // Immutable objects cannot be passed by-value.
+    google.protobuf.Empty invalid_object_by_value = 11;
+    // Immutable objects cannot be passed by mutable reference, `&mut`.
+    google.protobuf.Empty invalid_object_by_mut_ref = 12;
+    // Shared object operations such as wrapping, freezing, or converting to owned are not
+    // allowed.
+    google.protobuf.Empty shared_object_operation_not_allowed = 13;
+  }
+}
+
+// An error with a upgrading a package.
+message PackageUpgradeError {
+  oneof kind {
+    // Unable to fetch package.
+    ObjectId unable_to_fetch_package = 2;
+    // Object is not a package.
+    ObjectId not_a_package = 3;
+    // Package upgrade is incompatible with previous version.
+    google.protobuf.Empty incompatible_upgrade = 4;
+    // Digest in upgrade ticket and computed digest differ.
+    Digest digets_does_not_match = 5;
+    // Upgrade policy is not valid.
+    uint32 unknown_upgrade_policy = 6;
+    // Package ID does not match `PackageId` in upgrade ticket.
+    PackageIdDoesNotMatch package_id_does_not_match = 7;
+  }
+}
+
+// Package ID does not match `PackageId` in upgrade ticket.
+message PackageIdDoesNotMatch {
+  // Required. The package ID.
+  optional ObjectId package_id = 1;
+  // Required. The ticket ID.
+  optional ObjectId ticket_id = 2;
+}
+
+// Type argument error.
+message TypeArgumentError {
+  // Required. Index of the problematic type argument.
+  optional uint32 type_argument = 1;
+
+  oneof kind {
+    // A type was not found in the module specified.
+    google.protobuf.Empty type_not_found = 2;
+    // A type provided did not match the specified constraint.
+    google.protobuf.Empty constraint_not_satisfied = 3;
+  }
+}
+
+// End ExecutionStatus }}}
+
+// Signatures {{{
+
+// A signature from a user.
+message UserSignature {
+  oneof signature {
+    SimpleSignature simple = 1;
+    MultisigAggregatedSignature multisig = 2;
+    ZkLoginAuthenticator zklogin = 3;
+    PasskeyAuthenticator passkey = 4;
+  }
+}
+
+// A basic signature.
+//
+// Can either be an ed25519, secp256k1, or secp256r1 signature with
+// corresponding public key.
+message SimpleSignature {
+  // The signature scheme of the signautre and public key, which should be an
+  // enum value of [sui.types.SignatureScheme][sui.types.SignatureScheme]
+  optional int32 scheme = 1;
+  // Signature bytes.
+  optional bytes signature = 2;
+  // Public key bytes.
+  optional bytes public_key = 3;
+}
+
+// Public key equivalent for zklogin authenticators.
+message ZkLoginPublicIdentifier {
+  // Required.
+  optional string iss = 1;
+  // Required.
+  optional Bn254FieldElement address_seed = 2;
+}
+
+// Set of valid public keys for multisig committee members.
+message MultisigMemberPublicKey {
+  oneof scheme {
+    // An ed25519 public key
+    bytes ed25519 = 1;
+    // A secp256k1 public key
+    bytes secp256k1 = 2;
+    // A secp256r1 public key
+    bytes secp256r1 = 3;
+    // A zklogin public identifier
+    ZkLoginPublicIdentifier zklogin = 4;
+  }
+}
+
+// A member in a multisig committee.
+message MultisigMember {
+  // Required. The public key of the committee member.
+  optional MultisigMemberPublicKey public_key = 1;
+  // Required. The weight of this member's signature.
+  optional uint32 weight = 2;
+}
+
+// A multisig committee.
+message MultisigCommittee {
+  // A list of committee members and their corresponding weight.
+  repeated MultisigMember members = 1;
+  // Required. The threshold of signatures needed to validate a signature from
+  // this committee.
+  optional uint32 threshold = 2;
+}
+
+// Aggregated signature from members of a multisig committee.
+message MultisigAggregatedSignature {
+  // The plain signatures encoded with signature scheme.
+  //
+  // The signatures must be in the same order as they are listed in the committee.
+  repeated MultisigMemberSignature signatures = 1;
+
+  // Required. Bitmap indicating which committee members contributed to the
+  // signature.
+  optional uint32 bitmap = 2;
+  // Optional. If present, means this signature's on-chain format uses the old
+  // legacy multisig format.
+  optional RoaringBitmap legacy_bitmap = 3;
+  // Required. The committee to use to validate this signature.
+  optional MultisigCommittee committee = 4;
+}
+
+// A signature from a member of a multisig committee.
+message MultisigMemberSignature {
+  oneof signature {
+    // An ed25519 signature.
+    bytes ed25519 = 1;
+    // A secp256k1 signature.
+    bytes secp256k1 = 2;
+    // A secp256r1 signature.
+    bytes secp256r1 = 3;
+    // A zklogin signature.
+    ZkLoginAuthenticator zklogin = 4;
+  }
+}
+
+// A zklogin authenticator.
+message ZkLoginAuthenticator {
+  // Required. Zklogin proof and inputs required to perform proof verification.
+  optional ZkLoginInputs inputs = 1;
+  // Required. Maximum epoch for which the proof is valid.
+  optional uint64 max_epoch = 2;
+  // Required. User signature with the public key attested to by the provided proof.
+  optional SimpleSignature signature = 3;
+}
+
+// A zklogin groth16 proof and the required inputs to perform proof verification.
+message ZkLoginInputs {
+  // Required.
+  optional ZkLoginProof proof_points = 1;
+  // Required.
+  optional ZkLoginClaim iss_base64_details = 2;
+  // Required.
+  optional string header_base64 = 3;
+  // Required.
+  optional Bn254FieldElement address_seed = 4;
+}
+
+// A zklogin groth16 proof.
+message ZkLoginProof {
+  // Required.
+  optional CircomG1 a = 1;
+  // Required.
+  optional CircomG2 b = 2;
+  // Required.
+  optional CircomG1 c = 3;
+}
+
+// A claim of the iss in a zklogin proof.
+message ZkLoginClaim {
+  // Required.
+  optional string value = 1;
+  // Required.
+  optional uint32 index_mod_4 = 2;
+}
+
+// A G1 point.
+message CircomG1 {
+  // Required.
+  optional Bn254FieldElement e0 = 1;
+  // Required.
+  optional Bn254FieldElement e1 = 2;
+  // Required.
+  optional Bn254FieldElement e2 = 3;
+}
+
+// A G2 point.
+message CircomG2 {
+  // Required.
+  optional Bn254FieldElement e00 = 1;
+  // Required.
+  optional Bn254FieldElement e01 = 2;
+
+  // Required.
+  optional Bn254FieldElement e10 = 3;
+  // Required.
+  optional Bn254FieldElement e11 = 4;
+
+  // Required.
+  optional Bn254FieldElement e20 = 5;
+  // Required.
+  optional Bn254FieldElement e21 = 6;
+}
+
+// A point on the BN254 elliptic curve.
+message Bn254FieldElement {
+  // Required. 32-byte big-endian field element.
+  optional bytes element = 1;
+}
+
+// A passkey authenticator.
+//
+// See
+// [struct.PasskeyAuthenticator](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/struct.PasskeyAuthenticator.html#bcs)
+// for more information on the requirements on the shape of the
+// `client_data_json` field.
+message PasskeyAuthenticator {
+  // Required. Opaque authenticator data for this passkey signature.
+  //
+  // See [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) for
+  // more information on this field.
+  optional bytes authenticator_data = 1;
+
+  // Required. Structured, unparsed, JSON for this passkey signature.
+  //
+  // See [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata)
+  // for more information on this field.
+  optional string client_data_json = 2;
+
+  // Required. A secp256r1 signature.
+  optional SimpleSignature signature = 3;
+}
+
+// The validator set for a particular epoch.
+message ValidatorCommittee {
+  // Required. The epoch where this committee governs.
+  optional uint64 epoch = 1;
+
+  // The committee members.
+  repeated ValidatorCommitteeMember members = 2;
+}
+
+// A member of a validator committee.
+message ValidatorCommitteeMember {
+  // Required. The 96-byte Bls12381 public key for this validator.
+  optional bytes public_key = 1;
+
+  // Required. Stake weight this validator possesses.
+  optional uint64 stake = 2;
+}
+
+/// An aggregated signature from multiple validators.
+message ValidatorAggregatedSignature {
+  // Required. The epoch when this signature was produced.
+  //
+  // This can be used to lookup the `ValidatorCommittee` from this epoch
+  // to verify this signature.
+  optional uint64 epoch = 1;
+
+  // Required. The 48-byte Bls12381 aggregated signature.
+  optional bytes signature = 2;
+
+  // Required. Bitmap indicating which members of the committee contributed to
+  // this signature.
+  optional RoaringBitmap bitmap = 3;
+}
+
+// A RoaringBitmap. See
+// [RoaringFormatSpec](https://github.com/RoaringBitmap/RoaringFormatSpec) for the
+// specification for the serialized format of `RoaringBitmap`s.
+message RoaringBitmap {
+  // Required. Serialized `RoaringBitmap`.
+  optional bytes bitmap = 1;
+}
+
+// End Signatures }}}

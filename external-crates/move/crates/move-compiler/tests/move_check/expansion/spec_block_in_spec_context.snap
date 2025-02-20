@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/expansion/spec_block_in_spec_context.move:3:5
+  │  
+3 │ ╭     spec module {
+4 │ │         fun S(): () {
+5 │ │             spec {};
+6 │ │         }
+7 │ │     }
+  │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_block_in_spec_context.move:10:9
+   │
+10 │         spec {};
+   │         ^^^^^^^ Specification blocks are deprecated and are no longer used

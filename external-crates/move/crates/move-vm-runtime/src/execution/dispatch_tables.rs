@@ -589,6 +589,7 @@ impl VMDispatchTables {
         let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(ref einfo) => {
                 let mut variant_layouts = vec![];
+                *count += einfo.variants.len() as u64;
                 for variant in einfo.variants.iter() {
                     let field_tys = variant
                         .fields
@@ -677,6 +678,7 @@ impl VMDispatchTables {
         let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(enum_type) => {
                 let mut variant_layouts = BTreeMap::new();
+                *count += enum_type.variants.len() as u64;
                 for variant in enum_type.variants.iter() {
                     if variant.fields.len() != variant.field_names.len() {
                         return Err(

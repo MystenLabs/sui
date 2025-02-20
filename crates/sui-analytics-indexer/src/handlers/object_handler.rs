@@ -188,9 +188,17 @@ impl ObjectHandler {
         let object_type = move_obj_opt.map(|o| o.type_());
 
         let is_match = if let Some(package_id) = self.package_filter {
+            let original_package_id = state
+                .package_store
+                .get_original_package_id(package_id.into())
+                .await?;
             if let Some(move_object_type) = object_type {
                 let object_package_id: ObjectID = move_object_type.address().into();
-                object_package_id == package_id
+                let object_original_package_id = state
+                    .package_store
+                    .get_original_package_id(object_package_id.into())
+                    .await?;
+                object_original_package_id == original_package_id
             } else {
                 false
             }

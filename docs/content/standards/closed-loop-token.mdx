@@ -2,7 +2,7 @@
 title: Closed-Loop Token
 ---
 
-Using the Closed-Loop Token standard, you can limit the applications that can use the token and set up custom policies for transfers, spends, and conversions. The [`sui::token` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/token.md) in the Sui framework defines the standard.
+Using the Closed-Loop Token standard, you can limit the applications that can use the token and set up custom policies for transfers, spends, and conversions. The [`sui::token` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/token.md) in the Sui framework defines the standard.
 
 ## Background and use cases
 
@@ -29,6 +29,7 @@ flowchart RL
     B-- to_balance -->A;
     C-- to_coin -->B;
 ```
+
 ```mermaid
 flowchart LR
     subgraph "&nbsp;&nbsp;Balance has store { u64 }&nbsp;&nbsp;"
@@ -46,7 +47,6 @@ flowchart LR
     A-- from_balance -->B;
     B-- from_coin -->C;
 ```
-
 
 Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, it can be "spent" - see [Spending section](./closed-loop-token/spending.mdx) section).
 

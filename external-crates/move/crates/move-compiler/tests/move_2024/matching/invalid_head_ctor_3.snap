@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03022]: invalid usage position
+   ┌─ tests/move_2024/matching/invalid_head_ctor_3.move:16:13
+   │
+16 │             l::a(_) => (),
+   │             ^^^^ Invalid module access. Expected a struct or enum, but found function 'a' in module '0x42::l'

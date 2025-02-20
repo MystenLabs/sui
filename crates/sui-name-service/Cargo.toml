@@ -1,0 +1,16 @@
+[package]
+name = "sui-name-service"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+bcs.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+move-core-types.workspace = true
+
+sui-types.workspace = true

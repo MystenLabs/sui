@@ -173,7 +173,8 @@ The pool of `SUI` tokens to be distributed to reviewers is stored in the `reward
 
 #### Storage for reviews
 
-Because anyone can submit a review for a service, `Service` is defined as a shared object. All the reviews are stored in the `reviews` field, which has [ObjectTable](../../../concepts/sui-move-concepts/collections.mdx#object_table)`<ID, Review>` type. The `reviews` are stored as children of the shared object, but they are still accessible by their `ID`.
+Because anyone can submit a review for a service, `Service` is defined as a shared object. All the reviews are stored in the `reviews` field, which has `ObjectTable<ID, Review>` type. The `reviews` are stored as children of the shared object, but they are still accessible by their `ID`. See [Dynamic Collections](https://move-book.com/programmability/dynamic-collections.html#objecttable) in The Move Book for more information on `ObjectTables`.
+
 In other words, anyone can go to a transaction explorer and find a review object by its object ID, but they won't be able to use a review as an input to a transaction by its object ID.
 
 :::info

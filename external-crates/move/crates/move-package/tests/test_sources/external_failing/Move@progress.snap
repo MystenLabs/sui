@@ -1,0 +1,6 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+RESOLVING DEPENDENCIES IN A FROM Root WITH ../resolvers/failing.sh
+../resolvers/failing.sh stderr:
+Failed to resolve dependencies for A

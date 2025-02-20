@@ -16,183 +16,96 @@ DeepBook exposes a set of endpoints that can be used to query any pool.
 
 Accessor to check whether the pool is whitelisted.
 
-```move
-public fun whitelisted<BaseAsset, QuoteAsset>(self: &Pool<BaseAsset, QuoteAsset>): bool
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=whitelisted noComments}
 
 ### Check quote quantity against base
 
 Dry run to determine the quote quantity out for a given base quantity.
 
-```move
-public fun get_quote_quantity_out<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    base_quantity: u64,
-    clock: &Clock,
-): (u64, u64, u64)
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_quote_quantity_out noComments}
 
 ### Check base quantity against quote
 
 Dry run to determine the base quantity out for a given quote quantity.
 
-```move
-public fun get_base_quantity_out<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    quote_quantity: u64,
-    clock: &Clock,
-): (u64, u64, u64)
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_base_quantity_out noComments}
 
 ### Check quote quantity against quote or base
 
 Dry run to determine the quantity out for a given base or quote quantity. Only one out of base or quote quantity should be non-zero. Returns the (`base_quantity_out`, `quote_quantity_out`, `deep_quantity_required`).
 
-```move
-public fun get_quantity_out<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    base_quantity: u64,
-    quote_quantity: u64,
-    clock: &Clock,
-): (u64, u64, u64)
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_quantity_out noComments}
 
 ### Check fee required
 
 Returns the DEEP required for an order if it's a taker or maker given quantity and price (`deep_required_taker`, `deep_required_maker`).
 
-```move
-public fun get_order_deep_required<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    base_quantity: u64,
-    price: u64,
-): (u64, u64)
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_order_deep_required noComments}
 
 ### Retrieve mid price for a pool 
 
 Returns the mid price of the pool.
 
-```move
-public fun mid_price<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    clock: &Clock,
-): u64
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=mid_price noComments}
 
 ### Retrieve order IDs
 
 Returns the `order_id` for all open orders for the `balance_manager` in the pool.
 
-```move
-public fun account_open_orders<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    balance_manager: ID,
-): VecSet<u128>
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=account_open_orders noComments}
 
 ### Retrieve prices and quantities for an order book
 
 Returns vectors holding the prices (`price_vec`) and quantities (`quantity_vec`) for the level2 order book. The `price_low` and `price_high` are inclusive, all orders within the range are returned. `is_bid` is `true` for bids and `false` for asks.
 
-```move
-public fun get_level2_range<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    price_low: u64,
-    price_high: u64,
-    is_bid: bool,
-): (vector<u64>, vector<u64>)
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_level2_range noComments}
 
 Returns vectors holding the prices (`price_vec`) and quantities (`quantity_vec`) for the level2 order book. `ticks` are the maximum number of ticks to return starting from best bid and best ask. (`bid_price`, `bid_quantity`, `ask_price`, `ask_quantity`) are returned as four vectors. The price vectors are sorted in descending order for bids and ascending order for asks.
 
-```move
-public fun get_level2_ticks_from_mid<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    ticks: u64,
-): (vector<u64>, vector<u64>, vector<u64>, vector<u64>)
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_level2_ticks_from_mid noComments}
 
 ### Retrieve balances
 
 Get all balances held in this pool.
 
-```move
-public fun vault_balances<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-): (u64, u64, u64)
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=vault_balances noComments}
 
 ### Retrieve pool ID
 
 Get the ID of the pool given the asset types.
 
-```move
-public fun get_pool_id_by_asset<BaseAsset, QuoteAsset>(registry: &Registry): ID
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_pool_id_by_asset noComments}
 
 ### Retrieve order information
 
 Returns the `Order` struct using the order ID.
 
-```move
-public fun get_order<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    order_id: u128,
-): Order
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_order noComments}
 
 Returns a vector of `Order` structs using a vector of order IDs.
 
-```move
-public fun get_orders<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    order_ids: vector<u128>,
-): vector<Order>
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_orders noComments}
 
 Returns a vector of `Order` structs for all orders that belong to a `BalanceManager` in the pool.
 
-```move
-public fun get_account_order_details<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    balance_manager: &BalanceManager,
-): vector<Order>
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_account_order_details noComments}
 
 ### Retrieve locked balance
 
 Returns the locked balance for a `BalanceManager` in the pool (`base_quantity`, `quote_quantity`, `deep_quantity`).
 
-```move
-public fun locked_balance<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-    balance_manager: &BalanceManager,
-): (u64, u64, u64)
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=locked_balance noComments}
 
 ### Retrieve pool parameters
 
 Returns the trade parameters for the pool (`taker_fee`, `maker_fee`, `stake_required`).
 
-```move
-public fun pool_trade_params<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-): (u64, u64, u64)
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=pool_trade_params noComments}
 
 Returns the book parameters for the pool (`tick_size`, `lot_size`, `min_size`).
 
-```move
-public fun pool_book_params<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-): (u64, u64, u64)
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=pool_book_params noComments}
 
 Returns the `OrderDeepPrice` struct for the pool, which determines the conversion for DEEP fees.
 
-```move
-public fun get_order_deep_price<BaseAsset, QuoteAsset>(
-    self: &Pool<BaseAsset, QuoteAsset>,
-): OrderDeepPrice
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_order_deep_price noComments}

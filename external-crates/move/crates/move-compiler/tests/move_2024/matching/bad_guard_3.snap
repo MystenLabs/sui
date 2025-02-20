@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E07003]: invalid operation, could create dangling a reference
+   ┌─ tests/move_2024/matching/bad_guard_3.move:16:20
+   │
+14 │         match (o) {
+   │                - It is still being mutably borrowed by this reference
+15 │             Option::None => 0,
+16 │             _ if ({*o = Option::None; false}) => 1,
+   │                    ^^^^^^^^^^^^^^^^^ Invalid mutation of reference.

@@ -36,6 +36,7 @@ mod checked {
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag, TypeTag},
     };
+    use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::execution::vm::{LoadedFunctionInformation, MoveVM};
     use move_vm_runtime::execution::Type;
     use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeContextMut};
@@ -559,6 +560,7 @@ mod checked {
             function_name: &IdentStr,
             ty_args: Vec<Type>,
             args: Vec<impl Borrow<[u8]>>,
+            tracer: &mut Option<MoveTraceBuilder>,
         ) -> VMResult<SerializedReturnValues> {
             let gas_status = self.ctx.gas_charger.move_gas_status_mut();
             self.vm_instance.execute_function_bypass_visibility(
@@ -567,6 +569,7 @@ mod checked {
                 ty_args,
                 args,
                 gas_status,
+                tracer.as_mut(),
             )
         }
 
@@ -1300,7 +1303,7 @@ mod checked {
         Ok(InputValue::new_object(object_metadata, obj_value))
     }
 
-    /// Load an a CallArg, either an object or a raw set of BCS bytes
+    /// Load a CallArg, either an object or a raw set of BCS bytes
     fn load_call_arg(
         protocol_config: &ProtocolConfig,
         linkage_analyzer: &mut dyn LinkageAnalysis,

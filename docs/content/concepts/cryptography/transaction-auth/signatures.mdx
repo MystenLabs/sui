@@ -14,16 +14,18 @@ The `flag` is a 1-byte representation corresponding to the signature scheme that
 | ECDSA Secp256r1 | 0x02 |
 | multisig        | 0x03 |
 | zkLogin         | 0x05 |
+| passkey         | 0x06 |
 
 The `sig` bytes are the compressed bytes representation of the signature instead of DER encoding. The following table lists the expected size of each format:
 
-| Scheme          | Signature                                                                     |
-| --------------- | ------------------------------------------------------------------------------|
-| Pure Ed25519    | Compressed, 64 bytes                                                          |
-| ECDSA Secp256k1 | Non-recoverable, compressed, 64 bytes                                         |
-| ECDSA Secp256r1 | Non-recoverable, compressed, 64 bytes                                         |
-| multisig        | BCS serialized all signatures, size varies                                    |
-| zkLogin         | BCS serialized zkLogin inputs, max epoch and ephemeral signature, size varies |
+| Scheme          | Signature                                                                                      |
+| --------------- | -----------------------------------------------------------------------------------------------|
+| Pure Ed25519    | Compressed, 64 bytes                                                                           |
+| ECDSA Secp256k1 | Non-recoverable, compressed, 64 bytes                                                          |
+| ECDSA Secp256r1 | Non-recoverable, compressed, 64 bytes                                                          |
+| multisig        | BCS serialized all signatures, size varies                                                     |
+| zkLogin         | BCS serialized zkLogin inputs, max epoch and ephemeral signature, size varies                  |
+| passkey         | BCS serialized passkey inputs (authenticatorData, clientDataJson, userSignature), size varies  |
 
 The `pk` bytes are the bytes representation of the public key corresponding to the signature.
 
@@ -34,6 +36,7 @@ The `pk` bytes are the bytes representation of the public key corresponding to t
 | ECDSA Secp256r1 | Compressed, 33 bytes                                                                 |
 | multisig        | BCS serialized all participating public keys, size varies                            |
 | zkLogin         | Concatenation of iss length, iss bytes, address seed padded to 32-bytes, size varies |
+| passkey         | Compressed, 33 bytes                                                                 |
 
 ## Signature requirements {#signature-requirements}
 
@@ -55,6 +58,10 @@ An accepted pure Ed25519 signature must follow:
 1. The signature must be valid according to [ZIP215](https://github.com/zcash/zips/blob/main/zip-0215.rst).
 
 See a concrete example for offline signing using CLI in the [Offline Signing](../transaction-auth/offline-signing.mdx) topic.
+
+For more on zkLogin signature, see [zkLogin](../zklogin.mdx).
+
+For more on passkey signature, see [SIP-8](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md).
 
 ## Authority signature
 

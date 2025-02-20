@@ -8,6 +8,7 @@ use crate::execution_cache::ObjectCacheRead;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -18,26 +19,25 @@ use sui_types::storage::{
 use sui_types::transaction::{
     SenderSignedData, SharedInputObject, TransactionDataAPI, TransactionKey,
 };
-use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    error::SuiResult,
-    SUI_RANDOMNESS_STATE_OBJECT_ID,
-};
+use sui_types::{base_types::SequenceNumber, error::SuiResult, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tracing::{debug, trace};
 
 pub struct SharedObjVerManager {}
 
-pub type AssignedTxAndVersions = Vec<(TransactionKey, Vec<(ObjectID, SequenceNumber)>)>;
+pub type AssignedTxAndVersions = Vec<(
+    TransactionKey,
+    Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+)>;
 
 #[must_use]
 #[derive(Default)]
 pub struct ConsensusSharedObjVerAssignment {
-    pub shared_input_next_versions: HashMap<ObjectID, SequenceNumber>,
+    pub shared_input_next_versions: HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
     pub assigned_versions: AssignedTxAndVersions,
 }
 
 impl SharedObjVerManager {
-    pub async fn assign_versions_from_consensus(
+    pub fn assign_versions_from_consensus(
         epoch_store: &AuthorityPerEpochStore,
         cache_reader: &dyn ObjectCacheRead,
         certificates: &[VerifiedExecutableTransaction],
@@ -49,21 +49,33 @@ impl SharedObjVerManager {
             epoch_store,
             cache_reader,
             randomness_round.is_some(),
-        )
-        .await?;
+        )?;
         let mut assigned_versions = Vec::new();
         // We must update randomness object version first before processing any transaction,
         // so that all reads are using the next version.
         // TODO: Add a test that actually check this, i.e. if we change the order, some test should fail.
         if let Some(round) = randomness_round {
             // If we're generating randomness, update the randomness state object version.
+            let randomness_obj_initial_shared_version = epoch_store
+                .epoch_start_config()
+                .randomness_obj_initial_shared_version()
+                .expect("randomness state obj must exist");
             let version = shared_input_next_versions
-                .get_mut(&SUI_RANDOMNESS_STATE_OBJECT_ID)
+                .get_mut(&(
+                    SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    randomness_obj_initial_shared_version,
+                ))
                 .expect("randomness state object must have been added in get_or_init_versions()");
             debug!("assigning shared object versions for randomness: epoch {}, round {round:?} -> version {version:?}", epoch_store.epoch());
             assigned_versions.push((
                 TransactionKey::RandomnessRound(epoch_store.epoch(), round),
-                vec![(SUI_RANDOMNESS_STATE_OBJECT_ID, *version)],
+                vec![(
+                    (
+                        SUI_RANDOMNESS_STATE_OBJECT_ID,
+                        randomness_obj_initial_shared_version,
+                    ),
+                    *version,
+                )],
             ));
             version.increment();
         }
@@ -85,11 +97,11 @@ impl SharedObjVerManager {
         })
     }
 
-    pub async fn assign_versions_from_effects(
+    pub fn assign_versions_from_effects(
         certs_and_effects: &[(&VerifiedExecutableTransaction, &TransactionEffects)],
         epoch_store: &AuthorityPerEpochStore,
         cache_reader: &dyn ObjectCacheRead,
-    ) -> SuiResult<AssignedTxAndVersions> {
+    ) -> AssignedTxAndVersions {
         // We don't care about the results since we can use effects to assign versions.
         // But we must call it to make sure whenever a shared object is touched the first time
         // during an epoch, either through consensus or through checkpoint executor,
@@ -102,14 +114,25 @@ impl SharedObjVerManager {
             epoch_store,
             cache_reader,
             false,
-        )
-        .await?;
+        );
         let mut assigned_versions = Vec::new();
         for (cert, effects) in certs_and_effects {
+            let initial_version_map: BTreeMap<_, _> = cert
+                .transaction_data()
+                .shared_input_objects()
+                .into_iter()
+                .map(|input| input.into_id_and_version())
+                .collect();
             let cert_assigned_versions: Vec<_> = effects
                 .input_shared_objects()
                 .into_iter()
-                .map(|iso| iso.id_and_version())
+                .map(|iso| {
+                    let (id, version) = iso.id_and_version();
+                    let initial_version = initial_version_map
+                        .get(&id)
+                        .expect("transaction must have all inputs from effects");
+                    ((id, *initial_version), version)
+                })
                 .collect();
             let tx_key = cert.key();
             trace!(
@@ -119,14 +142,14 @@ impl SharedObjVerManager {
             );
             assigned_versions.push((tx_key, cert_assigned_versions));
         }
-        Ok(assigned_versions)
+        assigned_versions
     }
 
     pub fn assign_versions_for_certificate(
         cert: &VerifiedExecutableTransaction,
-        shared_input_next_versions: &mut HashMap<ObjectID, SequenceNumber>,
+        shared_input_next_versions: &mut HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-    ) -> Vec<(ObjectID, SequenceNumber)> {
+    ) -> Vec<(ConsensusObjectSequenceKey, SequenceNumber)> {
         let tx_digest = cert.digest();
 
         // Check if the transaction is cancelled due to congestion.
@@ -155,7 +178,12 @@ impl SharedObjVerManager {
         if txn_cancelled {
             // For cancelled transaction due to congestion, assign special versions to all shared objects.
             // Note that new lamport version does not depend on any shared objects.
-            for SharedInputObject { id, .. } in shared_input_objects.iter() {
+            for SharedInputObject {
+                id,
+                initial_shared_version,
+                ..
+            } in shared_input_objects.iter()
+            {
                 let assigned_version = match cancellation_info {
                     Some(CancelConsensusCertificateReason::CongestionOnObjects(_)) => {
                         if congested_objects_info
@@ -176,15 +204,26 @@ impl SharedObjVerManager {
                     }
                     None => unreachable!("cancelled transaction should have cancellation info"),
                 };
-                assigned_versions.push((*id, assigned_version));
+                assigned_versions.push(((*id, *initial_shared_version), assigned_version));
                 is_mutable_input.push(false);
             }
         } else {
-            for (SharedInputObject { id, mutable, .. }, assigned_version) in shared_input_objects
-                .iter()
-                .map(|obj| (obj, *shared_input_next_versions.get(&obj.id()).unwrap()))
-            {
-                assigned_versions.push((*id, assigned_version));
+            for (
+                SharedInputObject {
+                    id,
+                    initial_shared_version,
+                    mutable,
+                },
+                assigned_version,
+            ) in shared_input_objects.iter().map(|obj| {
+                (
+                    obj,
+                    *shared_input_next_versions
+                        .get(&obj.id_and_version())
+                        .unwrap(),
+                )
+            }) {
+                assigned_versions.push(((*id, *initial_shared_version), assigned_version));
                 input_object_keys.push(ObjectKey(*id, assigned_version));
                 is_mutable_input.push(*mutable);
             }
@@ -233,12 +272,12 @@ impl SharedObjVerManager {
     }
 }
 
-async fn get_or_init_versions(
-    transactions: impl Iterator<Item = &SenderSignedData>,
+fn get_or_init_versions<'a>(
+    transactions: impl Iterator<Item = &'a SenderSignedData>,
     epoch_store: &AuthorityPerEpochStore,
     cache_reader: &dyn ObjectCacheRead,
     generate_randomness: bool,
-) -> SuiResult<HashMap<ObjectID, SequenceNumber>> {
+) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
     let mut shared_input_objects: Vec<_> = transactions
         .flat_map(|tx| {
             tx.transaction_data()
@@ -263,9 +302,7 @@ async fn get_or_init_versions(
     shared_input_objects.sort();
     shared_input_objects.dedup();
 
-    epoch_store
-        .get_or_init_next_object_versions(&shared_input_objects, cache_reader)
-        .await
+    epoch_store.get_or_init_next_object_versions(&shared_input_objects, cache_reader)
 }
 
 #[cfg(test)]
@@ -323,18 +360,19 @@ mod tests {
             None,
             &BTreeMap::new(),
         )
-        .await
         .unwrap();
         // Check that the shared object's next version is always initialized in the epoch store.
         assert_eq!(
-            epoch_store.get_next_object_version(&id).unwrap(),
+            epoch_store
+                .get_next_object_version(&id, init_shared_version)
+                .unwrap(),
             init_shared_version
         );
         // Check that the final version of the shared object is the lamport version of the last
         // transaction.
         assert_eq!(
             shared_input_next_versions,
-            HashMap::from([(id, SequenceNumber::from_u64(12))])
+            HashMap::from([((id, init_shared_version), SequenceNumber::from_u64(12))])
         );
         // Check that the version assignment for each transaction is correct.
         // For a transaction that uses the shared object with mutable=false, it won't update the version
@@ -343,10 +381,22 @@ mod tests {
         assert_eq!(
             assigned_versions,
             vec![
-                (certs[0].key(), vec![(id, init_shared_version),]),
-                (certs[1].key(), vec![(id, SequenceNumber::from_u64(4)),]),
-                (certs[2].key(), vec![(id, SequenceNumber::from_u64(4)),]),
-                (certs[3].key(), vec![(id, SequenceNumber::from_u64(10)),]),
+                (
+                    certs[0].key(),
+                    vec![((id, init_shared_version), init_shared_version),]
+                ),
+                (
+                    certs[1].key(),
+                    vec![((id, init_shared_version), SequenceNumber::from_u64(4)),]
+                ),
+                (
+                    certs[2].key(),
+                    vec![((id, init_shared_version), SequenceNumber::from_u64(4)),]
+                ),
+                (
+                    certs[3].key(),
+                    vec![((id, init_shared_version), SequenceNumber::from_u64(10)),]
+                ),
             ]
         );
     }
@@ -388,12 +438,11 @@ mod tests {
             Some(RandomnessRound::new(1)),
             &BTreeMap::new(),
         )
-        .await
         .unwrap();
         // Check that the randomness object's next version is initialized.
         assert_eq!(
             epoch_store
-                .get_next_object_version(&SUI_RANDOMNESS_STATE_OBJECT_ID)
+                .get_next_object_version(&SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version)
                 .unwrap(),
             randomness_obj_version
         );
@@ -401,24 +450,36 @@ mod tests {
         assert_eq!(
             shared_input_next_versions,
             // Randomness object's version is only incremented by 1 regardless of lamport version.
-            HashMap::from([(SUI_RANDOMNESS_STATE_OBJECT_ID, next_randomness_obj_version)])
+            HashMap::from([(
+                (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
+                next_randomness_obj_version
+            )])
         );
         assert_eq!(
             assigned_versions,
             vec![
                 (
                     TransactionKey::RandomnessRound(0, RandomnessRound::new(1)),
-                    vec![(SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),]
+                    vec![(
+                        (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
+                        randomness_obj_version
+                    ),]
                 ),
                 (
                     certs[0].key(),
                     // It is critical that the randomness object version is updated before the assignment.
-                    vec![(SUI_RANDOMNESS_STATE_OBJECT_ID, next_randomness_obj_version)]
+                    vec![(
+                        (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
+                        next_randomness_obj_version
+                    )]
                 ),
                 (
                     certs[1].key(),
                     // It is critical that the randomness object version is updated before the assignment.
-                    vec![(SUI_RANDOMNESS_STATE_OBJECT_ID, next_randomness_obj_version)]
+                    vec![(
+                        (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
+                        next_randomness_obj_version
+                    )]
                 ),
             ]
         );
@@ -535,7 +596,6 @@ mod tests {
             None,
             &cancelled_txns,
         )
-        .await
         .unwrap();
 
         // Check that the final version of the shared object is the lamport version of the last
@@ -543,9 +603,12 @@ mod tests {
         assert_eq!(
             shared_input_next_versions,
             HashMap::from([
-                (id1, SequenceNumber::from_u64(5)), // determined by tx3
-                (id2, SequenceNumber::from_u64(4)), // determined by tx1
-                (SUI_RANDOMNESS_STATE_OBJECT_ID, SequenceNumber::from_u64(1)), // not mutable
+                ((id1, init_shared_version_1), SequenceNumber::from_u64(5)), // determined by tx3
+                ((id2, init_shared_version_2), SequenceNumber::from_u64(4)), // determined by tx1
+                (
+                    (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
+                    SequenceNumber::from_u64(1)
+                ), // not mutable
             ])
         );
 
@@ -555,31 +618,37 @@ mod tests {
             vec![
                 (
                     certs[0].key(),
-                    vec![(id1, init_shared_version_1), (id2, init_shared_version_2)]
+                    vec![
+                        ((id1, init_shared_version_1), init_shared_version_1),
+                        ((id2, init_shared_version_2), init_shared_version_2)
+                    ]
                 ),
                 (
                     certs[1].key(),
                     vec![
-                        (id1, SequenceNumber::CONGESTED),
-                        (id2, SequenceNumber::CANCELLED_READ),
+                        ((id1, init_shared_version_1), SequenceNumber::CONGESTED),
+                        ((id2, init_shared_version_2), SequenceNumber::CANCELLED_READ),
                     ]
                 ),
-                (certs[2].key(), vec![(id1, SequenceNumber::from_u64(4)),]),
+                (
+                    certs[2].key(),
+                    vec![((id1, init_shared_version_1), SequenceNumber::from_u64(4)),]
+                ),
                 (
                     certs[3].key(),
                     vec![
-                        (id1, SequenceNumber::CANCELLED_READ),
-                        (id2, SequenceNumber::CONGESTED)
+                        ((id1, init_shared_version_1), SequenceNumber::CANCELLED_READ),
+                        ((id2, init_shared_version_2), SequenceNumber::CONGESTED)
                     ]
                 ),
                 (
                     certs[4].key(),
                     vec![
                         (
-                            SUI_RANDOMNESS_STATE_OBJECT_ID,
+                            (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
                             SequenceNumber::RANDOMNESS_UNAVAILABLE
                         ),
-                        (id2, SequenceNumber::CANCELLED_READ)
+                        ((id2, init_shared_version_2), SequenceNumber::CANCELLED_READ)
                     ]
                 ),
             ]
@@ -628,21 +697,33 @@ mod tests {
                 .as_slice(),
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
-        )
-        .await
-        .unwrap();
+        );
         // Check that the shared object's next version is always initialized in the epoch store.
         assert_eq!(
-            epoch_store.get_next_object_version(&id).unwrap(),
+            epoch_store
+                .get_next_object_version(&id, init_shared_version)
+                .unwrap(),
             init_shared_version
         );
         assert_eq!(
             assigned_versions,
             vec![
-                (certs[0].key(), vec![(id, init_shared_version),]),
-                (certs[1].key(), vec![(id, SequenceNumber::from_u64(4)),]),
-                (certs[2].key(), vec![(id, SequenceNumber::from_u64(4)),]),
-                (certs[3].key(), vec![(id, SequenceNumber::from_u64(10)),]),
+                (
+                    certs[0].key(),
+                    vec![((id, init_shared_version), init_shared_version),]
+                ),
+                (
+                    certs[1].key(),
+                    vec![((id, init_shared_version), SequenceNumber::from_u64(4)),]
+                ),
+                (
+                    certs[2].key(),
+                    vec![((id, init_shared_version), SequenceNumber::from_u64(4)),]
+                ),
+                (
+                    certs[3].key(),
+                    vec![((id, init_shared_version), SequenceNumber::from_u64(10)),]
+                ),
             ]
         );
     }

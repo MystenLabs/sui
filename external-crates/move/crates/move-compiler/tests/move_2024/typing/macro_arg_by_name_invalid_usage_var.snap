@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_var.move:4:14
+  │
+4 │         copy $x;
+  │              ^^ Macro parameters are not allowed to appear in paths
+  │
+  = To use a macro parameter as a value in a path expression, first bind it to a local variable, e.g. 'let x = $x;'
+  = Macro parameters are always treated as value expressions, and are not modified by path operations.
+    Path operations include 'move', 'copy', '&', '&mut', and field references
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_var.move:5:14
+  │
+5 │         move $x;
+  │              ^^ Macro parameters are not allowed to appear in paths
+  │
+  = To use a macro parameter as a value in a path expression, first bind it to a local variable, e.g. 'let x = $x;'
+  = Macro parameters are always treated as value expressions, and are not modified by path operations.
+    Path operations include 'move', 'copy', '&', '&mut', and field references

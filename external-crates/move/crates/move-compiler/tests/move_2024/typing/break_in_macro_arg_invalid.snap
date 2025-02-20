@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/break_in_macro_arg_invalid.move:8:14
+   │  
+ 8 │           foo!('a: {
+   │ ╭──────────────^
+ 9 │ │             if (cond) return'a vector[];
+   │ │                                -------- Found: 'vector<_>'. It is not compatible with the other type.
+10 │ │             0
+   │ │             - Found: integer. It is not compatible with the other type.
+11 │ │         });
+   │ ╰─────────^ Invalid named block
+
+error[E04010]: cannot infer type
+  ┌─ tests/move_2024/typing/break_in_macro_arg_invalid.move:9:32
+  │
+9 │             if (cond) return'a vector[];
+  │                                ^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/break_in_macro_arg_invalid.move:12:14
+   │  
+12 │           foo!('a: {
+   │ ╭──────────────^
+13 │ │             if (cond) return'a 0;
+   │ │                       ---------- Found: integer. It is not compatible with the other type.
+14 │ │             vector[]
+   │ │             -------- Found: 'vector<_>'. It is not compatible with the other type.
+15 │ │         });
+   │ ╰─────────^ Invalid named block
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/break_in_macro_arg_invalid.move:14:13
+   │
+14 │             vector[]
+   │             ^^^^^^^^ Could not infer this type. Try adding an annotation

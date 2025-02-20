@@ -1,0 +1,6 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+Failed to resolve dependencies for package 'Root-rename': Conflicting "regular" and "dev" overrides found in B:
+C-rename = { local = "deps_only/C-v1" }
+C-rename = { local = "deps_only/C-v2" }
