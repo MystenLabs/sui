@@ -1,5 +1,5 @@
 # Dependency graph and an override (ov) - technically, override in the root is capable of resolving
-# a conflict in the sub-graph for A but becase we expect sub-graphs to be correct as standalone
+# a conflict in the sub-graph for A but because we expect sub-graphs to be correct as standalone
 # entities (and our algorithm proceeds by constructing sub-graphs independently), this will result
 # in a failure.
 #
