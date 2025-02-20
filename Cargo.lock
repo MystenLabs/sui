@@ -14775,7 +14775,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",
- "http 1.2.0",
+ "http 1.1.0",
  "humantime",
  "move-vm-profiler",
  "mysten-common",
