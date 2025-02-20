@@ -14,16 +14,17 @@ use sui_indexer_alt_schema::{
 };
 use sui_types::digests::TransactionDigest;
 
-use super::reader::{ReadError, Reader};
+use super::pg_reader::PgReader;
+use crate::data::error::Error;
 
 /// Key for fetching a transaction's balance changes by digest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct TxBalanceChangeKey(pub TransactionDigest);
 
 #[async_trait::async_trait]
-impl Loader<TxBalanceChangeKey> for Reader {
+impl Loader<TxBalanceChangeKey> for PgReader {
     type Value = StoredTxBalanceChange;
-    type Error = Arc<ReadError>;
+    type Error = Arc<Error>;
 
     async fn load(
         &self,

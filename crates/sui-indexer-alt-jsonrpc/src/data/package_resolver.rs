@@ -14,19 +14,19 @@ use sui_package_resolver::{
     error::Error, Package, PackageStore, PackageStoreWithLruCache, Resolver, Result,
 };
 
-use super::reader::Reader;
+use super::pg_reader::PgReader;
 
 const STORE: &str = "PostgreSQL";
 
 pub(crate) type PackageCache = PackageStoreWithLruCache<DbPackageStore>;
 pub(crate) type PackageResolver = Arc<Resolver<PackageCache>>;
-pub(crate) struct DbPackageStore(Arc<DataLoader<Reader>>);
+pub(crate) struct DbPackageStore(Arc<DataLoader<PgReader>>);
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct PackageKey(AccountAddress);
 
 impl DbPackageStore {
-    pub fn new(loader: Arc<DataLoader<Reader>>) -> Self {
+    pub fn new(loader: Arc<DataLoader<PgReader>>) -> Self {
         Self(loader)
     }
 }
@@ -44,7 +44,7 @@ impl PackageStore for DbPackageStore {
 }
 
 #[async_trait::async_trait]
-impl Loader<PackageKey> for Reader {
+impl Loader<PackageKey> for PgReader {
     type Value = Arc<Package>;
     type Error = Error;
 

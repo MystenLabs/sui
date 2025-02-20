@@ -68,7 +68,7 @@ async fn rgp_response(ctx: &Context) -> Result<BigInt<u64>, RpcError> {
     use kv_epoch_starts::dsl as e;
 
     let mut conn = ctx
-        .reader()
+        .pg_reader()
         .connect()
         .await
         .context("Failed to connect to the database")?;
@@ -89,11 +89,9 @@ async fn rgp_response(ctx: &Context) -> Result<BigInt<u64>, RpcError> {
 async fn latest_sui_system_state_response(
     ctx: &Context,
 ) -> Result<SuiSystemStateSummary, RpcError> {
-    let loader = ctx.loader();
-    let wrapper: SuiSystemStateWrapper =
-        load_latest_deserialized(loader, SUI_SYSTEM_STATE_OBJECT_ID)
-            .await
-            .context("Failed to fetch system state wrapper object")?;
+    let wrapper: SuiSystemStateWrapper = load_latest_deserialized(ctx, SUI_SYSTEM_STATE_OBJECT_ID)
+        .await
+        .context("Failed to fetch system state wrapper object")?;
 
     let inner_id = derive_dynamic_field_id(
         SUI_SYSTEM_STATE_OBJECT_ID,
@@ -103,12 +101,12 @@ async fn latest_sui_system_state_response(
     .context("Failed to derive inner system state field ID")?;
 
     Ok(match wrapper.version {
-        1 => load_latest_deserialized::<Field<u64, SuiSystemStateInnerV1>>(loader, inner_id)
+        1 => load_latest_deserialized::<Field<u64, SuiSystemStateInnerV1>>(ctx, inner_id)
             .await
             .context("Failed to fetch inner system state object")?
             .value
             .into_sui_system_state_summary(),
-        2 => load_latest_deserialized::<Field<u64, SuiSystemStateInnerV2>>(loader, inner_id)
+        2 => load_latest_deserialized::<Field<u64, SuiSystemStateInnerV2>>(ctx, inner_id)
             .await
             .context("Failed to fetch inner system state object")?
             .value

@@ -82,12 +82,11 @@ Response: {
   "jsonrpc": "2.0",
   "id": 3,
   "result": {
-    "status": "ObjectDeleted",
-    "details": {
-      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
-      "version": 4,
-      "digest": "7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz"
-    }
+    "status": "VersionNotFound",
+    "details": [
+      "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      4
+    ]
   }
 }
 
@@ -132,11 +131,10 @@ Response: {
   "jsonrpc": "2.0",
   "id": 6,
   "result": {
-    "status": "ObjectDeleted",
-    "details": {
-      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
-      "version": 4,
-      "digest": "7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz"
-    }
+    "status": "VersionNotFound",
+    "details": [
+      "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      4
+    ]
   }
 }

@@ -44,10 +44,10 @@ pub(super) async fn transaction(
     digest: TransactionDigest,
     options: &SuiTransactionBlockResponseOptions,
 ) -> Result<SuiTransactionBlockResponse, RpcError<Error>> {
-    let stored_tx = ctx.loader().load_one(TransactionKey(digest));
+    let stored_tx = ctx.pg_loader().load_one(TransactionKey(digest));
     let stored_bc: OptionFuture<_> = options
         .show_balance_changes
-        .then(|| ctx.loader().load_one(TxBalanceChangeKey(digest)))
+        .then(|| ctx.pg_loader().load_one(TxBalanceChangeKey(digest)))
         .into();
 
     let (stored_tx, stored_bc) = join!(stored_tx, stored_bc);
@@ -225,8 +225,8 @@ async fn object_changes(
     }
 
     let objects = ctx
-        .loader()
-        .load_many(keys)
+        .kv_loader()
+        .load_many_objects(keys)
         .await
         .context("Failed to fetch object contents")?;
 
@@ -243,19 +243,11 @@ async fn object_changes(
 
         let v = v.value();
 
-        let stored = objects
+        let o = objects
             .get(&VersionedObjectKey(id, v))
             .ok_or_else(|| invalid_params(Error::PrunedObject(digest, id, v)))?;
 
-        let bytes = stored
-            .serialized_object
-            .as_ref()
-            .with_context(|| format!("No content for object {id} at version {v}"))?;
-
-        let o = bcs::from_bytes(bytes)
-            .with_context(|| format!("Failed to deserialize object {id} at version {v}"))?;
-
-        Ok(Some((o, d)))
+        Ok(Some((o.clone(), d)))
     };
 
     let mut changes = Vec::with_capacity(native_changes.len());

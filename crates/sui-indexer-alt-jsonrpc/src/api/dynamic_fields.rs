@@ -144,7 +144,7 @@ async fn dynamic_field_object_response(
     use RpcError as E;
 
     Ok(SuiObjectResponse::new_with_data(
-        objects::response::object(ctx, object, &options)
+        objects::response::object_data_with_options(ctx, object, &options)
             .await
             .map_err(|e| match e {
                 E::InvalidParams(e) => match e {},
@@ -164,7 +164,7 @@ async fn load_df(
     let id = derive_dynamic_field_id(parent_id, type_, value)
         .context("Failed to derive dynamic field ID")?;
 
-    Ok(load_latest(ctx.loader(), id)
+    Ok(load_latest(ctx, id)
         .await
         .context("Failed to load dynamic field")?)
 }
@@ -184,7 +184,7 @@ async fn load_dof(
     let id = derive_dynamic_field_id(parent_id, &wrapper, name)
         .context("Failed to derive dynamic object field ID")?;
 
-    let Some(object) = load_latest(ctx.loader(), id)
+    let Some(object) = load_latest(ctx, id)
         .await
         .context("Failed to load dynamic object field")?
     else {
@@ -199,7 +199,7 @@ async fn load_dof(
     let value = ObjectID::from_bytes(&move_object.contents()[ObjectID::LENGTH + name.len()..])
         .context("Failed to extract object ID from dynamic object field")?;
 
-    Ok(load_latest(ctx.loader(), value)
+    Ok(load_latest(ctx, value)
         .await
         .context("Failed to load dynamic field object")?)
 }

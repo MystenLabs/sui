@@ -23,12 +23,12 @@ use sui_json_rpc_types::{Page as PageResponse, SuiTransactionBlockResponseOption
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
-    messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber, CheckpointSummary},
+    messages_checkpoint::CheckpointSequenceNumber,
     sui_serde::{BigInt, Readable},
 };
 
 use crate::{
-    data::{checkpoints::CheckpointKey, tx_digests::TxDigestKey},
+    data::tx_digests::TxDigestKey,
     error::{invalid_params, RpcError},
     paginate::{Cursor as _, JsonCursor, Page},
 };
@@ -128,7 +128,7 @@ async fn all_transactions(ctx: &Context, page: &Page<Cursor>) -> Result<Digests,
         .into_boxed();
 
     let results: Vec<(i64, Vec<u8>)> = ctx
-        .reader()
+        .pg_reader()
         .connect()
         .await
         .context("Failed to connect to the database")?
@@ -145,20 +145,14 @@ async fn by_checkpoint(
     page: &Page<Cursor>,
     checkpoint: u64,
 ) -> Result<Digests, RpcError<Error>> {
-    let Some(checkpoint) = ctx
-        .loader()
-        .load_one(CheckpointKey(checkpoint))
+    let Some((summary, contents, _)) = ctx
+        .kv_loader()
+        .load_one_checkpoint(checkpoint)
         .await
         .context("Failed to load checkpoint")?
     else {
         return Ok(PageResponse::empty());
     };
-
-    let summary: CheckpointSummary = bcs::from_bytes(&checkpoint.checkpoint_summary)
-        .context("Failed to deserialize checkpoint summary")?;
-
-    let contents: CheckpointContents = bcs::from_bytes(&checkpoint.checkpoint_contents)
-        .context("Failed to deserialize checkpoint contents")?;
 
     // Transaction sequence number bounds from the checkpoint
     let cp_hi = summary.network_total_transactions;
@@ -238,7 +232,7 @@ async fn tx_calls(
     }
 
     let results: Vec<i64> = ctx
-        .reader()
+        .pg_reader()
         .connect()
         .await
         .context("Failed to connect to the database")?
@@ -264,7 +258,7 @@ async fn tx_affected_objects(
         .into_boxed();
 
     let results: Vec<i64> = ctx
-        .reader()
+        .pg_reader()
         .connect()
         .await
         .context("Failed to connect to the database")?
@@ -304,7 +298,7 @@ async fn tx_affected_addresses(
     }
 
     let results: Vec<i64> = ctx
-        .reader()
+        .pg_reader()
         .connect()
         .await
         .context("Failed to connect to the database")?
@@ -395,7 +389,7 @@ async fn from_sequence_numbers(
         .context("Failed to encode next cursor")?;
 
     let digests = ctx
-        .loader()
+        .pg_loader()
         .load_many(rows.iter().map(|&seq| TxDigestKey(seq as u64)))
         .await
         .context("Failed to load transaction digests")?;
