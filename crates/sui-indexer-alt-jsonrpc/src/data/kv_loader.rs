@@ -4,13 +4,21 @@
 use super::error::Error;
 use super::objects::VersionedObjectKey;
 use super::pg_reader::PgReader;
+use super::transactions::TransactionKey;
 use super::{bigtable_reader::BigtableReader, checkpoints::CheckpointKey};
 use async_graphql::dataloader::DataLoader;
 use std::collections::HashMap;
 use std::sync::Arc;
+use sui_indexer_alt_schema::transactions::StoredTransaction;
+use sui_kvstore::TransactionData as KVTransactionData;
 use sui_types::base_types::ObjectID;
+use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffects;
+use sui_types::signature::GenericSignature;
+use sui_types::transaction::TransactionData;
 use sui_types::{
     crypto::AuthorityQuorumSignInfo,
+    event::Event,
     messages_checkpoint::{CheckpointContents, CheckpointSummary},
     object::Object,
 };
@@ -24,6 +32,12 @@ use sui_types::{
 pub(crate) enum KvLoader {
     Bigtable(Arc<DataLoader<BigtableReader>>),
     Pg(Arc<DataLoader<PgReader>>),
+}
+
+/// A wrapper for the contents of a transaction, either from Bigtable or Postgres.
+pub(crate) enum TransactionContents {
+    Bigtable(KVTransactionData),
+    Pg(StoredTransaction),
 }
 
 impl KvLoader {
@@ -114,6 +128,109 @@ impl KvLoader {
                     Ok((summary, contents, signature))
                 })
                 .transpose(),
+        }
+    }
+
+    pub(crate) async fn load_one_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Option<TransactionContents>, Arc<Error>> {
+        let key = TransactionKey(digest);
+        match self {
+            Self::Bigtable(loader) => Ok(loader
+                .load_one(key)
+                .await?
+                .map(TransactionContents::Bigtable)),
+            Self::Pg(loader) => Ok(loader.load_one(key).await?.map(TransactionContents::Pg)),
+        }
+    }
+}
+
+impl TransactionContents {
+    pub(crate) fn data(&self) -> anyhow::Result<TransactionData> {
+        match self {
+            Self::Pg(stored) => {
+                let data: TransactionData =
+                    bcs::from_bytes(&stored.raw_transaction).map_err(|e| {
+                        anyhow::anyhow!("Failed to deserialize transaction data: {}", e)
+                    })?;
+
+                Ok(data)
+            }
+            Self::Bigtable(kv) => Ok(kv.transaction.data().transaction_data().clone()),
+        }
+    }
+
+    pub(crate) fn digest(&self) -> anyhow::Result<TransactionDigest> {
+        match self {
+            Self::Pg(stored) => {
+                let digest =
+                    TransactionDigest::try_from(stored.tx_digest.clone()).map_err(|e| {
+                        anyhow::anyhow!("Failed to deserialize transaction digest: {}", e)
+                    })?;
+
+                Ok(digest)
+            }
+            Self::Bigtable(kv) => Ok(*kv.transaction.digest()),
+        }
+    }
+
+    pub(crate) fn signatures(&self) -> anyhow::Result<Vec<GenericSignature>> {
+        match self {
+            Self::Pg(stored) => {
+                let signatures: Vec<GenericSignature> = bcs::from_bytes(&stored.user_signatures)
+                    .map_err(|e| anyhow::anyhow!("Failed to deserialize signatures: {}", e))?;
+
+                Ok(signatures)
+            }
+            Self::Bigtable(kv) => Ok(kv.transaction.tx_signatures().to_vec()),
+        }
+    }
+
+    pub(crate) fn effects(&self) -> anyhow::Result<TransactionEffects> {
+        match self {
+            Self::Pg(stored) => {
+                let effects: TransactionEffects = bcs::from_bytes(&stored.raw_effects)
+                    .map_err(|e| anyhow::anyhow!("Failed to deserialize effects: {}", e))?;
+
+                Ok(effects)
+            }
+            Self::Bigtable(kv) => Ok(kv.effects.clone()),
+        }
+    }
+
+    pub(crate) fn events(&self) -> anyhow::Result<Vec<Event>> {
+        match self {
+            Self::Pg(stored) => {
+                let events: Vec<Event> = bcs::from_bytes(&stored.events)
+                    .map_err(|e| anyhow::anyhow!("Failed to deserialize events: {}", e))?;
+
+                Ok(events)
+            }
+            Self::Bigtable(kv) => Ok(kv.events.clone().unwrap_or_default().data),
+        }
+    }
+
+    pub(crate) fn raw_transaction(&self) -> anyhow::Result<Vec<u8>> {
+        match self {
+            Self::Pg(stored) => Ok(stored.raw_transaction.clone()),
+            Self::Bigtable(kv) => bcs::to_bytes(kv.transaction.data().transaction_data())
+                .map_err(|e| anyhow::anyhow!("Failed to serialize transaction: {}", e)),
+        }
+    }
+
+    pub(crate) fn raw_effects(&self) -> anyhow::Result<Vec<u8>> {
+        match self {
+            Self::Pg(stored) => Ok(stored.raw_effects.clone()),
+            Self::Bigtable(kv) => bcs::to_bytes(&kv.effects)
+                .map_err(|e| anyhow::anyhow!("Failed to serialize effects: {}", e)),
+        }
+    }
+
+    pub(crate) fn timestamp_ms(&self) -> u64 {
+        match self {
+            Self::Pg(stored) => stored.timestamp_ms as u64,
+            Self::Bigtable(kv) => kv.timestamp,
         }
     }
 }
