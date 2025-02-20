@@ -4,6 +4,7 @@
 use super::types::proto_to_timestamp_ms;
 use super::types::timestamp_ms_to_proto;
 use super::TryFromProtoError;
+use prost_types::FieldMask;
 use tap::Pipe;
 
 pub mod v2 {
@@ -461,170 +462,6 @@ impl GetCheckpointRequest {
 }
 
 //
-// GetTransactionOptions
-//
-
-impl GetTransactionOptions {
-    pub fn all() -> Self {
-        Self {
-            transaction: Some(true),
-            transaction_bcs: Some(true),
-            signatures: Some(true),
-            signatures_bytes: Some(true),
-            effects: Some(true),
-            effects_bcs: Some(true),
-            events: Some(true),
-            events_bcs: Some(true),
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            transaction: Some(false),
-            transaction_bcs: Some(false),
-            signatures: Some(false),
-            signatures_bytes: Some(false),
-            effects: Some(false),
-            effects_bcs: Some(false),
-            events: Some(false),
-            events_bcs: Some(false),
-        }
-    }
-
-    pub fn with_transaction(mut self) -> Self {
-        self.transaction = Some(true);
-        self
-    }
-
-    pub fn without_transaction(mut self) -> Self {
-        self.transaction = Some(false);
-        self
-    }
-
-    pub fn with_transaction_bcs(mut self) -> Self {
-        self.transaction_bcs = Some(true);
-        self
-    }
-
-    pub fn without_transaction_bcs(mut self) -> Self {
-        self.transaction_bcs = Some(false);
-        self
-    }
-
-    pub fn with_signatures(mut self) -> Self {
-        self.signatures = Some(true);
-        self
-    }
-
-    pub fn without_signatures(mut self) -> Self {
-        self.signatures = Some(false);
-        self
-    }
-
-    pub fn with_signatures_bytes(mut self) -> Self {
-        self.signatures_bytes = Some(true);
-        self
-    }
-
-    pub fn without_signatures_bytes(mut self) -> Self {
-        self.signatures_bytes = Some(false);
-        self
-    }
-
-    pub fn with_effects(mut self) -> Self {
-        self.effects = Some(true);
-        self
-    }
-
-    pub fn without_effects(mut self) -> Self {
-        self.effects = Some(false);
-        self
-    }
-
-    pub fn with_effects_bcs(mut self) -> Self {
-        self.effects_bcs = Some(true);
-        self
-    }
-
-    pub fn without_effects_bcs(mut self) -> Self {
-        self.effects_bcs = Some(false);
-        self
-    }
-
-    pub fn with_events(mut self) -> Self {
-        self.events = Some(true);
-        self
-    }
-
-    pub fn without_events(mut self) -> Self {
-        self.events = Some(false);
-        self
-    }
-
-    pub fn with_events_bcs(mut self) -> Self {
-        self.events_bcs = Some(true);
-        self
-    }
-
-    pub fn without_events_bcs(mut self) -> Self {
-        self.events_bcs = Some(false);
-        self
-    }
-}
-
-impl From<crate::types::GetTransactionOptions> for GetTransactionOptions {
-    fn from(
-        crate::types::GetTransactionOptions {
-            transaction,
-            transaction_bcs,
-            signatures,
-            signatures_bytes,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-        }: crate::types::GetTransactionOptions,
-    ) -> Self {
-        Self {
-            transaction,
-            transaction_bcs,
-            signatures,
-            signatures_bytes,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-        }
-    }
-}
-
-impl From<GetTransactionOptions> for crate::types::GetTransactionOptions {
-    fn from(
-        GetTransactionOptions {
-            transaction,
-            transaction_bcs,
-            signatures,
-            signatures_bytes,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-        }: GetTransactionOptions,
-    ) -> Self {
-        Self {
-            transaction,
-            transaction_bcs,
-            signatures,
-            signatures_bytes,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-        }
-    }
-}
-
-//
 // GetTransactionRequest
 //
 
@@ -632,13 +469,12 @@ impl GetTransactionRequest {
     pub fn new<T: Into<super::types::Digest>>(digest: T) -> Self {
         Self {
             digest: Some(digest.into()),
-            options: None,
             read_mask: None,
         }
     }
 
-    pub fn with_options(mut self, options: GetTransactionOptions) -> Self {
-        self.options = Some(options);
+    pub fn with_read_mask(mut self, read_mask: FieldMask) -> Self {
+        self.read_mask = Some(read_mask);
         self
     }
 }
