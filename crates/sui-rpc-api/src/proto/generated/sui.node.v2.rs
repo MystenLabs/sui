@@ -57,57 +57,10 @@ pub struct GetTransactionRequest {
     /// Required. The digest of the requested transaction.
     #[prost(message, optional, tag = "1")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "3")]
-    pub options: ::core::option::Option<GetTransactionOptions>,
     /// Optional. Mask for specifying which parts of the `GetTransactionResponse`
     /// should be returned.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
-}
-/// DEPRECATED To be removed in the next release
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct GetTransactionOptions {
-    /// Include the `sui.types.Transaction` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "1")]
-    pub transaction: ::core::option::Option<bool>,
-    /// Include the transaction formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "2")]
-    pub transaction_bcs: ::core::option::Option<bool>,
-    /// Include the set of `sui.types.UserSignature`s in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "3")]
-    pub signatures: ::core::option::Option<bool>,
-    /// Include the set of `UserSignature`s encoded as bytes in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "8")]
-    pub signatures_bytes: ::core::option::Option<bool>,
-    /// Include the `sui.types.TransactionEffects` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "4")]
-    pub effects: ::core::option::Option<bool>,
-    /// Include the `TransactionEffects` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "5")]
-    pub effects_bcs: ::core::option::Option<bool>,
-    /// Include the `sui.types.TransactionEvents` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "6")]
-    pub events: ::core::option::Option<bool>,
-    /// Include the `TransactionEvents` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "7")]
-    pub events_bcs: ::core::option::Option<bool>,
 }
 /// Response message for `NodeService.GetTransactio`n.
 #[derive(Clone, PartialEq, ::prost::Message)]

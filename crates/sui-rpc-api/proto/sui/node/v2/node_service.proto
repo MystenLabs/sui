@@ -139,47 +139,9 @@ message GetTransactionRequest {
   // Required. The digest of the requested transaction.
   optional sui.types.Digest digest = 1;
 
-  // DEPRECATED To be removed in the next release
-  optional GetTransactionOptions options = 3;
   // Optional. Mask for specifying which parts of the `GetTransactionResponse`
   // should be returned.
   optional google.protobuf.FieldMask read_mask = 4;
-}
-
-// DEPRECATED To be removed in the next release
-message GetTransactionOptions {
-  // Include the `sui.types.Transaction` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool transaction = 1;
-  // Include the transaction formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool transaction_bcs = 2;
-  // Include the set of `sui.types.UserSignature`s in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool signatures = 3;
-  // Include the set of `UserSignature`s encoded as bytes in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool signatures_bytes = 8;
-  // Include the `sui.types.TransactionEffects` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool effects = 4;
-  // Include the `TransactionEffects` formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool effects_bcs = 5;
-  // Include the `sui.types.TransactionEvents` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool events = 6;
-  // Include the `TransactionEvents` formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool events_bcs = 7;
 }
 
 // Response message for `NodeService.GetTransactio`n.
