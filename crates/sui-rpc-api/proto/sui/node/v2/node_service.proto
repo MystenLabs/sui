@@ -565,39 +565,9 @@ message ExecuteTransactionRequest {
   // transaction, encoded as bytes.
   repeated bytes signatures_bytes = 4;
 
-  // DEPRECATED To be removed in the next release
-  optional ExecuteTransactionOptions options = 5;
   // Optional. Mask for specifying which parts of the
   // `ExecuteTransactionResponse` should be returned.
   optional google.protobuf.FieldMask read_mask = 6;
-}
-
-// DEPRECATED To be removed in the next release
-message ExecuteTransactionOptions {
-  // Include the `sui.types.TransactionEffects` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool effects = 4;
-
-  // Include the `TransactionEffects` formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool effects_bcs = 5;
-
-  // Include the `sui.types.TransactionEvents` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool events = 6;
-
-  // Include the `TransactionEvents` formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool events_bcs = 7;
-
-  // Include the `BalanceChange`s in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool balance_changes = 8;
 }
 
 // Response message for `NodeService.ExecuteTransaction`.
