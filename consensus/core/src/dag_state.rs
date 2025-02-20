@@ -309,7 +309,9 @@ impl DagState {
             );
         }
         self.update_block_metadata(&block);
+
         self.blocks_to_write.push(block);
+
         let source = if self.context.own_index == block_ref.author {
             "own"
         } else {
