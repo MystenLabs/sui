@@ -76,7 +76,7 @@ impl Loader<CheckpointKey> for BigtableReader {
             .clone()
             .get_checkpoints(&checkpoint_keys)
             .await
-            .map_err(|e| Arc::new(Error::BigtableRead(e.into())))?;
+            .map_err(|e| Arc::new(Error::BigtableRead(e)))?;
 
         Ok(checkpoints
             .into_iter()

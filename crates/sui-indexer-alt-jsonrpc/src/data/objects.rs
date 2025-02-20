@@ -93,7 +93,7 @@ impl Loader<VersionedObjectKey> for BigtableReader {
             .clone()
             .get_objects(&object_keys)
             .await
-            .map_err(|e| Arc::new(Error::BigtableRead(e.into())))?;
+            .map_err(|e| Arc::new(Error::BigtableRead(e)))?;
 
         Ok(objects
             .into_iter()

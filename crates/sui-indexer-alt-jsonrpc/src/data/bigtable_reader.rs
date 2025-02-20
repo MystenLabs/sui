@@ -20,7 +20,7 @@ impl BigtableReader {
         }
         let client = BigTableClient::new_remote(instance_id, true, None)
             .await
-            .map_err(|e| Error::BigtableCreate(e.into()))?;
+            .map_err(Error::BigtableCreate)?;
         Ok(Self(client))
     }
 
