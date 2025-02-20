@@ -200,7 +200,11 @@ impl CheckpointExecutor {
     #[instrument(level = "error", skip_all, fields(epoch = ?self.epoch_store.epoch()))]
     pub async fn run_epoch(self, run_with_range: Option<RunWithRange>) -> StopReason {
         let _metrics_guard = mysten_metrics::monitored_scope("CheckpointExecutor::run_epoch");
-        debug!(?run_with_range, "CheckpointExecutor::run_epoch");
+        info!(?run_with_range, "CheckpointExecutor::run_epoch");
+        debug!(
+            "Checkpoint executor running for epoch {:?}",
+            self.epoch_store.epoch(),
+        );
 
         // check if we want to run this epoch based on RunWithRange condition value
         // we want to be inclusive of the defined RunWithRangeEpoch::Epoch
