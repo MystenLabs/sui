@@ -85,7 +85,7 @@ impl Pool {
         let bucket_index = (hash & BUCKET_MASK) as usize;
         let mut ptr: Option<&mut Box<Entry>> = self.0[bucket_index].as_mut();
 
-        // Iterate over the entires in the bucket.
+        // Iterate over the entries in the bucket.
         while let Some(entry) = ptr.take() {
             // If we find the string we're looking for, don't add anything to
             // the pool. Instead, just return the existing entry.
