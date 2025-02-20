@@ -1531,7 +1531,7 @@ mod checked {
                         name,
                         type_params,
                     } = *s;
-                    let definining_id = context
+                    let defining_id = context
                         .linkage
                         .resolve_type_to_defining_id(
                             context.ctx.linkage_analyzer.resolver(),
@@ -1555,7 +1555,7 @@ mod checked {
                         .map(|t| into_type_tag(context, t))
                         .collect::<Result<_, _>>()?;
                     T::Struct(Box::new(StructTag {
-                        address,
+                        address: defining_id.into(),
                         module: Identifier::new(module).map_err(|e| {
                             ExecutionError::new_with_source(
                                 ExecutionErrorKind::VMInvariantViolation,

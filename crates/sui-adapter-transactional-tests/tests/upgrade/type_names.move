@@ -77,6 +77,22 @@ module A2::m {
 
 //# run A2::m::canary --type-args A1::m::EB --args false --sender A
 
+//# run A2::m::canary --type-args A2::m::A --args true --sender A
+
+//# run A2::m::canary --type-args A2::m::B --args true --sender A
+
+//# run A2::m::canary --type-args A2::m::A --args false --sender A
+
+//# run A2::m::canary --type-args A2::m::B --args false --sender A
+
+//# run A2::m::canary --type-args A2::m::EA --args true --sender A
+
+//# run A2::m::canary --type-args A2::m::EB --args true --sender A
+
+//# run A2::m::canary --type-args A2::m::EA --args false --sender A
+
+//# run A2::m::canary --type-args A2::m::EB --args false --sender A
+
 //# view-object 4,0
 
 //# view-object 5,0
@@ -92,3 +108,17 @@ module A2::m {
 //# view-object 10,0
 
 //# view-object 11,0
+
+//# view-object 12,0
+
+//# view-object 13,0
+
+//# view-object 14,0
+
+//# view-object 15,0
+
+//# view-object 17,0
+
+//# view-object 18,0
+
+//# view-object 19,0
