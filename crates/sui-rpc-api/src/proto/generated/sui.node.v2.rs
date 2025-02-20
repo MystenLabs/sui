@@ -466,25 +466,12 @@ pub struct FullCheckpointTransaction {
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "8")]
     pub events_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "11")]
-    pub input_objects_old: ::core::option::Option<FullCheckpointObjects>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "12")]
-    pub output_objects_old: ::core::option::Option<FullCheckpointObjects>,
     /// Optional. Set of input objects used during the execution of this transaction.
     #[prost(message, repeated, tag = "13")]
     pub input_objects: ::prost::alloc::vec::Vec<FullCheckpointObject>,
     /// Optional. Set of output objects produced from the execution of this transaction.
     #[prost(message, repeated, tag = "14")]
     pub output_objects: ::prost::alloc::vec::Vec<FullCheckpointObject>,
-}
-/// Set of objects used by or produced from a transaction.
-/// TODO remove next release
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct FullCheckpointObjects {
-    #[prost(message, repeated, tag = "1")]
-    pub objects: ::prost::alloc::vec::Vec<FullCheckpointObject>,
 }
 /// An object used by or produced from a transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]

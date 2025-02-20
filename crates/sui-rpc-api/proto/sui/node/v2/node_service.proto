@@ -520,23 +520,11 @@ message FullCheckpointTransaction {
   // for this transaction encoded as BCS bytes.
   optional sui.types.Bcs events_bcs = 8;
 
-  // DEPRECATED To be removed in the next release
-  optional FullCheckpointObjects input_objects_old = 11;
-
-  // DEPRECATED To be removed in the next release
-  optional FullCheckpointObjects output_objects_old = 12;
-
   // Optional. Set of input objects used during the execution of this transaction.
   repeated FullCheckpointObject input_objects = 13;
 
   // Optional. Set of output objects produced from the execution of this transaction.
   repeated FullCheckpointObject output_objects = 14;
-}
-
-// Set of objects used by or produced from a transaction.
-// TODO remove next release
-message FullCheckpointObjects {
-  repeated FullCheckpointObject objects = 1;
 }
 
 // An object used by or produced from a transaction.
