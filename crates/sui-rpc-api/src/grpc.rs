@@ -124,13 +124,9 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
                 tonic::Status::new(tonic::Code::InvalidArgument, "invalid transaction_digest")
             })?;
 
-        let options = if let Some(read_mask) = request.read_mask {
-            crate::types::GetTransactionOptions::from_read_mask(read_mask)
-        } else if let Some(options) = request.options {
-            options.into()
-        } else {
-            Default::default()
-        };
+        let options = crate::types::GetTransactionOptions::from_read_mask(
+            request.read_mask.unwrap_or_default(),
+        );
 
         self.get_transaction(transaction_digest, &options)
             .map(Into::into)
