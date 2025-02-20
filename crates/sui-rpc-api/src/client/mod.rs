@@ -189,10 +189,6 @@ impl Client {
         let request = crate::proto::node::v2::GetObjectRequest {
             object_id: Some(sui_sdk_types::ObjectId::from(object_id).into()),
             version,
-            options: Some(crate::proto::node::v2::GetObjectOptions {
-                object: Some(false),
-                object_bcs: Some(true),
-            }),
             read_mask: FieldMaskUtil::from_paths(["object_bcs"]).pipe(Some),
         };
 

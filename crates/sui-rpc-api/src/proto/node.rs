@@ -169,60 +169,6 @@ impl TryFrom<&GetNodeInfoResponse> for crate::types::NodeInfo {
 }
 
 //
-// GetObjectOptions
-//
-
-impl GetObjectOptions {
-    pub fn all() -> Self {
-        Self {
-            object: Some(true),
-            object_bcs: Some(true),
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            object: Some(false),
-            object_bcs: Some(false),
-        }
-    }
-
-    pub fn with_object(mut self) -> Self {
-        self.object = Some(true);
-        self
-    }
-
-    pub fn without_object(mut self) -> Self {
-        self.object = Some(false);
-        self
-    }
-
-    pub fn with_object_bcs(mut self) -> Self {
-        self.object_bcs = Some(true);
-        self
-    }
-
-    pub fn without_object_bcs(mut self) -> Self {
-        self.object = Some(false);
-        self
-    }
-}
-
-impl From<crate::types::GetObjectOptions> for GetObjectOptions {
-    fn from(
-        crate::types::GetObjectOptions { object, object_bcs }: crate::types::GetObjectOptions,
-    ) -> Self {
-        Self { object, object_bcs }
-    }
-}
-
-impl From<GetObjectOptions> for crate::types::GetObjectOptions {
-    fn from(GetObjectOptions { object, object_bcs }: GetObjectOptions) -> Self {
-        Self { object, object_bcs }
-    }
-}
-
-//
 // GetObjectRequest
 //
 
@@ -231,7 +177,6 @@ impl GetObjectRequest {
         Self {
             object_id: Some(object_id.into()),
             version: None,
-            options: None,
             read_mask: None,
         }
     }
@@ -241,8 +186,8 @@ impl GetObjectRequest {
         self
     }
 
-    pub fn with_options(mut self, options: GetObjectOptions) -> Self {
-        self.options = Some(options);
+    pub fn with_read_mask(mut self, read_mask: FieldMask) -> Self {
+        self.read_mask = Some(read_mask);
         self
     }
 }

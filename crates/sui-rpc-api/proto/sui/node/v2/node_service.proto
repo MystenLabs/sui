@@ -204,24 +204,9 @@ message GetObjectRequest {
   // the object is returned.
   optional uint64 version = 2;
 
-  // DEPRECATED To be removed in the next release
-  optional GetObjectOptions options = 3;
   // Optional. Mask for specifying which parts of the `GetObjectResponse`
   // should be returned.
   optional google.protobuf.FieldMask read_mask = 4;
-}
-
-// DEPRECATED To be removed in the next release
-message GetObjectOptions {
-  // Include the `sui.types.Object` message in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool object = 1;
-
-  // Include the object formatted as BCS in the response.
-  //
-  // Defaults to `false` if not included.
-  optional bool object_bcs = 2;
 }
 
 // Response message for `NodeService.GetObject`.
