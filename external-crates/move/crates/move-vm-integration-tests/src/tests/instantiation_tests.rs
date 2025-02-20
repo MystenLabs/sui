@@ -160,7 +160,7 @@ fn test_instantiation_no_instantiation() {
 // Common runner for all tests.
 // Run a control test (load_pop) and an instantiation test which is then
 // compared against the control.
-// Ensure that tests complete with "out of gas" and withing a given time range.
+// Ensure that tests complete with "out of gas" and within a given time range.
 fn test_runner(
     gas_val: u64,
     test_name: &str,
