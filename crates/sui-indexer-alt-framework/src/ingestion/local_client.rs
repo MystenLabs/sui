@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ingestion::client::{FetchError, FetchResult, IngestionClientTrait};
+use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 use axum::body::Bytes;
 use std::path::PathBuf;
 
@@ -31,7 +31,7 @@ impl IngestionClientTrait for LocalIngestionClient {
                 }
             }
         })?;
-        Ok(Bytes::from(bytes))
+        Ok(FetchData::Raw(Bytes::from(bytes)))
     }
 }
 

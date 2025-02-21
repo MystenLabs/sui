@@ -106,6 +106,7 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
     let client_args = ClientArgs {
         local_ingestion_path: Some(config.data_ingestion_path.clone()),
         remote_store_url: None,
+        rpc_api_url: None,
     };
 
     // This configuration controls how often the RPC service checks for changes to system packages.
