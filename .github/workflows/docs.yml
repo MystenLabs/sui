@@ -32,7 +32,7 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
-          channel-id: 'tech-docs'
+          channel-id: 'docs-automations'
           slack-message: |
             An open PR modifies files in the `examples/` directory.
             Please review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}|PR${{ github.event.number }}>
