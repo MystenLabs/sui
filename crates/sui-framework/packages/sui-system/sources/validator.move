@@ -299,7 +299,7 @@ public(package) fun request_add_stake(
     stake: Balance<SUI>,
     staker_address: address,
     ctx: &mut TxContext,
-) : StakedSui {
+): StakedSui {
     let stake_amount = stake.value();
     assert!(stake_amount > 0, EInvalidStakeAmount);
     let stake_epoch = ctx.epoch() + 1;
@@ -325,7 +325,7 @@ public(package) fun convert_to_fungible_staked_sui(
     self: &mut Validator,
     staked_sui: StakedSui,
     ctx: &mut TxContext,
-) : FungibleStakedSui {
+): FungibleStakedSui {
     let stake_activation_epoch = staked_sui.stake_activation_epoch();
     let staked_sui_principal_amount = staked_sui.staked_sui_amount();
 
@@ -347,7 +347,7 @@ public(package) fun redeem_fungible_staked_sui(
     self: &mut Validator,
     fungible_staked_sui: FungibleStakedSui,
     ctx: &TxContext,
-) : Balance<SUI> {
+): Balance<SUI> {
     let fungible_staked_sui_amount = fungible_staked_sui.value();
 
     let sui = self.staking_pool.redeem_fungible_staked_sui(fungible_staked_sui, ctx);
@@ -394,7 +394,7 @@ public(package) fun request_withdraw_stake(
     self: &mut Validator,
     staked_sui: StakedSui,
     ctx: &TxContext,
-) : Balance<SUI> {
+): Balance<SUI> {
     let principal_amount = staked_sui.staked_sui_amount();
     let stake_activation_epoch = staked_sui.stake_activation_epoch();
     let withdrawn_stake = self.staking_pool.request_withdraw_stake(staked_sui, ctx);
@@ -900,7 +900,7 @@ public fun validate_metadata(metadata: &ValidatorMetadata) {
 
 public native fun validate_metadata_bcs(metadata: vector<u8>);
 
-public(package) fun get_staking_pool_ref(self: &Validator) : &StakingPool {
+public(package) fun get_staking_pool_ref(self: &Validator): &StakingPool {
     &self.staking_pool
 }
 

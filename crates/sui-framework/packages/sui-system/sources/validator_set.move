@@ -278,7 +278,7 @@ public(package) fun request_add_stake(
     validator_address: address,
     stake: Balance<SUI>,
     ctx: &mut TxContext,
-) : StakedSui {
+): StakedSui {
     let sui_amount = stake.value();
     assert!(sui_amount >= MIN_STAKING_THRESHOLD, EStakingBelowThreshold);
     let validator = get_candidate_or_active_validator_mut(self, validator_address);
@@ -295,7 +295,7 @@ public(package) fun request_withdraw_stake(
     self: &mut ValidatorSet,
     staked_sui: StakedSui,
     ctx: &TxContext,
-) : Balance<SUI> {
+): Balance<SUI> {
     let staking_pool_id = pool_id(&staked_sui);
     let validator =
         if (self.staking_pool_mappings.contains(staking_pool_id)) { // This is an active validator.
@@ -313,7 +313,7 @@ public(package) fun convert_to_fungible_staked_sui(
     self: &mut ValidatorSet,
     staked_sui: StakedSui,
     ctx: &mut TxContext,
-) : FungibleStakedSui {
+): FungibleStakedSui {
     let staking_pool_id = pool_id(&staked_sui);
     let validator =
         if (self.staking_pool_mappings.contains(staking_pool_id)) { // This is an active validator.
@@ -332,7 +332,7 @@ public(package) fun redeem_fungible_staked_sui(
     self: &mut ValidatorSet,
     fungible_staked_sui: FungibleStakedSui,
     ctx: &TxContext,
-) : Balance<SUI> {
+): Balance<SUI> {
     let staking_pool_id = fungible_staked_sui_pool_id(&fungible_staked_sui);
 
     let validator =
@@ -599,7 +599,7 @@ public fun validator_address_by_pool_id(self: &mut ValidatorSet, pool_id: &ID): 
 
 public(package) fun pool_exchange_rates(
     self: &mut ValidatorSet, pool_id: &ID
-) : &Table<u64, PoolTokenExchangeRate> {
+): &Table<u64, PoolTokenExchangeRate> {
     let validator =
         // If the pool id is recorded in the mapping, then it must be either candidate or active.
         if (self.staking_pool_mappings.contains(*pool_id)) {

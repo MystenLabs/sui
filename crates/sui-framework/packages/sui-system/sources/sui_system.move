@@ -291,7 +291,7 @@ public fun request_withdraw_stake_non_entry(
     wrapper: &mut SuiSystemState,
     staked_sui: StakedSui,
     ctx: &mut TxContext,
-) : Balance<SUI> {
+): Balance<SUI> {
     let self = load_system_state_mut(wrapper);
     self.request_withdraw_stake(staked_sui, ctx)
 }
@@ -567,7 +567,7 @@ fun advance_epoch(
     reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
     epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
     ctx: &mut TxContext,
-) : Balance<SUI> {
+): Balance<SUI> {
     let self = load_system_state_mut(wrapper);
     // Validator will make a special system call with sender set as 0x0.
     assert!(ctx.sender() == @0x0, ENotSystemAddress);

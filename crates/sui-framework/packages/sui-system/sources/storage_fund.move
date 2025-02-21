@@ -20,7 +20,7 @@ public struct StorageFund has store {
 }
 
 /// Called by `sui_system` at genesis time.
-public(package) fun new(initial_fund: Balance<SUI>) : StorageFund {
+public(package) fun new(initial_fund: Balance<SUI>): StorageFund {
     StorageFund {
         // At the beginning there's no object in the storage yet
         total_object_storage_rebates: balance::zero(),
@@ -36,7 +36,7 @@ public(package) fun advance_epoch(
     leftover_staking_rewards: Balance<SUI>,
     storage_rebate_amount: u64,
     non_refundable_storage_fee_amount: u64,
-) : Balance<SUI> {
+): Balance<SUI> {
     // Both the reinvestment and leftover rewards are not to be refunded so they go to the non-refundable balance.
     self.non_refundable_balance.join(storage_fund_reinvestment);
     self.non_refundable_balance.join(leftover_staking_rewards);
