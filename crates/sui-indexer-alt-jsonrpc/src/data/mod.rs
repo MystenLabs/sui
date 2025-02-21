@@ -3,6 +3,7 @@
 
 pub(crate) mod bigtable_reader;
 pub(crate) mod checkpoints;
+pub(crate) mod displays;
 pub(crate) mod error;
 pub(crate) mod kv_loader;
 pub(crate) mod object_info;
