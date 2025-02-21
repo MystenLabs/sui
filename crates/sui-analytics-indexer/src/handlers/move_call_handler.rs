@@ -5,8 +5,8 @@ use anyhow::Result;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
-use sui_rpc_api::CheckpointData;
 use sui_types::base_types::ObjectID;
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::handlers::AnalyticsHandler;

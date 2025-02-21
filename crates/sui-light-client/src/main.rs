@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiTransactionBlockResponseOptions};
 
-use sui_rpc_api::CheckpointData;
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
     base_types::ObjectID,
     committee::Committee,

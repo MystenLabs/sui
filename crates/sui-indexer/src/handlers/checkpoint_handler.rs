@@ -13,10 +13,10 @@ use tracing::{info, warn};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use sui_data_ingestion_core::Worker;
-use sui_rpc_api::{CheckpointData, CheckpointTransaction};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::{ObjectChange, TransactionEffectsAPI};
 use sui_types::event::SystemEpochInfoEvent;
+use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
 };

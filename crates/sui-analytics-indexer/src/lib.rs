@@ -19,12 +19,12 @@ use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_data_ingestion_core::Worker;
-use sui_rpc_api::CheckpointData;
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
 };
 use sui_types::base_types::EpochId;
 use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::analytics_metrics::AnalyticsMetrics;

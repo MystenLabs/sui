@@ -10,9 +10,9 @@ use tokio::sync::Mutex;
 
 use sui_json_rpc_types::SuiMoveStruct;
 use sui_package_resolver::Resolver;
-use sui_rpc_api::{CheckpointData, CheckpointTransaction};
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
+use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::object::Object;
 
 use crate::handlers::{
