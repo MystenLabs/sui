@@ -3,7 +3,7 @@
 
 use std::{
     collections::HashMap,
-    num::{NonZero, NonZeroUsize},
+    num::NonZeroUsize,
     sync::{Arc, Weak},
     time::{Duration, Instant},
 };
@@ -55,10 +55,10 @@ pub struct LocalObservations {
 // Tracks local execution time observations and shares them via consensus.
 impl ExecutionTimeObserver {
     pub fn spawn(
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Box<dyn SubmitToConsensus>,
         channel_size: usize,
-        lru_cache_size: usize,
+        lru_cache_size: NonZeroUsize,
     ) {
         if epoch_store
             .protocol_config()
@@ -74,13 +74,10 @@ impl ExecutionTimeObserver {
 
         // TODO: pre-populate local observations with stored data from prior epoch.
         let mut observer = Self {
-            epoch_store: Arc::downgrade(epoch_store),
+            epoch_store: Arc::downgrade(&epoch_store),
             consensus_adapter,
-            local_observations: LruCache::new(
-                NonZero::new(lru_cache_size).expect("lru_cache_size must be non-zero"),
-            ),
+            local_observations: LruCache::new(lru_cache_size),
         };
-        let epoch_store = epoch_store.clone();
         spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
             while let Some((tx, timings, total_duration)) = rx_local_execution_time.recv().await {
                 observer
@@ -99,7 +96,7 @@ impl ExecutionTimeObserver {
         Self {
             epoch_store: Arc::downgrade(&epoch_store),
             consensus_adapter,
-            local_observations: LruCache::new(NonZero::new(10000).unwrap()),
+            local_observations: LruCache::new(NonZeroUsize::new(10000).unwrap()),
         }
     }
 

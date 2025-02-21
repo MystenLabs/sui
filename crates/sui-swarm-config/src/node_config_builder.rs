@@ -9,7 +9,7 @@ use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
-    default_local_execution_time_channel_capacity, default_local_execution_time_lru_cache_size,
+    default_local_execution_time_cache_size, default_local_execution_time_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
     CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig, ExpensiveSafetyCheckConfig,
     Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
@@ -237,7 +237,7 @@ impl ValidatorConfigBuilder {
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
             local_execution_time_channel_capacity: default_local_execution_time_channel_capacity(),
-            local_execution_time_lru_cache_size: default_local_execution_time_lru_cache_size(),
+            local_execution_time_cache_size: default_local_execution_time_cache_size(),
         }
     }
 
@@ -538,7 +538,7 @@ impl FullnodeConfigBuilder {
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
             local_execution_time_channel_capacity: default_local_execution_time_channel_capacity(),
-            local_execution_time_lru_cache_size: default_local_execution_time_lru_cache_size(),
+            local_execution_time_cache_size: default_local_execution_time_cache_size(),
         }
     }
 }
