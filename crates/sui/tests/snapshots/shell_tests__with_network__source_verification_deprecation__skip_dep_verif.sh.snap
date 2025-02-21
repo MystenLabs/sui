@@ -65,9 +65,6 @@ exit_code: 0
 === munge Move.toml files ===
 === publish dependency (should warn about deprecation) ===
 [Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY DeepBook
-INCLUDING DEPENDENCY SuiSystem
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING dependency
@@ -75,9 +72,6 @@ Skipping dependency verification
 === publish package v0 (should warn about deprecation) ===
 [Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
 INCLUDING DEPENDENCY dependency
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY DeepBook
-INCLUDING DEPENDENCY SuiSystem
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
@@ -85,9 +79,6 @@ Skipping dependency verification
 === upgrade package (should warn about deprecation) ===
 [Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
 INCLUDING DEPENDENCY dependency
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY DeepBook
-INCLUDING DEPENDENCY SuiSystem
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
@@ -96,9 +87,6 @@ Skipping dependency verification
 === try to publish with modified dep (should succeed) ===
 [Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
 INCLUDING DEPENDENCY dependency
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY DeepBook
-INCLUDING DEPENDENCY SuiSystem
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
@@ -106,9 +94,6 @@ Skipping dependency verification
 === try to upgrade with modified dep (should succeed) ===
 [Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
 INCLUDING DEPENDENCY dependency
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY DeepBook
-INCLUDING DEPENDENCY SuiSystem
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
