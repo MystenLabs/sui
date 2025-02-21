@@ -5,18 +5,11 @@
 use criterion::Criterion;
 use std::time::Duration;
 
-use crate::posix_time::PosixTime;
-
-pub fn cpu_time_measurement() -> Criterion<PosixTime> {
+pub fn wall_time_measurement() -> Criterion {
     Criterion::default()
-        .with_measurement(PosixTime::UserAndSystemTime)
         .without_plots()
         .noise_threshold(0.20)
         .confidence_level(0.9)
         .warm_up_time(Duration::from_secs(10)) // Warm-up time before measurements start
         .measurement_time(Duration::from_secs(30)) // Measurement time of 30 seconds
-}
-
-pub fn wall_time_measurement() -> Criterion {
-    Criterion::default()
 }
