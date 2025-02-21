@@ -207,6 +207,33 @@ impl Deref for TrustedCommit {
     }
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct CertifiedCommit {
+    commit: Arc<TrustedCommit>,
+    blocks: Vec<VerifiedBlock>,
+}
+
+impl CertifiedCommit {
+    pub(crate) fn new_certified(commit: TrustedCommit, blocks: Vec<VerifiedBlock>) -> Self {
+        Self {
+            commit: Arc::new(commit),
+            blocks,
+        }
+    }
+
+    pub fn blocks(&self) -> &[VerifiedBlock] {
+        &self.blocks
+    }
+}
+
+impl Deref for CertifiedCommit {
+    type Target = TrustedCommit;
+
+    fn deref(&self) -> &Self::Target {
+        &self.commit
+    }
+}
+
 /// Digest of a consensus commit.
 #[derive(Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommitDigest([u8; consensus_config::DIGEST_LENGTH]);
@@ -411,6 +438,7 @@ pub fn load_committed_subdag_from_store(
 pub(crate) enum Decision {
     Direct,
     Indirect,
+    Certified, // This is a commit certified leader so no commit decision was made locally.
 }
 
 /// The status of a leader slot from the direct and indirect commit rules.
