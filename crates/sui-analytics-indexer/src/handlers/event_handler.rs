@@ -16,10 +16,10 @@ use crate::tables::EventEntry;
 use crate::FileType;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
 use sui_package_resolver::Resolver;
-use sui_rpc_api::CheckpointData;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
+use sui_types::full_checkpoint_content::CheckpointData;
 
 pub struct EventHandler {
     state: Mutex<State>,

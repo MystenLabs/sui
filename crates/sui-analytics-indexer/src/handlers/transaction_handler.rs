@@ -9,9 +9,9 @@ use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 use tracing::error;
 
-use sui_rpc_api::{CheckpointData, CheckpointTransaction};
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 
 use crate::handlers::AnalyticsHandler;
