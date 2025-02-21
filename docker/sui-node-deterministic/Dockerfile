@@ -29,8 +29,4 @@ RUN --network=none <<-EOF
 EOF
 
 FROM scratch AS package
-ARG GIT_REVISION
-ARG BUILD_DATE
-LABEL build-date=${BUILD_DATE}
-LABEL git-revision=${GIT_REVISION}
 COPY --from=build /rootfs /
