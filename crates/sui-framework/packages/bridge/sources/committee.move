@@ -37,7 +37,7 @@ module bridge::committee {
     }
 
     public struct BridgeCommittee has store {
-        // commitee pub key and weight
+        // committee pub key and weight
         members: VecMap<vector<u8>, CommitteeMember>,
         // Committee member registrations for the next committee creation.
         member_registrations: VecMap<address, CommitteeMemberRegistration>,
@@ -48,7 +48,7 @@ module bridge::committee {
     }
 
     public struct CommitteeUpdateEvent has copy, drop {
-        // commitee pub key and weight
+        // committee pub key and weight
         members: VecMap<vector<u8>, CommitteeMember>,
         stake_participation_percentage: u64
     }
@@ -228,7 +228,7 @@ module bridge::committee {
         }
     }
 
-    // This function applys the blocklist to the committee members, we won't need to run this very often so this is not gas optimised.
+    // This function applies the blocklist to the committee members, we won't need to run this very often so this is not gas optimised.
     // TODO: add tests for this function
     public(package) fun execute_blocklist(self: &mut BridgeCommittee, blocklist: Blocklist) {
         let blocklisted = blocklist.blocklist_type() != 1;
@@ -291,7 +291,7 @@ module bridge::committee {
     }
 
     // Assert if `bridge_pubkey_bytes` is duplicated in `member_registrations`.
-    // Dupicate keys would cause `try_create_next_committee` to fail and,
+    // Duplicate keys would cause `try_create_next_committee` to fail and,
     // in consequence, an end of epoch transaction to fail (safe mode run).
     // This check will ensure the creation of the committee is correct.
     fun check_uniqueness_bridge_keys(self: &BridgeCommittee, bridge_pubkey_bytes: vector<u8>) {

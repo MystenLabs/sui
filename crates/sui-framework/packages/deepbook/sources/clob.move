@@ -132,7 +132,7 @@ module deepbook::clob {
         // Orders that are submitted earlier has lower order ids.
         // 64 bits are sufficient for order ids whereas 32 bits are not.
         // Assuming a maximum TPS of 100K/s of Sui chain, it would take (1<<63) / 100000 / 3600 / 24 / 365 = 2924712 years to reach the full capacity.
-        // The highest bit of the order id is used to denote the order tyep, 0 for bid, 1 for ask.
+        // The highest bit of the order id is used to denote the order type, 0 for bid, 1 for ask.
         order_id: u64,
         // Only used for limit orders.
         price: u64,
@@ -775,7 +775,7 @@ module deepbook::clob {
         // the unfilled quantity will be cancelled.
         // Market ask order follows similar procedure.
         // The difference is that market ask order is matched against the open bid orders.
-        // We start with the bid PriceLeve with the highest price by calling max_leaf on the bids Critbit Tree.
+        // We start with the bid PriceLevel with the highest price by calling max_leaf on the bids Critbit Tree.
         // The inner loop for iterating over the open orders in ascending orders of order id is the same as above.
         // Then iterate over the price levels in descending order until the market order is completely filled.
         assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
