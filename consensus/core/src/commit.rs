@@ -207,6 +207,8 @@ impl Deref for TrustedCommit {
     }
 }
 
+/// `CertifiedCommits` keeps the synchronized certified commits along with the corresponding votes received from the peer that provided these commits.
+/// The `votes` contain the blocks as those provided by the peer, and certify the tip of the synced commits.
 #[derive(Clone, Debug)]
 pub(crate) struct CertifiedCommits {
     commits: Vec<CertifiedCommit>,
@@ -227,9 +229,7 @@ impl CertifiedCommits {
     }
 }
 
-/// A commit that has been synced and certified by a quorum of authorities. It has to be noted that it is expected
-/// in the majority of the cases the `votes` vector to be empty as during the sync commit process we expect to certify
-/// the tip of the fetched commits from an authority which inherently certifies the previous commits.
+/// A commit that has been synced and certified by a quorum of authorities.
 #[derive(Clone, Debug)]
 pub(crate) struct CertifiedCommit {
     commit: Arc<TrustedCommit>,

@@ -655,7 +655,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             sleep(forward_drift).await;
         }
 
-        // 9. Now create the Certified commits by assigning the blocks to each commit. The last commit will also bear the votes with it.
+        // 9. Now create the Certified commits by assigning the blocks to each commit and retaining the commit votes history.
         let mut certified_commits = Vec::new();
         for commit in &commits {
             let blocks = commit
@@ -716,7 +716,7 @@ struct Inner<C: NetworkClient> {
 
 impl<C: NetworkClient> Inner<C> {
     /// Verifies the commits and also certifies them using the provided vote blocks for the last commit. The
-    /// method returns the verified commits and the votes as verified blocks.
+    /// method returns the trusted commits and the votes as verified blocks.
     fn verify_commits(
         &self,
         peer: AuthorityIndex,
