@@ -15,10 +15,9 @@ use crate::{
 use futures::executor::block_on;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::resolver::SerializedPackage;
 use move_core_types::{
-    account_address::AccountAddress,
-    language_storage::{ModuleId, StructTag},
-    resolver::ModuleResolver,
+    account_address::AccountAddress, language_storage::ModuleId, resolver::ModuleResolver,
 };
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
@@ -40,7 +39,7 @@ use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
-use sui_types::storage::{get_module, PackageObject};
+use sui_types::storage::{get_module, get_package, PackageObject};
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::{
@@ -52,7 +51,7 @@ use sui_types::{
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
-    object::{Data, Object, Owner},
+    object::{Object, Owner},
     storage::get_module_by_id,
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
     transaction::{
@@ -1999,6 +1998,26 @@ impl ModuleResolver for LocalExec {
             });
         res
     }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        let mut res = [const { None }; N];
+        for i in 0..N {
+            res[i] = get_package(self, &ids[i].into())?;
+        }
+        Ok(res)
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        ids.iter()
+            .map(|id| get_package(self, &(*id).into()))
+            .collect()
+    }
 }
 
 impl ModuleResolver for &mut LocalExec {
@@ -2007,6 +2026,20 @@ impl ModuleResolver for &mut LocalExec {
     fn get_module(&self, module_id: &ModuleId) -> SuiResult<Option<Vec<u8>>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_module(module_id)
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        (**self).get_packages_static(ids)
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        (**self).get_packages(ids)
     }
 }
 
