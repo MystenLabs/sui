@@ -12,7 +12,7 @@ use crate::{
     },
     dbg_println,
     execution::{
-        dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
+        dispatch_tables::{DefinitionMap, IntraPackageKey, PackageVirtualTable, VirtualTableKey},
         values::Value,
     },
     jit::{execution::ast::*, optimization::ast as input},
@@ -50,7 +50,10 @@ struct PackageContext<'natives> {
 
     // NB: All things except for types are allocated into this arena.
     pub package_arena: Arena,
-    pub vtable: PackageVirtualTable,
+
+    pub vtable_funs: DefinitionMap<VMPointer<Function>>,
+    pub vtable_types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
+    // pub vtable: PackageVirtualTable,
 }
 
 struct FunctionContext<'pkg_ctxt, 'natives> {
@@ -77,48 +80,30 @@ struct Definitions {
 impl PackageContext<'_> {
     fn insert_vtable_functions(
         &mut self,
-        vtable: impl IntoIterator<Item = VMPointer<Function>>,
+        functions: impl IntoIterator<Item = VMPointer<Function>>,
     ) -> PartialVMResult<()> {
-        for func in vtable {
-            let fun_ref = func.ptr_clone().to_ref();
-            if self
-                .vtable
-                .functions
-                .insert(func.name.inner_pkg_key, func)
-                .is_some()
-            {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!(
-                            "Duplicate key {}::{}",
-                            self.storage_id,
-                            fun_ref.name.inner_pkg_key.to_string()?
-                        )),
-                );
-            }
-        }
-        Ok(())
+        let funs = functions
+            .into_iter()
+            .map(|ptr| {
+                let name = ptr.name.inner_pkg_key;
+                (name, ptr)
+            })
+            .collect::<Vec<_>>();
+        self.vtable_funs.extend(funs)
     }
 
     fn insert_vtable_datatypes(
         &mut self,
         datatype_descriptors: Vec<VMPointer<DatatypeDescriptor>>,
     ) -> PartialVMResult<()> {
-        for ptr in datatype_descriptors.into_iter() {
-            self.vtable.defining_ids.insert(*ptr.defining_id.address());
-            let name = ptr.intra_package_name();
-            if self.vtable.types.insert(name, ptr).is_some() {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!(
-                            "Duplicate key {}::{}",
-                            self.storage_id,
-                            name.to_string()?
-                        )),
-                );
-            }
-        }
-        Ok(())
+        let datatypes = datatype_descriptors
+            .into_iter()
+            .map(|ptr| {
+                let name = ptr.intra_package_name();
+                (name, ptr)
+            })
+            .collect::<Vec<_>>();
+        self.vtable_types.extend(datatypes)
     }
 
     /// Try to resolve a function call (vtable entry) to a direct call (i.e. a call to a function
@@ -133,8 +118,7 @@ impl PackageContext<'_> {
             return None;
         }
         // TODO(vm-rewrite): Have this return an error if the function was not found.
-        self.vtable
-            .functions
+        self.vtable_funs
             .get(&vtable_entry.inner_pkg_key)
             .map(|f| f.ptr_clone())
     }
@@ -213,7 +197,8 @@ pub fn package(
         runtime_id,
         loaded_modules: BTreeMap::new(),
         package_arena: Arena::new(),
-        vtable: PackageVirtualTable::new(),
+        vtable_funs: DefinitionMap::empty(),
+        vtable_types: DefinitionMap::empty(),
         type_origin_table,
     };
 
@@ -258,9 +243,12 @@ pub fn package(
         runtime_id,
         loaded_modules,
         package_arena,
-        vtable,
+        vtable_funs,
+        vtable_types,
         type_origin_table: _,
     } = package_context;
+
+    let vtable = PackageVirtualTable::new(vtable_funs, vtable_types);
 
     Ok(Package {
         storage_id,

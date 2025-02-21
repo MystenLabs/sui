@@ -54,7 +54,7 @@ use std::{
 ///
 /// TODO(tzakian): The representation can be optimized to use a more efficient data structure for
 /// vtable/cross-package function resolution but we will keep it simple for now.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct VMDispatchTables {
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) loaded_packages: BTreeMap<RuntimePackageId, Arc<Package>>,
@@ -62,11 +62,11 @@ pub struct VMDispatchTables {
     /// avoid grabbing write-locks and toward the possibility these may change based on linkage
     /// (e.g., type ugrades or similar).
     /// [SAFETY] Ordering of inner maps is not guaranteed
-    pub(crate) type_depths: BTreeMap<RuntimePackageId, HashMap<IntraPackageKey, DepthFormula>>,
+    pub(crate) type_depths: BTreeMap<RuntimePackageId, DefinitionMap<DepthFormula>>,
     /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
     /// [SAFETY] Ordering is not guaranteed
     #[allow(dead_code)]
-    pub(crate) defining_id_origins: HashMap<PackageStorageId, RuntimePackageId>,
+    pub(crate) defining_id_origins: BTreeMap<PackageStorageId, RuntimePackageId>,
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -74,14 +74,18 @@ pub struct VMDispatchTables {
 #[derive(Debug)]
 pub struct PackageVirtualTable {
     /// Representation of runtime functions.
-    /// [SAFETY] Ordering is not guaranteed
-    pub functions: HashMap<IntraPackageKey, VMPointer<Function>>,
+    pub functions: DefinitionMap<VMPointer<Function>>,
     /// Representation of runtime types.
-    /// [SAFETY] Ordering is not guaranteed
-    pub types: HashMap<IntraPackageKey, VMPointer<DatatypeDescriptor>>,
+    pub types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
     /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
     pub defining_ids: BTreeSet<PackageStorageId>,
 }
+
+/// This is a lookup-only map for recording information about module members in loaded package
+/// modules. It exposes an intentionally spartan interface to prevent any unexpected behavior
+/// (e.g., unstable iteration ordering) that Rust's standard collections run afoul of.
+#[derive(Debug)]
+pub struct DefinitionMap<Value>(HashMap<IntraPackageKey, Value>);
 
 /// runtime_address::module_name::function_name
 /// NB: This relies on no boxing -- if this introduces boxes, the arena allocation in the execution
@@ -128,12 +132,12 @@ pub struct DepthFormula {
 impl VMDispatchTables {
     /// Create a new RuntimeVTables instance.
     /// NOTE: This assumes linkage has already occured.
-    pub fn new(
+    pub(crate) fn new(
         vm_config: Arc<VMConfig>,
         loaded_packages: BTreeMap<RuntimePackageId, Arc<Package>>,
     ) -> VMResult<Self> {
         let defining_id_origins = {
-            let mut defining_id_map = HashMap::new();
+            let mut defining_id_map = BTreeMap::new();
             for (addr, pkg) in &loaded_packages {
                 for defining_id in &pkg.vtable.defining_ids {
                     if let Some(prev) = defining_id_map.insert(*defining_id, *addr) {
@@ -394,16 +398,10 @@ impl VMDispatchTables {
         let depth_formula =
             self.calculate_depth_of_datatype_and_cache(datatype_name, &mut depth_cache)?;
         for (datatype_key, depth) in depth_cache {
-            let _prev_depth = self
-                .type_depths
+            self.type_depths
                 .entry(datatype_key.package_key)
                 .or_default()
-                .insert(datatype_key.inner_pkg_key, depth);
-            debug_assert!(
-                _prev_depth.is_none(),
-                "recomputed type depth formula for {}",
-                datatype_key.to_string()?
-            );
+                .insert(datatype_key.inner_pkg_key, depth)?;
         }
         Ok(depth_formula)
     }
@@ -953,12 +951,90 @@ impl DepthFormula {
 // ------------------------------------------------------------------------
 
 impl PackageVirtualTable {
-    pub fn new() -> Self {
+    pub fn new(
+        functions: DefinitionMap<VMPointer<Function>>,
+        types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
+    ) -> Self {
+        // [SAFETY] This is unordered, but okay because we are making a set anyway.
+        let defining_ids = types
+            .0
+            .values()
+            .map(|ty| ty.defining_id.address())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .copied()
+            .collect();
         Self {
-            functions: HashMap::new(),
-            types: HashMap::new(),
-            defining_ids: BTreeSet::new(),
+            functions,
+            types,
+            defining_ids,
         }
+    }
+}
+
+impl<T> DefinitionMap<T> {
+    /// Create a new, empty DefinitionMap
+    pub fn empty() -> Self {
+        Self(HashMap::new())
+    }
+
+    /// Indicates if the DefinitionMap is empty or not.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Returns the number of entries in the map
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Extends a DefintionMap with new entries, producing an error if a duplicate key is found.
+    pub fn extend(
+        &mut self,
+        items: impl IntoIterator<Item = (IntraPackageKey, T)>,
+    ) -> PartialVMResult<()> {
+        let map = &mut self.0;
+        for (name, value) in items {
+            if map.insert(name, value).is_some() {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!("Duplicate key {}", name.to_string()?)),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Creates a new DefintionMap, producing an error if a duplicate key is found.
+    pub fn from_unique(
+        items: impl IntoIterator<Item = (IntraPackageKey, T)>,
+    ) -> PartialVMResult<Self> {
+        let mut map = HashMap::new();
+        for (name, value) in items {
+            if map.insert(name, value).is_some() {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!("Duplicate key {}", name.to_string()?)),
+                );
+            }
+        }
+        Ok(Self(map))
+    }
+
+    /// Retrieve a key from the definition map.
+    pub fn get(&self, key: &IntraPackageKey) -> Option<&T> {
+        self.0.get(key)
+    }
+
+    /// Private to this module, as it is only used in depth formula calculations.
+    fn insert(&mut self, key: IntraPackageKey, value: T) -> PartialVMResult<()> {
+        if self.0.insert(key, value).is_some() {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Duplicate key {}", key.to_string()?)),
+            );
+        }
+        Ok(())
     }
 }
 
@@ -1020,9 +1096,9 @@ impl IntraPackageKey {
 // Default
 // -------------------------------------------------------------------------------------------------
 
-impl Default for PackageVirtualTable {
+impl<T> Default for DefinitionMap<T> {
     fn default() -> Self {
-        Self::new()
+        Self(HashMap::new())
     }
 }
 
