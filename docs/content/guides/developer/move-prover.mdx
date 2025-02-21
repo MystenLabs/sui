@@ -20,6 +20,19 @@ cargo install --features "build" --locked --path crates/sui-move
 
 _The above creates a binary called `sui-move` that you can use to run the Move Prover._
 
+_Next, install [Boogie](https://github.com/boogie-org/boogie). This requires .NET._
+
+_Next, install [Z3](https://github.com/Z3Prover/z3). On MacOS, use:_
+```bash
+brew install z3
+```
+
+_Next, export:_
+```
+BOOGIE_EXE=boogie
+Z3_EXE=<full-path-to-z3>
+```
+
 ## Basic usage
 
 To use the Move Prover you need to write specifications for your smart contract. The Move Prover will then verify that your smart contract satisfies these specifications.
