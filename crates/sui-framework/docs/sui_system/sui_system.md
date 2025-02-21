@@ -724,7 +724,7 @@ Non-entry version of <code><a href="../sui_system/sui_system.md#sui_system_sui_s
     wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>,
     staked_sui: StakedSui,
     ctx: &<b>mut</b> TxContext,
-) : Balance&lt;SUI&gt; {
+): Balance&lt;SUI&gt; {
     <b>let</b> self = <a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     self.<a href="../sui_system/sui_system.md#sui_system_sui_system_request_withdraw_stake">request_withdraw_stake</a>(staked_sui, ctx)
 }
@@ -1492,11 +1492,11 @@ gas coins.
     storage_rebate: u64,
     non_refundable_storage_fee: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
-                                     // into storage fund, in basis point.
+                                        // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed to punish a <a href="../sui_system/validator.md#sui_system_validator">validator</a>, in bps.
     epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
     ctx: &<b>mut</b> TxContext,
-) : Balance&lt;SUI&gt; {
+): Balance&lt;SUI&gt; {
     <b>let</b> self = <a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     // Validator will make a special system call with sender set <b>as</b> 0x0.
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui_system/sui_system.md#sui_system_sui_system_ENotSystemAddress">ENotSystemAddress</a>);
@@ -1585,10 +1585,10 @@ gas coins.
 
 <pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInnerV2 {
     <b>if</b> (self.version == 1) {
-      <b>let</b> v1: SuiSystemStateInner = dynamic_field::remove(&<b>mut</b> self.id, self.version);
-      <b>let</b> v2 = v1.v1_to_v2();
-      self.version = 2;
-      dynamic_field::add(&<b>mut</b> self.id, self.version, v2);
+        <b>let</b> v1: SuiSystemStateInner = dynamic_field::remove(&<b>mut</b> self.id, self.version);
+        <b>let</b> v2 = v1.v1_to_v2();
+        self.version = 2;
+        dynamic_field::add(&<b>mut</b> self.id, self.version, v2);
     };
     <b>let</b> inner: &<b>mut</b> SuiSystemStateInnerV2 = dynamic_field::borrow_mut(
         &<b>mut</b> self.id,
