@@ -134,8 +134,8 @@ impl Event {
         db: &Db,
         page: Page<Cursor>,
         filter: EventFilter,
-        checkpoint_viewed_at: u64,
         tx_lo: u64,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Event>, Error> {
         let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
