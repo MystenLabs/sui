@@ -13,8 +13,17 @@ pub struct Args {
     #[command(flatten)]
     pub db_args: DbArgs,
 
+    #[command(flatten)]
+    pub write_args: Option<WriteArgs>,
+
     #[command(subcommand)]
     pub command: Command,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+pub struct WriteArgs {
+    /// The URL of the fullnode RPC we connect to for executing transactions.
+    pub fullnode_rpc_url: url::Url,
 }
 
 #[derive(clap::Subcommand, Debug, Clone)]
