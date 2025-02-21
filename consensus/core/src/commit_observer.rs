@@ -38,7 +38,7 @@ pub(crate) struct CommitObserver {
     /// Component to deterministically collect subdags for committed leaders.
     commit_interpreter: Linearizer,
     /// An unbounded channel to send committed sub-dags to the consumer of consensus output.
-    sender: UnboundedSender<CommittedSubDag>,
+    sender: UnboundedSender<(bool /* is_new_commit */, CommittedSubDag)>,
     /// Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
     leader_schedule: Arc<LeaderSchedule>,
@@ -48,6 +48,7 @@ impl CommitObserver {
     pub(crate) fn new(
         context: Arc<Context>,
         commit_consumer: CommitConsumer,
+        num_requested_prior_commits: u32,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
         leader_schedule: Arc<LeaderSchedule>,
@@ -64,7 +65,10 @@ impl CommitObserver {
             leader_schedule,
         };
 
-        observer.recover_and_send_commits(commit_consumer.last_processed_commit_index);
+        observer.recover_and_send_commits(
+            commit_consumer.last_processed_commit_index,
+            num_requested_prior_commits,
+        );
         observer
     }
 
@@ -84,7 +88,7 @@ impl CommitObserver {
         let mut sent_sub_dags = Vec::with_capacity(committed_sub_dags.len());
         for committed_sub_dag in committed_sub_dags.into_iter() {
             // Failures in sender.send() are assumed to be permanent
-            if let Err(err) = self.sender.send(committed_sub_dag.clone()) {
+            if let Err(err) = self.sender.send((true, committed_sub_dag.clone())) {
                 tracing::error!(
                     "Failed to send committed sub-dag, probably due to shutdown: {err:?}"
                 );
@@ -103,7 +107,11 @@ impl CommitObserver {
         Ok(sent_sub_dags)
     }
 
-    fn recover_and_send_commits(&mut self, last_processed_commit_index: CommitIndex) {
+    fn recover_and_send_commits(
+        &mut self,
+        last_processed_commit_index: CommitIndex,
+        num_requested_prior_commits: u32,
+    ) {
         let now = Instant::now();
         // TODO: remove this check, to allow consensus to regenerate commits?
         let last_commit = self
@@ -111,12 +119,15 @@ impl CommitObserver {
             .read_last_commit()
             .expect("Reading the last commit should not fail");
 
+        let first_requested_commit =
+            last_processed_commit_index.saturating_sub(num_requested_prior_commits);
+
         if let Some(last_commit) = &last_commit {
             let last_commit_index = last_commit.index();
 
             assert!(last_commit_index >= last_processed_commit_index);
-            if last_commit_index == last_processed_commit_index {
-                debug!("Nothing to recover for commit observer as commit index {last_commit_index} = {last_processed_commit_index} last processed index");
+            if last_commit_index == first_requested_commit {
+                debug!("Nothing to recover for commit observer as commit index {last_commit_index} = {first_requested_commit}");
                 return;
             }
         };
@@ -124,7 +135,7 @@ impl CommitObserver {
         // We should not send the last processed commit again, so last_processed_commit_index+1
         let unsent_commits = self
             .store
-            .scan_commits(((last_processed_commit_index + 1)..=CommitIndex::MAX).into())
+            .scan_commits(((first_requested_commit + 1)..=CommitIndex::MAX).into())
             .expect("Scanning commits should not fail");
 
         info!("Recovering commit observer after index {last_processed_commit_index} with last commit {} and {} unsent commits", last_commit.map(|c|c.index()).unwrap_or_default(), unsent_commits.len());
@@ -150,15 +161,22 @@ impl CommitObserver {
                 vec![]
             };
 
-            info!("Sending commit {} during recovery", commit.index());
+            let is_new_commit = commit.index() > last_processed_commit_index;
+            info!(
+                "Sending commit {} during recovery: is_new_commit={}",
+                commit.index(),
+                is_new_commit
+            );
             let committed_sub_dag =
                 load_committed_subdag_from_store(self.store.as_ref(), commit, reputation_scores);
-            self.sender.send(committed_sub_dag).unwrap_or_else(|e| {
-                panic!(
-                    "Failed to send commit during recovery, probably due to shutdown: {:?}",
-                    e
-                )
-            });
+            self.sender
+                .send((is_new_commit, committed_sub_dag))
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "Failed to send commit during recovery, probably due to shutdown: {:?}",
+                        e
+                    )
+                });
 
             last_sent_commit_index += 1;
         }
@@ -242,6 +260,7 @@ mod tests {
         let mut observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule,
@@ -294,7 +313,7 @@ mod tests {
 
         // Check commits sent over consensus output channel is accurate
         let mut processed_subdag_index = 0;
-        while let Ok(subdag) = commit_receiver.try_recv() {
+        while let Ok((_is_new_commit, subdag)) = commit_receiver.try_recv() {
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_ref.index as usize;
@@ -341,6 +360,7 @@ mod tests {
         let mut observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule.clone(),
@@ -375,7 +395,7 @@ mod tests {
 
         // Check commits sent over consensus output channel is accurate
         let mut processed_subdag_index = 0;
-        while let Ok(subdag) = commit_receiver.try_recv() {
+        while let Ok((_is_new_commit, subdag)) = commit_receiver.try_recv() {
             tracing::info!("Processed {subdag}");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
@@ -411,7 +431,7 @@ mod tests {
         );
 
         let expected_last_sent_index = num_rounds as usize;
-        while let Ok(subdag) = commit_receiver.try_recv() {
+        while let Ok((_is_new_commit, subdag)) = commit_receiver.try_recv() {
             tracing::info!("{subdag} was sent but not processed by consumer");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
@@ -437,6 +457,7 @@ mod tests {
         let _observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule,
@@ -445,7 +466,7 @@ mod tests {
         // Check commits sent over consensus output channel is accurate starting
         // from last processed index of 2 and finishing at last sent index of 3.
         processed_subdag_index = expected_last_processed_index;
-        while let Ok(subdag) = commit_receiver.try_recv() {
+        while let Ok((_is_new_commit, subdag)) = commit_receiver.try_recv() {
             tracing::info!("Processed {subdag} on resubmission");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
@@ -481,6 +502,7 @@ mod tests {
         let mut observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule.clone(),
@@ -507,7 +529,8 @@ mod tests {
 
         // Check commits sent over consensus output channel is accurate
         let mut processed_subdag_index = 0;
-        while let Ok(subdag) = commit_receiver.try_recv() {
+        while let Ok((is_new_commit, subdag)) = commit_receiver.try_recv() {
+            assert!(is_new_commit);
             tracing::info!("Processed {subdag}");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
@@ -534,6 +557,7 @@ mod tests {
         let _observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule,
@@ -545,7 +569,7 @@ mod tests {
     }
 
     /// After receiving all expected subdags, ensure channel is empty
-    fn verify_channel_empty(receiver: &mut UnboundedReceiver<CommittedSubDag>) {
+    fn verify_channel_empty(receiver: &mut UnboundedReceiver<(bool, CommittedSubDag)>) {
         match receiver.try_recv() {
             Ok(_) => {
                 panic!("Expected the consensus output channel to be empty, but found more subdags.")

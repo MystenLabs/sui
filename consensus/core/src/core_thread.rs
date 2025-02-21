@@ -491,6 +491,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store,
             leader_schedule.clone(),

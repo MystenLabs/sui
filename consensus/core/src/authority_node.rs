@@ -196,6 +196,8 @@ where
         );
         info!("Consensus parameters: {:?}", parameters);
         info!("Consensus committee: {:?}", committee);
+        let consensus_num_requested_prior_commits =
+            protocol_config.consensus_num_requested_prior_commits();
         let context = Arc::new(Context::new(
             own_index,
             committee,
@@ -259,6 +261,7 @@ where
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            consensus_num_requested_prior_commits,
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -545,11 +548,12 @@ mod tests {
         for receiver in &mut output_receivers {
             let mut expected_transactions = submitted_transactions.clone();
             loop {
-                let committed_subdag =
+                let (is_new_commit, committed_subdag) =
                     tokio::time::timeout(Duration::from_secs(1), receiver.recv())
                         .await
                         .unwrap()
                         .unwrap();
+                assert!(is_new_commit);
                 for b in committed_subdag.blocks {
                     for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
                         assert!(
@@ -644,11 +648,12 @@ mod tests {
         for receiver in &mut output_receivers {
             let mut expected_transactions = submitted_transactions.clone();
             loop {
-                let committed_subdag =
+                let (is_new_commit, committed_subdag) =
                     tokio::time::timeout(Duration::from_secs(1), receiver.recv())
                         .await
                         .unwrap()
                         .unwrap();
+                assert!(is_new_commit);
                 for b in committed_subdag.blocks {
                     for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
                         assert!(
@@ -739,11 +744,12 @@ mod tests {
         // We wait until we see at least one committed block authored from this authority. That way we'll be 100% sure that
         // at least one block has been proposed and successfully received by a quorum of nodes.
         let index_1 = committee.to_authority_index(1).unwrap();
-        'outer: while let Some(result) =
+        'outer: while let Some((is_new_commit, result)) =
             timeout(Duration::from_secs(10), output_receivers[index_1].recv())
                 .await
                 .expect("Timed out while waiting for at least one committed block from authority 1")
         {
+            assert!(is_new_commit);
             for block in result.blocks {
                 if block.round() > GENESIS_ROUND && block.author() == index_1 {
                     break 'outer;
@@ -807,7 +813,12 @@ mod tests {
         sleep(Duration::from_secs(5)).await;
 
         // We wait until we see at least one committed block authored from this authority
-        'outer: while let Some(result) = receiver.recv().await {
+        'outer: while let Some((is_new_commit, result)) =
+            timeout(Duration::from_secs(10), receiver.recv())
+                .await
+                .expect("Timed out while waiting for at least one committed block from authority 1")
+        {
+            assert!(is_new_commit);
             for block in result.blocks {
                 if block.round() > GENESIS_ROUND && block.author() == index_1 {
                     break 'outer;
@@ -830,7 +841,10 @@ mod tests {
         network_type: ConsensusNetwork,
         boot_counter: u64,
         protocol_config: ProtocolConfig,
-    ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
+    ) -> (
+        ConsensusAuthority,
+        UnboundedReceiver<(bool, CommittedSubDag)>,
+    ) {
         let registry = Registry::new();
 
         // Cache less blocks to exercise commit sync.

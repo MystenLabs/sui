@@ -1164,7 +1164,7 @@ pub(crate) struct CoreTextFixture {
     pub signal_receivers: CoreSignalsReceivers,
     pub block_receiver: broadcast::Receiver<ExtendedBlock>,
     #[allow(unused)]
-    pub commit_receiver: UnboundedReceiver<CommittedSubDag>,
+    pub commit_receiver: UnboundedReceiver<(bool, CommittedSubDag)>,
     pub store: Arc<MemStore>,
 }
 
@@ -1203,6 +1203,7 @@ impl CoreTextFixture {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1312,6 +1313,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1434,6 +1436,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1532,6 +1535,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1637,6 +1641,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1772,6 +1777,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1922,6 +1928,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -2001,6 +2008,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -2301,6 +2309,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -2547,6 +2556,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -2633,6 +2643,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -2698,6 +2709,7 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
+            0, /* num requested prior commits */
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),

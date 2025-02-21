@@ -11,7 +11,7 @@ use crate::{CommitIndex, CommittedSubDag, TransactionIndex, VerifiedBlock};
 #[derive(Clone)]
 pub struct CommitConsumer {
     // A channel to output the committed sub dags.
-    pub(crate) commit_sender: UnboundedSender<CommittedSubDag>,
+    pub(crate) commit_sender: UnboundedSender<(bool /* is_new_commit */, CommittedSubDag)>,
     // A channel to output certified and rejected transactions by batches of blocks.
     // Each tuple contains the block containing transactions, and indices of rejected transactions.
     // In each block, transactions that are not rejected are considered certified.
@@ -32,7 +32,7 @@ impl CommitConsumer {
         last_processed_commit_index: CommitIndex,
     ) -> (
         Self,
-        UnboundedReceiver<CommittedSubDag>,
+        UnboundedReceiver<(bool /* is_new_commit */, CommittedSubDag)>,
         UnboundedReceiver<Vec<(VerifiedBlock, Vec<TransactionIndex>)>>,
     ) {
         let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
