@@ -98,7 +98,7 @@ impl CFG {
             debug_assert!(edges.len() < usize::MAX);
             edges.push((parent_block_id, current_block_id));
             block_queue.push_back(current_block_id);
-            // `current_block_id` is bound by the max og `target_block_size`
+            // `current_block_id` is bound by the max of `target_block_size`
             debug_assert!(current_block_id < u16::MAX);
             current_block_id += 1;
             // Generate a second child edge with prob = 1/2
@@ -109,7 +109,7 @@ impl CFG {
                 debug_assert!(edges.len() < usize::MAX);
                 edges.push((parent_block_id, current_block_id));
                 block_queue.push_back(current_block_id);
-                // `current_block_id` is bound by the max og `target_block_size`
+                // `current_block_id` is bound by the max of `target_block_size`
                 debug_assert!(current_block_id < u16::MAX);
                 current_block_id += 1;
             }
