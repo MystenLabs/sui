@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 9 tasks
+processed 13 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -92,6 +92,64 @@ Response: {
       "coinType": "0xa6628f77d4a14f62ba1e2e8b24d99c19ca9948e8925f97367ce6f597f6b3085c::real::REAL",
       "coinObjectCount": 1,
       "totalBalance": "1000000",
+      "lockedBalance": {}
+    }
+  ]
+}
+
+task 9, line 91:
+//# transfer-object 1,6 --sender B --recipient A
+mutated: object(0,1), object(1,6)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
+
+task 10, line 93:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 11, lines 95-99:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": [
+    {
+      "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+      "coinObjectCount": 2,
+      "totalBalance": "299999962225608",
+      "lockedBalance": {}
+    },
+    {
+      "coinType": "0xa6628f77d4a14f62ba1e2e8b24d99c19ca9948e8925f97367ce6f597f6b3085c::fake::FAKE",
+      "coinObjectCount": 2,
+      "totalBalance": "4100",
+      "lockedBalance": {}
+    },
+    {
+      "coinType": "0xa6628f77d4a14f62ba1e2e8b24d99c19ca9948e8925f97367ce6f597f6b3085c::real::REAL",
+      "coinObjectCount": 4,
+      "totalBalance": "26003742",
+      "lockedBalance": {}
+    }
+  ]
+}
+
+task 12, lines 101-105:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": [
+    {
+      "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+      "coinObjectCount": 1,
+      "totalBalance": "299999997998776",
+      "lockedBalance": {}
+    },
+    {
+      "coinType": "0xa6628f77d4a14f62ba1e2e8b24d99c19ca9948e8925f97367ce6f597f6b3085c::fake::FAKE",
+      "coinObjectCount": 2,
+      "totalBalance": "3020",
       "lockedBalance": {}
     }
   ]

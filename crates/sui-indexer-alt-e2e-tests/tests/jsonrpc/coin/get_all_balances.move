@@ -87,3 +87,19 @@ module Test::real {
   "method": "suix_getAllBalances",
   "params": ["@{B}"]
 }
+
+//# transfer-object 1,6 --sender B --recipient A
+
+//# create-checkpoint
+
+//# run-jsonrpc
+{
+  "method": "suix_getAllBalances",
+  "params": ["@{A}"]
+}
+
+//# run-jsonrpc
+{
+  "method": "suix_getAllBalances",
+  "params": ["@{B}"]
+}

@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Context as _;
 use futures::future;
+use sui_types::object::Object;
 
 use super::rpc_module::RpcModule;
 use crate::context::Context;
@@ -45,7 +46,7 @@ trait CoinsApi {
         limit: Option<usize>,
     ) -> RpcResult<PageResponse<Coin, String>>;
 
-    /// Return the total coin balance for all coin type, owned by the address owner.
+    /// Return the total coin balance for all coin types, owned by the address owner.
     #[method(name = "getAllBalances")]
     async fn get_all_balances(
         &self,
@@ -133,7 +134,10 @@ impl CoinsApiServer for Coins {
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
         let Self(ctx, _) = self;
         let coin_ids = filter_coins(ctx, owner, None, None).await?;
-        let coin_futures = coin_ids.data.iter().map(|id| coin_response(ctx, *id));
+        let coin_futures = coin_ids
+            .data
+            .iter()
+            .map(|id| object_with_coin_data(ctx, *id));
         let coins = future::join_all(coin_futures)
             .await
             .into_iter()
@@ -146,10 +150,10 @@ impl CoinsApiServer for Coins {
 
         // Using a BTreeMap so that the ordering of keys is deterministic.
         let mut balance_map: BTreeMap<String, (usize, u128)> = BTreeMap::new();
-        for coin in coins {
-            let entry = balance_map.entry(coin.coin_type).or_insert((0, 0));
+        for (_, coin_type, balance) in coins {
+            let entry = balance_map.entry(coin_type).or_insert((0, 0));
             entry.0 += 1;
-            entry.1 += coin.balance as u128;
+            entry.1 += balance as u128;
         }
         let balances: Vec<Balance> = balance_map
             .into_iter()
@@ -305,14 +309,31 @@ async fn filter_coins(
 }
 
 async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Error>> {
-    let object = load_latest(ctx, id)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Failed to load latest object {}", id))?;
+    let (object, coin_type, balance) = object_with_coin_data(ctx, id).await?;
 
     let coin_object_id = object.id();
     let digest = object.digest();
     let version = object.version();
     let previous_transaction = object.as_inner().previous_transaction;
+
+    Ok(Coin {
+        coin_type,
+        coin_object_id,
+        version,
+        digest,
+        balance,
+        previous_transaction,
+    })
+}
+
+async fn object_with_coin_data(
+    ctx: &Context,
+    id: ObjectID,
+) -> Result<(Object, String, u64), RpcError<Error>> {
+    let object = load_latest(ctx, id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Failed to load latest object {}", id))?;
+
     let coin = object
         .as_coin_maybe()
         .context("Object is expected to be a coin")?;
@@ -320,12 +341,5 @@ async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Err
         .coin_type_maybe()
         .context("Object is expected to have a coin type")?
         .to_canonical_string(/* with_prefix */ true);
-    Ok(Coin {
-        coin_type,
-        coin_object_id,
-        version,
-        digest,
-        balance: coin.balance.value(),
-        previous_transaction,
-    })
+    Ok((object, coin_type, coin.balance.value()))
 }
