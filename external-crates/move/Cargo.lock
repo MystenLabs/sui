@@ -1492,7 +1492,6 @@ name = "language-benchmarks"
 version = "0.1.0"
 dependencies = [
  "criterion",
- "libc",
  "move-binary-format",
  "move-compiler",
  "move-core-types",
