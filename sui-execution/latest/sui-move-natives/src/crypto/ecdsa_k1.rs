@@ -129,13 +129,13 @@ pub fn ecrecover(
 
     let cost = context.gas_used();
 
-    let Ok(sig) = <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(&signature_ref) else {
+    let Ok(sig) = <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(signature_ref) else {
         return Ok(NativeResult::err(cost, INVALID_SIGNATURE));
     };
 
     let pk = match hash {
-        KECCAK256 => sig.recover_with_hash::<Keccak256>(&msg_ref),
-        SHA256 => sig.recover_with_hash::<Sha256>(&msg_ref),
+        KECCAK256 => sig.recover_with_hash::<Keccak256>(msg_ref),
+        SHA256 => sig.recover_with_hash::<Sha256>(msg_ref),
         _ => Err(FastCryptoError::InvalidInput), // We should never reach here
     };
 
@@ -177,7 +177,7 @@ pub fn decompress_pubkey(
 
     let cost = context.gas_used();
 
-    match Secp256k1PublicKey::from_bytes(&pubkey_ref) {
+    match Secp256k1PublicKey::from_bytes(pubkey_ref) {
         Ok(pubkey) => {
             let uncompressed = &pubkey.pubkey.serialize_uncompressed();
             Ok(NativeResult::ok(
@@ -282,17 +282,17 @@ pub fn secp256k1_verify(
 
     let cost = context.gas_used();
 
-    let Ok(sig) = <Secp256k1Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) else {
+    let Ok(sig) = <Secp256k1Signature as ToFromBytes>::from_bytes(signature_bytes_ref) else {
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
-    let Ok(pk) = <Secp256k1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) else {
+    let Ok(pk) = <Secp256k1PublicKey as ToFromBytes>::from_bytes(public_key_bytes_ref) else {
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
     let result = match hash {
-        KECCAK256 => pk.verify_with_hash::<Keccak256>(&msg_ref, &sig).is_ok(),
-        SHA256 => pk.verify_with_hash::<Sha256>(&msg_ref, &sig).is_ok(),
+        KECCAK256 => pk.verify_with_hash::<Keccak256>(msg_ref, &sig).is_ok(),
+        SHA256 => pk.verify_with_hash::<Sha256>(msg_ref, &sig).is_ok(),
         _ => false,
     };
 
@@ -326,7 +326,7 @@ pub fn secp256k1_sign(
     let msg_ref = msg.as_bytes_ref();
     let private_key_bytes_ref = private_key_bytes.as_bytes_ref();
 
-    let sk = match <Secp256k1PrivateKey as ToFromBytes>::from_bytes(&private_key_bytes_ref) {
+    let sk = match <Secp256k1PrivateKey as ToFromBytes>::from_bytes(private_key_bytes_ref) {
         Ok(sk) => sk,
         Err(_) => return Ok(NativeResult::err(cost, INVALID_PRIVKEY)),
     };
@@ -335,15 +335,15 @@ pub fn secp256k1_sign(
 
     let signature = match (hash, recoverable) {
         (KECCAK256, true) => kp
-            .sign_recoverable_with_hash::<Keccak256>(&msg_ref)
+            .sign_recoverable_with_hash::<Keccak256>(msg_ref)
             .as_bytes()
             .to_vec(),
-        (KECCAK256, false) => kp.sign_with_hash::<Keccak256>(&msg_ref).as_bytes().to_vec(),
+        (KECCAK256, false) => kp.sign_with_hash::<Keccak256>(msg_ref).as_bytes().to_vec(),
         (SHA256, true) => kp
-            .sign_recoverable_with_hash::<Sha256>(&msg_ref)
+            .sign_recoverable_with_hash::<Sha256>(msg_ref)
             .as_bytes()
             .to_vec(),
-        (SHA256, false) => kp.sign_with_hash::<Sha256>(&msg_ref).as_bytes().to_vec(),
+        (SHA256, false) => kp.sign_with_hash::<Sha256>(msg_ref).as_bytes().to_vec(),
         _ => return Ok(NativeResult::err(cost, INVALID_HASH_FUNCTION)),
     };
 
@@ -378,7 +378,7 @@ pub fn secp256k1_keypair_from_seed(
         return Ok(NativeResult::err(cost, INVALID_SEED));
     }
     let mut seed_array = [0u8; SEED_LENGTH];
-    seed_array.clone_from_slice(&seed_ref);
+    seed_array.clone_from_slice(seed_ref);
 
     let kp = Secp256k1KeyPair::generate(&mut StdRng::from_seed(seed_array));
 

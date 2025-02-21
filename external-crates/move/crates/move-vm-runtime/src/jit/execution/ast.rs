@@ -873,7 +873,6 @@ impl Function {
         )
     }
 
-    #[cfg(any(debug_assertions, feature = "tracing"))]
     pub fn pretty_short_string(&self) -> String {
         let id = &self.module;
         format!(

@@ -352,7 +352,7 @@ impl MovePackage {
             module
                 .serialize_with_version(module.version, &mut bytes)
                 .unwrap();
-            if let Some(_) = module_map.insert(name, bytes) {
+            if module_map.insert(name, bytes).is_some() {
                 panic!("Duplicate module {} in system package", module.self_id());
             }
         }
@@ -398,7 +398,7 @@ impl MovePackage {
                 VERSION_6
             };
             module.serialize_with_version(version, &mut bytes).unwrap();
-            if let Some(_) = module_map.insert(name, bytes) {
+            if module_map.insert(name, bytes).is_some() {
                 return Err(ExecutionError::from_kind(
                     ExecutionErrorKind::DuplicateModuleName {
                         duplicate_module_name: module.self_id().to_string(),
@@ -507,7 +507,7 @@ impl MovePackage {
         LinkageContext::new(
             self.linkage_table
                 .iter()
-                .map(|(k, v)| ((*k).into(), (*v).upgraded_id.into()))
+                .map(|(k, v)| ((*k).into(), v.upgraded_id.into()))
                 .collect(),
         )
     }
