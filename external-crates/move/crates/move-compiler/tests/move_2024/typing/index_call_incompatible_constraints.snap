@@ -1,0 +1,45 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04034]: 'syntax' method types differ
+  ┌─ tests/move_2024/typing/index_call_incompatible_constraints.move:6:15
+  │
+6 │ public fun in<T: drop>(self: &Box<T>): &T { &self.value }
+  │               ^  ---- Ability defined here
+  │               │   
+  │               This index function type parameter has the 'drop' ability
+  ·
+9 │ public fun in_mut<T: copy>(self: &mut Box<T>): &mut T { &mut self.value }
+  │                   - This mutable index function type parameter does not
+  │
+  = Index operations on use the same abilities for their type parameters
+
+error[E04034]: 'syntax' method types differ
+  ┌─ tests/move_2024/typing/index_call_incompatible_constraints.move:9:19
+  │
+6 │ public fun in<T: drop>(self: &Box<T>): &T { &self.value }
+  │               - This index function type parameter does not
+  ·
+9 │ public fun in_mut<T: copy>(self: &mut Box<T>): &mut T { &mut self.value }
+  │                   ^  ---- Ability defined here
+  │                   │   
+  │                   This mutable index function type parameter has the 'copy' ability
+  │
+  = Index operations on use the same abilities for their type parameters
+
+error[E04034]: 'syntax' method types differ
+   ┌─ tests/move_2024/typing/index_call_incompatible_constraints.move:14:16
+   │
+14 │ public fun in2<T: drop + copy + store>(self: &Box2<T>): &T { &self.value }
+   │                ^                ----- Ability defined here
+   │                │                 
+   │                This index function type parameter has the 'store' ability
+   ·
+17 │ public fun in_mut2<T: copy + drop>(self: &mut Box2<T>): &mut T { &mut self.value }
+   │                    - This mutable index function type parameter does not
+   │
+   = Index operations on use the same abilities for their type parameters

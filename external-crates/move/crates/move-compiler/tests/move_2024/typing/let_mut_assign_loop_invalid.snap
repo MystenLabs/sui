@@ -1,0 +1,61 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04024]: invalid usage of immutable variable
+  ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:4:24
+  │
+3 │         let a;
+  │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut a'
+4 │         while (cond) { a = 0; a; };
+  │                        ^
+  │                        │
+  │                        Invalid assignment of immutable variable 'a'
+  │                        The variable is assigned multiple times here in a loop
+
+error[E04024]: invalid usage of immutable variable
+  ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:9:16
+  │
+8 │         let b;
+  │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut b'
+9 │         loop { b = 0; b; }
+  │                ^
+  │                │
+  │                Invalid assignment of immutable variable 'b'
+  │                The variable is assigned multiple times here in a loop
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:14:24
+   │
+13 │         let x;
+   │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+14 │         while (cond) { x = 1; x; };
+   │                        ^
+   │                        │
+   │                        Invalid assignment of immutable variable 'x'
+   │                        The variable is assigned multiple times here in a loop
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:15:9
+   │
+13 │         let x;
+   │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+14 │         while (cond) { x = 1; x; };
+   │                        - The variable was initially assigned here
+15 │         x = 1;
+   │         ^ Invalid assignment of immutable variable 'x'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:22:13
+   │
+20 │         let x;
+   │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+21 │         loop {
+22 │             x = 0;
+   │             ^
+   │             │
+   │             Invalid assignment of immutable variable 'x'
+   │             The variable is assigned multiple times here in a loop

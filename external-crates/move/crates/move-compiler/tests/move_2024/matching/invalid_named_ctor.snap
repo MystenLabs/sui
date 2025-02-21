@@ -1,0 +1,40 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/matching/invalid_named_ctor.move:8:18
+  │
+4 │         E { x : u64 }
+  │         ------------- 'E' is declared here
+  ·
+8 │         let _x = Entry::E;
+  │                  ^^^^^^^^ Invalid variant instantiation. Named variant declarations require named instantiations
+  │
+  = Named instantiations take arguments using '{ }'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/matching/invalid_named_ctor.move:8:18
+  │
+8 │         let _x = Entry::E;
+  │                  ^^^^^^^^ Missing argument for field 'x' in '0x42::m::Entry::E'
+
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/matching/invalid_named_ctor.move:9:18
+  │
+4 │         E { x : u64 }
+  │         ------------- 'E' is declared here
+  ·
+9 │         let _x = Entry::E();
+  │                  ^^^^^^^^^^ Invalid variant instantiation. Named variant declarations require named instantiations
+  │
+  = Named instantiations take arguments using '{ }'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/matching/invalid_named_ctor.move:9:18
+  │
+9 │         let _x = Entry::E();
+  │                  ^^^^^^^^^^ Missing argument for field 'x' in '0x42::m::Entry::E'

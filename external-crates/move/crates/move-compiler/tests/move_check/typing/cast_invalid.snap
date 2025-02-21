@@ -1,0 +1,280 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_check/typing/cast_invalid.move:6:10
+  │
+6 │         (false as u8);
+  │          ^^^^^
+  │          │
+  │          Invalid argument to 'as'
+  │          Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_check/typing/cast_invalid.move:7:10
+  │
+7 │         (true as u128);
+  │          ^^^^
+  │          │
+  │          Invalid argument to 'as'
+  │          Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_check/typing/cast_invalid.move:9:10
+  │
+9 │         (() as u64);
+  │          ^^
+  │          │
+  │          Invalid argument to 'as'
+  │          Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:10:10
+   │
+10 │         ((0, 1) as u8);
+   │          ^^^^^^
+   │          │
+   │          Invalid argument to 'as'
+   │          Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:12:10
+   │
+12 │         (0 as bool);
+   │          ^    ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          │     
+   │          Invalid argument to 'as'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:13:10
+   │
+13 │         (0 as address);
+   │          ^    ------- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          │     
+   │          Invalid argument to 'as'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:14:16
+   │
+14 │         R{} = (0 as R);
+   │                ^    - Found: '0x8675309::M::R'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                │     
+   │                Invalid argument to 'as'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:15:10
+   │
+15 │         (0 as Cup<u8>);
+   │          ^    ------- Found: '0x8675309::M::Cup<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          │     
+   │          Invalid argument to 'as'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:16:10
+   │
+16 │         (0 as ());
+   │          ^    -- Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          │     
+   │          Invalid argument to 'as'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:17:10
+   │
+17 │         (0 as (u64, u8));
+   │          ^    --------- Found: '(u64, u8)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          │     
+   │          Invalid argument to 'as'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:19:10
+   │
+19 │         (x"1234" as u64);
+   │          ^^^^^^^
+   │          │
+   │          Invalid argument to 'as'
+   │          Found: 'vector<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/cast_invalid.move:23:9
+   │
+23 │         false as u8;
+   │         ^^^^^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:23:9
+   │
+23 │         false as u8;
+   │         ^^^^^
+   │         │
+   │         Invalid argument to 'as'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/cast_invalid.move:24:9
+   │
+24 │         true as u128;
+   │         ^^^^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:24:9
+   │
+24 │         true as u128;
+   │         ^^^^
+   │         │
+   │         Invalid argument to 'as'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/cast_invalid.move:26:9
+   │
+26 │         () as u64;
+   │         ^^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:26:9
+   │
+26 │         () as u64;
+   │         ^^
+   │         │
+   │         Invalid argument to 'as'
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/cast_invalid.move:27:9
+   │
+27 │         (0, 1) as u8;
+   │         ^^^^^^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:27:9
+   │
+27 │         (0, 1) as u8;
+   │         ^^^^^^
+   │         │
+   │         Invalid argument to 'as'
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/cast_invalid.move:29:9
+   │
+29 │         0 as bool;
+   │         ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:29:9
+   │
+29 │         0 as bool;
+   │         ^    ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         │     
+   │         Invalid argument to 'as'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/cast_invalid.move:30:9
+   │
+30 │         0 as address;
+   │         ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:30:9
+   │
+30 │         0 as address;
+   │         ^    ------- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         │     
+   │         Invalid argument to 'as'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/cast_invalid.move:31:15
+   │
+31 │         R{} = 0 as R;
+   │               ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:31:15
+   │
+31 │         R{} = 0 as R;
+   │               ^    - Found: '0x8675309::M::R'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │               │     
+   │               Invalid argument to 'as'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/cast_invalid.move:32:9
+   │
+32 │         0 as Cup<u8>;
+   │         ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:32:9
+   │
+32 │         0 as Cup<u8>;
+   │         ^    ------- Found: '0x8675309::M::Cup<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         │     
+   │         Invalid argument to 'as'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/cast_invalid.move:33:9
+   │
+33 │         0 as ();
+   │         ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:33:9
+   │
+33 │         0 as ();
+   │         ^    -- Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         │     
+   │         Invalid argument to 'as'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/cast_invalid.move:34:9
+   │
+34 │         0 as (u64, u8);
+   │         ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:34:9
+   │
+34 │         0 as (u64, u8);
+   │         ^    --------- Found: '(u64, u8)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         │     
+   │         Invalid argument to 'as'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/cast_invalid.move:36:9
+   │
+36 │         x"1234" as u64;
+   │         ^^^^^^^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_check/typing/cast_invalid.move:36:9
+   │
+36 │         x"1234" as u64;
+   │         ^^^^^^^
+   │         │
+   │         Invalid argument to 'as'
+   │         Found: 'vector<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'

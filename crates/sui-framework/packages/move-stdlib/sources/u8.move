@@ -76,21 +76,21 @@ public macro fun max_value(): u8 {
 }
 
 /// Loops applying `$f` to each number from `$start` to `$stop` (exclusive)
-public macro fun range_do($start: u8, $stop: u8, $f: |u8|) {
+public macro fun range_do<$R: drop>($start: u8, $stop: u8, $f: |u8| -> $R) {
     std::macros::range_do!($start, $stop, $f)
 }
 
 /// Loops applying `$f` to each number from `$start` to `$stop` (inclusive)
-public macro fun range_do_eq($start: u8, $stop: u8, $f: |u8|) {
+public macro fun range_do_eq<$R: drop>($start: u8, $stop: u8, $f: |u8| -> $R) {
     std::macros::range_do_eq!($start, $stop, $f)
 }
 
 /// Loops applying `$f` to each number from `0` to `$stop` (exclusive)
-public macro fun do($stop: u8, $f: |u8|) {
+public macro fun do<$R: drop>($stop: u8, $f: |u8| -> $R) {
     std::macros::do!($stop, $f)
 }
 
 /// Loops applying `$f` to each number from `0` to `$stop` (inclusive)
-public macro fun do_eq($stop: u8, $f: |u8|) {
+public macro fun do_eq<$R: drop>($stop: u8, $f: |u8| -> $R) {
     std::macros::do_eq!($stop, $f)
 }

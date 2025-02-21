@@ -1,0 +1,12 @@
+---
+listen-address: "127.0.0.1:8080"
+metrics-address: "127.0.0.1:9184"
+
+execution-peer:
+  address: "https://fullnode.mainnet.sui.io:443"
+
+read-peer:
+  address: " https://fullnode.mainnet.sui.io:443"
+
+logging:
+  read-request-sample-rate: 1.0

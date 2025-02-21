@@ -3,8 +3,7 @@
 use super::*;
 use crate::rocks::iter::{Iter, RevIter};
 use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
-use crate::rocks::util::{is_ref_count_value, reference_count_merge_operator};
-use crate::{reopen, retry_transaction, retry_transaction_forever};
+use crate::{reopen, retry_transaction};
 use rstest::rstest;
 use serde::Deserialize;
 
@@ -320,12 +319,6 @@ async fn test_skip(
     assert_eq!(key_vals[0], (456, "456".to_string()));
     assert_eq!(key_vals[1], (789, "789".to_string()));
 
-    // Skip all smaller: same for the keys iterator
-    let keys: Vec<_> = db.keys().skip_to(&456).expect("Seek failed").collect();
-    assert_eq!(keys.len(), 2);
-    assert_eq!(keys[0], Ok(456));
-    assert_eq!(keys[1], Ok(789));
-
     // Skip to the end
     assert_eq!(
         get_iter(&db, use_safe_iter)
@@ -334,16 +327,12 @@ async fn test_skip(
             .count(),
         0
     );
-    // same for the keys
-    assert_eq!(db.keys().skip_to(&999).expect("Seek failed").count(), 0);
 
     // Skip to last
     assert_eq!(
         get_iter(&db, use_safe_iter).skip_to_last().next(),
         Some((789, "789".to_string()))
     );
-    // same for the keys
-    assert_eq!(db.keys().skip_to_last().next(), Some(Ok(789)));
 
     // Skip to successor of first value
     assert_eq!(
@@ -353,7 +342,13 @@ async fn test_skip(
             .count(),
         3
     );
-    assert_eq!(db.keys().skip_to(&000).expect("Skip failed").count(), 3);
+    assert_eq!(
+        get_iter(&db, use_safe_iter)
+            .skip_to(&000)
+            .expect("Skip failed")
+            .count(),
+        3
+    );
 }
 
 #[rstest]
@@ -378,14 +373,6 @@ async fn test_skip_to_previous_simple(
         .collect();
     assert_eq!(key_vals.len(), 1);
     assert_eq!(key_vals[0], (789, "789".to_string()));
-    // Same for the keys iterator
-    let keys: Vec<_> = db
-        .keys()
-        .skip_prior_to(&999)
-        .expect("Seek failed")
-        .collect();
-    assert_eq!(keys.len(), 1);
-    assert_eq!(keys[0], Ok(789));
 
     // Skip to prior of first value
     // Note: returns an empty iterator!
@@ -398,7 +385,10 @@ async fn test_skip_to_previous_simple(
     );
     // Same for the keys iterator
     assert_eq!(
-        db.keys().skip_prior_to(&000).expect("Seek failed").count(),
+        get_iter(&db, use_safe_iter)
+            .skip_prior_to(&000)
+            .expect("Seek failed")
+            .count(),
         0
     );
 }
@@ -428,11 +418,11 @@ async fn test_iter_skip_to_previous_gap(
         db_iter.collect::<Vec<_>>()
     );
     // Same logic in the keys iterator
-    let db_iter = db.keys().skip_prior_to(&50).unwrap();
+    let db_iter = get_iter(&db, true).skip_prior_to(&50).unwrap();
 
     assert_eq!(
-        (49..50).chain(51..100).map(Ok).collect::<Vec<_>>(),
-        db_iter.collect::<Vec<_>>()
+        (49..50).chain(51..100).collect::<Vec<_>>(),
+        db_iter.map(|(k, _)| k).collect::<Vec<_>>()
     );
 }
 
@@ -490,19 +480,6 @@ async fn test_iter_reverse(
     assert_eq!(Some((2, "2".to_string())), iter.next());
     assert_eq!(Some((1, "1".to_string())), iter.next());
     assert_eq!(None, iter.next());
-}
-
-#[rstest]
-#[tokio::test]
-async fn test_keys(#[values(true, false)] is_transactional: bool) {
-    let db = open_map(temp_dir(), None, is_transactional);
-
-    db.insert(&123456789, &"123456789".to_string())
-        .expect("Failed to insert");
-
-    let mut keys = db.keys();
-    assert_eq!(Some(Ok(123456789)), keys.next());
-    assert_eq!(None, keys.next());
 }
 
 #[rstest]
@@ -661,8 +638,8 @@ async fn test_delete_batch() {
 
     batch.write().expect("Failed to execute batch");
 
-    for k in db.keys() {
-        assert_eq!(k.unwrap() % 2, 0);
+    for (k, _) in get_iter(&db, true) {
+        assert_eq!(k % 2, 0);
     }
 }
 
@@ -810,11 +787,11 @@ async fn test_iter_with_bounds(
     );
 
     // Same logic in the keys iterator
-    let db_iter = db.keys().skip_prior_to(&50).unwrap();
+    let db_iter = get_iter(&db, use_safe_iter).skip_prior_to(&50).unwrap();
 
     assert_eq!(
-        (49..50).chain(51..100).map(Ok).collect::<Vec<_>>(),
-        db_iter.collect::<Vec<_>>()
+        (49..50).chain(51..100).collect::<Vec<_>>(),
+        db_iter.map(|(k, _)| k).collect::<Vec<_>>()
     );
 
     // Skip to a key which is not within the bounds (bound is [1, 50))
@@ -952,11 +929,11 @@ async fn test_range_iter(
     );
 
     // Same logic in the keys iterator
-    let db_iter = db.keys().skip_prior_to(&50).unwrap();
+    let db_iter = get_iter(&db, use_safe_iter).skip_prior_to(&50).unwrap();
 
     assert_eq!(
-        (49..50).chain(51..100).map(Ok).collect::<Vec<_>>(),
-        db_iter.collect::<Vec<_>>()
+        (49..50).chain(51..100).collect::<Vec<_>>(),
+        db_iter.map(|(k, _)| k).collect::<Vec<_>>()
     );
 
     // Skip to a key which is not within the bounds (bound is [1, 50], but 50 doesn't exist in DB)
@@ -1248,26 +1225,6 @@ async fn test_retry_transaction() {
     })
     // fails after hitting maximum number of retries
     .unwrap_err();
-
-    // obviously we cannot verify that this never times out, this is more just a test to make sure
-    // the macro compiles as expected.
-    tokio::time::timeout(Duration::from_secs(1), async move {
-        retry_transaction_forever!({
-            let mut tx1 = db
-                .transaction_without_snapshot()
-                .expect("failed to initiate transaction");
-            tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
-                .unwrap();
-            db.insert(&key, &"1".to_string()).unwrap();
-            tx1.commit()
-        })
-        // fails after hitting maximum number of retries
-        .unwrap_err();
-        panic!("should never finish");
-    })
-    .await
-    // must timeout
-    .unwrap_err();
 }
 
 #[tokio::test]
@@ -1309,8 +1266,6 @@ async fn test_transaction_read_your_write() {
             .unwrap(),
         vec![Some("11".to_string()), None]
     );
-    let keys: Vec<String> = tx.keys(&db).map(|x| x.unwrap()).collect();
-    assert_eq!(keys, vec![key1.to_string()]);
     let values: Vec<_> = tx.values(&db).collect();
     assert_eq!(values, vec![Ok("11".to_string())]);
     assert!(tx.commit().is_ok());
@@ -1376,116 +1331,6 @@ async fn open_as_secondary_test() {
 struct ObjectWithRefCount {
     value: i64,
     ref_count: i64,
-}
-
-fn increment_counter(db: &DBMap<String, ObjectWithRefCount>, key: &str, value: i64) {
-    let mut batch = db.batch();
-    batch
-        .partial_merge_batch(db, [(key.to_string(), value.to_le_bytes())])
-        .unwrap();
-    batch.write().unwrap();
-}
-
-#[tokio::test]
-async fn refcount_test() {
-    let key = "key".to_string();
-    let mut options = rocksdb::Options::default();
-    options.set_merge_operator(
-        "refcount operator",
-        reference_count_merge_operator,
-        reference_count_merge_operator,
-    );
-    let db = DBMap::<String, ObjectWithRefCount>::open(
-        temp_dir(),
-        MetricConf::default(),
-        Some(options),
-        None,
-        &ReadWriteOptions::default(),
-    )
-    .expect("failed to open rocksdb");
-    let object = ObjectWithRefCount {
-        value: 3,
-        ref_count: 1,
-    };
-    // increment value 10 times
-    let iterations = 10;
-    for _ in 0..iterations {
-        let mut batch = db.batch();
-        batch.merge_batch(&db, [(key.to_string(), object)]).unwrap();
-        batch.write().unwrap();
-    }
-    let value = db
-        .get(&key)
-        .expect("failed to read value")
-        .expect("value is empty");
-    assert_eq!(value.value, object.value);
-    assert_eq!(value.ref_count, iterations);
-
-    // decrement value
-    increment_counter(&db, &key, -1);
-    let value = db.get(&key).unwrap().unwrap();
-    assert_eq!(value.value, object.value);
-    assert_eq!(value.ref_count, iterations - 1);
-}
-
-#[tokio::test]
-async fn refcount_with_compaction_test() {
-    let key = "key".to_string();
-    let mut options = rocksdb::Options::default();
-    options.set_merge_operator(
-        "refcount operator",
-        reference_count_merge_operator,
-        reference_count_merge_operator,
-    );
-    let db = DBMap::<String, ObjectWithRefCount>::open(
-        temp_dir(),
-        MetricConf::default(),
-        Some(options),
-        None,
-        &ReadWriteOptions::default(),
-    )
-    .expect("failed to open rocksdb");
-
-    let object = ObjectWithRefCount {
-        value: 3,
-        ref_count: 1,
-    };
-    let mut batch = db.batch();
-    batch.merge_batch(&db, [(key.to_string(), object)]).unwrap();
-    batch.write().unwrap();
-    // increment value once
-    increment_counter(&db, &key, 1);
-    let value = db.get(&key).unwrap().unwrap();
-    assert_eq!(value.value, object.value);
-
-    // decrement value to 0
-    increment_counter(&db, &key, -1);
-    increment_counter(&db, &key, -1);
-    // ref count went to zero. Reading value returns empty array
-    assert!(db.get(&key).is_err());
-    let value = db.multi_get_raw_bytes([(&key)]).unwrap()[0]
-        .clone()
-        .unwrap();
-    assert!(value.is_empty());
-
-    // refcount increment makes value visible again
-    increment_counter(&db, &key, 1);
-    let value = db.get(&key).unwrap().unwrap();
-    assert_eq!(value.value, object.value);
-
-    increment_counter(&db, &key, -1);
-    db.compact_range(
-        &object,
-        &ObjectWithRefCount {
-            value: 100,
-            ref_count: 1,
-        },
-    )
-    .unwrap();
-
-    increment_counter(&db, &key, 1);
-    let value = db.get_raw_bytes(&key).unwrap().unwrap();
-    assert!(is_ref_count_value(&value));
 }
 
 fn open_map<P: AsRef<Path>, K, V>(

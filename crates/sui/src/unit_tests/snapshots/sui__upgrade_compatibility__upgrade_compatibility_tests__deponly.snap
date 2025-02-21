@@ -1,0 +1,33 @@
+---
+source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility_tests.rs
+expression: normalize_path(err.to_string())
+---
+error[Compatibility E01010]: new declaration
+  ┌─ /fixtures/upgrade_errors/deponly_errors_v2/sources/UpgradeErrors.move:4:18
+  │
+4 │ module upgrades::upgrades {
+  │                  ^^^^^^^^ New unexpected enum 'NewEnum'.
+  │
+  = Enums cannot be added during a 'dependency only' upgrade.
+  = Remove the enum 'NewEnum' from its module.
+
+error[Compatibility E01010]: new declaration
+  ┌─ /fixtures/upgrade_errors/deponly_errors_v2/sources/UpgradeErrors.move:4:18
+  │
+4 │ module upgrades::upgrades {
+  │                  ^^^^^^^^ New unexpected function 'new_function'.
+  │
+  = Functions cannot be added during a 'dependency only' upgrade.
+  = Remove the function 'new_function' from its module.
+
+error[Compatibility E01010]: new declaration
+  ┌─ /fixtures/upgrade_errors/deponly_errors_v2/sources/UpgradeErrors.move:7:19
+  │
+7 │     public struct NewStruct {
+  │                   ^^^^^^^^^ New unexpected struct 'NewStruct'.
+  │
+  = Structs cannot be added during a 'dependency only' upgrade.
+  = Remove the struct 'NewStruct' from its module.
+
+
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'dependency only'.

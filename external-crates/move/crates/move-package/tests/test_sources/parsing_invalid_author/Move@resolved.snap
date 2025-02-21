@@ -1,0 +1,4 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+Error parsing '[package]' section of manifest: Invalid author '1' of type integer found. Expected a string.

@@ -1,3 +1,0 @@
-Conflicting "regular" and "dev" overrides found in Root-rename:
-C-rename = { local = "deps_only/C-v1" }
-C-rename = { local = "deps_only/C-v2" }

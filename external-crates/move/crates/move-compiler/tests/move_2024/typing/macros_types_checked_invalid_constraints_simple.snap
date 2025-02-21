@@ -1,0 +1,60 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:7:26
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
+   │                                        ---- 'copy' constraint declared here
+   ·
+ 7 │     macro fun bar<$T>(_: NeedsCopy<$T>) {}
+   │                          ^^^^^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+14 │         bar!<None>(NeedsCopy {});
+   │              ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:9:26
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
+   │                                        ---- 'copy' constraint declared here
+   ·
+ 9 │     macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }
+   │                          ^^^^^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+18 │         baz!<None>()
+   │              ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:13:9
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+   ·
+ 5 │     macro fun foo<$T: copy>() {}
+   │                       ---- 'copy' constraint declared here
+   ·
+13 │         foo!<None>();
+   │         ^^^^^^^^^^^^
+   │         │    │
+   │         │    The type 'a::m::None' does not have the ability 'copy'
+   │         'copy' constraint not satisifed
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:18:9
+   │
+ 9 │     macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }
+   │                          ------------- Given: 'a::m::NeedsCopy<a::m::None>'
+   ·
+17 │     fun t2() {
+   │         -- Expected: '()'
+18 │         baz!<None>()
+   │         ^^^^^^^^^^^^ Invalid return expression

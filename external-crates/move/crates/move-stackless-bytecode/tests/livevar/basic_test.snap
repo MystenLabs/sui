@@ -1,0 +1,200 @@
+---
+source: crates/move-stackless-bytecode/tests/testsuite.rs
+---
+============ initial translation from Move ================
+
+[variant baseline]
+fun TestLiveVars::test1($t0|r_ref: &TestLiveVars::R): u64 {
+     var $t1: &TestLiveVars::R
+     var $t2: &u64
+     var $t3: u64
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<TestLiveVars::R>.x($t1)
+  2: $t3 := read_ref($t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+fun TestLiveVars::test2($t0|b: bool): u64 {
+     var $t1|r1#1#0: TestLiveVars::R
+     var $t2|r2#1#0: TestLiveVars::R
+     var $t3|r_ref#1#0: &TestLiveVars::R
+     var $t4: u64
+     var $t5: TestLiveVars::R
+     var $t6: u64
+     var $t7: TestLiveVars::R
+     var $t8: &TestLiveVars::R
+     var $t9: bool
+     var $t10: &TestLiveVars::R
+     var $t11: &TestLiveVars::R
+     var $t12: &TestLiveVars::R
+     var $t13: u64
+  0: $t4 := 3
+  1: $t5 := pack TestLiveVars::R($t4)
+  2: $t1 := $t5
+  3: $t6 := 4
+  4: $t7 := pack TestLiveVars::R($t6)
+  5: $t2 := $t7
+  6: $t8 := borrow_local($t1)
+  7: $t3 := $t8
+  8: $t9 := move($t0)
+  9: if ($t9) goto 10 else goto 16
+ 10: label L1
+ 11: $t10 := move($t3)
+ 12: destroy($t10)
+ 13: $t11 := borrow_local($t2)
+ 14: $t3 := $t11
+ 15: goto 16
+ 16: label L0
+ 17: $t12 := move($t3)
+ 18: $t13 := TestLiveVars::test1($t12)
+ 19: return $t13
+}
+
+
+[variant baseline]
+fun TestLiveVars::test3($t0|n: u64, $t1|r_ref: &TestLiveVars::R): u64 {
+     var $t2|r1#1#0: TestLiveVars::R
+     var $t3|r2#1#0: TestLiveVars::R
+     var $t4: u64
+     var $t5: TestLiveVars::R
+     var $t6: u64
+     var $t7: TestLiveVars::R
+     var $t8: u64
+     var $t9: u64
+     var $t10: bool
+     var $t11: &TestLiveVars::R
+     var $t12: u64
+     var $t13: u64
+     var $t14: u64
+     var $t15: u64
+     var $t16: bool
+     var $t17: &TestLiveVars::R
+     var $t18: &TestLiveVars::R
+     var $t19: u64
+     var $t20: u64
+     var $t21: u64
+     var $t22: &TestLiveVars::R
+     var $t23: u64
+  0: $t4 := 3
+  1: $t5 := pack TestLiveVars::R($t4)
+  2: $t2 := $t5
+  3: $t6 := 4
+  4: $t7 := pack TestLiveVars::R($t6)
+  5: $t3 := $t7
+  6: goto 7
+  7: label L6
+  8: $t8 := 0
+  9: $t9 := copy($t0)
+ 10: $t10 := <($t8, $t9)
+ 11: if ($t10) goto 12 else goto 37
+ 12: label L1
+ 13: goto 14
+ 14: label L2
+ 15: $t11 := move($t1)
+ 16: destroy($t11)
+ 17: $t12 := copy($t0)
+ 18: $t13 := 2
+ 19: $t14 := /($t12, $t13)
+ 20: $t15 := 0
+ 21: $t16 := ==($t14, $t15)
+ 22: if ($t16) goto 23 else goto 27
+ 23: label L4
+ 24: $t17 := borrow_local($t2)
+ 25: $t1 := $t17
+ 26: goto 31
+ 27: label L3
+ 28: $t18 := borrow_local($t3)
+ 29: $t1 := $t18
+ 30: goto 31
+ 31: label L5
+ 32: $t19 := move($t0)
+ 33: $t20 := 1
+ 34: $t21 := -($t19, $t20)
+ 35: $t0 := $t21
+ 36: goto 7
+ 37: label L0
+ 38: $t22 := move($t1)
+ 39: $t23 := TestLiveVars::test1($t22)
+ 40: return $t23
+}
+
+============ after pipeline `livevar` ================
+
+[variant baseline]
+fun TestLiveVars::test1($t0|r_ref: TestLiveVars::R): u64 {
+     var $t1: u64
+  0: $t1 := get_field<TestLiveVars::R>.x($t0)
+  1: return $t1
+}
+
+
+[variant baseline]
+fun TestLiveVars::test2($t0|b: bool): u64 {
+     var $t1|r1#1#0: TestLiveVars::R
+     var $t2|r2#1#0: TestLiveVars::R
+     var $t3|r_ref#1#0: TestLiveVars::R
+     var $t4: u64
+     var $t5: TestLiveVars::R
+     var $t6: u64
+     var $t7: TestLiveVars::R
+     var $t8: u64
+  0: $t4 := 3
+  1: $t5 := pack TestLiveVars::R($t4)
+  2: $t6 := 4
+  3: $t7 := pack TestLiveVars::R($t6)
+  4: $t3 := $t5
+  5: if ($t0) goto 6 else goto 8
+  6: label L1
+  7: $t3 := $t7
+  8: label L0
+  9: $t8 := TestLiveVars::test1($t3)
+ 10: return $t8
+}
+
+
+[variant baseline]
+fun TestLiveVars::test3($t0|n: u64, $t1|r_ref: TestLiveVars::R): u64 {
+     var $t2|r1#1#0: TestLiveVars::R
+     var $t3|r2#1#0: TestLiveVars::R
+     var $t4: u64
+     var $t5: TestLiveVars::R
+     var $t6: u64
+     var $t7: TestLiveVars::R
+     var $t8: u64
+     var $t9: bool
+     var $t10: u64
+     var $t11: u64
+     var $t12: u64
+     var $t13: bool
+     var $t14: u64
+     var $t15: u64
+  0: $t4 := 3
+  1: $t5 := pack TestLiveVars::R($t4)
+  2: $t6 := 4
+  3: $t7 := pack TestLiveVars::R($t6)
+  4: label L6
+  5: $t8 := 0
+  6: $t9 := <($t8, $t0)
+  7: if ($t9) goto 8 else goto 24
+  8: label L1
+  9: label L2
+ 10: $t10 := 2
+ 11: $t11 := /($t0, $t10)
+ 12: $t12 := 0
+ 13: $t13 := ==($t11, $t12)
+ 14: if ($t13) goto 15 else goto 18
+ 15: label L4
+ 16: $t1 := $t5
+ 17: goto 20
+ 18: label L3
+ 19: $t1 := $t7
+ 20: label L5
+ 21: $t14 := 1
+ 22: $t0 := -($t0, $t14)
+ 23: goto 4
+ 24: label L0
+ 25: $t15 := TestLiveVars::test1($t1)
+ 26: return $t15
+}

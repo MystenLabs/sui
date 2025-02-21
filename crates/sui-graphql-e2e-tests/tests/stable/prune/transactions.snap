@@ -1,0 +1,453 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 25 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-25:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 27:
+//# run Test::M1::create --sender A --args 0 @A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 29:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 31:
+//# advance-epoch
+Epoch advanced: 0
+
+task 5, line 33:
+//# run Test::M1::create --sender A --args 1 @A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 35:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, line 37:
+//# advance-epoch
+Epoch advanced: 1
+
+task 8, line 39:
+//# run Test::M1::create --sender A --args 2 @A
+created: object(8,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 41:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 10, line 43:
+//# advance-epoch
+Epoch advanced: 2
+
+task 11, line 45:
+//# run Test::M1::create --sender A --args 3 @A
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, line 47:
+//# create-checkpoint
+Checkpoint created: 7
+
+task 13, lines 49-96:
+//# run-graphql --wait-for-checkpoint-pruned 4
+Response: {
+  "data": {
+    "epoch": {
+      "epochId": 3
+    },
+    "checkpoints": {
+      "nodes": [
+        {
+          "epoch": {
+            "epochId": 2
+          },
+          "sequenceNumber": 5
+        },
+        {
+          "epoch": {
+            "epochId": 2
+          },
+          "sequenceNumber": 6
+        },
+        {
+          "epoch": {
+            "epochId": 3
+          },
+          "sequenceNumber": 7
+        }
+      ]
+    },
+    "unfiltered": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 5
+            }
+          }
+        },
+        {
+          "digest": "3JTu6zCWqr6ntrcXes17pVGaDsi5TohbZG3KmJMB69wd",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 6
+            }
+          }
+        },
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
+        }
+      ]
+    },
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 5
+            }
+          }
+        },
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 14, lines 98-117:
+//# run-graphql --wait-for-checkpoint-pruned 4
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 15, lines 119-138:
+//# run-graphql --wait-for-checkpoint-pruned 4
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 5
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 16, lines 142-161:
+//# run-graphql --wait-for-checkpoint-pruned 4
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 17, lines 163-182:
+//# run-graphql --wait-for-checkpoint-pruned 4
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 18, lines 185-204:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 5
+            }
+          }
+        },
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 19, lines 206-225:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 20, lines 227-246:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 5
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 21, lines 248-268:
+//# run-graphql --cursors {"c":7,"t":6,"i":false}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo3LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "3JTu6zCWqr6ntrcXes17pVGaDsi5TohbZG3KmJMB69wd",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 6
+            }
+          }
+        },
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 22, lines 270-289:
+//# run-graphql --cursors {"c":7,"t":0,"i":false}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 23, lines 291-310:
+//# run-graphql --cursors {"c":7,"t":0,"i":true}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 5
+            }
+          }
+        },
+        {
+          "digest": "3JTu6zCWqr6ntrcXes17pVGaDsi5TohbZG3KmJMB69wd",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 6
+            }
+          }
+        },
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 24, lines 312-331:
+//# run-graphql --cursors {"c":7,"t":0,"i":true}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjp0cnVlfQ",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjp0cnVlfQ",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 5
+            }
+          }
+        },
+        {
+          "digest": "3JTu6zCWqr6ntrcXes17pVGaDsi5TohbZG3KmJMB69wd",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 6
+            }
+          }
+        },
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
+        }
+      ]
+    }
+  }
+}

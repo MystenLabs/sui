@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04032]: unable to expand macro function
+  ┌─ tests/move_2024/typing/annotated_lambda.move:8:15
+  │
+8 │         call!((|| 1 : || -> u64))
+  │               ^^^^^^^^^^^^^^^^^^ Unable to bind lambda to parameter '$f'. The lambda must be passed directly

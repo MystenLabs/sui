@@ -63,8 +63,6 @@ pub struct NodeConfig {
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
 
-    #[serde(default)]
-    pub enable_experimental_rest_api: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc: Option<sui_rpc_api::Config>,
 
@@ -123,9 +121,6 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub db_checkpoint_config: DBCheckpointConfig,
-
-    #[serde(default)]
-    pub indirect_objects_threshold: usize,
 
     #[serde(default)]
     pub expensive_safety_check_config: ExpensiveSafetyCheckConfig,
@@ -206,6 +201,12 @@ pub struct NodeConfig {
     /// By default, write stall is enabled on validators but not on fullnodes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_db_write_stall: Option<bool>,
+
+    /// Size of the channel used for buffering local execution time observations.
+    ///
+    /// If unspecified, this will default to `128`.
+    #[serde(default = "default_local_execution_time_channel_capacity")]
+    pub local_execution_time_channel_capacity: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -230,6 +231,13 @@ pub enum ExecutionCacheConfig {
         events_cache_size: Option<u64>, // defaults to transaction_cache_size
 
         transaction_objects_cache_size: Option<u64>, // defaults to 1000
+
+        /// Number of uncommitted transactions at which to pause consensus handler.
+        backpressure_threshold: Option<u64>,
+
+        /// Number of uncommitted transactions at which to refuse new transaction
+        /// submissions. Defaults to backpressure_threshold if unset.
+        backpressure_threshold_for_rpc: Option<u64>,
     },
 }
 
@@ -237,6 +245,8 @@ impl Default for ExecutionCacheConfig {
     fn default() -> Self {
         ExecutionCacheConfig::WritebackCache {
             max_cache_size: None,
+            backpressure_threshold: None,
+            backpressure_threshold_for_rpc: None,
             package_cache_size: None,
             object_cache_size: None,
             marker_cache_size: None,
@@ -374,6 +384,32 @@ impl ExecutionCacheConfig {
                 } => transaction_objects_cache_size.unwrap_or(1000),
             })
     }
+
+    pub fn backpressure_threshold(&self) -> u64 {
+        std::env::var("SUI_BACKPRESSURE_THRESHOLD")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    backpressure_threshold,
+                    ..
+                } => backpressure_threshold.unwrap_or(100_000),
+            })
+    }
+
+    pub fn backpressure_threshold_for_rpc(&self) -> u64 {
+        std::env::var("SUI_BACKPRESSURE_THRESHOLD_FOR_RPC")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    backpressure_threshold_for_rpc,
+                    ..
+                } => backpressure_threshold_for_rpc.unwrap_or(self.backpressure_threshold()),
+            })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -454,6 +490,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Threedos".to_string(),
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
         "Arden".to_string(),
+        "FanTV".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
@@ -507,6 +544,10 @@ pub fn default_concurrency_limit() -> Option<usize> {
 }
 
 pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
+    128
+}
+
+pub fn default_local_execution_time_channel_capacity() -> usize {
     128
 }
 
@@ -600,6 +641,10 @@ impl NodeConfig {
 
     pub fn jsonrpc_server_type(&self) -> ServerType {
         self.jsonrpc_server_type.unwrap_or(ServerType::Http)
+    }
+
+    pub fn rpc(&self) -> Option<&sui_rpc_api::Config> {
+        self.rpc.as_ref()
     }
 }
 
@@ -833,6 +878,13 @@ pub struct AuthorityStorePruningConfig {
     pub killswitch_tombstone_pruning: bool,
     #[serde(default = "default_smoothing", skip_serializing_if = "is_true")]
     pub smooth: bool,
+    /// Enables the compaction filter for pruning the objects table.
+    /// If disabled, a range deletion approach is used instead.
+    /// While it is generally safe to switch between the two modes,
+    /// switching from the compaction filter approach back to range deletion
+    /// may result in some old versions that will never be pruned.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub enable_compaction_filter: bool,
 }
 
 fn default_num_latest_epoch_dbs_to_retain() -> usize {
@@ -872,6 +924,7 @@ impl Default for AuthorityStorePruningConfig {
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
             smooth: true,
+            enable_compaction_filter: cfg!(test) || cfg!(msim),
         }
     }
 }

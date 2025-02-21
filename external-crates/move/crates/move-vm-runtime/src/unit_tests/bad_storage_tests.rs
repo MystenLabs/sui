@@ -52,6 +52,7 @@ fn test_malformed_module() {
             vec![],
             Vec::<Vec<u8>>::new(),
             &mut UnmeteredGasMeter,
+            None,
         )
         .unwrap();
     }
@@ -121,6 +122,7 @@ fn test_unverifiable_module() {
             vec![],
             Vec::<Vec<u8>>::new(),
             &mut UnmeteredGasMeter,
+            None,
         )
         .unwrap();
     }
@@ -188,6 +190,7 @@ fn test_missing_module_dependency() {
             vec![],
             Vec::<Vec<u8>>::new(),
             &mut UnmeteredGasMeter,
+            None,
         )
         .unwrap();
     }
@@ -252,6 +255,7 @@ fn test_malformed_module_dependency() {
             vec![],
             Vec::<Vec<u8>>::new(),
             &mut UnmeteredGasMeter,
+            None,
         )
         .unwrap();
     }
@@ -325,6 +329,7 @@ fn test_unverifiable_module_dependency() {
             vec![],
             Vec::<Vec<u8>>::new(),
             &mut UnmeteredGasMeter,
+            None,
         )
         .unwrap();
     }
@@ -412,6 +417,7 @@ fn test_unverifiable_module_dependency() {
 //                 vec![],
 //                 Vec::<Vec<u8>>::new(),
 //                 &mut UnmeteredGasMeter,
+//                 None,
 //             )
 //             .unwrap_err();
 //

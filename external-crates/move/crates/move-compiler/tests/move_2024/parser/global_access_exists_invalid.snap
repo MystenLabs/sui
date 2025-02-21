@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/global_access_exists_invalid.move:6:26
+  │
+6 │         let _ : bool = ::exists<Self::R>(0x0);
+  │                          ^^^^^^ Expected '::' after the global address in this module access chain
+  │
+  = Access chains that start with '::' must be multi-part

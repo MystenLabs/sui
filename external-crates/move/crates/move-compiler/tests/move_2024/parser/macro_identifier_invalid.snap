@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/macro_identifier_invalid.move:2:19
+  │
+2 │     macro fun foo($0: u64) {
+  │                   ^ Expected an identifier following '$', e.g. '$x'

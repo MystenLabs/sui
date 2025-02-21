@@ -1,0 +1,27 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09012]: unused 'mut' modifiers
+  ┌─ tests/move_2024/typing/let_mut_macro_return.move:3:17
+  │
+3 │         let mut i = $start;
+  │             --- ^ The variable 'i' is never used mutably
+  │             │    
+  │             Consider removing the 'mut' declaration here
+  │
+  = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/typing/let_mut_macro_return.move:16:35
+   │
+ 7 │             i = i + 1;
+   │             --------- Unreachable code. This statement (and any following statements) will not be executed.
+   ·
+16 │         'a: { for_each!(0, 1, |_| return 'a) }
+   │                                   ^^^^^^^^^ Any code after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

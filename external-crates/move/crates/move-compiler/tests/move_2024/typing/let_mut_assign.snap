@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04024]: invalid usage of immutable variable
+  ┌─ tests/move_2024/typing/let_mut_assign.move:7:9
+  │
+3 │     public fun t(x: u64, s: S): u64  {
+  │                  - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+  ·
+7 │         x = y + 1;
+  │         ^ Invalid assignment of immutable variable 'x'
+
+error[E04024]: invalid usage of immutable variable
+  ┌─ tests/move_2024/typing/let_mut_assign.move:8:9
+  │
+5 │         let S { f } = s;
+  │                 - To use the variable mutably, it must be declared 'mut', e.g. 'mut f'
+  ·
+8 │         f = f + 1;
+  │         ^ Invalid assignment of immutable variable 'f'
+
+error[E04024]: invalid usage of immutable variable
+  ┌─ tests/move_2024/typing/let_mut_assign.move:9:9
+  │
+4 │         let y = 0;
+  │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut y'
+  ·
+9 │         y = x + f;
+  │         ^ Invalid assignment of immutable variable 'y'

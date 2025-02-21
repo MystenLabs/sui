@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/warning_suppression/allow_on_use_fun.move:2:7
+  │
+2 │     #[allow(unused)]
+  │       ^^^^^
+  │       │
+  │       Known attribute 'allow' is not expected with a use
+  │       Expected to be used with one of the following: module, constant, struct, enum, function
+
+error[E02017]: invalid 'use fun' declaration
+  ┌─ tests/move_2024/warning_suppression/allow_on_use_fun.move:3:5
+  │
+3 │     use fun foo as X.f;
+  │     ^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::X.f'. Expected a 'a::m::X' type as the first argument (either by reference '&' '&mut' or by value)
+4 │     public struct X {}
+5 │     fun foo() {}
+  │         --- But 'a::m::foo' takes no arguments

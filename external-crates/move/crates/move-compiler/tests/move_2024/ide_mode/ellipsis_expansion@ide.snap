@@ -1,0 +1,84 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:17:15
+   │
+17 │         let A(.., _q) = a;
+   │               ^^ Ellipsis expansion: _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:18:19
+   │
+18 │         let A(_q, ..) = a;
+   │                   ^^ Ellipsis expansion: _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:19:15
+   │
+19 │         let A(..) = a;
+   │               ^^ Ellipsis expansion: _, _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:21:24
+   │
+21 │         let B { q: _q, .. } = b;
+   │                        ^^ Ellipsis expansion: a: _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:22:24
+   │
+22 │         let B { a: _a, .. } = b;
+   │                        ^^ Ellipsis expansion: q: _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:23:17
+   │
+23 │         let B { .. } = b;
+   │                 ^^ Ellipsis expansion: a: _, q: _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:26:22
+   │
+26 │             C::X(_q, ..) => (),
+   │                      ^^ Ellipsis expansion: _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:27:18
+   │
+27 │             C::X(.., _z) => (),
+   │                  ^^ Ellipsis expansion: _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:28:18
+   │
+28 │             C::X(..) => (),
+   │                  ^^ Ellipsis expansion: _, _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:30:27
+   │
+30 │             C::Y { y: _y, .. } => (),
+   │                           ^^ Ellipsis expansion: z: _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:31:20
+   │
+31 │             C::Y { .., y: _y } => (),
+   │                    ^^ Ellipsis expansion: z: _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:32:20
+   │
+32 │             C::Y { .., z: _z } => (),
+   │                    ^^ Ellipsis expansion: y: _
+
+note[I15005]: IDE ellipsis expansion
+   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:33:20
+   │
+33 │             C::Y { .. } => ()
+   │                    ^^ Ellipsis expansion: y: _, z: _

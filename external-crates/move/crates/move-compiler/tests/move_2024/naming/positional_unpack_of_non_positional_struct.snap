@@ -1,0 +1,48 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:7:13
+  │
+2 │     public struct Foo { field: u64 } has copy, drop;
+  │                   --- 'Foo' is declared here
+  ·
+7 │         let Foo(_) = x;
+  │             ^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
+
+error[E03010]: unbound field
+  ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:7:13
+  │
+7 │         let Foo(_) = x;
+  │             ^^^^^^ Unbound field '0' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:7:13
+  │
+7 │         let Foo(_) = x;
+  │             ^^^^^^ Missing binding for field 'field' in '0x42::M::Foo'
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:14:9
+   │
+ 2 │     public struct Foo { field: u64 } has copy, drop;
+   │                   --- 'Foo' is declared here
+   ·
+14 │         Foo(_) = x;
+   │         ^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:14:9
+   │
+14 │         Foo(_) = x;
+   │         ^^^^^^ Unbound field '0' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:14:9
+   │
+14 │         Foo(_) = x;
+   │         ^^^^^^ Missing assignment for field 'field' in '0x42::M::Foo'

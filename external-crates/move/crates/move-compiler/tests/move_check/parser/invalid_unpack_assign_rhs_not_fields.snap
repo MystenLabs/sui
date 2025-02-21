@@ -1,0 +1,47 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03003]: unbound module member
+  ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:9:9
+  │
+9 │         X::S () = 0;
+  │         ^^^^ Invalid module access. Unbound struct 'S' in module '0x2::X'
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:9:9
+  │
+9 │         X::S () = 0;
+  │         ^^^^^^^ Positional fields are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E03003]: unbound module member
+   ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:11:9
+   │
+11 │         X::S 0 = 0;
+   │         ^^^^ Invalid module access. Unbound module member 'S' in module '0x2::X'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:11:14
+   │
+11 │         X::S 0 = 0;
+   │              ^
+   │              │
+   │              Unexpected '0'
+   │              Expected ';'
+
+error[E03003]: unbound module member
+   ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:13:9
+   │
+13 │         X::S { 0 } = 0;
+   │         ^^^^ Invalid module access. Unbound struct 'S' in module '0x2::X'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:13:16
+   │
+13 │         X::S { 0 } = 0;
+   │                ^ Unexpected '<Number>'. Expected a field expression

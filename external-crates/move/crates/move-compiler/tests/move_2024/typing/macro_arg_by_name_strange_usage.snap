@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_arg_by_name_strange_usage.move:18:14
+   │
+ 2 │     public struct X() has drop;
+   │                   - To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct S { f: X } has drop;
+   │                          - The type 'a::m::X' does not have the ability 'copy'
+   ·
+18 │         foo!(s.f); // TODO improve this error message
+   │              ^^^ Invalid implicit copy of field 'f' without the 'copy' ability

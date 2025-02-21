@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04029]: invalid function call
+  ┌─ tests/move_2024/typing/call_target_mismatch.move:9:20
+  │
+4 │     fun not_a_macro(_: X) {
+  │         ----------- Normal (non-'macro') function is declared here
+  ·
+9 │         not_a_macro!(X());
+  │                    ^ 'not_a_macro' is not a macro function and cannot be called with a `!`. Try replacing with 'not_a_macro'
+
+error[E04029]: invalid function call
+   ┌─ tests/move_2024/typing/call_target_mismatch.move:10:9
+   │
+ 6 │     macro fun a_macro(_: X) {}
+   │     ----- 'macro' function is declared here
+   ·
+10 │         a_macro(X());
+   │         ^^^^^^^^^^^^ 'a_macro' is a macro function and must be called with a `!`. Try replacing with 'a_macro!'
+
+error[E04029]: invalid function call
+   ┌─ tests/move_2024/typing/call_target_mismatch.move:11:24
+   │
+ 4 │     fun not_a_macro(_: X) {
+   │         ----------- Normal (non-'macro') function is declared here
+   ·
+11 │         X().not_a_macro!();
+   │                        ^ 'not_a_macro' is not a macro function and cannot be called with a `!`. Try replacing with 'not_a_macro'
+
+error[E04029]: invalid function call
+   ┌─ tests/move_2024/typing/call_target_mismatch.move:12:9
+   │
+ 6 │     macro fun a_macro(_: X) {}
+   │     ----- 'macro' function is declared here
+   ·
+12 │         X().a_macro();
+   │         ^^^^^^^^^^^^^ 'a_macro' is a macro function and must be called with a `!`. Try replacing with 'a_macro!'

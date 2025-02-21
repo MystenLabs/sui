@@ -1,6 +1,0 @@
-error[E03005]: unbound unscoped name
-  ┌─ tests/move_check/naming/standalone_mname.move:3:17
-  │
-3 │         let m = M; m;
-  │                 ^ Unbound constant 'M'
-

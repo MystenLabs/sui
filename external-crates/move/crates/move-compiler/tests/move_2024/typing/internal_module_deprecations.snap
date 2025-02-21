@@ -1,0 +1,142 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W04037]: deprecated usage
+  ┌─ tests/move_2024/typing/internal_module_deprecations.move:3:13
+  │
+3 │         Bad(A),
+  │             ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+  │
+  = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:26:9
+   │
+26 │         foo();
+   │         ^^^ The function '0x42::m::foo' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:27:9
+   │
+27 │         foo();
+   │         ^^^ The function '0x42::m::foo' is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:28:9
+   │
+28 │         bar_dep();
+   │         ^^^^^^^ The function '0x42::m::bar_dep' is deprecated: Use the baz function instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:31:23
+   │
+31 │     public fun qux(_: A) { }
+   │                       ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:33:30
+   │
+33 │     public fun return_dep(): A {
+   │                              ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:34:9
+   │
+34 │         A()
+   │         ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:38:9
+   │
+38 │         H
+   │         ^ The constant '0x42::m::H' is deprecated: Use the L constant instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:42:15
+   │
+42 │         abort OldError
+   │               ^^^^^^^^ The constant '0x42::m::OldError' is deprecated: Use `NewError` instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:46:18
+   │
+46 │         let y = (A(): A);
+   │                  ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:46:23
+   │
+46 │         let y = (A(): A);
+   │                       ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:48:13
+   │
+48 │             A() => (),
+   │             ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:50:9
+   │
+50 │         A() = A();
+   │         ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:50:15
+   │
+50 │         A() = A();
+   │               ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:51:13
+   │
+51 │         let A() = A();
+   │             ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:51:19
+   │
+51 │         let A() = A();
+   │                   ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:55:24
+   │
+55 │         let _ = R::Bad(A());
+   │                        ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

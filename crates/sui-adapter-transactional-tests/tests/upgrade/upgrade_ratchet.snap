@@ -1,0 +1,81 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-12:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5646800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-16:
+//# upgrade --package V0 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 18-20:
+//# run sui::package::only_additive_upgrades --args object(1,1) --sender A
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4, lines 21-26:
+//# upgrade --package V1 --upgrade-capability 1,1 --sender A --policy compatible
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::authorize_upgrade (function index 21) at offset 24, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 21, instruction: 24, function_name: Some("authorize_upgrade") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::package::authorize_upgrade at offset 24"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(21), 24)] }), command: Some(0) } }
+
+task 5, lines 27-32:
+//# upgrade --package V1 --upgrade-capability 1,1 --sender A --policy additive
+created: object(5,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6, lines 33-36:
+//# upgrade --package V2 --upgrade-capability 1,1 --sender A --policy dep_only
+created: object(6,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 7, lines 38-40:
+//# run sui::package::only_dep_upgrades --args object(1,1) --sender A
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 8, lines 41-46:
+//# upgrade --package V3 --upgrade-capability 1,1 --sender A --policy compatible
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::authorize_upgrade (function index 21) at offset 24, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 21, instruction: 24, function_name: Some("authorize_upgrade") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::package::authorize_upgrade at offset 24"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(21), 24)] }), command: Some(0) } }
+
+task 9, lines 47-52:
+//# upgrade --package V3 --upgrade-capability 1,1 --sender A --policy additive
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::authorize_upgrade (function index 21) at offset 24, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 21, instruction: 24, function_name: Some("authorize_upgrade") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::package::authorize_upgrade at offset 24"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(21), 24)] }), command: Some(0) } }
+
+task 10, lines 53-58:
+//# upgrade --package V3 --upgrade-capability 1,1 --sender A --policy dep_only
+created: object(10,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 11, lines 59-61:
+//# run sui::package::only_additive_upgrades --args object(1,1) --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::restrict (function index 23) at offset 10, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 23, instruction: 10, function_name: Some("restrict") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::package::restrict at offset 10"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(23), 10)] }), command: Some(0) } }
+
+task 12, line 62:
+//# run sui::package::make_immutable --args object(1,1) --sender A
+mutated: object(0,0)
+deleted: object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 13, lines 64-66:
+//# view-object 1,1
+No object at id 1,1
+
+task 14, lines 67-70:
+//# upgrade --package V4 --upgrade-capability 1,1 --sender A --policy dep_only
+Error: INVALID TEST. Could not load object argument object(1,1)

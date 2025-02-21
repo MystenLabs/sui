@@ -26,7 +26,7 @@ use crate::error::Error;
 use crate::types::stake::StakedSui;
 use async_graphql::connection::Connection;
 use async_graphql::*;
-use sui_json_rpc::name_service::NameServiceConfig;
+use sui_name_service::NameServiceConfig;
 use sui_types::object::{Data, MoveObject as NativeMoveObject};
 use sui_types::TypeTag;
 

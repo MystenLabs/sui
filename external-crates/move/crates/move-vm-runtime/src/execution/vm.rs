@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    cache::identifier_interner::{intern_ident_str, intern_identifier},
     dbg_println,
     execution::{
         dispatch_tables::VMDispatchTables,
@@ -15,7 +16,6 @@ use crate::{
         serialization::{SerializedReturnValues, *},
         vm_pointer::VMPointer,
     },
-    string_interner,
 };
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
@@ -128,7 +128,7 @@ impl<'extensions> MoveVM<'extensions> {
         )
     }
 
-    /// Similar to execute_entry_function, but it bypasses visibility checks
+    /// Similar to execute_entry_function, but it bypasses visibility checks and accepts a tracer
     pub fn execute_function_bypass_visibility(
         &mut self,
         module: &ModuleId,
@@ -136,40 +136,7 @@ impl<'extensions> MoveVM<'extensions> {
         ty_args: Vec<Type>,
         args: Vec<impl Borrow<[u8]>>,
         gas_meter: &mut impl GasMeter,
-    ) -> VMResult<SerializedReturnValues> {
-        move_vm_profiler::tracing_feature_enabled! {
-            use move_vm_profiler::GasProfiler;
-            if gas_meter.get_profiler_mut().is_none() {
-                gas_meter.set_profiler(GasProfiler::init_default_cfg(
-                    function_name.to_string(),
-                    gas_meter.remaining_gas().into(),
-                ));
-            }
-        }
-
-        dbg_println!("running {module}::{function_name}");
-        dbg_println!("tables: {:#?}", self.virtual_tables.loaded_packages);
-        let bypass_declared_entry_check = true;
-        self.execute_function(
-            module,
-            function_name,
-            ty_args,
-            args,
-            None,
-            gas_meter,
-            bypass_declared_entry_check,
-        )
-    }
-
-    /// Similar to execute_entry_function, but it bypasses visibility checks and accepts a tracer
-    pub fn execute_function_bypass_visibility_with_tracer_if_enabled(
-        &mut self,
-        module: &ModuleId,
-        function_name: &IdentStr,
-        ty_args: Vec<Type>,
-        args: Vec<impl Borrow<[u8]>>,
         tracer: Option<&mut MoveTraceBuilder>,
-        gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
         move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;
@@ -290,7 +257,7 @@ impl<'extensions> MoveVM<'extensions> {
                     "Failed to resolve external type tag{tag}{}",
                     err.message()
                         .map(|s| format!(": {}", s))
-                        .unwrap_or_else(|| "".to_string())
+                        .unwrap_or_default()
                 ))
                 .finish(Location::Undefined)
         } else {
@@ -357,13 +324,10 @@ impl<'extensions> MoveVM<'extensions> {
         ty_args: &[Type],
     ) -> VMResult<MoveVMFunction> {
         let (package_key, module_id) = runtime_id.clone().into();
-        let string_interner = string_interner();
-        let module_name = string_interner
-            .get_or_intern_identifier(&module_id)
-            .map_err(|err| err.finish(Location::Undefined))?;
-        let member_name = string_interner
-            .get_or_intern_ident_str(function_name)
-            .map_err(|err| err.finish(Location::Undefined))?;
+        let module_name =
+            intern_identifier(&module_id).map_err(|err| err.finish(Location::Undefined))?;
+        let member_name =
+            intern_ident_str(function_name).map_err(|err| err.finish(Location::Undefined))?;
         let vtable_key = VirtualTableKey {
             package_key,
             inner_pkg_key: IntraPackageKey {

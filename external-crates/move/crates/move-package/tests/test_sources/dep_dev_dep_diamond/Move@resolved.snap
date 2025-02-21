@@ -1,0 +1,306 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+ResolvedGraph {
+    graph: DependencyGraph {
+        root_path: "tests/test_sources/dep_dev_dep_diamond",
+        root_package_id: "Root",
+        root_package_name: "Root",
+        package_graph: {
+            "Root": [
+                (
+                    "A",
+                    Outgoing,
+                ),
+                (
+                    "B",
+                    Outgoing,
+                ),
+                (
+                    "C",
+                    Outgoing,
+                ),
+            ],
+            "A": [
+                (
+                    "Root",
+                    Incoming,
+                ),
+                (
+                    "B",
+                    Outgoing,
+                ),
+                (
+                    "D",
+                    Outgoing,
+                ),
+            ],
+            "B": [
+                (
+                    "A",
+                    Incoming,
+                ),
+                (
+                    "Root",
+                    Incoming,
+                ),
+                (
+                    "C",
+                    Outgoing,
+                ),
+            ],
+            "D": [
+                (
+                    "A",
+                    Incoming,
+                ),
+            ],
+            "C": [
+                (
+                    "B",
+                    Incoming,
+                ),
+                (
+                    "Root",
+                    Incoming,
+                ),
+            ],
+        },
+        package_table: {
+            "A": Package {
+                kind: Local(
+                    "deps_only/A",
+                ),
+                version: None,
+                resolver: None,
+            },
+            "B": Package {
+                kind: Local(
+                    "deps_only/B",
+                ),
+                version: None,
+                resolver: None,
+            },
+            "C": Package {
+                kind: Local(
+                    "deps_only/C",
+                ),
+                version: None,
+                resolver: None,
+            },
+            "D": Package {
+                kind: Local(
+                    "deps_only/D",
+                ),
+                version: None,
+                resolver: None,
+            },
+        },
+        always_deps: {
+            "A",
+            "B",
+            "C",
+            "Root",
+        },
+        manifest_digest: "98BBCE8D1C29472825E598691218A0CBC5BDA1A56C4429F5C2311C245DEC28CE",
+        deps_digest: "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3",
+    },
+    build_options: BuildConfig {
+        dev_mode: true,
+        test_mode: false,
+        generate_docs: false,
+        save_disassembly: false,
+        install_dir: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        force_recompilation: false,
+        lock_file: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        fetch_deps_only: false,
+        skip_fetch_latest_git_deps: false,
+        default_flavor: None,
+        default_edition: None,
+        deps_as_root: false,
+        silence_warnings: false,
+        warnings_are_errors: false,
+        json_errors: false,
+        additional_named_addresses: {},
+        lint_flag: LintFlag {
+            no_lint: false,
+            lint: false,
+        },
+    },
+    package_table: {
+        "A": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "A",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {},
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {
+                    "B": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "../B",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: false,
+                        },
+                    ),
+                },
+                dev_dependencies: {
+                    "D": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "../D",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: false,
+                        },
+                    ),
+                },
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+        "B": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "B",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {},
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {},
+                dev_dependencies: {
+                    "C": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "../C",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: false,
+                        },
+                    ),
+                },
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+        "C": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "C",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {},
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {},
+                dev_dependencies: {},
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+        "D": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "D",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {},
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {},
+                dev_dependencies: {},
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+        "Root": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "Root",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {},
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {
+                    "A": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "deps_only/A",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: false,
+                        },
+                    ),
+                    "C": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "deps_only/C",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: false,
+                        },
+                    ),
+                },
+                dev_dependencies: {
+                    "B": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "deps_only/B",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: false,
+                        },
+                    ),
+                },
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+    },
+}

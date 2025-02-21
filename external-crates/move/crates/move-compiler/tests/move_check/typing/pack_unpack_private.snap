@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04001]: restricted visibility
+  ┌─ tests/move_check/typing/pack_unpack_private.move:8:9
+  │
+2 │     struct T {}
+  │            - Struct defined in module '0x43::C'
+  ·
+8 │         C::T {}
+  │         ^^^^^^^ Struct '0x43::C::T' can only be instantiated within its defining module '0x43::C'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/pack_unpack_private.move:11:13
+   │
+ 2 │     struct T {}
+   │            - Struct defined in module '0x43::C'
+   ·
+11 │         let C::T {} = c;
+   │             ^^^^^^^ Struct '0x43::C::T' can only be used in deconstruction binding within its defining module '0x43::C'

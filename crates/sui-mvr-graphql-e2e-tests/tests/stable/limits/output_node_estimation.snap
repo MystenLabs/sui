@@ -1,0 +1,350 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+task 1, lines 6-14:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasPreviousPage": false
+      }
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 3,
+      "outputNodes": 3,
+      "depth": 3,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 254
+    }
+  }
+}
+
+task 2, lines 16-26:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "edges": []
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 4,
+      "outputNodes": 42,
+      "depth": 4,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 359
+    }
+  }
+}
+
+task 3, lines 28-42:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "checkpoints": {
+      "nodes": [
+        {
+          "transactionBlocks": {
+            "edges": []
+          }
+        }
+      ]
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 6,
+      "outputNodes": 842,
+      "depth": 6,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 484
+    }
+  }
+}
+
+task 4, lines 44-65:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "checkpoints": {
+      "nodes": [
+        {
+          "notOne": {
+            "edges": []
+          },
+          "isOne": {
+            "edges": []
+          }
+        }
+      ]
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 10,
+      "outputNodes": 922,
+      "depth": 6,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 735
+    }
+  }
+}
+
+task 5, lines 67-88:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "checkpoints": {
+      "nodes": [
+        {
+          "notZero": {
+            "edges": []
+          },
+          "isZero": {
+            "edges": []
+          }
+        }
+      ]
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 10,
+      "outputNodes": 882,
+      "depth": 6,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 733
+    }
+  }
+}
+
+task 6, lines 90-100:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "edges": []
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 4,
+      "outputNodes": 4,
+      "depth": 4,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 323
+    }
+  }
+}
+
+task 7, lines 102-112:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "edges": []
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 4,
+      "outputNodes": 4,
+      "depth": 4,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 322
+    }
+  }
+}
+
+task 8, lines 114-142:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "edges": []
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 14,
+      "outputNodes": 1762,
+      "depth": 8,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 1077
+    }
+  }
+}
+
+task 9, lines 144-171:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": []
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 13,
+      "outputNodes": 1742,
+      "depth": 7,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 1030
+    }
+  }
+}
+
+task 10, lines 173-222:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "edges": []
+    },
+    "events": {
+      "edges": []
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 24,
+      "outputNodes": 46424,
+      "depth": 11,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 2093
+    }
+  }
+}
+
+task 11, lines 224-249:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "edges": []
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 12,
+      "outputNodes": 17302,
+      "depth": 11,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 1029
+    }
+  }
+}
+
+task 12, lines 251-272:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "fragmentSpread": {
+      "nodes": []
+    },
+    "inlineFragment": {
+      "nodes": []
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 8,
+      "outputNodes": 44,
+      "depth": 4,
+      "variables": 0,
+      "fragments": 1,
+      "queryPayload": 562
+    }
+  }
+}
+
+task 13, lines 274-286:
+//# run-graphql --show-usage
+Response: {
+  "data": null,
+  "extensions": {
+    "usage": {
+      "inputNodes": 4,
+      "outputNodes": 62,
+      "depth": 4,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 394
+    }
+  },
+  "errors": [
+    {
+      "message": "'first' and 'last' must not be used together",
+      "locations": [
+        {
+          "line": 4,
+          "column": 3
+        }
+      ],
+      "path": [
+        "transactionBlocks"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 14, lines 288-298:
+//# run-graphql --show-usage
+Response: {
+  "data": null,
+  "extensions": {
+    "usage": {
+      "inputNodes": 4,
+      "outputNodes": 42,
+      "depth": 4,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 141
+    }
+  },
+  "errors": [
+    {
+      "message": "Invalid value for argument \"first\", expected type \"Int\"",
+      "locations": [
+        {
+          "line": 3,
+          "column": 21
+        }
+      ]
+    }
+  ]
+}
+
+task 15, lines 300-310:
+//# run-graphql --show-usage
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Estimated output nodes exceeds 100000",
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

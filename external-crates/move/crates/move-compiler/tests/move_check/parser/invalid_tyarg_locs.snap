@@ -1,0 +1,66 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01016]: invalid name
+  ┌─ tests/move_check/parser/invalid_tyarg_locs.move:6:10
+  │
+6 │         a<u64>::m::S { u: 0 }
+  │          ^^^^^ Invalid type argument position
+  │
+  = Type arguments may only be used with module members
+
+error[E01016]: invalid name
+   ┌─ tests/move_check/parser/invalid_tyarg_locs.move:10:13
+   │
+10 │         a::m<u64>::S { u: 0 }
+   │             ^^^^^ Invalid type argument position
+   │
+   = Type arguments may only be used with module members
+
+error[E01016]: invalid name
+   ┌─ tests/move_check/parser/invalid_tyarg_locs.move:14:10
+   │
+14 │         a<u64>::m<u64>::S { u: 0 }
+   │          ^^^^^ Invalid type argument position
+   │
+   = Type arguments may only be used with module members
+
+error[E01016]: invalid name
+   ┌─ tests/move_check/parser/invalid_tyarg_locs.move:14:18
+   │
+14 │         a<u64>::m<u64>::S { u: 0 }
+   │          -----   ^^^^^ Paths cannot include type arguments more than once
+   │          │        
+   │          Previous type arguments appeared here
+   │
+   = Type arguments should only appear on module members
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/invalid_tyarg_locs.move:24:18
+   │
+24 │         0x42<u64>::m::S { u: 0 }
+   │                  ^^
+   │                  │
+   │                  Unexpected '::'
+   │                  Expected an expression term
+
+error[E01016]: invalid name
+   ┌─ tests/move_check/parser/invalid_tyarg_locs.move:28:16
+   │
+28 │         0x42::m<u64>::S { u: 0 }
+   │                ^^^^^ Invalid type argument position
+   │
+   = Type arguments may only be used with module members
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/invalid_tyarg_locs.move:32:18
+   │
+32 │         0x42<u64>::m<u64>::S { u: 0 }
+   │                  ^^
+   │                  │
+   │                  Unexpected '::'
+   │                  Expected an expression term

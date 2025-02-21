@@ -1,0 +1,181 @@
+version: "3"
+
+services:
+  validator1:
+    networks:
+      sui-network:
+        ipv4_address: 10.0.0.11
+    image: sui-node:${SUI_NODE_A_TAG}
+    container_name: validator1
+    hostname: validator1
+    environment:
+      - ENABLE_WRITEBACK_CACHE=1
+      - RUST_BACKTRACE=1
+      - RUST_LOG=${SUI_RUST_LOG:-info}
+      - RPC_WORKER_THREAD=12
+      - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
+      - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - TOKIO_WORKER_THREADS=4
+    volumes:
+      - ./genesis/files/validator1-8080.yaml:/opt/sui/config/validator.yaml:ro
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - ./dbs/validator1:/opt/sui/db:rw
+      - ./logs/validator1:/opt/sui/logs
+    command:
+        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml >> /opt/sui/logs/full_logs.log 2>&1'"
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
+  validator2:
+    networks:
+      sui-network:
+        ipv4_address: 10.0.0.12
+    image: sui-node:${SUI_NODE_A_TAG}
+    container_name: validator2
+    hostname: validator2
+    environment:
+      - ENABLE_WRITEBACK_CACHE=1
+      - RUST_BACKTRACE=1
+      - RUST_LOG=${SUI_RUST_LOG:-info}
+      - RPC_WORKER_THREAD=12
+      - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
+      - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - TOKIO_WORKER_THREADS=4
+    volumes:
+      - ./genesis/files/validator2-8080.yaml:/opt/sui/config/validator.yaml:ro
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - ./dbs/validator2:/opt/sui/db:rw
+      - ./logs/validator2:/opt/sui/logs
+    command:
+        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml >> /opt/sui/logs/full_logs.log 2>&1'"
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
+  validator3:
+    networks:
+      sui-network:
+        ipv4_address: 10.0.0.13
+    image: sui-node-alt:${SUI_NODE_B_TAG}
+    container_name: validator3
+    hostname: validator3
+    environment:
+      - DISABLE_WRITEBACK_CACHE=1
+      - RUST_BACKTRACE=1
+      - RUST_LOG=${SUI_RUST_LOG:-info}
+      - RPC_WORKER_THREAD=12
+      - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
+      - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - TOKIO_WORKER_THREADS=4
+    volumes:
+      - ./genesis/files/validator3-8080.yaml:/opt/sui/config/validator.yaml:ro
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - ./dbs/validator3:/opt/sui/db:rw
+      - ./logs/validator3:/opt/sui/logs
+    command:
+        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml >> /opt/sui/logs/full_logs.log 2>&1'"
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
+  validator4:
+    networks:
+      sui-network:
+        ipv4_address: 10.0.0.14
+    image: sui-node-alt:${SUI_NODE_B_TAG}
+    container_name: validator4
+    hostname: validator4
+    environment:
+      - DISABLE_WRITEBACK_CACHE=1
+      - RUST_BACKTRACE=1
+      - RUST_LOG=${SUI_RUST_LOG:-info}
+      - RPC_WORKER_THREAD=12
+      - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
+      - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - TOKIO_WORKER_THREADS=4
+    volumes:
+      - ./genesis/files/validator4-8080.yaml:/opt/sui/config/validator.yaml:ro
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - ./dbs/validator4:/opt/sui/db:rw
+      - ./logs/validator4:/opt/sui/logs
+    command:
+        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml >> /opt/sui/logs/full_logs.log 2>&1'"
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
+  fullnode1:
+    networks:
+      sui-network:
+        ipv4_address: 10.0.0.15
+    image: sui-node-alt:${SUI_NODE_B_TAG}
+    hostname: fullnode1
+    container_name: fullnode1
+    environment:
+      - ENABLE_WRITEBACK_CACHE=1
+      - RUST_BACKTRACE=1
+      - RUST_LOG=${SUI_RUST_LOG:-info}
+      - RPC_WORKER_THREAD=12
+      - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
+      - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - TOKIO_WORKER_THREADS=4
+    volumes:
+      - ./genesis/static/fullnode.yaml:/opt/sui/config/fullnode.yaml:ro
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - ./dbs/fullnode1:/opt/sui/db:rw
+      - ./logs/fullnode1:/opt/sui/logs
+    command:
+        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/fullnode.yaml >> /opt/sui/logs/full_logs.log 2>&1'"
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
+
+  stress:
+    networks:
+      sui-network:
+        ipv4_address: 10.0.0.16
+    image: stress:${SUI_NODE_B_TAG}
+    container_name: stress
+    environment:
+      - RUST_LOG=info
+      - STARTUP_DELAY_SECONDS=5
+      - STRESS_STAGGERED_START_MAX_MULTIPLIER=0
+      - FULLNODE_RPC_ADDRESS=10.0.0.15:9000
+      - USE_FULLNODE_FOR_RECONFIG=false
+      - PRIMARY_GAS_OWNER=0xd59d79516a4ed5b6825e80826c075a12bdd2759aaeb901df2f427f5f880c8f60
+      - GENESIS_BLOB_PATH=/opt/sui/config/genesis.blob
+      - KEYSTORE_PATH=/opt/sui/config/sui.keystore
+      - STRESS_TARGET_QPS=3
+      - STRESS_SHARED_COUNTER=1
+      - STRESS_TRANSFER_OBJECT=1
+      - STRESS_DELEGATION=0
+      - BATCH_PAYMENT=1
+      - BATCH_PAYMENT_SIZE=15
+      - STRESS_ADVERSARIAL=0
+    volumes:
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - ./genesis/static/sui.keystore:/opt/sui/config/sui.keystore:ro
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
+networks:
+  sui-network:
+    driver: bridge
+    ipam:
+      config:
+      - subnet: 10.0.0.0/24

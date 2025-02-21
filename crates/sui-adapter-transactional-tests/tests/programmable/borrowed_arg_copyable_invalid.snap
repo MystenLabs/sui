@@ -1,0 +1,37 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-15:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4461200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-18:
+//# programmable --inputs 0
+//> test::m1::imm_and_mut(Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 3, lines 20-21:
+//# programmable --inputs 0
+//> test::m1::mut_and_imm(Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 4, lines 23-24:
+//# programmable --inputs 0
+//> test::m1::imm_mut_imm(Input(0), Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 5, lines 26-27:
+//# programmable --inputs 0
+//> test::m1::imm_copy_mut(Input(0), Input(0), Input(0))
+Error: Transaction Effects Status: Invalid command argument at 2. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: InvalidValueUsage }, source: None, command: Some(0) } }

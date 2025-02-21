@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifier_infix_postfix_no_fields_with_comma_sep.move:3:46
+  │
+3 │     public native struct Foo has copy, drop, has store;
+  │                                              ^^^ Unexpected 'has'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'

@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/invalid_call_lhs_complex_expression.move:3:29
+  │
+3 │         (if (true) 5 else 0)();
+  │                             ^
+  │                             │
+  │                             Unexpected '('
+  │                             Expected ';'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/invalid_call_lhs_complex_expression.move:4:27
+  │
+4 │         (while (false) {})(0, 1);
+  │                           ^
+  │                           │
+  │                           Unexpected '('
+  │                           Expected ';'

@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::HashMap, hash::Hash};
 
 pub mod binary_cache;
 pub mod constants;
@@ -27,10 +27,10 @@ macro_rules! try_block {
 // key to retrieve the entry and support the error case.
 #[allow(clippy::map_entry)]
 /// Either returns a BTreeMap of unique keys, or a repeated key if the input keys are not unique.
-pub fn unique_map<Key: Ord, Value>(
+pub fn unique_map<Key: Hash + Eq, Value>(
     values: impl IntoIterator<Item = (Key, Value)>,
-) -> Result<BTreeMap<Key, Value>, Key> {
-    let mut map = BTreeMap::new();
+) -> Result<HashMap<Key, Value>, Key> {
+    let mut map = HashMap::new();
     for (k, v) in values {
         if map.contains_key(&k) {
             return Err(k);

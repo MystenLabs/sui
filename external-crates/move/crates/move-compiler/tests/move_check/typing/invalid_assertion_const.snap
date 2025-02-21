@@ -1,0 +1,28 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04035]: invalid constant usage in error context
+  ┌─ tests/move_check/typing/invalid_assertion_const.move:5:15
+  │
+2 │     const X: vector<u8> = b"X";
+  │           - 'X' defined here with no '#[error]' annotation
+  ·
+5 │         abort X;
+  │               ^ Invalid error code for abort, expected a u64 or constant declared with '#[error]' annotation
+  │
+  = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
+
+error[E04035]: invalid constant usage in error context
+  ┌─ tests/move_check/typing/invalid_assertion_const.move:9:24
+  │
+2 │     const X: vector<u8> = b"X";
+  │           - 'X' defined here with no '#[error]' annotation
+  ·
+9 │         assert!(false, X);
+  │                        ^ Invalid error code for assertion, expected a u64 or constant declared with '#[error]' annotation
+  │
+  = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.

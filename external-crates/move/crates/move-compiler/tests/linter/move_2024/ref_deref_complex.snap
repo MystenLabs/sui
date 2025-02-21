@@ -1,0 +1,78 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: true
+---
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_complex.move:10:17
+   │
+10 │     let _ref = &*&0;  // Redundant borrow-dereference on literal
+   │                 ^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_complex.move:18:17
+   │
+18 │     let _ref = &*&get_resource();  // Redundant borrow-dereference on function call result
+   │                 ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_complex.move:27:17
+   │
+27 │     let _ref = &*(&*&resource.a);  // Multiple redundant borrows on field
+   │                 ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_complex.move:27:20
+   │
+27 │     let _ref = &*(&*&resource.a);  // Multiple redundant borrows on field
+   │                    ^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_complex.move:32:18
+   │
+32 │     let _ref = &(copy resource.a);  // Multiple redundant borrows on field
+   │                  ^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_complex.move:37:17
+   │
+37 │     let _ref = &*&mut *&resource;  // Mixed mutable and immutable redundant borrows
+   │                 ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_complex.move:37:23
+   │
+37 │     let _ref = &*&mut *&resource;  // Mixed mutable and immutable redundant borrows
+   │                       ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_complex.move:47:17
+   │
+47 │     let _a = *&(*&resource.a + 1);  // Redundant borrows in complex expression
+   │                 ^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_complex.move:52:15
+   │
+52 │     let _a = (copy resource.a) + 1;  // Redundant borrows in complex expression
+   │               ^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

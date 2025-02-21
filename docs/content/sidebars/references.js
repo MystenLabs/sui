@@ -35,6 +35,7 @@ const references = [
 				label: 'JSON-RPC',
 				href: '/sui-api-ref',
 			},
+			'references/fullnode-protocol',
 			'references/sui-api/rpc-best-practices',
 		],
 	},

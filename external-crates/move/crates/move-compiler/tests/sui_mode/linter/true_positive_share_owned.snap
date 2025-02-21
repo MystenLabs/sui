@@ -1,0 +1,40 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99000]: possible owned object share
+   ┌─ tests/sui_mode/linter/true_positive_share_owned.move:17:9
+   │
+ 7 │     struct Obj has key, store {
+   │                         ----- Potentially an owned object because 'store' grants access to public transfers
+   ·
+15 │     public fun share(o: Obj) {
+   │                      - A potentially owned object coming from here
+16 │         let arg = o;
+17 │         transfer::public_share_object(arg);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                             │
+   │         │                             Creating a fresh object and sharing it within the same function will ensure this does not abort.
+   │         Potential abort from a (potentially) owned object created by a different transaction.
+   │
+   = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99000]: possible owned object share
+   ┌─ tests/sui_mode/linter/true_positive_share_owned.move:42:9
+   │
+37 │         transfer::transfer(arg, tx_context::sender(ctx));
+   │         ------------------------------------------------ Transferred as an owned object here
+   ·
+40 │     public fun share(o: Obj) {
+   │                      - A potentially owned object coming from here
+41 │         let arg = o;
+42 │         transfer::share_object(arg);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                      │
+   │         │                      Creating a fresh object and sharing it within the same function will ensure this does not abort.
+   │         Potential abort from a (potentially) owned object created by a different transaction.
+   │
+   = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

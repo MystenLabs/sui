@@ -180,20 +180,10 @@ This configuration keeps disk usage to a minimum. It is suitable for most valida
 enable-index-processing: false
 
 authority-store-pruning-config:
-  # default values
-  num-latest-epoch-dbs-to-retain: 3
-  epoch-db-pruning-period-secs: 3600
-  max-checkpoints-in-batch: 10
-  max-transactions-in-batch: 1000
-  # end of default values
-
   # Prune historic object versions as soon as possible.
   num-epochs-to-retain: 0
   # Prune historic transactions of the past epochs
   num-epochs-to-retain-for-checkpoints: 2
-  periodic-compaction-threshold-days: 1
-  # Smooth pruning traffic throughout an epoch
-  smooth: true
 ```
 
 ### Full node with indexing but no history
@@ -207,20 +197,10 @@ This setup manages secondary indexing in addition to the latest state, but aggre
 
 ```yaml
 authority-store-pruning-config:
-  # default values
-  num-latest-epoch-dbs-to-retain: 3
-  epoch-db-pruning-period-secs: 3600
-  max-checkpoints-in-batch: 10
-  max-transactions-in-batch: 1000
-  # end of default values
-
   # Prune historic object versions
   num-epochs-to-retain: 0
   # Prune historic transactions of the past epochs
   num-epochs-to-retain-for-checkpoints: 2
-  periodic-compaction-threshold-days: 1
-  # Smooth pruning traffic throughout an epoch
-  smooth: true
 ```
 
 ### Full node with full object history but pruned transaction history
@@ -233,18 +213,9 @@ In addition to the regular (pruned) snapshots, Mysten Labs also maintains specia
 
 ```yaml
 authority-store-pruning-config:
-  # default values
-  num-latest-epoch-dbs-to-retain: 3
-  epoch-db-pruning-period-secs: 3600
-  max-checkpoints-in-batch: 10
-  max-transactions-in-batch: 1000
-  # end of default values
-
-  # No pruning of object versions (use u64::max for num of epochs)
+  # No pruning of object versions with u64::max for num of epochs.
+  # Set a lower value for a smaller objects history.
   num-epochs-to-retain: 18446744073709551615
   # Prune historic transactions of the past epochs
   num-epochs-to-retain-for-checkpoints: 2
-  periodic-compaction-threshold-days: 1
-  # Smooth pruning traffic throughout an epoch
-  smooth: true
 ```

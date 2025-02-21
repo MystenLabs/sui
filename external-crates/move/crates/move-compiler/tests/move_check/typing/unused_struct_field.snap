@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/unused_struct_field.move:63:57
+   │
+63 │     public fun flaky(x: 0x42::private_struct::S): u64 { x.f }
+   │                                                         ^^^ Invalid access of field 'f' on the struct '0x42::private_struct::S'. The field 'f' can only be accessed within the module '0x42::private_struct' since it defines 'S'

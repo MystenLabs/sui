@@ -4,17 +4,21 @@ The Move command-line interface (Move CLI) is a tool that provides an easy way t
 with writing and running Move code, and to experiment with developing new tools useful
 for Move development. To reflect this, the Move CLI commands are grouped into
 three main subcommands:
-* **package commands**: are commands to create, compile, and test Move packages, as well as perform other operations related to packages. These do not rely on a Move Adapter implementation nor an implementation of storage.
-* **sandbox commands**: are commands that allow you to write Move modules and scripts, write and run scripts and tests, and view the resulting state of execution in a local sandboxed environment.
-* **experimental commands**: are experimental commands that are currently in development.
+
+- **package commands**: are commands to create, compile, and test Move packages, as well as perform other operations related to packages. These do not rely on a Move Adapter implementation nor an implementation of storage.
+- **sandbox commands**: are commands that allow you to write Move modules and scripts, write and run scripts and tests, and view the resulting state of execution in a local sandboxed environment.
+- **experimental commands**: are experimental commands that are currently in development.
 
 Every Move CLI command, with the exception of `package create`, is expected to be run within the context of a [Move package](https://move-language.github.io/move/packages.html).
 
 ## Installation
+
 ```shell
 $ cargo install --path move/language/tools/move-cli
 ```
+
 or
+
 ```shell
 $ cargo install --git https://github.com/move-language/move move-cli --branch main
 ```
@@ -37,7 +41,7 @@ USAGE:
 
 We'll go through the most common Move CLI commands and flags here, however
 you can find the complete list of commands available by calling `move
---help`.  Additionally, the complete list of flags and options available
+--help`. Additionally, the complete list of flags and options available
 for each Move CLI command can be found by passing the `--help` flag to it,
 i.e., `move <command> --help`.
 
@@ -47,12 +51,14 @@ Package commands provide wrappers with sane defaults around other commands
 that are provided either by various Move tools, compiler, or prover.
 
 The `move new` command will create a new empty Move package:
+
 ```shell
 $ move new <package_name> # Create a Move package <package_name> under the current dir
 $ move new <package_name> -p <path> # Create a Move package <package_name> under path <path>
 ```
 
 From within a package's root directory, you can build the modules and/or scripts that you have written in the package with:
+
 ```shell
 $ move build # Builds the Move package you are currently in
 $ move build -p <path> # Builds the Move package at <path>
@@ -65,26 +71,13 @@ can change where the build artifacts are saved by passing the optional `--build-
 $ move build --build-dir <path_to_save_to> # Build current Move package and save artifacts under <path_to_save_to>
 ```
 
-You can verify the specifications in a Move package using the Move Prover with the `prove` command:
-
-```shell
-$ move prove # Verify the specifications in the current package
-$ move prove -p <path> # Verify the specifications in the package at <path>
-```
-
-In order to run the Move Prover [additional tools need to be
-installed](https://github.com/move-language/move/blob/main/language/move-prover/doc/user/install.md).
-Information on the Move Prover and its configuration options can be found
-[here](https://github.com/move-language/move/blob/main/language/move-prover/doc/user/prover-guide.md)
-and
-[here](https://github.com/move-language/move/blob/main/language/move-prover/doc/user/spec-lang.md).
-
 You can also run unit tests in a package using the `test` command
 
 ```shell
 $ move test # Run Move unit tests in the current package
 $ move test -p <path> # Run Move unit tests in the package at <path>
 ```
+
 ## Sandbox Commands
 
 The sandbox allows you to experiment with writing and running Move code without
@@ -147,11 +140,12 @@ single-`signer` script will trigger a type error.
 ### Passing arguments
 
 The CLI supports passing non-`signer` arguments to `move sandbox run` via `--args`. The following argument types are supported:
-* `bool` literals (`true`, `false`)
-* `u64` literals (e.g., `10`, `58`)
-* `address` literals (e.g., `0x12`, `0x0000000000000000000000000000000f`)
-* hexadecimal strings (e.g., `'x"0012"'` will parse as the `vector<u8>` value `[00, 12]`)
-* ASCII strings (e.g., `'b"hi"'` will parse as the `vector<u8>` value `[68, 69]`)
+
+- `bool` literals (`true`, `false`)
+- `u64` literals (e.g., `10`, `58`)
+- `address` literals (e.g., `0x12`, `0x0000000000000000000000000000000f`)
+- hexadecimal strings (e.g., `'x"0012"'` will parse as the `vector<u8>` value `[00, 12]`)
+- ASCII strings (e.g., `'b"hi"'` will parse as the `vector<u8>` value `[68, 69]`)
 
 ### Publishing new modules
 
@@ -355,7 +349,7 @@ key 0x2::Test::Resource {
 #### Cleaning state
 
 Since state persists from one call to the Move CLI to another, there will
-frequently be times where you want to start again at a clean state.  This
+frequently be times where you want to start again at a clean state. This
 can be done using the `move sandbox clean` command which will remove the
 `storage` and `build` directories:
 
@@ -456,6 +450,7 @@ Note: To view coverage information, the Move CLI must be installed with the `--d
 i.e., `cargo install --debug --path move/language/tools/move-cli`.
 
 Using our running example to illustrate:
+
 ```shell
 $ move sandbox exp-test -p readme --track-cov
 1 / 1 test(s) passed.
@@ -503,11 +498,13 @@ fun test_unpublish_script(account: signer) {
 
 We further add a new command to the end of `args.txt`
 (`args.exp` needs to be updated too).
+
 ```shell
 sandbox run sources/test_unpublish_script.move --signers 0xf -v
 ```
 
 Now we can re-test the `readme` again
+
 ```shell
 $ move sandbox exp-test -p readme --track-cov
 1 / 1 test(s) passed.
@@ -535,9 +532,9 @@ overall module coverage is boosted to 61.11%.
 The `move sandbox publish` command automatically detects when upgrading a module may lead to a breaking change.
 There are two kinds of breaking changes:
 
-* Linking compatibility (e.g., removing or changing the signature of a public function that is invoked by other modules, removing a
-struct or resource type used by other modules)
-* Layout compatibility (e.g., adding/removing a resource or struct field)
+- Linking compatibility (e.g., removing or changing the signature of a public function that is invoked by other modules, removing a
+  struct or resource type used by other modules)
+- Layout compatibility (e.g., adding/removing a resource or struct field)
 
 The breaking changes analysis performed by `move sandbox publish` is necessarily conservative. For example, say we `move sandbox publish` the following
 module:
@@ -570,7 +567,8 @@ Error: Layout API for structs of module 00000000000000000000000000000002::M has 
 In this case, we know we have not published any instances of `S` in global storage, so it is safe to re-run `move sandbox publish --ignore-breaking-changes` (as recommended).
 We can double-check that this was not a breaking change by running `move sandbox doctor`.
 This handy command runs exhaustive sanity checks on global storage to detect any breaking changes that occurred in the past:
-* All modules pass the bytecode verifier
-* All modules link against their dependencies
-* All resources deserialize according to their declared types
-* All events deserialize according to their declared types
+
+- All modules pass the bytecode verifier
+- All modules link against their dependencies
+- All resources deserialize according to their declared types
+- All events deserialize according to their declared types

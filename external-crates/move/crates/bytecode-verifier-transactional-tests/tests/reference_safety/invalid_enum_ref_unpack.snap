@@ -1,0 +1,75 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/reference_safety/invalid_enum_ref_unpack.mvir
+---
+processed 7 tasks
+
+task 0, lines 1-20:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x1::o,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 13)],
+}
+
+task 1, lines 22-47:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x1::o,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
+
+task 2, lines 49-68:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x1::o,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 3, lines 70-95:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x1::o,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}
+
+task 4, lines 97-114:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x1::o,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 5, lines 116-134:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x1::o,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 6, lines 136-160:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x1::o,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}

@@ -1,0 +1,35 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/ability_field_requirements/unrestricted_enum_has_resource_field.mvir
+---
+processed 3 tasks
+
+task 0, lines 1-13:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x42::Test,
+    indices: [(EnumDefinition, 0), (VariantTag, 1), (FieldDefinition, 0)],
+    offsets: [],
+}
+
+task 1, lines 15-27:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x42::Test,
+    indices: [(EnumDefinition, 0), (VariantTag, 1), (FieldDefinition, 0)],
+    offsets: [],
+}
+
+task 2, lines 29-39:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x42::Test,
+    indices: [(StructDefinition, 0)],
+    offsets: [],
+}

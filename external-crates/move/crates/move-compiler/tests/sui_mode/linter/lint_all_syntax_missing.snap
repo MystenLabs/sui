@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/sui_mode/linter/lint_all_syntax_missing.move:2:14
+  │
+2 │ #[lint_allow(x)]
+  │              ^ Unknown warning filter 'lint_allow(x)'

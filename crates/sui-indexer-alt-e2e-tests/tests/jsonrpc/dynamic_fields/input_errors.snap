@@ -1,0 +1,94 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 14-19:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3625200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 21:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 23-30:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Invalid type 0x0::M::Key<u64>: Package not found: 0x0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}
+
+task 4, lines 32-39:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Invalid type 0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a::M::Key<u64>: Package not found: 0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+  }
+}
+
+task 5, lines 41-48:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Invalid type 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::N::Key<u64>: Module not found: 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::N"
+  }
+}
+
+task 6, lines 50-57:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Invalid type 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::DoesntExist<u64>: Datatype not found: 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::DoesntExist"
+  }
+}
+
+task 7, lines 59-66:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Invalid type 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::Key<u64, u32>: Expected 1 type parameters, but got 2"
+  }
+}
+
+task 8, lines 68-75:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 5,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Bad dynamic field name: Null not allowed."
+  }
+}
+
+task 9, lines 77-84:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 6,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Could not serialize dynamic field name as 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::Key<u64>: Unable to convert hello, world to unsigned int."
+  }
+}

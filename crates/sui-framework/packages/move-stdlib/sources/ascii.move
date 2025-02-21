@@ -113,7 +113,7 @@ public fun is_valid_char(b: u8): bool {
     b <= 0x7F
 }
 
-/// Returns `true` if `byte` is an printable ASCII character.
+/// Returns `true` if `byte` is a printable ASCII character.
 /// Returns `false` otherwise.
 public fun is_printable_char(byte: u8): bool {
     byte >= 0x20 && // Disallow metacharacters

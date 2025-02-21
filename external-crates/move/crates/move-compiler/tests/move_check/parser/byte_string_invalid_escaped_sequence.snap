@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01007]: invalid byte string
+  ┌─ tests/move_check/parser/byte_string_invalid_escaped_sequence.move:3:15
+  │
+3 │         b"libr\a"
+  │               ^^ Invalid escape sequence: '\a'

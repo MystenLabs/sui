@@ -3,7 +3,7 @@
 
 use crate::Result;
 use crate::RpcService;
-use sui_sdk_types::types::{EpochId, ValidatorCommittee};
+use sui_sdk_types::{EpochId, ValidatorCommittee};
 
 impl RpcService {
     pub fn get_committee(&self, epoch: Option<EpochId>) -> Result<ValidatorCommittee> {
@@ -41,8 +41,8 @@ impl std::fmt::Display for CommitteeNotFoundError {
 
 impl std::error::Error for CommitteeNotFoundError {}
 
-impl From<CommitteeNotFoundError> for crate::RpcServiceError {
+impl From<CommitteeNotFoundError> for crate::RpcError {
     fn from(value: CommitteeNotFoundError) -> Self {
-        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
+        Self::new(tonic::Code::NotFound, value.to_string())
     }
 }

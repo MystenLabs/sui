@@ -1,0 +1,223 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 20-68:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8770400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 70:
+//# run Test::M1::parent --sender A --args @A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 72:
+//# run Test::M1::child --sender A --args @A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 74:
+//# run Test::M1::child --sender A --args @A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 76:
+//# run Test::M1::add_child --sender A --args object(2,0) object(3,0) 42
+created: object(5,0)
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+
+task 6, line 78:
+//# run Test::M1::add_nested_child --sender A --args object(2,0) 42 object(4,0) 420
+created: object(6,0)
+mutated: object(0,0), object(2,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+
+task 7, line 80:
+//# run Test::M1::reclaim_and_freeze_child --sender A --args object(2,0) 42
+mutated: object(0,0), object(2,0), object(3,0)
+deleted: object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
+
+task 8, line 82:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 9, lines 84-114:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "dynamicFields": {
+        "nodes": [
+          {
+            "value": {
+              "address": "0xe3679305061cc482496424b6d7620aaf7547c119248c3a32d92cfd960be18f70",
+              "version": 5,
+              "contents": {
+                "json": {
+                  "id": "0xe3679305061cc482496424b6d7620aaf7547c119248c3a32d92cfd960be18f70",
+                  "count": "0"
+                }
+              },
+              "dynamicFields": {
+                "nodes": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 10, lines 116-146:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "dynamicFields": {
+        "nodes": [
+          {
+            "value": {
+              "address": "0xe3679305061cc482496424b6d7620aaf7547c119248c3a32d92cfd960be18f70",
+              "version": 5,
+              "contents": {
+                "json": {
+                  "id": "0xe3679305061cc482496424b6d7620aaf7547c119248c3a32d92cfd960be18f70",
+                  "count": "0"
+                }
+              },
+              "dynamicFields": {
+                "nodes": [
+                  {
+                    "value": {
+                      "address": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
+                      "version": 6,
+                      "contents": {
+                        "json": {
+                          "id": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
+                          "count": "0"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 11, lines 148-178:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "dynamicFields": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 12, lines 180-210:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null
+  }
+}
+
+task 13, lines 212-239:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "owner": {
+        "parent": {
+          "address": "0x9958869e2da5c5af828a334520a81de2bec0861e171b575db12fb4987cb27a78"
+        }
+      },
+      "dynamicFields": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 14, lines 241-258:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null
+  }
+}
+
+task 15, lines 260-287:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "owner": {
+        "_": null
+      },
+      "dynamicFields": {
+        "nodes": [
+          {
+            "value": {
+              "address": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
+              "version": 6,
+              "contents": {
+                "json": {
+                  "id": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
+                  "count": "0"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 16, lines 289-316:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "owner": {
+        "_": null
+      },
+      "dynamicFields": {
+        "nodes": [
+          {
+            "value": {
+              "address": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
+              "version": 6,
+              "contents": {
+                "json": {
+                  "id": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
+                  "count": "0"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

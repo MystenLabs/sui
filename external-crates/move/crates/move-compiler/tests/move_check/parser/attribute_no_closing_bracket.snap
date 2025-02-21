@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_no_closing_bracket.move:3:7
+  │
+3 │     #[attr = 0
+  │       ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/attribute_no_closing_bracket.move:4:5
+  │
+3 │     #[attr = 0
+  │      - To match this '['
+4 │     fun foo() {}
+  │     ^ Expected ']'

@@ -1,9 +1,0 @@
-error[E01002]: unexpected token
-  ┌─ tests/move_2024/parser/use_fun_ref.move:3:20
-  │
-3 │     use fun foo as &X.foo;
-  │                    ^
-  │                    │
-  │                    Unexpected '&'
-  │                    Expected a type name with no type arguments
-

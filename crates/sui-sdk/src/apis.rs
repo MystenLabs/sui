@@ -13,6 +13,8 @@ use std::time::Duration;
 use std::time::Instant;
 use sui_json_rpc_types::DevInspectArgs;
 use sui_json_rpc_types::SuiData;
+use sui_json_rpc_types::ZkLoginIntentScope;
+use sui_json_rpc_types::ZkLoginVerifyResult;
 
 use crate::error::{Error, SuiRpcResult};
 use crate::RpcClient;
@@ -708,6 +710,21 @@ impl ReadApi {
             .try_get_object_before_version(object_id, version)
             .await?)
     }
+
+    /// Verify a zkLogin signature against bytes that is parsed using intent_scope, and the sui address.
+    pub async fn verify_zklogin_signature(
+        &self,
+        bytes: String,
+        signature: String,
+        intent_scope: ZkLoginIntentScope,
+        address: SuiAddress,
+    ) -> SuiRpcResult<ZkLoginVerifyResult> {
+        Ok(self
+            .api
+            .http
+            .verify_zklogin_signature(bytes, signature, intent_scope, address)
+            .await?)
+    }
 }
 
 /// Coin Read API provides the functionality needed to get information from the Sui network regarding the coins owned by an address.
@@ -748,7 +765,7 @@ impl CoinReadApi {
         &self,
         owner: SuiAddress,
         coin_type: Option<String>,
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> SuiRpcResult<CoinPage> {
         Ok(self
@@ -782,7 +799,7 @@ impl CoinReadApi {
     pub async fn get_all_coins(
         &self,
         owner: SuiAddress,
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> SuiRpcResult<CoinPage> {
         Ok(self.api.http.get_all_coins(owner, cursor, limit).await?)
@@ -824,7 +841,7 @@ impl CoinReadApi {
             ),
             move |(mut data, cursor, has_next_page, coin_type)| async move {
                 if let Some(item) = data.pop() {
-                    Some((item, (data, cursor, /* has_next_page */ true, coin_type)))
+                    Some((item, (data, cursor, has_next_page, coin_type)))
                 } else if has_next_page {
                     let page = self
                         .get_coins(owner, coin_type.clone(), cursor, Some(100))

@@ -1,0 +1,56 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04034]: 'syntax' method types differ
+  ┌─ tests/move_2024/typing/syntax_methods_args_polymorphic_invalid.move:6:43
+  │
+6 │     public fun borrow<T,Q>(_s: &S<T>, _j: Q): &T { abort 0 }
+  │                                           ^ This parameter has type 'Q'
+  ·
+9 │     public fun borrow_mut<T,Q>(_s: &mut S<T>, _j: T): &mut T { abort 0 }
+  │                                                   -
+  │                                                   │
+  │                                                   Expected this parameter to have type 'Q'
+  │                                                   It has type 'T'
+  │
+  = Index operation non-subject parameter types must match exactly
+
+error[E04034]: 'syntax' method types differ
+   ┌─ tests/move_2024/typing/syntax_methods_args_polymorphic_invalid.move:14:33
+   │
+14 │     public fun borrowA<Q,T>(_s: &A<T>, _j: T): &Q { abort 0 }
+   │                          -      ^^^^^ This index function subject has type '&a::invalid::A<T>'
+   │                          │       
+   │                          Type parameter T appears in position 2 here
+15 │     #[syntax(index)]
+16 │     public fun borrow_muAt<T,Q>(_s: &mut A<T>, _j: T): &mut T { abort 0 }
+   │                            -        ---------
+   │                            │        │
+   │                            │        Expected this mutable index function subject to have type '&mut a::invalid::A<Q>'
+   │                            │        It has type '&mut a::invalid::A<T>'
+   │                            Type parameter T appears in position 1 here
+   │
+   = Type parameters must be used the same by position, not name
+   = These functions must take the same subject type, differing only by mutability
+
+error[E04034]: 'syntax' method types differ
+   ┌─ tests/move_2024/typing/syntax_methods_args_polymorphic_invalid.move:14:44
+   │
+14 │     public fun borrowA<Q,T>(_s: &A<T>, _j: T): &Q { abort 0 }
+   │                          -                 ^ This parameter has type 'T'
+   │                          │                  
+   │                          Type parameter T appears in position 2 here
+15 │     #[syntax(index)]
+16 │     public fun borrow_muAt<T,Q>(_s: &mut A<T>, _j: T): &mut T { abort 0 }
+   │                            -                       -
+   │                            │                       │
+   │                            │                       Expected this parameter to have type 'Q'
+   │                            │                       It has type 'T'
+   │                            Type parameter T appears in position 1 here
+   │
+   = Type parameters must be used the same by position, not name
+   = Index operation non-subject parameter types must match exactly

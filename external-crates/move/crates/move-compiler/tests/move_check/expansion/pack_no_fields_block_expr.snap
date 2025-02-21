@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/pack_no_fields_block_expr.move:4:22
+  │
+4 │         let _s = S { let x = 0; x };
+  │                      ^ Unexpected 'let'. Expected a field expression
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/pack_no_fields_block_expr.move:4:31
+  │
+4 │         let _s = S { let x = 0; x };
+  │                    -          ^ Expected '}'
+  │                    │           
+  │                    To match this '{'
+
+error[E03009]: unbound variable
+  ┌─ tests/move_check/expansion/pack_no_fields_block_expr.move:4:33
+  │
+4 │         let _s = S { let x = 0; x };
+  │                                 ^ Unbound variable 'x'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/pack_no_fields_block_expr.move:4:36
+  │
+4 │         let _s = S { let x = 0; x };
+  │                                    ^
+  │                                    │
+  │                                    Unexpected ';'
+  │                                    Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'

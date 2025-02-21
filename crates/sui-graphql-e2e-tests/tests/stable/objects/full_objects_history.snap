@@ -1,0 +1,71 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+task 1, lines 6-23:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5608800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 25:
+//# run Test::M1::create --args 0
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 27:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 29:
+//# advance-epoch
+Epoch advanced: 0
+
+task 5, line 31:
+//# run Test::M1::mutate --args object(2,0) 1
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 6, line 33:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, lines 35-40:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "digest": "5SXEg3CCA8xgEzDmyyqtpFjrhn3m53ziW4gaDuCgdSjt"
+    }
+  }
+}
+
+task 8, lines 42-47:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "digest": "7VWN2PsjurHdwiHhSYsrH7RVJPmS6Lrmqw9hNcGkqPWv"
+    }
+  }
+}
+
+task 9, line 49:
+//# advance-epoch
+Epoch advanced: 1
+
+task 10, lines 51-53:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 11, lines 54-59:
+//# run-graphql --wait-for-checkpoint-pruned 0
+Response: {
+  "data": {
+    "object": {
+      "digest": "5SXEg3CCA8xgEzDmyyqtpFjrhn3m53ziW4gaDuCgdSjt"
+    }
+  }
+}

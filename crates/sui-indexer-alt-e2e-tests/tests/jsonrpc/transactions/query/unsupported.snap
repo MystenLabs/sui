@@ -1,0 +1,19 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, line 6:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, lines 8-18:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: TransactionKind filter is not supported"
+  }
+}

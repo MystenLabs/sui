@@ -1,0 +1,22 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/new_tests/gitignore_exists.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# check that sui move new correctly updates existing .gitignore
+mkdir example
+echo "existing_ignore" > example/.gitignore
+sui move new example
+cat example/.gitignore
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+existing_ignore
+build/*
+
+----- stderr -----

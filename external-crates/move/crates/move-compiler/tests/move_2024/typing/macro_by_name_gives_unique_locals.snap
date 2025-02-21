@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E07005]: invalid transfer of references
+   ┌─ tests/move_2024/typing/macro_by_name_gives_unique_locals.move:13:9
+   │
+13 │         check_unique(s1, s2)
+   │         ^^^^^^^^^^^^^^^^^^^^ Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
+   ·
+25 │         foo!(&mut s);
+   │              ------ It is still being mutably borrowed by this reference

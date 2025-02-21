@@ -1,0 +1,35 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 7-26:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5821600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 28:
+//# run a::m::add_n_items --sender A --args 100 --gas-budget 1000000000000 --summarize
+created: 200
+mutated: 1
+gas summary: computation_cost: 1000000, storage_cost: 270028000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 30:
+//# run a::m::add_n_items --sender A --args 1000 --gas-budget 1000000000000 --summarize
+created: 2000
+mutated: 1
+gas summary: computation_cost: 198000000, storage_cost: 2691388000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 32:
+//# run a::m::add_n_items --sender A --args 1025 --gas-budget 1000000000000
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::dynamic_field::has_child_object (function index 14) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 14, instruction: 0, function_name: Some("has_child_object") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(5), message: Some("Object runtime cached objects limit (1000 entries) reached"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(14), 0)] }), command: Some(0) } }
+
+task 5, line 34:
+//# run a::m::add_n_items --sender A --args 1025 --gas-budget 100000000000000
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::dynamic_field::has_child_object (function index 14) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 14, instruction: 0, function_name: Some("has_child_object") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(5), message: Some("Object runtime cached objects limit (1000 entries) reached"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(14), 0)] }), command: Some(0) } }

@@ -1,0 +1,29 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-29:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6072400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 31-34:
+//# programmable --inputs vector[0u64,0u64]
+// INVALID option, using a vetor of length 2
+//> 0: MakeMoveVec<std::option::Option<u64>>([Input(0)]);
+//> 1: test::m1::vec_option_u64(Result(0));
+Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<u64> but provided argument's value does not match"), command: Some(0) } }
+
+task 3, lines 36-39:
+//# programmable --inputs vector[255u8,157u8,164u8,239u8,184u8,143u8]
+// INVALID string                ^^^ modified the bytes to make an invalid UTF8 string
+//> 0: MakeMoveVec<std::string::String>([Input(0), Input(0)]);
+//> 1: test::m1::vec_string(Result(0));
+Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::string::String but provided argument's value does not match"), command: Some(0) } }

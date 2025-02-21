@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/matching/counterexample_malformed_match.move:18:9
+   │
+18 │         SomeEnum::PositionalFields(_, ) => (),
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing pattern for field '1' in 'a::m::SomeEnum::PositionalFields'

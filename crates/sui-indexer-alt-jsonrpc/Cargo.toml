@@ -1,0 +1,57 @@
+[package]
+name = "sui-indexer-alt-jsonrpc"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[[bin]]
+name = "sui-indexer-alt-jsonrpc"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-graphql = { workspace = true, features = ["dataloader"] }
+async-trait.workspace = true
+axum.workspace = true
+bcs.workspace = true
+clap.workspace = true
+diesel = { workspace = true, features = ["chrono"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+fastcrypto.workspace = true
+futures.workspace = true
+jsonrpsee = { workspace = true, features = ["macros", "server"] }
+pin-project-lite.workspace = true
+prometheus.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+telemetry-subscribers.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+toml.workspace = true
+tower-layer.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+move-binary-format.workspace = true
+move-core-types.workspace = true
+
+sui-default-config.workspace = true
+sui-indexer-alt-metrics.workspace = true
+sui-indexer-alt-schema.workspace = true
+sui-json.workspace = true
+sui-json-rpc-types.workspace = true
+sui-name-service.workspace = true
+sui-open-rpc.workspace = true
+sui-open-rpc-macros.workspace = true
+sui-package-resolver.workspace = true
+sui-pg-db.workspace = true
+sui-types.workspace = true
+
+[dev-dependencies]
+reqwest.workspace = true
+serde_json.workspace = true

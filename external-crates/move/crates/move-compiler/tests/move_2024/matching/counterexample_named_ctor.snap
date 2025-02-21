@@ -1,0 +1,40 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/counterexample_named_ctor.move:9:16
+  │
+9 │         match (Option::Some { value: 0 }) {
+  │                ^^^^^^^^^^^^^^^^^^^^^^^^^ Pattern 'Option::None' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_named_ctor.move:15:16
+   │
+15 │         match (opt) {
+   │                ^^^ Pattern 'Option::Some { value: Option::Some { value: _ } }' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_named_ctor.move:22:16
+   │
+22 │         match (opt) {
+   │                ^^^ Pattern 'Option::None' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_named_ctor.move:32:16
+   │
+32 │         match (pair) {
+   │                ^^^^ Pattern 'Pair::P { one: _, two: _0 }' not covered
+   │
+   = When '_0' is not 0
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_named_ctor.move:38:16
+   │
+38 │         match (pair) {
+   │                ^^^^ Pattern 'Pair::P { one: _, two: _0 }' not covered
+   │
+   = When '_0' is not 0

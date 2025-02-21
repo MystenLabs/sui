@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/let_binding_missing_paren.move:3:23
+  │
+3 │         let (_x1, _x2 = (1, 2); // Test a missing right parenthesis
+  │                       ^
+  │                       │
+  │                       Unexpected '='
+  │                       Expected ',' or ')'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/let_binding_missing_paren.move:3:31
+  │
+3 │         let (_x1, _x2 = (1, 2); // Test a missing right parenthesis
+  │             -                 ^ Expected ')'
+  │             │                  
+  │             To match this '('

@@ -1,0 +1,13 @@
+---
+source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility_tests.rs
+expression: normalize_path(output)
+---
+error[Compatibility E01006]: module missing
+  ┌─ /fixtures/upgrade_errors/missing_module_toml/whitespace/Move.toml:1:1
+  │  
+1 │ ╭   
+2 │ │   
+  │ ╰──^ Package is missing module 'identifier'
+  │  
+  = Modules which are part package cannot be removed during an upgrade.
+  = Add missing module 'identifier' back to the package.

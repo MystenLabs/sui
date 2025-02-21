@@ -16,8 +16,8 @@ The following example demonstrates how to serialize data for a transfer using th
 
 {@include: ../../../snippets/info-gas-budget.mdx}
 
-```shell
-sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-unsigned-transaction
+```sh
+$ sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-unsigned-transaction
 ```
 
 The console responds with the resulting `<TX_BYTES>` value.
@@ -38,7 +38,7 @@ This example uses the `sui keytool` command to sign, using the Ed25519 key corre
 
 You receive the following response:
 
-```shell
+```sh
 Signer address: <SUI-ADDRESS>
 Raw tx_bytes to execute: <TX_BYTES>
 Intent: Intent { scope: TransactionData, version: V0, app_id: Sui }
@@ -55,13 +55,13 @@ To verify a signature against the cryptography library backing Sui when debuggin
 
 After you obtain the serialized signature, you can submit it using the execution transaction command. This command takes `--tx-bytes` as the raw transaction bytes to execute (see output of the previous `sui client transfer` command) and the serialized signature (Base64 encoded `flag || sig || pk`, see output of `sui keytool sign`). This executes the signed transaction and returns the certificate and transaction effects if successful.
 
-```shell
-sui client execute-signed-tx --tx-bytes <TX_BYTES> --signatures <SERIALIZED-SIGNATURE>
+```sh
+$ sui client execute-signed-tx --tx-bytes <TX_BYTES> --signatures <SERIALIZED-SIGNATURE>
 ```
 
 You get the following response:
 
-```shell
+```sh
 ----- Certificate ----
 Transaction Hash: <TRANSACTION-ID>
 Transaction Signature: <SIGNATURE>
@@ -80,14 +80,14 @@ Mutated Objects:
 
 Alternatively, you can use the active key in Sui Keystore to sign and output a Base64-encoded sender signed data with flag `--serialize-signed-transaction`. 
 
-```shell
-sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-signed-transaction
+```sh
+$ sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-signed-transaction
 ```
 
 The console responds with the resulting `<SIGNED-TX-BYTES>` value.
 
 After you obtain the signed transaction bytes, you can submit it using the `execute-combined-signed-tx` command. This command takes `--signed-tx-bytes` as the signed transaction bytes to execute (see output of the previous `sui client transfer-sui` command). This executes the signed transaction and returns the certificate and transaction effects if successful.
 
-```shell
-sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED-TX-BYTES>
+```sh
+$ sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED-TX-BYTES>
 ```

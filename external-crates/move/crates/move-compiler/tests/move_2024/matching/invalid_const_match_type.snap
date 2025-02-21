@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/matching/invalid_const_match_type.move:9:17
+  │
+3 │     const Z8: u8 = 0;
+  │               -- Given: 'u8'
+4 │ 
+5 │     public struct S has drop { n: u64 }
+  │                                   --- Expected: 'u64'
+  ·
+9 │             S { n: Z8 } => n,
+  │                 ^ Invalid pattern field type
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/matching/invalid_const_match_type.move:9:28
+  │
+9 │             S { n: Z8 } => n,
+  │                            ^ Unbound variable 'n'

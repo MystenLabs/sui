@@ -662,7 +662,7 @@ pub struct DynamicFieldIndexInfo {
     pub name_value: Vec<u8>,
     // TODO do we want to also store the type of the value? We can get this for free for
     // DynamicFields, but for DynamicObjects it would require a lookup in the DB on init, or
-    // scanning the transaction's output objects for the coorisponding Object to retreive its type
+    // scanning the transaction's output objects for the coorisponding Object to retrieve its type
     // information.
     //
     // pub value_type: TypeTag,

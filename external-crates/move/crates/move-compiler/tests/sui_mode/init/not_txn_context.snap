@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02003]: invalid 'init' function
+  ┌─ tests/sui_mode/init/not_txn_context.move:3:9
+  │
+3 │     fun init(_: u64) {
+  │         ^^^^    --- 'init' functions must have their last parameter as '&sui::tx_context::TxContext' or '&mut sui::tx_context::TxContext'
+  │         │        
+  │         Invalid 'init' function declaration
+
+error[Sui E02003]: invalid 'init' function
+   ┌─ tests/sui_mode/init/not_txn_context.move:10:9
+   │
+10 │     fun init(_: TxContext) {
+   │         ^^^^    --------- 'init' functions must have their last parameter as '&sui::tx_context::TxContext' or '&mut sui::tx_context::TxContext'
+   │         │        
+   │         Invalid 'init' function declaration
+
+error[Sui E02003]: invalid 'init' function
+   ┌─ tests/sui_mode/init/not_txn_context.move:17:9
+   │
+17 │     fun init(_: tx_context::TxContext) {
+   │         ^^^^    --------------------- 'init' functions must have their last parameter as '&sui::tx_context::TxContext' or '&mut sui::tx_context::TxContext'
+   │         │        
+   │         Invalid 'init' function declaration

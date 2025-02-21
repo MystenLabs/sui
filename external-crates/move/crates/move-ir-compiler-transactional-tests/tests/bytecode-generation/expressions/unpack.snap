@@ -1,0 +1,39 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 1-18:
+//# print-bytecode
+// Move bytecode v6
+module 1d12.M {
+
+struct T {
+	b: bool
+}
+
+new(): T {
+B0:
+	0: LdTrue
+	1: Pack[0](T)
+	2: Ret
+}
+
+f() {
+L0:	loc0: T
+L1:	loc1: bool
+B0:
+	0: Call new(): T
+	1: StLoc[0](loc0: T)
+	2: MoveLoc[0](loc0: T)
+	3: Unpack[0](T)
+	4: StLoc[1](loc1: bool)
+	5: Ret
+}
+
+}
+
+
+task 2, lines 31-44:
+//# print-bytecode
+Error: Missing struct definition for T

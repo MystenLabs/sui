@@ -1,0 +1,132 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: true
+---
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+  ┌─ tests/linter/true_positive_abort_constant.move:6:15
+  │
+6 │         abort 100 // Should trigger: using a numeric literal
+  │               ^^^ Prefer using a named constant.
+  │
+  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+  = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:10:15
+   │
+10 │         abort 1 + 2 // Should trigger
+   │               ^^^^^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:15:15
+   │
+15 │         abort 0 // Should trigger
+   │               ^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:19:15
+   │
+19 │         abort 0x1F // Should trigger
+   │               ^^^^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:23:15
+   │
+23 │         abort 1 + ERROR_NOT_OWNER // Should trigger
+   │               ^^^^^^^^^^^^^^^^^^^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:27:15
+   │
+27 │         abort ERROR_NOT_OWNER + ERROR_NOT_OWNER // Should trigger
+   │               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:32:15
+   │
+32 │         abort x
+   │               ^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:36:15
+   │
+36 │         abort error_code // trigger, since it's a dynamic value, not a constant
+   │               ^^^^^^^^^^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:40:24
+   │
+40 │         assert!(false, 2); // Should trigger: using a numeric literal
+   │                        ^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:44:24
+   │
+44 │         assert!(false, 1 + 1); // Should trigger
+   │                        ^^^^^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:48:24
+   │
+48 │         assert!(false, 0xC0FFEE); // Should trigger
+   │                        ^^^^^^^^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:52:24
+   │
+52 │         assert!(false, 1 + ERROR_NOT_OWNER); // Should trigger
+   │                        ^^^^^^^^^^^^^^^^^^^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:56:24
+   │
+56 │         assert!(false, ERROR_NOT_OWNER + ERROR_NOT_OWNER) // Should trigger
+   │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: 'abort' or 'assert' without named constant
+   ┌─ tests/linter/true_positive_abort_constant.move:61:24
+   │
+61 │         assert!(false, x); // Should trigger
+   │                        ^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

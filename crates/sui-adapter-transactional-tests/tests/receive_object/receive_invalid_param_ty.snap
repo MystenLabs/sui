@@ -1,0 +1,89 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+task 1, lines 6-41:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 8519600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 43:
+//# run tto::M1::start
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 45:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, line 47:
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 5, line 49:
+//# run tto::M1::receiver --args receiving(2,1)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 6, line 51:
+//# run tto::M1::receiver2 --args receiving(2,1)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 7, line 53:
+//# run tto::M1::receiver3 --args receiving(2,1)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 8, line 55:
+//# run tto::M1::receiver4 --args receiving(2,1)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 9, line 57:
+//# run tto::M1::receiver5 --args receiving(2,1)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 10, line 59:
+//# run tto::M1::receiver6 --args object(2,1)
+Error: Error checking transaction input objects: IncorrectUserSignature { error: "Object object(2,1) is owned by account address object(2,0), but given owner/signer address is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e" }
+
+task 11, line 61:
+//# run tto::M1::receiver6 --args object(2,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 12, line 63:
+//# run tto::M1::receiver6 --args receiving(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, line 65:
+//# run tto::M1::receiver6 --args 0
+Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be instantiated from raw bytes
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfPureArg }, source: Some("Non-primitive argument at index 0. If it is an object, it must be populated by an object"), command: Some(0) } }
+
+task 14, line 67:
+//# run tto::M1::receiver6 --args vector[0,0,0,0,0,0,0,0,0,0]
+Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be instantiated from raw bytes
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfPureArg }, source: Some("Non-primitive argument at index 0. If it is an object, it must be populated by an object"), command: Some(0) } }

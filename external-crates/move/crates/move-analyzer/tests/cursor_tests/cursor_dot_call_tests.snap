@@ -1,0 +1,162 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== dot_call.move ========================================================
+-- test 0 @ 5:22 ------------
+expected: at a struct definition name
+cursor info:
+- module: Move2024::M1
+- definition: struct SomeStruct
+- position: defn name
+
+-- test 1 @ 6:12 ------------
+expected: at a struct field name
+cursor info:
+- module: Move2024::M1
+- definition: struct SomeStruct
+- position: field
+- value: Field(
+    "some_field",
+)
+
+-- test 2 @ 6:18 ------------
+expected: in a struct definition at nowhere in particular
+cursor info:
+- module: Move2024::M1
+- definition: struct SomeStruct
+- position: unknown
+
+-- test 3 @ 6:19 ------------
+expected: at a struct field type
+cursor info:
+- module: Move2024::M1
+- definition: struct SomeStruct
+- position: unknown
+
+-- test 4 @ 6:20 ------------
+expected: at a struct field type
+cursor info:
+- module: Move2024::M1
+- definition: struct SomeStruct
+- position: type
+- value: Apply(Single(PathEntry { name: "u64", tyargs: None, is_macro: None }))
+
+-- test 5 @ 6:21 ------------
+expected: at a struct field type
+cursor info:
+- module: Move2024::M1
+- definition: struct SomeStruct
+- position: type
+- value: Apply(Single(PathEntry { name: "u64", tyargs: None, is_macro: None }))
+
+-- test 6 @ 6:22 ------------
+expected: in a struct definition at nowhere in particular
+cursor info:
+- module: Move2024::M1
+- definition: struct SomeStruct
+- position: type
+- value: Apply(Single(PathEntry { name: "u64", tyargs: None, is_macro: None }))
+
+-- test 7 @ 17:44 ------------
+expected: at a function return type
+cursor info:
+- module: Move2024::M1
+- definition: function bar
+- position: type
+- value: Apply(Single(PathEntry { name: "u64", tyargs: None, is_macro: None }))
+
+-- test 8 @ 28:13 ------------
+expected: at a function definition at nowhere in particular
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: unknown
+
+-- test 9 @ 28:13 ------------
+expected: at a function definition name
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: unknown
+
+-- test 10 @ 28:14 ------------
+expected: at a function definition name
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: unknown
+
+-- test 11 @ 28:15 ------------
+expected: at a function definition name
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: defn name
+
+-- test 12 @ 28:16 ------------
+expected: at a function definition name
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: defn name
+
+-- test 13 @ 28:17 ------------
+expected: at a function definition at nowhere in particular
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: defn name
+
+-- test 14 @ 28:18 ------------
+expected: at a function definition at nowhere in particular
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: unknown
+
+-- test 15 @ 31:4 ------------
+expected: inside a function body -- unknown
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: unknown
+
+-- test 16 @ 31:8 ------------
+expected: let binding
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: seq item
+- value: Bind([Var(None, Var("some_struct"))], Some(Apply(Single(PathEntry { name: "SomeStructAlias", tyargs: None, is_macro: None }))), Call(Path(NamePath { root: RootPathEntry { name: M1, tyargs: None, is_macro: None }, entries: [PathEntry { name: "snew", tyargs: None, is_macro: None }], is_incomplete: false }), []))
+
+-- test 17 @ 31:18 ------------
+expected: binding in the lhs of a let-binding
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: binder
+- value: Var(None, Var("some_struct"))
+
+-- test 18 @ 31:49 ------------
+expected: name in module access
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: exp
+- value: Call(Path(NamePath { root: RootPathEntry { name: M1, tyargs: None, is_macro: None }, entries: [PathEntry { name: "snew", tyargs: None, is_macro: None }], is_incomplete: false }), [])
+
+-- test 19 @ 34:28 ------------
+expected: name in a dot call
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: exp
+- value: DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), Loc { file_hash: "c26c564206296bc6de3b43456c0cf245c77be098b5cb90d48a37b737c8b0d007", start: 842, end: 843 }, "f3", None, None, [Name(Single(PathEntry { name: "val", tyargs: None, is_macro: None }))])
+
+-- test 20 @ 34:37 ------------
+expected: equal sign in a binop
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: exp
+- value: BinopExp(DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), Loc { file_hash: "c26c564206296bc6de3b43456c0cf245c77be098b5cb90d48a37b737c8b0d007", start: 842, end: 843 }, "f3", None, None, [Name(Single(PathEntry { name: "val", tyargs: None, is_macro: None }))]), Eq, DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), Loc { file_hash: "c26c564206296bc6de3b43456c0cf245c77be098b5cb90d48a37b737c8b0d007", start: 865, end: 866 }, "f4", None, None, [Name(Single(PathEntry { name: "val", tyargs: None, is_macro: None }))]))

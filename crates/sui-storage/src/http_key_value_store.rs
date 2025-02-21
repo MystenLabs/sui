@@ -16,9 +16,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber, VersionNumber};
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use sui_types::{
-    digests::{
-        CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
-    },
+    digests::{CheckpointContentsDigest, CheckpointDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     error::{SuiError, SuiResult},
     messages_checkpoint::{
@@ -77,7 +75,6 @@ where
 pub enum Key {
     Tx(TransactionDigest),
     Fx(TransactionDigest),
-    Events(TransactionEventsDigest),
     CheckpointContents(CheckpointSequenceNumber),
     CheckpointSummary(CheckpointSequenceNumber),
     CheckpointContentsByDigest(CheckpointContentsDigest),
@@ -93,7 +90,6 @@ impl Key {
         match self {
             Key::Tx(_) => "tx",
             Key::Fx(_) => "fx",
-            Key::Events(_) => "ev",
             Key::CheckpointContents(_) => "cc",
             Key::CheckpointSummary(_) => "cs",
             Key::CheckpointContentsByDigest(_) => "cc",
@@ -108,7 +104,6 @@ impl Key {
         match self {
             Key::Tx(digest) => encode_digest(digest),
             Key::Fx(digest) => encode_digest(digest),
-            Key::Events(digest) => encode_digest(digest),
             Key::CheckpointContents(seq) => {
                 encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq))
             }
@@ -144,9 +139,6 @@ pub fn path_elements_to_key(digest: &str, type_: &str) -> anyhow::Result<Key> {
     match type_ {
         "tx" => Ok(Key::Tx(TransactionDigest::try_from(decoded_digest)?)),
         "fx" => Ok(Key::Fx(TransactionDigest::try_from(decoded_digest)?)),
-        "ev" => Ok(Key::Events(TransactionEventsDigest::try_from(
-            decoded_digest,
-        )?)),
         "cc" => {
             // first try to decode as digest, otherwise try to decode as tagged key
             match CheckpointContentsDigest::try_from(decoded_digest.clone()) {
@@ -351,27 +343,19 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
         &self,
         transactions: &[TransactionDigest],
         effects: &[TransactionDigest],
-        events: &[TransactionEventsDigest],
-    ) -> SuiResult<(
-        Vec<Option<Transaction>>,
-        Vec<Option<TransactionEffects>>,
-        Vec<Option<TransactionEvents>>,
-    )> {
+    ) -> SuiResult<(Vec<Option<Transaction>>, Vec<Option<TransactionEffects>>)> {
         let num_txns = transactions.len();
         let num_effects = effects.len();
-        let num_events = events.len();
 
         let keys = transactions
             .iter()
             .map(|tx| Key::Tx(*tx))
             .chain(effects.iter().map(|fx| Key::Fx(*fx)))
-            .chain(events.iter().map(|events| Key::Events(*events)))
             .collect::<Vec<_>>();
 
         let fetches = self.multi_fetch(keys).await;
         let txn_slice = fetches[..num_txns].to_vec();
         let fx_slice = fetches[num_txns..num_txns + num_effects].to_vec();
-        let events_slice = fetches[num_txns + num_effects..].to_vec();
 
         let txn_results = txn_slice
             .iter()
@@ -398,20 +382,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
                 })
             })
             .collect::<Vec<_>>();
-
-        let events_results = events_slice
-            .iter()
-            .take(num_events)
-            .zip(events.iter())
-            .map(map_fetch)
-            .map(|maybe_bytes| {
-                maybe_bytes.and_then(|(bytes, digest)| {
-                    deser_check_digest(digest, bytes, |events: &TransactionEvents| events.digest())
-                })
-            })
-            .collect::<Vec<_>>();
-
-        Ok((txn_results, fx_results, events_results))
+        Ok((txn_results, fx_results))
     }
 
     #[instrument(level = "trace", skip_all)]

@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/typing/match_counterexample_bool.move:5:16
+  │
+5 │         match (x) {
+  │                ^ Pattern 'false' not covered

@@ -200,7 +200,7 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
         let return_type = &sig.output;
         let body = &input.block;
         quote! {
-            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
+            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args),*)]
             #[::sui_macros::init_static_initializers]
             #ignore
             #sig {

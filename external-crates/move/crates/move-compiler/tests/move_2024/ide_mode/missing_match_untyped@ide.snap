@@ -1,0 +1,53 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:4:16
+  │
+4 │         match (e) {
+  │                ^ Unbound variable 'e'
+
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:4:16
+  │
+4 │         match (e) {
+  │                ^ Pattern '_' not covered
+
+note[I15004]: IDE missing match arms
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:4:19
+  │  
+4 │           match (e) {
+  │ ╭───────────────────^
+5 │ │         }
+  │ ╰─────────^ Missing arms: '_'
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:16
+  │
+9 │         match (e) {
+  │                ^ Unbound variable 'e'
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:19
+   │  
+ 9 │           match (e) {
+   │ ╭───────────────────^
+10 │ │             E::Two(n) => n
+11 │ │         }
+   │ ╰─────────^ Missing arms: '_'
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:10:13
+   │
+10 │             E::Two(n) => n
+   │             ^ Could not resolve the name 'E'
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:10:26
+   │
+10 │             E::Two(n) => n
+   │                          ^ Unbound variable 'n'

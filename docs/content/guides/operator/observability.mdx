@@ -101,7 +101,7 @@ You can send this output to a tool or service for indexing, alerts, aggregation,
 
 The following example output shows certificate processing in the authority with span logging. Note the `START` and `END` annotations, and notice how `DB_UPDATE_STATE` which is nested is embedded within `PROCESS_CERT`. Also notice `elapsed_milliseconds`, which logs the duration of each span.
 
-```bash
+```sh
 {"v":0,"name":"sui","msg":"[PROCESS_CERT - START]","level":20,"hostname":"Evan-MLbook.lan","pid":51425,"time":"2022-03-08T22:48:11.241421Z","target":"sui_core::authority_server","line":67,"file":"sui_core/src/authority_server.rs","tx_digest":"t#d1385064287c2ad67e4019dd118d487a39ca91a40e0fd8e678dbc32e112a1493"}
 {"v":0,"name":"sui","msg":"[PROCESS_CERT - EVENT] Read inputs for transaction from DB","level":20,"hostname":"Evan-MLbook.lan","pid":51425,"time":"2022-03-08T22:48:11.246688Z","target":"sui_core::authority","line":393,"file":"sui_core/src/authority.rs","num_inputs":2,"tx_digest":"t#d1385064287c2ad67e4019dd118d487a39ca91a40e0fd8e678dbc32e112a1493"}
 {"v":0,"name":"sui","msg":"[PROCESS_CERT - EVENT] Finished execution of transaction with status Success { gas_used: 18 }","level":20,"hostname":"Evan-MLbook.lan","pid":51425,"time":"2022-03-08T22:48:11.246759Z","target":"sui_core::authority","line":409,"file":"sui_core/src/authority.rs","gas_used":18,"tx_digest":"t#d1385064287c2ad67e4019dd118d487a39ca91a40e0fd8e678dbc32e112a1493"}
@@ -116,14 +116,14 @@ To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do t
 
 1.  Run this to get a local Jaeger container:
 
-```bash
-docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
+```sh
+$ docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
 ```
 
 1.  Run Sui like this (trace enables the most detailed spans):
 
-```bash
-SUI_TRACING_ENABLE=1 RUST_LOG="info,sui_core=trace" ./sui start
+```sh
+$ SUI_TRACING_ENABLE=1 RUST_LOG="info,sui_core=trace" ./sui start
 ```
 
 1.  Run some transfers with Sui CLI client, or run the benchmarking tool.

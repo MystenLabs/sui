@@ -15,7 +15,7 @@ use crate::{
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
     parser::ast::{ConstantName, FunctionName},
-    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv},
+    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, AstDebug, CompilationEnv},
     FullyCompiledProgram,
 };
 use cfgir::ast::LoopInfo;
@@ -43,6 +43,13 @@ enum NamedBlockType {
     Named,
 }
 
+pub(super) struct CFGIRDebugFlags {
+    #[allow(dead_code)]
+    pub(super) print_blocks: bool,
+    #[allow(dead_code)]
+    pub(super) print_optimized_blocks: bool,
+}
+
 struct Context<'env> {
     env: &'env CompilationEnv,
     info: &'env TypingProgramInfo,
@@ -52,6 +59,7 @@ struct Context<'env> {
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
     loop_bounds: BTreeMap<Label, G::LoopInfo>,
+    debug: CFGIRDebugFlags,
 }
 
 impl<'env> Context<'env> {
@@ -65,6 +73,10 @@ impl<'env> Context<'env> {
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
+            debug: CFGIRDebugFlags {
+                print_blocks: false,
+                print_optimized_blocks: false,
+            },
         }
     }
 
@@ -155,6 +167,7 @@ pub fn program(
     let mut context = Context::new(compilation_env, &info);
 
     let modules = modules(&mut context, hmodules);
+    set_constant_value_types(&info, &modules);
 
     let mut program = G::Program {
         modules,
@@ -163,6 +176,25 @@ pub fn program(
     };
     visit_program(&mut context, &mut program);
     program
+}
+
+fn set_constant_value_types(
+    info: &TypingProgramInfo,
+    modules: &UniqueMap<ModuleIdent, G::ModuleDefinition>,
+) {
+    for (mname, mdef) in modules.key_cloned_iter() {
+        for (cname, cdef) in mdef.constants.key_cloned_iter() {
+            if let Some(value) = &cdef.value {
+                info.module(&mname)
+                    .constants
+                    .get(&cname)
+                    .unwrap()
+                    .value
+                    .set(value.clone())
+                    .unwrap();
+            }
+        }
+    }
 }
 
 fn modules(
@@ -654,7 +686,15 @@ fn function_body(
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();
             let binfo = block_info.iter().map(destructure_tuple);
-
+            if context.debug.print_blocks {
+                for (lbl, block) in &blocks {
+                    println!("{lbl}:");
+                    for cmd in block {
+                        print!("    ");
+                        cmd.print_verbose();
+                    }
+                }
+            }
             let (mut cfg, infinite_loop_starts, diags) =
                 MutForwardCFG::new(start, &mut blocks, binfo);
             context.add_diags(diags);
@@ -685,6 +725,15 @@ fn function_body(
                     &UniqueMap::new(),
                     &mut cfg,
                 );
+                if context.debug.print_optimized_blocks {
+                    for (lbl, block) in &blocks {
+                        println!("{lbl}:");
+                        for cmd in block {
+                            print!("    ");
+                            cmd.print_verbose();
+                        }
+                    }
+                }
             }
             let block_info = block_info
                 .into_iter()

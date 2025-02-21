@@ -17,7 +17,7 @@ use sui_types::object::Object;
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
 
-pub type CoinPage = Page<Coin, ObjectID>;
+pub type CoinPage = Page<Coin, String>;
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema, PartialEq, Eq, Clone)]

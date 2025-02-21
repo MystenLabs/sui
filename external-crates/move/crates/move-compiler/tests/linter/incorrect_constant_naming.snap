@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: true
+---
+warning[Lint W04001]: constant should follow naming convention
+  ┌─ tests/linter/incorrect_constant_naming.move:3:5
+  │
+3 │     const Another_BadName: u64 = 42; // Should trigger a warning
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'Another_BadName' should be ALL_CAPS. Or for error constants, use PascalCase
+  │
+  = This warning can be suppressed with '#[allow(lint(constant_naming))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04001]: constant should follow naming convention
+  ┌─ tests/linter/incorrect_constant_naming.move:4:5
+  │
+4 │     const JSON_Max_Size: u64 = 1048576;
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'JSON_Max_Size' should be ALL_CAPS. Or for error constants, use PascalCase
+  │
+  = This warning can be suppressed with '#[allow(lint(constant_naming))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

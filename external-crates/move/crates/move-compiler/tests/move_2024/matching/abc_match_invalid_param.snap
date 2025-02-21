@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03008]: too few type arguments
+  ┌─ tests/move_2024/matching/abc_match_invalid_param.move:9:17
+  │
+9 │     fun t0(abc: ABC): u64 {
+  │                 ^^^ Invalid instantiation of '0x42::m::ABC'. Expected 1 type argument(s) but got 0

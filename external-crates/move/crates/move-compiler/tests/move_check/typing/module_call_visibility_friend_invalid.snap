@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/module_call_visibility_friend_invalid.move:18:49
+   │
+ 5 │     public(friend) fun f_friend() {}
+   │     -------------- This function can only be called from a 'friend' of module '0x2::X'
+   ·
+18 │     public(friend) fun f_friend_call_friend() { X::f_friend() }
+   │                                                 ^^^^^^^^^^^^^ Invalid call to 'public(friend)' visible function '0x2::X::f_friend'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/module_call_visibility_friend_invalid.move:22:52
+   │
+ 4 │     fun f_private() {}
+   │         --------- This function is internal to its module. Only 'public' and 'public(friend)' functions can be called outside of their module
+   ·
+22 │     public(friend) fun f_friend_call_private_1() { X::f_private() }
+   │                                                    ^^^^^^^^^^^^^^ Invalid call to internal function '0x2::X::f_private'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/module_call_visibility_friend_invalid.move:23:52
+   │
+10 │     fun f_private() {}
+   │         --------- This function is internal to its module. Only 'public' and 'public(friend)' functions can be called outside of their module
+   ·
+23 │     public(friend) fun f_friend_call_private_2() { Y::f_private() }
+   │                                                    ^^^^^^^^^^^^^^ Invalid call to internal function '0x2::Y::f_private'

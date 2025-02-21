@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04023]: invalid method call
+  ┌─ tests/move_2024/typing/macro_duck_typing_method_invalid.move:5:9
+  │
+5 │         x.foo()
+  │         ^^^^^^^
+  │         │ │
+  │         │ No local 'use fun' alias was found for 'a::m::X.foo', and no function 'foo' was found in the defining module 'a::m'
+  │         Invalid method call. No known method 'foo' on type 'a::m::X'

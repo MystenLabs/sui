@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/guard_wild_inexhaustive.move:9:12
+  │
+9 │     match (tile) {
+  │            ^^^^ Pattern 'Tile::Unwalkable' not covered
+  │
+  = Match arms with guards are not considered for coverage.

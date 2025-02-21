@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/matching/invalid_head_ctor.move:9:13
+  │
+9 │             Some(_) => (),
+  │             ^^^^ Unexpected name access. Expected a valid 'enum' variant, 'struct', or 'const'.

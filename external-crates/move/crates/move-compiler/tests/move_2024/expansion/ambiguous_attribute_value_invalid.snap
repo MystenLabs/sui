@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E10008]: ambiguous attribute value
+  ┌─ tests/move_2024/expansion/ambiguous_attribute_value_invalid.move:7:18
+  │
+7 │     #[ext(attr = foo)]
+  │                  ^^^ Ambiguous attribute value. It can resolve to both a module member and a module

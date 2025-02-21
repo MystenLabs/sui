@@ -28,13 +28,11 @@ module.exports = {
 		'build',
 		'dist',
 		'coverage',
-		'apps/icons/src',
 		'next-env.d.ts',
 		'doc/book',
 		'external-crates',
 		'storybook-static',
 		'.next',
-		'sdk/docs/public/typedoc',
 	],
 	rules: {
 		'no-case-declarations': 'off',
@@ -74,43 +72,6 @@ module.exports = {
 	},
 	overrides: [
 		{
-			files: ['sdk/**/*'],
-			rules: {
-				'require-extensions/require-extensions': 'error',
-				'require-extensions/require-index': 'error',
-				'@typescript-eslint/consistent-type-imports': ['error'],
-				'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],
-				'import/no-cycle': ['error'],
-			},
-		},
-		{
-			files: ['apps/wallet/**/*'],
-			rules: {
-				'react/display-name': 'off',
-				'import/no-duplicates': ['error'],
-				'@typescript-eslint/consistent-type-imports': [
-					'error',
-					{
-						prefer: 'type-imports',
-						disallowTypeAnnotations: true,
-						fixStyle: 'inline-type-imports',
-					},
-				],
-				'@typescript-eslint/unified-signatures': 'error',
-				'@typescript-eslint/parameter-properties': 'error',
-				'no-console': ['warn'],
-				'@typescript-eslint/no-non-null-assertion': 'off',
-			},
-		},
-		{
-			files: ['apps/wallet/src/**/*.test.*', 'apps/wallet/src/**/*.spec.*'],
-
-			rules: {
-				// Allow any casting in tests:
-				'@typescript-eslint/no-explicit-any': 'off',
-			},
-		},
-		{
 			files: ['dapps/kiosk/**/*'],
 			rules: {
 				'no-unused-vars': 'off', // or "@typescript-eslint/no-unused-vars": "off",
@@ -124,14 +85,6 @@ module.exports = {
 						argsIgnorePattern: '^_',
 					},
 				],
-			},
-		},
-		{
-			files: ['sdk/ledgerjs-hw-app-sui/**/*', 'apps/wallet/**/*'],
-			rules: {
-				// ledgerjs-hw-app-sui and wallet use Buffer
-				'no-restricted-globals': ['off'],
-				'@typescript-eslint/ban-types': ['off'],
 			},
 		},
 		{
@@ -152,13 +105,6 @@ module.exports = {
 			rules: {
 				// Story files have render functions that this rule incorrectly warns on:
 				'react-hooks/rules-of-hooks': 'off',
-			},
-		},
-		{
-			files: ['sdk/create-dapp/templates/**/*'],
-			rules: {
-				'header/header': 'off',
-				'require-extensions/require-extensions': 'off',
 			},
 		},
 	],

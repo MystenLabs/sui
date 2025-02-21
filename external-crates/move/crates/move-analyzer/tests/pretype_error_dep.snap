@@ -1,0 +1,46 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== M1.move ========================================================
+-- test 0 -------------------
+use line: 3, use_ndx: 0
+Use: 'SomeStruct', start: 11, end: 21
+Def: 'SomeStruct', line: 2, def char: 11
+TypeDef: 'SomeStruct', line: 2, char: 11
+On Hover:
+struct PreTypeErrorDep::M1::SomeStruct {
+	some_field: u64
+}
+
+-- test 1 -------------------
+use line: 13, use_ndx: 0
+Use: 'wrong', start: 8, end: 13
+Def: 'wrong', line: 12, def char: 8
+TypeDef: no info
+On Hover:
+fun PreTypeErrorDep::M1::wrong(): address
+
+== M2.move ========================================================
+-- test 0 -------------------
+use line: 5, use_ndx: 0
+Use: 'fun_call', start: 15, end: 23
+Def: 'fun_call', line: 4, def char: 15
+TypeDef: no info
+On Hover:
+public fun PreTypeErrorDep::M2::fun_call(): u64
+
+-- test 1 -------------------
+use line: 9, use_ndx: 1
+Use: 's', start: 29, end: 30
+Def: 's', line: 8, def char: 29
+TypeDef: 'SomeStruct', line: 2, char: 11
+On Hover:
+s: PreTypeErrorDep::M1::SomeStruct
+
+-- test 2 -------------------
+use line: 6, use_ndx: 1
+Use: 'foo', start: 29, end: 32
+Def: 'foo', line: 6, def char: 15
+TypeDef: no info
+On Hover:
+public fun PreTypeErrorDep::M1::foo(): u64

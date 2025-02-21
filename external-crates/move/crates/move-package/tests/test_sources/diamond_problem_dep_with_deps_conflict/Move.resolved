@@ -1,5 +1,0 @@
-When resolving dependencies for package Root, conflicting versions of package E found:
-At A -> E
-	E = { local = "deps_only/E-v3" }
-At C -> E
-	E = { local = "deps_only/E-v1" }

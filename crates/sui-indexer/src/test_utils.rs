@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
-use sui_pg_temp_db::{get_available_port, TempDb};
+use sui_pg_db::temp::{get_available_port, TempDb};
 
 use crate::config::{IngestionConfig, RetentionConfig, SnapshotLagConfig, UploadOptions};
 use crate::database::Connection;

@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_2024/naming/type_hole_valid_location_invalid_usage.move:6:9
+  │
+6 │         0 as S<_>;
+  │         ^    ---- Found: 'a::m::S<_>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │         │     
+  │         Invalid argument to 'as'
+
+error[E04010]: cannot infer type
+  ┌─ tests/move_2024/naming/type_hole_valid_location_invalid_usage.move:6:16
+  │
+6 │         0 as S<_>;
+  │                ^ Could not infer this type. Try adding an annotation

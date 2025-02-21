@@ -207,7 +207,7 @@ impl Foo {
 
 As every integer operation (`+`, `-`, `/`, `*`, etc.) implies edge-cases (e.g. overflows `u64::MAX + 1`, underflows `0u64 -1`, division by zero, etc.),
 we use checked arithmetic instead of directly using math symbols.
-It forces us to think of edge-cases, and handle them explicitely.
+It forces us to think of edge-cases, and handle them explicitly.
 This is a brief and simplified mini guide of the different functions that exist to handle integer arithmetic:
 
 * [checked_](https://doc.rust-lang.org/std/primitive.u32.html#method.checked_add): use this function if you want to handle overflows and underflows as a special edge-case. It returns `None` if an underflow or overflow has happened, and `Some(operation_result)` otherwise.

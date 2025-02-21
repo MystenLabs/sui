@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04024]: invalid usage of immutable variable
+  ┌─ tests/move_2024/typing/let_mut_decl.move:6:9
+  │
+3 │         let x;
+  │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+4 │         x = 0;
+  │         - The variable was initially assigned here
+5 │         move x;
+6 │         x = 1;
+  │         ^ Invalid assignment of immutable variable 'x'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/typing/let_mut_decl.move:14:9
+   │
+11 │         let x;
+   │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+12 │         x = 0;
+   │         - The variable was initially assigned here
+13 │         if (cond) { move x; };
+14 │         x = 1;
+   │         ^ Invalid assignment of immutable variable 'x'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/typing/let_mut_decl.move:21:9
+   │
+19 │         let x;
+   │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+20 │         if (cond) { x = 0; copy x; };
+   │                     - The variable was initially assigned here
+21 │         x = 1;
+   │         ^ Invalid assignment of immutable variable 'x'

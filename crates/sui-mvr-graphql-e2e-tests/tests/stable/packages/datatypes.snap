@@ -1,0 +1,378 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-54:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "coin": {
+          "datatype": {
+            "name": "Coin",
+            "abilities": [
+              "STORE",
+              "KEY"
+            ],
+            "typeParameters": [
+              {
+                "constraints": [],
+                "isPhantom": true
+              }
+            ],
+            "asMoveStruct": {
+              "fields": [
+                {
+                  "name": "id",
+                  "type": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                    "signature": {
+                      "ref": null,
+                      "body": {
+                        "datatype": {
+                          "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                          "module": "object",
+                          "type": "UID",
+                          "typeParameters": []
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "balance",
+                  "type": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<$0>",
+                    "signature": {
+                      "ref": null,
+                      "body": {
+                        "datatype": {
+                          "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                          "module": "balance",
+                          "type": "Balance",
+                          "typeParameters": [
+                            {
+                              "typeParameter": 0
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "tx_context": {
+          "datatype": {
+            "name": "TxContext",
+            "abilities": [
+              "DROP"
+            ],
+            "typeParameters": [],
+            "asMoveStruct": {
+              "fields": [
+                {
+                  "name": "sender",
+                  "type": {
+                    "repr": "address",
+                    "signature": {
+                      "ref": null,
+                      "body": "address"
+                    }
+                  }
+                },
+                {
+                  "name": "tx_hash",
+                  "type": {
+                    "repr": "vector<u8>",
+                    "signature": {
+                      "ref": null,
+                      "body": {
+                        "vector": "u8"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "epoch",
+                  "type": {
+                    "repr": "u64",
+                    "signature": {
+                      "ref": null,
+                      "body": "u64"
+                    }
+                  }
+                },
+                {
+                  "name": "epoch_timestamp_ms",
+                  "type": {
+                    "repr": "u64",
+                    "signature": {
+                      "ref": null,
+                      "body": "u64"
+                    }
+                  }
+                },
+                {
+                  "name": "ids_created",
+                  "type": {
+                    "repr": "u64",
+                    "signature": {
+                      "ref": null,
+                      "body": "u64"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 2, lines 56-66:
+//# publish --upgradeable --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 68:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 70:
+//# view-object 2,0
+2,0::m
+
+task 5, lines 72-96:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "address": "0xd2fc664278ad66cd85ad423b87c88678bb8852a40640978a1dbe794e052cf0df",
+      "asMovePackage": {
+        "module": {
+          "datatypes": {
+            "nodes": [
+              {
+                "name": "IsAStruct",
+                "abilities": [],
+                "typeParameters": []
+              },
+              {
+                "name": "IsAnEnum",
+                "abilities": [
+                  "COPY",
+                  "DROP"
+                ],
+                "typeParameters": []
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 6, lines 98-143:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "address": "0xd2fc664278ad66cd85ad423b87c88678bb8852a40640978a1dbe794e052cf0df",
+      "asMovePackage": {
+        "module": {
+          "datatypes": {
+            "nodes": [
+              {
+                "name": "IsAStruct",
+                "abilities": [],
+                "typeParameters": [],
+                "asMoveEnum": null,
+                "asMoveStruct": {
+                  "fields": [
+                    {
+                      "name": "x",
+                      "type": {
+                        "repr": "u64",
+                        "signature": {
+                          "ref": null,
+                          "body": "u64"
+                        }
+                      }
+                    },
+                    {
+                      "name": "y",
+                      "type": {
+                        "repr": "bool",
+                        "signature": {
+                          "ref": null,
+                          "body": "bool"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "IsAnEnum",
+                "abilities": [
+                  "COPY",
+                  "DROP"
+                ],
+                "typeParameters": [],
+                "asMoveEnum": {
+                  "variants": [
+                    {
+                      "name": "V1",
+                      "fields": [
+                        {
+                          "name": "pos0",
+                          "type": {
+                            "repr": "u64",
+                            "signature": {
+                              "ref": null,
+                              "body": "u64"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "V2",
+                      "fields": [
+                        {
+                          "name": "x",
+                          "type": {
+                            "repr": "bool",
+                            "signature": {
+                              "ref": null,
+                              "body": "bool"
+                            }
+                          }
+                        },
+                        {
+                          "name": "y",
+                          "type": {
+                            "repr": "u64",
+                            "signature": {
+                              "ref": null,
+                              "body": "u64"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "asMoveStruct": null
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 7, lines 145-174:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "datatype": {
+            "name": "IsAnEnum",
+            "abilities": [
+              "COPY",
+              "DROP"
+            ],
+            "typeParameters": [],
+            "asMoveEnum": {
+              "variants": [
+                {
+                  "name": "V1",
+                  "fields": [
+                    {
+                      "name": "pos0",
+                      "type": {
+                        "repr": "u64",
+                        "signature": {
+                          "ref": null,
+                          "body": "u64"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "V2",
+                  "fields": [
+                    {
+                      "name": "x",
+                      "type": {
+                        "repr": "bool",
+                        "signature": {
+                          "ref": null,
+                          "body": "bool"
+                        }
+                      }
+                    },
+                    {
+                      "name": "y",
+                      "type": {
+                        "repr": "u64",
+                        "signature": {
+                          "ref": null,
+                          "body": "u64"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 8, lines 176-206:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "datatype": {
+            "name": "IsAStruct",
+            "abilities": [],
+            "typeParameters": [],
+            "asMoveEnum": null
+          }
+        }
+      }
+    }
+  }
+}

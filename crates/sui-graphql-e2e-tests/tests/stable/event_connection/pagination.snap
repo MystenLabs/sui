@@ -1,0 +1,269 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-22:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4818400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 24:
+//# run Test::M1::emit_1 --sender A --args 0
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 26:
+//# run Test::M1::emit_2 --sender A --args 1
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 28:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 30-56:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MiwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
+              },
+              "json": {
+                "new_value": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MSwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
+              },
+              "json": {
+                "new_value": "2"
+              },
+              "bcs": "AgAAAAAAAAA="
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 6, lines 58-84:
+//# run-graphql --cursors {"tx":2,"e":0,"c":1}
+Response: {
+  "data": {
+    "events": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MSwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
+              },
+              "json": {
+                "new_value": "2"
+              },
+              "bcs": "AgAAAAAAAAA="
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 7, lines 86-113:
+//# run-graphql --cursors {"tx":3,"e":1,"c":1}
+Response: {
+  "data": {
+    "events": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MiwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
+              },
+              "json": {
+                "new_value": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 8, lines 115-141:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MSwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
+              },
+              "json": {
+                "new_value": "2"
+              },
+              "bcs": "AgAAAAAAAAA="
+            }
+          }
+        }
+      ]
+    }
+  }
+}

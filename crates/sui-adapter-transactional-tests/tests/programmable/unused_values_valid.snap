@@ -1,0 +1,48 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-30:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7242800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 31-35:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::r();
+//> TransferObjects([Result(0)], Input(0))
+// unused inputs and unused objects and unused results of various kinds
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 36-41:
+//# programmable --sender A --inputs object(2,0) 0 vector[@0,@0]
+//> 0: test::m1::droppable();
+//> 1: test::m1::droppable();
+//> 2: test::m1::cup<test::m1::Droppable>(Result(0));
+// unconsumed copyable value, but most recent usage was by-value
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+
+task 4, lines 42-49:
+//# programmable --sender A
+//> 0: test::m1::copyable();
+//> 1: test::m1::borrow(Result(0));
+//> 2: test::m1::copy_(Result(0));
+//> 3: test::m1::borrow(Result(0));
+//> 4: test::m1::copy_(Result(0));
+// unused pure that was cast
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 50-51:
+//# programmable --sender A --inputs 0
+//> test::m1::num_mut(Input(0))
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

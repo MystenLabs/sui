@@ -1,0 +1,8 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 1-6:
+//# print-bytecode
+Error: ParserError: Invalid Token: expected Tok::NameValue

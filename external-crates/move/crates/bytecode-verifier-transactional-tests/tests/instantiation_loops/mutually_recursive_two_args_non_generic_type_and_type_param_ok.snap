@@ -1,0 +1,5 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/instantiation_loops/mutually_recursive_two_args_non_generic_type_and_type_param_ok.mvir
+---
+processed 1 task

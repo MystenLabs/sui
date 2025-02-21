@@ -14,7 +14,7 @@ anyhow.workspace = true
 bytes.workspace = true
 clap.workspace = true
 futures.workspace = true
-url.workspace = true
+url = {workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 serde.workspace = true
@@ -26,3 +26,4 @@ reqwest.workspace = true
 mysten-metrics.workspace = true
 prometheus.workspace = true
 telemetry-subscribers.workspace = true
+rand = "0.8"

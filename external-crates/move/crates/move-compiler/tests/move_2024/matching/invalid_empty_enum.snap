@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02022]: invalid 'enum' declaration
+  ┌─ tests/move_2024/matching/invalid_empty_enum.move:2:5
+  │  
+2 │ ╭     public enum Empty {
+3 │ │ 
+4 │ │     }
+  │ ╰─────^ An 'enum' must define at least one variant

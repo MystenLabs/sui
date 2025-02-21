@@ -1,0 +1,32 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09014]: unused mutable reference '&mut' parameter
+  ┌─ tests/move_check/borrows/unused_mut_ref_branches.move:3:51
+  │
+3 │     public(friend) fun both_unused(cond: bool, x: &mut u64) {
+  │                                                -  ^^^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+  │                                                │   
+  │                                                For parameters, this can be silenced by prefixing the name with an underscore, e.g. '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_mut_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09013]: unused mutable reference '&mut'
+  ┌─ tests/move_check/borrows/unused_mut_ref_branches.move:5:31
+  │
+5 │         if (cond) copy x else &mut i;
+  │                               ^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+  │
+  = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09013]: unused mutable reference '&mut'
+   ┌─ tests/move_check/borrows/unused_mut_ref_branches.move:11:31
+   │
+11 │         if (cond) copy x else &mut i;
+   │                               ^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+   │
+   = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

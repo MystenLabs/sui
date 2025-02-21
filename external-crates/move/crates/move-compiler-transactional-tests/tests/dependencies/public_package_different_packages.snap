@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 2, lines 11-17:
+//# publish --linkage 0x42=>0x43
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Y'. Got VMError: {
+    major_status: MISSING_DEPENDENCY,
+    sub_status: None,
+    location: undefined,
+    indices: [],
+    offsets: [],
+}

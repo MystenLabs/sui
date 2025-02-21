@@ -1,0 +1,52 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03022]: invalid usage position
+  ┌─ tests/move_2024/parser/positional_struct_explicit_type_arg_assign.move:5:9
+  │
+5 │         Foo <u64>(_) = Foo(0);
+  │         ^^^ Expected a local or constant, but found struct 'Foo' in current scope
+  │
+  = Structs with positional arguments must be written as 'Foo<T>( ... )'
+
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_2024/parser/positional_struct_explicit_type_arg_assign.move:5:9
+  │
+5 │         Foo <u64>(_) = Foo(0);
+  │         ^^^^^^^^
+  │         │
+  │         Invalid argument to '>'
+  │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/parser/positional_struct_explicit_type_arg_assign.move:5:14
+  │
+5 │         Foo <u64>(_) = Foo(0);
+  │              ^^^ Unbound variable 'u64'
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/parser/positional_struct_explicit_type_arg_assign.move:5:19
+  │
+5 │         Foo <u64>(_) = Foo(0);
+  │                   ^ Unbound variable '_'
+
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_2024/parser/positional_struct_explicit_type_arg_assign.move:5:19
+  │
+5 │         Foo <u64>(_) = Foo(0);
+  │         --------  ^ Invalid argument to '>'
+  │         │          
+  │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/positional_struct_explicit_type_arg_assign.move:5:22
+  │
+5 │         Foo <u64>(_) = Foo(0);
+  │                      ^
+  │                      │
+  │                      Unexpected '='
+  │                      Expected ';'

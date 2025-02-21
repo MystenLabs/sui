@@ -36,7 +36,7 @@ mod checked {
     use sui_types::storage::BackingStore;
     use sui_types::storage::WriteKind;
     #[cfg(msim)]
-    use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
+    use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result_legacy;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
     use sui_types::transaction::CheckedInputObjects;
     use sui_types::transaction::{
@@ -657,7 +657,7 @@ mod checked {
         );
 
         #[cfg(msim)]
-        let result = maybe_modify_result(result, change_epoch.epoch);
+        let result = maybe_modify_result_legacy(result, change_epoch.epoch);
 
         if result.is_err() {
             tracing::error!(

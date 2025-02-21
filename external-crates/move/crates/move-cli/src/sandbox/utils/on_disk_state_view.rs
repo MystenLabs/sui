@@ -368,7 +368,7 @@ impl OnDiskStateView {
             };
 
             // Process each module and add its dependencies to the to_process list
-            for (_, module) in &pkg.modules {
+            for module in pkg.modules.values() {
                 let module = CompiledModule::deserialize_with_defaults(module).unwrap();
                 let deps = module
                     .immediate_dependencies()

@@ -877,6 +877,9 @@ active_validator_addresses
 extract_coin_balance
 	fun
 	0x3::sui_system_state_inner
+store_execution_time_estimates
+	public(package) fun
+	0x3::sui_system_state_inner
 SuiSystemState
 	public struct
 	0x3::sui_system
@@ -1013,6 +1016,9 @@ load_inner_maybe_upgrade
 	fun
 	0x3::sui_system
 validator_voting_powers
+	fun
+	0x3::sui_system
+store_execution_time_estimates
 	fun
 	0x3::sui_system
 GenesisValidatorMetadata
@@ -1505,6 +1511,9 @@ peel_vec_u128
 	public fun
 	0x2::bcs
 peel_vec_u256
+	public fun
+	0x2::bcs
+peel_enum_tag
 	public fun
 	0x2::bcs
 peel_option_address
@@ -2788,6 +2797,45 @@ sqrt_u128
 divide_and_round_up
 	public fun
 	0x2::math
+PCREntry
+	public struct
+	0x2::nitro_attestation
+NitroAttestationDocument
+	public struct
+	0x2::nitro_attestation
+load_nitro_attestation
+	entry fun
+	0x2::nitro_attestation
+module_id
+	public fun
+	0x2::nitro_attestation
+timestamp
+	public fun
+	0x2::nitro_attestation
+digest
+	public fun
+	0x2::nitro_attestation
+pcrs
+	public fun
+	0x2::nitro_attestation
+public_key
+	public fun
+	0x2::nitro_attestation
+user_data
+	public fun
+	0x2::nitro_attestation
+nonce
+	public fun
+	0x2::nitro_attestation
+index
+	public fun
+	0x2::nitro_attestation
+value
+	public fun
+	0x2::nitro_attestation
+load_nitro_attestation_internal
+	fun
+	0x2::nitro_attestation
 ObjectBag
 	public struct
 	0x2::object_bag

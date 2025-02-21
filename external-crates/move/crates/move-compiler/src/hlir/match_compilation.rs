@@ -71,7 +71,8 @@ pub(super) fn compile_match(
     let match_tree = build_match_tree(context, VecDeque::from([match_subject]), pattern_matrix);
     debug_print!(
         context.debug.match_translation,
-        ("match tree" => match_tree; sdbg)
+        ("match tree" => match_tree; sdbg),
+        ("result type" => result_type)
     );
     let mut resolution_context = ResolutionContext {
         hlir_context: context,
@@ -419,6 +420,7 @@ fn match_tree_to_exp(
                 if let Some((unpack_fields, next)) = arms.remove(&v) {
                     let rest_result = match_tree_to_exp(context, init_subject, *next);
                     let unpack_block = make_match_variant_unpack(
+                        context,
                         m,
                         e,
                         v,
@@ -436,7 +438,7 @@ fn match_tree_to_exp(
             }
             let out_exp = T::UnannotatedExp_::VariantMatch(make_var_ref(subject), (m, e), blocks);
             let body_exp = T::exp(context.output_type(), sp(context.arms_loc(), out_exp));
-            make_copy_bindings(bindings, body_exp)
+            make_copy_bindings(context, bindings, body_exp)
         }
         MatchTree::StructUnpack {
             subject,
@@ -460,6 +462,7 @@ fn match_tree_to_exp(
                 StructUnpack::Unpack(unpack_fields, next) => {
                     let rest_result = match_tree_to_exp(context, init_subject, *next);
                     make_match_struct_unpack(
+                        context,
                         m,
                         s,
                         tyargs.clone(),
@@ -469,7 +472,7 @@ fn match_tree_to_exp(
                     )
                 }
             };
-            make_copy_bindings(bindings, unpack_exp)
+            make_copy_bindings(context, bindings, unpack_exp)
         }
         MatchTree::LiteralSwitch {
             subject,
@@ -497,11 +500,11 @@ fn match_tree_to_exp(
 
             let true_arm = match_tree_to_exp(context, init_subject, *true_arm);
             let false_arm = match_tree_to_exp(context, init_subject, *false_arm);
-            let result_ty = context.output_type().clone();
 
             make_copy_bindings(
+                context,
                 bindings,
-                make_if_else(lit_subject, true_arm, false_arm, result_ty),
+                make_if_else_arm(context, lit_subject, true_arm, false_arm),
             )
         }
         MatchTree::LiteralSwitch {
@@ -526,10 +529,9 @@ fn match_tree_to_exp(
             for (key, next_tree) in entries.into_iter().rev() {
                 let match_arm = match_tree_to_exp(context, init_subject, *next_tree);
                 let test_exp = make_lit_test(lit_subject.clone(), key);
-                let result_ty = context.output_type().clone();
-                out_exp = make_if_else(test_exp, match_arm, out_exp, result_ty);
+                out_exp = make_if_else_arm(context, test_exp, match_arm, out_exp);
             }
-            make_copy_bindings(bindings, out_exp)
+            make_copy_bindings(context, bindings, out_exp)
         }
     }
 }
@@ -549,7 +551,8 @@ fn make_leaf(
             last.guard.unwrap().exp.loc,
             "Must have a non-guarded leaf"
         );
-        return make_copy_bindings(last.bindings, make_arm(context, subject.clone(), last.arm));
+        let arm = make_arm(context, subject.clone(), last.arm);
+        return make_copy_bindings(context, last.bindings, arm);
     }
 
     let last = leaf.pop().unwrap();
@@ -559,9 +562,8 @@ fn make_leaf(
         last.guard.unwrap().exp.loc,
         "Must have a non-guarded leaf"
     );
-    let mut out_exp =
-        make_copy_bindings(last.bindings, make_arm(context, subject.clone(), last.arm));
-    let out_ty = out_exp.ty.clone();
+    let arm = make_arm(context, subject.clone(), last.arm);
+    let mut out_exp = make_copy_bindings(context, last.bindings, arm);
     while let Some(arm) = leaf.pop() {
         ice_assert!(
             context.hlir_context.reporter,
@@ -569,7 +571,7 @@ fn make_leaf(
             arm.loc,
             "Expected a guard"
         );
-        out_exp = make_guard_exp(context, subject, arm, out_exp, out_ty.clone());
+        out_exp = make_guard_exp(context, subject, arm, out_exp);
     }
     out_exp
 }
@@ -579,7 +581,6 @@ fn make_guard_exp(
     subject: &FringeEntry,
     arm: ArmResult,
     cur_exp: T::Exp,
-    result_ty: Type,
 ) -> T::Exp {
     let ArmResult {
         loc: _,
@@ -593,8 +594,8 @@ fn make_guard_exp(
         .map(|(x, (_mut, entry))| (x, (Mutability::Imm, entry)))
         .collect();
     let guard_arm = make_arm(context, subject.clone(), arm);
-    let body = make_if_else(*guard.unwrap(), guard_arm, cur_exp, result_ty);
-    make_copy_bindings(bindings, body)
+    let body = make_if_else_arm(context, *guard.unwrap(), guard_arm, cur_exp);
+    make_copy_bindings(context, bindings, body)
 }
 
 fn make_arm(context: &mut ResolutionContext, subject: FringeEntry, arm: Arm) -> T::Exp {
@@ -715,11 +716,10 @@ fn make_arm_unpack(
     }
 
     let nloc = next.exp.loc;
-    let out_type = next.ty.clone();
     seq.push_back(sp(nloc, T::SequenceItem_::Seq(Box::new(next))));
 
     let body = T::UnannotatedExp_::Block((UseFuns::new(0), seq));
-    T::exp(out_type, sp(ploc, body))
+    T::exp(context.output_type(), sp(ploc, body))
 }
 
 fn match_pattern_has_binders(pat: &T::MatchPattern, rhs_binders: &BTreeSet<Var>) -> bool {
@@ -937,6 +937,7 @@ fn make_var_ref(subject: FringeEntry) -> Box<T::Exp> {
 
 // Performs an unpack for the purpose of matching, where we are matching against an imm. ref.
 fn make_match_variant_unpack(
+    context: &ResolutionContext,
     mident: ModuleIdent,
     enum_: DatatypeName,
     variant: VariantName,
@@ -970,16 +971,16 @@ fn make_match_variant_unpack(
     let binder = T::SequenceItem_::Bind(sp(rhs_loc, vec![unpack_lvalue]), vec![Some(ty)], rhs);
     seq.push_back(sp(rhs_loc, binder));
 
-    let result_type = next.ty.clone();
     let eloc = next.exp.loc;
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
 
     let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
-    T::exp(result_type, exp_value)
+    T::exp(context.output_type(), exp_value)
 }
 
 // Performs a struct unpack for the purpose of matching, where we are matching against an imm. ref.
 fn make_match_struct_unpack(
+    context: &ResolutionContext,
     mident: ModuleIdent,
     struct_: DatatypeName,
     tyargs: Vec<Type>,
@@ -1012,12 +1013,11 @@ fn make_match_struct_unpack(
     let binder = T::SequenceItem_::Bind(sp(rhs_loc, vec![unpack_lvalue]), vec![Some(ty)], rhs);
     seq.push_back(sp(rhs_loc, binder));
 
-    let result_type = next.ty.clone();
     let eloc = next.exp.loc;
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
 
     let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
-    T::exp(result_type, exp_value)
+    T::exp(context.output_type(), exp_value)
 }
 
 fn make_arm_variant_unpack_stmt(
@@ -1111,11 +1111,16 @@ fn make_match_lit(subject: FringeEntry) -> T::Exp {
     }
 }
 
-fn make_copy_bindings(bindings: PatBindings, next: T::Exp) -> T::Exp {
-    make_bindings(bindings, next, true)
+fn make_copy_bindings(context: &ResolutionContext, bindings: PatBindings, next: T::Exp) -> T::Exp {
+    make_bindings(context, bindings, next, true)
 }
 
-fn make_bindings(bindings: PatBindings, next: T::Exp, as_copy: bool) -> T::Exp {
+fn make_bindings(
+    context: &ResolutionContext,
+    bindings: PatBindings,
+    next: T::Exp,
+    as_copy: bool,
+) -> T::Exp {
     let eloc = next.exp.loc;
     let mut seq = VecDeque::new();
     for (lhs, (mut_, rhs)) in bindings {
@@ -1126,10 +1131,9 @@ fn make_bindings(bindings: PatBindings, next: T::Exp, as_copy: bool) -> T::Exp {
         };
         seq.push_back(binding);
     }
-    let result_type = next.ty.clone();
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
     let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
-    T::exp(result_type, exp_value)
+    T::exp(context.output_type(), exp_value)
 }
 
 fn make_lvalue(lhs: Var, mut_: Mutability, ty: Type) -> T::LValue {
@@ -1174,11 +1178,16 @@ fn make_lit_test(lit_exp: T::Exp, value: Value) -> T::Exp {
     make_eq_test(loc, lit_exp, value_exp)
 }
 
-fn make_if_else(test: T::Exp, conseq: T::Exp, alt: T::Exp, result_ty: Type) -> T::Exp {
+fn make_if_else_arm(
+    context: &ResolutionContext,
+    test: T::Exp,
+    conseq: T::Exp,
+    alt: T::Exp,
+) -> T::Exp {
     // FIXME: this span is woefully wrong
     let loc = test.exp.loc;
     T::exp(
-        result_ty,
+        context.output_type(),
         sp(
             loc,
             T::UnannotatedExp_::IfElse(Box::new(test), Box::new(conseq), Some(Box::new(alt))),

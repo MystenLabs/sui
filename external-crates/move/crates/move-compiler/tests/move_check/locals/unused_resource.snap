@@ -1,0 +1,156 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/locals/unused_resource.move:5:13
+  │
+5 │         let r = R{};
+  │             ^ Unused local variable 'r'. Consider removing or prefixing with an underscore: '_r'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06001]: unused value without 'drop'
+  ┌─ tests/move_check/locals/unused_resource.move:5:20
+  │
+2 │     struct R {}
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+5 │         let r = R{};
+  │             -   ---^ Invalid return
+  │             │   │   
+  │             │   The type '0x8675309::M::R' does not have the ability 'drop'
+  │             The local variable 'r' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/unused_resource.move:10:21
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+10 │         let _r = R{};
+   │             --   ---^ Invalid return
+   │             │    │   
+   │             │    The type '0x8675309::M::R' does not have the ability 'drop'
+   │             The local variable '_r' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_check/locals/unused_resource.move:15:21
+   │
+15 │         if (cond) { r = R{}; };
+   │                     ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/unused_resource.move:15:31
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+15 │         if (cond) { r = R{}; };
+   │                     -   ---   ^ Invalid return
+   │                     │   │      
+   │                     │   The type '0x8675309::M::R' does not have the ability 'drop'
+   │                     The local variable 'r' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_check/locals/unused_resource.move:20:29
+   │
+20 │         if (cond) {} else { r = R{}; };
+   │                             ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/unused_resource.move:20:39
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+20 │         if (cond) {} else { r = R{}; };
+   │                             -   ---   ^ Invalid return
+   │                             │   │      
+   │                             │   The type '0x8675309::M::R' does not have the ability 'drop'
+   │                             The local variable 'r' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_check/locals/unused_resource.move:25:24
+   │
+25 │         while (cond) { r = R{} };
+   │                        ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/unused_resource.move:25:24
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+25 │         while (cond) { r = R{} };
+   │                        ^   --- The type '0x8675309::M::R' does not have the ability 'drop'
+   │                        │    
+   │                        Invalid assignment to variable 'r'
+   │                        The variable might contain a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/unused_resource.move:25:33
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+25 │         while (cond) { r = R{} };
+   │                        -   ---  ^ Invalid return
+   │                        │   │     
+   │                        │   The type '0x8675309::M::R' does not have the ability 'drop'
+   │                        The local variable 'r' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/locals/unused_resource.move:29:20
+   │
+29 │         loop { let r = R{}; }
+   │                    ^ Unused local variable 'r'. Consider removing or prefixing with an underscore: '_r'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/unused_resource.move:29:20
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+29 │         loop { let r = R{}; }
+   │                    ^   --- The type '0x8675309::M::R' does not have the ability 'drop'
+   │                    │    
+   │                    Invalid assignment to variable 'r'
+   │                    The variable might contain a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/unused_resource.move:33:21
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+33 │         let _ = &R{};
+   │                  ---^ Invalid return
+   │                  │   
+   │                  The value is created but not used. The value does not have the 'drop' ability and must be consumed before the function returns
+   │                  The type '0x8675309::M::R' does not have the ability 'drop'
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/unused_resource.move:36:22
+   │  
+ 2 │       struct R {}
+   │              - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·  
+36 │       fun t7<T>(_x: R) {
+   │                 --  - The type '0x8675309::M::R' does not have the ability 'drop'
+   │                 │    
+   │                 The parameter '_x' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+   │ ╭──────────────────────^
+37 │ │     }
+   │ ╰─────^ Invalid return

@@ -1,0 +1,98 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:1:1
+  │  
+1 │ ╭ module 0x42::m;
+2 │ │ 
+3 │ │ public struct Action<T> { inner: T }
+4 │ │ 
+5 │ │ public fun make_action_ref<T>(action: &mut Action<T>): &mut T {
+6 │ │     &mut action.inner.bar
+7 │ │ }
+  │ ╰─^ Possible in-scope names
+  │  
+  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:3:34
+  │
+3 │ public struct Action<T> { inner: T }
+  │                                  ^ Possible in-scope names
+  │
+  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 'T'
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:5:44
+  │
+5 │ public fun make_action_ref<T>(action: &mut Action<T>): &mut T {
+  │                                            ^^^^^^ Possible in-scope names
+  │
+  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 'T'
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:5:51
+  │
+5 │ public fun make_action_ref<T>(action: &mut Action<T>): &mut T {
+  │                                                   ^ Possible in-scope names
+  │
+  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 'T'
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:5:61
+  │
+5 │ public fun make_action_ref<T>(action: &mut Action<T>): &mut T {
+  │                                                             ^ Possible in-scope names
+  │
+  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 'T'
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:6:10
+  │
+6 │     &mut action.inner.bar
+  │          ^^^^^^ Possible in-scope names
+  │
+  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 'T'
+
+error[E04009]: expected specific type
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:6:10
+  │
+5 │ public fun make_action_ref<T>(action: &mut Action<T>): &mut T {
+  │                                                   - Expected a struct type in the current module but got: 'T'
+6 │     &mut action.inner.bar
+  │          ^^^^^^^^^^^^^^^^ Unbound field 'bar'
+
+note[I15001]: IDE dot autocomplete
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:6:16
+  │
+6 │     &mut action.inner.bar
+  │                ^ Possible dot names: '0x42::m::make_action_ref' or 'inner'
+
+note[I15001]: IDE dot autocomplete
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:6:17
+  │
+6 │     &mut action.inner.bar
+  │                 ^^^^^ Possible dot names: '0x42::m::make_action_ref' or 'inner'

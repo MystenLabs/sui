@@ -1,0 +1,66 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-17:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 4544800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 19-21:
+//# programmable --sender A --inputs @A
+//> 0: P0::M::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 23-24:
+//# programmable --sender A --inputs object(2,0) @B
+//> 0: TransferObjects([Input(0)], Input(1))
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+
+task 4, line 26:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 28-32:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "digest": "CrVRtSGQYfefzNWfU6a6ZHmZzU2WMoCKn7nqHw4X2QBp",
+    "objectChanges": [
+      {
+        "type": "transferred",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "recipient": {
+          "AddressOwner": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+        },
+        "objectType": "0x1a5a31900509d00c257cef365edcbba723be53e2083ccbfda4e0a2ea0b284203::M::O",
+        "objectId": "0x00d176adb885597c7871d9e9ca7442c533dec70083b6275c03374be06b9b503f",
+        "version": "3",
+        "digest": "JAK8Ws8AWQcHjd8xsfBRXe9FKXVnp6Ei56CtTjqCjiah"
+      },
+      {
+        "type": "mutated",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+        "objectId": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+        "version": "3",
+        "previousVersion": "2",
+        "digest": "GNoT9p5mUDUpCiAs4enq3HKjFZE8DjnKfC5xZyFZwgdR"
+      }
+    ]
+  }
+}

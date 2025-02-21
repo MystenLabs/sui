@@ -1,6 +1,6 @@
 ---
 title: Move Concepts
-description: Move is an open source language for writing safe packages to manipulate on-chain objects
+description: Move is an open-source language for writing safe packages to manipulate on-chain objects
 ---
 
 {@include: ../snippets/move-summary.mdx}
@@ -9,20 +9,13 @@ You can use Move to define, create, and manage programmable Sui objects represen
 
 ## Move on Sui
 
-
-Move on Sui contains some important differences from Move on other blockchains. Sui takes advantage of Move's security and flexibility and enhances it with the features described in the following sections to vastly improve throughput, reduce delays in finality, and make Move programming more approachable. For full details, see the [Sui Smart Contracts Platform](/doc/sui.pdf) white paper.
-
+Move on Sui contains some important differences from Move on other blockchains. Sui takes advantage of Move's security and flexibility and enhances it with the features to vastly improve throughput, reduce delays in finality, and make Move programming more approachable. For full details, see the [Sui Smart Contracts Platform](/doc/sui.pdf) whitepaper.
 
 :::tip
 
 Where the Sui documentation refers to the Move language, the content is documenting the specific Move implementation on the Sui blockchain. If relevant, the documentation expressly refers to the original use case for the Move language as Move on Diem.
 
 :::
-
-In general, Move on Diem code written for other systems works in Sui with these exceptions:
-
-- [Global storage operators](https://move-language.github.io/move/global-storage-operators.html)
-- [Key abilities](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md)
 
 ## Key differences {#differences}
 
@@ -40,13 +33,15 @@ In Move on Diem, global storage is part of the programming model. Resources and 
 
 This approach introduces a scaling issue, as it is not possible to statically determine which transactions are contending over the same resource and which are not.  This is similar to the scaling issues faced by other blockchains where smart contracts typically store account information in large, internal mappings, which limit throughput.
 
-Move on Sui addresses the scaling issue by not having global storage, or its related operations. When objects (in contrast to resources) and packages (sets of modules) are stored on Sui, they are each given unique identifiers.  All a transaction's inputs are explicitly specified up-front using these unique identifiers, to allow the chain to schedule transactions with non-overlapping inputs in parallel.
+Move on Sui addresses the scaling issue by not having global storage, or its related operations. When objects (in contrast to resources) and packages (sets of modules) are stored on Sui, they are each given unique identifiers. All a transaction's inputs are explicitly specified up-front using these unique identifiers, to allow the chain to schedule transactions with non-overlapping inputs in parallel.
 
 ### Addresses represent Object IDs {#object-ids}
 
 In Move on Diem, there is a 16-byte `address` type used to represent account addresses in global storage. A 16 byte address is sufficient for the Move on Diem security model.
 
-Sui doesn't have global storage, so `address` is re-purposed as a 32-byte identifier used for both objects and accounts. Each transaction is signed by an account (the "sender") that is accessible from the transaction context, and each object stores its `address` wrapped in its `id: UID` field. (Refer to [object.move](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object.move) in the Sui framework for details).
+Sui doesn't have global storage, so `address` is re-purposed as a 32-byte identifier used for both objects and accounts. Each transaction is signed by an account (the "sender") that is accessible from the transaction context, and each object stores its `address` wrapped in its `id: UID` field. 
+
+See [Address](https://move-book.com/reference/primitive-types/address.html) in The Move Book for an overview on addresses and refer to <a href="/references/framework/sui-framework/object" data-noBrokenLinkCheck='true'>object.move</a> in the Sui Framework for implementation details.
 
 ### Object with key ability, globally unique IDs {#global-unique}
 
@@ -56,31 +51,17 @@ On Sui, the `key` ability indicates that a struct is an object type and comes wi
 
 ### Module initializers {#module-initializers}
 
-As described in [Object-centric global storage](#global-storage), you publish Move modules into Sui storage. The Sui runtime executes a special [initializer function](./sui-move-concepts/init.mdx) you optionally define in a module only once at the time of module publication to pre-initialize module-specific data (for example, creating singleton objects).
+As described in [Object-centric global storage](#global-storage), you publish Move modules into Sui storage. The Sui runtime executes a special initializer function you optionally define in a module only once at the time of module publication to pre-initialize module-specific data (for example, creating singleton objects). See [Module Initializer](https://move-book.com/programmability/module-initializer.html) in The Move Book for more information.
 
 ### Entry points take object references as input {#entry-points}
 
 You can call public functions from Sui transactions (called programmable transaction blocks). These functions can take objects by value, by immutable reference, or by mutable reference. If taken by value, you can destroy the object, wrap it (in another object), or transfer it (to a Sui ID specified by an address). If taken by mutable reference, the modified version of the object saves to storage without any change in ownership. In any case, the Sui network authenticates the object and declares it's usage as a part of the transaction.
 
-In addition to calling public functions, you can call a function that is marked [entry](./sui-move-concepts/entry-functions.mdx) even if it is private as long as other non-`entry` functions have not used its inputs.
+In addition to calling public functions, you can call a function that is marked `entry`, even if it is private, as long as other non-`entry` functions have not used its inputs. See [entry modifier](https://move-book.com/reference/functions.html#entry-modifier) in The Move Reference for more information.
 
+## Related links
 
-## Explore concepts
+To learn more about using Move on Sui, see the following sites:
 
-Some of the features of Move are defined in this section using commented code examples.
-
-### Init
-
-The `init` function is a special function that executes only once - when you publish the associated module. See [Init](./sui-move-concepts/init.mdx) for details.
-
-### Entry functions
-
-The `entry` modifier for functions enables safe and direct invocation of module functions, much like scripts. See [Entry](./sui-move-concepts/entry-functions.mdx) for details.
-
-### Strings
-
-Move does not have a native type for strings, but it has a useful wrapper. See [Strings](./sui-move-concepts/strings.mdx) for examples.
-
-### One-time witness
-
-A one-time witness (OTW) is a special instance of a type created in the module initializer and guaranteed to be unique with only one instance. See [One-Time Witness](./sui-move-concepts/one-time-witness.mdx) for an example.
+- [The Move Book](https://move-book.com): A comprehensive guide to the Move programming language on the Sui blockchain.
+- [The Move Reference](https://move-book.com/reference): Language reference for Move on Sui.

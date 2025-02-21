@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04016]: too few arguments
+  ┌─ tests/move_check/expansion/unpack_assign_block_single_expr.move:4:9
+  │
+4 │         S { 0 } = S { f: 0 };
+  │         ^^^^^^^ Missing assignment for field 'f' in '0x42::M::S'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/unpack_assign_block_single_expr.move:4:13
+  │
+4 │         S { 0 } = S { f: 0 };
+  │             ^ Unexpected '<Number>'. Expected a field expression

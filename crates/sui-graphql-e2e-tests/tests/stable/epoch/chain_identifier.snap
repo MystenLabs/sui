@@ -1,0 +1,19 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+C: object(0,0)
+
+task 1, line 7:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, lines 9-12:
+//# run-graphql
+Response: {
+  "data": {
+    "chainIdentifier": "3989ac57"
+  }
+}

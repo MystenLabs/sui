@@ -1,0 +1,43 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
+Running Move unit tests
+[ FAIL    ] 0x42::m::t0
+[ FAIL    ] 0x42::m::t1
+[ FAIL    ] 0x42::m::t2
+
+Test failures:
+
+Failures in 0x42::m:
+
+┌── t0 ──────
+│ Test did not error as expected
+└──────────────────
+
+
+┌── t1 ──────
+│ error[E11001]: test failure
+│    ┌─ out_of_gas.move:10:5
+│    │
+│  9 │ fun t1() {
+│    │     -- In this function in 0x42::m
+│ 10 │     loop {}
+│    │     ^^^^^^^ Test did not error as expected. Expected test to give an arithmetic error originating in the module 0x42::m but instead it ran out of gas in the module 0x42::m rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── t2 ──────
+│ error[E11001]: test failure
+│    ┌─ out_of_gas.move:16:7
+│    │
+│ 15 │ fun t2() {
+│    │     -- In this function in 0x42::m
+│ 16 │     0 - 1;
+│    │       ^ Test did not error as expected. Expected test to run out of gas in the module 0x42::m but instead it gave an arithmetic error originating in the module 0x42::m rooted here
+│ 
+│ 
+└──────────────────
+
+Test result: FAILED. Total tests: 3; passed: 0; failed: 3

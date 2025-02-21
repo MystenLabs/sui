@@ -1,0 +1,83 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/ide_mode/use_incomplete.move:5:9
+  │
+5 │         let _tmp = 42; // reset parser to see if the next line compiles
+  │         ^^^
+  │         │
+  │         Unexpected 'let'
+  │         Expected an identifier
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/use_incomplete.move:11:9
+   │
+11 │         let _tmp = 42; // reset parser to see if the next line compiles
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected ',' or '}'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/use_incomplete.move:11:22
+   │
+10 │         use a::m2::{foo
+   │                    - To match this '{'
+11 │         let _tmp = 42; // reset parser to see if the next line compiles
+   │                      ^ Expected '}'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/use_incomplete.move:17:9
+   │
+17 │         let _tmp = 42; // reset parser to see if the next lines compile
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected ',' or '}'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/use_incomplete.move:17:22
+   │
+16 │         use a::m2::{foo, bar
+   │                    - To match this '{'
+17 │         let _tmp = 42; // reset parser to see if the next lines compile
+   │                      ^ Expected '}'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/use_incomplete.move:24:9
+   │
+24 │         let _tmp = 42; // reset parser to see if the next lines compile
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected ',' or '}'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/use_incomplete.move:24:22
+   │
+23 │         use a::{m2::{foo, bar
+   │                     - To match this '{'
+24 │         let _tmp = 42; // reset parser to see if the next lines compile
+   │                      ^ Expected '}'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/use_incomplete.move:32:9
+   │
+32 │         let _tmp = 42; // reset parser to see if the next lines compile
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected ',' or '}'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/use_incomplete.move:32:22
+   │
+31 │         use a::{m2::{foo, bar}, m3
+   │                - To match this '{'
+32 │         let _tmp = 42; // reset parser to see if the next lines compile
+   │                      ^ Expected '}'

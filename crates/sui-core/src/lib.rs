@@ -9,6 +9,7 @@ pub mod authority_aggregator;
 pub mod authority_client;
 pub mod authority_server;
 pub mod checkpoints;
+pub mod congestion_tracker;
 pub mod consensus_adapter;
 pub mod consensus_handler;
 pub mod consensus_manager;
@@ -19,6 +20,7 @@ pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod execution_cache;
 mod execution_driver;
+mod fallback_fetch;
 pub mod jsonrpc_index;
 pub mod metrics;
 pub mod mock_consensus;
@@ -73,6 +75,9 @@ mod transfer_to_object_tests;
 #[cfg(test)]
 #[path = "unit_tests/type_param_tests.rs"]
 mod type_param_tests;
+#[cfg(test)]
+#[path = "unit_tests/unit_test_utils.rs"]
+mod unit_test_utils;
 
 pub mod signature_verifier;
 

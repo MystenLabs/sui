@@ -1,0 +1,178 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: true
+---
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:10:21
+   │
+10 │         let _ref = &*(&resource);  // Redundant borrow-dereference
+   │                     ^^^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:15:25
+   │
+15 │         let _ref = &mut *(&mut resource);  // Redundant mutable borrow-dereference
+   │                         ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:20:22
+   │
+20 │         let _value = *(&resource.value);  // Redundant dereference of field borrow
+   │                      ^^^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:57:21
+   │
+57 │         let _ref = &*(&*(&resource));  // Triple nested borrow-dereference, might be missed
+   │                     ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:57:24
+   │
+57 │         let _ref = &*(&*(&resource));  // Triple nested borrow-dereference, might be missed
+   │                        ^^^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04010]: cannot infer type
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:68:13
+   │
+68 │         let _value = *((&resource).value);  // Complex expression, might be missed
+   │             ^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:68:22
+   │
+ 3 │         value: u64,
+   │                --- Given: 'u64'
+   ·
+68 │         let _value = *((&resource).value);  // Complex expression, might be missed
+   │                      ^^^^^^^^^^^^^^^^^^^^
+   │                      │
+   │                      Invalid dereference.
+   │                      Expected: '&_'
+
+error[E04010]: cannot infer type
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:68:22
+   │
+68 │         let _value = *((&resource).value);  // Complex expression, might be missed
+   │                      ^^^^^^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:75:21
+   │
+75 │         let _ref = &*&resource.value;  // Redundant borrow-dereference on field
+   │                     ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:80:21
+   │
+80 │         let _ref = &*&(&resource).value;  // Nested redundant borrow-dereference on field
+   │                     ^^^^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:86:21
+   │
+86 │         let _ref = &*&0;  // Redundant borrow-dereference on literal
+   │                     ^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:94:21
+   │
+94 │         let _ref = &*&get_resource();  // Redundant borrow-dereference on function call result
+   │                     ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+    ┌─ tests/linter/incorrect_redundant_ref_deref.move:107:21
+    │
+107 │         let _ref = &*&(&*&resource.value);  // Multiple redundant borrows on field
+    │                     ^^^^^^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
+    │
+    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04004]: expected a single non-reference type
+    ┌─ tests/linter/incorrect_redundant_ref_deref.move:107:22
+    │
+107 │         let _ref = &*&(&*&resource.value);  // Multiple redundant borrows on field
+    │                      ^^^^^^^^^^^^^^^^^^^^
+    │                      │ │
+    │                      │ Expected a single non-reference type, but found: '&u64'
+    │                      Invalid borrow
+
+warning[Lint W01009]: redundant reference/dereference
+    ┌─ tests/linter/incorrect_redundant_ref_deref.move:107:25
+    │
+107 │         let _ref = &*&(&*&resource.value);  // Multiple redundant borrows on field
+    │                         ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+    │
+    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+    ┌─ tests/linter/incorrect_redundant_ref_deref.move:111:13
+    │
+111 │         let mut resource = MyResource { value: 10 };
+    │             ^^^ Unused local variable 'mut'. Consider removing or prefixing with an underscore: '_mut'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+    ┌─ tests/linter/incorrect_redundant_ref_deref.move:111:17
+    │
+111 │         let mut resource = MyResource { value: 10 };
+    │                 ^^^^^^^^
+    │                 │
+    │                 Unexpected 'resource'
+    │                 Expected ';'
+
+error[E04010]: cannot infer type
+    ┌─ tests/linter/incorrect_redundant_ref_deref.move:112:21
+    │
+112 │         let _ref = &*&mut *&resource;  // Mixed mutable and immutable redundant borrows
+    │                     ^^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+    ┌─ tests/linter/incorrect_redundant_ref_deref.move:112:27
+    │
+112 │         let _ref = &*&mut *&resource;  // Mixed mutable and immutable redundant borrows
+    │                           ^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E03009]: unbound variable
+    ┌─ tests/linter/incorrect_redundant_ref_deref.move:112:29
+    │
+112 │         let _ref = &*&mut *&resource;  // Mixed mutable and immutable redundant borrows
+    │                             ^^^^^^^^ Unbound variable 'resource'
+
+warning[Lint W01009]: redundant reference/dereference
+    ┌─ tests/linter/incorrect_redundant_ref_deref.move:117:25
+    │
+117 │         let _value = *&(*&resource.value + 1);  // Redundant borrows in complex expression
+    │                         ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+    │
+    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+    ┌─ tests/linter/incorrect_redundant_ref_deref.move:124:21
+    │
+124 │         let _ref = &*(&resource.value);  // Complex nested borrow on field, might be missed
+    │                     ^^^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+    │
+    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

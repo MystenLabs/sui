@@ -1,0 +1,19 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02004]: invalid one-time witness declaration
+  ┌─ tests/sui_mode/one_time_witness/wrong_field_type_with_init.move:6:12
+  │
+6 │     struct M has drop { value: u64 }
+  │            ^            ----- One-time witness types must have no fields, or exactly one field of type 'bool'
+  │            │             
+  │            Invalid one-time witness declaration
+7 │ 
+8 │     fun init(_otw: M, _ctx: &mut tx_context::TxContext) {
+  │                    - Attempted usage as a one-time witness here
+  │
+  = One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.

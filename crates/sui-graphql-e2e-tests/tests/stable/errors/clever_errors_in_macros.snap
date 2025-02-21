@@ -1,0 +1,61 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-34:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4187600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 36:
+//# run P0::m::t_a
+Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::t_a (function index 0) at offset 1, Abort Code: 9223372127049089023
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("t_a") }, 9223372127049089023), source: Some(VMError { major_status: ABORTED, sub_status: Some(9223372127049089023), message: Some("P0::m::t_a at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 3, line 38:
+//# run P0::m::t_calls_a
+Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::t_calls_a (function index 1) at offset 1, Abort Code: 9223372139933990911
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("t_calls_a") }, 9223372139933990911), source: Some(VMError { major_status: ABORTED, sub_status: Some(9223372139933990911), message: Some("P0::m::t_calls_a at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
+
+task 4, line 40:
+//# run P0::m::t_const_assert
+Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::t_const_assert (function index 2) at offset 1, Abort Code: 9223372075509481473
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 2, instruction: 1, function_name: Some("t_const_assert") }, 9223372075509481473), source: Some(VMError { major_status: ABORTED, sub_status: Some(9223372075509481473), message: Some("P0::m::t_const_assert at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 1)] }), command: Some(0) } }
+
+task 5, line 42:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 44-54:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "status": "FAILURE",
+            "errors": "Error in 1st command, from '0x6846951eaea99f8742b4ad253534ef8b44459248f322f3cd404050aa1b9a3cbb::m::t_a' (line 20)"
+          }
+        },
+        {
+          "effects": {
+            "status": "FAILURE",
+            "errors": "Error in 1st command, from '0x6846951eaea99f8742b4ad253534ef8b44459248f322f3cd404050aa1b9a3cbb::m::t_calls_a' (line 23)"
+          }
+        },
+        {
+          "effects": {
+            "status": "FAILURE",
+            "errors": "Error in 1st command, from '0x6846951eaea99f8742b4ad253534ef8b44459248f322f3cd404050aa1b9a3cbb::m::t_const_assert' (line 9), abort 'EMsg': This is a string"
+          }
+        }
+      ]
+    }
+  }
+}

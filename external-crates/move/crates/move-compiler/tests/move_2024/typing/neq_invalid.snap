@@ -1,0 +1,166 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/neq_invalid.move:9:17
+  │
+9 │         (0: u8) != (1: u128);
+  │             --  ^^     ---- Found: 'u128'. It is not compatible with the other type.
+  │             │   │       
+  │             │   Incompatible arguments to '!='
+  │             Found: 'u8'. It is not compatible with the other type.
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/neq_invalid.move:10:11
+   │
+10 │         0 != false;
+   │         - ^^ ----- Found: 'bool'. It is not compatible with the other type.
+   │         │ │   
+   │         │ Incompatible arguments to '!='
+   │         Found: integer. It is not compatible with the other type.
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/neq_invalid.move:18:9
+   │
+ 3 │     public struct R { f: u64 }
+   │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+17 │     fun t1(r: R) {
+   │               - The type '0x8675309::M::R' does not have the ability 'drop'
+18 │         r != r;
+   │         ^ '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/neq_invalid.move:18:14
+   │
+ 3 │     public struct R { f: u64 }
+   │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+17 │     fun t1(r: R) {
+   │               - The type '0x8675309::M::R' does not have the ability 'drop'
+18 │         r != r;
+   │              ^ '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/neq_invalid.move:22:9
+   │
+ 4 │     public struct G0<phantom T> {}
+   │                   -- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+22 │         G0{} != G0{};
+   │         ^^^^
+   │         │
+   │         '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+   │         The type '0x8675309::M::G0<_>' does not have the ability 'drop'
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/neq_invalid.move:22:9
+   │
+22 │         G0{} != G0{};
+   │         ^^^^ Could not infer this type. Try adding an annotation
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/neq_invalid.move:22:17
+   │
+ 4 │     public struct G0<phantom T> {}
+   │                   -- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+22 │         G0{} != G0{};
+   │                 ^^^^
+   │                 │
+   │                 '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+   │                 The type '0x8675309::M::G0<_>' does not have the ability 'drop'
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/neq_invalid.move:22:17
+   │
+22 │         G0{} != G0{};
+   │                 ^^^^ Could not infer this type. Try adding an annotation
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/neq_invalid.move:23:9
+   │
+ 5 │     public struct G1<phantom T: key> {}
+   │                   -- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+23 │         G1{} != G1{};
+   │         ^^^^
+   │         │
+   │         '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+   │         The type '0x8675309::M::G1<_>' does not have the ability 'drop'
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/neq_invalid.move:23:9
+   │
+23 │         G1{} != G1{};
+   │         ^^^^ Could not infer this type. Try adding an annotation
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/neq_invalid.move:23:17
+   │
+ 5 │     public struct G1<phantom T: key> {}
+   │                   -- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+23 │         G1{} != G1{};
+   │                 ^^^^
+   │                 │
+   │                 '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
+   │                 The type '0x8675309::M::G1<_>' does not have the ability 'drop'
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/neq_invalid.move:23:17
+   │
+23 │         G1{} != G1{};
+   │                 ^^^^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/neq_invalid.move:24:9
+   │
+24 │         G2{} != G2{};
+   │         ^^^^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/neq_invalid.move:24:17
+   │
+24 │         G2{} != G2{};
+   │                 ^^^^ Could not infer this type. Try adding an annotation
+
+error[E04005]: expected a single type
+   ┌─ tests/move_2024/typing/neq_invalid.move:28:9
+   │
+28 │         () != ();
+   │         ^^^^^^^^
+   │         │     │
+   │         │     Expected a single type, but found expression list type: '()'
+   │         Incompatible arguments to '!='
+
+error[E04005]: expected a single type
+   ┌─ tests/move_2024/typing/neq_invalid.move:29:9
+   │
+29 │         (0, 1) != (0, 1);
+   │         ^^^^^^^^^^^^^^^^
+   │         │         │
+   │         │         Expected a single type, but found expression list type: '(u64, u64)'
+   │         Incompatible arguments to '!='
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/neq_invalid.move:30:19
+   │
+30 │         (1, 2, 3) != (0, 1);
+   │         --------- ^^ ------ Found expression list of length 2: '({integer}, {integer})'. It is not compatible with the other type of length 3.
+   │         │         │   
+   │         │         Incompatible arguments to '!='
+   │         Found expression list of length 3: '({integer}, {integer}, {integer})'. It is not compatible with the other type of length 2.
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/neq_invalid.move:31:16
+   │
+31 │         (0, 1) != (1, 2, 3);
+   │         ------ ^^ --------- Found expression list of length 3: '({integer}, {integer}, {integer})'. It is not compatible with the other type of length 2.
+   │         │      │   
+   │         │      Incompatible arguments to '!='
+   │         Found expression list of length 2: '({integer}, {integer})'. It is not compatible with the other type of length 3.

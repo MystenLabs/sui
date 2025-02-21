@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/invalid_or_types_4.move:11:30
+   │
+ 4 │     X { x: u64 },
+   │            --- Given: 'u64'
+ 5 │     Y(u32),
+   │       --- Expected: 'u32'
+   ·
+11 │         E::X { x: y } | E::Y(y) | E::Z { z: y } => *y
+   │                              ^ Invalid pattern field type

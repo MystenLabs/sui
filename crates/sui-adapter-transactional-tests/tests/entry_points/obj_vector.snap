@@ -1,0 +1,108 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 19 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-111:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 12646400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 113:
+//# run Test::M::prim_vec_len --sender A --args vector[7,42]
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 115-119:
+//# run Test::M::mint --sender A --args 42
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 121:
+//# run Test::M::obj_vec_destroy --sender A --args vector[object(3,0)]
+mutated: object(0,0)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+
+task 5, line 123:
+//# run Test::M::mint --sender A --args 42
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 125:
+//# run Test::M::mint_child --sender A --args 42 object(5,0)
+created: object(6,0), object(6,1)
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 6011600,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+
+task 7, lines 127-131:
+//# run Test::M::child_access --sender A --args object(5,0) vector[object(6,0)]
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(6,0), parent_id: object(6,1) }
+
+task 8, line 133:
+//# run Test::M::mint_another --sender A --args 42
+created: object(8,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, lines 135-138:
+//# run Test::M::obj_vec_destroy --sender A --args vector[object(8,0)]
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
+
+task 10, line 140:
+//# run Test::M::mint_another --sender A --args 42
+created: object(10,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, line 142:
+//# run Test::M::mint --sender A --args 42
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, lines 144-147:
+//# run Test::M::two_obj_vec_destroy --sender A --args vector[object(10,0),object(11,0)]
+Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 13, line 149:
+//# run Test::M::mint_shared --sender A --args 42
+created: object(13,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, lines 151-154:
+//# run Test::M::obj_vec_destroy --sender A --args vector[object(13,0)]
+mutated: object(0,0)
+deleted: object(13,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+
+task 15, line 156:
+//# run Test::M::mint --sender A --args 42
+created: object(15,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, lines 158-161:
+//# run Test::M::same_objects --sender A --args object(15,0) vector[object(15,0)]
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }
+
+task 17, line 163:
+//# run Test::M::mint --sender A --args 42
+created: object(17,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 18, line 165:
+//# run Test::M::same_objects_ref --sender A --args object(17,0) vector[object(17,0)]
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }

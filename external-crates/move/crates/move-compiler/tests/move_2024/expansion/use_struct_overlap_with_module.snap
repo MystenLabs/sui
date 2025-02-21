@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/expansion/use_struct_overlap_with_module.move:2:5
+  │
+2 │     struct S {}
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/expansion/use_struct_overlap_with_module.move:6:29
+  │
+6 │     use 0x2::X::{Self, S as X};
+  │                  ----       ^ Duplicate module member or alias 'X'. Top level names in a namespace must be unique
+  │                  │           
+  │                  Alias previously defined here
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/expansion/use_struct_overlap_with_module.move:7:5
+  │
+7 │     struct A { f1: X, f2: X::S }
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/expansion/use_struct_overlap_with_module.move:7:27
+  │
+7 │     struct A { f1: X, f2: X::S }
+  │                           ^^^^ Unexpected enum variant identifier. An enum variant identifier is not a valid type
+  │
+  = Variants may not be used as types. Use the enum instead.

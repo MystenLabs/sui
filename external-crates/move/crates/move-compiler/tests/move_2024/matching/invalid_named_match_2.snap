@@ -1,0 +1,37 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/matching/invalid_named_match_2.move:9:13
+  │
+4 │         One { x: u64 }
+  │         -------------- 'One' is declared here
+  ·
+9 │             Entry::One(x) => ()
+  │             ^^^^^^^^^^^^^ Invalid variant pattern. Named variant declarations require named patterns
+  │
+  = Named patterns take arguments using '{ }'
+
+error[E03010]: unbound field
+  ┌─ tests/move_2024/matching/invalid_named_match_2.move:9:13
+  │
+9 │             Entry::One(x) => ()
+  │             ^^^^^^^^^^^^^ Unbound field '0' in '0x42::m::Entry::One'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/matching/invalid_named_match_2.move:9:13
+  │
+9 │             Entry::One(x) => ()
+  │             ^^^^^^^^^^^^^ Missing pattern for field 'x' in '0x42::m::Entry::One'
+
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/matching/invalid_named_match_2.move:9:24
+  │
+9 │             Entry::One(x) => ()
+  │                        ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

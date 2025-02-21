@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09006]: unused struct type parameter
+  ┌─ tests/move_check/parser/phantom_param_invalid_keyword.move:2:18
+  │
+2 │     struct S<T1, phatom T2> {
+  │                  ^^^^^^ Unused type parameter 'phatom'. Consider declaring it as phantom
+  │
+  = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/phantom_param_invalid_keyword.move:2:25
+  │
+2 │     struct S<T1, phatom T2> {
+  │                         ^^
+  │                         │
+  │                         Unexpected 'T2'
+  │                         Expected ',' or '>'

@@ -1,0 +1,124 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+task 1, lines 20-29:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x7::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 2, lines 30-39:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x8::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 4, lines 60-69:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0xa::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 5, lines 70-79:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x47::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 7, lines 99-108:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0xc::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 8, lines 109-118:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0xd::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 10, lines 139-148:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x15::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 11, lines 149-158:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x16::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 12, lines 161-170:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x17::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 14, lines 190-199:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x19::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 15, lines 200-209:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x1a::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 16, lines 210-219:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x1b::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}

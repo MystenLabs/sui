@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+warning[W09004]: unnecessary trailing semicolon
+  ┌─ tests/sui_mode/one_time_witness/bool_field.move:9:15
+  │
+9 │         return;
+  │         ------^
+  │         │     │
+  │         │     Invalid trailing ';'
+  │         │     A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+  │         Any code after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -1,0 +1,127 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 10-37:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6095200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 39:
+//# run Test::M3::yeet --sender A --args 2
+events: Event { package_id: Test, transaction_module: Identifier("M3"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 41:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 43-62:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M3"
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
+            },
+            "bcs": "AgAAAAAAAAA=",
+            "json": {
+              "new_value": "2"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5, lines 64-83:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M3"
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
+            },
+            "bcs": "AgAAAAAAAAA=",
+            "json": {
+              "new_value": "2"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 6, lines 85-104:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "nodes": []
+    }
+  }
+}
+
+task 7, lines 106-125:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "nodes": []
+    }
+  }
+}
+
+task 8, lines 127-146:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M3"
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
+            },
+            "bcs": "AgAAAAAAAAA=",
+            "json": {
+              "new_value": "2"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

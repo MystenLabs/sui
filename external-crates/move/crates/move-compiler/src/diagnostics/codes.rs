@@ -15,7 +15,7 @@ pub enum Severity {
     Bug = 4,
 }
 
-/// A an optional prefix to distinguish between different types of warnings (internal vs. possibly
+/// An optional prefix to distinguish between different types of warnings (internal vs. possibly
 /// multiple externally provided ones).
 pub type ExternalPrefix = Option<&'static str>;
 /// The ID for a diagnostic, consisting of an optional prefix, a category, and a code.

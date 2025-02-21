@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/naming/use_fun_duplicate_same_scope.move:5:9
+  │
+4 │     public use fun foo as S.foo;
+  │                             --- Previously declared here
+5 │     fun foo(_: &S) {}
+  │         ^^^     - Function declarations create an implicit 'use fun' when their first argument is a type defined in the same module
+  │         │        
+  │         Duplicate 'use fun' for 'a::t1::S.foo'
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/naming/use_fun_duplicate_same_scope.move:12:9
+   │
+11 │     public use fun foo as S.bar;
+   │                             --- Previously declared here
+12 │     fun bar(_: &S) {}
+   │         ^^^     - Function declarations create an implicit 'use fun' when their first argument is a type defined in the same module
+   │         │        
+   │         Duplicate 'use fun' for 'a::t2::S.bar'

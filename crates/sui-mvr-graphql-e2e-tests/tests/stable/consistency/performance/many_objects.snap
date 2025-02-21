@@ -1,0 +1,479 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 12-35:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6118000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 37:
+//# run Test::M1::create_many --sender A --args @A
+created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9), object(2,10), object(2,11), object(2,12), object(2,13), object(2,14), object(2,15), object(2,16), object(2,17), object(2,18), object(2,19), object(2,20), object(2,21), object(2,22), object(2,23), object(2,24), object(2,25), object(2,26), object(2,27), object(2,28), object(2,29), object(2,30), object(2,31), object(2,32), object(2,33), object(2,34), object(2,35), object(2,36), object(2,37), object(2,38), object(2,39), object(2,40), object(2,41), object(2,42), object(2,43), object(2,44), object(2,45), object(2,46), object(2,47), object(2,48), object(2,49), object(2,50), object(2,51), object(2,52), object(2,53), object(2,54), object(2,55), object(2,56), object(2,57), object(2,58), object(2,59), object(2,60), object(2,61), object(2,62), object(2,63), object(2,64), object(2,65), object(2,66), object(2,67), object(2,68), object(2,69), object(2,70), object(2,71), object(2,72), object(2,73), object(2,74), object(2,75), object(2,76), object(2,77), object(2,78), object(2,79), object(2,80), object(2,81), object(2,82), object(2,83), object(2,84), object(2,85), object(2,86), object(2,87), object(2,88), object(2,89), object(2,90), object(2,91), object(2,92), object(2,93), object(2,94), object(2,95), object(2,96), object(2,97), object(2,98), object(2,99), object(2,100), object(2,101), object(2,102), object(2,103), object(2,104), object(2,105), object(2,106), object(2,107), object(2,108), object(2,109), object(2,110), object(2,111), object(2,112), object(2,113), object(2,114), object(2,115), object(2,116), object(2,117), object(2,118), object(2,119), object(2,120), object(2,121), object(2,122), object(2,123), object(2,124), object(2,125), object(2,126), object(2,127), object(2,128), object(2,129), object(2,130), object(2,131), object(2,132), object(2,133), object(2,134), object(2,135), object(2,136), object(2,137), object(2,138), object(2,139), object(2,140), object(2,141), object(2,142), object(2,143), object(2,144), object(2,145), object(2,146), object(2,147), object(2,148), object(2,149), object(2,150), object(2,151), object(2,152), object(2,153), object(2,154), object(2,155), object(2,156), object(2,157), object(2,158), object(2,159), object(2,160), object(2,161), object(2,162), object(2,163), object(2,164), object(2,165), object(2,166), object(2,167), object(2,168), object(2,169), object(2,170), object(2,171), object(2,172), object(2,173), object(2,174), object(2,175), object(2,176), object(2,177), object(2,178), object(2,179), object(2,180), object(2,181), object(2,182), object(2,183), object(2,184), object(2,185), object(2,186), object(2,187), object(2,188), object(2,189), object(2,190), object(2,191), object(2,192), object(2,193), object(2,194), object(2,195), object(2,196), object(2,197), object(2,198), object(2,199), object(2,200), object(2,201), object(2,202), object(2,203), object(2,204), object(2,205), object(2,206), object(2,207), object(2,208), object(2,209), object(2,210), object(2,211), object(2,212), object(2,213), object(2,214), object(2,215), object(2,216), object(2,217), object(2,218), object(2,219), object(2,220), object(2,221), object(2,222), object(2,223), object(2,224), object(2,225), object(2,226), object(2,227), object(2,228), object(2,229), object(2,230), object(2,231), object(2,232), object(2,233), object(2,234), object(2,235), object(2,236), object(2,237), object(2,238), object(2,239), object(2,240), object(2,241), object(2,242), object(2,243), object(2,244), object(2,245), object(2,246), object(2,247), object(2,248), object(2,249), object(2,250), object(2,251), object(2,252), object(2,253), object(2,254), object(2,255), object(2,256), object(2,257), object(2,258), object(2,259), object(2,260), object(2,261), object(2,262), object(2,263), object(2,264), object(2,265), object(2,266), object(2,267), object(2,268), object(2,269), object(2,270), object(2,271), object(2,272), object(2,273), object(2,274), object(2,275), object(2,276), object(2,277), object(2,278), object(2,279), object(2,280), object(2,281), object(2,282), object(2,283), object(2,284), object(2,285), object(2,286), object(2,287), object(2,288), object(2,289), object(2,290), object(2,291), object(2,292), object(2,293), object(2,294), object(2,295), object(2,296), object(2,297), object(2,298), object(2,299), object(2,300), object(2,301), object(2,302), object(2,303), object(2,304), object(2,305), object(2,306), object(2,307), object(2,308), object(2,309), object(2,310), object(2,311), object(2,312), object(2,313), object(2,314), object(2,315), object(2,316), object(2,317), object(2,318), object(2,319), object(2,320), object(2,321), object(2,322), object(2,323), object(2,324), object(2,325), object(2,326), object(2,327), object(2,328), object(2,329), object(2,330), object(2,331), object(2,332), object(2,333), object(2,334), object(2,335), object(2,336), object(2,337), object(2,338), object(2,339), object(2,340), object(2,341), object(2,342), object(2,343), object(2,344), object(2,345), object(2,346), object(2,347), object(2,348), object(2,349), object(2,350), object(2,351), object(2,352), object(2,353), object(2,354), object(2,355), object(2,356), object(2,357), object(2,358), object(2,359), object(2,360), object(2,361), object(2,362), object(2,363), object(2,364), object(2,365), object(2,366), object(2,367), object(2,368), object(2,369), object(2,370), object(2,371), object(2,372), object(2,373), object(2,374), object(2,375), object(2,376), object(2,377), object(2,378), object(2,379), object(2,380), object(2,381), object(2,382), object(2,383), object(2,384), object(2,385), object(2,386), object(2,387), object(2,388), object(2,389), object(2,390), object(2,391), object(2,392), object(2,393), object(2,394), object(2,395), object(2,396), object(2,397), object(2,398), object(2,399), object(2,400), object(2,401), object(2,402), object(2,403), object(2,404), object(2,405), object(2,406), object(2,407), object(2,408), object(2,409), object(2,410), object(2,411), object(2,412), object(2,413), object(2,414), object(2,415), object(2,416), object(2,417), object(2,418), object(2,419), object(2,420), object(2,421), object(2,422), object(2,423), object(2,424), object(2,425), object(2,426), object(2,427), object(2,428), object(2,429), object(2,430), object(2,431), object(2,432), object(2,433), object(2,434), object(2,435), object(2,436), object(2,437), object(2,438), object(2,439), object(2,440), object(2,441), object(2,442), object(2,443), object(2,444), object(2,445), object(2,446), object(2,447), object(2,448), object(2,449), object(2,450), object(2,451), object(2,452), object(2,453), object(2,454), object(2,455), object(2,456), object(2,457), object(2,458), object(2,459), object(2,460), object(2,461), object(2,462), object(2,463), object(2,464), object(2,465), object(2,466), object(2,467), object(2,468), object(2,469), object(2,470), object(2,471), object(2,472), object(2,473), object(2,474), object(2,475), object(2,476), object(2,477), object(2,478), object(2,479), object(2,480), object(2,481), object(2,482), object(2,483), object(2,484), object(2,485), object(2,486), object(2,487), object(2,488), object(2,489), object(2,490), object(2,491), object(2,492), object(2,493), object(2,494), object(2,495), object(2,496), object(2,497), object(2,498), object(2,499)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 658388000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 39:
+//# create-checkpoint 2
+Checkpoint created: 2
+
+task 4, lines 41-82:
+//# run-graphql
+Response: {
+  "data": {
+    "last_2": {
+      "nodes": [
+        {
+          "version": 2,
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xff7f5ef9e5a7b5b6265b414ddc0f76a1daa5677e6333d10c280223d036a7038f",
+                "value": "6"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        },
+        {
+          "version": 2,
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfffc711287a6c859f0855d276c5439941b0a916bcdb4f31a62547bf94b073682",
+                "value": "107"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "last_4_objs_owned_by_A": {
+      "objects": {
+        "nodes": [
+          {
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfecefff3d2e3952957d14e450ef967f370986d101867386df4d581366063f153",
+                "value": "263"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          },
+          {
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfef205520684c9953fac1dee89681b03fc8cd19d8574f660202972b95bb7a5a8",
+                "value": "275"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          },
+          {
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xff7f5ef9e5a7b5b6265b414ddc0f76a1daa5677e6333d10c280223d036a7038f",
+                "value": "6"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          },
+          {
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfffc711287a6c859f0855d276c5439941b0a916bcdb4f31a62547bf94b073682",
+                "value": "107"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 5, line 84:
+//# transfer-object 2,499 --sender A --recipient B
+mutated: object(0,0), object(2,499)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 6, line 86:
+//# transfer-object 2,498 --sender A --recipient B
+mutated: object(0,0), object(2,498)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 7, line 88:
+//# transfer-object 2,497 --sender A --recipient B
+mutated: object(0,0), object(2,497)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 8, line 90:
+//# view-object 2,498
+Owner: Account Address ( B )
+Version: 4
+Contents: Test::M1::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,498),
+        },
+    },
+    value: 6u64,
+}
+
+task 9, line 92:
+//# view-object 2,497
+Owner: Account Address ( B )
+Version: 5
+Contents: Test::M1::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,497),
+        },
+    },
+    value: 275u64,
+}
+
+task 10, line 94:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 11, lines 96-138:
+//# run-graphql
+Response: {
+  "data": {
+    "last_3": {
+      "nodes": [
+        {
+          "version": 5,
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfef205520684c9953fac1dee89681b03fc8cd19d8574f660202972b95bb7a5a8",
+                "value": "275"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        },
+        {
+          "version": 4,
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xff7f5ef9e5a7b5b6265b414ddc0f76a1daa5677e6333d10c280223d036a7038f",
+                "value": "6"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        },
+        {
+          "version": 3,
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfffc711287a6c859f0855d276c5439941b0a916bcdb4f31a62547bf94b073682",
+                "value": "107"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "last_obj_owned_by_A": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 2,
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfecefff3d2e3952957d14e450ef967f370986d101867386df4d581366063f153",
+                "value": "263"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 12, lines 140-244:
+//# run-graphql
+Response: {
+  "data": {
+    "a": null,
+    "b": null,
+    "objects_a": {
+      "nodes": [
+        {
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfef205520684c9953fac1dee89681b03fc8cd19d8574f660202972b95bb7a5a8",
+                "value": "275"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xff7f5ef9e5a7b5b6265b414ddc0f76a1daa5677e6333d10c280223d036a7038f",
+                "value": "6"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfffc711287a6c859f0855d276c5439941b0a916bcdb4f31a62547bf94b073682",
+                "value": "107"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "objects_b": {
+      "nodes": [
+        {
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfef205520684c9953fac1dee89681b03fc8cd19d8574f660202972b95bb7a5a8",
+                "value": "275"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xff7f5ef9e5a7b5b6265b414ddc0f76a1daa5677e6333d10c280223d036a7038f",
+                "value": "6"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfffc711287a6c859f0855d276c5439941b0a916bcdb4f31a62547bf94b073682",
+                "value": "107"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "owned_by_b": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 1,
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0x666f28299115f43a52d09d94ffda7828cc16a28daeb6dc2ed89665cf2d014f53",
+                "balance": {
+                  "value": "300000000000000"
+                }
+              },
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+              }
+            }
+          },
+          {
+            "version": 5,
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfef205520684c9953fac1dee89681b03fc8cd19d8574f660202972b95bb7a5a8",
+                "value": "275"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          },
+          {
+            "version": 4,
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xff7f5ef9e5a7b5b6265b414ddc0f76a1daa5677e6333d10c280223d036a7038f",
+                "value": "6"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          },
+          {
+            "version": 3,
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfffc711287a6c859f0855d276c5439941b0a916bcdb4f31a62547bf94b073682",
+                "value": "107"
+              },
+              "type": {
+                "repr": "0x361adca72b31788356405445166ccc9c01ab86b80ab7a28fc7aff4da14b0bbb7::M1::Object"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

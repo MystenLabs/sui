@@ -38,6 +38,7 @@ use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
 use rand::{prelude::SliceRandom as _, rngs::ThreadRng};
 use tokio::{
+    runtime::Handle,
     sync::oneshot,
     task::{JoinHandle, JoinSet},
     time::{sleep, MissedTickBehavior},
@@ -307,6 +308,18 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             missing, fetched_commit_range
                         );
                     }
+                    for block_ref in missing {
+                        let hostname = &self
+                            .inner
+                            .context
+                            .committee
+                            .authority(block_ref.author)
+                            .hostname;
+                        metrics
+                            .commit_sync_fetch_missing_blocks
+                            .with_label_values(&[hostname])
+                            .inc();
+                    }
                 }
                 Err(e) => {
                     info!("Failed to add blocks, shutting down: {}", e);
@@ -499,12 +512,20 @@ impl<C: NetworkClient> CommitSyncer<C> {
         // 2. Verify the response contains blocks that can certify the last returned commit,
         // and the returned commits are chained by digest, so earlier commits are certified
         // as well.
-        let commits = inner.verify_commits(
-            target_authority,
-            commit_range,
-            serialized_commits,
-            serialized_blocks,
-        )?;
+        let commits = Handle::current()
+            .spawn_blocking({
+                let inner = inner.clone();
+                move || {
+                    inner.verify_commits(
+                        target_authority,
+                        commit_range,
+                        serialized_commits,
+                        serialized_blocks,
+                    )
+                }
+            })
+            .await
+            .expect("Spawn blocking should not fail")?;
 
         // 3. Fetch blocks referenced by the commits, from the same authority.
         let block_refs: Vec<_> = commits.iter().flat_map(|c| c.blocks()).cloned().collect();
@@ -703,8 +724,9 @@ impl<C: NetworkClient> Inner<C> {
         for serialized in serialized_blocks {
             let block: SignedBlock =
                 bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
-            // The block signature needs to be verified.
-            self.block_verifier.verify(&block)?;
+            // Only block signatures need to be verified, to verify commit votes.
+            // But the blocks will be sent to Core, so they need to be fully verified.
+            self.block_verifier.verify_and_vote(&block)?;
             for vote in block.commit_votes() {
                 if *vote == end_commit_ref {
                     stake_aggregator.add(block.author(), &self.context.committee);

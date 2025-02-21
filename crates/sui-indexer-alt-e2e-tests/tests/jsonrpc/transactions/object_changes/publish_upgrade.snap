@@ -1,0 +1,113 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-12:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5076800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-21:
+//# upgrade --package P0 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5768400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, line 23:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 25-29:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "digest": "BfhUDo5S1qaoTNPZNbUWPTwievt5NJzyKN2AxmDEH6wz",
+    "objectChanges": [
+      {
+        "type": "published",
+        "packageId": "0x7670061a5a8ace811e66a06a1358363b9bd7b8f2f9ee8a0ea262bc0e33b148c0",
+        "version": "1",
+        "digest": "FpCHKBbpdgVNCiqX5xe13rVGDqd2HYyGuCJ8hdj9Pv8L",
+        "modules": [
+          "M"
+        ]
+      },
+      {
+        "type": "created",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0x2::package::UpgradeCap",
+        "objectId": "0xa3a64bd1bbfc45f234b17702cf453fa3660a94d11b5bf18efd69262ab49b9d9f",
+        "version": "2",
+        "digest": "5xPHPaX3axjkrFYdE3RmQZA6grnUDDE69TypXwJCd1va"
+      },
+      {
+        "type": "mutated",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+        "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+        "version": "2",
+        "previousVersion": "1",
+        "digest": "BRwz4gsomJX3ka2jqYBp7Ud2XSmL4We8weumCPsMSYSm"
+      }
+    ]
+  }
+}
+
+task 5, lines 31-35:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "digest": "875EAzb9SBt8rhxjhYFD2bnuisUXhJN1m7si8BH8QuDF",
+    "objectChanges": [
+      {
+        "type": "mutated",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0x2::package::UpgradeCap",
+        "objectId": "0xa3a64bd1bbfc45f234b17702cf453fa3660a94d11b5bf18efd69262ab49b9d9f",
+        "version": "3",
+        "previousVersion": "2",
+        "digest": "WSZ1LFNowwaMYKfqNajHYdp6DZGYdyisW9zSD36iP3m"
+      },
+      {
+        "type": "mutated",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+        "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+        "version": "3",
+        "previousVersion": "2",
+        "digest": "GehBiyivz5iaQDd3K5A38oNTfZLLcVgsgXhNo2vnYwXv"
+      },
+      {
+        "type": "published",
+        "packageId": "0xead19ea504f857a14578d1547ae33f531f0dd612637e1aec30b9f00ae335d747",
+        "version": "2",
+        "digest": "Ftbo2Y9txgidKvz8UNdE7Z3phjtH8n4D3Dfs5WX8E3dP",
+        "modules": [
+          "M",
+          "N"
+        ]
+      }
+    ]
+  }
+}

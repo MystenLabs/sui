@@ -1,0 +1,67 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04012]: invalid type for constant
+  ┌─ tests/move_2024/typing/meaningless_move.move:2:16
+  │
+2 │     const ZED: Z = Z { f: 0 };
+  │                ^
+  │                │
+  │                Unpermitted constant type
+  │                Found: 'a::m::Z'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04013]: invalid statement or expression in constant
+  ┌─ tests/move_2024/typing/meaningless_move.move:2:20
+  │
+2 │     const ZED: Z = Z { f: 0 };
+  │                    ^^^^^^^^^^ Structs are not supported in constants
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/meaningless_move.move:19:9
+   │
+19 │         move x.y;
+   │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/meaningless_move.move:20:9
+   │
+20 │         move x.y.z;
+   │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/meaningless_move.move:21:9
+   │
+21 │         move x.y.z.f;
+   │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/meaningless_move.move:22:9
+   │
+22 │         move V;
+   │         ^^^^ Invalid 'move'. Cannot 'move' constants
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/meaningless_move.move:23:9
+   │
+23 │         move ZED.f;
+   │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_2024/typing/meaningless_move.move:23:14
+   │
+23 │         move ZED.f;
+   │              ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/typing/meaningless_move.move:24:9
+   │
+24 │         move x.id();
+   │         ^^^^ ------ Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'move' of expression

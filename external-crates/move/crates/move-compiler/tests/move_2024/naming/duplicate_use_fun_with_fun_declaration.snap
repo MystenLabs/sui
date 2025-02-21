@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/naming/duplicate_use_fun_with_fun_declaration.move:7:9
+  │
+4 │     public use fun foobar as X.foobaz;
+  │                                ------ Previously declared here
+  ·
+7 │     fun foobaz(_: &X, _: u64) {}
+  │         ^^^^^^     - Function declarations create an implicit 'use fun' when their first argument is a type defined in the same module
+  │         │           
+  │         Duplicate 'use fun' for 'a::m::X.foobaz'

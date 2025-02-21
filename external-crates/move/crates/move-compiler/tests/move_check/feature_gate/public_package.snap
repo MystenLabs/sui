@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/feature_gate/public_package.move:2:5
+  │
+2 │     public(package) fun foo(): u64 { 0 }
+  │     ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.

@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/function_invalid_names.move:3:9
+  │
+3 │     fun _foo() {}
+  │         ^^^^ Invalid function name '_foo'. Function names cannot start with '_'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/function_invalid_names.move:4:9
+  │
+4 │     fun _() {}
+  │         ^ Invalid function name '_'. Function names cannot start with '_'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/function_invalid_names.move:5:9
+  │
+5 │     fun ___() {}
+  │         ^^^ Invalid function name '___'. Function names cannot start with '_'

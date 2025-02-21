@@ -1,0 +1,19 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== M2.move ========================================================
+-- test 0 -------------------
+use line: 5, use_ndx: 0
+Use: 'fun_call', start: 15, end: 23
+Def: 'fun_call', line: 4, def char: 15
+TypeDef: no info
+On Hover:
+public fun ParseErrorDep::M2::fun_call(): u64
+
+-- test 1 -------------------
+use line: 9, use_ndx: 1
+Use: 's', start: 29, end: 30
+Def: 's', line: 8, def char: 29
+TypeDef: 'SomeStruct', line: 2, char: 11
+On Hover:
+s: ParseErrorDep::M1::SomeStruct

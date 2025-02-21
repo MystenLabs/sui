@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W04028]: implicit copy of a constant
+  ┌─ tests/move_2024/typing/implicit_const_copy_method.move:8:9
+  │
+8 │         BYTES.length();
+  │         ^^^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+  │
+  = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+  ┌─ tests/move_2024/typing/implicit_const_copy_method.move:9:9
+  │
+9 │         BYTES.push_back(0);
+  │         ^^^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+  │
+  = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/function_without_body.move:3:13
+  │
+3 │     fun fn();
+  │             ^
+  │             │
+  │             Unexpected ';'
+  │             Expected '{'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/function_without_body.move:5:1
+  │
+5 │ 
+  │ ^
+  │ 
+  │ Unexpected end-of-file
+  │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'

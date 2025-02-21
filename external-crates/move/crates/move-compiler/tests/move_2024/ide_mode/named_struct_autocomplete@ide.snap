@@ -1,0 +1,48 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:14:23
+   │
+14 │         let _tmp1 = _s.;
+   │                       ^ Possible dot names: 'a'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:14:24
+   │
+14 │         let _tmp1 = _s.;
+   │                        ^
+   │                        │
+   │                        Unexpected ';'
+   │                        Expected an identifier or a decimal number
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:15:23
+   │
+15 │         let _tmp2 = _s.a.;
+   │                       ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:15:24
+   │
+15 │         let _tmp2 = _s.a.;
+   │                        ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:15:25
+   │
+15 │         let _tmp2 = _s.a.;
+   │                         ^ Possible dot names: 'x'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:15:26
+   │
+15 │         let _tmp2 = _s.a.;
+   │                          ^
+   │                          │
+   │                          Unexpected ';'
+   │                          Expected an identifier or a decimal number

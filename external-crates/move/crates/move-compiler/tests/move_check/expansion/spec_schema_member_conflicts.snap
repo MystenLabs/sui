@@ -1,0 +1,54 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:4:5
+  │  
+4 │ ╭     spec schema Foo<T> {
+5 │ │         ensures true;
+6 │ │     }
+  │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:11:5
+   │  
+11 │ ╭     spec schema Foo<T> {
+12 │ │         ensures true;
+13 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:14:5
+   │  
+14 │ ╭     spec schema Foo<T> {
+15 │ │         ensures true;
+16 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:20:5
+   │  
+20 │ ╭     spec schema Foo<T> {
+21 │ │         ensures true;
+22 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:27:5
+   │  
+27 │ ╭     spec schema Foo<T> {
+28 │ │         ensures true;
+29 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:30:5
+   │  
+30 │ ╭     spec module {
+31 │ │         fun Foo(): bool { false }
+32 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used

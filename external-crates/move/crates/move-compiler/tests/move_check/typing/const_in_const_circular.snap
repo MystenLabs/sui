@@ -1,0 +1,48 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E08001]: cannot compute constant value
+  ┌─ tests/move_check/typing/const_in_const_circular.move:5:11
+  │
+3 │     const C0: u64 = C1 + 1;
+  │           -- Cyclic constant defined here
+4 │ 
+5 │     const C1: u64 = C2 + 1;
+  │           ^^ Constant definitions form a circular dependency: C1, C0, C2
+6 │     
+7 │     const C2: u64 = C0 + 1;
+  │           -- Cyclic constant defined here
+
+error[E08001]: cannot compute constant value
+  ┌─ tests/move_check/typing/const_in_const_circular.move:9:11
+  │
+9 │     const C3: u64 = C1 + 1;
+  │           ^^ Constant uses constant C1, which has a circular dependency
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_check/typing/const_in_const_circular.move:13:11
+   │
+13 │     const C5: u64 = C1 + C4;
+   │           ^^ Constant uses constant C1, which has a circular dependency
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_check/typing/const_in_const_circular.move:15:11
+   │
+15 │     const C6: u64 = C7 + 1;
+   │           ^^ Constant definitions form a circular dependency: C6, C9, C7
+16 │     
+17 │     const C7: u64 = C9 + 1;
+   │           -- Cyclic constant defined here
+   ·
+21 │     const C9: u64 = C6 + C6;
+   │           -- Cyclic constant defined here
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_check/typing/const_in_const_circular.move:23:11
+   │
+23 │     const C10: u64 = C0 + C6;
+   │           ^^^ Constant uses constant C0, which has a circular dependency

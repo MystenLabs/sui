@@ -1,0 +1,74 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+task 1, lines 6-31:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6916000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 33:
+//# run tto::M1::start
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 35:
+//# view-object 2,0
+Owner: Shared( 3 )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, line 37:
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 5, line 39:
+//# run tto::M1::receiver --args object(2,0) receiving(2,1)
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3385800, non_refundable_storage_fee: 34200
+
+task 6, line 41:
+//# view-object 2,0
+Owner: Shared( 3 )
+Version: 4
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 7, line 43:
+//# view-object 2,1
+Owner: Account Address ( _ )
+Version: 4
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 8, line 45:
+//# run tto::M1::receiver --args object(2,0) receiving(2,1)@3
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 12) at offset 0, Abort Code: 3
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 12, instruction: 0, function_name: Some("receive_impl") }, 3) at command Some(0)

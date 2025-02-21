@@ -1,0 +1,9 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
+Running Move unit tests
+[ PASS    ] 0x6::M::u64_add_overflow
+[ PASS    ] 0x6::M::u64_div_by_zero
+[ PASS    ] 0x6::M::u64_mul_overflow
+[ PASS    ] 0x6::M::u64_sub_underflow
+Test result: OK. Total tests: 4; passed: 4; failed: 0

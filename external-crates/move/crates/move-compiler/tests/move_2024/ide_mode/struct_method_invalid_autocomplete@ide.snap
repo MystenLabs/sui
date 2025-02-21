@@ -1,0 +1,48 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:20:21
+   │
+20 │         let _tmp1 = _a.t7();
+   │                     ^^^^^^^
+   │                     │  │
+   │                     │  No local 'use fun' alias was found for 'a::m::A.t7', and no function 't7' was found in the defining module 'a::m'
+   │                     Invalid method call. No known method 't7' on type 'a::m::A'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:20:23
+   │
+20 │         let _tmp1 = _a.t7();
+   │                       ^ Possible dot names: 'a::m::t0', 'a::m::t1', or 'a::m::t2'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:20:24
+   │
+20 │         let _tmp1 = _a.t7();
+   │                        ^^ Possible dot names: 'a::m::t0', 'a::m::t1', or 'a::m::t2'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:21:21
+   │
+21 │         let _tmp2 = _b.t8();
+   │                     ^^^^^^^
+   │                     │  │
+   │                     │  No local 'use fun' alias was found for 'a::m::B.t8', and no function 't8' was found in the defining module 'a::m'
+   │                     Invalid method call. No known method 't8' on type 'a::m::B'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:21:23
+   │
+21 │         let _tmp2 = _b.t8();
+   │                       ^ Possible dot names: 'a::m::t3', 'a::m::t4', or 'a::m::t5'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:21:24
+   │
+21 │         let _tmp2 = _b.t8();
+   │                        ^^ Possible dot names: 'a::m::t3', 'a::m::t4', or 'a::m::t5'

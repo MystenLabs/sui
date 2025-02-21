@@ -38,6 +38,7 @@ fn call_non_existent_module() {
             vec![],
             serialize_values(&vec![MoveValue::Signer(TEST_ADDR)]),
             &mut UnmeteredGasMeter,
+            None,
         )
         .unwrap_err();
 
@@ -72,6 +73,7 @@ fn call_non_existent_function() {
             vec![],
             serialize_values(&vec![MoveValue::Signer(TEST_ADDR)]),
             &mut UnmeteredGasMeter,
+            None,
         )
         .unwrap_err();
 

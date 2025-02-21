@@ -1,0 +1,34 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03005]: unbound unscoped name
+  ┌─ tests/move_2024/naming/use_fun_local.move:3:17
+  │
+3 │         use fun f as u64.f;
+  │                 ^ Unbound function 'f' in current scope
+
+error[E02010]: invalid name
+  ┌─ tests/move_2024/naming/use_fun_local.move:7:19
+  │
+7 │     macro fun bar(f: u64) {
+  │     -----         ^ Invalid parameter name 'f'. 'macro' parameter names must start with '$' (or must be '_')
+  │     │              
+  │     Declared 'macro' here
+  │
+  = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
+
+error[E03005]: unbound unscoped name
+  ┌─ tests/move_2024/naming/use_fun_local.move:8:17
+  │
+8 │         use fun f as u64.f;
+  │                 ^ Unbound function 'f' in current scope
+
+error[E03005]: unbound unscoped name
+   ┌─ tests/move_2024/naming/use_fun_local.move:13:17
+   │
+13 │         use fun $f as u64.f;
+   │                 ^^ Unbound function '$f' in current scope

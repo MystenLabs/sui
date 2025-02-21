@@ -1,0 +1,249 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2), D: object(0,3), E: object(0,4)
+
+task 1, lines 6-19:
+//# publish
+created: object(1,0)
+mutated: object(0,5)
+gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 21:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 23:
+//# run Test::M1::create --args 0 @A --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, line 25:
+//# run Test::M1::create --args 1 @A --sender B
+created: object(4,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 5, line 27:
+//# run Test::M1::create --args 2 @A --sender C
+created: object(5,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 6, line 29:
+//# run Test::M1::create --args 3 @A --sender D
+created: object(6,0)
+mutated: object(0,3)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 7, line 31:
+//# run Test::M1::create --args 4 @A --sender E
+created: object(7,0)
+mutated: object(0,4)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 8, line 33:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 9, lines 35-53:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjoyLCJ0Ijo2LCJpIjpmYWxzZX0",
+        "startCursor": "eyJjIjoyLCJ0IjoyLCJpIjpmYWxzZX0"
+      },
+      "nodes": [
+        {
+          "digest": "DtdkcWfVprqB3UTAsHZu4WKjTAZ9GNgCJYcpARVdwhE2",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "GSWPZuHhsJ12D7HhTQ9qwntehfjDmZDCjGYVkraPWzUW",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "AmhHJvv1yZYR6q3jKHm7YwXAvaZEuDy8TWDqHPDU8sC7",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "GxcuVbd9wJLq89oiUK7zWsWQkGu4V481k2mGurfpkBdJ",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "4Di8EQtt8JZ4dUhn9brM4g51Aw3Ly1JDfdqnE4ZuTQRN",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 10, lines 55-73:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjoyLCJ0IjoyLCJpIjpmYWxzZX0",
+        "startCursor": "eyJjIjoyLCJ0IjoyLCJpIjpmYWxzZX0"
+      },
+      "nodes": [
+        {
+          "digest": "DtdkcWfVprqB3UTAsHZu4WKjTAZ9GNgCJYcpARVdwhE2",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 11, lines 75-93:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjoyLCJ0IjozLCJpIjpmYWxzZX0",
+        "startCursor": "eyJjIjoyLCJ0IjozLCJpIjpmYWxzZX0"
+      },
+      "nodes": [
+        {
+          "digest": "GSWPZuHhsJ12D7HhTQ9qwntehfjDmZDCjGYVkraPWzUW",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12, lines 95-113:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjoyLCJ0Ijo0LCJpIjpmYWxzZX0",
+        "startCursor": "eyJjIjoyLCJ0Ijo0LCJpIjpmYWxzZX0"
+      },
+      "nodes": [
+        {
+          "digest": "AmhHJvv1yZYR6q3jKHm7YwXAvaZEuDy8TWDqHPDU8sC7",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 13, lines 115-133:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjoyLCJ0Ijo1LCJpIjpmYWxzZX0",
+        "startCursor": "eyJjIjoyLCJ0Ijo1LCJpIjpmYWxzZX0"
+      },
+      "nodes": [
+        {
+          "digest": "GxcuVbd9wJLq89oiUK7zWsWQkGu4V481k2mGurfpkBdJ",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 14, lines 135-153:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjoyLCJ0Ijo2LCJpIjpmYWxzZX0",
+        "startCursor": "eyJjIjoyLCJ0Ijo2LCJpIjpmYWxzZX0"
+      },
+      "nodes": [
+        {
+          "digest": "4Di8EQtt8JZ4dUhn9brM4g51Aw3Ly1JDfdqnE4ZuTQRN",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 15, lines 155-173:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": null,
+        "startCursor": null
+      },
+      "nodes": []
+    }
+  }
+}

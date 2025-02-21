@@ -1,0 +1,27 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
+Running Move unit tests
+[ PASS    ] 0x6::M::dummy_test
+[ FAIL    ] 0x7::B::failing_test
+
+Test failures:
+
+Failures in 0x7::B:
+
+┌── failing_test ──────
+│ error[E11001]: test failure
+│   ┌─ cross_module_aborts.move:4:9
+│   │
+│ 3 │     public fun this_aborts() {
+│   │                ----------- In this function in 0x6::M
+│ 4 │         abort 0
+│   │         ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 0x6::M rooted here
+│ 
+│ 
+│ stack trace
+│ 	B::failing_test(tests/test_sources/cross_module_aborts.move:18)
+│ 
+└──────────────────
+
+Test result: FAILED. Total tests: 2; passed: 1; failed: 1

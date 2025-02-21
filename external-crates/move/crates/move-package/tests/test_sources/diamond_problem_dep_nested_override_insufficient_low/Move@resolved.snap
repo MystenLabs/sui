@@ -1,0 +1,8 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+When resolving dependencies for package Root, conflicting versions of package E found:
+At A -> E
+	E = { local = "deps_only/E-v1" }
+At B -> E
+	E = { local = "deps_only/E-v3" }

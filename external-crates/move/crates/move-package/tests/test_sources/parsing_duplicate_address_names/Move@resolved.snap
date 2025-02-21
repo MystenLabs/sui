@@ -1,0 +1,4 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+Unable to parse Move package manifest: duplicate key: `a` for key `addresses` at line 4 column 1

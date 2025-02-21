@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09012]: unused 'mut' modifiers
+  ┌─ tests/move_2024/typing/mut_ref_match.move:9:22
+  │
+9 │             X::A(mut a) => {
+  │                  --- ^ The variable 'a' is never used mutably
+  │                  │    
+  │                  Consider removing the 'mut' declaration here
+  │
+  = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

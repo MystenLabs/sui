@@ -1,0 +1,40 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/if_no_else.move:4:9
+  │
+4 │         if (cond) 0;
+  │         ^^^^^^^^^^^
+  │         │         │
+  │         │         Given: integer
+  │         Invalid 'if'. The body of an 'if' without an 'else' must have type '()'
+  │         Expected: '()'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/if_no_else.move:5:9
+   │
+ 5 │         if (cond) foo();
+   │         ^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid 'if'. The body of an 'if' without an 'else' must have type '()'
+   │         Expected: '()'
+   ·
+13 │     fun foo(): u64 { 0 }
+   │                --- Given: 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/if_no_else.move:6:9
+   │    
+ 6 │ ╭ ╭         if (cond) {
+ 7 │ │ │             let x = 0;
+ 8 │ │ │             let y = 1;
+   │ │ │                 - Given: integer
+ 9 │ │ │             x * y
+10 │ │ │         }
+   │ ╰─│─────────^ Invalid 'if'. The body of an 'if' without an 'else' must have type '()'
+   │   ╰─────────' Expected: '()'

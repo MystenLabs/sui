@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/expansion/use_spec_function.move:3:5
+  │  
+3 │ ╭     spec module {
+4 │ │         fun foo(): bool { true }
+5 │ │         fun bar(): bool { true }
+6 │ │     }
+  │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+error[E03003]: unbound module member
+   ┌─ tests/move_check/expansion/use_spec_function.move:10:18
+   │
+ 2 │ module X {
+   │        - Module '0x2::X' declared here
+   ·
+10 │     use 0x2::X::{foo, bar as baz};
+   │                  ^^^ Invalid 'use'. Unbound member 'foo' in module '0x2::X'
+
+error[E03003]: unbound module member
+   ┌─ tests/move_check/expansion/use_spec_function.move:10:23
+   │
+ 2 │ module X {
+   │        - Module '0x2::X' declared here
+   ·
+10 │     use 0x2::X::{foo, bar as baz};
+   │                       ^^^ Invalid 'use'. Unbound member 'bar' in module '0x2::X'
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/use_spec_function.move:14:5
+   │  
+14 │ ╭     spec t {
+15 │ │         ensures foo();
+16 │ │         ensures baz();
+17 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used

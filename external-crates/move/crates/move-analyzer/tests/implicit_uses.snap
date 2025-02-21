@@ -1,0 +1,26 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== implicit_uses.move ========================================================
+-- test 0 -------------------
+use line: 4, use_ndx: 1
+Use: 'Option', start: 13, end: 19
+Def: 'Option', line: 7, def char: 18
+TypeDef: 'Option', line: 7, char: 18
+On Hover:
+public struct Option<Element> has copy, drop, store {
+	vec: vector<Element>
+}
+
+ Abstraction of a value that may or may not be present. Implemented with a vector of size
+ zero or one because Move bytecode does not have ADTs.
+
+-- test 1 -------------------
+use line: 8, use_ndx: 2
+Use: 'option', start: 26, end: 32
+Def: 'option', line: 4, def char: 12
+TypeDef: no info
+On Hover:
+module option
+
+ This module defines the Option type and its methods to represent and handle an optional value.

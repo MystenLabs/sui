@@ -7,7 +7,7 @@ use crate::{
     ManifestV1, FILE_MAX_BYTES, MAGIC_BYTES, MANIFEST_FILE_MAGIC, OBJECT_FILE_MAGIC,
     OBJECT_REF_BYTES, REFERENCE_FILE_MAGIC, SEQUENCE_NUM_BYTES,
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use byteorder::{BigEndian, ByteOrder};
 use fastcrypto::hash::MultisetHash;
 use futures::StreamExt;
@@ -24,13 +24,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
-use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::blob::{Blob, BlobEncoding, BLOB_ENCODING_BYTES};
 use sui_storage::object_store::util::{copy_file, delete_recursively, path_to_filesystem};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{ObjectID, ObjectRef};
+use sui_types::digests::ChainIdentifier;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -260,13 +260,11 @@ impl StateSnapshotWriterV1 {
         epoch: u64,
         perpetual_db: Arc<AuthorityPerpetualTables>,
         root_state_hash: ECMHLiveObjectSetDigest,
+        chain_identifier: ChainIdentifier,
     ) -> Result<()> {
         let system_state_object = get_sui_system_state(&perpetual_db)?;
 
         let protocol_version = system_state_object.protocol_version();
-        let chain_identifier = CHAIN_IDENTIFIER
-            .get()
-            .ok_or(anyhow!("No chain identifier found"))?;
         let protocol_config = ProtocolConfig::get_for_version(
             ProtocolVersion::new(protocol_version),
             chain_identifier.chain(),

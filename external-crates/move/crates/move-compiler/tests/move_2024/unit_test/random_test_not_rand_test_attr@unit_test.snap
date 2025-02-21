@@ -1,0 +1,56 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E10005]: unable to generate test
+  ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:2:7
+  │
+2 │     #[test]
+  │       ^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
+3 │     fun foo(a: u64) { 
+  │         --- - Corresponding to this parameter
+  │         │    
+  │         Error found in this test
+
+error[E10005]: unable to generate test
+  ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:7:7
+  │
+7 │     #[test, expected_failure]
+  │       ^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
+8 │     fun go(b: u64) { 
+  │         -- - Corresponding to this parameter
+  │         │   
+  │         Error found in this test
+
+error[E10005]: unable to generate test
+   ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:12:7
+   │
+12 │     #[test]
+   │       ^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
+13 │     fun qux(c: u64, d: bool) { 
+   │         --- - Corresponding to this parameter
+   │         │    
+   │         Error found in this test
+
+error[E10005]: unable to generate test
+   ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:12:7
+   │
+12 │     #[test]
+   │       ^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
+13 │     fun qux(c: u64, d: bool) { 
+   │         ---         - Corresponding to this parameter
+   │         │            
+   │         Error found in this test
+
+error[E10005]: unable to generate test
+   ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:18:7
+   │
+18 │     #[test]
+   │       ^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
+19 │     fun qux_vec(c: vector<u8>) { 
+   │         ------- - Corresponding to this parameter
+   │         │        
+   │         Error found in this test

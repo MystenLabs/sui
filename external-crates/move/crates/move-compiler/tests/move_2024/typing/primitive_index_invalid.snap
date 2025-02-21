@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02019]: invalid 'syntax' method type
+  ┌─ tests/move_2024/typing/primitive_index_invalid.move:4:14
+  │
+4 │     #[syntax(index)]
+  │              ^^^^^ Invalid syntax annotation
+5 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &mut Element;
+  │                                           ----------------           ------------ This syntax method must return an immutable reference to match its subject type
+  │                                           │                           
+  │                                           Immutable subject type defined here

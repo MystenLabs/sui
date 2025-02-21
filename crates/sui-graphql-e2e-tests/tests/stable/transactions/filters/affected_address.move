@@ -7,7 +7,7 @@
 //
 // 1. A splits off a coin from its gas and sends it to B.
 //
-// 2. A sponsors a transaction where B splits off the a coin from the gas coin
+// 2. A sponsors a transaction where B splits off a coin from the gas coin
 //    and sends it to C.
 //
 // 3. (A splits off a coin to use as gas in future transactions where the gas

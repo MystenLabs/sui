@@ -18,6 +18,8 @@ use sui_json_rpc_types::{get_new_package_obj_from_response, SuiTransactionBlockR
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::ObjectID;
 
+pub mod system_package_versions;
+
 const PUBLISHED_AT_MANIFEST_FIELD: &str = "published-at";
 
 pub enum LockCommand {

@@ -1,0 +1,54 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/struct_public.move:3:5
+  │
+3 │     public struct Foo {}
+  │     ^^^^^^ Invalid struct declaration. Structs cannot have visibility modifiers as they are always 'public'
+  │
+  = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/struct_public.move:3:5
+  │
+3 │     public struct Foo {}
+  │     ^^^^^^ Struct visibility modifiers are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/struct_public.move:4:5
+  │
+4 │     public(friend) struct Foo {}
+  │     ^^^^^^^^^^^^^^ Invalid struct declaration. Structs cannot have visibility modifiers as they are always 'public'
+  │
+  = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/struct_public.move:4:27
+  │
+3 │     public struct Foo {}
+  │                   --- Alias previously defined here
+4 │     public(friend) struct Foo {}
+  │                           ^^^ Duplicate module member or alias 'Foo'. Top level names in a namespace must be unique
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/struct_public.move:5:5
+  │
+5 │     public(package) struct Foo {}
+  │     ^^^^^^^^^^^^^^^ Invalid struct declaration. Structs cannot have visibility modifiers as they are always 'public'
+  │
+  = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/struct_public.move:5:28
+  │
+4 │     public(friend) struct Foo {}
+  │                           --- Alias previously defined here
+5 │     public(package) struct Foo {}
+  │                            ^^^ Duplicate module member or alias 'Foo'. Top level names in a namespace must be unique

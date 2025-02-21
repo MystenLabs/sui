@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/macros_not_type_checked_called.move:4:11
+  │
+4 │         1 + b"2"
+  │         - ^ ---- Found: 'vector<u8>'. It is not compatible with the other type.
+  │         │ │  
+  │         │ Incompatible arguments to '+'
+  │         Found: integer. It is not compatible with the other type.

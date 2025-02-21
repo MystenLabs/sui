@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04009]: expected specific type
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:6:10
+  │
+5 │ public fun make_action_ref<T>(action: &mut Action<T>): &mut T {
+  │                                                   - Expected a struct type in the current module but got: 'T'
+6 │     &mut action.inner.bar
+  │          ^^^^^^^^^^^^^^^^ Unbound field 'bar'

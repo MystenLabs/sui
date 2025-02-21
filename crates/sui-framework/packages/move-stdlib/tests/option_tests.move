@@ -188,6 +188,12 @@ fun do_destroy() {
 
     some.do!(|el| { let NoDrop {} = el; });
     none.do!(|el| { let NoDrop {} = el; });
+
+    option::some(5).do!(|x| x); // return value
+    option::some(5).do!(|_| {}); // no return value
+
+    option::some(5).destroy!(|x| x); // return value
+    option::some(5).destroy!(|_| {}); // no return value
 }
 
 #[test]
@@ -198,6 +204,11 @@ fun do_ref_mut() {
     opt.do_ref!(|x| counter = *x);
 
     assert!(counter == 100);
+
+    opt.do_ref!(|x| *x); // return value
+    opt.do_ref!(|_| {}); // no return value
+    opt.do_mut!(|_| 5); // return value
+    opt.do_mut!(|_| {}); // no return value
 }
 
 #[test]

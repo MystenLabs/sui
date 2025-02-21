@@ -1,0 +1,48 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-25:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4894400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 26-30:
+//# programmable --sender A --inputs 0
+//> 0: test::m1::mint<sui::sui::SUI>();
+//> SplitCoins(Result(0), [Input(0)])
+// merge into non-coin
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: Some("Expected a coin but got an non coin object"), command: Some(1) } }
+
+task 3, lines 31-35:
+//# programmable --sender A --inputs 0
+//> 0: test::m1::mint<sui::sui::SUI>();
+//> MergeCoins(Result(0), [Gas])
+// merge non-coin into gas
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: Some("Expected a coin but got an non coin object"), command: Some(1) } }
+
+task 4, lines 36-38:
+//# programmable --sender A --inputs 0
+//> 0: test::m1::mint<sui::sui::SUI>();
+//> MergeCoins(Gas, [Result(0)])
+Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: Some("Coins do not have the same type"), command: Some(1) } }
+
+task 5, lines 40-41:
+//# programmable --sender A --inputs 10000u64
+//> MergeCoins(Gas, [Input(0)])
+Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 6, lines 43-44:
+//# programmable --sender A --inputs 10000u64
+//> MergeCoins(Gas, [Input(0)])
+Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(0) } }

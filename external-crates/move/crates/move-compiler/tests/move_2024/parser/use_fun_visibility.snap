@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02017]: invalid 'use fun' declaration
+  ┌─ tests/move_2024/parser/use_fun_visibility.move:2:5
+  │
+2 │     public(friend) use fun foo as S.g;
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │     │
+  │     Invalid visibility for 'use fun' declaration
+  │     Module level 'use fun' declarations can be 'public' for the module's types, otherwise they must internal to declared scope.
+
+error[E02017]: invalid 'use fun' declaration
+  ┌─ tests/move_2024/parser/use_fun_visibility.move:3:5
+  │
+3 │     public(package) use fun foo as S.h;
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │     │
+  │     Invalid visibility for 'use fun' declaration
+  │     Module level 'use fun' declarations can be 'public' for the module's types, otherwise they must internal to declared scope.

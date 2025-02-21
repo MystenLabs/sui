@@ -1,0 +1,133 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:8:14
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
+   │                                        ---- 'copy' constraint declared here
+   ·
+ 8 │         $_n: NeedsCopy<$T>,
+   │              ^^^^^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+24 │         foo!<None, NeedsCopy<bool>>(0, &mut 1, NeedsCopy {});
+   │              ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:10:16
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
+   │                                        ---- 'copy' constraint declared here
+   ·
+10 │         let _: NeedsCopy<$U> = NeedsCopy {};
+   │                ^^^^^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+26 │         foo!<u64, None>(0, &mut 1, NeedsCopy {});
+   │                   ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:10:32
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
+   │                                        ---- 'copy' constraint declared here
+   ·
+10 │         let _: NeedsCopy<$U> = NeedsCopy {};
+   │                                ^^^^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+26 │         foo!<u64, None>(0, &mut 1, NeedsCopy {});
+   │                   ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:14:9
+   │
+14 │         NeedsCopy {}
+   │         ^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:17:27
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
+   │                                        ---- 'copy' constraint declared here
+   ·
+17 │     macro fun ret2<$T>(): NeedsCopy<$T> {
+   │                           ^^^^^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+28 │         ret2!<None>();
+   │               ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:18:9
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
+   │                                        ---- 'copy' constraint declared here
+   ·
+18 │         NeedsCopy {}
+   │         ^^^^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+28 │         ret2!<None>();
+   │               ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:24:9
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+   ·
+ 5 │     macro fun foo<$T: copy, $U>(
+   │                       ---- 'copy' constraint declared here
+   ·
+24 │         foo!<None, NeedsCopy<bool>>(0, &mut 1, NeedsCopy {});
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │    │
+   │         │    The type 'a::m::None' does not have the ability 'copy'
+   │         'copy' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:25:19
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
+   │                                        ---- 'copy' constraint declared here
+   ·
+25 │         foo!<u64, NeedsCopy<None>>(0, &mut 1, NeedsCopy {});
+   │                   ^^^^^^^^^^^^^^^
+   │                   │         │
+   │                   │         The type 'a::m::None' does not have the ability 'copy'
+   │                   'copy' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:27:9
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+27 │         ret!<None>();
+   │         ^^^^^^^^^^^^
+   │         │    │
+   │         │    The type 'a::m::None' does not have the ability 'drop'
+   │         Cannot ignore values without the 'drop' ability. The value must be used
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:27:14
+   │
+27 │         ret!<None>();
+   │         -----^^^^---
+   │         │    │
+   │         │    Invalid type annotation
+   │         │    Expected: 'a::m::None'
+   │         Given: 'a::m::NeedsCopy<_>'

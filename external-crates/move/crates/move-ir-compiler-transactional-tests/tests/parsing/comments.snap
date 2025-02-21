@@ -1,0 +1,72 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 0, lines 1-8:
+//# print-bytecode
+// Move bytecode v6
+module 6.m {
+
+entry foo() {
+B0:
+	0: Ret
+}
+
+}
+
+
+task 1, lines 10-18:
+//# print-bytecode
+// Move bytecode v6
+module 7.m {
+
+entry foo() {
+B0:
+	0: Ret
+}
+
+}
+
+
+task 2, lines 20-26:
+//# print-bytecode
+// Move bytecode v6
+module 8.m {
+
+entry foo() {
+B0:
+	0: Ret
+}
+
+}
+
+
+task 3, lines 28-35:
+//# print-bytecode
+// Move bytecode v6
+module 9.m {
+
+entry foo() {
+B0:
+	0: Ret
+}
+
+}
+
+
+task 4, lines 37-46:
+//# print-bytecode
+Error: ParserError: Invalid Token: invalid token kind for statement Slash
+
+task 5, lines 48-58:
+//# print-bytecode
+// Move bytecode v6
+module b.m {
+
+entry foo() {
+B0:
+	0: Ret
+}
+
+}

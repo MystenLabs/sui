@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/vector_literal_unclosed_args.move:4:13
+  │
+4 │         let v = vector[
+  │             ^ Unused local variable 'v'. Consider removing or prefixing with an underscore: '_v'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04010]: cannot infer type
+  ┌─ tests/move_check/parser/vector_literal_unclosed_args.move:4:17
+  │  
+4 │           let v = vector[
+  │ ╭─────────────────^
+5 │ │     }
+6 │ │ }
+  │ ╰─^ Could not infer this type. Try adding an annotation
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/vector_literal_unclosed_args.move:5:5
+  │
+5 │     }
+  │     ^ Unexpected '}'. Expected a vector argument expression
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/vector_literal_unclosed_args.move:7:1
+  │
+4 │         let v = vector[
+  │                       - To match this '['
+  ·
+7 │ 
+  │ ^ Expected ']'

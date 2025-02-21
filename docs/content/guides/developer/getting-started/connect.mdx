@@ -30,8 +30,8 @@ First, [Install Sui](./sui-install.mdx#install-binaries). After you install Sui,
 
 To check whether Sui is already installed, run the following command:
 
-```shell
-which sui
+```sh
+$ which sui
 ```
 
 If Sui is installed, the command returns the path to the Sui binary. If Sui is not installed, it returns `sui not found`.
@@ -44,8 +44,8 @@ If you previously ran `sui genesis` to create a local network, it created a Sui 
 
 To connect the Sui client to a network, run the following command:
 
-```shell
-sui client
+```sh
+$ sui client
 ```
 
 If you receive the `sui-client` help output in the console, you already have a client.yaml file. See [Connect to a custom RPC endpoint](#connect-to-a-custom-rpc-endpoint) to add a new environment alias or to switch the currently active network.
@@ -93,7 +93,7 @@ If you previously installed a Sui client that connected to a Sui network, or cre
 To check currently available environment aliases, run the following command: 
 
 ```sh
-sui client envs
+$ sui client envs
 ```
 
 The command outputs the available environment aliases, with `(active)` denoting the currently active network.
@@ -104,14 +104,14 @@ devnet => https://fullnode.devnet.sui.io:443
 
 To add a new alias for a custom RPC endpoint, run the following command. Replace values in `<` `>` with values for your installation:
 
-```shell
-sui client new-env --alias <ALIAS> --rpc <RPC-SERVER-URL>
+```sh
+$ sui client new-env --alias <ALIAS> --rpc <RPC-SERVER-URL>
 ```
 
 To switch the active network, run the following command:
 
-```shell
-sui client switch --env <ALIAS>
+```sh
+$ sui client switch --env <ALIAS>
 ```
 
 If you encounter an issue, delete the Sui configuration directory (`~/.sui/sui_config`) and reinstall the latest [Sui binaries](./sui-install.mdx#install-sui-binaries).

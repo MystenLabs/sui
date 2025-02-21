@@ -1,0 +1,65 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/stack_usage_verifier/integer_stack_positive.mvir
+---
+processed 6 tasks
+
+task 0, lines 1-14:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::A'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x6::A,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}
+
+task 1, lines 17-30:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000007::A'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x7::A,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}
+
+task 2, lines 32-45:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000008::A'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x8::A,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}
+
+task 3, lines 47-60:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000009::A'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x9::A,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}
+
+task 4, lines 62-75:
+//# publish
+Error: Unable to publish module '000000000000000000000000000000000000000000000000000000000000000a::A'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0xa::A,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}
+
+task 5, lines 77-90:
+//# publish
+Error: Unable to publish module '000000000000000000000000000000000000000000000000000000000000000b::A'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0xb::A,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}

@@ -1,0 +1,40 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/chain_lower_case_incomplete.move:1:1
+  │  
+1 │ ╭ module 0x42::m1 {
+2 │ │     public fun bar() {}
+3 │ │ 
+4 │ │     public fun foo() {
+5 │ │         b
+6 │ │     }
+7 │ │ }
+  │ ╰─^ Possible in-scope names
+  │  
+  = members: 'Option -> std::option::Option', 'bar -> 0x42::m1::bar', or 'foo -> 0x42::m1::foo'
+  = modules: 'Self -> 0x42::m1', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/chain_lower_case_incomplete.move:5:9
+  │
+5 │         b
+  │         ^ Possible in-scope names
+  │
+  = members: 'Option -> std::option::Option', 'bar -> 0x42::m1::bar', or 'foo -> 0x42::m1::foo'
+  = modules: 'Self -> 0x42::m1', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/ide_mode/chain_lower_case_incomplete.move:5:9
+  │
+5 │         b
+  │         ^ Unbound variable 'b'

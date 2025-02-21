@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use move_binary_format::CompiledModule;
+use move_bytecode_source_map::utils::serialize_to_json_string;
 use move_cli::base;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
@@ -25,6 +26,10 @@ pub struct Disassemble {
 
     #[clap(short = 'i', long = "interactive")]
     interactive: bool,
+
+    /// Print the "bytecode map" (source map for disassembled bytecode)
+    #[clap(long = "bytecode-map")]
+    pub bytecode_map: bool,
 }
 
 impl Disassemble {
@@ -47,6 +52,7 @@ impl Disassemble {
                 package_name: None,
                 module_or_script_name: module_name,
                 debug: self.debug,
+                bytecode_map: self.bytecode_map,
             }
             .execute(package_path, build_config)?;
             return Ok(());
@@ -69,7 +75,11 @@ impl Disassemble {
             println!("{module:#?}");
         } else {
             let d = Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc)?;
-            println!("{}", d.disassemble()?);
+            let (disassemble_string, bcode_map) = d.disassemble_with_source_map()?;
+            if self.bytecode_map {
+                println!("{}", serialize_to_json_string(&bcode_map)?);
+            }
+            println!("{}", disassemble_string);
         }
 
         Ok(())

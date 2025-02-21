@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:4:14
+  │
+4 │         false::M::S { }
+  │              ^^
+  │              │
+  │              Unexpected '::'
+  │              Expected ';'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:8:9
+  │
+8 │         fun baz()::baz()::M::S { }
+  │         ^^^
+  │         │
+  │         Unexpected 'fun'
+  │         Expected an expression term
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:8:18
+  │
+8 │         fun baz()::baz()::M::S { }
+  │                  ^^
+  │                  │
+  │                  Unexpected '::'
+  │                  Expected '{'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:11:1
+   │
+11 │ 
+   │ ^
+   │ 
+   │ Unexpected end-of-file
+   │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'

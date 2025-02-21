@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09013]: unused mutable reference '&mut'
+  ┌─ tests/move_check/borrows/unused_mut_ref_field_invalid.move:9:23
+  │
+9 │         let param_f = &mut param.f;
+  │                       ^^^^^^^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+  │
+  = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09013]: unused mutable reference '&mut'
+   ┌─ tests/move_check/borrows/unused_mut_ref_field_invalid.move:10:19
+   │
+10 │         let r_f = &mut r.f;
+   │                   ^^^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+   │
+   = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09013]: unused mutable reference '&mut'
+   ┌─ tests/move_check/borrows/unused_mut_ref_field_invalid.move:11:9
+   │
+11 │         &mut S { f: 0 }.f;
+   │         ^^^^^^^^^^^^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+   │
+   = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

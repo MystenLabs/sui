@@ -1,0 +1,205 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --inputs 42 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 10:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 14-16:
+//# programmable --inputs 42 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(4,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 18:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, line 20:
+//# advance-epoch
+Epoch advanced: 0
+
+task 7, lines 22-24:
+//# programmable --inputs 42 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(7,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 26-28:
+//# programmable --inputs 42 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(8,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, lines 30-32:
+//# programmable --inputs 42 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(9,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, line 34:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 11, lines 36-40:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "epoch": "0",
+    "sequenceNumber": "0",
+    "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
+    "networkTotalTransactions": "1",
+    "epochRollingGasCostSummary": {
+      "computationCost": "0",
+      "storageCost": "0",
+      "storageRebate": "0",
+      "nonRefundableStorageFee": "0"
+    },
+    "timestampMs": "0",
+    "transactions": [
+      "3FJ4fSrf7toVCANccxAbeJ5A1iSzwKLghCYcaz9atbCD"
+    ],
+    "checkpointCommitments": [],
+    "validatorSignature": "sqTHHfkSR11Z+F1hT87Kq6omvXa6VgddqwTlq7kkS20vBM0XEMQsqq+YjSLf31fZ"
+  }
+}
+
+task 12, lines 42-46:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "epoch": "0",
+    "sequenceNumber": "1",
+    "digest": "5z57fGEjjGjdKRt7kf4iRZPts1puq9GMnvqMJ7VHG8t9",
+    "networkTotalTransactions": "2",
+    "previousDigest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
+    "epochRollingGasCostSummary": {
+      "computationCost": "1000000",
+      "storageCost": "1976000",
+      "storageRebate": "0",
+      "nonRefundableStorageFee": "0"
+    },
+    "timestampMs": "0",
+    "transactions": [
+      "7765qzSQjDksw9eDmD5yeUHSzZ5goCFaohKpZXVsi95p"
+    ],
+    "checkpointCommitments": [],
+    "validatorSignature": "qpjLans/1B7y1YkdU72xBsc593cpXg0NOmCHTAfiHfP6+UC+UNt8FTUP8KJqbmWg"
+  }
+}
+
+task 13, lines 48-52:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "epoch": "0",
+    "sequenceNumber": "2",
+    "digest": "FF46FUYmKFbj7o3kY5WRDr2i81RSPizDxZpTKjVMXVme",
+    "networkTotalTransactions": "4",
+    "previousDigest": "5z57fGEjjGjdKRt7kf4iRZPts1puq9GMnvqMJ7VHG8t9",
+    "epochRollingGasCostSummary": {
+      "computationCost": "2000000",
+      "storageCost": "3952000",
+      "storageRebate": "978120",
+      "nonRefundableStorageFee": "9880"
+    },
+    "timestampMs": "1000",
+    "transactions": [
+      "8DFy3oTHn2RoG1nW7f6YNYrt4Hbrf6sQmDAAk8t9mFPi",
+      "HNHP6psTduE3H3KyqdMVHdqrWEB8dG3L7BHXu4rgjY8Q"
+    ],
+    "checkpointCommitments": [],
+    "validatorSignature": "gFxj6BzeTOBdjwZvixIrN2Ok6nGS3KU7cOGnJ4YwLRAujgF2mY6iUwA4bCO8Vtfo"
+  }
+}
+
+task 14, lines 54-58:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "epoch": "0",
+    "sequenceNumber": "3",
+    "digest": "4md7Du9MwCduiiqd9MebsDom7ThnK3oTvBQ3iQp2baZY",
+    "networkTotalTransactions": "5",
+    "previousDigest": "FF46FUYmKFbj7o3kY5WRDr2i81RSPizDxZpTKjVMXVme",
+    "epochRollingGasCostSummary": {
+      "computationCost": "2000000",
+      "storageCost": "3952000",
+      "storageRebate": "978120",
+      "nonRefundableStorageFee": "9880"
+    },
+    "timestampMs": "1000",
+    "endOfEpochData": {
+      "nextEpochCommittee": [
+        [
+          "qqgbtEP57SCwGrO7tmcKwy/daeoOFwANmrMTm1Qu4jUJRhi2VePz/brF9YAcjmJ7BLOpN8c5Ia7zYzTNmGtGoaUnjoYrbvDG9E05s9antwSmkHAIGsM8mkmeBkSjSBrt",
+          "10000"
+        ]
+      ],
+      "nextEpochProtocolVersion": "70",
+      "epochCommitments": []
+    },
+    "transactions": [
+      "gzaBALyrgTTckbYkCedU6srqRv8v1eV6PB75uxy6koH"
+    ],
+    "checkpointCommitments": [],
+    "validatorSignature": "hoTxEM+Lag81g7z2pfJEgjVgG41jML8Aq6OlXGF3ntDI2LMyUXocRbNBmDGktf+0"
+  }
+}
+
+task 15, lines 60-64:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "epoch": "1",
+    "sequenceNumber": "4",
+    "digest": "5ZHZCGLiaZmqqTq9yZYh6EKsXDuigLmDjimqERYtNLVf",
+    "networkTotalTransactions": "8",
+    "previousDigest": "4md7Du9MwCduiiqd9MebsDom7ThnK3oTvBQ3iQp2baZY",
+    "epochRollingGasCostSummary": {
+      "computationCost": "3000000",
+      "storageCost": "5928000",
+      "storageRebate": "2934360",
+      "nonRefundableStorageFee": "29640"
+    },
+    "timestampMs": "1000",
+    "transactions": [
+      "B7Z8ZQpTAFipfxm8NWEoC433a783pLNbYR8Gtyiopb6i",
+      "8YmvQSCKVcejFuS4GmV7Xjo7PyUoKPpj1V6fPaYVw8PH",
+      "UFJ9Z9f4eSfA6PfM1mPJzFAHp8jGN42ynpfqb5EHDJU"
+    ],
+    "checkpointCommitments": [],
+    "validatorSignature": "rS2i1oNF6+8Ls4jOP3GPh1BaWiecf5NxsTEbugItvc9iCKB1d8Z7jUsIDHMiyqNU"
+  }
+}

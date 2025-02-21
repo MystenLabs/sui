@@ -102,7 +102,7 @@ impl TxChangesProcessor {
             effects,
             tx.input_objects().unwrap_or_else(|e| {
                 panic!(
-                    "Checkpointed tx {:?} has inavlid input objects: {e}",
+                    "Checkpointed tx {:?} has invalid input objects: {e}",
                     tx_digest,
                 )
             }),

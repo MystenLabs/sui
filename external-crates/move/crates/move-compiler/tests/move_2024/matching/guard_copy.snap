@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/guard_copy.move:17:32
+   │
+17 │             Option::Some(n) if check_s(copy n) => n,
+   │                                ^^^^^^^
+   │                                │
+   │                                Unexpected 'check_s'
+   │                                Expected '('

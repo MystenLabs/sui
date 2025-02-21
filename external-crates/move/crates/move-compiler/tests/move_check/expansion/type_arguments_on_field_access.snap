@@ -1,0 +1,32 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:6:9
+  │
+6 │         x.f<u64>;
+  │         ^^^^^^^^ Method syntax is not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04023]: invalid method call
+  ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:6:9
+  │
+6 │         x.f<u64>;
+  │         ^^^^^^^^
+  │         │ │
+  │         │ No local 'use fun' alias was found for '0x42::M::S.f', and no function 'f' was found in the defining module '0x42::M'
+  │         Invalid method call. No known method 'f' on type '0x42::M::S'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:6:17
+  │
+6 │         x.f<u64>;
+  │                 ^
+  │                 │
+  │                 Unexpected ';'
+  │                 Expected '('

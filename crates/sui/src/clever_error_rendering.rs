@@ -5,7 +5,7 @@
 //! error message using the clever error rendering logic.
 //!
 //! The logic in this file is largely a stop-gap to provide Clever Error rendering in the CLI while
-//! it still uses the JSON-RPC API. The new GraphQL API already renderd Clever Errors on the server
+//! it still uses the JSON-RPC API. The new GraphQL API already rendered Clever Errors on the server
 //! side in a much more robust and efficient way.
 //!
 //! Once the CLI is updated to use the GraphQL API, this file can be removed, and the GraphQL-based

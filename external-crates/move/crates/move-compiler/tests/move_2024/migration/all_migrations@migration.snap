@@ -1,0 +1,64 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.migration
+  lint: false
+---
+--- tests/move_2024/migration/all_migrations.move
++++ tests/move_2024/migration/all_migrations.move
+@@ -3,2 +3,2 @@
+-    #[test_only]
+-    friend a::b;
++    /* #[test_only] */
++    /* friend a::b; */
+@@ -6 +6 @@
+-    friend a::c;
++    /* friend a::c; */
+@@ -8 +8 @@
+-    #[ext(
++    /* #[ext(
+@@ -11,2 +11,2 @@
+-    ]
+-    friend a::d;
++    ] */
++    /* friend a::d; */
+@@ -14 +14 @@
+-    #[ext(
++    /* #[ext(
+@@ -19,2 +19,2 @@
+-    ]
+-    friend a::e;
++    ] */
++    /* friend a::e; */
+@@ -22 +22 @@
+-    struct S { f: u64 }
++    public struct S { f: u64 }
+@@ -24 +24 @@
+-    struct LongerName {
++    public struct LongerName {
+@@ -29 +29 @@
+-    struct Positional(u64, u64, u64)
++    public struct Positional(u64, u64, u64)
+@@ -31,2 +31,2 @@
+-    fun t0(x: u64, s: S): u64 {
+-        let S { f: fin } = s;
++    fun t0(mut x: u64, s: S): u64 {
++        let S { f: mut fin } = s;
+@@ -38 +38 @@
+-    public(friend) fun t1() {}
++    public(package) fun t1() {}
+@@ -40,2 +40 @@
+-    public(
+-        friend) fun t2() {}
++    public(package) fun t2() {}
+@@ -43,3 +42 @@
+-    public(
+-        friend
+-        ) fun t3() {}
++    public(package) fun t3() {}
+@@ -47,3 +44 @@
+-    public(
+-        friend
+-    ) fun t4() {}
++    public(package) fun t4() {}

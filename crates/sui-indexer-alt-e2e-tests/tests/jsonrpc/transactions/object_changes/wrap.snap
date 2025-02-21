@@ -1,0 +1,76 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-26:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5836800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 28-30:
+//# programmable --sender A --inputs @A
+//> 0: P0::M::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 32-34:
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: P0::M::wrap(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+wrapped: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2447200,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+
+task 4, line 36:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 38-42:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "digest": "8uiu3WCLxRYnoP3P6NGn1YfdRK99b4iLZ21ifdxDNErd",
+    "objectChanges": [
+      {
+        "type": "created",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0x45204616e1053b2a44105712720357c178195724066d7b7eb32f10e798e99e1e::M::O",
+        "objectId": "0x70e651e9ac346ad05a4e094f593ef324d78806c295fdfef52ea24c0aa4180d99",
+        "version": "3",
+        "digest": "BFhy5Mn1Z2AiNBbVzowTAQGnP2SB9swXpWcyDgTJfeXg"
+      },
+      {
+        "type": "mutated",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+        "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+        "version": "3",
+        "previousVersion": "2",
+        "digest": "4xQ6qSchZVmud2VeEeAKaQKjbUj67XhcqA8w9oVXBt5C"
+      },
+      {
+        "type": "wrapped",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "objectType": "0x45204616e1053b2a44105712720357c178195724066d7b7eb32f10e798e99e1e::M::I",
+        "objectId": "0xea80aa0712647964efcf2b71dfab5b996245ab7302c1d010179a08fb9ca4d078",
+        "version": "3"
+      }
+    ]
+  }
+}

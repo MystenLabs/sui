@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/index_fun_invalid_visibility_2.move:44:19
+   │
+ 7 │     fun index_a(a: &A): &A { a }
+   │         ------- This function is internal to its module. Only 'public' and 'public(package)' functions can be called outside of their module
+   ·
+44 │         let _a0 = &a[];
+   │                   ^^^^ Invalid call to internal function '0x42::m::index_a'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/index_fun_invalid_visibility_2.move:49:19
+   │
+22 │     fun index_b_mut(b: &mut B): &mut B { b }
+   │         ----------- This function is internal to its module. Only 'public' and 'public(package)' functions can be called outside of their module
+   ·
+49 │         let _b0 = &mut b[];
+   │                   ^^^^^^^^ Invalid call to internal function '0x42::m::index_b_mut'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/index_fun_invalid_visibility_2.move:52:19
+   │
+31 │     fun index_c(c: &C): &C { c }
+   │         ------- This function is internal to its module. Only 'public' and 'public(package)' functions can be called outside of their module
+   ·
+52 │         let _c0 = &c[];
+   │                   ^^^^ Invalid call to internal function '0x42::m::index_c'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/index_fun_invalid_visibility_2.move:53:19
+   │
+34 │     fun index_c_mut(c: &mut C): &mut C { c }
+   │         ----------- This function is internal to its module. Only 'public' and 'public(package)' functions can be called outside of their module
+   ·
+53 │         let _c0 = &mut c[];
+   │                   ^^^^^^^^ Invalid call to internal function '0x42::m::index_c_mut'

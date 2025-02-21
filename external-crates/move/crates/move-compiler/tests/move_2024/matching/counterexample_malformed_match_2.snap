@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03010]: unbound field
+   ┌─ tests/move_2024/matching/counterexample_malformed_match_2.move:18:9
+   │
+18 │         SomeEnum::PositionalFields(_, _, _) => (),
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unbound field '2' in 'a::m::SomeEnum::PositionalFields'

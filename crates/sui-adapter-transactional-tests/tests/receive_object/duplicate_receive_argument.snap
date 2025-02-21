@@ -1,0 +1,34 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 6-31:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6756400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 33:
+//# run tto::M1::start
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 35-38:
+//# programmable --inputs object(2,0) receiving(2,1)
+//> tto::M1::send_back(Input(0), Input(1))
+// Duplicate object ref in input
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3385800, non_refundable_storage_fee: 34200
+
+task 4, lines 39-42:
+//# programmable --inputs object(2,0) receiving(2,1) receiving(2,1)
+//> tto::M1::send_back(Input(0), Input(1))
+// Invalid signature for the receiving object since we try to use it as a normal input
+Error: Error checking transaction input objects: DuplicateObjectRefInput
+
+task 5, lines 43-44:
+//# programmable --inputs object(2,1) receiving(2,1)
+//> tto::M1::send_back(Input(0), Input(1))
+Error: Error checking transaction input objects: IncorrectUserSignature { error: "Object object(2,1) is owned by account address object(2,0), but given owner/signer address is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e" }

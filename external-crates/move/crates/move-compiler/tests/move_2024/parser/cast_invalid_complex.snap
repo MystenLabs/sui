@@ -1,0 +1,86 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01015]: ambiguous 'as'
+  ┌─ tests/move_2024/parser/cast_invalid_complex.move:6:9
+  │
+6 │         1 + s.f as u32;
+  │         ^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E01015]: ambiguous 'as'
+  ┌─ tests/move_2024/parser/cast_invalid_complex.move:7:9
+  │
+7 │         1 + S { f: 0 }.f as u32;
+  │         ^^^^^^^^^^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/cast_invalid_complex.move:8:9
+  │
+8 │         *if (cond) { &0 } else { &mut 0 } as u32;
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │         │                                    │
+  │         │                                    Given: 'u32'
+  │         Invalid dereference.
+  │         Expected: '&_'
+
+error[E04010]: cannot infer type
+  ┌─ tests/move_2024/parser/cast_invalid_complex.move:8:9
+  │
+8 │         *if (cond) { &0 } else { &mut 0 } as u32;
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E01015]: ambiguous 'as'
+  ┌─ tests/move_2024/parser/cast_invalid_complex.move:8:10
+  │
+8 │         *if (cond) { &0 } else { &mut 0 } as u32;
+  │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_2024/parser/cast_invalid_complex.move:8:10
+  │
+8 │         *if (cond) { &0 } else { &mut 0 } as u32;
+  │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │          │           │
+  │          │           Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │          Invalid argument to 'as'
+
+error[E01015]: ambiguous 'as'
+  ┌─ tests/move_2024/parser/cast_invalid_complex.move:9:9
+  │
+9 │         *if (cond) { &s } else {&mut s}.f_imm() as u32;
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/cast_invalid_complex.move:11:10
+   │
+11 │         (*if (cond) { &0 } else { &mut 0 } as u32);
+   │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │          │                                    │
+   │          │                                    Given: 'u32'
+   │          Invalid dereference.
+   │          Expected: '&_'
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/parser/cast_invalid_complex.move:11:10
+   │
+11 │         (*if (cond) { &0 } else { &mut 0 } as u32);
+   │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E01015]: ambiguous 'as'
+   ┌─ tests/move_2024/parser/cast_invalid_complex.move:11:11
+   │
+11 │         (*if (cond) { &0 } else { &mut 0 } as u32);
+   │           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/cast_invalid_complex.move:11:11
+   │
+11 │         (*if (cond) { &0 } else { &mut 0 } as u32);
+   │           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │           │           │
+   │           │           Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │           Invalid argument to 'as'

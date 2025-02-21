@@ -10,8 +10,8 @@
   "author": "",
   "license": "Apache 2.0",
   "dependencies": {
-    "@mysten/dapp-kit": "^0.14.25",
-    "@mysten/sui": "^1.12.0",
+    "@mysten/dapp-kit": "^0.14.44",
+    "@mysten/sui": "^1.18.0",
     "@tanstack/react-query": "^5.50.1",
     "parcel": "^2.12.0",
     "react": "^18.3.1",

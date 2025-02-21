@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01005]: invalid address
+  ┌─ tests/move_check/parser/address_too_long_decimal_exp.move:4:18
+  │
+4 │         let x = @3402823669209384634633746074317682114568097213470921387019238740912836510928347019247; x;
+  │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid address literal. The numeric value is too large. The maximum size is 32 bytes

@@ -1,0 +1,212 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== dot_call.move ========================================================
+-- test 0 -------------------
+use line: 3, use_ndx: 0
+Use: 'Self', start: 19, end: 23
+Def: 'M1', line: 0, def char: 17
+TypeDef: no info
+On Hover:
+module Move2024::M1
+
+-- test 1 -------------------
+use line: 3, use_ndx: 1
+Use: 'foo', start: 25, end: 28
+Def: 'foo', line: 13, def char: 15
+TypeDef: no info
+On Hover:
+public fun Move2024::M1::foo(
+	s: &Move2024::M1::SomeStruct
+): u64
+
+-- test 2 -------------------
+use line: 3, use_ndx: 2
+Use: 'SomeStruct', start: 32, end: 42
+Def: 'SomeStruct', line: 5, def char: 18
+TypeDef: 'SomeStruct', line: 5, char: 18
+On Hover:
+public struct Move2024::M1::SomeStruct has drop {
+	some_field: u64
+}
+
+-- test 3 -------------------
+use line: 3, use_ndx: 3
+Use: 'f1', start: 43, end: 45
+Def: 'foo', line: 13, def char: 15
+TypeDef: no info
+On Hover:
+public fun Move2024::M1::foo(
+	s: &Move2024::M1::SomeStruct
+): u64
+
+-- test 4 -------------------
+use line: 4, use_ndx: 0
+Use: 'M1', start: 29, end: 31
+Def: 'M1', line: 0, def char: 17
+TypeDef: no info
+On Hover:
+module Move2024::M1
+
+-- test 5 -------------------
+use line: 4, use_ndx: 1
+Use: 'foo', start: 33, end: 36
+Def: 'foo', line: 13, def char: 15
+TypeDef: no info
+On Hover:
+public fun Move2024::M1::foo(
+	s: &Move2024::M1::SomeStruct
+): u64
+
+-- test 6 -------------------
+use line: 4, use_ndx: 2
+Use: 'SomeStruct', start: 40, end: 50
+Def: 'SomeStruct', line: 5, def char: 18
+TypeDef: 'SomeStruct', line: 5, char: 18
+On Hover:
+public struct Move2024::M1::SomeStruct has drop {
+	some_field: u64
+}
+
+-- test 7 -------------------
+use line: 4, use_ndx: 3
+Use: 'f2', start: 51, end: 53
+Def: 'foo', line: 13, def char: 15
+TypeDef: no info
+On Hover:
+public fun Move2024::M1::foo(
+	s: &Move2024::M1::SomeStruct
+): u64
+
+-- test 8 -------------------
+use line: 27, use_ndx: 0
+Use: 'M1_ALIAS', start: 12, end: 20
+Def: 'M1', line: 0, def char: 17
+TypeDef: no info
+On Hover:
+module Move2024::M1
+
+-- test 9 -------------------
+use line: 27, use_ndx: 1
+Use: 'bar', start: 22, end: 25
+Def: 'bar', line: 17, def char: 15
+TypeDef: no info
+On Hover:
+public fun Move2024::M1::bar(
+	s: &Move2024::M1::SomeStruct,
+	v: u64
+): u64
+
+-- test 10 -------------------
+use line: 27, use_ndx: 2
+Use: 'M1', start: 39, end: 41
+Def: 'M1', line: 0, def char: 17
+TypeDef: no info
+On Hover:
+module Move2024::M1
+
+-- test 11 -------------------
+use line: 27, use_ndx: 3
+Use: 'SomeStruct', start: 43, end: 53
+Def: 'SomeStruct', line: 5, def char: 18
+TypeDef: 'SomeStruct', line: 5, char: 18
+On Hover:
+public struct Move2024::M1::SomeStruct has drop {
+	some_field: u64
+}
+
+-- test 12 -------------------
+use line: 27, use_ndx: 4
+Use: 'f3', start: 54, end: 56
+Def: 'bar', line: 17, def char: 15
+TypeDef: no info
+On Hover:
+public fun Move2024::M1::bar(
+	s: &Move2024::M1::SomeStruct,
+	v: u64
+): u64
+
+-- test 13 -------------------
+use line: 30, use_ndx: 0
+Use: 'M1', start: 16, end: 18
+Def: 'M1', line: 0, def char: 17
+TypeDef: no info
+On Hover:
+module Move2024::M1
+
+-- test 14 -------------------
+use line: 30, use_ndx: 1
+Use: 'bar', start: 20, end: 23
+Def: 'bar', line: 17, def char: 15
+TypeDef: no info
+On Hover:
+public fun Move2024::M1::bar(
+	s: &Move2024::M1::SomeStruct,
+	v: u64
+): u64
+
+-- test 15 -------------------
+use line: 30, use_ndx: 2
+Use: 'SomeStructAlias', start: 27, end: 42
+Def: 'SomeStruct', line: 5, def char: 18
+TypeDef: 'SomeStruct', line: 5, char: 18
+On Hover:
+public struct Move2024::M1::SomeStruct has drop {
+	some_field: u64
+}
+
+-- test 16 -------------------
+use line: 30, use_ndx: 3
+Use: 'f4', start: 43, end: 45
+Def: 'bar', line: 17, def char: 15
+TypeDef: no info
+On Hover:
+public fun Move2024::M1::bar(
+	s: &Move2024::M1::SomeStruct,
+	v: u64
+): u64
+
+-- test 17 -------------------
+use line: 34, use_ndx: 0
+Use: 'some_struct', start: 16, end: 27
+Def: 'some_struct', line: 31, def char: 12
+TypeDef: 'SomeStruct', line: 5, char: 18
+On Hover:
+let some_struct: Move2024::M1::SomeStruct
+
+-- test 18 -------------------
+use line: 34, use_ndx: 1
+Use: 'f1', start: 28, end: 30
+Def: 'foo', line: 13, def char: 15
+TypeDef: no info
+On Hover:
+public fun Move2024::M1::foo(
+	s: &Move2024::M1::SomeStruct
+): u64
+
+-- test 19 -------------------
+use line: 35, use_ndx: 0
+Use: 'some_struct', start: 16, end: 27
+Def: 'some_struct', line: 31, def char: 12
+TypeDef: 'SomeStruct', line: 5, char: 18
+On Hover:
+let some_struct: Move2024::M1::SomeStruct
+
+-- test 20 -------------------
+use line: 35, use_ndx: 1
+Use: 'f3', start: 28, end: 30
+Def: 'bar', line: 17, def char: 15
+TypeDef: no info
+On Hover:
+public fun Move2024::M1::bar(
+	s: &Move2024::M1::SomeStruct,
+	v: u64
+): u64
+
+-- test 21 -------------------
+use line: 35, use_ndx: 2
+Use: 'val', start: 31, end: 34
+Def: 'val', line: 32, def char: 12
+TypeDef: no info
+On Hover:
+let val: u64

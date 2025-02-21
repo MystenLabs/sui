@@ -1,0 +1,50 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_store.move:10:9
+   │
+ 9 │     public fun t1(s: other::S) {
+   │                      -------- The type 'a::other::S' is not declared in the current module
+10 │         transfer::transfer(s, @0x100);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::transfer' is restricted to being called in the object's module, 'a::other'
+   ·
+27 │     struct S has key, store {
+   │                       ----- The object has 'store' so 'sui::transfer::public_transfer' can be called instead
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_store.move:14:9
+   │
+13 │     public fun t2(s: other::S) {
+   │                      -------- The type 'a::other::S' is not declared in the current module
+14 │         transfer::freeze_object(s);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::freeze_object' is restricted to being called in the object's module, 'a::other'
+   ·
+27 │     struct S has key, store {
+   │                       ----- The object has 'store' so 'sui::transfer::public_freeze_object' can be called instead
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_store.move:18:9
+   │
+17 │     public fun t3(s: other::S) {
+   │                      -------- The type 'a::other::S' is not declared in the current module
+18 │         transfer::share_object(s);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::share_object' is restricted to being called in the object's module, 'a::other'
+   ·
+27 │     struct S has key, store {
+   │                       ----- The object has 'store' so 'sui::transfer::public_share_object' can be called instead
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_store.move:22:9
+   │
+21 │     public fun t4(p: &mut UID, s: Receiving<other::S>): other::S {
+   │                                             -------- The type 'a::other::S' is not declared in the current module
+22 │         transfer::receive(p, s)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::receive' is restricted to being called in the object's module, 'a::other'
+   ·
+27 │     struct S has key, store {
+   │                       ----- The object has 'store' so 'sui::transfer::public_receive' can be called instead

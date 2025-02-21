@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/invalid_labels_0.move:3:18
+  │
+3 │         let _x = 'a';
+  │                  ^^^ Single-quote (') may only prefix control flow labels
+  │
+  = Character literals are not supported, and string literals use double-quote (").

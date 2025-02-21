@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/feature_gate/macro_lambda.move:2:17
+  │
+2 │     fun tfun(_: |u64| u64) {}
+  │                 ^^^^^^^^^ 'macro' functions are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/feature_gate/macro_lambda.move:4:17
+  │
+4 │         let _ = |x| x;
+  │                 ^^^^^ lambda expressions are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.

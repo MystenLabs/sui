@@ -1,0 +1,47 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_check/naming/generics_shadowing_invalid.move:7:14
+  │
+6 │     fun foo<S: drop>(s1: S, _: S): S {
+  │                          - Given: 'S'
+7 │         (s1: Self::S);
+  │              ^^^^^^^
+  │              │
+  │              Invalid type annotation
+  │              Expected: '0x2::M::S'
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_check/naming/generics_shadowing_invalid.move:8:20
+  │
+6 │     fun foo<S: drop>(s1: S, _: S): S {
+  │             - But 'S' was declared as a type parameter here
+7 │         (s1: Self::S);
+8 │         let _: S = S {}; // TODO error? should this try to construct the generic ?
+  │                    ^ Invalid construction. Expected a struct name
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/naming/generics_shadowing_invalid.move:9:9
+   │
+ 6 │     fun foo<S: drop>(s1: S, _: S): S {
+   │                          - Given: 'S'
+   ·
+ 9 │         bar(s1);
+   │         ^^^^^^^ Invalid call of '0x2::M::bar'. Invalid argument for parameter '_'
+   ·
+13 │     fun bar(_: S) {}
+   │                - Expected: '0x2::M::S'
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_check/naming/generics_shadowing_invalid.move:10:9
+   │
+ 6 │     fun foo<S: drop>(s1: S, _: S): S {
+   │             - But 'S' was declared as a type parameter here
+   ·
+10 │         S {}
+   │         ^ Invalid construction. Expected a struct name

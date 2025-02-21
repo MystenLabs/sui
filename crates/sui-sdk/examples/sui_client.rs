@@ -32,8 +32,15 @@ async fn main() -> Result<(), anyhow::Error> {
     let sui_testnet = SuiClientBuilder::default().build_testnet().await?;
     println!("Sui testnet version: {}", sui_testnet.api_version());
 
-    println!("{:?}", sui_local.available_rpc_methods());
-    println!("{:?}", sui_local.available_subscriptions());
+    // Sui mainnet -- https://fullnode.mainnet.sui.io:443
+    let sui_mainnet = SuiClientBuilder::default().build_mainnet().await?;
+    println!("Sui mainnet version: {}", sui_mainnet.api_version());
+
+    println!("rpc methods: {:?}", sui_testnet.available_rpc_methods());
+    println!(
+        "available subscriptions: {:?}",
+        sui_testnet.available_subscriptions()
+    );
 
     Ok(())
 }

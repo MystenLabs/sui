@@ -1,0 +1,68 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+task 1, line 25:
+//# run 0x42::Test::t1 --type-args u64 --args 0
+return values: 0
+
+task 2, line 27:
+//# run 0x42::Test::t1 --type-args u8 --args 0u8
+return values: 0
+
+task 3, line 29:
+//# run 0x42::Test::t1 --type-args vector<u8> --args b"wat"
+return values: [119, 97, 116]
+
+task 4, line 31:
+//# run 0x42::Test::t1 --type-args 0x42::Test::Cup<u64> --args 0
+return values: { 0 }
+
+task 5, line 35:
+//# run 0x42::Test::t2 --type-args u64 --args 0
+return values: [0]
+
+task 6, line 37:
+//# run 0x42::Test::t2 --type-args u8 --args 0u8
+return values: [0]
+
+task 7, line 39:
+//# run 0x42::Test::t2 --type-args vector<u8> --args b"wat"
+return values: [[119, 97, 116]]
+
+task 8, line 41:
+//# run 0x42::Test::t2 --type-args 0x42::Test::Cup<u64> --args 0
+return values: [{ 0 }]
+
+task 9, line 45:
+//# run 0x42::Test::t3 --type-args u64 --args 0
+return values: { 0 }
+
+task 10, line 47:
+//# run 0x42::Test::t3 --type-args u8 --args 0u8
+return values: { 0 }
+
+task 11, line 49:
+//# run 0x42::Test::t3 --type-args vector<u8> --args b"wat"
+return values: { [119, 97, 116] }
+
+task 12, line 51:
+//# run 0x42::Test::t3 --type-args 0x42::Test::Cup<u64> --args 0
+return values: { { 0 } }
+
+task 13, line 55:
+//# run 0x42::Test::t4 --type-args u64 u8 --args 0 0u8
+return values: 0, 0
+
+task 14, line 57:
+//# run 0x42::Test::t4 --type-args u8 bool --args 0u8 false
+return values: false, 0
+
+task 15, line 59:
+//# run 0x42::Test::t4 --type-args vector<u8> 0x42::Test::Cup<u64> --args b"wat" 0
+return values: { 0 }, [119, 97, 116]
+
+task 16, line 61:
+//# run 0x42::Test::t4 --type-args 0x42::Test::Cup<u64> address --args 0 @0x42
+return values: 0000000000000000000000000000000000000000000000000000000000000042, { 0 }

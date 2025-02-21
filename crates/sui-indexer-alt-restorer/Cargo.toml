@@ -1,0 +1,36 @@
+[package]
+name = "sui-indexer-alt-restorer"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = { version = "1.0.71", features = ["backtrace"] }
+async-trait = "0.1.68"
+clap = { version = "4.3.0", features = ["derive", "env"] }
+futures = "0.3.28"
+tracing = "0.1.37"
+
+diesel = { workspace = true, features = ["chrono"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+indicatif.workspace = true
+object_store.workspace = true
+prometheus.workspace = true
+sui-archival.workspace = true
+sui-config.workspace = true
+sui-core.workspace = true
+sui-field-count.workspace = true
+sui-indexer-alt-schema.workspace = true
+sui-indexer-alt-framework.workspace = true
+sui-pg-db.workspace = true
+sui-snapshot.workspace = true
+sui-storage.workspace = true
+sui-types.workspace = true
+tokio = { workspace = true, features = ["full"] }
+telemetry-subscribers.workspace = true
+
+[[bin]]
+name = "sui-indexer-alt-restorer"
+path = "src/main.rs"

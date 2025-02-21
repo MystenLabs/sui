@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/parser/invalid_macro_bang_no_args.move:3:17
+  │
+3 │     fun bar() { foo!; }
+  │                 ^^^^- Found 0 argument(s) here
+  │                 │    
+  │                 Invalid call of 'a::m::foo'. The call expected 1 argument(s) but got 0
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/invalid_macro_bang_no_args.move:3:21
+  │
+3 │     fun bar() { foo!; }
+  │                     ^
+  │                     │
+  │                     Unexpected ';'
+  │                     Expected '('

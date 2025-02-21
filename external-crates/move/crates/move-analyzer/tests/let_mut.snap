@@ -1,0 +1,35 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== let_mut.move ========================================================
+-- test 0 -------------------
+use line: 3, use_ndx: 1
+Use: 'p', start: 23, end: 24
+Def: 'p', line: 2, def char: 23
+TypeDef: no info
+On Hover:
+mut p: u64
+
+-- test 1 -------------------
+use line: 4, use_ndx: 0
+Use: 'p', start: 8, end: 9
+Def: 'p', line: 2, def char: 23
+TypeDef: no info
+On Hover:
+mut p: u64
+
+-- test 2 -------------------
+use line: 5, use_ndx: 0
+Use: 'v', start: 16, end: 17
+Def: 'v', line: 4, def char: 16
+TypeDef: no info
+On Hover:
+let mut v: u64
+
+-- test 3 -------------------
+use line: 6, use_ndx: 0
+Use: 'v', start: 8, end: 9
+Def: 'v', line: 4, def char: 16
+TypeDef: no info
+On Hover:
+let mut v: u64

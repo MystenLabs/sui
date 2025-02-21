@@ -1,0 +1,45 @@
+// The sui.node.v2alpha package contains experimental services that have yet to
+// stabilize
+//
+// Everything in here is subject to change and there is no gaurentee about
+// stability or breaking changes.
+syntax = "proto3";
+
+package sui.node.v2alpha;
+
+import "google/protobuf/field_mask.proto";
+import "sui/node/v2/node_service.proto";
+
+// Service for subscribing to data from a Sui Fullnode
+service SubscriptionService {
+  // Subscribe to the stream of checkpoints.
+  //
+  // This API provides a subscription to the checkpoint stream for the Sui
+  // blockchain. When a subscription is initialized the stream will begin with
+  // the latest executed checkpoint as seen by the server. Responses are
+  // gaurenteed to return checkpoints in-order and without gaps. This enables
+  // clients to know exactly the last checkpoint they have processed and in the
+  // event the subscription terminates (either by the client/server or by the
+  // connection breaking), clients will be able to reinitailize a subscription
+  // and then leverage other APIs (e.g.
+  // sui.node.v2.NodeService.GetFullCheckpoint) in order to request data for
+  // the checkpoints they missed.
+  rpc SubscribeCheckpoints(SubscribeCheckpointsRequest) returns (stream SubscribeCheckpointsResponse);
+}
+
+// Request message for SubscriptionService.SubscribeCheckpoints
+message SubscribeCheckpointsRequest {
+  // Optional. Mask for specifiying which parts of the
+  // SubscribeCheckpointsResponse should be returned.
+  optional google.protobuf.FieldMask read_mask = 3;
+}
+
+// Response message for SubscriptionService.SubscribeCheckpoints
+message SubscribeCheckpointsResponse {
+  // Required. The checkpoint sequence number and value of the current cursor
+  // into the checkpoint stream
+  optional uint64 cursor = 1;
+
+  // The requested data for this checkpoint
+  optional sui.node.v2.GetFullCheckpointResponse checkpoint = 2;
+}

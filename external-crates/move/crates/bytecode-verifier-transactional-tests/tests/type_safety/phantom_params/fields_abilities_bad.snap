@@ -1,0 +1,85 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/phantom_params/fields_abilities_bad.mvir
+---
+processed 10 tasks
+
+task 1, lines 16-21:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x1::M2,
+    indices: [(StructDefinition, 0)],
+    offsets: [],
+}
+
+task 2, lines 23-28:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x1::M3,
+    indices: [(StructDefinition, 0)],
+    offsets: [],
+}
+
+task 3, lines 30-35:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M4'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x1::M4,
+    indices: [(StructDefinition, 0)],
+    offsets: [],
+}
+
+task 4, lines 37-42:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M5'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x1::M5,
+    indices: [(StructDefinition, 0)],
+    offsets: [],
+}
+
+task 6, lines 56-61:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M2'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x2::M2,
+    indices: [(EnumDefinition, 0), (VariantTag, 0), (FieldDefinition, 0)],
+    offsets: [],
+}
+
+task 7, lines 63-68:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M3'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x2::M3,
+    indices: [(EnumDefinition, 0), (VariantTag, 0), (FieldDefinition, 0)],
+    offsets: [],
+}
+
+task 8, lines 70-75:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M4'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x2::M4,
+    indices: [(EnumDefinition, 0), (VariantTag, 0), (FieldDefinition, 0)],
+    offsets: [],
+}
+
+task 9, lines 77-82:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M5'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x2::M5,
+    indices: [(EnumDefinition, 0), (VariantTag, 0), (FieldDefinition, 0)],
+    offsets: [],
+}

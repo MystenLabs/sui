@@ -138,6 +138,7 @@ We have selected the following incidents for review:
 and the following incidents have been excluded from review:
 {}
 
+These are only *newly scheduled* incidents. All incidents scheduled for review can be found in Notion <https://www.notion.so/mystenlabs/Incident-Review-Selection-c96bb9ba36c24a59af230162042d3dd4?pvs=4|here>.
 Please comment in the thread to request an adjustment to the list.",
         day_of_week(),
         to_review

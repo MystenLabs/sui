@@ -1,0 +1,98 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-23:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4772800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 25-27:
+//# programmable --sender A --inputs @A
+//> 0: P0::M::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 29-30:
+//# programmable --sender A --inputs object(2,0)
+//> 0: P0::M::delete(Input(0))
+mutated: object(0,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+
+task 4, line 32:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 34-38:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "digest": "4ukxTageudh4AU1Hv25XeNucQcX6R5Gw2BwAC19rkUjt",
+    "objectChanges": [
+      {
+        "type": "mutated",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+        "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+        "version": "2",
+        "previousVersion": "1",
+        "digest": "2LSs7zxkU42HhLyqNWnwTGD5yEzzh1yZSaueQ31RJc6A"
+      },
+      {
+        "type": "created",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0xf827985b0577822cde33d6014436abc7b3a1d13106e97b6939ecf7d466c1310f::M::O",
+        "objectId": "0xc7162cc23503adb20cb79297ed7ce9079f7430cdd57fe901c3c4d8becc36db8d",
+        "version": "2",
+        "digest": "8dXr7d9fBENNdxBX1G3jzb6s8V5QKDWewqUiM4hUNPYq"
+      }
+    ]
+  }
+}
+
+task 6, lines 40-44:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "digest": "94ATSaPBkEeiAuZRjV7mBSpWffQuEkJ9RJjdPUH6eEu9",
+    "objectChanges": [
+      {
+        "type": "mutated",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+        "objectId": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+        "version": "3",
+        "previousVersion": "2",
+        "digest": "GzRuf5gpzWgtRuVwzqfVPZED5fy1Apx2yRdbzUEwewmD"
+      },
+      {
+        "type": "deleted",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "objectType": "0xf827985b0577822cde33d6014436abc7b3a1d13106e97b6939ecf7d466c1310f::M::O",
+        "objectId": "0xc7162cc23503adb20cb79297ed7ce9079f7430cdd57fe901c3c4d8becc36db8d",
+        "version": "3"
+      }
+    ]
+  }
+}

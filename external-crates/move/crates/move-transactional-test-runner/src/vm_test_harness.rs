@@ -162,10 +162,6 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
         self.default_syntax
     }
 
-    async fn cleanup_resources(&mut self) -> Result<()> {
-        Ok(())
-    }
-
     async fn init(
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
@@ -521,7 +517,8 @@ fn call_vm_function(
         .collect();
 
     println!("Doing call");
-    vm_instance.execute_function_bypass_visibility(module, function, type_args, args, gas_meter)
+    vm_instance
+        .execute_function_bypass_visibility(module, function, type_args, args, gas_meter, None)
 }
 
 pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {

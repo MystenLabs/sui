@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02004]: invalid one-time witness declaration
+  ┌─ tests/sui_mode/one_time_witness/no_drop.move:7:12
+  │
+7 │     struct M { dummy: bool }
+  │            ^
+  │            │
+  │            Invalid one-time witness declaration
+  │            One-time witness types can only have the have the 'drop' ability
+  │
+  = One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.

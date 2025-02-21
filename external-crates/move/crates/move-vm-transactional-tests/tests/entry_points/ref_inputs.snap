@@ -1,0 +1,28 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+task 2, lines 38-46:
+//# run --args false
+mutable inputs after call: local#0: false
+
+task 3, lines 47-54:
+//# run --args 0 false 0 0
+mutable inputs after call: local#1: false, local#3: { 0 }
+
+task 4, lines 56-64:
+//# run --type-args u64 bool 0x42::M::S 0x42::M::S --args 0 false 0 0
+mutable inputs after call: local#1: false, local#3: { 0 }
+
+task 6, line 67:
+//# run 0x42::M::t2 --args false
+mutable inputs after call: local#0: false
+
+task 7, line 69:
+//# run 0x42::M::t3 --args 0 false 0 0
+mutable inputs after call: local#1: false, local#3: { 0 }
+
+task 8, line 71:
+//# run 0x42::M::tgen --type-args u64 bool 0x42::M::S 0x42::M::S --args 0 false 0 0
+mutable inputs after call: local#1: false, local#3: { 0 }

@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/restricted_module_alias_names.move:3:20
+  │
+3 │     use 0x42::M as Self;
+  │                    ^^^^ Invalid module alias name 'Self'. 'Self' is restricted and cannot be used to name a module alias
+
+warning[W09001]: unused alias
+  ┌─ tests/move_check/expansion/restricted_module_alias_names.move:5:20
+  │
+5 │     use 0x42::M as vector;
+  │                    ^^^^^^ Unused 'use' of alias 'vector'. Consider removing it
+  │
+  = This alias does not shadow the built-in type 'vector' in type annotations.
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

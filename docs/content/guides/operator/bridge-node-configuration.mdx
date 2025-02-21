@@ -9,10 +9,12 @@ Running a Bridge Validator Node (Bridge Node) requires registering your node wit
 
 To set up and run a Bridge Node, you need to install `sui` and `sui-bridge-cli`. You can install them using one of the following options: 
 
+Install from tip of `main`:
 ```sh
-# install from tip of `main`
 $ cargo install --locked --git "https://github.com/MystenLabs/sui.git" sui sui-bridge-cli
-# install with a commit sha
+```
+Install with a commit sha:
+```sh
 $ cargo install --locked --git "https://github.com/MystenLabs/sui.git" --rev {SHA} sui sui-bridge-cli
 ```
 
@@ -182,7 +184,7 @@ sui:
 To create a `BridgeClient` key pair, run
 
 ```sh
-sui-bridge-cli create-bridge-client-key <PATH_TO_BRIDGE_CLIENT_KEY>
+$ sui-bridge-cli create-bridge-client-key <PATH_TO_BRIDGE_CLIENT_KEY>
 ```
 This prints the newly created Sui Address. Then we need to fund this address with some SUI for operations.
 
@@ -194,20 +196,30 @@ Build or install Bridge Node in one of the following ways:
 - Use `cargo install`.
     ```sh
     $ cargo install --locked --git "https://github.com/MystenLabs/sui.git" --branch {BRANCH-NAME} sui-bridge
-    # OR
+    ```
+    Or
+    ```sh
     $ cargo install --locked --git "https://github.com/MystenLabs/sui.git" --rev {SHA-NAME} sui-bridge
     ```
 - Compile from source code
     ```sh
     $ git clone https://github.com/MystenLabs/sui.git
+    ```
+    ```sh
     $ cd sui
+    ```
+    ```sh
     $ git fetch origin {BRANCH-NAME|SHA}
+    ```
+    ```sh
     $ git checkout {BRANCH-NAME|SHA}
+    ```
+    ```sh
     $ cargo build --release --bin sui-bridge
     ```
 - Use `curl`/`wget` pre-built binaries (for Linux/AMD64 only).
-    ```
-    curl https://sui-releases.s3.us-east-1.amazonaws.com/{SHA}/sui-bridge -o sui-bridge
+    ```sh
+    $ curl https://sui-releases.s3.us-east-1.amazonaws.com/{SHA}/sui-bridge -o sui-bridge
     ```
 - Use pre-built Docker image. Pull from Docker Hub: `mysten/sui-tools:{SHA}`
 

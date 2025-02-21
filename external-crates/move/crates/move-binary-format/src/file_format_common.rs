@@ -29,7 +29,7 @@ const _: () = {
     assert!(BinaryFlavor::mask_and_shift_to_unflavor(x) == BinaryFlavor::SUI_FLAVOR);
 };
 
-/// Encoding of a the flavor into the version of the binary format for versions >= 7.
+/// Encoding of the flavor into the version of the binary format for versions >= 7.
 pub struct BinaryFlavor;
 impl BinaryFlavor {
     pub const FLAVOR_MASK: u32 = 0xFF00_0000;

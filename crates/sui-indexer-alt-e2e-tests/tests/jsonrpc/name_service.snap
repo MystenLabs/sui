@@ -1,0 +1,103 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+task 1, lines 14-18:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Name Service: Domain must contain at least one label"
+  }
+}
+
+task 2, lines 20-24:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Name Service: String length: 243 exceeds maximum allowed length: 200"
+  }
+}
+
+task 3, lines 26-30:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Name Service: Domain must include only one separator"
+  }
+}
+
+task 4, lines 32-36:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Name Service: String length: 0 outside of valid range: [1, 63]"
+  }
+}
+
+task 5, lines 38-42:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Name Service: String length: 70 outside of valid range: [1, 63]"
+  }
+}
+
+task 6, lines 44-48:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 5,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Name Service: Hyphens are not allowed as the first or last character"
+  }
+}
+
+task 7, lines 50-54:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 6,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Name Service: Hyphens are not allowed as the first or last character"
+  }
+}
+
+task 8, lines 56-60:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 7,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Name Service: Only lowercase letters, numbers, and hyphens are allowed"
+  }
+}
+
+task 9, lines 62-66:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 8,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Name Service: Only lowercase letters, numbers, and hyphens are allowed"
+  }
+}

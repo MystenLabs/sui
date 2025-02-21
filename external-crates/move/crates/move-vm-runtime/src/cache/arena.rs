@@ -69,10 +69,12 @@ impl Arena {
     }
 
     /// SAFETY:
+    /// 0. This must never be called on strings (or any other type that contains internal
+    ///    allocations or pointers), as they have heap-allocated byte arrays that will be leaked
+    ///    when the arena is released. This box is allocated in the arena, and thus even if it is
+    ///    dropped, any internal memory will not be reclaimed.
     /// 1. It is the caller's responsibility to ensure that `self` is not shared across threads
     ///    during this call.
-    /// 2. This box is allocated in the arena, and thus even it is dropped its memory will not be
-    ///    reclaimed until the arena is discarded.
     pub fn alloc_box<T>(&self, item: T) -> PartialVMResult<ArenaBox<T>> {
         if let Ok(slice) = self.0.try_alloc(item) {
             Ok(ArenaBox(unsafe {

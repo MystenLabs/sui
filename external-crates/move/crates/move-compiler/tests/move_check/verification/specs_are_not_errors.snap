@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/verification/specs_are_not_errors.move:4:5
+  │
+4 │     spec foo {}
+  │     ^^^^^^^^^^^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/verification/specs_are_not_errors.move:7:7
+  │
+7 │     #[verify_only]
+  │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/verification/specs_are_not_errors.move:12:9
+   │
+12 │ spec a::m {
+   │         ^ Specification blocks are deprecated and are no longer used

@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/invalid_incomplete_match.move:13:16
+   │
+13 │         match (x) {
+   │                ^ Pattern 'Tuple::Two(Maybe::Nothing, _)' not covered

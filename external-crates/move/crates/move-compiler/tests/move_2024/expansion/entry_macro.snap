@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02007]: invalid 'fun' declaration
+  ┌─ tests/move_2024/expansion/entry_macro.move:3:5
+  │
+3 │     entry macro fun foo() {}
+  │     ^^^^^ ----- Function declared as 'macro' here
+  │     │      
+  │     Invalid function declaration. It is meaningless for 'macro' functions to be 'entry' since they are fully-expanded inline during compilation

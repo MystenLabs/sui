@@ -15,7 +15,8 @@ macro_rules! debug_fatal {
         if cfg!(debug_assertions) {
             $crate::fatal!($($arg)*);
         } else {
-            tracing::error!(debug_fatal = true, $($arg)*);
+            let stacktrace = std::backtrace::Backtrace::capture();
+            tracing::error!(debug_fatal = true, stacktrace = ?stacktrace, $($arg)*);
             let location = concat!(file!(), ':', line!());
             if let Some(metrics) = mysten_metrics::get_metrics() {
                 metrics.system_invariant_violations.with_label_values(&[location]).inc();

@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/naming/named_address_distinct_from_each_others_value.move:18:9
+   │
+ 6 │     const C: u64 = 0;
+   │           - Constants are internal to their module, and cannot can be accessed outside of their module
+   ·
+18 │         k::M::C;
+   │         ^^^^^^^ Invalid access of '(k=0x19)::M::C'

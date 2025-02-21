@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/dot_incomplete.move:12:23
+   │
+12 │         let _tmp1 = s.;                // incomplete with `;` (next line should parse)
+   │                       ^
+   │                       │
+   │                       Unexpected ';'
+   │                       Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/dot_incomplete.move:13:37
+   │
+13 │         let _tmp2 = s.another_field.;  // incomplete with `;` (next line should parse)
+   │                                     ^
+   │                                     │
+   │                                     Unexpected ';'
+   │                                     Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/dot_incomplete.move:15:9
+   │
+15 │         let _tmp4 = s;
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/dot_incomplete.move:17:5
+   │
+17 │     }
+   │     ^
+   │     │
+   │     Unexpected '}'
+   │     Expected an identifier or a decimal number

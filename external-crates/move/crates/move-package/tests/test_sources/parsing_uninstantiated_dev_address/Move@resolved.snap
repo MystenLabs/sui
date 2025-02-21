@@ -1,0 +1,4 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+Error parsing '[dev-addresses]' section of manifest: Found uninstantiated named address 'b'. All addresses in the 'dev-addresses' field must be instantiated.

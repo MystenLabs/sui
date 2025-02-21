@@ -1,0 +1,274 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+ResolvedGraph {
+    graph: DependencyGraph {
+        root_path: "tests/test_sources/nested_deps_shared_override",
+        root_package_id: "Root",
+        root_package_name: "Root",
+        package_graph: {
+            "Root": [
+                (
+                    "More",
+                    Outgoing,
+                ),
+                (
+                    "Nested",
+                    Outgoing,
+                ),
+                (
+                    "Shared",
+                    Outgoing,
+                ),
+            ],
+            "More": [
+                (
+                    "Root",
+                    Incoming,
+                ),
+                (
+                    "Shared",
+                    Outgoing,
+                ),
+                (
+                    "Nested",
+                    Incoming,
+                ),
+            ],
+            "Shared": [
+                (
+                    "More",
+                    Incoming,
+                ),
+                (
+                    "Nested",
+                    Incoming,
+                ),
+                (
+                    "Root",
+                    Incoming,
+                ),
+            ],
+            "Nested": [
+                (
+                    "Root",
+                    Incoming,
+                ),
+                (
+                    "More",
+                    Outgoing,
+                ),
+                (
+                    "Shared",
+                    Outgoing,
+                ),
+            ],
+        },
+        package_table: {
+            "More": Package {
+                kind: Local(
+                    "deps_only/more",
+                ),
+                version: None,
+                resolver: None,
+            },
+            "Nested": Package {
+                kind: Local(
+                    "deps_only/nested",
+                ),
+                version: None,
+                resolver: None,
+            },
+            "Shared": Package {
+                kind: Local(
+                    "deps_only/shared",
+                ),
+                version: None,
+                resolver: None,
+            },
+        },
+        always_deps: {
+            "More",
+            "Nested",
+            "Root",
+            "Shared",
+        },
+        manifest_digest: "5005BF461ECC5281FE314371B38D8C163C5395D7455B91BEA0F63C1BCFD57551",
+        deps_digest: "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3",
+    },
+    build_options: BuildConfig {
+        dev_mode: true,
+        test_mode: false,
+        generate_docs: false,
+        save_disassembly: false,
+        install_dir: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        force_recompilation: false,
+        lock_file: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        fetch_deps_only: false,
+        skip_fetch_latest_git_deps: false,
+        default_flavor: None,
+        default_edition: None,
+        deps_as_root: false,
+        silence_warnings: false,
+        warnings_are_errors: false,
+        json_errors: false,
+        additional_named_addresses: {},
+        lint_flag: LintFlag {
+            no_lint: false,
+            lint: false,
+        },
+    },
+    package_table: {
+        "More": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "More",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {},
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {
+                    "Shared": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "../shared",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: true,
+                        },
+                    ),
+                },
+                dev_dependencies: {},
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+        "Nested": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "Nested",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {},
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {
+                    "More": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "../more",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: false,
+                        },
+                    ),
+                    "Shared": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "../shared",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: true,
+                        },
+                    ),
+                },
+                dev_dependencies: {},
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+        "Root": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "Root",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {},
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {
+                    "More": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "deps_only/more",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: false,
+                        },
+                    ),
+                    "Nested": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "deps_only/nested",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: false,
+                        },
+                    ),
+                    "Shared": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "deps_only/shared",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: true,
+                        },
+                    ),
+                },
+                dev_dependencies: {},
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+        "Shared": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "Shared",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {},
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {},
+                dev_dependencies: {},
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+    },
+}

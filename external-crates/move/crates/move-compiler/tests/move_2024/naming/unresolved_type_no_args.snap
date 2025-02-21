@@ -1,0 +1,44 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/naming/unresolved_type_no_args.move:2:5
+  │
+2 │     struct Mine { f: Q }
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E03004]: unbound type
+  ┌─ tests/move_2024/naming/unresolved_type_no_args.move:2:22
+  │
+2 │     struct Mine { f: Q }
+  │                      ^ Unbound type 'Q' in current scope
+
+error[E03004]: unbound type
+  ┌─ tests/move_2024/naming/unresolved_type_no_args.move:3:16
+  │
+3 │     fun foo(_: S): G {
+  │                ^ Unbound type 'S' in current scope
+
+error[E03004]: unbound type
+  ┌─ tests/move_2024/naming/unresolved_type_no_args.move:3:20
+  │
+3 │     fun foo(_: S): G {
+  │                    ^ Unbound type 'G' in current scope
+
+error[E03004]: unbound type
+  ┌─ tests/move_2024/naming/unresolved_type_no_args.move:4:16
+  │
+4 │         let _: R = (0: P);
+  │                ^ Unbound type 'R' in current scope
+
+error[E03004]: unbound type
+  ┌─ tests/move_2024/naming/unresolved_type_no_args.move:4:24
+  │
+4 │         let _: R = (0: P);
+  │                        ^ Unbound type 'P' in current scope

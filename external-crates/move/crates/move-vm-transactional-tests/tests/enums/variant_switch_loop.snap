@@ -1,0 +1,47 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 1-22:
+//# print-bytecode
+// Move bytecode v7
+module 6.InfiniteSwith {
+
+enum EnumWithOneVariant {
+	One {  }
+}
+
+public f(Arg0: EnumWithOneVariant) {
+B0:
+	0: ImmBorrowLoc[0](Arg0: EnumWithOneVariant)
+	1: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	2: Ret
+Jump tables:
+[0]:	variant_switch EnumWithOneVariant {
+		Variant0 => jump 0
+	}
+}
+
+public start(): EnumWithOneVariant {
+L0:	loc0: EnumWithOneVariant
+B0:
+	0: PackVariant(VariantHandleIndex(0))
+	1: StLoc[0](loc0: EnumWithOneVariant)
+	2: MoveLoc[0](loc0: EnumWithOneVariant)
+	3: Ret
+}
+
+}
+
+
+task 2, lines 48-58:
+//# run --gas-budget 10000
+Error: Function execution failed with VMError: {
+    major_status: OUT_OF_GAS,
+    sub_status: None,
+    location: 0x6::InfiniteSwith,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}

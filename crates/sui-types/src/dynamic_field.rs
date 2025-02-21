@@ -61,12 +61,11 @@ where
 }
 
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldInfo {
     pub name: DynamicFieldName,
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<crate::sui_serde::Base64orBase58, _>")]
+    #[serde_as(as = "Readable<Base64, _>")]
     pub bcs_name: Vec<u8>,
     pub type_: DynamicFieldType,
     pub object_type: String,

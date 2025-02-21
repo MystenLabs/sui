@@ -1,0 +1,46 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/struct_public.move:3:5
+  │
+3 │     struct Foo {}
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/struct_public.move:4:5
+  │
+4 │     public(friend) struct Foo {}
+  │     ^^^^^^^^^^^^^^ Invalid struct declaration. 'public(friend)' struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/parser/struct_public.move:4:27
+  │
+3 │     struct Foo {}
+  │            --- Alias previously defined here
+4 │     public(friend) struct Foo {}
+  │                           ^^^ Duplicate module member or alias 'Foo'. Top level names in a namespace must be unique
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/struct_public.move:5:5
+  │
+5 │     public(package) struct Foo {}
+  │     ^^^^^^^^^^^^^^^ Invalid struct declaration. 'public(package)' struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/parser/struct_public.move:5:28
+  │
+4 │     public(friend) struct Foo {}
+  │                           --- Alias previously defined here
+5 │     public(package) struct Foo {}
+  │                            ^^^ Duplicate module member or alias 'Foo'. Top level names in a namespace must be unique

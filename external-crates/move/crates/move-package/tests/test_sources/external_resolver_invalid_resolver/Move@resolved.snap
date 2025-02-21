@@ -1,0 +1,5 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+Error parsing '[dependencies]' section of manifest: Malformed external resolver declaration for dependency r.baz = "quz"
+foo = "bar"

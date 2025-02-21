@@ -1,0 +1,39 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W02021]: duplicate alias
+   ┌─ tests/move_2024/naming/use_fun_duplicate_nested_scopes.move:10:5
+   │
+ 4 │     public fun foo(_: &S) {}
+   │                --- The same alias was previously declared here
+   ·
+10 │     use fun a::m::foo as S.foo;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary method alias 'a::m::S.foo' for 'a::m::foo'
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+   ┌─ tests/move_2024/naming/use_fun_duplicate_nested_scopes.move:21:9
+   │
+19 │     use fun a::m::foo as S.bar;
+   │     --------------------------- The same alias was previously declared here
+20 │     fun call_bar(s: &S) {
+21 │         use fun a::m::foo as S.bar;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate method alias 'a::m::S.bar' for 'a::m::foo'
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+   ┌─ tests/move_2024/naming/use_fun_duplicate_nested_scopes.move:31:9
+   │
+29 │     use a::m::foo as bar;
+   │                      --- The same alias was previously declared here
+30 │     fun call_bar(s: &S) {
+31 │         use fun a::m::foo as S.bar;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate method alias 'a::m::S.bar' for 'a::m::foo'
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

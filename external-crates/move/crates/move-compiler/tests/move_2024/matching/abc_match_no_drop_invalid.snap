@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/matching/abc_match_no_drop_invalid.move:10:27
+   │    
+ 3 │         public enum ABC<T> {
+   │                     --- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·    
+10 │             match (ABC::C(0)) {
+   │                    --------- The type '0x42::m::ABC<u64>' does not have the ability 'drop'
+   │ ╭─────────────────────────────^
+   │ │ ╭───────────────────────────'
+11 │ │ │             ABC::C(x) => x,
+12 │ │ │             ABC::A(x) => x,
+13 │ │ │             _ => 1,
+14 │ │ │         }
+   │ ╰─│─────────^ Invalid return
+   │   ╰─────────' The match expression takes ownership of this value but does not use it. The value does not have the 'drop' ability and must be consumed before the function returns
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/matching/abc_match_no_drop_invalid.move:13:13
+   │
+ 3 │     public enum ABC<T> {
+   │                 --- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+10 │         match (ABC::C(0)) {
+   │                --------- The type '0x42::m::ABC<u64>' does not have the ability 'drop'
+   ·
+13 │             _ => 1,
+   │             ^ Cannot ignore values without the 'drop' ability. '_' patterns discard their values

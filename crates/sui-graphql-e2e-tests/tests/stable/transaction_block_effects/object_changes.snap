@@ -1,0 +1,148 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+validator_0: object(0,0)
+
+task 1, lines 6-25:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 27:
+//# run Test::M1::create --args 0 @A --gas-price 1000
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 29:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 31-50:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "pageInfo": {
+                "hasPreviousPage": false,
+                "hasNextPage": true,
+                "startCursor": "eyJpIjowLCJjIjoxfQ",
+                "endCursor": "eyJpIjoxOSwiYyI6MX0"
+              },
+              "edges": [
+                {
+                  "cursor": "eyJpIjowLCJjIjoxfQ"
+                },
+                {
+                  "cursor": "eyJpIjoxLCJjIjoxfQ"
+                },
+                {
+                  "cursor": "eyJpIjoyLCJjIjoxfQ"
+                },
+                {
+                  "cursor": "eyJpIjozLCJjIjoxfQ"
+                },
+                {
+                  "cursor": "eyJpIjo0LCJjIjoxfQ"
+                },
+                {
+                  "cursor": "eyJpIjo1LCJjIjoxfQ"
+                },
+                {
+                  "cursor": "eyJpIjo2LCJjIjoxfQ"
+                },
+                {
+                  "cursor": "eyJpIjo3LCJjIjoxfQ"
+                },
+                {
+                  "cursor": "eyJpIjo4LCJjIjoxfQ"
+                },
+                {
+                  "cursor": "eyJpIjo5LCJjIjoxfQ"
+                },
+                {
+                  "cursor": "eyJpIjoxMCwiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxMSwiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxMiwiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxMywiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxNCwiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxNSwiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxNiwiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxNywiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxOCwiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxOSwiYyI6MX0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5, lines 52-71:
+//# run-graphql --cursors {"i":10,"c":1}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "pageInfo": {
+                "hasPreviousPage": true,
+                "hasNextPage": true,
+                "startCursor": "eyJpIjoxMSwiYyI6MX0",
+                "endCursor": "eyJpIjoxNSwiYyI6MX0"
+              },
+              "edges": [
+                {
+                  "cursor": "eyJpIjoxMSwiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxMiwiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxMywiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxNCwiYyI6MX0"
+                },
+                {
+                  "cursor": "eyJpIjoxNSwiYyI6MX0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

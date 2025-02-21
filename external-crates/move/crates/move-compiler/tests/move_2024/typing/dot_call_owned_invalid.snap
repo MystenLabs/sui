@@ -1,0 +1,39 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/dot_call_owned_invalid.move:9:5
+  │
+6 │ fun f(_self: X) {}
+  │              - Expected: '0x42::t::X'
+7 │ 
+8 │ public fun foo (x: &X, y1: Y, y2: &Y) {
+  │                    -- Given: '&0x42::t::X'
+9 │     x.f();
+  │     ^^^^^ Invalid call of '0x42::t::f'. Invalid argument for parameter '_self'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/dot_call_owned_invalid.move:10:5
+   │
+ 3 │ public struct X has drop {}
+   │               - To satisfy the constraint, the 'copy' ability would need to be added here
+ 4 │ public struct Y has drop { x: X }
+   │                               - The type '0x42::t::X' does not have the ability 'copy'
+   ·
+10 │     y1.x.f();
+   │     ^^^^^^^^ Invalid implicit copy of field 'x' without the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/dot_call_owned_invalid.move:11:5
+   │
+ 3 │ public struct X has drop {}
+   │               - To satisfy the constraint, the 'copy' ability would need to be added here
+ 4 │ public struct Y has drop { x: X }
+   │                               - The type '0x42::t::X' does not have the ability 'copy'
+   ·
+11 │     y2.x.f();
+   │     ^^^^^^^^ Invalid implicit copy of field 'x' without the 'copy' ability

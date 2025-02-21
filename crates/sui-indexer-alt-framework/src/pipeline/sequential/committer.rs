@@ -4,6 +4,7 @@
 use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
+use sui_pg_db::Db;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -13,10 +14,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::{
-    db::Db,
     metrics::IndexerMetrics,
-    pipeline::{logging::WatermarkLogger, Indexed, WARN_PENDING_WATERMARKS},
-    watermarks::CommitterWatermark,
+    models::watermarks::CommitterWatermark,
+    pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
 };
 
 use super::{Handler, SequentialConfig};
@@ -42,7 +42,7 @@ use super::{Handler, SequentialConfig};
 pub(super) fn committer<H: Handler + 'static>(
     config: SequentialConfig,
     watermark: Option<CommitterWatermark<'static>>,
-    mut rx: mpsc::Receiver<Indexed<H>>,
+    mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     db: Db,
     metrics: Arc<IndexerMetrics>,
@@ -84,7 +84,7 @@ pub(super) fn committer<H: Handler + 'static>(
 
         // Data for checkpoint that haven't been written yet. Note that `pending_rows` includes
         // rows in `batch`.
-        let mut pending: BTreeMap<u64, Indexed<H>> = BTreeMap::new();
+        let mut pending: BTreeMap<u64, IndexedCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
         info!(pipeline = H::NAME, ?watermark, "Starting committer");
@@ -219,6 +219,10 @@ pub(super) fn committer<H: Handler + 'static>(
 
                     let Ok(mut conn) = db.connect().await else {
                         warn!(pipeline = H::NAME, "Failed to get connection for DB");
+                        metrics
+                            .total_committer_batches_failed
+                            .with_label_values(&[H::NAME])
+                            .inc();
                         continue;
                     };
 
@@ -250,6 +254,11 @@ pub(super) fn committer<H: Handler + 'static>(
                                 pending = pending_rows,
                                 "Error writing batch: {e}",
                             );
+
+                            metrics
+                                .total_committer_batches_failed
+                                .with_label_values(&[H::NAME])
+                                .inc();
 
                             attempt += 1;
                             continue;

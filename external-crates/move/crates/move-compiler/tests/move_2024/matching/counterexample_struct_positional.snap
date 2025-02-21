@@ -1,0 +1,50 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/counterexample_struct_positional.move:6:16
+  │
+6 │         match (PTuple2(0, 1)) {
+  │                ^^^^^^^^^^^^^ Pattern 'PTuple2(_0, _)' not covered
+  │
+  = When '_0' is not 0
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_struct_positional.move:12:16
+   │
+12 │         match (PTuple2(0, 1)) {
+   │                ^^^^^^^^^^^^^ Pattern 'PTuple2(_0, _)' not covered
+   │
+   = When '_0' is not 0 or 3
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_struct_positional.move:19:16
+   │
+19 │         match (tup) {
+   │                ^^^ Pattern 'PTuple2(PTuple2(_0, _), _)' not covered
+   │
+   = When '_0' is not 1
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_struct_positional.move:25:16
+   │
+25 │         match (tup) {
+   │                ^^^ Pattern 'PTuple2(false, _)' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_struct_positional.move:31:16
+   │
+31 │         match (tup) {
+   │                ^^^ Pattern 'PTuple2(false, false)' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_struct_positional.move:38:16
+   │
+38 │         match (PTuple2(0, 1)) {
+   │                ^^^^^^^^^^^^^ Pattern 'PTuple2(_0, _)' not covered
+   │
+   = When '_0' is not 0, 3, 4, or 7

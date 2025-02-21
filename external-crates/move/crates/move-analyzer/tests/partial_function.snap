@@ -1,0 +1,11 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== M1.move ========================================================
+-- test 0 -------------------
+use line: 3, use_ndx: 0
+Use: 'INVALID USE IDENT', start: 8, end: 17
+Def: 'just_name', line: 2, def char: 8
+TypeDef: no info
+On Hover:
+fun PartialFunction::M1::just_name()

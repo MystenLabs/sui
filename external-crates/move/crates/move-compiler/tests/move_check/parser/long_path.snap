@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01016]: invalid name
+  ┌─ tests/move_check/parser/long_path.move:7:19
+  │
+7 │     struct A { y: 0x42::m::X::Y }
+  │                   ^^^^^^^^^^^^^ Too many name segments
+  │
+  = Names may only have 0, 1, or 2 segments separated by '::'
+
+error[E01016]: invalid name
+  ┌─ tests/move_check/parser/long_path.move:8:19
+  │
+8 │     struct B { x: 0x42::m::X::X }
+  │                   ^^^^^^^^^^^^^ Too many name segments
+  │
+  = Names may only have 0, 1, or 2 segments separated by '::'
+
+error[E01016]: invalid name
+   ┌─ tests/move_check/parser/long_path.move:10:27
+   │
+10 │     fun foo(): 0x42::m::X<042::m::Y::Y> {
+   │                           ^^^^^^^^^^^^ Too many name segments
+   │
+   = Names may only have 0, 1, or 2 segments separated by '::'
+
+error[E01016]: invalid name
+   ┌─ tests/move_check/parser/long_path.move:11:9
+   │
+11 │         0x42::m::X<u64>::X { t: abort 0 }
+   │         ^^^^^^^^^^^^^^^^^^ Too many name segments
+   │
+   = Names may only have 0, 1, or 2 segments separated by '::'

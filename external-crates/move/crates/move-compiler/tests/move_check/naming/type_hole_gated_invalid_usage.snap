@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03021]: invalid type annotation
+  ┌─ tests/move_check/naming/type_hole_gated_invalid_usage.move:2:22
+  │
+2 │     struct S<T> { f: _ }
+  │                      ^ Invalid usage of a placeholder for type inference '_'. Struct fields require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/naming/type_hole_gated_invalid_usage.move:2:22
+  │
+2 │     struct S<T> { f: _ }
+  │                      ^ '_' placeholders for type inference are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E03021]: invalid type annotation
+  ┌─ tests/move_check/naming/type_hole_gated_invalid_usage.move:3:16
+  │
+3 │     fun foo(_: _) {}
+  │                ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
+  │
+  = Only 'macro' functions can use '_' in their signatures
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/naming/type_hole_gated_invalid_usage.move:3:16
+  │
+3 │     fun foo(_: _) {}
+  │                ^ '_' placeholders for type inference are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.

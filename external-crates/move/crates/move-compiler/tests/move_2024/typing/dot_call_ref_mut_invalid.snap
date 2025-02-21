@@ -1,0 +1,25 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04006]: invalid subtype
+  ┌─ tests/move_2024/typing/dot_call_ref_mut_invalid.move:9:5
+  │
+6 │ fun f(_self: &mut X) {}
+  │              ------ Expected: '&mut 0x42::t::X'
+7 │ 
+8 │ public fun foo(x: &X) {
+  │                   -- Given: '&0x42::t::X'
+9 │     x.f();
+  │     ^^^^^ Invalid call of '0x42::t::f'. Invalid argument for parameter '_self'
+
+error[E07001]: referential transparency violated
+   ┌─ tests/move_2024/typing/dot_call_ref_mut_invalid.move:13:5
+   │
+12 │ public fun bar(y: &Y) {
+   │                   -- Immutable because of this position
+13 │     y.x.f();
+   │     ^^^^^^^ Invalid mutable borrow from an immutable reference

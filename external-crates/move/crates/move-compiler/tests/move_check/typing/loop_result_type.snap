@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/typing/loop_result_type.move:19:13
+   │
+19 │         foo(loop {})
+   │             ^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/typing/loop_result_type.move:25:23
+   │
+25 │         let x: X::R = loop { 0; };
+   │                       ^^^^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

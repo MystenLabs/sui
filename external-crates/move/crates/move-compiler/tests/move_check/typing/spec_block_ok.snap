@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/typing/spec_block_ok.move:3:10
+  │
+3 │         (spec {}: ())
+  │          ^^^^^^^ Specification blocks are deprecated and are no longer used

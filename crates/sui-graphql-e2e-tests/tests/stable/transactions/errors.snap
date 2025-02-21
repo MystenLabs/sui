@@ -1,0 +1,66 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+task 1, lines 6-11:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-14:
+//# programmable
+//> P0::m::boom()
+Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::boom (function index 1) at offset 1, Abort Code: 42
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("boom") }, 42), source: Some(VMError { major_status: ABORTED, sub_status: Some(42), message: Some("P0::m::boom at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
+
+task 3, line 16:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 18-30:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "status": "FAILURE",
+            "errors": "Error in 1st command, from '0xf3d0d32cbacdccefba19a343e281fec9846e3b4bab89bd11d54fcb9a2630e82a::m::boom' (instruction 1), abort code: 42"
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5, lines 32-35:
+//# programmable
+//> 0: P0::m::tick();
+//> 1: P0::m::tick();
+//> P0::m::boom()
+Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::boom (function index 1) at offset 1, Abort Code: 42
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("boom") }, 42), source: Some(VMError { major_status: ABORTED, sub_status: Some(42), message: Some("P0::m::boom at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(2) } }
+
+task 6, line 37:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 39-52:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "status": "FAILURE",
+            "errors": "Error in 3rd command, from '0xf3d0d32cbacdccefba19a343e281fec9846e3b4bab89bd11d54fcb9a2630e82a::m::boom' (instruction 1), abort code: 42"
+          }
+        }
+      ]
+    }
+  }
+}

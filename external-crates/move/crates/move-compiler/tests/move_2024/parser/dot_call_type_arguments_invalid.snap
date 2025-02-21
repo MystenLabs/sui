@@ -1,0 +1,44 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03010]: unbound field
+   ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:9
+   │
+12 │         c.uncup <u64> ();
+   │         ^^^^^^^ Unbound field 'uncup' in 'a::m::Cup'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:9
+   │
+12 │         c.uncup <u64> ();
+   │         ^^^^^^^^^^^^
+   │         │
+   │         Invalid argument to '>'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:18
+   │
+12 │         c.uncup <u64> ();
+   │                  ^^^ Unbound variable 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:21
+   │
+12 │         c.uncup <u64> ();
+   │         ------------^ -- Found: '()'. It is not compatible with the other type.
+   │         │           │  
+   │         │           Incompatible arguments to '>'
+   │         Found: 'bool'. It is not compatible with the other type.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:23
+   │
+12 │         c.uncup <u64> ();
+   │         ------------  ^^ Invalid argument to '>'
+   │         │              
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'

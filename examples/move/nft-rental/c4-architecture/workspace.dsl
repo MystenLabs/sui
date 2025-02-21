@@ -13,7 +13,7 @@ workspace {
                 promise = component "Promise" "A Promise object given to the borrower when they want to use the borrowed item. Acts as a hot potato, requiring that the rentable be returned after use."
                 install = component "Install" "Allows for a borrower or renter to install the Rentables Extension to their Kiosk."
                 list = component "List" "Allows for a renter to list an item for renting."
-                delist = component "Delist" "Allows a renter to delist an item they are currenlty listing but not actively renting."
+                delist = component "Delist" "Allows a renter to delist an item they are currently listing but not actively renting."
                 rent = component "Rent" "Allows a borrower to rent an item that is being listed in one's Rentables Extension."
                 borrow = component "Borrow" "Enables the borrower to borrow the item either by value of by reference. Depending on the configuration defined by the renter."
                 reclaim = component "Reclaim" "Allows the renter to claim their item after the rental period has expired."

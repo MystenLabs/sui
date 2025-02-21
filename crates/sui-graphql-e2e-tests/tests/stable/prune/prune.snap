@@ -1,0 +1,132 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+task 1, lines 6-25:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 27:
+//# run Test::M1::create --args 0 @A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 29:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 31:
+//# advance-epoch
+Epoch advanced: 0
+
+task 5, line 33:
+//# run Test::M1::create --args 1 @A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 35:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, line 37:
+//# advance-epoch
+Epoch advanced: 1
+
+task 8, line 39:
+//# run Test::M1::create --args 2 @A
+created: object(8,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 41:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 10, line 43:
+//# advance-epoch
+Epoch advanced: 2
+
+task 11, lines 45-58:
+//# run-graphql --wait-for-checkpoint-pruned 4
+Response: {
+  "data": {
+    "epoch": {
+      "epochId": 2
+    },
+    "checkpoints": {
+      "nodes": [
+        {
+          "epoch": {
+            "epochId": 2
+          },
+          "sequenceNumber": 5
+        },
+        {
+          "epoch": {
+            "epochId": 2
+          },
+          "sequenceNumber": 6
+        }
+      ]
+    }
+  }
+}
+
+task 12, lines 60-70:
+//# run-graphql
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 5
+      },
+      "last": {
+        "sequenceNumber": 6
+      }
+    }
+  }
+}
+
+task 13, lines 72-75:
+//# run-graphql
+Response: {
+  "data": {
+    "chainIdentifier": "084d40f2"
+  }
+}
+
+task 14, lines 77-106:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "validatorSet": {
+        "totalStake": "0",
+        "activeValidators": {
+          "nodes": [
+            {
+              "name": "validator-0"
+            }
+          ]
+        },
+        "validatorCandidatesSize": 0,
+        "inactivePoolsId": "0x514509ad914ad681508af65f278bea302598aa33653436d497faaa0dbd756f61"
+      },
+      "totalGasFees": "2000000",
+      "totalStakeRewards": "2000000",
+      "totalStakeSubsidies": "0",
+      "fundSize": "0",
+      "fundInflow": "7873600",
+      "fundOutflow": "978120",
+      "netInflow": "6895480",
+      "transactionBlocks": {
+        "nodes": []
+      }
+    }
+  }
+}

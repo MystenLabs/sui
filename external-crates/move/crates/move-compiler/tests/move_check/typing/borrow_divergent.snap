@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/typing/borrow_divergent.move:4:13
+  │
+4 │            &break;
+  │             ^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/typing/borrow_divergent.move:9:12
+  │
+9 │         &{ return };
+  │            ^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/typing/borrow_divergent.move:13:11
+   │
+13 │         &(if (cond) return else return);
+   │           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

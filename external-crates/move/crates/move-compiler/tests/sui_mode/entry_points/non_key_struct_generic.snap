@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02002]: invalid 'entry' function signature
+  ┌─ tests/sui_mode/entry_points/non_key_struct_generic.move:9:25
+  │
+9 │     public entry fun t1(_: Obj<NoStore>) {
+  │            -----        ^  ------------ 'entry' parameters must be primitives (by-value), vectors of primitives, objects (by-reference or by-value), vectors of objects, or 'Receiving' arguments (by-reference or by-value)
+  │            │            │   
+  │            │            Invalid 'entry' parameter type for parameter '_'
+  │            't1' was declared 'entry' here
+
+error[Sui E02002]: invalid 'entry' function signature
+   ┌─ tests/sui_mode/entry_points/non_key_struct_generic.move:14:28
+   │
+14 │     public entry fun t2<T>(_: Obj<T>) {
+   │            -----           ^  ------ 'entry' parameters must be primitives (by-value), vectors of primitives, objects (by-reference or by-value), vectors of objects, or 'Receiving' arguments (by-reference or by-value)
+   │            │               │   
+   │            │               Invalid 'entry' parameter type for parameter '_'
+   │            't2' was declared 'entry' here

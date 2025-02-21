@@ -1,0 +1,41 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-17:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4810800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 19:
+//# run test::m1::mint_shared
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 21:
+//# view-object 2,0
+Owner: Shared( 3 )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
+
+task 4, lines 23-24:
+//# programmable --sender A --inputs object(2,0)
+//> MergeCoins(Gas, [Input(0)])
+mutated: object(0,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

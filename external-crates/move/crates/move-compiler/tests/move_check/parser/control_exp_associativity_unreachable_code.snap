@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:9:11
+  │
+9 │     fun t(cond: bool): u64 {
+  │           ^^^^ Unused parameter 'cond'. Consider removing or prefixing with an underscore: '_cond'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:11:13
+   │
+11 │         1 + loop { foo() } + 2;
+   │             ^^^^^^^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

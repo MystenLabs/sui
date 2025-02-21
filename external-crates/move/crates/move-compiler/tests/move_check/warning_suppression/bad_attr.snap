@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02015]: invalid attribute
+  ┌─ tests/move_check/warning_suppression/bad_attr.move:3:16
+  │
+3 │ #[allow(all(), unused = true, unused_(assignment, variable))]
+  │                ^^^^^^ Expected a stand alone warning filter identifier, e.g. 'allow(unused)'
+
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/warning_suppression/bad_attr.move:3:39
+  │
+3 │ #[allow(all(), unused = true, unused_(assignment, variable))]
+  │                                       ^^^^^^^^^^ Unknown warning filter 'unused_(assignment)'
+
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/warning_suppression/bad_attr.move:3:51
+  │
+3 │ #[allow(all(), unused = true, unused_(assignment, variable))]
+  │                                                   ^^^^^^^^ Unknown warning filter 'unused_(variable)'

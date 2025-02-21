@@ -1,0 +1,124 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+task 2, line 222:
+//# run 0x6::Enums::poly_invalid1_mut_ref
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(4), 1)],
+}
+
+task 3, line 224:
+//# run 0x6::Enums::poly_invalid1_imm_ref
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(5), 1)],
+}
+
+task 4, line 226:
+//# run 0x6::Enums::poly_invalid1
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(3), 1)],
+}
+
+task 5, line 228:
+//# run 0x6::Enums::poly_invalid2_mut_ref
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(1), 1)],
+}
+
+task 6, line 230:
+//# run 0x6::Enums::poly_invalid2_imm_ref
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(2), 1)],
+}
+
+task 7, line 232:
+//# run 0x6::Enums::poly_invalid2
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 8, line 234:
+//# run 0x6::Enums::mono_invalid1_mut_ref
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(10), 1)],
+}
+
+task 9, line 236:
+//# run 0x6::Enums::mono_invalid1_imm_ref
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(11), 1)],
+}
+
+task 10, line 238:
+//# run 0x6::Enums::mono_invalid1
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(9), 1)],
+}
+
+task 11, line 240:
+//# run 0x6::Enums::mono_invalid2_mut_ref
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(7), 1)],
+}
+
+task 12, line 242:
+//# run 0x6::Enums::mono_invalid2_imm_ref
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(8), 1)],
+}
+
+task 13, line 244:
+//# run 0x6::Enums::mono_invalid2
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(6), 1)],
+}

@@ -1,0 +1,213 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 2, lines 10-12:
+//# programmable --sender A --inputs 1 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 14:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, line 18:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, line 22:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, lines 24-36:
+//# run-graphql
+Response: {
+  "data": {
+    "c0": {
+      "nodes": [
+        {
+          "digest": "FPhSSzT7tHmrPhs3H9GT1n4Dqj3eyCgaFLkQSc9FEDVV",
+          "kind": {
+            "__typename": "GenesisTransaction"
+          }
+        }
+      ]
+    },
+    "c1": {
+      "nodes": [
+        {
+          "digest": "43wY12GuxKzFAJAAW7oCcYfRGb3BSKXxgrVTtXwuELfn",
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction"
+          }
+        },
+        {
+          "digest": "Cn6D9eKgVx5EeZddUSpQeTFcVyHKjqmt6yeiroKgr9h6",
+          "kind": {
+            "__typename": "ProgrammableTransactionBlock"
+          }
+        }
+      ]
+    },
+    "c2": {
+      "nodes": [
+        {
+          "digest": "9eMYXfB8mzZhdQgJ6HJTTdcwyXZ3EHVXDpcvERnnBWvR",
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction"
+          }
+        }
+      ]
+    },
+    "c3": {
+      "nodes": [
+        {
+          "digest": "E1TmDoToDfVSW7kMEFiYsNFL2UeCaL1wNbWLdFjxe5mx",
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction"
+          }
+        }
+      ]
+    },
+    "c4": {
+      "nodes": []
+    }
+  }
+}
+
+task 9, lines 38-50:
+//# run-graphql
+Response: {
+  "data": {
+    "c0": {
+      "transactionBlocks": {
+        "nodes": [
+          {
+            "digest": "FPhSSzT7tHmrPhs3H9GT1n4Dqj3eyCgaFLkQSc9FEDVV",
+            "kind": {
+              "__typename": "GenesisTransaction"
+            }
+          }
+        ]
+      }
+    },
+    "c1": {
+      "transactionBlocks": {
+        "nodes": [
+          {
+            "digest": "43wY12GuxKzFAJAAW7oCcYfRGb3BSKXxgrVTtXwuELfn",
+            "kind": {
+              "__typename": "ConsensusCommitPrologueTransaction"
+            }
+          },
+          {
+            "digest": "Cn6D9eKgVx5EeZddUSpQeTFcVyHKjqmt6yeiroKgr9h6",
+            "kind": {
+              "__typename": "ProgrammableTransactionBlock"
+            }
+          }
+        ]
+      }
+    },
+    "c2": {
+      "transactionBlocks": {
+        "nodes": [
+          {
+            "digest": "9eMYXfB8mzZhdQgJ6HJTTdcwyXZ3EHVXDpcvERnnBWvR",
+            "kind": {
+              "__typename": "ConsensusCommitPrologueTransaction"
+            }
+          }
+        ]
+      }
+    },
+    "c3": {
+      "transactionBlocks": {
+        "nodes": [
+          {
+            "digest": "E1TmDoToDfVSW7kMEFiYsNFL2UeCaL1wNbWLdFjxe5mx",
+            "kind": {
+              "__typename": "ConsensusCommitPrologueTransaction"
+            }
+          }
+        ]
+      }
+    },
+    "c4": null
+  }
+}
+
+task 10, lines 52-63:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "transactionBlocks": {
+            "nodes": [
+              {
+                "digest": "FPhSSzT7tHmrPhs3H9GT1n4Dqj3eyCgaFLkQSc9FEDVV",
+                "kind": {
+                  "__typename": "GenesisTransaction"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "transactionBlocks": {
+            "nodes": [
+              {
+                "digest": "43wY12GuxKzFAJAAW7oCcYfRGb3BSKXxgrVTtXwuELfn",
+                "kind": {
+                  "__typename": "ConsensusCommitPrologueTransaction"
+                }
+              },
+              {
+                "digest": "Cn6D9eKgVx5EeZddUSpQeTFcVyHKjqmt6yeiroKgr9h6",
+                "kind": {
+                  "__typename": "ProgrammableTransactionBlock"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "transactionBlocks": {
+            "nodes": [
+              {
+                "digest": "9eMYXfB8mzZhdQgJ6HJTTdcwyXZ3EHVXDpcvERnnBWvR",
+                "kind": {
+                  "__typename": "ConsensusCommitPrologueTransaction"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "transactionBlocks": {
+            "nodes": [
+              {
+                "digest": "E1TmDoToDfVSW7kMEFiYsNFL2UeCaL1wNbWLdFjxe5mx",
+                "kind": {
+                  "__typename": "ConsensusCommitPrologueTransaction"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

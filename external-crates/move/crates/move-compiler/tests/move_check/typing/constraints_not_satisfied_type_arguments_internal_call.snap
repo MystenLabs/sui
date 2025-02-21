@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/constraints_not_satisfied_type_arguments_internal_call.move:9:13
+  │
+2 │     struct CupC<T: copy> { f: T }
+  │                    ---- 'copy' constraint declared here
+3 │     struct R {}
+  │            - To satisfy the constraint, the 'copy' ability would need to be added here
+  ·
+9 │         box<CupC<R>>();
+  │             ^^^^^^^
+  │             │    │
+  │             │    The type '0x8675309::M::R' does not have the ability 'copy'
+  │             'copy' constraint not satisifed

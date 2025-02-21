@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, lines 9-15:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x2::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 2, lines 17-23:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x3::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}

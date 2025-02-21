@@ -1,0 +1,10 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
+Running Move unit tests
+[ PASS    ] 0x42::m::t0
+[ PASS    ] 0x42::m::t1
+[ PASS    ] 0x42::m::t2
+[ PASS    ] 0x42::m::t3
+[ PASS    ] 0x42::m::t4
+Test result: OK. Total tests: 5; passed: 5; failed: 0

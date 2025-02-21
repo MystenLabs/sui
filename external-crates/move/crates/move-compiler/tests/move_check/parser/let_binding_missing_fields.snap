@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04016]: too few arguments
+  ┌─ tests/move_check/parser/let_binding_missing_fields.move:6:13
+  │
+6 │         let Generic<u64> = g; // Test a type name with no field bindings
+  │             ^^^^^^^^^^^^ Missing binding for field 'g' in '0x42::M::Generic'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/let_binding_missing_fields.move:6:26
+  │
+6 │         let Generic<u64> = g; // Test a type name with no field bindings
+  │                          ^
+  │                          │
+  │                          Unexpected '='
+  │                          Expected '{'

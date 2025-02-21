@@ -1,0 +1,132 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+task 1, lines 8-30:
+//# run-graphql
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "digest": "ZQawQqeikA4pRqKnkcuHuMnGZuKJTSt3V3EVmMjG56k",
+        "sequenceNumber": 0
+      },
+      "last": {
+        "digest": "ZQawQqeikA4pRqKnkcuHuMnGZuKJTSt3V3EVmMjG56k",
+        "sequenceNumber": 0
+      }
+    },
+    "first": {
+      "digest": "ZQawQqeikA4pRqKnkcuHuMnGZuKJTSt3V3EVmMjG56k",
+      "sequenceNumber": 0
+    },
+    "last": {
+      "digest": "ZQawQqeikA4pRqKnkcuHuMnGZuKJTSt3V3EVmMjG56k",
+      "sequenceNumber": 0
+    }
+  }
+}
+
+task 3, line 34:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 36-46:
+//# run-graphql
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 0
+      },
+      "last": {
+        "sequenceNumber": 1
+      }
+    }
+  }
+}
+
+task 6, line 50:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 52-62:
+//# run-graphql
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 0
+      },
+      "last": {
+        "sequenceNumber": 2
+      }
+    }
+  }
+}
+
+task 9, line 66:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 10, lines 68-78:
+//# run-graphql
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 1
+      },
+      "last": {
+        "sequenceNumber": 3
+      }
+    }
+  }
+}
+
+task 12, line 82:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 13, lines 84-94:
+//# run-graphql
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 2
+      },
+      "last": {
+        "sequenceNumber": 4
+      }
+    }
+  }
+}
+
+task 15, line 98:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 16, lines 100-120:
+//# run-graphql
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 3
+      },
+      "last": {
+        "sequenceNumber": 5
+      }
+    },
+    "first": {
+      "digest": "ZQawQqeikA4pRqKnkcuHuMnGZuKJTSt3V3EVmMjG56k",
+      "sequenceNumber": 0
+    },
+    "last": {
+      "digest": "9C7jQMv4YDXtBQFVawbAJTtQf7JefT3XPNUNoWSot5T2",
+      "sequenceNumber": 5
+    }
+  }
+}

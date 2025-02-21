@@ -1,0 +1,63 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02019]: invalid 'syntax' method type
+  ┌─ tests/move_2024/naming/index_syntax_methods_invalid_return.move:5:14
+  │
+5 │     #[syntax(index)]
+  │              ^^^^^ Invalid syntax annotation. This syntax method must return an immutable reference
+6 │     public fun index_s(_s: &S): |u64| -> u64 { abort 0 }
+  │                            --   ------------ This is not an immutable reference
+  │                            │     
+  │                            Immutable subject type defined here
+
+error[E04030]: invalid usage of lambda type
+  ┌─ tests/move_2024/naming/index_syntax_methods_invalid_return.move:6:33
+  │
+6 │     public fun index_s(_s: &S): |u64| -> u64 { abort 0 }
+  │                                 ^^^^^^^^^^^^ Unexpected lambda type. Lambdas can only be used with 'macro' functions, as parameters or direct arguments
+
+error[E02019]: invalid 'syntax' method type
+  ┌─ tests/move_2024/naming/index_syntax_methods_invalid_return.move:8:14
+  │
+8 │     #[syntax(index)]
+  │              ^^^^^ Invalid syntax annotation. This syntax method must return a mutable reference
+9 │     public fun index_s_mut(_s: &mut S): () { abort 0 }
+  │                                ------   -- This is not a mutable reference
+  │                                │         
+  │                                Mutable subject type defined here
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/naming/index_syntax_methods_invalid_return.move:13:14
+   │
+13 │     #[syntax(index)]
+   │              ^^^^^ Invalid syntax annotation. A syntax method cannot return a function
+14 │     public fun index_t(_t: &T): &(|u64| -> u64) { abort 0 }
+   │                                  -------------- But a function type appears in this return type
+
+error[E04030]: invalid usage of lambda type
+   ┌─ tests/move_2024/naming/index_syntax_methods_invalid_return.move:14:34
+   │
+14 │     public fun index_t(_t: &T): &(|u64| -> u64) { abort 0 }
+   │                                  ^^^^^^^^^^^^^^ Unexpected lambda type. Lambdas can only be used with 'macro' functions, as parameters or direct arguments
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/naming/index_syntax_methods_invalid_return.move:16:14
+   │
+16 │     #[syntax(index)]
+   │              ^^^^^ Invalid syntax annotation. This syntax method cannot return a unit type
+17 │     public fun index_t_mut(_t: &mut T): &mut () { abort 0 }
+   │                                              -- Unit type occurs as the return type for this function
+
+error[E04004]: expected a single non-reference type
+   ┌─ tests/move_2024/naming/index_syntax_methods_invalid_return.move:17:41
+   │
+17 │     public fun index_t_mut(_t: &mut T): &mut () { abort 0 }
+   │                                         ^^^^^^^
+   │                                         │    │
+   │                                         │    Expected a single non-reference type, but found: '()'
+   │                                         Invalid reference type

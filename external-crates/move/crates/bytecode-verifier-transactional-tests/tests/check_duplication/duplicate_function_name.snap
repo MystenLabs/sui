@@ -1,0 +1,15 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/check_duplication/duplicate_function_name.mvir
+---
+processed 1 task
+
+task 0, lines 1-6:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
+    major_status: DUPLICATE_ELEMENT,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [],
+}

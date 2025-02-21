@@ -1,0 +1,609 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 25 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-27:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5798800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 29:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 31:
+//# run Test::M1::create --args 0 @B --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, line 33:
+//# run Test::M1::create --args 1 @B --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 35:
+//# run Test::M1::create --args 2 @B --sender A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 37:
+//# run Test::M1::create --args 3 @B --sender A
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 39:
+//# run Test::M1::create --args 4 @B --sender A
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 41:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 9, line 43:
+//# run Test::M1::create --args 100 @B --sender A
+created: object(9,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, line 45:
+//# run Test::M1::create --args 101 @B --sender A
+created: object(10,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, line 47:
+//# run Test::M1::create --args 102 @B --sender A
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, line 49:
+//# run Test::M1::create --args 103 @B --sender A
+created: object(12,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, line 51:
+//# run Test::M1::create --args 104 @B --sender A
+created: object(13,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, line 53:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 15, lines 55-74:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjozLCJ0IjoxMSwiaSI6ZmFsc2V9",
+        "startCursor": "eyJjIjozLCJ0IjoyLCJpIjpmYWxzZX0"
+      },
+      "nodes": [
+        {
+          "digest": "6xLEAWZ7yZ4LPYkMYJ4KMegSfAovuuL86hhMdoE4aqbH",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "2a2uYFbVZ7A4tYCF1Uc4XqgR4qTpttyn28bTfzCaRzFK",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "3BRYWH3JGjJHgMqxciLWqEgbzntHC9KybmjG4PPWY5MQ",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "BsGrU2kopmcTQ9V5cMNBGHzxVAEwQ1Kwomq1hmShxLQv",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "9PrjJGFwHzPcg6rSzGjtFALvDrbfSaES6z7xcLkJNkSi",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "7XiuHRDpeiRQU1XCK2Jw1xTVa26DR1FZeoFTetRktTrN",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "4tKiKS62YKN2PL5Cv8645DCM3A84rH86oTqcPcvo8aWd",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "5eQQp6NR1pb9MqiwJRfCDSBuZshCarsrc3i1bGajnqPo",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "5vMhuv1BgZTav4HJoCUPNpMcgpr9yvv7qedwNC7uQZaf",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "F2f61VrBSipg6wxFcrhEnVSe67QxuPB5SCfXfd7ZF76K",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 16, lines 76-95:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjozLCJ0IjoxMSwiaSI6ZmFsc2V9",
+        "startCursor": "eyJjIjozLCJ0IjoyLCJpIjpmYWxzZX0"
+      },
+      "nodes": [
+        {
+          "digest": "6xLEAWZ7yZ4LPYkMYJ4KMegSfAovuuL86hhMdoE4aqbH",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "2a2uYFbVZ7A4tYCF1Uc4XqgR4qTpttyn28bTfzCaRzFK",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "3BRYWH3JGjJHgMqxciLWqEgbzntHC9KybmjG4PPWY5MQ",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "BsGrU2kopmcTQ9V5cMNBGHzxVAEwQ1Kwomq1hmShxLQv",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "9PrjJGFwHzPcg6rSzGjtFALvDrbfSaES6z7xcLkJNkSi",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "7XiuHRDpeiRQU1XCK2Jw1xTVa26DR1FZeoFTetRktTrN",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "4tKiKS62YKN2PL5Cv8645DCM3A84rH86oTqcPcvo8aWd",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "5eQQp6NR1pb9MqiwJRfCDSBuZshCarsrc3i1bGajnqPo",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "5vMhuv1BgZTav4HJoCUPNpMcgpr9yvv7qedwNC7uQZaf",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "F2f61VrBSipg6wxFcrhEnVSe67QxuPB5SCfXfd7ZF76K",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 17, lines 97-116:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "A scan limit must be specified for the given filter combination",
+      "locations": [
+        {
+          "line": 3,
+          "column": 3
+        }
+      ],
+      "path": [
+        "transactionBlocks"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 18, lines 118-137:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjozLCJ0IjoxMSwiaSI6dHJ1ZX0",
+        "startCursor": "eyJjIjozLCJ0IjoyLCJpIjp0cnVlfQ"
+      },
+      "nodes": [
+        {
+          "digest": "6xLEAWZ7yZ4LPYkMYJ4KMegSfAovuuL86hhMdoE4aqbH",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "2a2uYFbVZ7A4tYCF1Uc4XqgR4qTpttyn28bTfzCaRzFK",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "3BRYWH3JGjJHgMqxciLWqEgbzntHC9KybmjG4PPWY5MQ",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "BsGrU2kopmcTQ9V5cMNBGHzxVAEwQ1Kwomq1hmShxLQv",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "9PrjJGFwHzPcg6rSzGjtFALvDrbfSaES6z7xcLkJNkSi",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "7XiuHRDpeiRQU1XCK2Jw1xTVa26DR1FZeoFTetRktTrN",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "4tKiKS62YKN2PL5Cv8645DCM3A84rH86oTqcPcvo8aWd",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "5eQQp6NR1pb9MqiwJRfCDSBuZshCarsrc3i1bGajnqPo",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "5vMhuv1BgZTav4HJoCUPNpMcgpr9yvv7qedwNC7uQZaf",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "F2f61VrBSipg6wxFcrhEnVSe67QxuPB5SCfXfd7ZF76K",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 19, lines 139-158:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "A scan limit must be specified for the given filter combination",
+      "locations": [
+        {
+          "line": 3,
+          "column": 3
+        }
+      ],
+      "path": [
+        "transactionBlocks"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 20, lines 160-179:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjozLCJ0IjoxMSwiaSI6dHJ1ZX0",
+        "startCursor": "eyJjIjozLCJ0IjoyLCJpIjp0cnVlfQ"
+      },
+      "nodes": [
+        {
+          "digest": "6xLEAWZ7yZ4LPYkMYJ4KMegSfAovuuL86hhMdoE4aqbH",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "2a2uYFbVZ7A4tYCF1Uc4XqgR4qTpttyn28bTfzCaRzFK",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "3BRYWH3JGjJHgMqxciLWqEgbzntHC9KybmjG4PPWY5MQ",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "BsGrU2kopmcTQ9V5cMNBGHzxVAEwQ1Kwomq1hmShxLQv",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "9PrjJGFwHzPcg6rSzGjtFALvDrbfSaES6z7xcLkJNkSi",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "7XiuHRDpeiRQU1XCK2Jw1xTVa26DR1FZeoFTetRktTrN",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "4tKiKS62YKN2PL5Cv8645DCM3A84rH86oTqcPcvo8aWd",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "5eQQp6NR1pb9MqiwJRfCDSBuZshCarsrc3i1bGajnqPo",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "5vMhuv1BgZTav4HJoCUPNpMcgpr9yvv7qedwNC7uQZaf",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "F2f61VrBSipg6wxFcrhEnVSe67QxuPB5SCfXfd7ZF76K",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 21, lines 181-200:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "A scan limit must be specified for the given filter combination",
+      "locations": [
+        {
+          "line": 3,
+          "column": 3
+        }
+      ],
+      "path": [
+        "transactionBlocks"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 22, lines 202-221:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjozLCJ0IjoxMSwiaSI6dHJ1ZX0",
+        "startCursor": "eyJjIjozLCJ0IjoyLCJpIjp0cnVlfQ"
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 23, lines 224-243:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "A scan limit must be specified for the given filter combination",
+      "locations": [
+        {
+          "line": 3,
+          "column": 3
+        }
+      ],
+      "path": [
+        "transactionBlocks"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 24, lines 245-269:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": false,
+        "startCursor": "eyJjIjozLCJ0IjoyLCJpIjp0cnVlfQ",
+        "endCursor": "eyJjIjozLCJ0IjoxMSwiaSI6dHJ1ZX0"
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjozLCJ0IjoyLCJpIjpmYWxzZX0",
+          "node": {
+            "digest": "6xLEAWZ7yZ4LPYkMYJ4KMegSfAovuuL86hhMdoE4aqbH",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

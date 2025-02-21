@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09014]: unused mutable reference '&mut' parameter
+  ┌─ tests/move_check/borrows/unused_mut_ref_immutable_usage.move:5:33
+  │
+5 │     public(friend) fun param(x: &mut S): &S {
+  │                              -  ^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+  │                              │   
+  │                              For parameters, this can be silenced by prefixing the name with an underscore, e.g. '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_mut_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09013]: unused mutable reference '&mut'
+   ┌─ tests/move_check/borrows/unused_mut_ref_immutable_usage.move:17:17
+   │
+17 │         let x = &mut s;
+   │                 ^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+   │
+   = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -11,7 +11,6 @@ anyhow.workspace = true
 async-trait.workspace = true
 aws-config.workspace = true
 aws-sdk-dynamodb.workspace = true
-aws-sdk-s3.workspace = true
 backoff.workspace = true
 base64-url.workspace = true
 bcs.workspace = true

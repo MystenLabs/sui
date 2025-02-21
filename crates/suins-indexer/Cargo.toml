@@ -27,6 +27,7 @@ prometheus.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
+sui-name-service.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 url.workspace = true

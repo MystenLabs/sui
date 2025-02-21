@@ -1,0 +1,120 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-25:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6650000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 26-29:
+//# programmable --sender A --inputs 100  --gas-budget 10000000000
+//> 0: SplitCoins(Gas, [Input(0)]); // split the coin as a limit
+//> 1: test::m1::purchase(Result(0));
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3260400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 31:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
+
+task 4, lines 33-35:
+//# view-object 2,1
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m1::CoolMarker {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 5, lines 36-41:
+//# programmable --sender A --inputs 100  --gas-budget 10000000000
+//> 0: SplitCoins(Gas, [Input(0)]); /* split the coin as a limit */
+//> 1: test::m1::purchase_(Result(0));
+// call a non-entry function, and transfer the object
+Error: Transaction Effects Status: Unused result without the drop ability. Command result 1, return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 1, secondary_idx: 0 }, source: None, command: None } }
+
+task 6, lines 42-47:
+//# programmable --sender A --inputs 100 @A  --gas-budget 10000000000
+//> 0: SplitCoins(Gas, [Input(0), Input(0)]); /* /* nested */*/
+//> 1: test::m1::purchase_(NestedResult(0, 0));
+//> 2: test::m1::purchase_(NestedResult(0, 1));
+//> TransferObjects([Result(1), Result(2)], Input(1));
+created: object(6,0), object(6,1), object(6,2), object(6,3)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5532800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 49:
+//# view-object 6,0
+Owner: Account Address ( _ )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
+
+task 8, line 51:
+//# view-object 6,1
+Owner: Account Address ( _ )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,1),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
+
+task 9, line 53:
+//# view-object 6,2
+Owner: Account Address ( A )
+Version: 4
+Contents: test::m1::CoolMarker {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,2),
+        },
+    },
+}
+
+task 10, line 55:
+//# view-object 6,3
+Owner: Account Address ( A )
+Version: 4
+Contents: test::m1::CoolMarker {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,3),
+        },
+    },
+}

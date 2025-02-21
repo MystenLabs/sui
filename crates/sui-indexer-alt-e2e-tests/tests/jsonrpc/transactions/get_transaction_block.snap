@@ -1,0 +1,959 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 14-48:
+//# publish
+created: object(1,0), object(1,1)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 9211200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 50-56:
+//# programmable --sender A --inputs object(1,0) 42 @A
+//> 0: test::counter::inc(Input(0));
+//> 1: test::counter::inc_by(Input(0), Input(1));
+//> 2: sui::coin::value<sui::sui::SUI>(Gas);
+//> 3: test::counter::inc_by(Input(0), Result(2));
+//> 4: test::counter::take(Input(0), Input(1));
+//> 5: TransferObjects([Result(4)], Input(2))
+events: Event { package_id: test, transaction_module: Identifier("counter"), sender: A, type_: StructTag { address: test, module: Identifier("counter"), name: Identifier("NFTMinted"), type_params: [] }, contents: [36, 128, 140, 176, 175, 75, 57, 9, 37, 183, 118, 215, 178, 121, 175, 49, 254, 87, 44, 244, 46, 73, 120, 94, 146, 242, 21, 112, 3, 28, 150, 50] }
+created: object(2,0)
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 1346796, non_refundable_storage_fee: 13604
+
+task 3, lines 58-60:
+//# programmable --sender A --inputs 42 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 62:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 64-68:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "digest": "5p9wHYHPWxr5qSCDifjzxQLxv8Berk2tik2jtyfoQmQL"
+  }
+}
+
+task 6, lines 70-74:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Transaction 11111111111111111111111111111111 not found"
+  }
+}
+
+task 7, lines 76-86:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "digest": "5p9wHYHPWxr5qSCDifjzxQLxv8Berk2tik2jtyfoQmQL",
+    "rawTransaction": "AAADAQFBd+JUVDhx5XeiGSNJI5s4UQEfXa07GCfaFCUk98lC1wIAAAAAAAAAAQAIKgAAAAAAAAAAIPzMmkIbuxPBpmoaqY8K11Ap7elIV3ecaRW0T5QGi5IeBgBiHbdDLb65YtqclRm+ClCfrP6oKqHdC41gITwzJcAVqAdjb3VudGVyA2luYwABAQAAAGIdt0Mtvrli2pyVGb4KUJ+s/qgqod0LjWAhPDMlwBWoB2NvdW50ZXIGaW5jX2J5AAIBAAABAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIEY29pbgV2YWx1ZQEHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIDc3VpA1NVSQABAABiHbdDLb65YtqclRm+ClCfrP6oKqHdC41gITwzJcAVqAdjb3VudGVyBmluY19ieQACAQAAAgIAAGIdt0Mtvrli2pyVGb4KUJ+s/qgqod0LjWAhPDMlwBWoB2NvdW50ZXIEdGFrZQACAQAAAQEAAQECBAABAgD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHgEoNNhdv+/c1m8EgRIxuoGIk3k+g6iV1TQC/ZnhMuNlYgEAAAAAAAAAIAxTyQqgv33v1e2KKeTKCujrlS8ekEWqYA2s3/WsyFOJ/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh7oAwAAAAAAAADyBSoBAAAAAA==",
+    "rawEffects": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      64,
+      66,
+      15,
+      0,
+      0,
+      0,
+      0,
+      0,
+      192,
+      32,
+      56,
+      0,
+      0,
+      0,
+      0,
+      0,
+      236,
+      140,
+      20,
+      0,
+      0,
+      0,
+      0,
+      0,
+      36,
+      53,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      32,
+      71,
+      131,
+      38,
+      79,
+      17,
+      216,
+      21,
+      248,
+      103,
+      109,
+      39,
+      21,
+      255,
+      78,
+      166,
+      184,
+      208,
+      203,
+      136,
+      251,
+      233,
+      245,
+      69,
+      196,
+      224,
+      62,
+      34,
+      185,
+      230,
+      97,
+      13,
+      49,
+      1,
+      1,
+      0,
+      0,
+      0,
+      1,
+      32,
+      247,
+      189,
+      139,
+      228,
+      72,
+      94,
+      84,
+      72,
+      63,
+      93,
+      131,
+      76,
+      134,
+      63,
+      21,
+      67,
+      230,
+      66,
+      210,
+      32,
+      20,
+      99,
+      180,
+      85,
+      143,
+      17,
+      16,
+      97,
+      188,
+      103,
+      61,
+      162,
+      2,
+      32,
+      54,
+      234,
+      13,
+      174,
+      78,
+      101,
+      36,
+      117,
+      198,
+      255,
+      182,
+      156,
+      30,
+      104,
+      31,
+      203,
+      236,
+      136,
+      218,
+      107,
+      72,
+      104,
+      239,
+      189,
+      141,
+      220,
+      137,
+      224,
+      89,
+      71,
+      179,
+      22,
+      32,
+      126,
+      244,
+      78,
+      39,
+      248,
+      204,
+      239,
+      74,
+      61,
+      49,
+      12,
+      142,
+      174,
+      1,
+      118,
+      168,
+      68,
+      249,
+      237,
+      130,
+      182,
+      116,
+      246,
+      94,
+      37,
+      145,
+      92,
+      15,
+      145,
+      214,
+      235,
+      75,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3,
+      36,
+      128,
+      140,
+      176,
+      175,
+      75,
+      57,
+      9,
+      37,
+      183,
+      118,
+      215,
+      178,
+      121,
+      175,
+      49,
+      254,
+      87,
+      44,
+      244,
+      46,
+      73,
+      120,
+      94,
+      146,
+      242,
+      21,
+      112,
+      3,
+      28,
+      150,
+      50,
+      0,
+      1,
+      32,
+      215,
+      77,
+      98,
+      227,
+      62,
+      228,
+      227,
+      13,
+      186,
+      0,
+      174,
+      93,
+      120,
+      55,
+      98,
+      225,
+      188,
+      217,
+      15,
+      249,
+      201,
+      219,
+      136,
+      57,
+      183,
+      175,
+      246,
+      175,
+      22,
+      39,
+      204,
+      225,
+      0,
+      252,
+      204,
+      154,
+      66,
+      27,
+      187,
+      19,
+      193,
+      166,
+      106,
+      26,
+      169,
+      143,
+      10,
+      215,
+      80,
+      41,
+      237,
+      233,
+      72,
+      87,
+      119,
+      156,
+      105,
+      21,
+      180,
+      79,
+      148,
+      6,
+      139,
+      146,
+      30,
+      1,
+      40,
+      52,
+      216,
+      93,
+      191,
+      239,
+      220,
+      214,
+      111,
+      4,
+      129,
+      18,
+      49,
+      186,
+      129,
+      136,
+      147,
+      121,
+      62,
+      131,
+      168,
+      149,
+      213,
+      52,
+      2,
+      253,
+      153,
+      225,
+      50,
+      227,
+      101,
+      98,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      32,
+      12,
+      83,
+      201,
+      10,
+      160,
+      191,
+      125,
+      239,
+      213,
+      237,
+      138,
+      41,
+      228,
+      202,
+      10,
+      232,
+      235,
+      149,
+      47,
+      30,
+      144,
+      69,
+      170,
+      96,
+      13,
+      172,
+      223,
+      245,
+      172,
+      200,
+      83,
+      137,
+      0,
+      252,
+      204,
+      154,
+      66,
+      27,
+      187,
+      19,
+      193,
+      166,
+      106,
+      26,
+      169,
+      143,
+      10,
+      215,
+      80,
+      41,
+      237,
+      233,
+      72,
+      87,
+      119,
+      156,
+      105,
+      21,
+      180,
+      79,
+      148,
+      6,
+      139,
+      146,
+      30,
+      1,
+      32,
+      164,
+      47,
+      177,
+      32,
+      0,
+      219,
+      35,
+      39,
+      41,
+      147,
+      183,
+      85,
+      201,
+      93,
+      129,
+      83,
+      40,
+      170,
+      243,
+      154,
+      248,
+      24,
+      55,
+      71,
+      193,
+      69,
+      124,
+      159,
+      9,
+      48,
+      210,
+      139,
+      0,
+      252,
+      204,
+      154,
+      66,
+      27,
+      187,
+      19,
+      193,
+      166,
+      106,
+      26,
+      169,
+      143,
+      10,
+      215,
+      80,
+      41,
+      237,
+      233,
+      72,
+      87,
+      119,
+      156,
+      105,
+      21,
+      180,
+      79,
+      148,
+      6,
+      139,
+      146,
+      30,
+      0,
+      65,
+      119,
+      226,
+      84,
+      84,
+      56,
+      113,
+      229,
+      119,
+      162,
+      25,
+      35,
+      73,
+      35,
+      155,
+      56,
+      81,
+      1,
+      31,
+      93,
+      173,
+      59,
+      24,
+      39,
+      218,
+      20,
+      37,
+      36,
+      247,
+      201,
+      66,
+      215,
+      1,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      32,
+      205,
+      115,
+      251,
+      47,
+      136,
+      76,
+      131,
+      223,
+      249,
+      240,
+      193,
+      169,
+      134,
+      55,
+      165,
+      30,
+      155,
+      29,
+      51,
+      114,
+      43,
+      249,
+      243,
+      184,
+      104,
+      1,
+      65,
+      210,
+      77,
+      151,
+      141,
+      102,
+      2,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      32,
+      43,
+      118,
+      118,
+      215,
+      229,
+      72,
+      180,
+      74,
+      62,
+      98,
+      64,
+      11,
+      123,
+      72,
+      108,
+      56,
+      29,
+      214,
+      9,
+      38,
+      153,
+      127,
+      122,
+      40,
+      233,
+      246,
+      2,
+      53,
+      160,
+      184,
+      125,
+      44,
+      2,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+}
+
+task 8, lines 88-98:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "digest": "5p9wHYHPWxr5qSCDifjzxQLxv8Berk2tik2jtyfoQmQL",
+    "transaction": {
+      "data": {
+        "messageVersion": "v1",
+        "transaction": {
+          "kind": "ProgrammableTransaction",
+          "inputs": [
+            {
+              "type": "object",
+              "objectType": "sharedObject",
+              "objectId": "0x4177e254543871e577a2192349239b3851011f5dad3b1827da142524f7c942d7",
+              "initialSharedVersion": "2",
+              "mutable": true
+            },
+            {
+              "type": "pure",
+              "valueType": "u64",
+              "value": "42"
+            },
+            {
+              "type": "pure",
+              "valueType": "address",
+              "value": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "transactions": [
+            {
+              "MoveCall": {
+                "package": "0x621db7432dbeb962da9c9519be0a509facfea82aa1dd0b8d60213c3325c015a8",
+                "module": "counter",
+                "function": "inc",
+                "arguments": [
+                  {
+                    "Input": 0
+                  }
+                ]
+              }
+            },
+            {
+              "MoveCall": {
+                "package": "0x621db7432dbeb962da9c9519be0a509facfea82aa1dd0b8d60213c3325c015a8",
+                "module": "counter",
+                "function": "inc_by",
+                "arguments": [
+                  {
+                    "Input": 0
+                  },
+                  {
+                    "Input": 1
+                  }
+                ]
+              }
+            },
+            {
+              "MoveCall": {
+                "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                "module": "coin",
+                "function": "value",
+                "type_arguments": [
+                  "0x2::sui::SUI"
+                ],
+                "arguments": [
+                  "GasCoin"
+                ]
+              }
+            },
+            {
+              "MoveCall": {
+                "package": "0x621db7432dbeb962da9c9519be0a509facfea82aa1dd0b8d60213c3325c015a8",
+                "module": "counter",
+                "function": "inc_by",
+                "arguments": [
+                  {
+                    "Input": 0
+                  },
+                  {
+                    "Result": 2
+                  }
+                ]
+              }
+            },
+            {
+              "MoveCall": {
+                "package": "0x621db7432dbeb962da9c9519be0a509facfea82aa1dd0b8d60213c3325c015a8",
+                "module": "counter",
+                "function": "take",
+                "arguments": [
+                  {
+                    "Input": 0
+                  },
+                  {
+                    "Input": 1
+                  }
+                ]
+              }
+            },
+            {
+              "TransferObjects": [
+                [
+                  {
+                    "Result": 4
+                  }
+                ],
+                {
+                  "Input": 2
+                }
+              ]
+            }
+          ]
+        },
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "gasData": {
+          "payment": [
+            {
+              "objectId": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+              "version": 1,
+              "digest": "q7zZtCD3hWzn8bDfuAfVs4Jz9xuXbaRoRmscfDLfRGc"
+            }
+          ],
+          "owner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+          "price": "1000",
+          "budget": "5000000000"
+        }
+      },
+      "txSignatures": [
+        "AO0JoGECqyBeXhej35Fv0rYGG+O5yh5/wSFPK/f4GRybyqqSFTnojVZWloTzMZ8nW1xpkfDjQ/IrF8dbRPZCpAh/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
+      ]
+    },
+    "effects": {
+      "messageVersion": "v1",
+      "status": {
+        "status": "success"
+      },
+      "executedEpoch": "0",
+      "gasUsed": {
+        "computationCost": "1000000",
+        "storageCost": "3678400",
+        "storageRebate": "1346796",
+        "nonRefundableStorageFee": "13604"
+      },
+      "modifiedAtVersions": [
+        {
+          "objectId": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+          "sequenceNumber": "1"
+        },
+        {
+          "objectId": "0x4177e254543871e577a2192349239b3851011f5dad3b1827da142524f7c942d7",
+          "sequenceNumber": "2"
+        }
+      ],
+      "sharedObjects": [
+        {
+          "objectId": "0x4177e254543871e577a2192349239b3851011f5dad3b1827da142524f7c942d7",
+          "version": 2,
+          "digest": "Eq19qfVDFudB3Kc63ha8KA3aCVEB5ZUFSEeBcmH7Qy5f"
+        }
+      ],
+      "transactionDigest": "5p9wHYHPWxr5qSCDifjzxQLxv8Berk2tik2jtyfoQmQL",
+      "created": [
+        {
+          "owner": {
+            "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "reference": {
+            "objectId": "0x24808cb0af4b390925b776d7b279af31fe572cf42e49785e92f21570031c9632",
+            "version": 3,
+            "digest": "FVT6ZPwya7HV99NvwWU9hPLY8GzegmazpQnpci2jSXSQ"
+          }
+        }
+      ],
+      "mutated": [
+        {
+          "owner": {
+            "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "reference": {
+            "objectId": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+            "version": 3,
+            "digest": "C3v3QDwZPz6917cKrRVjVyZZpTBY4ci2GoiXHjbhV56z"
+          }
+        },
+        {
+          "owner": {
+            "Shared": {
+              "initial_shared_version": 2
+            }
+          },
+          "reference": {
+            "objectId": "0x4177e254543871e577a2192349239b3851011f5dad3b1827da142524f7c942d7",
+            "version": 3,
+            "digest": "3vfJUp5PpXkpyBTNTLK9jTv2SZYXVLSJqHdtARmvTgi7"
+          }
+        }
+      ],
+      "gasObject": {
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "reference": {
+          "objectId": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+          "version": 3,
+          "digest": "C3v3QDwZPz6917cKrRVjVyZZpTBY4ci2GoiXHjbhV56z"
+        }
+      },
+      "eventsDigest": "Hg5LZJqeAYNSHRnXi7E5zJQkvF1HrafWqZTstt1CkMUD",
+      "dependencies": [
+        "4hN1oBeozq3Hno8q9JfKkrTUQHs21Q2j7UWHk1bxSk5B",
+        "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr"
+      ]
+    }
+  }
+}
+
+task 9, lines 100-109:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "digest": "5p9wHYHPWxr5qSCDifjzxQLxv8Berk2tik2jtyfoQmQL",
+    "events": [
+      {
+        "id": {
+          "txDigest": "5p9wHYHPWxr5qSCDifjzxQLxv8Berk2tik2jtyfoQmQL",
+          "eventSeq": "0"
+        },
+        "packageId": "0x621db7432dbeb962da9c9519be0a509facfea82aa1dd0b8d60213c3325c015a8",
+        "transactionModule": "counter",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "type": "0x621db7432dbeb962da9c9519be0a509facfea82aa1dd0b8d60213c3325c015a8::counter::NFTMinted",
+        "parsedJson": {
+          "id": "0x24808cb0af4b390925b776d7b279af31fe572cf42e49785e92f21570031c9632"
+        },
+        "bcsEncoding": "base64",
+        "bcs": "JICMsK9LOQklt3bXsnmvMf5XLPQuSXhekvIVcAMcljI=",
+        "timestampMs": "0"
+      }
+    ]
+  }
+}
+
+task 10, lines 111-120:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 5,
+  "result": {
+    "digest": "5p9wHYHPWxr5qSCDifjzxQLxv8Berk2tik2jtyfoQmQL",
+    "balanceChanges": [
+      {
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "coinType": "0x2::sui::SUI",
+        "amount": "-3331604"
+      }
+    ]
+  }
+}
+
+task 11, lines 122-131:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 6,
+  "result": {
+    "digest": "DQQTRmCg1KDocZb1JwChJa8nQjAG9UaY2Jy1GnFKamDQ",
+    "balanceChanges": [
+      {
+        "owner": {
+          "AddressOwner": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+        },
+        "coinType": "0x2::sui::SUI",
+        "amount": "42"
+      },
+      {
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "coinType": "0x2::sui::SUI",
+        "amount": "-1997922"
+      }
+    ]
+  }
+}

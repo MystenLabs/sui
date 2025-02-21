@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_check/parser/cast_other_types.move:4:10
+  │
+4 │         (0 as ());
+  │          ^    -- Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │          │     
+  │          Invalid argument to 'as'
+
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_check/parser/cast_other_types.move:5:10
+  │
+5 │         (0 as &u64);
+  │          ^    ---- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │          │     
+  │          Invalid argument to 'as'

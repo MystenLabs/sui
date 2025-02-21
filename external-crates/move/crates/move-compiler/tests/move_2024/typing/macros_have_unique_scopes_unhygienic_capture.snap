@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture.move:16:17
+   │
+16 │         foo!(|| x);
+   │                 ^ Unbound variable 'x'
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture.move:17:17
+   │
+17 │         bar!(|| x);
+   │                 ^ Unbound variable 'x'

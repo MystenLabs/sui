@@ -24,6 +24,10 @@ pub struct TrafficControllerMetrics {
     pub highest_proxied_spam_rate: IntGauge,
     pub highest_direct_error_rate: IntGauge,
     pub highest_proxied_error_rate: IntGauge,
+    pub spam_client_threshold: IntGauge,
+    pub error_client_threshold: IntGauge,
+    pub spam_proxied_client_threshold: IntGauge,
+    pub error_proxied_client_threshold: IntGauge,
 }
 
 impl TrafficControllerMetrics {
@@ -126,6 +130,30 @@ impl TrafficControllerMetrics {
             highest_proxied_error_rate: register_int_gauge_with_registry!(
                 "highest_proxied_error_rate",
                 "Highest proxied error rate seen recently",
+                registry
+            )
+            .unwrap(),
+            spam_client_threshold: register_int_gauge_with_registry!(
+                "spam_client_threshold",
+                "Spam client threshold",
+                registry
+            )
+            .unwrap(),
+            error_client_threshold: register_int_gauge_with_registry!(
+                "error_client_threshold",
+                "Error client threshold",
+                registry
+            )
+            .unwrap(),
+            spam_proxied_client_threshold: register_int_gauge_with_registry!(
+                "spam_proxied_client_threshold",
+                "Spam proxied client threshold",
+                registry
+            )
+            .unwrap(),
+            error_proxied_client_threshold: register_int_gauge_with_registry!(
+                "error_proxied_client_threshold",
+                "Error proxied client threshold",
                 registry
             )
             .unwrap(),

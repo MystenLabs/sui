@@ -1,5 +1,0 @@
-When resolving dependencies for package Root, conflicting dependencies found:
-At A -> ADep
-	no dependencies
-At ADep
-	ADepDep = { local = "deps_only/ADepDep" }

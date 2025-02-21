@@ -1,0 +1,55 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/struct_defs/recursive_struct.mvir
+---
+processed 6 tasks
+
+task 1, lines 10-14:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M0'. Got VMError: {
+    major_status: RECURSIVE_DATATYPE_DEFINITION,
+    sub_status: None,
+    location: 0x1::M0,
+    indices: [(StructDefinition, 0)],
+    offsets: [],
+}
+
+task 2, lines 16-28:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M1'. Got VMError: {
+    major_status: RECURSIVE_DATATYPE_DEFINITION,
+    sub_status: None,
+    location: 0x1::M1,
+    indices: [(StructDefinition, 0)],
+    offsets: [],
+}
+
+task 3, lines 30-37:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
+    major_status: RECURSIVE_DATATYPE_DEFINITION,
+    sub_status: None,
+    location: 0x1::M2,
+    indices: [(StructDefinition, 1)],
+    offsets: [],
+}
+
+task 4, lines 39-46:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
+    major_status: RECURSIVE_DATATYPE_DEFINITION,
+    sub_status: None,
+    location: 0x1::M3,
+    indices: [(StructDefinition, 0)],
+    offsets: [],
+}
+
+task 5, lines 48-58:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
+    major_status: RECURSIVE_DATATYPE_DEFINITION,
+    sub_status: None,
+    location: 0x1::M3,
+    indices: [(StructDefinition, 3)],
+    offsets: [],
+}

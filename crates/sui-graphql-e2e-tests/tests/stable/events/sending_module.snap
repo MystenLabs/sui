@@ -1,0 +1,48 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-11:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5327600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-28:
+//# upgrade --package P --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6802000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, line 30:
+//# run P::M1::emit --sender A
+events: Event { package_id: P, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: fake(1,0), module: Identifier("M0"), name: Identifier("Event"), type_params: [] }, contents: [42, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 32:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 34-44:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "package": {
+              "address": "0xf847f63b795fdbc978a23fc181ea5180f55755e446fae1f1ce7865234cac7984"
+            },
+            "name": "M1"
+          }
+        }
+      ]
+    }
+  }
+}

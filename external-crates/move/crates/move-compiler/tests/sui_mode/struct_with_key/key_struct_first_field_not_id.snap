@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02007]: invalid object declaration
+  ┌─ tests/sui_mode/struct_with_key/key_struct_first_field_not_id.move:4:9
+  │
+3 │     struct S has key {
+  │                  --- The 'key' ability is used to declare objects in Sui
+4 │         flag: bool
+  │         ^^^^ Invalid object 'S'. Structs with the 'key' ability must have 'id: sui::object::UID' as their first field

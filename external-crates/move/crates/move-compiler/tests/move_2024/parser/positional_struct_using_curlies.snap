@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/positional_struct_using_curlies.move:3:29
+  │
+3 │     public struct Foo { u64 }
+  │                             ^
+  │                             │
+  │                             Unexpected '}'
+  │                             Expected ':'

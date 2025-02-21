@@ -1,0 +1,28 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/missing_angle_brace_close.move:3:13
+  │
+3 │         let x = t<u64;
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_check/parser/missing_angle_brace_close.move:3:17
+  │
+3 │         let x = t<u64;
+  │                 ^^^^^ Expected name to be followed by a brace-enclosed list of field expressions or a parenthesized list of arguments for a function call
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/missing_angle_brace_close.move:3:22
+  │
+3 │         let x = t<u64;
+  │                  -   ^ Expected '>'
+  │                  │    
+  │                  To match this '<'

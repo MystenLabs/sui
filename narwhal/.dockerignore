@@ -1,7 +1,0 @@
-# Exclude directories from getting copied
-# to the Docker image once built.
-.cargo
-.github
-.idea
-target
-benchmark

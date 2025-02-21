@@ -10,25 +10,7 @@ network-address: /ip4/0.0.0.0/tcp/8080/http
 metrics-address: 0.0.0.0:9184
 admin-interface-port: 1337
 consensus-config:
-  address: /ip4/127.0.0.1/tcp/8083/http
   db-path: /opt/sui/db/consensus_db
-  internal-worker-address: null
-  narwhal-config:
-    header_num_of_batches_threshold: 32
-    max_header_num_of_batches: 1000
-    max_header_delay: 1000ms
-    gc_depth: 50
-    sync_retry_delay: 5000ms
-    sync_retry_nodes: 3
-    batch_size: 500000
-    max_batch_delay: 100ms
-    max_concurrent_requests: 500000
-    prometheus_metrics:
-      socket_addr: /ip4/127.0.0.1/tcp/33291/http
-    network_admin_server:
-      primary_network_admin_server_port: 41303
-      worker_network_admin_server_base_port: 41669
-enable-event-processing: false
 p2p-config:
   listen-address: 0.0.0.0:8084
   external-address: /dns/$HOSTNAME/udp/8084 # UPDATE THIS
@@ -36,13 +18,10 @@ p2p-config:
     max-concurrent-connections: 0
 genesis:
   genesis-file-location: /opt/sui/config/genesis.blob
+enable-index-processing: false
 authority-store-pruning-config:
-  num-latest-epoch-dbs-to-retain: 3
-  epoch-db-pruning-period-secs: 3600
-  num-epochs-to-retain: 1
-  max-checkpoints-in-batch: 5
-  max-transactions-in-batch: 1000
-end-of-epoch-broadcast-channel-capacity: 128
+  num-epochs-to-retain: 0
+  num-epochs-to-retain-for-checkpoints: 2
 checkpoint-executor-config:
   checkpoint-execution-max-concurrency: 200
   local-execution-timeout-sec: 10

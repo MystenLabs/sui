@@ -1,0 +1,106 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/cast_valid_bad_types.move:4:22
+  │
+4 │         while (cond) x as u32;
+  │                      ^^^^^^^^
+  │                      │    │
+  │                      │    Given: 'u32'
+  │                      Invalid loop body
+  │                      Expected: '()'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/cast_valid_bad_types.move:5:14
+  │
+5 │         loop x as u32;
+  │              ^^^^^^^^
+  │              │    │
+  │              │    Given: 'u32'
+  │              Invalid loop body
+  │              Expected: '()'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/cast_valid_bad_types.move:6:17
+  │
+6 │         cond && x as u8;
+  │              -- ^^^^^^^
+  │              │  │    │
+  │              │  │    Given: 'u8'
+  │              │  Invalid argument to '&&'
+  │              Expected: 'bool'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/cast_valid_bad_types.move:7:17
+  │
+7 │         cond || x as u8;
+  │              -- ^^^^^^^
+  │              │  │    │
+  │              │  │    Given: 'u8'
+  │              │  Invalid argument to '||'
+  │              Expected: 'bool'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/cast_valid_bad_types.move:8:9
+  │
+8 │         x as u8 && cond;
+  │         ^^^^^^^ -- Expected: 'bool'
+  │         │    │   
+  │         │    Given: 'u8'
+  │         Invalid argument to '&&'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/cast_valid_bad_types.move:9:9
+  │
+9 │         x as u8 || cond;
+  │         ^^^^^^^ -- Expected: 'bool'
+  │         │    │   
+  │         │    Given: 'u8'
+  │         Invalid argument to '||'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/cast_valid_bad_types.move:10:10
+   │
+10 │         (!x as u32);
+   │          ^^
+   │          │
+   │          Invalid argument to 'as'
+   │          Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/cast_valid_bad_types.move:10:11
+   │
+ 3 │     fun invalid_types(cond: bool, x: u64) {
+   │                                      --- Given: 'u64'
+   ·
+10 │         (!x as u32);
+   │           ^
+   │           │
+   │           Invalid argument to '!'
+   │           Expected: 'bool'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/cast_valid_bad_types.move:11:10
+   │
+11 │         (!x) as u32;
+   │          ^^
+   │          │
+   │          Invalid argument to 'as'
+   │          Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/cast_valid_bad_types.move:11:11
+   │
+ 3 │     fun invalid_types(cond: bool, x: u64) {
+   │                                      --- Given: 'u64'
+   ·
+11 │         (!x) as u32;
+   │           ^
+   │           │
+   │           Invalid argument to '!'
+   │           Expected: 'bool'

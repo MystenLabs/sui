@@ -289,7 +289,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors @{obj_1_0,6}
+//# run-graphql --cursors bcs(@{obj_1_0},6)
 # But it would no longer be possible to try to paginate using a cursor that falls outside the available range
 {
   availableRange {

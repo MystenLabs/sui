@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:5:7
+  │
+5 │     #[syntax]
+  │       ^^^^^^ Expected a parameter list of syntax method usage forms, e.g., 'syntax(index)'
+
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:8:14
+  │
+8 │     #[syntax(index(A))]
+  │              ^^^^^ Expected a standalone syntax method identifier, e.g., 'syntax(index)'
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:14:7
+   │
+14 │     #[syntax = index]
+   │       ^^^^^^^^^^^^^^ Expected a parameter list of syntax method usage forms, e.g., 'syntax(index)'
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:17:14
+   │
+17 │     #[syntax(index = foo)]
+   │              ^^^^^ Expected a standalone syntax method identifier, e.g., 'syntax(index)'
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:22:21
+   │
+22 │     #[syntax(index, index)]
+   │              -----  ^^^^^ Duplicate attribute 'index' attached to the same item
+   │              │       
+   │              Attribute previously given here

@@ -1,0 +1,58 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: true
+---
+warning[Lint W01007]: 'if' expression can be removed
+  ┌─ tests/linter/true_positive_unnecessary_conitional.move:4:9
+  │
+4 │         if (!condition) true else false;
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Detected an unnecessary conditional expression 'if (cond)'. Consider using the condition directly, i.e. 'cond'
+  │
+  = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01007]: 'if' expression can be removed
+  ┌─ tests/linter/true_positive_unnecessary_conitional.move:5:9
+  │
+5 │         if (condition) { { false } } else { (true: bool) };
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Detected an unnecessary conditional expression 'if (cond)'. Consider using the condition directly, i.e. '!cond'
+  │
+  = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01007]: 'if' expression can be removed
+  ┌─ tests/linter/true_positive_unnecessary_conitional.move:9:9
+  │
+9 │         if (true) true else true;
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^
+  │         │         │         │
+  │         │         │         is the same as this value
+  │         │         This value
+  │         Detected a redundant conditional expression 'if (..) v else v', where each branch results in the same value 'v'. Consider using the value directly
+  │
+  = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01007]: 'if' expression can be removed
+   ┌─ tests/linter/true_positive_unnecessary_conitional.move:10:9
+   │
+10 │         if (foo()) 0 else 0;
+   │         ^^^^^^^^^^^^^^^^^^^
+   │         │          │      │
+   │         │          │      is the same as this value
+   │         │          This value
+   │         Detected a redundant conditional expression 'if (..) v else v', where each branch results in the same value 'v'. Consider using the value directly
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01007]: 'if' expression can be removed
+   ┌─ tests/linter/true_positive_unnecessary_conitional.move:11:9
+   │
+11 │         if (!foo()) b"" else x"";
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │           │        │
+   │         │           │        is the same as this value
+   │         │           This value
+   │         Detected a redundant conditional expression 'if (..) v else v', where each branch results in the same value 'v'. Consider using the value directly
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -29,23 +29,43 @@ global.run_spec = function (dirname, action) {
             // of the `m` module
             const traceInfo = test_dir +  '::' + 'm::test';
             return rt.start(path.join(dirname, 'sources', `m.move`), traceInfo, true).then(() => {
-                const result = action(rt);
-                const exp_file = 'test.exp';
-                const exp_path = path.join(dirname, exp_file);
-                if (UB === '1') {
-                    // user asked to regenerate output
-                    fs.writeFileSync(exp_path, result, 'utf8');
-                    return;
-                }
-                if (!fs.existsSync(exp_path)) {
-                    assert.fail(`\n${result}\nNo expected output file`);
-                }
-                const exp_out = fs.readFileSync(exp_path, { encoding: 'utf8' });
-                if (result !== exp_out) {
-                    const out_diff = new linediff(exp_out, result).toString();
-                    assert.fail(`${out_diff}\nCurrent output does not match the expected one (run with UB=1 to save the current output)`);
-                }
+                handleTestResult(dirname, action, rt);
+            });
+
+        });
+    });
+};
+
+global.run_spec_replay = function (dirname, action) {
+    const test_dir = path.basename(dirname);
+    describe(test_dir, () => {
+        it(test_dir, () => {
+            const rt = new runtime.Runtime();
+            const traceInfo = ''; // unused when trace comes from replay tool
+            return rt.start(path.join(dirname, 'trace.json'), traceInfo, true).then(() => {
+                handleTestResult(dirname, action, rt);
             });
         });
     });
 };
+
+
+function handleTestResult(dirname, action, rt) {
+    const result = action(rt);
+    const exp_file = 'test.exp';
+    const exp_path = path.join(dirname, exp_file);
+    if (UB === '1') {
+        // user asked to regenerate output
+        fs.writeFileSync(exp_path, result, 'utf8');
+        return;
+    }
+    if (!fs.existsSync(exp_path)) {
+        assert.fail(`\n${result}\nNo expected output file`);
+    }
+    const exp_out = fs.readFileSync(exp_path, { encoding: 'utf8' });
+    if (result !== exp_out) {
+        const out_diff = new linediff(exp_out, result).toString();
+        assert.fail(`${out_diff}\nCurrent output does not match the expected one (run with UB=1 to save the current output)`);
+    }
+}
+

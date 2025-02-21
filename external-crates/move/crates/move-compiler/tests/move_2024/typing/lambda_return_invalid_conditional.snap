@@ -1,0 +1,78 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:7:18
+  │
+7 │         call!(|| { if (cond) return 0; &1 });
+  │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │                  │           │         │
+  │                  │           │         Found: '&{integer}'. It is not compatible with the other type.
+  │                  │           Found: integer. It is not compatible with the other type.
+  │                  Invalid lambda return
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:8:18
+  │
+8 │         call!(|| { if (cond) 1 else return &0 });
+  │         ---------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+  │         │        │                         │
+  │         │        │                         Found: '&{integer}'. It is not compatible with the other type.
+  │         │        Invalid lambda return
+  │         Found: integer. It is not compatible with the other type.
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:9:18
+  │
+9 │         call!(|| { if (cond) return 0; &1 });
+  │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │                  │           │         │
+  │                  │           │         Found: '&{integer}'. It is not compatible with the other type.
+  │                  │           Found: integer. It is not compatible with the other type.
+  │                  Invalid lambda return
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:10:18
+   │
+10 │         call!(|| { if (cond) 1 else return &0 });
+   │         ---------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+   │         │        │                         │
+   │         │        │                         Found: '&{integer}'. It is not compatible with the other type.
+   │         │        Invalid lambda return
+   │         Found: integer. It is not compatible with the other type.
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:11:18
+   │
+11 │         call!(|| { if (cond) return (vector[], 0, false); (vector[0], true) });
+   │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                  │                  │                     │
+   │                  │                  │                     Found expression list of length 2: '(vector<{integer}>, bool)'. It is not compatible with the other type of length 3.
+   │                  │                  Found expression list of length 3: '(vector<_>, {integer}, bool)'. It is not compatible with the other type of length 2.
+   │                  Invalid lambda return
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:11:38
+   │
+11 │         call!(|| { if (cond) return (vector[], 0, false); (vector[0], true) });
+   │                                      ^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:12:18
+   │
+12 │         call!(|| { if (cond) (vector[], 0, false) else return (vector[0], true) });
+   │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                  │           │                                │
+   │                  │           │                                Found expression list of length 2: '(vector<{integer}>, bool)'. It is not compatible with the other type of length 3.
+   │                  │           Found expression list of length 3: '(vector<_>, {integer}, bool)'. It is not compatible with the other type of length 2.
+   │                  Invalid lambda return
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:12:31
+   │
+12 │         call!(|| { if (cond) (vector[], 0, false) else return (vector[0], true) });
+   │                               ^^^^^^^^ Could not infer this type. Try adding an annotation

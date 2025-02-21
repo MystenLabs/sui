@@ -5,7 +5,6 @@ use std::str::FromStr;
 use std::{path::PathBuf, time::Duration};
 
 use sui_graphql_rpc_client::simple_client::SimpleClient;
-use sui_json_rpc::name_service::{Domain, DomainFormat};
 use sui_json_rpc_types::ObjectChange;
 use sui_move_build::BuildConfig;
 use sui_mvr_graphql_rpc::{
@@ -15,7 +14,8 @@ use sui_mvr_graphql_rpc::{
         wait_for_graphql_checkpoint_catchup, wait_for_graphql_server, NetworkCluster,
     },
 };
-use sui_pg_temp_db::get_available_port;
+use sui_name_service::{Domain, DomainFormat};
+use sui_pg_db::temp::get_available_port;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::ObjectDigest,

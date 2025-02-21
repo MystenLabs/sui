@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/typing/mismatched_lambda_arity.move:3:9
+  │
+3 │         $f();
+  │         ^^^^
+  │         │ │
+  │         │ Found 0 argument(s) here
+  │         Invalid lambda call of '$f'. The call expected 2 argument(s) but got 0
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/typing/mismatched_lambda_arity.move:4:9
+  │
+4 │         $f(0);
+  │         ^^^^^
+  │         │ │
+  │         │ Found 1 argument(s) here
+  │         Invalid lambda call of '$f'. The call expected 2 argument(s) but got 1
+
+error[E04017]: too many arguments
+  ┌─ tests/move_2024/typing/mismatched_lambda_arity.move:5:9
+  │
+5 │         $f(0, 1, 2);
+  │         ^^^^^^^^^^^
+  │         │ │
+  │         │ Found 3 argument(s) here
+  │         Invalid lambda call of '$f'. The call expected 2 argument(s) but got 3

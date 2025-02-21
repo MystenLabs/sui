@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/expansion/alias_overlap_invalid.move:9:15
+  │
+8 │     use a::S;
+  │            - Alias previously defined here
+9 │     use a::S::S; // ERROR
+  │               ^ Duplicate module member or alias 'S'. Top level names in a namespace must be unique
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/expansion/alias_overlap_invalid.move:14:19
+   │
+13 │     use a::S;
+   │            - Alias previously defined here
+14 │     public struct S() has copy, drop; // ERROR
+   │                   ^ Duplicate module member or alias 'S'. Top level names in a namespace must be unique

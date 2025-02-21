@@ -1,0 +1,205 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 18 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-53:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 20428800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 54-56:
+//# run sui::coin::deny_list_v2_add --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 48, 51, 51, 49, 100, 56, 101, 49, 98, 99, 98, 101, 55, 102, 100, 51, 97, 54, 101, 48, 97, 102, 102, 55, 99, 56, 56, 98, 50, 53, 97, 57, 54, 51, 102, 48, 51, 56, 102, 48, 51, 98, 97, 49, 53, 48, 51, 101, 48, 53, 98, 57, 56, 49, 102, 102, 101, 98, 56, 56, 98, 101, 98, 52, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 116, 239, 154, 198, 227, 43, 235, 247, 62, 51, 2, 238, 1, 255, 251, 178, 127, 24, 217, 192, 109, 173, 216, 65, 206, 45, 158, 164, 2, 239, 79, 140] }
+created: object(2,0), object(2,1), object(2,2)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 12190400,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
+
+task 3, lines 57-59:
+//# run sui::coin::deny_list_v2_enable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(3,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 4356396, non_refundable_storage_fee: 44004
+
+task 4, line 60:
+//# view-object 2,1
+Owner: Object ID: ( fake(2,0) )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::deny_list::AddressKey, sui::config::Setting<bool>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    name: sui::deny_list::AddressKey {
+        pos0: B,
+    },
+    value: sui::config::Setting<bool> {
+        data: std::option::Option<sui::config::SettingData<bool>> {
+            vec: vector[
+                sui::config::SettingData<bool> {
+                    newer_value_epoch: 0u64,
+                    newer_value: std::option::Option<bool> {
+                        vec: vector[
+                            true,
+                        ],
+                    },
+                    older_value_opt: std::option::Option<bool> {
+                        vec: vector[],
+                    },
+                },
+            ],
+        },
+    },
+}
+
+task 5, line 62:
+//# view-object 3,0
+Owner: Object ID: ( fake(2,0) )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::deny_list::GlobalPauseKey, sui::config::Setting<bool>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    name: sui::deny_list::GlobalPauseKey {
+        dummy_field: false,
+    },
+    value: sui::config::Setting<bool> {
+        data: std::option::Option<sui::config::SettingData<bool>> {
+            vec: vector[
+                sui::config::SettingData<bool> {
+                    newer_value_epoch: 0u64,
+                    newer_value: std::option::Option<bool> {
+                        vec: vector[
+                            true,
+                        ],
+                    },
+                    older_value_opt: std::option::Option<bool> {
+                        vec: vector[],
+                    },
+                },
+            ],
+        },
+    },
+}
+
+task 6, lines 64-66:
+//# advance-epoch
+Epoch advanced: 1
+
+task 7, lines 67-69:
+//# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
+
+task 8, lines 70-72:
+//# run sui::coin::deny_list_v2_disable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 6591024, non_refundable_storage_fee: 66576
+
+task 9, line 73:
+//# view-object 2,1
+Owner: Object ID: ( fake(2,0) )
+Version: 5
+Contents: sui::dynamic_field::Field<sui::deny_list::AddressKey, sui::config::Setting<bool>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    name: sui::deny_list::AddressKey {
+        pos0: B,
+    },
+    value: sui::config::Setting<bool> {
+        data: std::option::Option<sui::config::SettingData<bool>> {
+            vec: vector[
+                sui::config::SettingData<bool> {
+                    newer_value_epoch: 1u64,
+                    newer_value: std::option::Option<bool> {
+                        vec: vector[],
+                    },
+                    older_value_opt: std::option::Option<bool> {
+                        vec: vector[
+                            true,
+                        ],
+                    },
+                },
+            ],
+        },
+    },
+}
+
+task 10, line 75:
+//# view-object 3,0
+Owner: Object ID: ( fake(2,0) )
+Version: 6
+Contents: sui::dynamic_field::Field<sui::deny_list::GlobalPauseKey, sui::config::Setting<bool>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    name: sui::deny_list::GlobalPauseKey {
+        dummy_field: false,
+    },
+    value: sui::config::Setting<bool> {
+        data: std::option::Option<sui::config::SettingData<bool>> {
+            vec: vector[
+                sui::config::SettingData<bool> {
+                    newer_value_epoch: 1u64,
+                    newer_value: std::option::Option<bool> {
+                        vec: vector[],
+                    },
+                    older_value_opt: std::option::Option<bool> {
+                        vec: vector[
+                            true,
+                        ],
+                    },
+                },
+            ],
+        },
+    },
+}
+
+task 11, lines 77-79:
+//# advance-epoch
+Epoch advanced: 2
+
+task 12, lines 80-82:
+//# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+deleted: object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 4400400,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
+
+task 13, lines 83-85:
+//# run sui::coin::deny_list_v2_disable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 4400400,  storage_rebate: 6591024, non_refundable_storage_fee: 66576
+
+task 14, line 86:
+//# view-object 2,1
+No object at id 2,1
+
+task 15, lines 88-90:
+//# view-object 3,0
+No object at id 3,0
+
+task 16, lines 91-93:
+//# run test::regulated_coin::assert_address_deny_status --args immshared(0x403) @B false --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 17, line 94:
+//# run test::regulated_coin::assert_global_pause_status --args immshared(0x403) false --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

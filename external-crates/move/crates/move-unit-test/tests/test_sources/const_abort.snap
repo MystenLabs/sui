@@ -1,0 +1,7 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
+Running Move unit tests
+[ PASS    ] 0x6::M::test_local_abort
+[ PASS    ] 0x6::M::test_local_abort_invalid_code
+Test result: OK. Total tests: 2; passed: 2; failed: 0

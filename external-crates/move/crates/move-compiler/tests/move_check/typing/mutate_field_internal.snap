@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/mutate_field_internal.move:13:9
+   │
+13 │         X::s().f = 0;
+   │         ^^^^^^^^ Invalid access of field 'f' on the struct '0x2::X::S'. The field 'f' can only be accessed within the module '0x2::X' since it defines 'S'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/mutate_field_internal.move:15:9
+   │
+15 │         s.f = 0;
+   │         ^^^ Invalid access of field 'f' on the struct '0x2::X::S'. The field 'f' can only be accessed within the module '0x2::X' since it defines 'S'

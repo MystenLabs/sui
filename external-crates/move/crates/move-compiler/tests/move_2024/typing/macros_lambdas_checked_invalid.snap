@@ -1,0 +1,44 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid.move:9:19
+  │
+9 │         foo!<u64, vector<u8>>(
+  │              ---  ^^^^^^^^^^
+  │              │    │
+  │              │    Invalid type annotation
+  │              │    Expected: 'vector<u8>'
+  │              Given: 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid.move:14:19
+   │
+14 │         foo!<u64, vector<u8>>(
+   │              ---  ^^^^^^^^^^
+   │              │    │      │
+   │              │    │      Expected: 'u8'
+   │              │    Invalid type annotation
+   │              Given: 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid.move:19:19
+   │
+19 │         foo!<u64, vector<u8>>(
+   │                   ^^^^^^^^^^
+   │                   │      │
+   │                   │      Expected: 'u8'
+   │                   Invalid type annotation
+   ·
+22 │             || vector[vector[]], // invalid
+   │                       -------- Given: 'vector<_>'
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid.move:22:23
+   │
+22 │             || vector[vector[]], // invalid
+   │                       ^^^^^^^^ Could not infer this type. Try adding an annotation

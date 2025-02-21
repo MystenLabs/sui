@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/guard_ref.move:16:32
+   │
+16 │             Option::Some(n) if check_imm_ref_s(n) => n,
+   │                                ^^^^^^^^^^^^^^^
+   │                                │
+   │                                Unexpected 'check_imm_ref_s'
+   │                                Expected '('
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/guard_ref.move:28:32
+   │
+28 │             Option::Some(n) if check_mut_ref_s(n) => n,
+   │                                ^^^^^^^^^^^^^^^
+   │                                │
+   │                                Unexpected 'check_mut_ref_s'
+   │                                Expected '('
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/guard_ref.move:36:32
+   │
+36 │             Option::Some(n) if check_mut_ref_s(n) => n,
+   │                                ^^^^^^^^^^^^^^^
+   │                                │
+   │                                Unexpected 'check_mut_ref_s'
+   │                                Expected '('

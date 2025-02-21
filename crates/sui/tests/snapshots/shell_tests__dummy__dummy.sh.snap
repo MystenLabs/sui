@@ -1,0 +1,21 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/dummy/dummy.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# simple test just to make sure the test runner works
+echo "dummy test"
+cat data/data.txt
+sui move new dummy
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+dummy test
+some dummy data
+
+----- stderr -----

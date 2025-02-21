@@ -12,7 +12,6 @@ pub mod annotated_extractor;
 pub mod annotated_value;
 pub mod annotated_visitor;
 pub mod effects;
-pub mod errmap;
 pub mod gas_algebra;
 pub mod identifier;
 pub mod language_storage;

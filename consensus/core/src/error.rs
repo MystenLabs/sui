@@ -176,9 +176,6 @@ pub(crate) enum ConsensusError {
     #[error("Failed to connect as client: {0:?}")]
     NetworkClientConnection(String),
 
-    #[error("Failed to connect as server: {0:?}")]
-    NetworkServerConnection(String),
-
     #[error("Failed to send request: {0:?}")]
     NetworkRequest(String),
 

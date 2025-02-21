@@ -1,0 +1,78 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:9:15
+  │
+9 │        match (o) {
+  │               ^ Pattern 'Option::None' not covered
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:10:10
+   │
+10 │          Option::Other { mut x: mut y } => y,
+   │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing pattern for field 'x' in '0x42::m::Option::Other'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:10:26
+   │
+10 │          Option::Other { mut x: mut y } => y,
+   │                          ^^^ 'mut' modifier can only be used on variable bindings
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:10:44
+   │
+10 │          Option::Other { mut x: mut y } => y,
+   │                                            ^ Unbound variable 'y'
+
+error[E02010]: invalid name
+   ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:11:33
+   │
+11 │          Option::Other { x: mut y<u64> } => y,
+   │                                 ^ Invalid type arguments on a pattern variable
+   │
+   = Type arguments cannot appear on pattern variables
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:12:10
+   │
+12 │          Option::Other { mut x: y } => y,
+   │          ^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing pattern for field 'x' in '0x42::m::Option::Other'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:12:26
+   │
+12 │          Option::Other { mut x: y } => y,
+   │                          ^^^ 'mut' modifier can only be used on variable bindings
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:12:40
+   │
+12 │          Option::Other { mut x: y } => y,
+   │                                        ^ Unbound variable 'y'
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:13:10
+   │
+13 │          x @ mut Option::Some(true) => true,
+   │          ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:13:14
+   │
+13 │          x @ mut Option::Some(true) => true,
+   │              ^^^ Invalid 'mut' keyword on non-variable pattern
+
+error[E02010]: invalid name
+   ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:14:10
+   │
+14 │          mut Option::None => false,
+   │          ^^^ ------------ Expected a valid 'enum' variant, 'struct', or 'const', not a variable
+   │          │    
+   │          'mut' can only be used with variable bindings in patterns

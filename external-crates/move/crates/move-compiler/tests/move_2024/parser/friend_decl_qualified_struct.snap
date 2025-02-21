@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/friend_decl_qualified_struct.move:2:5
+  │
+2 │     struct A {}
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/parser/friend_decl_qualified_struct.move:6:12
+  │
+6 │     friend 0x42::A::A;
+  │            ^^^^^^^^^^ Unexpected module member identifier. A module member identifier is not a valid module

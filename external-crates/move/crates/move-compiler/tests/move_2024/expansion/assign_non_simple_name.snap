@@ -1,0 +1,132 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/expansion/assign_non_simple_name.move:2:5
+  │
+2 │     struct S {}
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/expansion/assign_non_simple_name.move:6:23
+  │
+5 │     use 0x42::X;
+  │               - Alias previously defined here
+6 │     use 0x42::X::S as X;
+  │                       ^ Duplicate module member or alias 'X'. Top level names in a namespace must be unique
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/expansion/assign_non_simple_name.move:8:5
+  │
+8 │     struct R {}
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/expansion/assign_non_simple_name.move:9:5
+  │
+9 │     struct S<T> { f: T }
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:15:9
+   │
+15 │         X::S = ();
+   │         ^^^^ Unexpected assignment of variant
+   │
+   = If you are trying to unpack an enum variant, use 'match'
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:16:9
+   │
+16 │         Self::S<u64> = ();
+   │         ^^^^^^^^^^^^ Unexpected assignment of module access without fields
+   │
+   = If you are trying to unpack a struct, try adding fields, e.g.'Self::S {}'
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:17:9
+   │
+17 │         Self::R = ();
+   │         ^^^^^^^ Unexpected assignment of module access without fields
+   │
+   = If you are trying to unpack a struct, try adding fields, e.g.'Self::R {}'
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:21:9
+   │
+21 │         0x42::X::S = ();
+   │         ^^^^^^^^^^ Unexpected assignment of module access without fields
+   │
+   = If you are trying to unpack a struct, try adding fields, e.g.'0x42::X::S {}'
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:22:9
+   │
+22 │         0x42::M::S<u64> = ();
+   │         ^^^^^^^^^^^^^^^ Unexpected assignment of module access without fields
+   │
+   = If you are trying to unpack a struct, try adding fields, e.g.'0x42::M::S {}'
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:23:9
+   │
+23 │         0x42::M::R = ();
+   │         ^^^^^^^^^^ Unexpected assignment of module access without fields
+   │
+   = If you are trying to unpack a struct, try adding fields, e.g.'0x42::M::R {}'
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:27:9
+   │
+27 │         x<u64> = ();
+   │         ^^^^^^ Unexpected assignment of instantiated type without fields
+   │
+   = If you are trying to unpack a struct, try adding fields, e.g.'x {}'
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:28:9
+   │
+28 │         S<u64> = ();
+   │         ^^^^^^ Unexpected assignment of module access without fields
+   │
+   = If you are trying to unpack a struct, try adding fields, e.g.'S {}'
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:32:9
+   │
+32 │         X = ();
+   │         ^ Unexpected assignment of module access without fields
+   │
+   = If you are trying to unpack a struct, try adding fields, e.g.'X {}'
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:33:9
+   │
+33 │         S = ();
+   │         ^ Unexpected assignment of module access without fields
+   │
+   = If you are trying to unpack a struct, try adding fields, e.g.'S {}'
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:34:9
+   │
+34 │         R = ();
+   │         ^ Unexpected assignment of module access without fields
+   │
+   = If you are trying to unpack a struct, try adding fields, e.g.'R {}'
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:38:9
+   │
+38 │         Y = 0;
+   │         ^ Invalid assignment. Unbound variable 'Y'

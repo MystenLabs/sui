@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03004]: unbound type
+   ┌─ tests/move_2024/unit_test/cross_module_members_non_test_function.move:22:23
+   │
+22 │     public fun bad(): Foo {
+   │                       ^^^ Unbound type 'Foo' in current scope
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/unit_test/cross_module_members_non_test_function.move:23:9
+   │
+23 │         P::build_foo()
+   │         ^ Could not resolve the name 'P'

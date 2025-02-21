@@ -1,0 +1,69 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+task 1, lines 6-30:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6688000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 32:
+//# run tto::M1::start
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 34:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, lines 36-38:
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 5, line 39:
+//# run tto::M1::receiver --args object(2,0) receiving(2,1)
+Error: Transaction Effects Status: Move Runtime Abort. Location: tto::M1::receiver (function index 1) at offset 6, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: tto, name: Identifier("M1") }, function: 1, instruction: 6, function_name: Some("receiver") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("tto::M1::receiver at offset 6"), exec_state: None, location: Module(ModuleId { address: tto, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 6)] }), command: Some(0) } }
+
+task 6, line 41:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 4
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 7, line 43:
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}

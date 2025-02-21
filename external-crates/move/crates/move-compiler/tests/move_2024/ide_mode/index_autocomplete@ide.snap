@@ -1,0 +1,109 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:2:1
+  │  
+2 │ ╭ module std::vector {
+3 │ │     #[syntax(index)]
+4 │ │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
+5 │ │     #[syntax(index)]
+6 │ │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+7 │ │ }
+  │ ╰─^ Possible in-scope names
+  │  
+  = members: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', or 'vborrow_mut -> std::vector::vborrow_mut'
+  = modules: 'Self -> std::vector', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:4:51
+  │
+4 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
+  │                                                   ^^^^^^^ Possible in-scope names
+  │
+  = members: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', or 'vborrow_mut -> std::vector::vborrow_mut'
+  = modules: 'Self -> std::vector', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 'Element'
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:4:71
+  │
+4 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
+  │                                                                       ^^^^^^^ Possible in-scope names
+  │
+  = members: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', or 'vborrow_mut -> std::vector::vborrow_mut'
+  = modules: 'Self -> std::vector', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 'Element'
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:6:59
+  │
+6 │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+  │                                                           ^^^^^^^ Possible in-scope names
+  │
+  = members: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', or 'vborrow_mut -> std::vector::vborrow_mut'
+  = modules: 'Self -> std::vector', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 'Element'
+
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:6:83
+  │
+6 │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+  │                                                                                   ^^^^^^^ Possible in-scope names
+  │
+  = members: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', or 'vborrow_mut -> std::vector::vborrow_mut'
+  = modules: 'Self -> std::vector', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 'Element'
+
+warning[W09009]: unused struct field
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:14:23
+   │
+14 │     public struct C { c: u64, d: u64 } has drop;
+   │                       ^ The 'c' field of the 'C' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09009]: unused struct field
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:14:31
+   │
+14 │     public struct C { c: u64, d: u64 } has drop;
+   │                               ^ The 'd' field of the 'C' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:29
+   │
+17 │         let _ = &in.0.0[1]. ;
+   │                             ^
+   │                             │
+   │                             Unexpected ';'
+   │                             Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:34
+   │
+21 │         let _ = &in.0.0[1].0[0]. ;
+   │                                  ^
+   │                                  │
+   │                                  Unexpected ';'
+   │                                  Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:34
+   │
+25 │         let _ = &in.0.0[1].0[0]. ;
+   │                                  ^
+   │                                  │
+   │                                  Unexpected ';'
+   │                                  Expected an identifier or a decimal number

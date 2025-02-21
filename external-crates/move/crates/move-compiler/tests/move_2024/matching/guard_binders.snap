@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/guard_binders.move:19:32
+   │
+19 │             Option::Some(n) if n == &5 => *n,
+   │                                ^
+   │                                │
+   │                                Unexpected 'n'
+   │                                Expected '('
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/guard_binders.move:28:32
+   │
+28 │             Option::Some(n) if n == &5 => *n,
+   │                                ^
+   │                                │
+   │                                Unexpected 'n'
+   │                                Expected '('

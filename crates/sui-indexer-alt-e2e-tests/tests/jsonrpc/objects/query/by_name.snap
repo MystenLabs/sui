@@ -1,0 +1,139 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 11-38:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 7075600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 40-42:
+//# programmable --sender B --inputs @B
+//> 0: P::M::o1<u64>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 44-48:
+//# programmable --sender A --inputs @A
+//> 0: P::M::o1<u32>();
+//> 1: P::M::o2();
+//> 2: P::N::o1();
+//> 3: TransferObjects([Result(0), Result(1), Result(2)], Input(0))
+created: object(3,0), object(3,1), object(3,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4643600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, line 50:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 52-54:
+//# programmable --sender A --inputs @A
+//> 0: P::M::o1<u16>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 56:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 58-68:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": [
+      {
+        "data": {
+          "objectId": "0xa149cfb5a4d73dc0e453acf798b86ae510abc6ef0842bde71b79ac28846caad4",
+          "version": "3",
+          "digest": "8fBZV9wTyZLsfFpk6juQX599wMXGH2ELV7auRea72HDe",
+          "type": "0xea172d9fc530d31939523f79e455a7709df18773cf0e7194c9ef04fe8db0c634::M::O1<u16>"
+        }
+      },
+      {
+        "data": {
+          "objectId": "0x72a1babb319e33c79676c8b6273887a6745c39e337e96379fe09e489338e9f44",
+          "version": "2",
+          "digest": "5ZzFto6F55thAMFLz9Q4rfQehjjJo3GQvUu5zhUo3DD8",
+          "type": "0xea172d9fc530d31939523f79e455a7709df18773cf0e7194c9ef04fe8db0c634::M::O1<u32>"
+        }
+      }
+    ],
+    "nextCursor": "IHKhursxnjPHlnbItic4h6Z0XDnjN+ljef4J5Ikzjp9EAQAAAAAAAAA=",
+    "hasNextPage": false
+  }
+}
+
+task 8, lines 70-80:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "data": [
+      {
+        "data": {
+          "objectId": "0x8e780346fb537c4dbfe2622b77b9179d6ff80b5b6cd30c746ec094576944a460",
+          "version": "2",
+          "digest": "8JdoHUTLVvnAdd9kpzep3Gm8uiJPNFdtarXSd8bAf84f",
+          "type": "0xea172d9fc530d31939523f79e455a7709df18773cf0e7194c9ef04fe8db0c634::M::O2"
+        }
+      }
+    ],
+    "nextCursor": "II54A0b7U3xNv+JiK3e5F51v+AtbbNMMdG7AlFdpRKRgAQAAAAAAAAA=",
+    "hasNextPage": false
+  }
+}
+
+task 9, lines 82-94:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "data": [
+      {
+        "data": {
+          "objectId": "0xa149cfb5a4d73dc0e453acf798b86ae510abc6ef0842bde71b79ac28846caad4",
+          "version": "3",
+          "digest": "8fBZV9wTyZLsfFpk6juQX599wMXGH2ELV7auRea72HDe",
+          "type": "0xea172d9fc530d31939523f79e455a7709df18773cf0e7194c9ef04fe8db0c634::M::O1<u16>"
+        }
+      }
+    ],
+    "nextCursor": "IKFJz7Wk1z3A5FOs95i4auUQq8bvCEK95xt5rCiEbKrUAgAAAAAAAAA=",
+    "hasNextPage": true
+  }
+}
+
+task 10, lines 96-108:
+//# run-jsonrpc --cursors bcs(@{obj_5_0},2)
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "data": [
+      {
+        "data": {
+          "objectId": "0x72a1babb319e33c79676c8b6273887a6745c39e337e96379fe09e489338e9f44",
+          "version": "2",
+          "digest": "5ZzFto6F55thAMFLz9Q4rfQehjjJo3GQvUu5zhUo3DD8",
+          "type": "0xea172d9fc530d31939523f79e455a7709df18773cf0e7194c9ef04fe8db0c634::M::O1<u32>"
+        }
+      }
+    ],
+    "nextCursor": "IHKhursxnjPHlnbItic4h6Z0XDnjN+ljef4J5Ikzjp9EAQAAAAAAAAA=",
+    "hasNextPage": false
+  }
+}

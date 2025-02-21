@@ -1,0 +1,102 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/all_migrations.move:6:5
+  │
+6 │     friend a::c;
+  │     ^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+   ┌─ tests/move_2024/migration/all_migrations.move:12:5
+   │
+12 │     friend a::d;
+   │     ^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+   ┌─ tests/move_2024/migration/all_migrations.move:20:5
+   │
+20 │     friend a::e;
+   │     ^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
+
+error[E01003]: invalid modifier
+   ┌─ tests/move_2024/migration/all_migrations.move:22:5
+   │
+22 │     struct S { f: u64 }
+   │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+   │
+   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E01003]: invalid modifier
+   ┌─ tests/move_2024/migration/all_migrations.move:24:5
+   │
+24 │     struct LongerName {
+   │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+   │
+   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E01003]: invalid modifier
+   ┌─ tests/move_2024/migration/all_migrations.move:29:5
+   │
+29 │     struct Positional(u64, u64, u64)
+   │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+   │
+   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_2024/migration/all_migrations.move:32:20
+   │
+32 │         let S { f: fin } = s;
+   │                    ^^^ Unused assignment for variable 'fin'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_fin')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/migration/all_migrations.move:33:9
+   │
+32 │         let S { f: fin } = s;
+   │                    --- To use the variable mutably, it must be declared 'mut', e.g. 'mut fin'
+33 │         fin = 10;
+   │         ^^^ Invalid assignment of immutable variable 'fin'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/migration/all_migrations.move:34:9
+   │
+31 │     fun t0(x: u64, s: S): u64 {
+   │            - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+   ·
+34 │         x = 20;
+   │         ^ Invalid assignment of immutable variable 'x'
+
+error[E13002]: feature is deprecated in specified edition
+   ┌─ tests/move_2024/migration/all_migrations.move:38:5
+   │
+38 │     public(friend) fun t1() {}
+   │     ^^^^^^^^^^^^^^ 'public(friend)' is deprecated. Replace with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+   ┌─ tests/move_2024/migration/all_migrations.move:40:5
+   │  
+40 │ ╭     public(
+41 │ │         friend) fun t2() {}
+   │ ╰───────────────^ 'public(friend)' is deprecated. Replace with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+   ┌─ tests/move_2024/migration/all_migrations.move:43:5
+   │  
+43 │ ╭     public(
+44 │ │         friend
+45 │ │         ) fun t3() {}
+   │ ╰─────────^ 'public(friend)' is deprecated. Replace with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+   ┌─ tests/move_2024/migration/all_migrations.move:47:5
+   │  
+47 │ ╭     public(
+48 │ │         friend
+49 │ │     ) fun t4() {}
+   │ ╰─────^ 'public(friend)' is deprecated. Replace with 'public(package)'

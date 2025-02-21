@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/expansion/expansion/deprecate_friend.move:2:5
+  │
+2 │     friend a::n;
+  │     ^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/expansion/expansion/deprecate_friend.move:3:5
+  │
+3 │     friend a::x;
+  │     ^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
+
+error[E03002]: unbound module
+  ┌─ tests/move_2024/expansion/expansion/deprecate_friend.move:3:12
+  │
+3 │     friend a::x;
+  │            ^^^^ Unbound module 'a::x'

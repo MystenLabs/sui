@@ -1,0 +1,72 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E10005]: unable to generate test
+  ┌─ tests/move_2024/unit_test/random_test_invalid.move:4:7
+  │
+4 │     #[random_test]
+  │       ^^^^^^^^^^^ No parameters to generate for random test. A #[random_test] function must have at least one parameter to generate.
+5 │     fun foo() { }
+  │         --- Error found in this test
+
+error[E10003]: invalid attribute value
+  ┌─ tests/move_2024/unit_test/random_test_invalid.move:7:23
+  │
+7 │     #[random_test(b = 1)]
+  │                   ----^
+  │                   │   │
+  │                   │   Unsupported attribute value
+  │                   Assigned in this attribute
+
+error[E10004]: invalid usage of known attribute
+   ┌─ tests/move_2024/unit_test/random_test_invalid.move:10:7
+   │
+10 │     #[random_test]
+   │       ^^^^^^^^^^^ Function annotated as both #[test] and #[random_test]. You need to declare it as either one or the other
+11 │     #[test]
+   │       ---- Previously annotated here
+12 │     fun qux(_c: u64, _d: bool) { }
+   │         --- Error found in this test
+
+error[E10004]: invalid usage of known attribute
+   ┌─ tests/move_2024/unit_test/random_test_invalid.move:14:7
+   │
+14 │     #[random_test]
+   │       ^^^^^^^^^^^ Function annotated as both #[test] and #[random_test]. You need to declare it as either one or the other
+15 │     #[test]
+   │       ---- Previously annotated here
+16 │     fun quxz() { }
+   │         ---- Error found in this test
+
+error[E10005]: unable to generate test
+   ┌─ tests/move_2024/unit_test/random_test_invalid.move:18:7
+   │
+18 │     #[random_test]
+   │       ^^^^^^^^^^^ No parameters to generate for random test. A #[random_test] function must have at least one parameter to generate.
+19 │     #[test_only]
+20 │     fun bar() { }
+   │         --- Error found in this test
+
+error[E10004]: invalid usage of known attribute
+   ┌─ tests/move_2024/unit_test/random_test_invalid.move:19:7
+   │
+18 │     #[random_test]
+   │       ----------- Previously annotated here
+19 │     #[test_only]
+   │       ^^^^^^^^^ Function annotated as both #[test] and #[test_only]. You need to declare it as either one or the other
+20 │     fun bar() { }
+   │         --- Error found in this test
+
+error[E10005]: unable to generate test
+   ┌─ tests/move_2024/unit_test/random_test_invalid.move:24:16
+   │
+24 │     fun baz(_: X) { }
+   │         ---    ^ Unsupported type for generated input for test. Only built-in types are supported for generated test inputs
+   │         │       
+   │         Error found in this test
+   │
+   = Supported builti-in types are: bool, u8, u16, u32, u64, u128, u256, address, and vector<T> where T is a built-in type

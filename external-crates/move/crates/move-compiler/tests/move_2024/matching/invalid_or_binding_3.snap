@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/invalid_or_binding_3.move:9:12
+  │
+9 │     match (e) {
+  │            ^ Pattern 'E::Y { y: _ }' not covered
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/matching/invalid_or_binding_3.move:10:22
+   │
+10 │         E::X { x } | E::Y { y: _, x } => *x
+   │                      ^^^^^^^^^^^^^^^^ Unbound field 'x' in '0x42::m::E::Y'

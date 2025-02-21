@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/hlir/break_outer_loop.move:14:13
+   │
+14 │             break 'a 5;
+   │             ^^^^^^^^^^ Any code after this expression will not be reached
+15 │             break 10;
+   │             -------- Unreachable code. This statement (and any following statements) will not be executed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

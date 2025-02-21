@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/control_flow/infinite_loop_with_dead_exits.move:13:17
+   │
+13 │             if (return) break;
+   │                 ^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -1,0 +1,102 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:18:13
+   │
+18 │             break.xval();
+   │             ^^^^^^^^^^^^
+   │             │
+   │             Invalid method call
+   │             Unable to infer type for method call. Try annotating this type
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:19:13
+   │
+19 │             continue.xval();
+   │             ^^^^^^^^^^^^^^^
+   │             │
+   │             Invalid method call
+   │             Unable to infer type for method call. Try annotating this type
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:21:9
+   │
+21 │         vector [] .length();
+   │         ^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:21:9
+   │
+21 │         vector [] .length();
+   │         ^^^^^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:22:9
+   │
+22 │         (X{}, Y{}).xval();
+   │         ^^^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid method call
+   │         Method calls are only supported on single types. Got an expression of type: '(a::m::X, a::m::Y)'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:23:9
+   │
+23 │         0.next();
+   │         ^^^^^^^^
+   │         │
+   │         Invalid method call
+   │         Unable to infer type for method call. Try annotating this type
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:24:9
+   │
+24 │         while (cond) { }.xeat();
+   │         ^^^^^^^^^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid method call
+   │         Method calls are only supported on single types. Got an expression of type: '()'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:25:9
+   │
+16 │     fun t(cond: bool) {
+   │         - Expected: '()'
+   ·
+25 │         return { X{} }.xval();
+   │         ^^^^^^^^^^^^^^
+   │         │        │
+   │         │        Given: 'a::m::X'
+   │         Invalid return
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:25:9
+   │
+25 │         return { X{} }.xval();
+   │         ^^^^^^^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid method call
+   │         Unable to infer type for method call. Try annotating this type
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:26:9
+   │
+26 │         return.xval();
+   │         ^^^^^^^^^^^^^
+   │         │
+   │         Invalid method call
+   │         Unable to infer type for method call. Try annotating this type
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:27:9
+   │
+27 │         abort { 0 } .length();
+   │         ^^^^^^^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid method call
+   │         Unable to infer type for method call. Try annotating this type

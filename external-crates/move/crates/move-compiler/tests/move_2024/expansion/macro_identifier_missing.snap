@@ -1,0 +1,44 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/macro_identifier_missing.move:2:19
+  │
+2 │     macro fun foo<T>(x: u64, f: |u64|) {
+  │     -----         ^ Invalid type parameter name. 'macro fun' type parameter names must start with '$'
+  │     │              
+  │     Declared 'macro' here
+  │
+  = Type parameter names starting with '$' indicate that their arguments do not have to satisfy certain constraints before the macro is expanded, meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.
+
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/macro_identifier_missing.move:2:22
+  │
+2 │     macro fun foo<T>(x: u64, f: |u64|) {
+  │     -----            ^ Invalid parameter name 'x'. 'macro' parameter names must start with '$' (or must be '_')
+  │     │                 
+  │     Declared 'macro' here
+  │
+  = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
+
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/macro_identifier_missing.move:2:30
+  │
+2 │     macro fun foo<T>(x: u64, f: |u64|) {
+  │     -----                    ^ Invalid parameter name 'f'. 'macro' parameter names must start with '$' (or must be '_')
+  │     │                         
+  │     Declared 'macro' here
+  │
+  = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
+
+error[E04029]: invalid function call
+  ┌─ tests/move_2024/expansion/macro_identifier_missing.move:3:9
+  │
+3 │         f(x)
+  │         ^ Unexpected invocation of parameter or local 'f'. Non-syntax variables cannot be invoked as functions
+  │
+  = Only macro syntax variables, e.g. '$f', may be invoked as functions.

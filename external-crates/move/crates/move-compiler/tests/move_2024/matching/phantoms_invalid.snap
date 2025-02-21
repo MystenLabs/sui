@@ -1,0 +1,110 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02013]: invalid phantom type parameter usage
+  ┌─ tests/move_2024/matching/phantoms_invalid.move:9:11
+  │
+7 │     public enum Q<phantom X> {
+  │                           - 'X' declared here as phantom
+8 │         A,
+9 │         B(X),
+  │           ^ Phantom type parameter cannot be used as a field type
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/phantoms_invalid.move:15:16
+   │
+13 │     public enum R<phantom X> {
+   │                           - 'X' declared here as phantom
+14 │         A,
+15 │         B { x: X },
+   │                ^ Phantom type parameter cannot be used as a field type
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/phantoms_invalid.move:20:11
+   │
+19 │     public enum S<phantom X> {
+   │                           - 'X' declared here as phantom
+20 │         A(X),
+   │           ^ Phantom type parameter cannot be used as a field type
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/phantoms_invalid.move:21:16
+   │
+19 │     public enum S<phantom X> {
+   │                           - 'X' declared here as phantom
+20 │         A(X),
+21 │         B { x: X },
+   │                ^ Phantom type parameter cannot be used as a field type
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/phantoms_invalid.move:27:13
+   │
+25 │     public enum T<phantom X> {
+   │                           - 'X' declared here as phantom
+26 │         A,
+27 │         B(Y<X>),
+   │             ^ Phantom type parameter cannot be used as an argument to a non-phantom parameter
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/phantoms_invalid.move:33:18
+   │
+31 │     public enum U<phantom X> {
+   │                           - 'X' declared here as phantom
+32 │         A,
+33 │         B { x: Y<X> },
+   │                  ^ Phantom type parameter cannot be used as an argument to a non-phantom parameter
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/phantoms_invalid.move:38:11
+   │
+37 │     public enum V<phantom X> {
+   │                           - 'X' declared here as phantom
+38 │         A(X, Y<X>),
+   │           ^ Phantom type parameter cannot be used as a field type
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/phantoms_invalid.move:38:16
+   │
+37 │     public enum V<phantom X> {
+   │                           - 'X' declared here as phantom
+38 │         A(X, Y<X>),
+   │                ^ Phantom type parameter cannot be used as an argument to a non-phantom parameter
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/phantoms_invalid.move:39:16
+   │
+37 │     public enum V<phantom X> {
+   │                           - 'X' declared here as phantom
+38 │         A(X, Y<X>),
+39 │         B { x: X, y: Y<X> },
+   │                ^ Phantom type parameter cannot be used as a field type
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/phantoms_invalid.move:39:24
+   │
+37 │     public enum V<phantom X> {
+   │                           - 'X' declared here as phantom
+38 │         A(X, Y<X>),
+39 │         B { x: X, y: Y<X> },
+   │                        ^ Phantom type parameter cannot be used as an argument to a non-phantom parameter
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/phantoms_invalid.move:44:11
+   │
+43 │     public enum W<phantom X> {
+   │                           - 'X' declared here as phantom
+44 │         A(X, V<X>),
+   │           ^ Phantom type parameter cannot be used as a field type
+
+error[E02013]: invalid phantom type parameter usage
+   ┌─ tests/move_2024/matching/phantoms_invalid.move:45:26
+   │
+43 │     public enum W<phantom X> {
+   │                           - 'X' declared here as phantom
+44 │         A(X, V<X>),
+45 │         B { v: V<X> , x: X},
+   │                          ^ Phantom type parameter cannot be used as a field type

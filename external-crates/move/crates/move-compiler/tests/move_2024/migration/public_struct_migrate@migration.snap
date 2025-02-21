@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.migration
+  lint: false
+---
+--- tests/move_2024/migration/public_struct_migrate.move
++++ tests/move_2024/migration/public_struct_migrate.move
+@@ -2 +2 @@
+-    struct S { f: u64 }
++    public struct S { f: u64 }
+@@ -4 +4 @@
+-    struct LongerName {
++    public struct LongerName {
+@@ -9 +9 @@
+-    struct Positional(u64, u64, u64)
++    public struct Positional(u64, u64, u64)

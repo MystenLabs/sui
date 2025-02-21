@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04010]: cannot infer type
+  ┌─ tests/move_2024/typing/struct_match_ambiguous_invalid.move:5:17
+  │
+5 │         let s = S { x: 0 };
+  │                 ^^^^^^^^^^ Could not infer this type. Try adding an annotation

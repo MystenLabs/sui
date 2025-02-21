@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::base_types::{ObjectID, SequenceNumber, VersionNumber};
-use sui_types::digests::{CheckpointDigest, TransactionDigest, TransactionEventsDigest};
+use sui_types::digests::{CheckpointDigest, TransactionDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::messages_checkpoint::{
@@ -19,11 +19,7 @@ use sui_types::object::Object;
 use sui_types::transaction::Transaction;
 use tracing::instrument;
 
-pub type KVStoreTransactionData = (
-    Vec<Option<Transaction>>,
-    Vec<Option<TransactionEffects>>,
-    Vec<Option<TransactionEvents>>,
-);
+pub type KVStoreTransactionData = (Vec<Option<Transaction>>, Vec<Option<TransactionEffects>>);
 
 pub type KVStoreCheckpointData = (
     Vec<Option<CertifiedCheckpointSummary>>,
@@ -55,20 +51,14 @@ impl TransactionKeyValueStore {
         &self,
         transactions: &[TransactionDigest],
         effects: &[TransactionDigest],
-        events: &[TransactionEventsDigest],
-    ) -> SuiResult<(
-        Vec<Option<Transaction>>,
-        Vec<Option<TransactionEffects>>,
-        Vec<Option<TransactionEvents>>,
-    )> {
+    ) -> SuiResult<(Vec<Option<Transaction>>, Vec<Option<TransactionEffects>>)> {
         let start = Instant::now();
-        let res = self.inner.multi_get(transactions, effects, events).await;
+        let res = self.inner.multi_get(transactions, effects).await;
         let elapsed = start.elapsed();
 
         let num_txns = transactions.len() as u64;
         let num_effects = effects.len() as u64;
-        let num_events = events.len() as u64;
-        let total_keys = num_txns + num_effects + num_events;
+        let total_keys = num_txns + num_effects;
 
         self.metrics
             .key_value_store_num_fetches_latency_ms
@@ -82,7 +72,6 @@ impl TransactionKeyValueStore {
         if let Ok(res) = &res {
             let txns_not_found = res.0.iter().filter(|v| v.is_none()).count() as u64;
             let effects_not_found = res.1.iter().filter(|v| v.is_none()).count() as u64;
-            let events_not_found = res.2.iter().filter(|v| v.is_none()).count() as u64;
 
             if num_txns > 0 {
                 self.metrics
@@ -95,12 +84,6 @@ impl TransactionKeyValueStore {
                     .key_value_store_num_fetches_success
                     .with_label_values(&[self.store_name, "fx"])
                     .inc_by(num_effects);
-            }
-            if num_events > 0 {
-                self.metrics
-                    .key_value_store_num_fetches_success
-                    .with_label_values(&[self.store_name, "events"])
-                    .inc_by(num_events);
             }
 
             if txns_not_found > 0 {
@@ -115,12 +98,6 @@ impl TransactionKeyValueStore {
                     .with_label_values(&[self.store_name, "fx"])
                     .inc_by(effects_not_found);
             }
-            if events_not_found > 0 {
-                self.metrics
-                    .key_value_store_num_fetches_not_found
-                    .with_label_values(&[self.store_name, "events"])
-                    .inc_by(events_not_found);
-            }
         } else {
             self.metrics
                 .key_value_store_num_fetches_error
@@ -130,10 +107,6 @@ impl TransactionKeyValueStore {
                 .key_value_store_num_fetches_error
                 .with_label_values(&[self.store_name, "fx"])
                 .inc_by(num_effects);
-            self.metrics
-                .key_value_store_num_fetches_error
-                .with_label_values(&[self.store_name, "events"])
-                .inc_by(num_events);
         }
 
         res
@@ -252,25 +225,14 @@ impl TransactionKeyValueStore {
         &self,
         keys: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<Transaction>>> {
-        self.multi_get(keys, &[], &[])
-            .await
-            .map(|(txns, _, _)| txns)
+        self.multi_get(keys, &[]).await.map(|(txns, _)| txns)
     }
 
     pub async fn multi_get_fx_by_tx_digest(
         &self,
         keys: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        self.multi_get(&[], keys, &[]).await.map(|(_, fx, _)| fx)
-    }
-
-    pub async fn multi_get_events(
-        &self,
-        keys: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        self.multi_get(&[], &[], keys)
-            .await
-            .map(|(_, _, events)| events)
+        self.multi_get(&[], keys).await.map(|(_, fx)| fx)
     }
 
     /// Convenience method for fetching single digest, and returning an error if it's not found.
@@ -296,20 +258,6 @@ impl TransactionKeyValueStore {
             .next()
             .flatten()
             .ok_or(SuiError::TransactionNotFound { digest })
-    }
-
-    /// Convenience method for fetching single digest, and returning an error if it's not found.
-    /// Prefer using multi_get_events whenever possible.
-    pub async fn get_events(
-        &self,
-        digest: TransactionEventsDigest,
-    ) -> SuiResult<TransactionEvents> {
-        self.multi_get_events(&[digest])
-            .await?
-            .into_iter()
-            .next()
-            .flatten()
-            .ok_or(SuiError::TransactionEventsNotFound { digest })
     }
 
     /// Convenience method for fetching single checkpoint, and returning an error if it's not found.
@@ -401,7 +349,6 @@ pub trait TransactionKeyValueStoreTrait {
         &self,
         transactions: &[TransactionDigest],
         effects: &[TransactionDigest],
-        events: &[TransactionEventsDigest],
     ) -> SuiResult<KVStoreTransactionData>;
 
     /// Generic multi_get to allow implementors to get heterogenous values with a single round trip.
@@ -462,38 +409,25 @@ impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
         &self,
         transactions: &[TransactionDigest],
         effects: &[TransactionDigest],
-        events: &[TransactionEventsDigest],
-    ) -> SuiResult<(
-        Vec<Option<Transaction>>,
-        Vec<Option<TransactionEffects>>,
-        Vec<Option<TransactionEvents>>,
-    )> {
-        let mut res = self
-            .primary
-            .multi_get(transactions, effects, events)
-            .await?;
+    ) -> SuiResult<(Vec<Option<Transaction>>, Vec<Option<TransactionEffects>>)> {
+        let mut res = self.primary.multi_get(transactions, effects).await?;
 
         let (fallback_transactions, indices_transactions) = find_fallback(&res.0, transactions);
         let (fallback_effects, indices_effects) = find_fallback(&res.1, effects);
-        let (fallback_events, indices_events) = find_fallback(&res.2, events);
 
-        if fallback_transactions.is_empty()
-            && fallback_effects.is_empty()
-            && fallback_events.is_empty()
-        {
+        if fallback_transactions.is_empty() && fallback_effects.is_empty() {
             return Ok(res);
         }
 
         let secondary_res = self
             .fallback
-            .multi_get(&fallback_transactions, &fallback_effects, &fallback_events)
+            .multi_get(&fallback_transactions, &fallback_effects)
             .await?;
 
         merge_res(&mut res.0, secondary_res.0, &indices_transactions);
         merge_res(&mut res.1, secondary_res.1, &indices_effects);
-        merge_res(&mut res.2, secondary_res.2, &indices_events);
 
-        Ok((res.0, res.1, res.2))
+        Ok((res.0, res.1))
     }
 
     #[instrument(level = "trace", skip_all)]

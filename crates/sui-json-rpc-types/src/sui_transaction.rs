@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::{self, Display, Formatter, Write};
-use std::sync::Arc;
 
 use enum_dispatch::enum_dispatch;
 use schemars::JsonSchema;
@@ -556,6 +555,9 @@ impl SuiTransactionBlockKind {
                             ) => SuiEndOfEpochTransactionKind::BridgeCommitteeUpdate(
                                 bridge_shared_version,
                             ),
+                            EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
+                                SuiEndOfEpochTransactionKind::StoreExecutionTimeObservations
+                            }
                         })
                         .collect(),
                 })
@@ -565,7 +567,7 @@ impl SuiTransactionBlockKind {
 
     async fn try_from_with_package_resolver(
         tx: TransactionKind,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
+        package_resolver: &Resolver<impl PackageStore>,
     ) -> Result<Self, anyhow::Error> {
         Ok(match tx {
             TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(e.into()),
@@ -654,6 +656,9 @@ impl SuiTransactionBlockKind {
                             }
                             EndOfEpochTransactionKind::BridgeCommitteeInit(seq) => {
                                 SuiEndOfEpochTransactionKind::BridgeCommitteeUpdate(seq)
+                            }
+                            EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
+                                SuiEndOfEpochTransactionKind::StoreExecutionTimeObservations
                             }
                         })
                         .collect(),
@@ -1478,7 +1483,7 @@ impl SuiTransactionBlockData {
 
     pub async fn try_from_with_package_resolver(
         data: TransactionData,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
+        package_resolver: &Resolver<impl PackageStore>,
     ) -> Result<Self, anyhow::Error> {
         let message_version = data.message_version();
         let sender = data.sender();
@@ -1536,7 +1541,7 @@ impl SuiTransactionBlock {
     // `try_from` methods for nested structs like SuiTransactionBlockData etc.
     pub async fn try_from_with_package_resolver(
         data: SenderSignedData,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
+        package_resolver: &Resolver<impl PackageStore>,
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
             data: SuiTransactionBlockData::try_from_with_package_resolver(
@@ -1670,6 +1675,7 @@ pub enum SuiEndOfEpochTransactionKind {
     CoinDenyListStateCreate,
     BridgeStateCreate(CheckpointDigest),
     BridgeCommitteeUpdate(SequenceNumber),
+    StoreExecutionTimeObservations,
 }
 
 #[serde_as]
@@ -1787,7 +1793,7 @@ impl SuiProgrammableTransactionBlock {
 
     async fn try_from_with_package_resolver(
         value: ProgrammableTransaction,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
+        package_resolver: &Resolver<impl PackageStore>,
     ) -> Result<Self, anyhow::Error> {
         let input_types = package_resolver.pure_input_layouts(&value).await?;
         let ProgrammableTransaction { inputs, commands } = value;
@@ -2137,21 +2143,21 @@ impl From<TypeTag> for SuiTypeTag {
     }
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum RPCTransactionRequestParams {
     TransferObjectRequestParams(TransferObjectParams),
     MoveCallRequestParams(MoveCallParams),
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferObjectParams {
     pub recipient: SuiAddress,
     pub object_id: ObjectID,
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct MoveCallParams {
     pub package_object_id: ObjectID,
@@ -2163,7 +2169,7 @@ pub struct MoveCallParams {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionBlockBytes {
     /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.

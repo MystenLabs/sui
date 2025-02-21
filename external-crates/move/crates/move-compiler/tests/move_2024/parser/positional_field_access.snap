@@ -1,0 +1,46 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03010]: unbound field
+   ┌─ tests/move_2024/parser/positional_field_access.move:25:9
+   │
+25 │         y.0x0 + y.0xff
+   │         ^^^^^ Unbound field '0x0' in '0x42::M::Foo'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/positional_field_access.move:25:11
+   │
+25 │         y.0x0 + y.0xff
+   │           ^^^ Invalid field access. Expected a decimal number but was given a hexadecimal
+   │
+   = Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/parser/positional_field_access.move:25:17
+   │
+25 │         y.0x0 + y.0xff
+   │                 ^^^^^^ Unbound field '0xff' in '0x42::M::Foo'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/positional_field_access.move:25:19
+   │
+25 │         y.0x0 + y.0xff
+   │                   ^^^^ Invalid field access. Expected a decimal number but was given a hexadecimal
+   │
+   = Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/parser/positional_field_access.move:29:9
+   │
+29 │         y.1_0 + y.1_0_0
+   │         ^^^^^ Unbound field '10' in '0x42::M::Foo'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/parser/positional_field_access.move:29:17
+   │
+29 │         y.1_0 + y.1_0_0
+   │                 ^^^^^^^ Unbound field '100' in '0x42::M::Foo'

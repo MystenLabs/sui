@@ -1,0 +1,8 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, line 24:
+//# run 0x42::M::t
+return values: 42

@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/num_infer.move:27:34
+   │
+ 5 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
+   │                                                                --- Expected: 'u64'
+   ·
+26 │         let idx = rnd % (matches.length() as u256);
+   │                                              ---- Given: 'u256'
+27 │         let game = orders.remove(matches[idx]);
+   │                                  ^^^^^^^^^^^^ Invalid call of 'std::vector::vborrow'. Invalid argument for parameter 'i'

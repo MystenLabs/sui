@@ -1,0 +1,13 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== M2.move ========================================================
+-- test 0 -------------------
+use line: 3, use_ndx: 0
+Use: 'SomeStruct', start: 11, end: 21
+Def: 'SomeStruct', line: 2, def char: 11
+TypeDef: 'SomeStruct', line: 2, char: 11
+On Hover:
+struct PreTypeError::M2::SomeStruct {
+	some_field: u64
+}

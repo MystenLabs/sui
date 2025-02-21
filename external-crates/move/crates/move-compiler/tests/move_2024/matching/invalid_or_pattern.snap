@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/invalid_or_pattern.move:9:12
+  │
+9 │     match (e) {
+  │            ^ Pattern 'E::Y' not covered
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/matching/invalid_or_pattern.move:10:22
+   │
+ 5 │     Y
+   │     - 'Y' is declared here
+   ·
+10 │         E::X { x } | E::Y { y: _, x } => *x
+   │                      ^^^^^^^^^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+   │
+   = Remove '{ }' arguments from this pattern

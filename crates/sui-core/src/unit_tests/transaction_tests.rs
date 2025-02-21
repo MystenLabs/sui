@@ -255,7 +255,7 @@ async fn test_user_sends_consensus_commit_prologue_v3() {
             commit_timestamp_ms: 42,
             consensus_commit_digest: ConsensusCommitDigest::default(),
             consensus_determined_version_assignments:
-                ConsensusDeterminedVersionAssignments::CancelledTransactions(Vec::new()),
+                ConsensusDeterminedVersionAssignments::empty_for_testing(),
         },
     ))
     .await;

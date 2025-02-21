@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03018]: invalid type parameter
+   ┌─ tests/move_2024/expansion/invalid_tyargs.move:10:27
+   │
+10 │             Maybe::Nothing<u64> => (),
+   │                           ^^^^^ Cannot use type parameters on an enum variant
+   │
+   = Type arguments are used with the enum, as '0x42::a::Maybe<u64>::Nothing'
+
+error[E02010]: invalid name
+   ┌─ tests/move_2024/expansion/invalid_tyargs.move:11:13
+   │
+11 │             _x<u64> => (),
+   │             ^^ Invalid type arguments on a pattern variable
+   │
+   = Type arguments cannot appear on pattern variables
+
+error[E03018]: invalid type parameter
+   ┌─ tests/move_2024/expansion/invalid_tyargs.move:12:24
+   │
+12 │             Maybe::Just<u64>(_) => (),
+   │                        ^^^^^ Cannot use type parameters on an enum variant
+   │
+   = Type arguments are used with the enum, as '0x42::a::Maybe<u64>::Just'

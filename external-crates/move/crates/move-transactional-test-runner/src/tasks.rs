@@ -297,7 +297,7 @@ impl<ExtraValueArgs: ParsableValue> PublishRunCommand<ExtraValueArgs> {
             .map(|call| {
                 let name = parse_qualified_module_access(&call[0])?;
                 let args: Vec<ParsedValue<ExtraValueArgs>> = call[1..]
-                    .into_iter()
+                    .iter()
                     .map(|arg| {
                         ParsedValue::<ExtraValueArgs>::parse(arg)
                             .map_err(|e| anyhow!("Failed to parse argument: {}", e))

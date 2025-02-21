@@ -1,6 +1,0 @@
-error[E01001]: invalid character
-  ┌─ tests/move_check/parser/invalid_character_emoji.move:5:4
-  │
-5 │    ❤️
-  │    ^ Unexpected character: '\u{2764}'
-

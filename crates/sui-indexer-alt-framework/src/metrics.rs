@@ -1,23 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::{atomic::AtomicU64, Arc};
 
-use anyhow::Result;
-use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use prometheus::{
-    core::{Collector, Desc},
-    proto::{Counter, Gauge, LabelPair, Metric, MetricFamily, MetricType, Summary},
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry, TextEncoder,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
-use tokio::{net::TcpListener, task::JoinHandle};
-use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::warn;
 
-use crate::{db::Db, ingestion::error::Error};
+use crate::{ingestion::error::Error, pipeline::Processor};
 
 /// Histogram buckets for the distribution of checkpoint fetching latencies.
 const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -48,13 +42,6 @@ const BATCH_SIZE_BUCKETS: &[f64] = &[
     1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0, 20000.0,
 ];
 
-/// Service to expose prometheus metrics from the indexer.
-pub(crate) struct MetricsService {
-    addr: SocketAddr,
-    registry: Registry,
-    cancel: CancellationToken,
-}
-
 #[derive(Clone)]
 pub(crate) struct IndexerMetrics {
     // Statistics related to fetching data from the remote store.
@@ -67,6 +54,7 @@ pub(crate) struct IndexerMetrics {
     pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
 
+    // Checkpoint lag metrics for the ingestion pipeline.
     pub latest_ingested_checkpoint: IntGauge,
     pub latest_ingested_checkpoint_timestamp_lag_ms: IntGauge,
     pub ingested_checkpoint_timestamp_lag: Histogram,
@@ -90,12 +78,33 @@ pub(crate) struct IndexerMetrics {
     pub total_collector_batches_created: IntCounterVec,
     pub total_committer_batches_attempted: IntCounterVec,
     pub total_committer_batches_succeeded: IntCounterVec,
+    pub total_committer_batches_failed: IntCounterVec,
     pub total_committer_rows_committed: IntCounterVec,
     pub total_committer_rows_affected: IntCounterVec,
     pub total_watermarks_out_of_order: IntCounterVec,
     pub total_pruner_chunks_attempted: IntCounterVec,
     pub total_pruner_chunks_deleted: IntCounterVec,
     pub total_pruner_rows_deleted: IntCounterVec,
+
+    // Checkpoint lag metrics for the collector.
+    pub latest_collected_checkpoint: IntGaugeVec,
+    pub latest_collected_checkpoint_timestamp_lag_ms: IntGaugeVec,
+    pub collected_checkpoint_timestamp_lag: HistogramVec,
+
+    // Checkpoint lag metrics for the committer.
+    // We can only report partially committed checkpoints, since the concurrent committer isn't aware of
+    // when a checkpoint is fully committed. So we report whenever we see a checkpoint. Since data from
+    // the same checkpoint is batched continuously, this is a good proxy for the last committed checkpoint.
+    pub latest_partially_committed_checkpoint: IntGaugeVec,
+    pub latest_partially_committed_checkpoint_timestamp_lag_ms: IntGaugeVec,
+    pub partially_committed_checkpoint_timestamp_lag: HistogramVec,
+
+    // Checkpoint lag metrics for the watermarker.
+    // The latest watermarked checkpoint metric is already covered by watermark_checkpoint_in_db.
+    // While we already have watermark_timestamp_in_db_ms metric, reporting the lag explicitly
+    // for consistency.
+    pub latest_watermarked_checkpoint_timestamp_lag_ms: IntGaugeVec,
+    pub watermarked_checkpoint_timestamp_lag: HistogramVec,
 
     pub collector_gather_latency: HistogramVec,
     pub collector_batch_size: HistogramVec,
@@ -122,58 +131,22 @@ pub(crate) struct IndexerMetrics {
     pub watermark_pruner_hi_in_db: IntGaugeVec,
 }
 
-/// Collects information about the database connection pool.
-struct DbConnectionStatsCollector {
-    db: Db,
-    desc: Vec<(MetricType, Desc)>,
-}
-
-impl MetricsService {
-    /// Create a new metrics service, exposing Mysten-wide metrics, and Indexer-specific metrics.
-    /// Returns the Indexer-specific metrics and the service itself (which must be run with
-    /// [Self::run]).
-    pub(crate) fn new(
-        addr: SocketAddr,
-        db: Db,
-        cancel: CancellationToken,
-    ) -> Result<(Arc<IndexerMetrics>, MetricsService)> {
-        let registry = Registry::new_custom(Some("indexer_alt".to_string()), None)?;
-
-        let metrics = IndexerMetrics::new(&registry);
-        registry.register(Box::new(DbConnectionStatsCollector::new(db)))?;
-
-        let service = Self {
-            addr,
-            registry,
-            cancel,
-        };
-
-        Ok((Arc::new(metrics), service))
-    }
-
-    /// Start the service. The service will run until the cancellation token is triggered.
-    pub(crate) async fn run(self) -> Result<JoinHandle<()>> {
-        let listener = TcpListener::bind(&self.addr).await?;
-        let app = Router::new()
-            .route("/metrics", get(metrics))
-            .layer(Extension(self.registry));
-
-        Ok(tokio::spawn(async move {
-            info!("Starting metrics service on {}", self.addr);
-            axum::serve(listener, app)
-                .with_graceful_shutdown(async move {
-                    self.cancel.cancelled().await;
-                    info!("Shutdown received, stopping metrics service");
-                })
-                .await
-                .unwrap();
-        }))
-    }
+/// A helper struct to report metrics regarding the checkpoint lag at various points in the indexer.
+pub(crate) struct CheckpointLagMetricReporter {
+    /// Metric to report the lag distribution of each checkpoint.
+    checkpoint_time_lag_histogram: Histogram,
+    /// Metric to report the lag of the checkpoint with the highest sequence number observed so far.
+    /// This is needed since concurrent pipelines observe checkpoints out of order.
+    latest_checkpoint_time_lag_gauge: IntGauge,
+    /// Metric to report the sequence number of the checkpoint with the highest sequence number observed so far.
+    latest_checkpoint_sequence_number_gauge: IntGauge,
+    // Internal state to keep track of the highest checkpoint sequence number reported so far.
+    latest_reported_checkpoint: AtomicU64,
 }
 
 impl IndexerMetrics {
-    pub(crate) fn new(registry: &Registry) -> Self {
-        Self {
+    pub(crate) fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
             total_ingested_checkpoints: register_int_counter_with_registry!(
                 "indexer_total_ingested_checkpoints",
                 "Total number of checkpoints fetched from the remote store",
@@ -341,6 +314,13 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            total_committer_batches_failed: register_int_counter_vec_with_registry!(
+                "indexer_total_committer_batches_failed",
+                "Total number of failed batches writes by this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
             total_committer_rows_committed: register_int_counter_vec_with_registry!(
                 "indexer_total_committer_rows_committed",
                 "Total number of rows sent to the database by this committer",
@@ -380,6 +360,71 @@ impl IndexerMetrics {
                 "indexer_pruner_rows_deleted",
                 "Number of rows this pruner successfully deleted",
                 &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_collected_checkpoint: register_int_gauge_vec_with_registry!(
+                "indexer_latest_collected_checkpoint",
+                "Latest checkpoint sequence number collected by this collector",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_collected_checkpoint_timestamp_lag_ms: register_int_gauge_vec_with_registry!(
+                "indexer_latest_collected_checkpoint_timestamp_lag_ms",
+                "Difference between the system timestamp when the latest checkpoint was collected and the \
+                 timestamp in the checkpoint, in milliseconds",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            collected_checkpoint_timestamp_lag: register_histogram_vec_with_registry!(
+                "indexer_collected_checkpoint_timestamp_lag",
+                "Difference between the system timestamp when a checkpoint was collected and the \
+                 timestamp in each checkpoint, in seconds",
+                &["pipeline"],
+                LAG_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            latest_partially_committed_checkpoint: register_int_gauge_vec_with_registry!(
+                "indexer_latest_partially_committed_checkpoint",
+                "Latest checkpoint sequence number partially committed by this collector",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_partially_committed_checkpoint_timestamp_lag_ms: register_int_gauge_vec_with_registry!(
+                "indexer_latest_partially_committed_checkpoint_timestamp_lag_ms",
+                "Difference between the system timestamp when the latest checkpoint was partially committed and the \
+                 timestamp in the checkpoint, in milliseconds",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            partially_committed_checkpoint_timestamp_lag: register_histogram_vec_with_registry!(
+                "indexer_partially_committed_checkpoint_timestamp_lag",
+                "Difference between the system timestamp when a checkpoint was partially committed and the \
+                 timestamp in each checkpoint, in seconds",
+                &["pipeline"],
+                LAG_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            latest_watermarked_checkpoint_timestamp_lag_ms: register_int_gauge_vec_with_registry!(
+                "indexer_latest_watermarked_checkpoint_timestamp_lag_ms",
+                "Difference between the system timestamp when the latest checkpoint was watermarked and the \
+                 timestamp in the checkpoint, in milliseconds",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermarked_checkpoint_timestamp_lag: register_histogram_vec_with_registry!(
+                "indexer_watermarked_checkpoint_timestamp_lag",
+                "Difference between the system timestamp when a checkpoint was watermarked and the \
+                 timestamp in each checkpoint, in seconds",
+                &["pipeline"],
+                LAG_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -539,7 +584,7 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-        }
+        })
     }
 
     /// Register that we're retrying a checkpoint fetch due to a transient error, logging the
@@ -560,202 +605,58 @@ impl IndexerMetrics {
     }
 }
 
-impl DbConnectionStatsCollector {
-    fn new(db: Db) -> Self {
-        let desc = vec![
-            (
-                MetricType::GAUGE,
-                desc(
-                    "db_connections",
-                    "Number of connections currently being managed by the pool",
-                ),
-            ),
-            (
-                MetricType::GAUGE,
-                desc(
-                    "db_idle_connections",
-                    "Number of idle connections in the pool",
-                ),
-            ),
-            (
-                MetricType::COUNTER,
-                desc("db_connect_direct", "Connections that did not have to wait"),
-            ),
-            (
-                MetricType::SUMMARY,
-                desc("db_connect_waited", "Connections that had to wait"),
-            ),
-            (
-                MetricType::COUNTER,
-                desc(
-                    "db_connect_timed_out",
-                    "Connections that timed out waiting for a connection",
-                ),
-            ),
-            (
-                MetricType::COUNTER,
-                desc(
-                    "db_connections_created",
-                    "Connections that have been created in the pool",
-                ),
-            ),
-            (
-                MetricType::COUNTER,
-                desc_with_labels(
-                    "db_connections_closed",
-                    "Total connections that were closed",
-                    &["reason"],
-                ),
-            ),
-        ];
-
-        Self { db, desc }
-    }
-}
-
-impl Collector for DbConnectionStatsCollector {
-    fn desc(&self) -> Vec<&Desc> {
-        self.desc.iter().map(|d| &d.1).collect()
+impl CheckpointLagMetricReporter {
+    pub fn new(
+        checkpoint_time_lag_histogram: Histogram,
+        latest_checkpoint_time_lag_gauge: IntGauge,
+        latest_checkpoint_sequence_number_gauge: IntGauge,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            checkpoint_time_lag_histogram,
+            latest_checkpoint_time_lag_gauge,
+            latest_checkpoint_sequence_number_gauge,
+            latest_reported_checkpoint: AtomicU64::new(0),
+        })
     }
 
-    fn collect(&self) -> Vec<MetricFamily> {
-        let state = self.db.state();
-        let stats = state.statistics;
-
-        vec![
-            gauge(&self.desc[0].1, state.connections as f64),
-            gauge(&self.desc[1].1, state.idle_connections as f64),
-            counter(&self.desc[2].1, stats.get_direct as f64),
-            summary(
-                &self.desc[3].1,
-                stats.get_wait_time.as_millis() as f64,
-                stats.get_waited + stats.get_timed_out,
-            ),
-            counter(&self.desc[4].1, stats.get_timed_out as f64),
-            counter(&self.desc[5].1, stats.connections_created as f64),
-            counter_with_labels(
-                &self.desc[6].1,
-                &[
-                    ("reason", "broken", stats.connections_closed_broken as f64),
-                    ("reason", "invalid", stats.connections_closed_invalid as f64),
-                    (
-                        "reason",
-                        "max_lifetime",
-                        stats.connections_closed_max_lifetime as f64,
-                    ),
-                    (
-                        "reason",
-                        "idle_timeout",
-                        stats.connections_closed_idle_timeout as f64,
-                    ),
-                ],
-            ),
-        ]
-    }
-}
-
-/// Route handler for metrics service
-async fn metrics(Extension(registry): Extension<Registry>) -> (StatusCode, String) {
-    match TextEncoder.encode_to_string(&registry.gather()) {
-        Ok(s) => (StatusCode::OK, s),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("unable to encoding metrics: {e}"),
-        ),
-    }
-}
-
-fn desc(name: &str, help: &str) -> Desc {
-    desc_with_labels(name, help, &[])
-}
-
-fn desc_with_labels(name: &str, help: &str, labels: &[&str]) -> Desc {
-    Desc::new(
-        name.to_string(),
-        help.to_string(),
-        labels.iter().map(|s| s.to_string()).collect(),
-        Default::default(),
-    )
-    .expect("Bad metric description")
-}
-
-fn gauge(desc: &Desc, value: f64) -> MetricFamily {
-    let mut g = Gauge::default();
-    let mut m = Metric::default();
-    let mut mf = MetricFamily::new();
-
-    g.set_value(value);
-    m.set_gauge(g);
-
-    mf.mut_metric().push(m);
-    mf.set_name(desc.fq_name.clone());
-    mf.set_help(desc.help.clone());
-    mf.set_field_type(MetricType::COUNTER);
-    mf
-}
-
-fn counter(desc: &Desc, value: f64) -> MetricFamily {
-    let mut c = Counter::default();
-    let mut m = Metric::default();
-    let mut mf = MetricFamily::new();
-
-    c.set_value(value);
-    m.set_counter(c);
-
-    mf.mut_metric().push(m);
-    mf.set_name(desc.fq_name.clone());
-    mf.set_help(desc.help.clone());
-    mf.set_field_type(MetricType::GAUGE);
-    mf
-}
-
-fn counter_with_labels(desc: &Desc, values: &[(&str, &str, f64)]) -> MetricFamily {
-    let mut mf = MetricFamily::new();
-
-    for (name, label, value) in values {
-        let mut c = Counter::default();
-        let mut l = LabelPair::default();
-        let mut m = Metric::default();
-
-        c.set_value(*value);
-        l.set_name(name.to_string());
-        l.set_value(label.to_string());
-
-        m.set_counter(c);
-        m.mut_label().push(l);
-        mf.mut_metric().push(m);
+    pub fn new_for_pipeline<P: Processor>(
+        checkpoint_time_lag_histogram: &HistogramVec,
+        latest_checkpoint_time_lag_gauge: &IntGaugeVec,
+        latest_checkpoint_sequence_number_gauge: &IntGaugeVec,
+    ) -> Arc<Self> {
+        Self::new(
+            checkpoint_time_lag_histogram.with_label_values(&[P::NAME]),
+            latest_checkpoint_time_lag_gauge.with_label_values(&[P::NAME]),
+            latest_checkpoint_sequence_number_gauge.with_label_values(&[P::NAME]),
+        )
     }
 
-    mf.set_name(desc.fq_name.clone());
-    mf.set_help(desc.help.clone());
-    mf.set_field_type(MetricType::COUNTER);
-    mf
-}
+    pub fn report_lag(&self, cp_sequence_number: u64, checkpoint_timestamp_ms: u64) {
+        let lag = chrono::Utc::now().timestamp_millis() - checkpoint_timestamp_ms as i64;
+        self.checkpoint_time_lag_histogram
+            .observe((lag as f64) / 1000.0);
 
-fn summary(desc: &Desc, sum: f64, count: u64) -> MetricFamily {
-    let mut s = Summary::default();
-    let mut m = Metric::default();
-    let mut mf = MetricFamily::new();
-
-    s.set_sample_sum(sum);
-    s.set_sample_count(count);
-    m.set_summary(s);
-
-    mf.mut_metric().push(m);
-    mf.set_name(desc.fq_name.clone());
-    mf.set_help(desc.help.clone());
-    mf.set_field_type(MetricType::SUMMARY);
-    mf
+        let prev = self
+            .latest_reported_checkpoint
+            .fetch_max(cp_sequence_number, std::sync::atomic::Ordering::Relaxed);
+        if cp_sequence_number > prev {
+            self.latest_checkpoint_sequence_number_gauge
+                .set(cp_sequence_number as i64);
+            self.latest_checkpoint_time_lag_gauge.set(lag);
+        }
+    }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::sync::Arc;
+
     use prometheus::Registry;
 
     use super::IndexerMetrics;
 
     /// Construct metrics for test purposes.
-    pub fn test_metrics() -> IndexerMetrics {
+    pub fn test_metrics() -> Arc<IndexerMetrics> {
         IndexerMetrics::new(&Registry::new())
     }
 }

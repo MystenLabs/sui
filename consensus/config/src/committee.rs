@@ -175,15 +175,9 @@ impl AuthorityIndex {
     }
 }
 
-// TODO: re-evaluate formats for production debugging.
 impl Display for AuthorityIndex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.value() < 26 {
-            let c = (b'A' + self.value() as u8) as char;
-            f.write_str(c.to_string().as_str())
-        } else {
-            write!(f, "[{:02}]", self.value())
-        }
+        write!(f, "[{}]", self.value())
     }
 }
 

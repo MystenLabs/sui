@@ -61,8 +61,8 @@ Make sure to [update Rust](https://doc.rust-lang.org/book/ch01-01-installation.h
 
 Use the following command to install additional Linux dependencies.
 
-```shell
-sudo apt-get update \
+```sh
+$ sudo apt-get update \
 && sudo apt-get install -y --no-install-recommends \
 tzdata \
 libprotobuf-dev \
@@ -121,7 +121,7 @@ When you are ready to run `sui-node` in your production environment, you can set
 
     <TabItem label="Mainnet" value="mainnet">
 
-    ```shell
+    ```sh
     p2p-config:
       seed-peers:
         - address: /dns/mel-00.mainnet.sui.io/udp/8084
@@ -149,7 +149,7 @@ When you are ready to run `sui-node` in your production environment, you can set
     </TabItem>
     <TabItem label="Testnet" value="testnet">
 
-    ```shell
+    ```sh
     p2p-config:
       seed-peers:
         - address: /dns/yto-tnt-ssfn-01.testnet.sui.io/udp/8084
@@ -176,7 +176,7 @@ When you are ready to run `sui-node` in your production environment, you can set
 1. Update the `db-path` field with the path to the Full node database.
     `db-path: "/db-files/sui-fullnode"`
 1. Update the `genesis-file-location` with the path to genesis.blob.
-    ```shell
+    ```sh
     genesis:
         genesis-file-location: "/sui-fullnode/genesis.blob"
     ```
@@ -189,8 +189,8 @@ Instead, start your Full node from a recent snapshot. You can find details on ho
 
 Now that you have your Full node config file set up, and you've obtained a snapshot, you can start your Full node by running the `sui-node` binary with your `fullnode.yaml` configuration file:
 
-```shell
-sui-node --config-path fullnode.yaml
+```sh
+$ sui-node --config-path fullnode.yaml
 ```
 
 It's a good idea to use something like systemd to manage your Full node in a production environment.
@@ -200,12 +200,12 @@ If you receive a `cannot find -lpq` error, you are missing the `libpq` library. 
 
 If you receive the following error:
 
-```shell
+```sh
 panicked at error binding to 0.0.0.0:9184: error creating server listener: Address already in use (os error 98)
 ```
 
 Then update the metrics address in your fullnode.yaml file to use port `9180`.
 
-```shell
+```sh
 metrics-address: "0.0.0.0:9180"
 ```

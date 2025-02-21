@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02004]: invalid 'module' declaration
+   ┌─ tests/move_check/expansion/friend_decl_inner_scope_alias_cycle.move:8:5
+   │
+ 8 │     friend Q;
+   │     ^^^^^^^^^ '0x42::Q' is a friend of '0x42::R'. This 'friend' relationship creates a dependency cycle.
+   ·
+12 │         Q::q()
+   │         ------ '0x42::Q' uses '0x42::R'

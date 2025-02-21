@@ -1,0 +1,176 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-47:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 21766400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 49:
+//# view-object 1,0
+Owner: Account Address ( A )
+Version: 2
+Contents: test::regulated_coin::Wallet {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,0),
+        },
+    },
+}
+
+task 3, line 51:
+//# view-object 1,1
+1,1::regulated_coin
+
+task 4, line 53:
+//# view-object 1,2
+Owner: Account Address ( fake(1,0) )
+Version: 2
+Contents: sui::coin::Coin<test::regulated_coin::REGULATED_COIN> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,2),
+        },
+    },
+    balance: sui::balance::Balance<test::regulated_coin::REGULATED_COIN> {
+        value: 10000u64,
+    },
+}
+
+task 5, line 55:
+//# view-object 1,3
+Owner: Immutable
+Version: 2
+Contents: sui::coin::CoinMetadata<test::regulated_coin::REGULATED_COIN> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,3),
+        },
+    },
+    decimals: 9u8,
+    name: std::string::String {
+        bytes: vector[
+            82u8,
+            69u8,
+            71u8,
+            85u8,
+            76u8,
+            65u8,
+            84u8,
+            69u8,
+            68u8,
+            95u8,
+            67u8,
+            79u8,
+            73u8,
+            78u8,
+        ],
+    },
+    symbol: std::ascii::String {
+        bytes: vector[
+            82u8,
+            67u8,
+        ],
+    },
+    description: std::string::String {
+        bytes: vector[
+            65u8,
+            32u8,
+            110u8,
+            101u8,
+            119u8,
+            32u8,
+            114u8,
+            101u8,
+            103u8,
+            117u8,
+            108u8,
+            97u8,
+            116u8,
+            101u8,
+            100u8,
+            32u8,
+            99u8,
+            111u8,
+            105u8,
+            110u8,
+        ],
+    },
+    icon_url: std::option::Option<sui::url::Url> {
+        vec: vector[],
+    },
+}
+
+task 6, line 57:
+//# view-object 1,4
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::DenyCap<test::regulated_coin::REGULATED_COIN> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,4),
+        },
+    },
+}
+
+task 7, line 59:
+//# view-object 1,5
+Owner: Immutable
+Version: 2
+Contents: sui::coin::RegulatedCoinMetadata<test::regulated_coin::REGULATED_COIN> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,5),
+        },
+    },
+    coin_metadata_object: sui::object::ID {
+        bytes: fake(1,3),
+    },
+    deny_cap_object: sui::object::ID {
+        bytes: fake(1,4),
+    },
+}
+
+task 8, lines 61-63:
+//# view-object 1,6
+Owner: Immutable
+Version: 2
+Contents: sui::coin::TreasuryCap<test::regulated_coin::REGULATED_COIN> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,6),
+        },
+    },
+    total_supply: sui::balance::Supply<test::regulated_coin::REGULATED_COIN> {
+        value: 10000u64,
+    },
+}
+
+task 9, lines 64-66:
+//# run sui::coin::deny_list_add --args object(0x403) object(1,4) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(9,0), object(9,1)
+mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,4)
+gas summary: computation_cost: 1000000, storage_cost: 11415200,  storage_rebate: 2723688, non_refundable_storage_fee: 27512
+
+task 10, lines 67-69:
+//# run test::regulated_coin::receive_coin --args object(1,0) receiving(1,2) --sender A
+Error: Error checking transaction input objects: AddressDeniedForCoin { address: @A, coin_type: "object(1,1)::regulated_coin::REGULATED_COIN" }
+
+task 11, lines 70-72:
+//# run sui::coin::deny_list_remove --args object(0x403) object(1,4) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,4), object(9,1)
+deleted: object(9,0)
+gas summary: computation_cost: 1000000, storage_cost: 9522800,  storage_rebate: 11301048, non_refundable_storage_fee: 114152
+
+task 12, line 73:
+//# run test::regulated_coin::receive_coin --args object(1,0) receiving(1,2) --sender A
+mutated: object(0,0), object(1,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 3807600,  storage_rebate: 3769524, non_refundable_storage_fee: 38076

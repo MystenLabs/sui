@@ -682,7 +682,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         Ok(sp.wrap(addr))
     }
 
-    /// Parse a numeric addres literal (must be prefixed by an `@` symbol).
+    /// Parse a numeric address literal (must be prefixed by an `@` symbol).
     fn parse_address_literal(&mut self) -> PTBResult<Spanned<NumericalAddress>> {
         let sp!(sp, _) = self.expect(Token::At).map_err(|e| {
             err!(e.span => help: {

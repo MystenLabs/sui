@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04006]: invalid subtype
+   ┌─ tests/move_2024/matching/bad_guard_4.move:16:21
+   │
+16 │             x if ({*x = Option::Some(1); false}) => 1,
+   │             -       ^
+   │             │       │
+   │             │       Invalid mutation. Expected a mutable reference
+   │             │       Expected: '&mut _'
+   │             Given: '&0x42::m::Option<{integer}>'
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/matching/bad_guard_4.move:18:13
+   │
+18 │             x => 10,
+   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

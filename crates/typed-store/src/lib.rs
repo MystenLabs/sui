@@ -15,10 +15,8 @@ pub mod traits;
 pub use traits::Map;
 pub mod metrics;
 pub mod rocks;
-pub use typed_store_error::TypedStoreError;
-pub mod sally;
-pub mod test_db;
 pub use metrics::DBMetrics;
+pub use typed_store_error::TypedStoreError;
 
 pub type StoreError = typed_store_error::TypedStoreError;
 
@@ -38,7 +36,7 @@ pub type StoreError = typed_store_error::TypedStoreError;
 /// The definer of the struct can specify the default options for each table using annotations
 /// We can also supply column family options on the default ones
 /// A user defined function of signature () -> Options can be provided for each table
-/// If a an override function is not specified, the default in `typed_store::rocks::default_db_options` is used
+/// If an override function is not specified, the default in `typed_store::rocks::default_db_options` is used
 /// ```
 /// use typed_store::rocks::DBOptions;
 /// use typed_store::rocks::DBMap;
@@ -153,5 +151,3 @@ pub type StoreError = typed_store_error::TypedStoreError;
 /// //     bad_field: u32,
 /// // #}
 pub use typed_store_derive::DBMapUtils;
-
-pub use typed_store_derive::SallyDB;

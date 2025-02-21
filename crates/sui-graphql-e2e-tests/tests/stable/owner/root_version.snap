@@ -1,0 +1,324 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-86:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 10586800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 88-89:
+//# run P0::M::new_o
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 91-92:
+//# run P0::M::new_w
+created: object(3,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 94-95:
+//# run P0::M::new_dof
+created: object(4,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 97-98:
+//# run P0::M::new_dof
+created: object(5,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 100-103:
+//# run P0::M::connect --args object(2,0) object(3,0) object(4,0) object(5,0)
+created: object(6,0), object(6,1)
+mutated: object(0,1), object(2,0), object(4,0), object(5,0)
+wrapped: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 9940800,  storage_rebate: 6041772, non_refundable_storage_fee: 61028
+
+task 7, lines 105-107:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 7
+Contents: P0::M::O {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 0u64,
+    wrapped: std::option::Option<P0::M::W> {
+        vec: vector[
+            P0::M::W {
+                id: sui::object::UID {
+                    id: sui::object::ID {
+                        bytes: fake(3,0),
+                    },
+                },
+                count: 0u64,
+            },
+        ],
+    },
+}
+
+task 8, lines 109-110:
+//# run P0::M::touch_root --args object(2,0)
+mutated: object(0,1), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2568800,  storage_rebate: 2543112, non_refundable_storage_fee: 25688
+
+task 9, lines 112-113:
+//# run P0::M::touch_wrapped --args object(2,0)
+mutated: object(0,1), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2568800,  storage_rebate: 2543112, non_refundable_storage_fee: 25688
+
+task 10, lines 115-116:
+//# run P0::M::touch_inner --args object(2,0)
+mutated: object(0,1), object(2,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 3853200,  storage_rebate: 3814668, non_refundable_storage_fee: 38532
+
+task 11, lines 118-119:
+//# run P0::M::touch_outer --args object(2,0)
+mutated: object(0,1), object(2,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 3853200,  storage_rebate: 3814668, non_refundable_storage_fee: 38532
+
+task 12, line 121:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 11
+Contents: P0::M::O {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 1u64,
+    wrapped: std::option::Option<P0::M::W> {
+        vec: vector[
+            P0::M::W {
+                id: sui::object::UID {
+                    id: sui::object::ID {
+                        bytes: fake(3,0),
+                    },
+                },
+                count: 1u64,
+            },
+        ],
+    },
+}
+
+task 13, line 123:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 14, lines 125-140:
+//# run-graphql
+Response: {
+  "data": {
+    "latest": {
+      "asObject": {
+        "asMoveObject": {
+          "version": 11,
+          "contents": {
+            "json": {
+              "id": "0xdecc5c8f1ae3f8e6bfa4493d9e9711a033e1eb00551e07854d5f08ac6dae7588",
+              "count": "1",
+              "wrapped": {
+                "id": "0xec73f4e0490995f1661d8248f4402b475a4f9643d309c1bb792874484cb0adbd",
+                "count": "1"
+              }
+            }
+          }
+        }
+      }
+    },
+    "versioned": {
+      "asObject": {
+        "asMoveObject": {
+          "version": 10,
+          "contents": {
+            "json": {
+              "id": "0xdecc5c8f1ae3f8e6bfa4493d9e9711a033e1eb00551e07854d5f08ac6dae7588",
+              "count": "1",
+              "wrapped": {
+                "id": "0xec73f4e0490995f1661d8248f4402b475a4f9643d309c1bb792874484cb0adbd",
+                "count": "1"
+              }
+            }
+          }
+        }
+      }
+    },
+    "beforeWrappedBump": {
+      "asObject": {
+        "asMoveObject": {
+          "version": 8,
+          "contents": {
+            "json": {
+              "id": "0xdecc5c8f1ae3f8e6bfa4493d9e9711a033e1eb00551e07854d5f08ac6dae7588",
+              "count": "1",
+              "wrapped": {
+                "id": "0xec73f4e0490995f1661d8248f4402b475a4f9643d309c1bb792874484cb0adbd",
+                "count": "0"
+              }
+            }
+          }
+        }
+      }
+    },
+    "beforeBump": {
+      "asObject": {
+        "asMoveObject": {
+          "version": 7,
+          "contents": {
+            "json": {
+              "id": "0xdecc5c8f1ae3f8e6bfa4493d9e9711a033e1eb00551e07854d5f08ac6dae7588",
+              "count": "0",
+              "wrapped": {
+                "id": "0xec73f4e0490995f1661d8248f4402b475a4f9643d309c1bb792874484cb0adbd",
+                "count": "0"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 15, lines 142-169:
+//# run-graphql
+Response: {
+  "data": {
+    "unversioned": {
+      "dynamicObjectField": {
+        "value": {
+          "version": 10,
+          "contents": {
+            "json": {
+              "id": "0xc6648a3386f34bd5b4757713a6d5f81852df299ef5a867de257b0c28a56f07e3",
+              "count": "1"
+            }
+          }
+        }
+      }
+    },
+    "latest": {
+      "dynamicObjectField": {
+        "value": {
+          "version": 10,
+          "contents": {
+            "json": {
+              "id": "0xc6648a3386f34bd5b4757713a6d5f81852df299ef5a867de257b0c28a56f07e3",
+              "count": "1"
+            }
+          }
+        }
+      }
+    },
+    "afterFirstInnerBump": {
+      "dynamicObjectField": {
+        "value": {
+          "version": 10,
+          "contents": {
+            "json": {
+              "id": "0xc6648a3386f34bd5b4757713a6d5f81852df299ef5a867de257b0c28a56f07e3",
+              "count": "1"
+            }
+          }
+        }
+      }
+    },
+    "beforeFirstInnerBump": {
+      "dynamicObjectField": {
+        "value": {
+          "version": 7,
+          "contents": {
+            "json": {
+              "id": "0xc6648a3386f34bd5b4757713a6d5f81852df299ef5a867de257b0c28a56f07e3",
+              "count": "0"
+            }
+          }
+        }
+      }
+    },
+    "beforeBumps": {
+      "dynamicObjectField": {
+        "value": {
+          "version": 7,
+          "contents": {
+            "json": {
+              "id": "0xc6648a3386f34bd5b4757713a6d5f81852df299ef5a867de257b0c28a56f07e3",
+              "count": "0"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 16, lines 171-206:
+//# run-graphql
+Response: {
+  "data": {
+    "unversioned": {
+      "dynamicObjectField": {
+        "value": {
+          "version": 11,
+          "contents": {
+            "json": {
+              "id": "0x418dc1ff6ea1cdccbc2ab29974b3f233855dee9bedecfadaab0d4f906bef4295",
+              "count": "1"
+            }
+          }
+        }
+      }
+    },
+    "latestObject": {
+      "dynamicObjectField": {
+        "value": {
+          "version": 7,
+          "contents": {
+            "json": {
+              "id": "0x418dc1ff6ea1cdccbc2ab29974b3f233855dee9bedecfadaab0d4f906bef4295",
+              "count": "0"
+            }
+          }
+        }
+      }
+    },
+    "latest": {
+      "dynamicObjectField": {
+        "value": {
+          "version": 11,
+          "contents": {
+            "json": {
+              "id": "0x418dc1ff6ea1cdccbc2ab29974b3f233855dee9bedecfadaab0d4f906bef4295",
+              "count": "1"
+            }
+          }
+        }
+      }
+    },
+    "beforeInnerBump": {
+      "dynamicObjectField": {
+        "value": {
+          "version": 7,
+          "contents": {
+            "json": {
+              "id": "0x418dc1ff6ea1cdccbc2ab29974b3f233855dee9bedecfadaab0d4f906bef4295",
+              "count": "0"
+            }
+          }
+        }
+      }
+    }
+  }
+}

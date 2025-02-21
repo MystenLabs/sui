@@ -1,0 +1,37 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03008]: too few type arguments
+  ┌─ tests/move_2024/matching/abc_match_ref_invalid.move:9:18
+  │
+9 │     fun t0(abc: &ABC): u64 {
+  │                  ^^^ Invalid instantiation of '0x42::m::ABC'. Expected 1 type argument(s) but got 0
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/abc_match_ref_invalid.move:10:9
+   │  
+ 9 │       fun t0(abc: &ABC): u64 {
+   │                          --- Expected: 'u64'
+10 │ ╭         match (abc) {
+11 │ │             ABC::C(x) => x,
+   │ │             --------- Given: '&_'
+12 │ │             ABC::A(x) => x,
+13 │ │             ABC::B => 1,
+14 │ │         }
+   │ ╰─────────^ Invalid return expression
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/abc_match_ref_invalid.move:13:23
+   │
+11 │             ABC::C(x) => x,
+   │             --------- Expected: '&_'
+12 │             ABC::A(x) => x,
+13 │             ABC::B => 1,
+   │                       ^
+   │                       │
+   │                       Invalid right-hand side expression
+   │                       Given: integer

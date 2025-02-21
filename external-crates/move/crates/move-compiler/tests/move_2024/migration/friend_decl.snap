@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/friend_decl.move:3:5
+  │
+3 │     friend a::n1;
+  │     ^^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/friend_decl.move:4:5
+  │
+4 │     friend /* nested */ a::n2;
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/friend_decl.move:5:16
+  │
+5 │     /* stays */friend /* nested */ a::n3; // stays
+  │                ^^^^^^^^^^^^^^^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/friend_decl.move:6:16
+  │
+6 │     /* stays */friend/* nested */a::n4;// stays
+  │                ^^^^^^^^^^^^^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'

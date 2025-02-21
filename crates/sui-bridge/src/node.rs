@@ -165,6 +165,7 @@ async fn start_watchdog(
         _config_address,
         weth_address,
         usdt_address,
+        _wbtc_address,
     ) = get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider)
         .await
         .unwrap_or_else(|e| panic!("get_eth_contract_addresses should not fail: {}", e));
@@ -178,6 +179,7 @@ async fn start_watchdog(
     )
     .await
     .unwrap_or_else(|e| panic!("Failed to create eth vault balance: {}", e));
+
     let usdt_vault_balance = EthereumVaultBalance::new(
         eth_provider.clone(),
         vault_address,
@@ -187,6 +189,16 @@ async fn start_watchdog(
     )
     .await
     .unwrap_or_else(|e| panic!("Failed to create usdt vault balance: {}", e));
+
+    let wbtc_vault_balance = EthereumVaultBalance::new(
+        eth_provider.clone(),
+        vault_address,
+        _wbtc_address,
+        VaultAsset::WBTC,
+        watchdog_metrics.wbtc_vault_balance.clone(),
+    )
+    .await
+    .unwrap_or_else(|e| panic!("Failed to create wbtc vault balance: {}", e));
 
     let eth_bridge_status = EthBridgeStatus::new(
         eth_provider,
@@ -202,6 +214,7 @@ async fn start_watchdog(
     let mut observables: Vec<Box<dyn Observable + Send + Sync>> = vec![
         Box::new(eth_vault_balance),
         Box::new(usdt_vault_balance),
+        Box::new(wbtc_vault_balance),
         Box::new(eth_bridge_status),
         Box::new(sui_bridge_status),
     ];

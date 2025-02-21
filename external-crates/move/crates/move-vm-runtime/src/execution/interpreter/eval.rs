@@ -132,7 +132,7 @@ fn step(
     assert!(
         pc <= instructions.len(),
         "PC beyond instruction count for {}",
-        fun_ref.name
+        fun_ref.name()
     );
     let instruction = &instructions[pc];
 
@@ -882,8 +882,8 @@ fn call_function(
         // Charge for a non-generic call
         gas_meter
             .charge_call(
-                module_id,
-                function.name(),
+                &module_id,
+                &function.name_str(),
                 last_n_operands,
                 (function.local_count() as u64).into(),
             )
@@ -892,8 +892,8 @@ fn call_function(
         // Charge for a generic call
         gas_meter
             .charge_call_generic(
-                module_id,
-                function.name(),
+                &module_id,
+                &function.name_str(),
                 ty_args.iter().map(|ty| ResolvableType {
                     ty,
                     vtables: run_context.vtables,

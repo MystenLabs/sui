@@ -23,6 +23,7 @@ serde.workspace = true
 
 bcs.workspace = true
 
+move-bytecode-source-map.workspace = true
 move-bytecode-verifier.workspace = true
 move-disassembler.workspace = true
 move-docgen.workspace = true
@@ -37,9 +38,10 @@ move-vm-runtime.workspace = true
 move-vm-profiler.workspace = true
 move-binary-format.workspace = true
 move-package.workspace = true
-move-prover.workspace = true
+move-symbol-pool.workspace = true
 move-unit-test.workspace = true
 move-bytecode-viewer.workspace = true
+move-model-2.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

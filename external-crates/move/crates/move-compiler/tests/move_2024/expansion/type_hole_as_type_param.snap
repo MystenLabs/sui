@@ -1,0 +1,32 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09006]: unused struct type parameter
+  ┌─ tests/move_2024/expansion/type_hole_as_type_param.move:2:21
+  │
+2 │     public struct S<_>()
+  │                     ^ Unused type parameter '_'. Consider declaring it as phantom
+  │
+  = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_2024/expansion/type_hole_as_type_param.move:2:21
+  │
+2 │     public struct S<_>()
+  │                     ^ Invalid type parameter name '_'. '_' is restricted and cannot be used to name a type parameter
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_2024/expansion/type_hole_as_type_param.move:3:13
+  │
+3 │     fun foo<_>() {}
+  │             ^ Invalid type parameter name '_'. '_' is restricted and cannot be used to name a type parameter
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_2024/expansion/type_hole_as_type_param.move:4:19
+  │
+4 │     macro fun bar<_>() {}
+  │                   ^ Invalid type parameter name '_'. '_' is restricted and cannot be used to name a type parameter

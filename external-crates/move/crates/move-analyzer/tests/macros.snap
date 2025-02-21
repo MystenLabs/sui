@@ -1,0 +1,315 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== fun_type.move ========================================================
+-- test 0 -------------------
+use line: 3, use_ndx: 0
+Use: 'entry_fun', start: 14, end: 23
+Def: 'entry_fun', line: 2, def char: 14
+TypeDef: no info
+On Hover:
+entry fun Macros::fun_type::entry_fun()
+
+-- test 1 -------------------
+use line: 6, use_ndx: 0
+Use: 'macro_fun', start: 14, end: 23
+Def: 'macro_fun', line: 5, def char: 14
+TypeDef: no info
+On Hover:
+macro fun Macros::fun_type::macro_fun()
+
+-- test 2 -------------------
+use line: 10, use_ndx: 0
+Use: 'entry_fun', start: 8, end: 17
+Def: 'entry_fun', line: 2, def char: 14
+TypeDef: no info
+On Hover:
+entry fun Macros::fun_type::entry_fun()
+
+-- test 3 -------------------
+use line: 11, use_ndx: 0
+Use: 'macro_fun', start: 8, end: 17
+Def: 'macro_fun', line: 5, def char: 14
+TypeDef: no info
+On Hover:
+macro fun Macros::fun_type::macro_fun()
+
+== macros.move ========================================================
+-- test 0 -------------------
+use line: 7, use_ndx: 0
+Use: 'n foo(', start: 12, end: 18
+Def: 'vector', line: 6, def char: 12
+TypeDef: no info
+On Hover:
+module vector
+
+ A variable-sized container that can hold any type. Indexing is 0-based, and
+ vectors are growable. This module has many native functions.
+
+-- test 1 -------------------
+use line: 7, use_ndx: 1
+Use: 'foo', start: 14, end: 17
+Def: 'foo', line: 6, def char: 14
+TypeDef: no info
+On Hover:
+macro fun Macros::macros::foo(
+	$i: u64,
+	$body: |u64| -> u64
+): u64
+
+-- test 2 -------------------
+use line: 7, use_ndx: 2
+Use: '$i', start: 18, end: 20
+Def: '$i', line: 6, def char: 18
+TypeDef: no info
+On Hover:
+$i: u64
+
+-- test 3 -------------------
+use line: 7, use_ndx: 3
+Use: '$body', start: 27, end: 32
+Def: '$body', line: 6, def char: 27
+TypeDef: no info
+On Hover:
+$body: |u64| -> u64
+
+-- test 4 -------------------
+use line: 15, use_ndx: 0
+Use: 'bar', start: 14, end: 17
+Def: 'bar', line: 14, def char: 14
+TypeDef: no info
+On Hover:
+macro fun Macros::macros::bar(
+	$i: Macros::macros::SomeStruct,
+	$body: |Macros::macros::SomeStruct| -> Macros::macros::SomeStruct
+): Macros::macros::SomeStruct
+
+-- test 5 -------------------
+use line: 15, use_ndx: 1
+Use: '$i', start: 18, end: 20
+Def: '$i', line: 14, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+$i: Macros::macros::SomeStruct
+
+-- test 6 -------------------
+use line: 15, use_ndx: 2
+Use: 'SomeStruct', start: 22, end: 32
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+public struct Macros::macros::SomeStruct has drop {
+	some_field: u64
+}
+
+-- test 7 -------------------
+use line: 15, use_ndx: 3
+Use: '$body', start: 34, end: 39
+Def: '$body', line: 14, def char: 34
+TypeDef: no info
+On Hover:
+$body: |Macros::macros::SomeStruct| -> Macros::macros::SomeStruct
+
+-- test 8 -------------------
+use line: 15, use_ndx: 4
+Use: 'SomeStruct', start: 42, end: 52
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+public struct Macros::macros::SomeStruct has drop {
+	some_field: u64
+}
+
+-- test 9 -------------------
+use line: 15, use_ndx: 5
+Use: 'SomeStruct', start: 57, end: 67
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+public struct Macros::macros::SomeStruct has drop {
+	some_field: u64
+}
+
+-- test 10 -------------------
+use line: 15, use_ndx: 6
+Use: 'SomeStruct', start: 70, end: 80
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+public struct Macros::macros::SomeStruct has drop {
+	some_field: u64
+}
+
+-- test 11 -------------------
+use line: 19, use_ndx: 0
+Use: 'for_each', start: 14, end: 22
+Def: 'for_each', line: 18, def char: 14
+TypeDef: no info
+On Hover:
+macro fun Macros::macros::for_each<$T>(
+	$v: &vector<$T>,
+	$body: |&$T| -> ()
+)
+
+-- test 12 -------------------
+use line: 19, use_ndx: 1
+Use: '$T', start: 23, end: 25
+Def: '$T', line: 18, def char: 23
+TypeDef: no info
+On Hover:
+$T
+
+-- test 13 -------------------
+use line: 19, use_ndx: 2
+Use: '$v', start: 27, end: 29
+Def: '$v', line: 18, def char: 27
+TypeDef: no info
+On Hover:
+let $v: &vector<u64>
+
+-- test 14 -------------------
+use line: 19, use_ndx: 3
+Use: '$T', start: 39, end: 41
+Def: '$T', line: 18, def char: 23
+TypeDef: no info
+On Hover:
+$T
+
+-- test 15 -------------------
+use line: 19, use_ndx: 4
+Use: '$body', start: 44, end: 49
+Def: '$body', line: 18, def char: 44
+TypeDef: no info
+On Hover:
+$body: |&$T| -> ()
+
+-- test 16 -------------------
+use line: 19, use_ndx: 5
+Use: '$T', start: 53, end: 55
+Def: '$T', line: 18, def char: 23
+TypeDef: no info
+On Hover:
+$T
+
+-- test 17 -------------------
+use line: 33, use_ndx: 0
+Use: 'macros', start: 16, end: 22
+Def: 'macros', line: 0, def char: 15
+TypeDef: no info
+On Hover:
+module Macros::macros
+
+-- test 18 -------------------
+use line: 33, use_ndx: 1
+Use: 'foo', start: 24, end: 27
+Def: 'foo', line: 6, def char: 14
+TypeDef: no info
+On Hover:
+macro fun Macros::macros::foo(
+	$i: u64,
+	$body: |u64| -> u64
+): u64
+
+-- test 19 -------------------
+use line: 33, use_ndx: 2
+Use: 'p', start: 29, end: 30
+Def: 'p', line: 31, def char: 12
+TypeDef: no info
+On Hover:
+let p: u64
+
+-- test 20 -------------------
+use line: 33, use_ndx: 3
+Use: 'x', start: 33, end: 34
+Def: 'x', line: 32, def char: 33
+TypeDef: no info
+On Hover:
+let x: u64
+
+-- test 21 -------------------
+use line: 33, use_ndx: 4
+Use: 'x', start: 36, end: 37
+Def: 'x', line: 32, def char: 33
+TypeDef: no info
+On Hover:
+let x: u64
+
+-- test 22 -------------------
+use line: 38, use_ndx: 5
+Use: 'y', start: 49, end: 50
+Def: 'y', line: 37, def char: 49
+TypeDef: no info
+On Hover:
+let y: u64
+
+-- test 23 -------------------
+use line: 38, use_ndx: 7
+Use: 'foo', start: 68, end: 71
+Def: 'foo', line: 6, def char: 14
+TypeDef: no info
+On Hover:
+macro fun Macros::macros::foo(
+	$i: u64,
+	$body: |u64| -> u64
+): u64
+
+-- test 24 -------------------
+use line: 38, use_ndx: 8
+Use: 'y', start: 73, end: 74
+Def: 'y', line: 37, def char: 49
+TypeDef: no info
+On Hover:
+let y: u64
+
+-- test 25 -------------------
+use line: 38, use_ndx: 9
+Use: 'z', start: 77, end: 78
+Def: 'z', line: 37, def char: 77
+TypeDef: no info
+On Hover:
+let z: u64
+
+-- test 26 -------------------
+use line: 38, use_ndx: 10
+Use: 'z', start: 80, end: 81
+Def: 'z', line: 37, def char: 77
+TypeDef: no info
+On Hover:
+let z: u64
+
+-- test 27 -------------------
+use line: 44, use_ndx: 4
+Use: 'sum', start: 48, end: 51
+Def: 'sum', line: 42, def char: 16
+TypeDef: no info
+On Hover:
+let mut sum: u64
+
+-- test 28 -------------------
+use line: 45, use_ndx: 0
+Use: 'es', start: 8, end: 10
+Def: 'es', line: 41, def char: 12
+TypeDef: no info
+On Hover:
+let es: vector<u64>
+
+-- test 29 -------------------
+use line: 45, use_ndx: 1
+Use: 'feach', start: 11, end: 16
+Def: 'for_each', line: 18, def char: 14
+TypeDef: no info
+On Hover:
+macro fun Macros::macros::for_each<$T>(
+	$v: &vector<$T>,
+	$body: |&$T| -> ()
+)
+
+-- test 30 -------------------
+use line: 52, use_ndx: 2
+Use: 'SomeStruct', start: 34, end: 44
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+public struct Macros::macros::SomeStruct has drop {
+	some_field: u64
+}

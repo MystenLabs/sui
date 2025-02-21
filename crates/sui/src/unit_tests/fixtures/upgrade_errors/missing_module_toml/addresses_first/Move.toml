@@ -1,0 +1,6 @@
+[addresses]
+upgrades = "0x0"
+
+[package]
+name = "upgrades"
+edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move

@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: true
+---
+warning[Lint W04002]: unnecessary 'while (true)', replace with 'loop'
+  ┌─ tests/linter/true_positive_unnecessary_while_loop.move:3:9
+  │
+3 │         while (true) {};
+  │         ^^^^^^^^^^^^^^^ 'while (true)' can be always replaced with 'loop'
+  │
+  = A 'loop' is more useful in these cases. Unlike 'while', 'loop' can have a 'break' with a value, e.g. 'let x = loop { break 42 };'
+  = This warning can be suppressed with '#[allow(lint(while_true))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04002]: unnecessary 'while (true)', replace with 'loop'
+  ┌─ tests/linter/true_positive_unnecessary_while_loop.move:4:9
+  │
+4 │         while (true) { break }
+  │         ^^^^^^^^^^^^^^^^^^^^^^ 'while (true)' can be always replaced with 'loop'
+  │
+  = A 'loop' is more useful in these cases. Unlike 'while', 'loop' can have a 'break' with a value, e.g. 'let x = loop { break 42 };'
+  = This warning can be suppressed with '#[allow(lint(while_true))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

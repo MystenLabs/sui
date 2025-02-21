@@ -1,0 +1,34 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 0, lines 6-13:
+//# publish
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Invalid entry point return type. Expected a non reference type."), command: Some(0) } }
+
+task 1, lines 15-22:
+//# publish
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Invalid entry point return type. Expected a non reference type."), command: Some(0) } }
+
+task 2, lines 24-31:
+//# publish
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Invalid entry point return type. Expected a non reference type."), command: Some(0) } }
+
+task 3, lines 33-41:
+//# publish
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Invalid entry point return type. The specified return type does not have the 'drop' ability: _::m::Copyable"), command: Some(0) } }
+
+task 4, lines 43-52:
+//# publish
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Invalid entry point return type. The specified return type does not have the 'drop' ability: _::m::Obj"), command: Some(0) } }
+
+task 5, lines 54-63:
+//# publish
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Invalid entry point return type. The specified return type does not have the 'drop' ability: vector<_::m::Obj>"), command: Some(0) } }

@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01012]: invalid identifier escape
+  ┌─ tests/move_check/parser/unmatched_restricted_identifier.move:4:13
+  │
+4 │     fun foo(`x: u64): u64 { `x }
+  │             ^^ Missing closing backtick (`) for restricted identifier escaping
+
+error[E01012]: invalid identifier escape
+  ┌─ tests/move_check/parser/unmatched_restricted_identifier.move:4:29
+  │
+4 │     fun foo(`x: u64): u64 { `x }
+  │                             ^^ Missing closing backtick (`) for restricted identifier escaping

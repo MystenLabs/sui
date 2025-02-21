@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02003]: invalid 'init' function
+  ┌─ tests/sui_mode/init/not_private.move:4:16
+  │
+4 │     public fun init(_ctxctx: &mut tx_context::TxContext) {
+  │     ------     ^^^^ Invalid 'init' function declaration
+  │     │           
+  │     'init' functions must be internal to their module
+
+error[Sui E02003]: invalid 'init' function
+   ┌─ tests/sui_mode/init/not_private.move:11:15
+   │
+11 │     entry fun init(_ctx: &mut tx_context::TxContext) {
+   │     -----     ^^^^ Invalid 'init' function declaration
+   │     │          
+   │     'init' functions cannot be 'entry' functions
+
+error[Sui E02003]: invalid 'init' function
+   ┌─ tests/sui_mode/init/not_private.move:18:24
+   │
+18 │     public(friend) fun init(_ctx: &mut tx_context::TxContext) {
+   │     --------------     ^^^^ Invalid 'init' function declaration
+   │     │                   
+   │     'init' functions must be internal to their module

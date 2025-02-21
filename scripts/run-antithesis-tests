@@ -1,0 +1,87 @@
+#!/bin/bash
+
+# Script requires sui-operations repo be locally checked out in order to kick off the antithesis workflow. If SUI_OPS_REPO is not provided then it will default to the path below.
+if [ -z "$SUI_OPS_REPO" ]; then
+  SUI_OPS_REPO="${HOME}/dev/sui-operations"
+fi
+
+if [ ! -d "$SUI_OPS_REPO" ]; then
+  echo "sui-operations repo directory $SUI_OPS_REPO does not exist. Please make sure you have correctly set the sui-operatios repo directory." >&2
+  exit 1
+fi
+
+# check if git repo is dirty
+if ! git diff --quiet --exit-code -- $path || ! git diff --cached --quiet --exit-code -- $path; then
+  echo "Warning: git repo is dirty"
+fi
+
+# parse -t option to get test duration, -s flag for split version, -d flag for description, and -u flag for upgrade
+while getopts t:d:sua:l:h flag
+do
+    case "${flag}" in
+        t) TEST_DURATION=${OPTARG};;
+        s) SPLIT_VERSION=true;;
+        d) DESCRIPTION=${OPTARG};;
+        u) UPGRADE=true;;
+        a) ALT_COMMIT=${OPTARG};;
+        l) LOG_LEVEL=${OPTARG};;
+        h) echo "Usage: run-antithesis-tests [-t test_duration] [-s] [-d description] [-u] [-a alt_commit] [-l log_level]"; exit 0;;
+    esac
+done
+
+if [ -z "$TEST_DURATION" ]; then
+  TEST_DURATION=0.25
+fi
+
+branch=$(git rev-parse HEAD)
+
+if [ "$SPLIT_VERSION" = true ]; then
+  if [ -n "$ALT_COMMIT" ]; then
+    COMMIT=$ALT_COMMIT
+  else
+    COMMIT=$(git merge-base origin/main HEAD)
+  fi
+  ALT_COMMIT=$branch
+else
+  COMMIT=$branch
+fi
+
+cd $SUI_OPS_REPO
+
+cmd="gh workflow run .github/workflows/run-antithesis-tests.yaml -f sui_commit=$COMMIT -f test_duration=$TEST_DURATION"
+
+if [ -n "$DESCRIPTION" ]; then
+  cmd="$cmd -f description='$DESCRIPTION'"
+fi
+
+if [ -n "$ALT_COMMIT" ]; then
+  cmd="$cmd -f sui_commit_alt=$ALT_COMMIT"
+fi 
+
+if [ "$UPGRADE" = true ]; then
+  cmd="$cmd -f test_type=upgrade"
+fi
+
+if [ -n "$LOG_LEVEL" ]; then
+  if [[ "$LOG_LEVEL" =~ [[:space:]] ]]; then
+    echo "Error: LOG_LEVEL cannot contain spaces"
+    exit 1
+  fi
+  cmd="$cmd -f log_level=$LOG_LEVEL"
+fi
+
+echo Running: $cmd
+
+$cmd
+
+GH_USER=$(gh api user | jq -r .login)
+
+# need a small delay to allow the run to be created before listing
+sleep 5
+
+RUN_ID=$(gh run list --user $GH_USER --workflow .github/workflows/run-antithesis-tests.yaml --limit 1 --json databaseId -q '.[0].databaseId')
+
+echo "Run ID: $RUN_ID"
+
+URL=$(gh run view "$RUN_ID" --json url -q '.url')
+echo "URL: $URL"

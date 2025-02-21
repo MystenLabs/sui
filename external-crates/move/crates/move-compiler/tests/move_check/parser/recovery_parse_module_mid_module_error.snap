@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/recovery_parse_module_mid_module_error.move:4:16
+  │
+4 │     public fun () foo
+  │                ^
+  │                │
+  │                Unexpected '('
+  │                Expected an identifier
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/parser/recovery_parse_module_mid_module_error.move:11:36
+   │    
+11 │         public fun wrong_return(): u64 {
+   │                                    --- Expected: 'u64'
+   │ ╭──────────────────────────────────────^
+   │ │ ╭────────────────────────────────────'
+12 │ │ │     }
+   │ ╰─│─────^ Invalid return expression
+   │   ╰─────' Given: '()'

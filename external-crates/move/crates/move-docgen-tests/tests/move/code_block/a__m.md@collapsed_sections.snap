@@ -1,0 +1,51 @@
+---
+source: crates/move-docgen-tests/tests/testsuite.rs
+info:
+  section_level_start: 1
+  exclude_private_fun: false
+  exclude_impl: false
+  toc_depth: 3
+  no_collapsed_sections: true
+  include_dep_diagrams: false
+  include_call_diagrams: false
+input_file: crates/move-docgen-tests/tests/move/code_block/Move.toml
+---
+<a name="a_m"></a>
+
+# Module `a::m`
+
+
+
+-  [Function `main`](#a_m_main)
+    -  [Explanation of the algorithm](#@Explanation_of_the_algorithm_0)
+
+
+<pre><code></code></pre>
+
+
+
+<a name="a_m_main"></a>
+
+## Function `main`
+
+
+<a name="@Explanation_of_the_algorithm_0"></a>
+
+### Explanation of the algorithm
+
+```
+code block
+```
+then <code>inline code</code>
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../a/m.md#a_m_main">main</a>()
+</code></pre>
+
+
+
+##### Implementation
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../a/m.md#a_m_main">main</a>() { }
+</code></pre>

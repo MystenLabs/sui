@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E00002]: DEPRECATED. unexpected spec item
+  ┌─ tests/move_check/parser/spec_parsing_range_fail.move:3:15
+  │
+3 │       let _ = 1 .. 2;
+  │               ^^^^^^ Specification blocks are deprecated and are no longer used

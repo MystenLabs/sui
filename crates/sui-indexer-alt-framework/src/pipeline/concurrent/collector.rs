@@ -12,34 +12,32 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
 use crate::{
-    metrics::IndexerMetrics,
-    pipeline::{CommitterConfig, Indexed, WatermarkPart},
+    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
+    pipeline::{CommitterConfig, IndexedCheckpoint, WatermarkPart},
 };
 
-use super::{Batched, Handler};
+use super::{BatchedRows, Handler};
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.
-struct Pending<H: Handler> {
+struct PendingCheckpoint<H: Handler> {
     /// Values to be inserted into the database from this checkpoint
     values: Vec<H::Value>,
     /// The watermark associated with this checkpoint and the part of it that is left to commit
     watermark: WatermarkPart,
 }
 
-impl<H: Handler> Pending<H> {
+impl<H: Handler> PendingCheckpoint<H> {
     /// Whether there are values left to commit from this indexed checkpoint.
     fn is_empty(&self) -> bool {
         let empty = self.values.is_empty();
-        if empty {
-            debug_assert!(self.watermark.batch_rows == 0);
-        }
+        debug_assert!(!empty || self.watermark.batch_rows == 0);
         empty
     }
 
     /// Adds data from this indexed checkpoint to the `batch`, honoring the handler's bounds on
     /// chunk size.
-    fn batch_into(&mut self, batch: &mut Batched<H>) {
+    fn batch_into(&mut self, batch: &mut BatchedRows<H>) {
         let max_chunk_rows = super::max_chunk_rows::<H>();
         if batch.values.len() + self.values.len() > max_chunk_rows {
             let mut for_batch = self.values.split_off(max_chunk_rows - batch.values.len());
@@ -54,8 +52,8 @@ impl<H: Handler> Pending<H> {
     }
 }
 
-impl<H: Handler> From<Indexed<H>> for Pending<H> {
-    fn from(indexed: Indexed<H>) -> Self {
+impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
+    fn from(indexed: IndexedCheckpoint<H>) -> Self {
         Self {
             watermark: WatermarkPart {
                 watermark: indexed.watermark,
@@ -83,9 +81,8 @@ impl<H: Handler> From<Indexed<H>> for Pending<H> {
 /// closed.
 pub(super) fn collector<H: Handler + 'static>(
     config: CommitterConfig,
-    checkpoint_lag: Option<u64>,
-    mut rx: mpsc::Receiver<Indexed<H>>,
-    tx: mpsc::Sender<Batched<H>>,
+    mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
+    tx: mpsc::Sender<BatchedRows<H>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -95,12 +92,14 @@ pub(super) fn collector<H: Handler + 'static>(
         let mut poll = interval(config.collect_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        // Data for checkpoints that have been received but not yet ready to be sent to committer due to lag constraint.
-        let mut received: BTreeMap<u64, Indexed<H>> = BTreeMap::new();
-        let checkpoint_lag = checkpoint_lag.unwrap_or_default();
+        let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
+            &metrics.collected_checkpoint_timestamp_lag,
+            &metrics.latest_collected_checkpoint_timestamp_lag_ms,
+            &metrics.latest_collected_checkpoint,
+        );
 
         // Data for checkpoints that are ready to be sent but haven't been written yet.
-        let mut pending: BTreeMap<u64, Pending<H>> = BTreeMap::new();
+        let mut pending: BTreeMap<u64, PendingCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
         info!(pipeline = H::NAME, "Starting collector");
@@ -119,7 +118,7 @@ pub(super) fn collector<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    let mut batch = Batched::new();
+                    let mut batch = BatchedRows::new();
                     while !batch.is_full() {
                         let Some(mut entry) = pending.first_entry() else {
                             break;
@@ -128,6 +127,10 @@ pub(super) fn collector<H: Handler + 'static>(
                         let indexed = entry.get_mut();
                         indexed.batch_into(&mut batch);
                         if indexed.is_empty() {
+                            checkpoint_lag_reporter.report_lag(
+                                indexed.watermark.checkpoint(),
+                                indexed.watermark.timestamp_ms(),
+                            );
                             entry.remove();
                         }
                     }
@@ -178,8 +181,8 @@ pub(super) fn collector<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .inc();
 
-                    received.insert(indexed.checkpoint(), indexed);
-                    pending_rows += move_ready_checkpoints(&mut received, &mut pending, checkpoint_lag);
+                    pending_rows += indexed.len();
+                    pending.insert(indexed.checkpoint(), indexed.into());
 
                     if pending_rows >= H::MIN_EAGER_ROWS {
                         poll.reset_immediately()
@@ -190,41 +193,14 @@ pub(super) fn collector<H: Handler + 'static>(
     })
 }
 
-/// Move all checkpoints from `received` that are within the lag range into `pending`.
-/// Returns the number of rows moved.
-fn move_ready_checkpoints<H: Handler>(
-    received: &mut BTreeMap<u64, Indexed<H>>,
-    pending: &mut BTreeMap<u64, Pending<H>>,
-    checkpoint_lag: u64,
-) -> usize {
-    let tip = match (received.last_key_value(), pending.last_key_value()) {
-        (Some((cp, _)), None) | (None, Some((cp, _))) => *cp,
-        (Some((cp1, _)), Some((cp2, _))) => std::cmp::max(*cp1, *cp2),
-        (None, None) => return 0,
-    };
-
-    let mut moved_rows = 0;
-    while let Some(entry) = received.first_entry() {
-        let cp = *entry.key();
-        if cp + checkpoint_lag > tip {
-            break;
-        }
-
-        let indexed = entry.remove();
-        moved_rows += indexed.len();
-        pending.insert(cp, indexed.into());
-    }
-
-    moved_rows
-}
-
 #[cfg(test)]
 mod tests {
     use sui_field_count::FieldCount;
+    use sui_pg_db as db;
     use sui_types::full_checkpoint_content::CheckpointData;
 
     use crate::{
-        db,
+        metrics::tests::test_metrics,
         pipeline::{concurrent::max_chunk_rows, Processor},
     };
 
@@ -238,7 +214,6 @@ mod tests {
         const FIELD_COUNT: usize = 32;
     }
 
-    use prometheus::Registry;
     use std::time::Duration;
     use tokio::sync::mpsc;
 
@@ -265,89 +240,17 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_move_ready_checkpoints_empty() {
-        let mut received = BTreeMap::new();
-        let mut pending = BTreeMap::new();
-        let moved = move_ready_checkpoints::<TestHandler>(&mut received, &mut pending, 10);
-        assert_eq!(moved, 0);
-        assert!(received.is_empty());
-        assert!(pending.is_empty());
-    }
-
-    #[test]
-    fn test_move_ready_checkpoints_within_lag() {
-        let mut received = BTreeMap::new();
-        let mut pending = BTreeMap::new();
-
-        // Add checkpoints 1-5 to received
-        for i in 1..=5 {
-            received.insert(i, Indexed::new(0, i, 0, 0, vec![Entry, Entry, Entry]));
-        }
-
-        // With lag of 2 and tip at 5, only checkpoints 1-3 should move
-        let moved = move_ready_checkpoints::<TestHandler>(&mut received, &mut pending, 2);
-
-        assert_eq!(moved, 9); // 3 checkpoints * 3 rows each
-        assert_eq!(received.len(), 2); // 4,5 remain
-        assert_eq!(pending.len(), 3); // 1,2,3 moved
-        assert!(pending.contains_key(&1));
-        assert!(pending.contains_key(&2));
-        assert!(pending.contains_key(&3));
-    }
-
-    #[test]
-    fn test_move_ready_checkpoints_tip_from_pending() {
-        let mut received = BTreeMap::new();
-        let mut pending = BTreeMap::new();
-
-        // Add checkpoint 10 to pending to establish tip
-        pending.insert(10, Pending::from(Indexed::new(0, 10, 0, 0, vec![Entry])));
-
-        // Add checkpoints 1-5 to received
-        for i in 1..=5 {
-            received.insert(i, Indexed::new(0, i, 0, 0, vec![Entry]));
-        }
-
-        // With lag of 3 and tip at 10, checkpoints 1-7 can move
-        let moved = move_ready_checkpoints::<TestHandler>(&mut received, &mut pending, 3);
-
-        assert_eq!(moved, 5); // All 5 checkpoints moved, 1 row each
-        assert!(received.is_empty());
-        assert_eq!(pending.len(), 6); // Original + 5 new
-    }
-
-    #[test]
-    fn test_move_ready_checkpoints_no_eligible() {
-        let mut received = BTreeMap::new();
-        let mut pending = BTreeMap::new();
-
-        // Add checkpoints 8-10 to received
-        for i in 8..=10 {
-            received.insert(i, Indexed::new(0, i, 0, 0, vec![Entry]));
-        }
-
-        // With lag of 5 and tip at 10, no checkpoints can move
-        let moved = move_ready_checkpoints::<TestHandler>(&mut received, &mut pending, 5);
-
-        assert_eq!(moved, 0);
-        assert_eq!(received.len(), 3);
-        assert!(pending.is_empty());
-    }
-
     #[tokio::test]
     async fn test_collector_batches_data() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let metrics = Arc::new(IndexerMetrics::new(&Registry::new()));
         let cancel = CancellationToken::new();
 
         let _collector = collector::<TestHandler>(
             CommitterConfig::default(),
-            None,
             processor_rx,
             collector_tx,
-            metrics,
+            test_metrics(),
             cancel.clone(),
         );
 
@@ -357,9 +260,9 @@ mod tests {
 
         // Send test data
         let test_data = vec![
-            Indexed::new(0, 1, 10, 1000, vec![Entry; part1_length]),
-            Indexed::new(0, 2, 20, 2000, vec![Entry; part2_length]),
-            Indexed::new(0, 3, 30, 3000, vec![Entry, Entry]),
+            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; part1_length]),
+            IndexedCheckpoint::new(0, 2, 20, 2000, vec![Entry; part2_length]),
+            IndexedCheckpoint::new(0, 3, 30, 3000, vec![Entry, Entry]),
         ];
 
         for data in test_data {
@@ -382,20 +285,18 @@ mod tests {
     async fn test_collector_shutdown() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let metrics = Arc::new(IndexerMetrics::new(&Registry::new()));
         let cancel = CancellationToken::new();
 
         let collector = collector::<TestHandler>(
             CommitterConfig::default(),
-            None,
             processor_rx,
             collector_tx,
-            metrics,
+            test_metrics(),
             cancel.clone(),
         );
 
         processor_tx
-            .send(Indexed::new(0, 1, 10, 1000, vec![Entry, Entry]))
+            .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry, Entry]))
             .await
             .unwrap();
 
@@ -422,13 +323,11 @@ mod tests {
         let (processor_tx, processor_rx) = mpsc::channel(processor_channel_size);
         let (collector_tx, _collector_rx) = mpsc::channel(collector_channel_size);
 
-        let metrics = Arc::new(IndexerMetrics::new(&Registry::new()));
-
+        let metrics = test_metrics();
         let cancel = CancellationToken::new();
 
         let _collector = collector::<TestHandler>(
             CommitterConfig::default(),
-            None,
             processor_rx,
             collector_tx,
             metrics.clone(),
@@ -436,7 +335,7 @@ mod tests {
         );
 
         // Send more data than MAX_PENDING_ROWS plus collector channel buffer
-        let data = Indexed::new(
+        let data = IndexedCheckpoint::new(
             0,
             1,
             10,
@@ -454,12 +353,12 @@ mod tests {
 
         // Now fill up the processor channel with minimum data to trigger send blocking
         for _ in 0..processor_channel_size {
-            let more_data = Indexed::new(0, 2, 11, 1000, vec![Entry]);
+            let more_data = IndexedCheckpoint::new(0, 2, 11, 1000, vec![Entry]);
             processor_tx.send(more_data).await.unwrap();
         }
 
         // Now sending even more data should block because of MAX_PENDING_ROWS limit.
-        let even_more_data = Indexed::new(0, 3, 12, 1000, vec![Entry]);
+        let even_more_data = IndexedCheckpoint::new(0, 3, 12, 1000, vec![Entry]);
 
         let send_result = processor_tx.try_send(even_more_data);
         assert!(matches!(

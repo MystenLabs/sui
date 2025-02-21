@@ -1,0 +1,34 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/matching/invalid_or_binding_4.move:11:19
+   │
+11 │         E::X { x: y } | E::Y(x) | E::Z { z: x } => *x
+   │                   ^ Unused local variable 'y'. Consider removing or prefixing with an underscore: '_y'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/matching/invalid_or_binding_4.move:11:19
+   │
+11 │         E::X { x: y } | E::Y(x) | E::Z { z: x } => *x
+   │                   ^     ----------------------- right or-pattern does not
+   │                   │      
+   │                   left or-pattern binds variable y
+   │
+   = Both sides of an or-pattern must bind the same variables.
+
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/matching/invalid_or_binding_4.move:11:30
+   │
+11 │         E::X { x: y } | E::Y(x) | E::Z { z: x } => *x
+   │         -------------        ^ right or-pattern binds variable x
+   │         │                     
+   │         left or-pattern does not
+   │
+   = Both sides of an or-pattern must bind the same variables.

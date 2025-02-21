@@ -104,6 +104,7 @@ fn run(
         vec![],
         serialize_values(&vec![arg_val0]),
         &mut UnmeteredGasMeter,
+        None,
     )
 }
 

@@ -7,7 +7,8 @@ use std::{borrow::Cow, sync::Arc, time::Instant};
 use mysten_network::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 
 #[derive(Clone)]
@@ -68,11 +69,20 @@ impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
         let start = Instant::now();
         let metrics = self.metrics.clone();
 
-        let path = if let Some(path) = request.extensions.get::<axum::extract::MatchedPath>() {
-            Cow::Owned(path.as_str().to_owned())
-        } else {
-            Cow::Borrowed("unknown")
-        };
+        let path =
+            if let Some(matched_path) = request.extensions.get::<axum::extract::MatchedPath>() {
+                if request
+                    .headers
+                    .get(&http::header::CONTENT_TYPE)
+                    .is_some_and(|header| header == tonic::metadata::GRPC_CONTENT_TYPE)
+                {
+                    Cow::Owned(request.uri.path().to_owned())
+                } else {
+                    Cow::Owned(matched_path.as_str().to_owned())
+                }
+            } else {
+                Cow::Borrowed("unknown")
+            };
 
         metrics
             .inflight_requests
@@ -98,16 +108,42 @@ pub struct RpcMetricsCallbackHandler {
 }
 
 impl ResponseHandler for RpcMetricsCallbackHandler {
-    fn on_response(mut self, response: &http::response::Parts) {
+    fn on_response(&mut self, response: &http::response::Parts) {
+        const GRPC_STATUS: http::HeaderName = http::HeaderName::from_static("grpc-status");
+
+        let status = if response
+            .headers
+            .get(&http::header::CONTENT_TYPE)
+            .is_some_and(|content_type| {
+                content_type
+                    .as_bytes()
+                    // check if the content-type starts_with 'application/grpc' in order to
+                    // consider this as a gRPC request. A prefix comparison is done instead of a
+                    // full equality check in order to account for the various types of
+                    // content-types that are considered as gRPC traffic.
+                    .starts_with(tonic::metadata::GRPC_CONTENT_TYPE.as_bytes())
+            }) {
+            let code = response
+                .headers
+                .get(&GRPC_STATUS)
+                .map(http::HeaderValue::as_bytes)
+                .map(tonic::Code::from_bytes)
+                .unwrap_or(tonic::Code::Ok);
+
+            code_as_str(code)
+        } else {
+            response.status.as_str()
+        };
+
         self.metrics
             .num_requests
-            .with_label_values(&[self.path.as_ref(), response.status.as_str()])
+            .with_label_values(&[self.path.as_ref(), status])
             .inc();
 
         self.counted_response = true;
     }
 
-    fn on_error<E>(self, _error: &E) {
+    fn on_error<E>(&mut self, _error: &E) {
         // Do nothing if the whole service errored
         //
         // in Axum this isn't possible since all services are required to have an error type of
@@ -133,6 +169,53 @@ impl Drop for RpcMetricsCallbackHandler {
                 .num_requests
                 .with_label_values(&[self.path.as_ref(), "canceled"])
                 .inc();
+        }
+    }
+}
+
+fn code_as_str(code: tonic::Code) -> &'static str {
+    match code {
+        tonic::Code::Ok => "ok",
+        tonic::Code::Cancelled => "canceled",
+        tonic::Code::Unknown => "unknown",
+        tonic::Code::InvalidArgument => "invalid-argument",
+        tonic::Code::DeadlineExceeded => "deadline-exceeded",
+        tonic::Code::NotFound => "not-found",
+        tonic::Code::AlreadyExists => "already-exists",
+        tonic::Code::PermissionDenied => "permission-denied",
+        tonic::Code::ResourceExhausted => "resource-exhausted",
+        tonic::Code::FailedPrecondition => "failed-precondition",
+        tonic::Code::Aborted => "aborted",
+        tonic::Code::OutOfRange => "out-of-range",
+        tonic::Code::Unimplemented => "unimplemented",
+        tonic::Code::Internal => "internal",
+        tonic::Code::Unavailable => "unavailable",
+        tonic::Code::DataLoss => "data-loss",
+        tonic::Code::Unauthenticated => "unauthenticated",
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct SubscriptionMetrics {
+    pub inflight_subscribers: IntGauge,
+    pub last_recieved_checkpoint: IntGauge,
+}
+
+impl SubscriptionMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            inflight_subscribers: register_int_gauge_with_registry!(
+                "subscription_inflight_subscribers",
+                "Total in-flight subscriptions",
+                registry,
+            )
+            .unwrap(),
+            last_recieved_checkpoint: register_int_gauge_with_registry!(
+                "subscription_last_recieved_checkpoint",
+                "Last recieved checkpoint by the subscription service",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }

@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/ability_modifies_no_abilities_infix_postfix.move:3:5
+  │
+3 │     struct Foo has {} has;
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifies_no_abilities_infix_postfix.move:3:20
+  │
+3 │     struct Foo has {} has;
+  │                    ^ Unexpected '{'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifies_no_abilities_infix_postfix.move:3:26
+  │
+3 │     struct Foo has {} has;
+  │                          ^ Unexpected ';'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifies_no_abilities_infix_postfix.move:5:1
+  │
+5 │ 
+  │ ^
+  │ 
+  │ Unexpected end-of-file
+  │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', 'struct', or 'enum'

@@ -1,0 +1,104 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-19:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-23:
+//# programmable --sender A --inputs @A
+//> 0: sui::bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 25-28:
+//# programmable --sender A --inputs object(2,0) 42 43u32 44 45 46 @A
+//> 0: P::M::name(Input(1), Input(2));
+//> 1: sui::bag::add<u64, u64>(Input(0), Input(3), Input(4));
+//> 2: sui::bag::add<P::M::Name, u64>(Input(0), Result(0), Input(5))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5555600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 4, line 30:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 32-36:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": {
+      "objectId": "0x63a370673b226e7c04b25f3ff9b43ccbdd64fc651433be4e9b9587ca552a9453",
+      "version": "3",
+      "digest": "4N9j9jxQ55tdDRYcxEayJncAjG1zrxt2eBoWjEcPffdz",
+      "type": "0x2::dynamic_field::Field<u64, u64>",
+      "owner": {
+        "ObjectOwner": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad"
+      },
+      "previousTransaction": "65zGhhFftTf648zjdJpYDnb9K3YPzvYUC3wagZdYLhTq",
+      "storageRebate": "1466800",
+      "content": {
+        "dataType": "moveObject",
+        "type": "0x2::dynamic_field::Field<u64, u64>",
+        "hasPublicTransfer": false,
+        "fields": {
+          "id": {
+            "id": "0x63a370673b226e7c04b25f3ff9b43ccbdd64fc651433be4e9b9587ca552a9453"
+          },
+          "name": "44",
+          "value": "45"
+        }
+      }
+    }
+  }
+}
+
+task 6, lines 38-45:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "data": {
+      "objectId": "0xf391c82c30fb39e249bbcbf23559eb7b9aeddebb12d305f0d47b6eea74b7da9d",
+      "version": "3",
+      "digest": "BBPYZpN2fKYhZFZwdbUQefaLZ9uuehFmRbLsZr8EwGuw",
+      "type": "0x2::dynamic_field::Field<0x0c1b57d949b2d2e7ec682faefe0cd21dc2738675c1f00e756c0fb7e0eca77259::M::Name, u64>",
+      "owner": {
+        "ObjectOwner": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad"
+      },
+      "previousTransaction": "65zGhhFftTf648zjdJpYDnb9K3YPzvYUC3wagZdYLhTq",
+      "storageRebate": "1801200",
+      "content": {
+        "dataType": "moveObject",
+        "type": "0x2::dynamic_field::Field<0x0c1b57d949b2d2e7ec682faefe0cd21dc2738675c1f00e756c0fb7e0eca77259::M::Name, u64>",
+        "hasPublicTransfer": false,
+        "fields": {
+          "id": {
+            "id": "0xf391c82c30fb39e249bbcbf23559eb7b9aeddebb12d305f0d47b6eea74b7da9d"
+          },
+          "name": {
+            "type": "0x0c1b57d949b2d2e7ec682faefe0cd21dc2738675c1f00e756c0fb7e0eca77259::M::Name",
+            "fields": {
+              "x": "42",
+              "y": 43
+            }
+          },
+          "value": "46"
+        }
+      }
+    }
+  }
+}

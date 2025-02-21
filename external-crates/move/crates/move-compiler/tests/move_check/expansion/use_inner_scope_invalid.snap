@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/use_inner_scope_invalid.move:12:5
+   │  
+12 │ ╭     spec schema Foo<T> {
+13 │ │         ensures true;
+14 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+error[E03011]: invalid use of reserved name
+   ┌─ tests/move_check/expansion/use_inner_scope_invalid.move:17:23
+   │
+17 │         use 0x2::M as Self;
+   │                       ^^^^ Invalid module alias name 'Self'. 'Self' is restricted and cannot be used to name a module alias
+
+error[E02010]: invalid name
+   ┌─ tests/move_check/expansion/use_inner_scope_invalid.move:18:28
+   │
+18 │         use 0x2::M::{S1 as s1, Foo as foo};
+   │                            ^^ Invalid struct alias name 's1'. Struct alias names must start with 'A'..'Z'
+
+error[E03003]: unbound module member
+   ┌─ tests/move_check/expansion/use_inner_scope_invalid.move:18:32
+   │
+ 2 │ module M {
+   │        - Module '0x2::M' declared here
+   ·
+18 │         use 0x2::M::{S1 as s1, Foo as foo};
+   │                                ^^^ Invalid 'use'. Unbound member 'Foo' in module '0x2::M'

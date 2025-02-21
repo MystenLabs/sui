@@ -1,0 +1,142 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 14-16:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 18-20:
+//# programmable --sender A --inputs 43 object(1,0)
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: MergeCoins(Input(1), [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 3, lines 22-23:
+//# programmable --sender A --inputs object(1,0)
+//> 0: MergeCoins(Gas, [Input(0)])
+mutated: object(0,0)
+deleted: object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 4, line 25:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 27-31:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "status": "VersionNotFound",
+    "details": [
+      "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      1
+    ]
+  }
+}
+
+task 6, lines 33-37:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "status": "VersionFound",
+    "details": {
+      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "version": "2",
+      "digest": "4wV3VBJGNaMCv9zfjSna8c4as6EkuYoqTHHjueS6S745"
+    }
+  }
+}
+
+task 7, lines 39-43:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "status": "VersionFound",
+    "details": {
+      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "version": "3",
+      "digest": "5p2rFja4CnVp4TWPg2VuRYpDS6d2AUSTQL5mfWBoiVjh"
+    }
+  }
+}
+
+task 8, lines 45-49:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "status": "ObjectDeleted",
+    "details": {
+      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "version": 4,
+      "digest": "7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz"
+    }
+  }
+}
+
+task 9, lines 51-64:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "status": "VersionNotFound",
+    "details": [
+      "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      1
+    ]
+  }
+}
+
+task 10, lines 66-79:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 5,
+  "result": {
+    "status": "VersionFound",
+    "details": {
+      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "version": "2",
+      "digest": "4wV3VBJGNaMCv9zfjSna8c4as6EkuYoqTHHjueS6S745",
+      "type": "0x2::coin::Coin<0x2::sui::SUI>",
+      "owner": {
+        "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+      },
+      "previousTransaction": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk",
+      "storageRebate": "988000"
+    }
+  }
+}
+
+task 11, lines 81-94:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 6,
+  "result": {
+    "status": "ObjectDeleted",
+    "details": {
+      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "version": 4,
+      "digest": "7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz"
+    }
+  }
+}

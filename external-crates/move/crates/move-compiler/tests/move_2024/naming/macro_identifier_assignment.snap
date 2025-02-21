@@ -1,0 +1,34 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/naming/macro_identifier_assignment.move:2:33
+   │
+ 2 │     macro fun call($f: |u64| -> u64, $x: u64): u64 {
+   │                                 ^^^
+   │                                 │
+   │                                 Invalid type annotation
+   │                                 Expected: 'u64'
+   ·
+10 │         call!(|_| false, 0) + 1;
+   │                   ----- Given: 'bool'
+
+error[E04032]: unable to expand macro function
+  ┌─ tests/move_2024/naming/macro_identifier_assignment.move:3:9
+  │
+3 │         $f = 0;
+  │         ^^ Cannot assign to argument for parameter '$f'. Arguments must be used in value positions
+  │
+  = 'macro' parameters are substituted without being evaluated. There is no local variable to assign to
+
+error[E04032]: unable to expand macro function
+  ┌─ tests/move_2024/naming/macro_identifier_assignment.move:4:9
+  │
+4 │         $x = 0;
+  │         ^^ Cannot assign to argument for parameter '$x'. Arguments must be used in value positions
+  │
+  = 'macro' parameters are substituted without being evaluated. There is no local variable to assign to

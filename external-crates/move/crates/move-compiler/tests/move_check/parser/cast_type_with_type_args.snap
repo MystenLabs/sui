@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/cast_type_with_type_args.move:4:23
+  │
+4 │         (0 as Cup <u8>);
+  │                       ^
+  │                       │
+  │                       Unexpected ')'
+  │                       Expected an expression term

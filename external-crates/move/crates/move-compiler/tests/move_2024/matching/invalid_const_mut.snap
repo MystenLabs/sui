@@ -1,0 +1,60 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_2024/matching/invalid_const_mut.move:9:26
+  │
+9 │             Box { value: mut ZERO } => ZERO,
+  │                          ^^^ ---- Expected a valid 'enum' variant, 'struct', or 'const', not a variable
+  │                          │    
+  │                          'mut' can only be used with variable bindings in patterns
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/matching/invalid_const_mut.move:10:13
+   │
+ 5 │     public struct Box { value: u64 }
+   │                   --- To satisfy the constraint, the 'drop' ability would need to be added here
+ 6 │ 
+ 7 │     public fun test(b: Box): u64 {
+   │                        --- The type '0x42::m::Box' does not have the ability 'drop'
+   ·
+10 │             _ => 10,
+   │             ^ Cannot ignore values without the 'drop' ability. '_' patterns discard their values
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/matching/invalid_const_mut.move:14:16
+   │
+ 7 │     public fun test(b: Box): u64 {
+   │                ---- Alias previously defined here
+   ·
+14 │     public fun test(b: &Box): u64 {
+   │                ^^^^ Duplicate module member or alias 'test'. Top level names in a namespace must be unique
+
+error[E02010]: invalid name
+   ┌─ tests/move_2024/matching/invalid_const_mut.move:16:26
+   │
+16 │             Box { value: mut ZERO } => ZERO,
+   │                          ^^^ ---- Expected a valid 'enum' variant, 'struct', or 'const', not a variable
+   │                          │    
+   │                          'mut' can only be used with variable bindings in patterns
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/matching/invalid_const_mut.move:21:16
+   │
+14 │     public fun test(b: &Box): u64 {
+   │                ---- Alias previously defined here
+   ·
+21 │     public fun test(b: &mut Box): u64 {
+   │                ^^^^ Duplicate module member or alias 'test'. Top level names in a namespace must be unique
+
+error[E02010]: invalid name
+   ┌─ tests/move_2024/matching/invalid_const_mut.move:23:26
+   │
+23 │             Box { value: mut ZERO } => ZERO,
+   │                          ^^^ ---- Expected a valid 'enum' variant, 'struct', or 'const', not a variable
+   │                          │    
+   │                          'mut' can only be used with variable bindings in patterns

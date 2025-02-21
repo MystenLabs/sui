@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::indexer_reader::IndexerReader;
+use crate::{errors::IndexerError, indexer_reader::IndexerReader};
 use jsonrpsee::{core::RpcResult, RpcModule};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_api::{validate_limit, ExtendedApiServer, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
@@ -29,7 +29,8 @@ impl ExtendedApiServer for ExtendedApi {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<EpochPage> {
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
+        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)
+            .map_err(IndexerError::from)?;
         let mut epochs = self
             .inner
             .get_epochs(
@@ -60,10 +61,7 @@ impl ExtendedApiServer for ExtendedApi {
         _cursor: Option<CheckpointedObjectID>,
         _limit: Option<usize>,
     ) -> RpcResult<QueryObjectsPage> {
-        Err(jsonrpsee::types::error::CallError::Custom(
-            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
-        )
-        .into())
+        Err(jsonrpsee::types::error::ErrorCode::MethodNotFound.into())
     }
 
     async fn get_total_transactions(&self) -> RpcResult<BigInt<u64>> {

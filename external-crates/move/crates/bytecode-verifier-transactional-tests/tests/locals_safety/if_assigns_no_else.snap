@@ -1,0 +1,15 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/locals_safety/if_assigns_no_else.mvir
+---
+processed 1 task
+
+task 0, lines 1-16:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: COPYLOC_UNAVAILABLE_ERROR,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}

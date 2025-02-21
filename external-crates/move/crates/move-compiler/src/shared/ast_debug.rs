@@ -120,6 +120,10 @@ impl AstWriter {
         self.lines.last_mut().unwrap()
     }
 
+    pub fn is_verbose(&self) -> bool {
+        self.verbose
+    }
+
     pub fn new_line(&mut self) {
         self.lines.push(String::new());
     }

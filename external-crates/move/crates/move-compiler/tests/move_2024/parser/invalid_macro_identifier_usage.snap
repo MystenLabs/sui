@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/invalid_macro_identifier_usage.move:2:9
+  │
+2 │     fun $foo() { let $x = 0; }
+  │         ^^^^
+  │         │
+  │         Unexpected '$foo'
+  │         Expected an identifier
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/invalid_macro_identifier_usage.move:3:19
+  │
+3 │     public struct $X()
+  │                   ^^
+  │                   │
+  │                   Unexpected '$X'
+  │                   Expected an identifier
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/invalid_macro_identifier_usage.move:4:11
+  │
+4 │     const $C: u64 = 0;
+  │           ^^
+  │           │
+  │           Unexpected '$C'
+  │           Expected an identifier

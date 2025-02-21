@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/struct_invalid_visibility_progress_inside.move:2:5
+  │
+2 │     struct Foo {
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E03004]: unbound type
+  ┌─ tests/move_2024/struct_invalid_visibility_progress_inside.move:3:12
+  │
+3 │         x: Bar<foo>,
+  │            ^^^ Unbound type 'Bar' in current scope

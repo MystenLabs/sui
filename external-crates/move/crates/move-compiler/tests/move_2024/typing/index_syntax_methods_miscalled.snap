@@ -1,0 +1,300 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:30:10
+   │
+ 8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+   │                                                               --- Expected: 'u64'
+   ·
+29 │     public fun miscall0(s: &S, i: u32): &u64 {
+   │                                   --- Given: 'u32'
+30 │         &s.t[i]
+   │          ^^^^^^ Invalid call of 'std::vector::borrow'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:34:14
+   │
+ 8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+   │                                                               --- Expected: 'u64'
+   ·
+33 │     public fun miscall1(s: &mut S, i: u32): &mut u64 {
+   │                                       --- Given: 'u32'
+34 │         &mut s.t[i]
+   │              ^^^^^^ Invalid call of 'std::vector::borrow'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:38:10
+   │
+ 8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+   │                                                               --- Expected: 'u64'
+   ·
+37 │     public fun miscall2<T>(s: &S, i: T): &u64 {
+   │                                      - Given: 'T'
+38 │         &s.t[i]
+   │          ^^^^^^ Invalid call of 'std::vector::borrow'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:43:14
+   │
+ 8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+   │                                                               --- Expected: 'u64'
+   ·
+42 │     public fun miscall3<T>(s: &mut S, i: T): &mut u64 {
+   │                                          - Given: 'T'
+43 │         &mut s.t[i]
+   │              ^^^^^^ Invalid call of 'std::vector::borrow'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:52:10
+   │
+20 │     public fun borrow_s(s: &S, i: u64): &u64 {
+   │                                   --- Expected: 'u64'
+   ·
+51 │     fun miscall0(s: &s::S, i: u32): &u64 {
+   │                               --- Given: 'u32'
+52 │         &s[i]
+   │          ^^^^ Invalid call of 'a::s::borrow_s'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:56:14
+   │
+20 │     public fun borrow_s(s: &S, i: u64): &u64 {
+   │                                   --- Expected: 'u64'
+   ·
+55 │     fun miscall1(s: &mut s::S, i: u32): &mut u64 {
+   │                                   --- Given: 'u32'
+56 │         &mut s[i]
+   │              ^^^^ Invalid call of 'a::s::borrow_s'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:60:10
+   │
+20 │     public fun borrow_s(s: &S, i: u64): &u64 {
+   │                                   --- Expected: 'u64'
+   ·
+59 │     fun miscall2<T>(s: &s::S, i: T): &u64 {
+   │                                  - Given: 'T'
+60 │         &s[i]
+   │          ^^^^ Invalid call of 'a::s::borrow_s'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:64:14
+   │
+20 │     public fun borrow_s(s: &S, i: u64): &u64 {
+   │                                   --- Expected: 'u64'
+   ·
+63 │     fun miscall3<T>(s: &mut s::S, i: T): &mut u64 {
+   │                                      - Given: 'T'
+64 │         &mut s[i]
+   │              ^^^^ Invalid call of 'a::s::borrow_s'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:80:10
+   │
+77 │     public fun borrow_mirror(_q: &Q, i: &mut u64): &u64 { i }
+   │                                         -------- Expected: '&mut u64'
+78 │ 
+79 │     fun miscall0(q: &Q, i: u32): &u64 {
+   │                            --- Given: 'u32'
+80 │         &q[i]
+   │          ^^^^ Invalid call of 'a::mirror::borrow_mirror'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:84:14
+   │
+77 │     public fun borrow_mirror(_q: &Q, i: &mut u64): &u64 { i }
+   │                                         -------- Expected: '&mut u64'
+   ·
+83 │     fun miscall1(q: &mut Q, i: u32): &mut u64 {
+   │                                --- Given: 'u32'
+84 │         &mut q[i]
+   │              ^^^^ Invalid call of 'a::mirror::borrow_mirror'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:88:10
+   │
+77 │     public fun borrow_mirror(_q: &Q, i: &mut u64): &u64 { i }
+   │                                         -------- Expected: '&mut u64'
+   ·
+87 │     fun miscall2<T>(q: &Q, i: T): &u64 {
+   │                               - Given: 'T'
+88 │         &q[i]
+   │          ^^^^ Invalid call of 'a::mirror::borrow_mirror'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:92:14
+   │
+77 │     public fun borrow_mirror(_q: &Q, i: &mut u64): &u64 { i }
+   │                                         -------- Expected: '&mut u64'
+   ·
+91 │     fun miscall3<T>(q: &mut Q, i: T): &mut u64 {
+   │                                   - Given: 'T'
+92 │         &mut q[i]
+   │              ^^^^ Invalid call of 'a::mirror::borrow_mirror'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:100:10
+    │
+  8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                                                               --- Expected: 'u64'
+    ·
+ 99 │     public fun miscall1<T>(v: &vector<T>, i: u32): &T {
+    │                                              --- Given: 'u32'
+100 │         &v[i]
+    │          ^^^^ Invalid call of 'std::vector::borrow'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:104:14
+    │
+  8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                                                               --- Expected: 'u64'
+    ·
+103 │     public fun miscall2<T>(v: &mut vector<T>, i: u32): &mut T {
+    │                                                  --- Given: 'u32'
+104 │         &mut v[i]
+    │              ^^^^ Invalid call of 'std::vector::borrow'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:108:10
+    │
+  8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                                                               --- Expected: 'u64'
+    ·
+107 │     public fun miscall3<T,U>(v: &vector<T>, i: U): &T {
+    │                                                - Given: 'U'
+108 │         &v[i]
+    │          ^^^^ Invalid call of 'std::vector::borrow'. Invalid argument for parameter 'i'
+
+error[E04007]: incompatible types
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:112:14
+    │
+  8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                                                               --- Expected: 'u64'
+    ·
+111 │     public fun miscall4<T,U>(v: &mut vector<T>, i: U): &mut T {
+    │                                                    - Given: 'U'
+112 │         &mut v[i]
+    │              ^^^^ Invalid call of 'std::vector::borrow'. Invalid argument for parameter 'i'
+
+error[E04017]: too many arguments
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:120:9
+    │
+120 │         &v[i, j]
+    │         ^^^^^^^^
+    │         │ │
+    │         │ Found 3 argument(s) here
+    │         Invalid call of 'std::vector::borrow'. The call expected 2 argument(s) but got 3
+
+error[E04017]: too many arguments
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:120:10
+    │
+120 │         &v[i, j]
+    │          ^^^^^^^
+    │          ││
+    │          │Found 3 argument(s) here
+    │          Invalid call of 'std::vector::borrow'. The call expected 2 argument(s) but got 3
+
+error[E04017]: too many arguments
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:124:9
+    │
+124 │         &mut v[i, j]
+    │         ^^^^^^^^^^^^
+    │         │     │
+    │         │     Found 3 argument(s) here
+    │         Invalid call of 'std::vector::borrow_mut'. The call expected 2 argument(s) but got 3
+
+error[E04017]: too many arguments
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:124:14
+    │
+124 │         &mut v[i, j]
+    │              ^^^^^^^
+    │              ││
+    │              │Found 3 argument(s) here
+    │              Invalid call of 'std::vector::borrow'. The call expected 2 argument(s) but got 3
+
+error[E04017]: too many arguments
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:128:10
+    │
+128 │         &v[i, j]
+    │          ^^^^^^^
+    │          ││
+    │          │Found 3 argument(s) here
+    │          Invalid call of 'std::vector::borrow'. The call expected 2 argument(s) but got 3
+
+error[E04007]: incompatible types
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:128:10
+    │
+  8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                                                               --- Expected: 'u64'
+    ·
+127 │     public fun miscall3<T,U,V>(v: &vector<T>, i: U, j: V): &T {
+    │                                                  - Given: 'U'
+128 │         &v[i, j]
+    │          ^^^^^^^ Invalid call of 'std::vector::borrow'. Invalid argument for parameter 'i'
+
+error[E03004]: unbound type
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:131:59
+    │
+131 │     public fun miscall4<T,U>(v: &mut vector<T>, i: U, j : V): &mut T {
+    │                                                           ^ Unbound type 'V' in current scope
+
+error[E04017]: too many arguments
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:132:14
+    │
+132 │         &mut v[i, j]
+    │              ^^^^^^^
+    │              ││
+    │              │Found 3 argument(s) here
+    │              Invalid call of 'std::vector::borrow'. The call expected 2 argument(s) but got 3
+
+error[E04007]: incompatible types
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:132:14
+    │
+  8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                                                               --- Expected: 'u64'
+    ·
+131 │     public fun miscall4<T,U>(v: &mut vector<T>, i: U, j : V): &mut T {
+    │                                                    - Given: 'U'
+132 │         &mut v[i, j]
+    │              ^^^^^^^ Invalid call of 'std::vector::borrow'. Invalid argument for parameter 'i'
+
+error[E04016]: too few arguments
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:152:9
+    │
+152 │         &s[i]
+    │         ^^^^^
+    │         │ │
+    │         │ Found 2 argument(s) here
+    │         Invalid call of 'a::too_few_args::borrow_s'. The call expected 3 argument(s) but got 2
+
+error[E04016]: too few arguments
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:152:10
+    │
+152 │         &s[i]
+    │          ^^^^
+    │          ││
+    │          │Found 2 argument(s) here
+    │          Invalid call of 'a::too_few_args::borrow_s'. The call expected 3 argument(s) but got 2
+
+error[E04016]: too few arguments
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:156:9
+    │
+156 │         &mut s[i]
+    │         ^^^^^^^^^
+    │         │     │
+    │         │     Found 2 argument(s) here
+    │         Invalid call of 'a::too_few_args::borrow_s_mut'. The call expected 3 argument(s) but got 2
+
+error[E04016]: too few arguments
+    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:156:14
+    │
+156 │         &mut s[i]
+    │              ^^^^
+    │              ││
+    │              │Found 2 argument(s) here
+    │              Invalid call of 'a::too_few_args::borrow_s'. The call expected 3 argument(s) but got 2

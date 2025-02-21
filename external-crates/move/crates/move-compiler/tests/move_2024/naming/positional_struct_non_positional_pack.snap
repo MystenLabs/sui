@@ -1,0 +1,27 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/naming/positional_struct_non_positional_pack.move:6:18
+  │
+2 │     public struct Foo(u64) has copy, drop;
+  │                   --- 'Foo' is declared here
+  ·
+6 │         let _x = Foo { pos0: 0 };
+  │                  ^^^^^^^^^^^^^^^ Invalid struct instantiation. Positional struct declarations require positional instantiations
+
+error[E03010]: unbound field
+  ┌─ tests/move_2024/naming/positional_struct_non_positional_pack.move:6:18
+  │
+6 │         let _x = Foo { pos0: 0 };
+  │                  ^^^^^^^^^^^^^^^ Unbound field 'pos0' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/naming/positional_struct_non_positional_pack.move:6:18
+  │
+6 │         let _x = Foo { pos0: 0 };
+  │                  ^^^^^^^^^^^^^^^ Missing argument for field '0' in '0x42::M::Foo'

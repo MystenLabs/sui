@@ -1,0 +1,179 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+ResolvedGraph {
+    graph: DependencyGraph {
+        root_path: "tests/test_sources/resolve_version",
+        root_package_id: "Root",
+        root_package_name: "Root",
+        package_graph: {
+            "Root": [
+                (
+                    "A",
+                    Outgoing,
+                ),
+                (
+                    "B",
+                    Outgoing,
+                ),
+            ],
+            "A": [
+                (
+                    "Root",
+                    Incoming,
+                ),
+            ],
+            "B": [
+                (
+                    "Root",
+                    Incoming,
+                ),
+            ],
+        },
+        package_table: {
+            "A": Package {
+                kind: Local(
+                    "deps_only/A",
+                ),
+                version: Some(
+                    "3",
+                ),
+                resolver: None,
+            },
+            "B": Package {
+                kind: Local(
+                    "deps_only/B",
+                ),
+                version: Some(
+                    "2",
+                ),
+                resolver: None,
+            },
+        },
+        always_deps: {
+            "A",
+            "B",
+            "Root",
+        },
+        manifest_digest: "A152DBB11C386226B7A6435D66090103E0CC19330A38251784E4D2D0C0EF57A5",
+        deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
+    },
+    build_options: BuildConfig {
+        dev_mode: true,
+        test_mode: false,
+        generate_docs: false,
+        save_disassembly: false,
+        install_dir: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        force_recompilation: false,
+        lock_file: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        fetch_deps_only: false,
+        skip_fetch_latest_git_deps: false,
+        default_flavor: None,
+        default_edition: None,
+        deps_as_root: false,
+        silence_warnings: false,
+        warnings_are_errors: false,
+        json_errors: false,
+        additional_named_addresses: {},
+        lint_flag: LintFlag {
+            no_lint: false,
+            lint: false,
+        },
+    },
+    package_table: {
+        "A": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "A",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {
+                        "version": "3",
+                    },
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {},
+                dev_dependencies: {},
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+        "B": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "B",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {
+                        "version": "2",
+                    },
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {},
+                dev_dependencies: {},
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+        "Root": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "Root",
+                    authors: [],
+                    license: None,
+                    edition: None,
+                    flavor: None,
+                    custom_properties: {
+                        "version": "1",
+                    },
+                },
+                addresses: None,
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {
+                    "A": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "deps_only/A",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: false,
+                        },
+                    ),
+                    "B": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "deps_only/B",
+                            ),
+                            subst: None,
+                            digest: None,
+                            dep_override: false,
+                        },
+                    ),
+                },
+                dev_dependencies: {},
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {},
+            source_digest: "ELIDED_FOR_TEST",
+        },
+    },
+}

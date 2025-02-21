@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifier_infix_and_postfix_native_struct.move:4:46
+  │
+4 │     public native struct Foo has copy, drop; has store;
+  │                                              ^^^
+  │                                              │
+  │                                              Unexpected 'has'
+  │                                              Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', 'struct', or 'enum'

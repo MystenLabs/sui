@@ -39,6 +39,7 @@ pub struct TemporaryStore<'backing> {
     store: &'backing dyn BackingStore,
     tx_digest: TransactionDigest,
     input_objects: BTreeMap<ObjectID, Object>,
+    deleted_consensus_objects: BTreeMap<ObjectID, SequenceNumber>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
     mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
@@ -68,11 +69,13 @@ impl<'backing> TemporaryStore<'backing> {
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
+        let deleted_consensus_objects = input_objects.deleted_consensus_objects();
         let objects = input_objects.into_object_map();
         Self {
             store,
             tx_digest,
             input_objects: objects,
+            deleted_consensus_objects,
             lamport_timestamp,
             mutable_input_refs,
             execution_results: ExecutionResultsV2::default(),
@@ -107,6 +110,7 @@ impl<'backing> TemporaryStore<'backing> {
         let results = self.execution_results;
         InnerTemporaryStore {
             input_objects: self.input_objects,
+            deleted_consensus_objects: self.deleted_consensus_objects,
             mutable_inputs: self.mutable_input_refs,
             written: results.written_objects,
             events: TransactionEvents {
@@ -1063,6 +1067,8 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         // You should never be able to try and receive an object after deleting it or writing it in the same
         // transaction since `Receiving` doesn't have copy.
@@ -1079,6 +1085,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
+            use_object_per_epoch_marker_table_v2,
         )
     }
 }

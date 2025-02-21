@@ -98,7 +98,7 @@ echo "Using MSIM_TEST_SEED=$SEED, logging to $LOG_FILE"
 MSIM_TEST_SEED="$SEED" \
 MSIM_TEST_NUM=1 \
 MSIM_WATCHDOG_TIMEOUT_MS=60000 \
-MSIM_TEST_CHECK_DETERMINISM=1
+MSIM_TEST_CHECK_DETERMINISM=1 \
 scripts/simtest/cargo-simtest simtest \
   --color always \
   --test-threads "$NUM_CPUS" \

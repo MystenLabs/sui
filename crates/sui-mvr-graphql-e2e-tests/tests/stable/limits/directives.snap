@@ -1,0 +1,95 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-10:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Directive `@deprecated` is not supported. Supported directives are `@include`, `@skip`",
+      "locations": [
+        {
+          "line": 2,
+          "column": 19
+        }
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 2, lines 12-42:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Directive `@deprecated` is not supported. Supported directives are `@include`, `@skip`",
+      "locations": [
+        {
+          "line": 1,
+          "column": 28
+        }
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 3, lines 44-50:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Directive `@deprecated` is not supported. Supported directives are `@include`, `@skip`",
+      "locations": [
+        {
+          "line": 1,
+          "column": 24
+        }
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 4, lines 52-56:
+//# run-graphql
+Response: {
+  "data": {}
+}
+
+task 5, lines 58-62:
+//# run-graphql
+Response: {
+  "data": {
+    "chainIdentifier": "3989ac57"
+  }
+}
+
+task 6, lines 64-68:
+//# run-graphql
+Response: {
+  "data": {
+    "chainIdentifier": "3989ac57"
+  }
+}
+
+task 7, lines 70-74:
+//# run-graphql
+Response: {
+  "data": {}
+}

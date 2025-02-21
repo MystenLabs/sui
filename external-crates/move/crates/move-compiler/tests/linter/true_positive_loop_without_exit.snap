@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: true
+---
+warning[Lint W02006]: 'loop' without 'break' or 'return'
+  ┌─ tests/linter/true_positive_loop_without_exit.move:5:9
+  │
+5 │         loop {}
+  │         ^^^^^^^ 'loop' without 'break' or 'return'. This code will until it errors, e.g. reaching an 'abort' or running out of gas
+  │
+  = This warning can be suppressed with '#[allow(lint(loop_without_exit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02006]: 'loop' without 'break' or 'return'
+   ┌─ tests/linter/true_positive_loop_without_exit.move:10:9
+   │
+10 │         loop { abort ZERO }
+   │         ^^^^^^^^^^^^^^^^^^^ 'loop' without 'break' or 'return'. This code will until it errors, e.g. reaching an 'abort' or running out of gas
+   │
+   = This warning can be suppressed with '#[allow(lint(loop_without_exit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02006]: 'loop' without 'break' or 'return'
+   ┌─ tests/linter/true_positive_loop_without_exit.move:14:9
+   │  
+14 │ ╭         loop {
+15 │ │             t2();
+16 │ │             t2();
+17 │ │         }
+   │ ╰─────────^ 'loop' without 'break' or 'return'. This code will until it errors, e.g. reaching an 'abort' or running out of gas
+   │  
+   = This warning can be suppressed with '#[allow(lint(loop_without_exit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

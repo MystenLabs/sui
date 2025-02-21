@@ -1,0 +1,102 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: 2024.alpha
+  lint: false
+---
+warning[W02021]: duplicate alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:11:23
+   │
+11 │     use sui::object::{Self, ID, UID};
+   │                       ^^^^ Unnecessary alias 'object' for module 'sui::object'. This alias is provided by default
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:11:23
+   │
+11 │     use sui::object::{Self, ID, UID};
+   │                       ^^^^ Unused 'use' of alias 'object'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:11:29
+   │
+11 │     use sui::object::{Self, ID, UID};
+   │                             ^^ Unnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:11:29
+   │
+11 │     use sui::object::{Self, ID, UID};
+   │                             ^^ Unused 'use' of alias 'ID'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:11:33
+   │
+11 │     use sui::object::{Self, ID, UID};
+   │                                 ^^^ Unnecessary alias 'UID' for module member 'sui::object::UID'. This alias is provided by default
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:11:33
+   │
+11 │     use sui::object::{Self, ID, UID};
+   │                                 ^^^ Unused 'use' of alias 'UID'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:12:14
+   │
+12 │     use sui::transfer;
+   │              ^^^^^^^^ Unnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:12:14
+   │
+12 │     use sui::transfer;
+   │              ^^^^^^^^ Unused 'use' of alias 'transfer'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:13:27
+   │
+13 │     use sui::tx_context::{Self, TxContext};
+   │                           ^^^^ Unnecessary alias 'tx_context' for module 'sui::tx_context'. This alias is provided by default
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:13:27
+   │
+13 │     use sui::tx_context::{Self, TxContext};
+   │                           ^^^^ Unused 'use' of alias 'tx_context'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:13:33
+   │
+13 │     use sui::tx_context::{Self, TxContext};
+   │                                 ^^^^^^^^^ Unnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:13:33
+   │
+13 │     use sui::tx_context::{Self, TxContext};
+   │                                 ^^^^^^^^^ Unused 'use' of alias 'TxContext'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

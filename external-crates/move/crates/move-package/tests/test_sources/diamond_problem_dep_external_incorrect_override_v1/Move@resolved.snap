@@ -1,0 +1,8 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+When resolving dependencies for package Root, conflicting dependencies found:
+At B -> A
+	ADep = { local = "deps_only/ADep-v1" }
+At C -> A
+	ADep = { local = "deps_only/ADep" }

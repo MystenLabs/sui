@@ -1,0 +1,62 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03002]: unbound module
+  ┌─ tests/move_2024/expansion/unbound_named_address.move:3:9
+  │
+3 │     use B::X;
+  │         ^^^^ Invalid 'use'. Unbound module: 'B::X'
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/expansion/unbound_named_address.move:5:12
+  │
+5 │     friend C::M;
+  │            ^ Could not resolve the name 'C'
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/expansion/unbound_named_address.move:6:12
+  │
+6 │     friend D::M::foo;
+  │            ^ Could not resolve the name 'D'
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/expansion/unbound_named_address.move:8:5
+  │
+8 │     struct S {
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/expansion/unbound_named_address.move:9:12
+  │
+9 │         x: E::M::S,
+  │            ^ Could not resolve the name 'E'
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/expansion/unbound_named_address.move:13:17
+   │
+13 │         let x = F::M::S {}; x;
+   │                 ^ Could not resolve the name 'F'
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/expansion/unbound_named_address.move:14:9
+   │
+14 │         G::M::foo();
+   │         ^ Could not resolve the name 'G'
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/expansion/unbound_named_address.move:15:17
+   │
+15 │         let c = H::M::C; c;
+   │                 ^ Could not resolve the name 'H'
+
+error[E03001]: address with no value
+   ┌─ tests/move_2024/expansion/unbound_named_address.move:16:18
+   │
+16 │         let a = @I; a; // suggests declaration
+   │                  ^ address 'I' is not assigned a value. Try assigning it a value when calling the compiler

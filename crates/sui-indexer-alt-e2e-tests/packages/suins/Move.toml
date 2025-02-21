@@ -1,0 +1,9 @@
+[package]
+name = "suins"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+suins = "0x0"

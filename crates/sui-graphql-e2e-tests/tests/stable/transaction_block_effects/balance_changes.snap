@@ -1,0 +1,180 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+C: object(0,0), O: object(0,1), P: object(0,2), Q: object(0,3), R: object(0,4), S: object(0,5)
+
+task 1, lines 6-8:
+//# programmable --sender C --inputs @C 1000 2000 3000 4000 5000
+//> SplitCoins(Gas, [Input(1), Input(2), Input(3), Input(4), Input(5)]);
+//> TransferObjects([NestedResult(0,0), NestedResult(0,1), NestedResult(0,2), NestedResult(0,3), NestedResult(0,4)], Input(0));
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 10-15:
+//# programmable --sender C --inputs object(1,0) object(1,1) object(1,2) object(1,3) object(1,4) @O @P @Q @R @S
+//> TransferObjects([Input(0)], Input(5));
+//> TransferObjects([Input(1)], Input(6));
+//> TransferObjects([Input(2)], Input(7));
+//> TransferObjects([Input(3)], Input(8));
+//> TransferObjects([Input(4)], Input(9));
+mutated: object(0,0), object(1,0), object(1,1), object(1,2), object(1,3), object(1,4)
+gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 5868720, non_refundable_storage_fee: 59280
+
+task 3, line 17:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 19:
+//# advance-epoch
+Epoch advanced: 0
+
+task 5, lines 21-45:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "transactionBlocks": {
+        "nodes": [
+          {
+            "effects": {
+              "balanceChanges": {
+                "pageInfo": {
+                  "hasPreviousPage": false,
+                  "hasNextPage": false,
+                  "startCursor": "eyJpIjowLCJjIjoyfQ",
+                  "endCursor": "eyJpIjo1LCJjIjoyfQ"
+                },
+                "edges": [
+                  {
+                    "node": {
+                      "amount": "3000"
+                    },
+                    "cursor": "eyJpIjowLCJjIjoyfQ"
+                  },
+                  {
+                    "node": {
+                      "amount": "4000"
+                    },
+                    "cursor": "eyJpIjoxLCJjIjoyfQ"
+                  },
+                  {
+                    "node": {
+                      "amount": "1000"
+                    },
+                    "cursor": "eyJpIjoyLCJjIjoyfQ"
+                  },
+                  {
+                    "node": {
+                      "amount": "2000"
+                    },
+                    "cursor": "eyJpIjozLCJjIjoyfQ"
+                  },
+                  {
+                    "node": {
+                      "amount": "5000"
+                    },
+                    "cursor": "eyJpIjo0LCJjIjoyfQ"
+                  },
+                  {
+                    "node": {
+                      "amount": "-1074280"
+                    },
+                    "cursor": "eyJpIjo1LCJjIjoyfQ"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 6, lines 47-71:
+//# run-graphql --cursors {"i":2,"c":1}
+Response: {
+  "data": {
+    "address": {
+      "transactionBlocks": {
+        "nodes": [
+          {
+            "effects": {
+              "balanceChanges": {
+                "pageInfo": {
+                  "hasPreviousPage": true,
+                  "hasNextPage": true,
+                  "startCursor": "eyJpIjozLCJjIjoxfQ",
+                  "endCursor": "eyJpIjo0LCJjIjoxfQ"
+                },
+                "edges": [
+                  {
+                    "node": {
+                      "amount": "2000"
+                    },
+                    "cursor": "eyJpIjozLCJjIjoxfQ"
+                  },
+                  {
+                    "node": {
+                      "amount": "5000"
+                    },
+                    "cursor": "eyJpIjo0LCJjIjoxfQ"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 7, lines 73-97:
+//# run-graphql --cursors {"i":3,"c":1}
+Response: {
+  "data": {
+    "address": {
+      "transactionBlocks": {
+        "nodes": [
+          {
+            "effects": {
+              "balanceChanges": {
+                "pageInfo": {
+                  "hasPreviousPage": false,
+                  "hasNextPage": true,
+                  "startCursor": "eyJpIjowLCJjIjoxfQ",
+                  "endCursor": "eyJpIjoyLCJjIjoxfQ"
+                },
+                "edges": [
+                  {
+                    "node": {
+                      "amount": "3000"
+                    },
+                    "cursor": "eyJpIjowLCJjIjoxfQ"
+                  },
+                  {
+                    "node": {
+                      "amount": "4000"
+                    },
+                    "cursor": "eyJpIjoxLCJjIjoxfQ"
+                  },
+                  {
+                    "node": {
+                      "amount": "1000"
+                    },
+                    "cursor": "eyJpIjoyLCJjIjoxfQ"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

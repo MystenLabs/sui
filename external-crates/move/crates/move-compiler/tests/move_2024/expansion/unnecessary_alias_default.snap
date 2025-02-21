@@ -1,0 +1,55 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W02021]: duplicate alias
+  ┌─ tests/move_2024/expansion/unnecessary_alias_default.move:2:14
+  │
+2 │     use std::vector;
+  │              ^^^^^^ Unnecessary alias 'vector' for module 'std::vector'. This alias is provided by default
+  │
+  = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/expansion/unnecessary_alias_default.move:2:14
+  │
+2 │     use std::vector;
+  │              ^^^^^^ Unused 'use' of alias 'vector'. Consider removing it
+  │
+  = This alias does not shadow the built-in type 'vector' in type annotations.
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+  ┌─ tests/move_2024/expansion/unnecessary_alias_default.move:3:23
+  │
+3 │     use std::option::{Self, Option};
+  │                       ^^^^ Unnecessary alias 'option' for module 'std::option'. This alias is provided by default
+  │
+  = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/expansion/unnecessary_alias_default.move:3:23
+  │
+3 │     use std::option::{Self, Option};
+  │                       ^^^^ Unused 'use' of alias 'option'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+  ┌─ tests/move_2024/expansion/unnecessary_alias_default.move:3:29
+  │
+3 │     use std::option::{Self, Option};
+  │                             ^^^^^^ Unnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default
+  │
+  = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/expansion/unnecessary_alias_default.move:3:29
+  │
+3 │     use std::option::{Self, Option};
+  │                             ^^^^^^ Unused 'use' of alias 'Option'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

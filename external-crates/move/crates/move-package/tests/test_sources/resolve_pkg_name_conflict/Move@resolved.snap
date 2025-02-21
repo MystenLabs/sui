@@ -1,0 +1,8 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+When resolving dependencies for package Root-rename, conflicting versions of package C-rename found:
+At A-rename -> C-rename
+	C-rename = { local = "deps_only/C-rename-v3" }
+At B -> C-rename
+	C-rename = { local = "deps_only/C-rename-v2" }

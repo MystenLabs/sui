@@ -1,0 +1,127 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09003]: unused assignment
+  ┌─ tests/move_check/locals/assign_partial_resource.move:6:21
+  │
+6 │         if (cond) { r = R{}; };
+  │                     ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06001]: unused value without 'drop'
+  ┌─ tests/move_check/locals/assign_partial_resource.move:7:9
+  │
+2 │     struct R {}
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+5 │         let r: R;
+  │                - The type '0x8675309::M::R' does not have the ability 'drop'
+6 │         if (cond) { r = R{}; };
+  │                     - The variable might contain a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
+7 │         r = R{};
+  │         ^ Invalid assignment to variable 'r'
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_check/locals/assign_partial_resource.move:13:29
+   │
+13 │         if (cond) {} else { r = R{}; };
+   │                             ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/assign_partial_resource.move:14:9
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+12 │         let r: R;
+   │                - The type '0x8675309::M::R' does not have the ability 'drop'
+13 │         if (cond) {} else { r = R{}; };
+   │                             - The variable might contain a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
+14 │         r = R{};
+   │         ^ Invalid assignment to variable 'r'
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_check/locals/assign_partial_resource.move:20:24
+   │
+20 │         while (cond) { r = R{} };
+   │                        ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/assign_partial_resource.move:20:24
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+19 │         let r: R;
+   │                - The type '0x8675309::M::R' does not have the ability 'drop'
+20 │         while (cond) { r = R{} };
+   │                        ^
+   │                        │
+   │                        Invalid assignment to variable 'r'
+   │                        The variable might contain a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/assign_partial_resource.move:21:9
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+19 │         let r: R;
+   │                - The type '0x8675309::M::R' does not have the ability 'drop'
+20 │         while (cond) { r = R{} };
+   │                        - The variable might contain a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
+21 │         r = R{};
+   │         ^ Invalid assignment to variable 'r'
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_check/locals/assign_partial_resource.move:27:16
+   │
+27 │         loop { r = R{} }
+   │                ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/assign_partial_resource.move:27:16
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+26 │         let r: R;
+   │                - The type '0x8675309::M::R' does not have the ability 'drop'
+27 │         loop { r = R{} }
+   │                ^
+   │                │
+   │                Invalid assignment to variable 'r'
+   │                The variable might contain a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/assign_partial_resource.move:31:21
+   │
+30 │     fun t5<T>(cond: bool, x: T, y: T): (T, T) {
+   │            -              -  - The type 'T' does not have the ability 'drop'
+   │            │              │   
+   │            │              The variable contains a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
+   │            To satisfy the constraint, the 'drop' ability would need to be added here
+31 │         if (cond) { x = y };
+   │                     ^ Invalid assignment to variable 'x'
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/assign_partial_resource.move:32:13
+   │
+31 │         if (cond) { x = y };
+   │                         -
+   │                         │
+   │                         The value of 'y' might have been previously moved here.
+   │                         Suggestion: use 'copy y' to avoid the move.
+32 │         (x, y)
+   │             ^ Invalid usage of previously moved variable 'y'.

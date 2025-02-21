@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/parsing/address_normal_usage.move:1:1
+  │
+1 │ address 0x2 {
+  │ ^^^^^^^ 'address' blocks are deprecated. Use addresses directly in module definitions instead.
+2 │ module m {
+  │        - Replace with '0x2::m'
+3 │ }
+4 │ module m2 {
+  │        -- Replace with '0x2::m2'
+5 │ }
+6 │ module m3 {
+  │        -- Replace with '0x2::m3'

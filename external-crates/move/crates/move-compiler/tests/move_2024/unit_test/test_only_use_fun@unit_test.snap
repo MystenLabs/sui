@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/unit_test/test_only_use_fun.move:6:5
+  │
+6 │     use fun foo as X.f;
+  │     ^^^^^^^^^^^^^^^^^^^ Unused 'use fun' of 'a::m::X.f'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

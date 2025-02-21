@@ -1,0 +1,192 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 29 tasks
+
+init:
+A: object(0,0)
+
+task 1, line 8:
+//# advance-epoch
+Epoch advanced: 0
+
+task 2, line 10:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 3, lines 12-37:
+//# publish --sender A --gas-budget 9999999999
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5920400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, line 39:
+//# run P0::m::new --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 41:
+//# run P0::m::new --sender A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 43:
+//# run P0::m::new --sender A
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 45:
+//# run P0::m::new --sender A
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 47:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 9, line 49:
+//# advance-epoch
+Epoch advanced: 1
+
+task 10, lines 51-63:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "validatorSet": {
+        "activeValidators": {
+          "nodes": [
+            {
+              "apy": 0,
+              "name": "validator-0"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 11, line 65:
+//# run P0::m::new --sender A
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, line 67:
+//# run P0::m::new --sender A
+created: object(12,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, line 69:
+//# run P0::m::new --sender A
+created: object(13,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, line 71:
+//# run P0::m::new --sender A
+created: object(14,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 15, line 73:
+//# run P0::m::new --sender A
+created: object(15,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, line 75:
+//# run P0::m::new --sender A
+created: object(16,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 17, line 77:
+//# run P0::m::new --sender A
+created: object(17,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 18, line 79:
+//# run P0::m::new --sender A
+created: object(18,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 19, line 81:
+//# run P0::m::new --sender A
+created: object(19,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 20, line 83:
+//# run P0::m::new --sender A
+created: object(20,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 21, line 85:
+//# run P0::m::new --sender A
+created: object(21,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 22, line 87:
+//# run P0::m::new --sender A
+created: object(22,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 23, line 89:
+//# run P0::m::new --sender A
+created: object(23,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 24, line 91:
+//# run P0::m::new --sender A
+created: object(24,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 25, line 93:
+//# run P0::m::new --sender A
+created: object(25,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 26, line 95:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 27, lines 97-99:
+//# advance-epoch
+Epoch advanced: 2
+
+task 28, lines 101-118:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "validatorSet": {
+        "activeValidators": {
+          "nodes": [
+            {
+              "apy": 1,
+              "name": "validator-0",
+              "reportRecords": {
+                "nodes": []
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

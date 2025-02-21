@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09009]: unused struct field
+  ┌─ tests/move_check/typing/unused_id_field.move:5:26
+  │
+5 │     struct Obj has key { id: sui::object::UID }
+  │                          ^^ The 'id' field of the 'Obj' type is unused
+  │
+  = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

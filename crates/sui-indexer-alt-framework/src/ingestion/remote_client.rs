@@ -113,7 +113,7 @@ pub(crate) mod tests {
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
     use axum::http::StatusCode;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Mutex;
     use tokio_util::sync::CancellationToken;
     use wiremock::{
         matchers::{method, path_regex},
@@ -133,7 +133,7 @@ pub(crate) mod tests {
     }
 
     fn remote_test_client(uri: String) -> IngestionClient {
-        IngestionClient::new_remote(Url::parse(&uri).unwrap(), Arc::new(test_metrics())).unwrap()
+        IngestionClient::new_remote(Url::parse(&uri).unwrap(), test_metrics()).unwrap()
     }
 
     fn assert_http_error(error: Error, checkpoint: u64, code: StatusCode) {

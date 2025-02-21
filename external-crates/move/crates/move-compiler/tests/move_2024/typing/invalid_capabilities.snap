@@ -1,0 +1,150 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_2024/typing/invalid_capabilities.move:8:37
+  │
+3 │     public struct Nothing { }
+  │                   ------- To satisfy the constraint, the 'copy' ability would need to be added here
+  ·
+8 │     public enum ECopy0 has copy { V(Nothing) }
+  │                                     ^^^^^^^
+  │                                     │
+  │                                     Invalid field type. The enum was declared with the ability 'copy' so all fields require the ability 'copy'
+  │                                     The type '0x42::m::Nothing' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_2024/typing/invalid_capabilities.move:9:37
+  │
+4 │     public struct Drop has drop { }
+  │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+  ·
+9 │     public enum ECopy1 has copy { V(Drop) }
+  │                                     ^^^^
+  │                                     │
+  │                                     Invalid field type. The enum was declared with the ability 'copy' so all fields require the ability 'copy'
+  │                                     The type '0x42::m::Drop' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/invalid_capabilities.move:10:37
+   │
+ 6 │     public struct Store has store { }
+   │                   ----- To satisfy the constraint, the 'copy' ability would need to be added here
+   ·
+10 │     public enum ECopy2 has copy { V(Store) }
+   │                                     ^^^^^
+   │                                     │
+   │                                     Invalid field type. The enum was declared with the ability 'copy' so all fields require the ability 'copy'
+   │                                     The type '0x42::m::Store' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/invalid_capabilities.move:13:12
+   │
+ 3 │     public struct Nothing { }
+   │                   ------- To satisfy the constraint, the 'copy' ability would need to be added here
+   ·
+13 │         V1(Nothing)
+   │            ^^^^^^^
+   │            │
+   │            Invalid field type. The enum was declared with the ability 'copy' so all fields require the ability 'copy'
+   │            The type '0x42::m::Nothing' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/invalid_capabilities.move:16:37
+   │
+ 3 │     public struct Nothing { }
+   │                   ------- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+16 │     public enum EDrop0 has drop { V(Nothing) }
+   │                                     ^^^^^^^
+   │                                     │
+   │                                     Invalid field type. The enum was declared with the ability 'drop' so all fields require the ability 'drop'
+   │                                     The type '0x42::m::Nothing' does not have the ability 'drop'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/invalid_capabilities.move:17:37
+   │
+ 5 │     public struct Copy has copy { }
+   │                   ---- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+17 │     public enum EDrop1 has drop { V(Copy) }
+   │                                     ^^^^
+   │                                     │
+   │                                     Invalid field type. The enum was declared with the ability 'drop' so all fields require the ability 'drop'
+   │                                     The type '0x42::m::Copy' does not have the ability 'drop'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/invalid_capabilities.move:18:37
+   │
+ 6 │     public struct Store has store { }
+   │                   ----- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+18 │     public enum EDrop2 has drop { V(Store) }
+   │                                     ^^^^^
+   │                                     │
+   │                                     Invalid field type. The enum was declared with the ability 'drop' so all fields require the ability 'drop'
+   │                                     The type '0x42::m::Store' does not have the ability 'drop'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/invalid_capabilities.move:21:12
+   │
+ 3 │     public struct Nothing { }
+   │                   ------- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+21 │         V1(Nothing)
+   │            ^^^^^^^
+   │            │
+   │            Invalid field type. The enum was declared with the ability 'drop' so all fields require the ability 'drop'
+   │            The type '0x42::m::Nothing' does not have the ability 'drop'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/invalid_capabilities.move:24:39
+   │
+ 3 │     public struct Nothing { }
+   │                   ------- To satisfy the constraint, the 'store' ability would need to be added here
+   ·
+24 │     public enum EStore0 has store { V(Nothing) }
+   │                                       ^^^^^^^
+   │                                       │
+   │                                       Invalid field type. The enum was declared with the ability 'store' so all fields require the ability 'store'
+   │                                       The type '0x42::m::Nothing' does not have the ability 'store'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/invalid_capabilities.move:25:39
+   │
+ 5 │     public struct Copy has copy { }
+   │                   ---- To satisfy the constraint, the 'store' ability would need to be added here
+   ·
+25 │     public enum EStore1 has store { V(Copy) }
+   │                                       ^^^^
+   │                                       │
+   │                                       Invalid field type. The enum was declared with the ability 'store' so all fields require the ability 'store'
+   │                                       The type '0x42::m::Copy' does not have the ability 'store'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/invalid_capabilities.move:26:39
+   │
+ 4 │     public struct Drop has drop { }
+   │                   ---- To satisfy the constraint, the 'store' ability would need to be added here
+   ·
+26 │     public enum EStore2 has store { V(Drop) }
+   │                                       ^^^^
+   │                                       │
+   │                                       Invalid field type. The enum was declared with the ability 'store' so all fields require the ability 'store'
+   │                                       The type '0x42::m::Drop' does not have the ability 'store'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/invalid_capabilities.move:29:12
+   │
+ 3 │     public struct Nothing { }
+   │                   ------- To satisfy the constraint, the 'store' ability would need to be added here
+   ·
+29 │         V1(Nothing)
+   │            ^^^^^^^
+   │            │
+   │            Invalid field type. The enum was declared with the ability 'store' so all fields require the ability 'store'
+   │            The type '0x42::m::Nothing' does not have the ability 'store'

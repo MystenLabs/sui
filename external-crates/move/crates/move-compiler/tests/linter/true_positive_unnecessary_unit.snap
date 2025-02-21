@@ -1,0 +1,157 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: true
+---
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+  ┌─ tests/linter/true_positive_unnecessary_unit.move:6:16
+  │
+6 │         if (b) () else { x = 1 };
+  │             -  ^^ Unnecessary unit '()'
+  │             │   
+  │             Consider negating the 'if' condition and simplifying
+  │
+  = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+  = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+  ┌─ tests/linter/true_positive_unnecessary_unit.move:8:16
+  │
+8 │         if (b) {} else { x = 1 };
+  │             -  ^^ Unnecessary unit '()'
+  │             │   
+  │             Consider negating the 'if' condition and simplifying
+  │
+  = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+  = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:10:16
+   │
+10 │         if (b) { () } else { x = 1 };
+   │             -  ^^^^^^ Unnecessary unit '()'
+   │             │   
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:12:16
+   │  
+12 │           if (b) {
+   │               - Consider negating the 'if' condition and simplifying
+   │ ╭────────────────^
+13 │ │             // new line and comment does not suppress it
+14 │ │         } else { x = 1 };
+   │ ╰─────────^ Unnecessary unit '()'
+   │  
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:21:31
+   │
+21 │         if (b) { x = 1 } else ();
+   │         ----------------------^^
+   │         │                     │
+   │         │                     Unnecessary 'else ()'.
+   │         An 'if' without an 'else' has an implicit 'else ()'. Consider removing the 'else' branch
+   │
+   = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:23:31
+   │
+23 │         if (b) { x = 1 } else {};
+   │         ----------------------^^
+   │         │                     │
+   │         │                     Unnecessary 'else ()'.
+   │         An 'if' without an 'else' has an implicit 'else ()'. Consider removing the 'else' branch
+   │
+   = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:25:31
+   │
+25 │         if (b) { x = 1 } else { () };
+   │         ----------------------^^^^^^
+   │         │                     │
+   │         │                     Unnecessary 'else ()'.
+   │         An 'if' without an 'else' has an implicit 'else ()'. Consider removing the 'else' branch
+   │
+   = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:27:31
+   │    
+27 │   ╭         if (b) { x = 1 } else {
+   │ ╭─────────────────────────────────^
+28 │ │ │             // new line and comment does not suppress it
+29 │ │ │         };
+   │ ╰─│─────────^ Unnecessary 'else ()'.
+   │   ╰─────────' An 'if' without an 'else' has an implicit 'else ()'. Consider removing the 'else' branch
+   │    
+   = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:34:9
+   │
+34 │         ();
+   │         ^^ Unnecessary unit in sequence '();'. Consider removing
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:37:18
+   │
+37 │         if (b) { (); () } else { x = 1 }; // doesn't trigger if/else case
+   │                  ^^ Unnecessary unit in sequence '();'. Consider removing
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:39:33
+   │
+39 │         if (b) { x = 1 } else { (); (); () }; // doesn't trigger if/else case
+   │                                 ^^ Unnecessary unit in sequence '();'. Consider removing
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:39:37
+   │
+39 │         if (b) { x = 1 } else { (); (); () }; // doesn't trigger if/else case
+   │                                     ^^ Unnecessary unit in sequence '();'. Consider removing
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:41:9
+   │
+41 │         {};
+   │         ^^ Unnecessary unit in sequence '();'. Consider removing
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:42:9
+   │
+42 │         { () }; // inner isn't an error but the outer is
+   │         ^^^^^^ Unnecessary unit in sequence '();'. Consider removing
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:43:11
+   │
+43 │         { (); }; // inner is an error but outer isn't
+   │           ^^ Unnecessary unit in sequence '();'. Consider removing
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

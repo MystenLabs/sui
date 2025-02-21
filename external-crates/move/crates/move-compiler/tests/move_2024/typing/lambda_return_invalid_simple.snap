@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/lambda_return_invalid_simple.move:8:23
+  │
+8 │         call!<u64>(|| return &0);
+  │               ---     ^^^^^^^^^
+  │               │       │      │
+  │               │       │      Found: '&{integer}'. It is not compatible with the other type.
+  │               │       Invalid lambda return
+  │               Found: 'u64'. It is not compatible with the other type.
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/lambda_return_invalid_simple.move:9:24
+  │
+9 │         call!<&u64>(|| return 0);
+  │               ----     ^^^^^^^^
+  │               │        │
+  │               │        Invalid lambda return
+  │               │        Found: integer. It is not compatible with the other type.
+  │               Found: '&u64'. It is not compatible with the other type.
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_return_invalid_simple.move:10:30
+   │
+10 │         call!<(&u64, u8)>(|| return (&0, 1, 3));
+   │               ----------     ^^^^^^^^^^^^^^^^^
+   │               │              │      │
+   │               │              │      Found expression list of length 3: '(&{integer}, {integer}, {integer})'. It is not compatible with the other type of length 2.
+   │               │              Invalid lambda return
+   │               Found expression list of length 2: '(&u64, u8)'. It is not compatible with the other type of length 3.

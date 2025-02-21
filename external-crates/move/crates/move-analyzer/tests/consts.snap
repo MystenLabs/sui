@@ -1,0 +1,163 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== M8.move ========================================================
+-- test 0 -------------------
+use line: 3, use_ndx: 0
+Use: 'MY_BOOL', start: 10, end: 17
+Def: 'MY_BOOL', line: 2, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::MY_BOOL: bool = false
+
+-- test 1 -------------------
+use line: 5, use_ndx: 0
+Use: 'PAREN', start: 10, end: 15
+Def: 'PAREN', line: 4, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::PAREN: bool = true
+
+-- test 2 -------------------
+use line: 7, use_ndx: 0
+Use: 'BLOCK', start: 10, end: 15
+Def: 'BLOCK', line: 6, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::BLOCK: bool = true
+
+-- test 3 -------------------
+use line: 9, use_ndx: 0
+Use: 'MY_ADDRESS', start: 10, end: 20
+Def: 'MY_ADDRESS', line: 8, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::MY_ADDRESS: address = @0x70DD
+
+-- test 4 -------------------
+use line: 11, use_ndx: 0
+Use: 'BYTES', start: 10, end: 15
+Def: 'BYTES', line: 10, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::BYTES: vector<u8> = [104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]
+
+-- test 5 -------------------
+use line: 13, use_ndx: 0
+Use: 'HEX_BYTES', start: 10, end: 19
+Def: 'HEX_BYTES', line: 12, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::HEX_BYTES: vector<u8> = [222, 173, 190, 239]
+
+-- test 6 -------------------
+use line: 15, use_ndx: 0
+Use: 'NUMS', start: 10, end: 14
+Def: 'NUMS', line: 14, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::NUMS: vector<u16> = [1, 2]
+
+-- test 7 -------------------
+use line: 17, use_ndx: 0
+Use: 'RULE', start: 10, end: 14
+Def: 'RULE', line: 16, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::RULE: bool = true && false
+
+-- test 8 -------------------
+use line: 19, use_ndx: 0
+Use: 'CAP', start: 10, end: 13
+Def: 'CAP', line: 18, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::CAP: u64 = 10 * 100 + 1
+
+-- test 9 -------------------
+use line: 21, use_ndx: 0
+Use: 'SHIFTY', start: 10, end: 16
+Def: 'SHIFTY', line: 20, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::SHIFTY: u8 = 1 << 1
+
+-- test 10 -------------------
+use line: 23, use_ndx: 0
+Use: 'HALF_MAX', start: 10, end: 18
+Def: 'HALF_MAX', line: 22, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::HALF_MAX: u128 = 340282366920938463463374607431768211455 / 2
+
+-- test 11 -------------------
+use line: 25, use_ndx: 0
+Use: 'REM', start: 10, end: 13
+Def: 'REM', line: 24, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::REM: u256 = 57896044618658097711785492504343953926634992332820282019728792003956564819968 % 654321
+
+-- test 12 -------------------
+use line: 27, use_ndx: 0
+Use: 'USE_CONST', start: 10, end: 19
+Def: 'USE_CONST', line: 26, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::USE_CONST: bool = Symbols::M8::EQUAL == false
+
+-- test 13 -------------------
+use line: 27, use_ndx: 1
+Use: 'EQUAL', start: 28, end: 33
+Def: 'EQUAL', line: 28, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::EQUAL: bool = 1 == 1
+
+-- test 14 -------------------
+use line: 29, use_ndx: 0
+Use: 'EQUAL', start: 10, end: 15
+Def: 'EQUAL', line: 28, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::EQUAL: bool = 1 == 1
+
+-- test 15 -------------------
+use line: 31, use_ndx: 0
+Use: 'ANOTHER_USE_CONST', start: 10, end: 27
+Def: 'ANOTHER_USE_CONST', line: 30, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::ANOTHER_USE_CONST: bool = Symbols::M8::EQUAL == false
+
+-- test 16 -------------------
+use line: 31, use_ndx: 2
+Use: 'EQUAL', start: 49, end: 54
+Def: 'EQUAL', line: 28, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::EQUAL: bool = 1 == 1
+
+-- test 17 -------------------
+use line: 34, use_ndx: 0
+Use: 'ERROR_CONST', start: 10, end: 21
+Def: 'ERROR_CONST', line: 33, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::ERROR_CONST: u64 = 42
+
+-- test 18 -------------------
+use line: 37, use_ndx: 0
+Use: 'ERROR_CONST', start: 16, end: 27
+Def: 'ERROR_CONST', line: 33, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::ERROR_CONST: u64 = 42
+
+-- test 19 -------------------
+use line: 37, use_ndx: 1
+Use: 'ERROR_CONST', start: 35, end: 46
+Def: 'ERROR_CONST', line: 33, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::ERROR_CONST: u64 = 42

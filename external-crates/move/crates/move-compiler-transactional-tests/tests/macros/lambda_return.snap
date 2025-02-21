@@ -1,0 +1,12 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 2, line 26:
+//# run 42::m::t --args true
+return values: [2, 8, 16]
+
+task 3, line 28:
+//# run 42::m::t --args false
+return values: [0, 4, 16]

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -10,9 +9,13 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
-use crate::{metrics::IndexerMetrics, pipeline::Break, task::TrySpawnStreamExt};
+use crate::{
+    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
+    pipeline::Break,
+    task::TrySpawnStreamExt,
+};
 
-use super::Indexed;
+use super::IndexedCheckpoint;
 
 /// Implementors of this trait are responsible for transforming checkpoint into rows for their
 /// table. The `FANOUT` associated value controls how many concurrent workers will be used to
@@ -41,23 +44,26 @@ pub trait Processor {
 /// The task will shutdown if the `cancel` token is cancelled, or if any of the workers encounters
 /// an error -- there is no retry logic at this level.
 pub(super) fn processor<P: Processor + Send + Sync + 'static>(
-    processor: P,
+    processor: Arc<P>,
     rx: mpsc::Receiver<Arc<CheckpointData>>,
-    tx: mpsc::Sender<Indexed<P>>,
+    tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         info!(pipeline = P::NAME, "Starting processor");
-        let latest_processed_checkpoint = Arc::new(AtomicU64::new(0));
-        let processor = Arc::new(processor);
+        let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<P>(
+            &metrics.processed_checkpoint_timestamp_lag,
+            &metrics.latest_processed_checkpoint_timestamp_lag_ms,
+            &metrics.latest_processed_checkpoint,
+        );
 
         match ReceiverStream::new(rx)
             .try_for_each_spawned(P::FANOUT, |checkpoint| {
                 let tx = tx.clone();
                 let metrics = metrics.clone();
                 let cancel = cancel.clone();
-                let latest_processed_checkpoint = latest_processed_checkpoint.clone();
+                let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
                 let processor = processor.clone();
 
                 async move {
@@ -90,24 +96,7 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
                         "Processed checkpoint",
                     );
 
-                    let lag = chrono::Utc::now().timestamp_millis() - timestamp_ms as i64;
-                    metrics
-                        .processed_checkpoint_timestamp_lag
-                        .with_label_values(&[P::NAME])
-                        .observe((lag as f64) / 1000.0);
-
-                    let prev = latest_processed_checkpoint
-                        .fetch_max(cp_sequence_number, std::sync::atomic::Ordering::Relaxed);
-                    if cp_sequence_number > prev {
-                        metrics
-                            .latest_processed_checkpoint
-                            .with_label_values(&[P::NAME])
-                            .set(cp_sequence_number as i64);
-                        metrics
-                            .latest_processed_checkpoint_timestamp_lag_ms
-                            .with_label_values(&[P::NAME])
-                            .set(lag);
-                    }
+                    checkpoint_lag_reporter.report_lag(cp_sequence_number, timestamp_ms);
 
                     metrics
                         .total_handler_checkpoints_processed
@@ -119,7 +108,7 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
                         .with_label_values(&[P::NAME])
                         .inc_by(values.len() as u64);
 
-                    tx.send(Indexed::new(
+                    tx.send(IndexedCheckpoint::new(
                         epoch,
                         cp_sequence_number,
                         tx_hi,

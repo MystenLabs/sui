@@ -1,0 +1,63 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04012]: invalid type for constant
+  ┌─ tests/move_check/typing/constant_non_base_type.move:3:15
+  │
+3 │     const C1: &u64 = &0;
+  │               ^^^^
+  │               │
+  │               Unpermitted constant type
+  │               Found: '&u64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04013]: invalid statement or expression in constant
+  ┌─ tests/move_check/typing/constant_non_base_type.move:3:22
+  │
+3 │     const C1: &u64 = &0;
+  │                      ^^ References (and reference operations) are not supported in constants
+
+error[E04006]: invalid subtype
+  ┌─ tests/move_check/typing/constant_non_base_type.move:4:15
+  │
+4 │     const C2: &mut u64 = &0;
+  │               ^^^^^^^^   -- Given: '&{integer}'
+  │               │           
+  │               Invalid constant signature
+  │               Expected: '&mut u64'
+
+error[E04012]: invalid type for constant
+  ┌─ tests/move_check/typing/constant_non_base_type.move:4:15
+  │
+4 │     const C2: &mut u64 = &0;
+  │               ^^^^^^^^
+  │               │
+  │               Unpermitted constant type
+  │               Found: '&mut u64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04013]: invalid statement or expression in constant
+  ┌─ tests/move_check/typing/constant_non_base_type.move:4:26
+  │
+4 │     const C2: &mut u64 = &0;
+  │                          ^^ References (and reference operations) are not supported in constants
+
+error[E04012]: invalid type for constant
+  ┌─ tests/move_check/typing/constant_non_base_type.move:5:15
+  │
+5 │     const C3: () = ();
+  │               ^^
+  │               │
+  │               Unpermitted constant type
+  │               Found: '()'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+  ┌─ tests/move_check/typing/constant_non_base_type.move:6:15
+  │
+6 │     const C4: (address, bool) = (@0x0, false);
+  │               ^^^^^^^^^^^^^^^
+  │               │
+  │               Unpermitted constant type
+  │               Found: '(_, _)'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'

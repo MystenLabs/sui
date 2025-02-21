@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09008]: unused function
+  ┌─ tests/move_check/typing/unused_functions.move:3:9
+  │
+3 │     fun init() {
+  │         ^^^^ The non-'public', non-'entry' function 'init' is never called. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09008]: unused function
+   ┌─ tests/move_check/typing/unused_functions.move:11:9
+   │
+11 │     fun unused_private() {}
+   │         ^^^^^^^^^^^^^^ The non-'public', non-'entry' function 'unused_private' is never called. Consider removing it.
+   │
+   = This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

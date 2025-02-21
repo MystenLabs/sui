@@ -1,0 +1,96 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+task 1, line 6:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, line 8:
+//# advance-epoch --create-random-state
+Epoch advanced: 0
+
+task 3, lines 10-46:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "protocolConfigs": {
+        "protocolVersion": 51,
+        "randomBeacon": {
+          "value": true
+        }
+      }
+    },
+    "object": {
+      "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
+      "version": 2,
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::random::Random"
+          },
+          "json": {
+            "id": "0x0000000000000000000000000000000000000000000000000000000000000008",
+            "inner": {
+              "id": "0xeab190dea45779ed5f2cdd9191c485333236b441d7488fb0676dac4959fbd383",
+              "version": "1"
+            }
+          }
+        }
+      }
+    },
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "kind": {
+            "__typename": "EndOfEpochTransaction",
+            "transactions": {
+              "edges": [
+                {
+                  "cursor": "eyJpIjowLCJjIjoyfQ",
+                  "node": {
+                    "__typename": "RandomnessStateCreateTransaction"
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxLCJjIjoyfQ",
+                  "node": {
+                    "__typename": "ChangeEpochTransaction"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5, line 52:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 6, lines 54-69:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "kind": {
+            "__typename": "RandomnessStateUpdateTransaction",
+            "epoch": {
+              "epochId": 0
+            },
+            "randomnessRound": 0,
+            "randomBytes": "SGVsbG8gU3Vp",
+            "randomnessObjInitialSharedVersion": 2
+          }
+        }
+      ]
+    }
+  }
+}

@@ -40,7 +40,6 @@ pub(crate) mod tests {
     use crate::ingestion::client::IngestionClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
-    use std::sync::Arc;
     use sui_storage::blob::{Blob, BlobEncoding};
     use tokio_util::sync::CancellationToken;
 
@@ -51,8 +50,7 @@ pub(crate) mod tests {
         let test_checkpoint = test_checkpoint_data(1);
         tokio::fs::write(&path, &test_checkpoint).await.unwrap();
 
-        let metrics = Arc::new(test_metrics());
-        let local_client = IngestionClient::new_local(tempdir, metrics);
+        let local_client = IngestionClient::new_local(tempdir, test_metrics());
         let checkpoint = local_client
             .fetch(1, &CancellationToken::new())
             .await

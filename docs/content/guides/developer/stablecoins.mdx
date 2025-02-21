@@ -67,20 +67,20 @@ Before you start building the sample app to perform a USDC transfer, ensure you 
 
 To begin, create a new project directory (`usdc-transfer-app`, for example) and initialize it with pnpm:
 
-```bash
-pnpm init
+```sh
+$ pnpm init
 ```
 
 To keep a small footprint, the instruction uses [Parcel](https://parceljs.org/) to render the example React-based app. You can use a more robust framework, like Next.js, or a different package manager, but you must modify the steps appropriately. 
 
-```bash
-pnpm add react react-dom parcel
+```sh
+$ pnpm add react react-dom parcel
 ```
 
 Install Sui dependencies next:
 
-```bash
-pnpm add @mysten/dapp-kit @mysten/sui @tanstack/react-query
+```sh
+$ pnpm add @mysten/dapp-kit @mysten/sui @tanstack/react-query
 ```
 
 Finally, update your `package.json` to include the following script:
@@ -131,8 +131,8 @@ Finally, create an `App.js` file at the project root. When complete, this file w
 
 Start the development server to make sure the default app runs using the following command in the root of your project:
 
-```bash
-pnpm start
+```sh
+$ pnpm start
 ```
 
 Open a browser to `localhost:1234` to make sure the Hello World text appears.

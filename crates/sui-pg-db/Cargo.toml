@@ -1,0 +1,22 @@
+[package]
+name = "sui-pg-db"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+bb8 = "0.8.5"
+clap.workspace = true
+diesel.workspace = true
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+diesel_migrations.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+telemetry-subscribers.workspace = true

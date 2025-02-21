@@ -304,15 +304,14 @@ impl SharedTestingConfig {
 
             let function_name = IdentStr::new(function_name).unwrap();
 
-            let serialized_return_values_result = vm_instance
-                .execute_function_bypass_visibility_with_tracer_if_enabled(
-                    &module_id,
-                    function_name,
-                    vec![], /* no ty args for now */
-                    serialize_values(arguments.iter()),
-                    tracer,
-                    gas_meter,
-                );
+            let serialized_return_values_result = vm_instance.execute_function_bypass_visibility(
+                &module_id,
+                function_name,
+                vec![], /* no ty args for now */
+                serialize_values(arguments.iter()),
+                gas_meter,
+                tracer,
+            );
             serialized_return_values_result.map(|res| {
                 (
                     res.return_values

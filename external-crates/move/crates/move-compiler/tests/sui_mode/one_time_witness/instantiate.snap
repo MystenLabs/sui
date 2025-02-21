@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02005]: invalid one-time witness usage
+   ┌─ tests/sui_mode/one_time_witness/instantiate.move:12:9
+   │
+12 │         M { dummy: false }
+   │         ^^^^^^^^^^^^^^^^^^ Invalid one-time witness construction. One-time witness types cannot be created manually, but are passed as an argument 'init'
+   │
+   = One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.

@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/hlir/dead_code_nested_block.move:3:11
+  │
+3 │ fun test0(cond: bool): u64 {
+  │           ^^^^ Unused parameter 'cond'. Consider removing or prefixing with an underscore: '_cond'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_2024/hlir/dead_code_nested_block.move:5:9
+  │
+5 │         return 'a 5;
+  │         ^^^^^^^^^^^ Any code after this expression will not be reached
+6 │         0
+  │         - Unreachable code. This statement (and any following statements) will not be executed.
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/hlir/dead_code_nested_block.move:13:13
+   │
+13 │             return 'a 5
+   │             ^^^^^^^^^^^ Any code after this expression will not be reached
+14 │         };
+15 │         0
+   │         - Unreachable code. This statement (and any following statements) will not be executed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

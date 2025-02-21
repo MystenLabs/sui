@@ -1,0 +1,5 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/struct_defs/module_struct_shared_name.mvir
+---
+processed 2 tasks

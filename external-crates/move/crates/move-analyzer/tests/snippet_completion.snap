@@ -1,0 +1,29 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== init.move ========================================================
+-- test 0 -------------------
+use line: 3, use_col: 9
+Snippet 'init'
+    INSERT TEXT: 'init(ctx: &mut TxContext) {
+	${1:}
+}
+'
+
+== init_otw.move ========================================================
+-- test 0 -------------------
+use line: 5, use_col: 9
+Snippet 'init'
+    INSERT TEXT: 'init(${1:witness}: INIT_OTW, ctx: &mut TxContext) {
+	${2:}
+}
+'
+
+== object.move ========================================================
+-- test 0 -------------------
+use line: 3, use_col: 38
+Snippet 'id: UID'
+    INSERT TEXT: '
+	id: UID,
+	$1
+'

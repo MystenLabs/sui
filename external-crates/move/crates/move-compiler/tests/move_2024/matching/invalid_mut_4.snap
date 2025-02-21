@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/invalid_mut_4.move:9:16
+  │
+9 │         match (m) {
+  │                ^ Pattern 'Maybe::Nothing' not covered
+
+error[E02010]: invalid name
+   ┌─ tests/move_2024/matching/invalid_mut_4.move:10:13
+   │
+10 │             mut Maybe::Nothing => (),
+   │             ^^^ -------------- Expected a valid 'enum' variant, 'struct', or 'const', not a variable
+   │             │    
+   │             'mut' can only be used with variable bindings in patterns

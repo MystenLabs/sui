@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macro_visibility_higher_order_error.move:12:21
+   │
+ 8 │     public struct S { }
+   │                   - Struct defined in module 'a::m'
+   ·
+12 │             let s = S { };
+   │                     ^^^^^ Struct 'a::m::S' can only be instantiated within its defining module 'a::m'
+   ·
+22 │         test!();
+   │         ------- While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macros 'a::m::test' and 'a::l::test'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macro_visibility_higher_order_error.move:13:17
+   │
+ 8 │     public struct S { }
+   │                   - Struct defined in module 'a::m'
+   ·
+13 │             let S { } = s;
+   │                 ^^^^^ Struct 'a::m::S' can only be used in deconstruction binding within its defining module 'a::m'
+   ·
+22 │         test!();
+   │         ------- While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macros 'a::m::test' and 'a::l::test'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.

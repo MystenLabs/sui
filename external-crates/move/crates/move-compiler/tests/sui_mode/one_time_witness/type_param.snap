@@ -1,0 +1,45 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02004]: invalid one-time witness declaration
+  ┌─ tests/sui_mode/one_time_witness/type_param.move:7:12
+  │
+7 │     struct M<phantom T> has drop { dummy: bool }
+  │            ^         - One-time witness types cannot have type parameters
+  │            │          
+  │            Invalid one-time witness declaration
+  │
+  = One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.
+
+error[Sui E02003]: invalid 'init' function
+  ┌─ tests/sui_mode/one_time_witness/type_param.move:9:9
+  │
+9 │     fun init<T>(_otw: M<T>, _ctx: &mut tx_context::TxContext) {
+  │         ^^^^ - 'init' functions cannot have type parameters
+  │         │     
+  │         Invalid 'init' function declaration
+
+error[Sui E02004]: invalid one-time witness declaration
+   ┌─ tests/sui_mode/one_time_witness/type_param.move:16:12
+   │
+16 │     struct X<phantom T> has drop { dummy: bool }
+   │            ^         - One-time witness types cannot have type parameters
+   │            │          
+   │            Invalid one-time witness declaration
+   │
+   = One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.
+
+error[Sui E02003]: invalid 'init' function
+   ┌─ tests/sui_mode/one_time_witness/type_param.move:18:20
+   │
+16 │     struct X<phantom T> has drop { dummy: bool }
+   │            - One-time witness declared here
+17 │ 
+18 │     fun init(_ctx: &mut tx_context::TxContext) {
+   │                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid first parameter to 'init'. Expected this module's one-time witness type 'a::x::X'
+   │
+   = One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.

@@ -1,0 +1,68 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+task 1, lines 6-39:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7569600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 41:
+//# run tto::M1::start
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 43:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, lines 45-47:
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 5, line 48:
+//# run tto::M1::wrapper --args object(2,0) receiving(2,1)
+created: object(5,0)
+mutated: object(0,0), object(2,0)
+wrapped: object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 3708800,  storage_rebate: 3385800, non_refundable_storage_fee: 34200
+
+task 6, line 50:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 4
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 7, lines 52-54:
+//# view-object 2,1
+No object at id 2,1
+
+task 8, line 55:
+//# run tto::M1::wrapper --args object(2,0) receiving(2,1)@3
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 12) at offset 0, Abort Code: 3
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 12, instruction: 0, function_name: Some("receive_impl") }, 3), source: Some(VMError { major_status: ABORTED, sub_status: Some(3), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 0)] }), command: Some(0) } }

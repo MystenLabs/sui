@@ -1,0 +1,27 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03009]: unbound variable
+  ┌─ tests/move_check/parser/named_blocks_invalid.move:4:9
+  │
+4 │         name: {
+  │         ^^^^ Unbound variable 'name'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/named_blocks_invalid.move:4:13
+  │
+4 │         name: {
+  │             ^
+  │             │
+  │             Unexpected ':'
+  │             Expected ';'
+
+error[E01001]: invalid character
+  ┌─ tests/move_check/parser/named_blocks_invalid.move:5:32
+  │
+5 │             if (cond) { return 'name 10 };
+  │                                ^^^^^ Unexpected character (')

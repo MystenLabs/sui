@@ -1,0 +1,83 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03013]: positional call mismatch
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
+  │
+3 │     struct S { f: u64 }
+  │            - 'S' is declared here
+  ·
+6 │         S ( f ) = S { f: 0 };
+  │         ^^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
+  │
+6 │         S ( f ) = S { f: 0 };
+  │         ^^^^^^^ Positional fields are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E03010]: unbound field
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
+  │
+6 │         S ( f ) = S { f: 0 };
+  │         ^^^^^^^ Unbound field '0' in '0x42::M::S'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
+  │
+6 │         S ( f ) = S { f: 0 };
+  │         ^^^^^^^ Missing assignment for field 'f' in '0x42::M::S'
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:8:13
+  │
+8 │         let f: u64;
+  │             ^ Unused local variable 'f'. Consider removing or prefixing with an underscore: '_f'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03022]: invalid usage position
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:9:9
+  │
+9 │         S f = S { f: 0 };
+  │         ^ Expected a local or constant, but found struct 'S' in current scope
+  │
+  = Struct with named arguments must be written as 'S { ... }'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:9:11
+  │
+9 │         S f = S { f: 0 };
+  │           ^
+  │           │
+  │           Unexpected 'f'
+  │           Expected ';'
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:11:9
+   │
+ 2 │     struct G {}
+   │            - 'G' is declared here
+   ·
+11 │         G () = G {};
+   │         ^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:11:9
+   │
+11 │         G () = G {};
+   │         ^^^^ Positional fields are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:12:12
+   │
+12 │         G {{}} = G{};
+   │            ^ Unexpected '{'. Expected a field expression

@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.migration
+  lint: false
+---
+--- tests/move_2024/migration/multiline.move
++++ tests/move_2024/migration/multiline.move
+@@ -3,5 +3,3 @@
+-    friend // why
+-    a::n;
+-    public( // why folks, why
+-        friend
+-    ) fun t() {}
++    /* friend // why
++    a::n; */
++    public(package) fun t() {}

@@ -24,7 +24,7 @@ use crate::{
 };
 
 #[derive(PartialEq, Eq)]
-/// The status of a ssh command running in the background.
+/// The status of an ssh command running in the background.
 pub enum CommandStatus {
     Running,
     Terminated,
@@ -346,7 +346,7 @@ impl SshConnection {
         }
     }
 
-    /// Execute a ssh command on the remote machine.
+    /// Execute an ssh command on the remote machine.
     pub async fn execute(&self, command: String) -> SshResult<(String, String)> {
         let mut error = None;
         for _ in 0..self.retries + 1 {

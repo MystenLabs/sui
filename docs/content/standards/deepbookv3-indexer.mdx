@@ -1,0 +1,650 @@
+---
+title: DeepBookV3 Indexer
+---
+
+import Admonition from '@theme/Admonition';
+
+{@include: ../snippets/deepbook.mdx}
+
+DeepBook Indexer provides streamlined, real-time access to order book and trading data from the DeepBook protocol. It acts as a centralized service to aggregate and expose critical data points for developers, traders, and analysts who interact with DeepBook.
+
+DeepBook Indexer simplifies data retrieval by offering endpoints that enable:
+
+-	**Viewing pool information:** Retrieve detailed metadata about all available trading pools, including base and quote assets, tick sizes, and lot sizes.
+-	**Historical volume analysis:** Fetch volume metrics for specific pools or balance managers over custom time ranges, with support for interval-based breakdowns.
+-	**User-specific volume tracking:** Provide insights into individual trader activities by querying their balance manager-specific volumes.
+
+You can either use a publicly available indexer or spin up your own service. The choice you make depends on a few factors.
+
+Use the public service if:
+
+-	You have standard data needs.
+-	Latency and availability provided by the public endpoint meet your requirements.
+-	You want to avoid the operational overhead of running your own service.
+
+Run your own indexer if:
+
+-	You require guaranteed uptime and low latency.
+-	You have specific customization needs.
+-	Your application depends on proprietary features or extended data sets.
+
+## Public DeepBook Indexer
+
+[Mysten Labs](https://www.mystenlabs.com/) provides a public indexer for DeepBook. You can access this indexer at the following URL:
+
+```http
+https://deepbook-indexer.mainnet.mystenlabs.com/
+```
+
+## Asset conversions
+
+Volumes returned by the following endpoints are expressed in the smallest unit of the corresponding asset. 
+
+- `/all_historical_volume`
+- `/historical_volume`
+- `/historical_volume_by_balance_manager_id`
+- `/historical_volume_by_balance_manager_id_with_interval`
+
+Following are the decimal places (scalars) used to determine the base unit for each asset.
+
+| Asset | Scalar |
+| --- | --- |
+| AUSD | 6 |
+| Bridged Eth (bETH) | 8 |
+| Deepbook Token (DEEP) | 6 |
+| Native USDC | 6 |
+| SUI | 9 |
+| SuiNS Token (NS) | 6 |
+| TYPUS | 9 |
+| Wrapped USDC (wUSDC) | 6 |
+| Wrapped USDT (wUSDT) | 6 |
+
+To convert the returned volume to the standard asset unit, divide the value by 10^SCALAR. For example:
+
+If the volume returned in the base asset for the SUI/USDC pool is 1,000,000,000 SUI UNIT, the correct volume in SUI is 1,000,000,000 / 10^(SUI_SCALAR) = 1 SUI. Similarly, if the volume returned in the quote asset for the SUI/USDC pool is 1,000,000,000 USDC UNIT, the correct volume is  1,000,000,000 / 10^(USDC_SCALAR) = 1,000 USDC.
+
+Use these conversions to interpret the volumes correctly across all pools and assets.
+
+## API endpoints
+
+You can perform the following tasks using the endpoints that the indexer API for DeepBook provides.
+
+### Get all pool information
+
+```
+/get_pools
+```
+
+Returns a list of all available pools, each containing detailed information about the base and quote assets, as well as pool parameters like minimum size, lot size, and tick size.
+
+#### Response
+
+```json
+[
+	{
+	  "pool_id": "string",
+	  "pool_name": "string",
+	  "base_asset_id": "string",
+	  "base_asset_decimals": integer,
+	  "base_asset_symbol": "string",
+	  "base_asset_name": "string",
+	  "quote_asset_id": "string",
+	  "quote_asset_decimals": integer,
+	  "quote_asset_symbol": "string",
+	  "quote_asset_name": "string",
+	  "min_size": integer,
+	  "lot_size": integer,
+	  "tick_size": integer
+	},
+	...
+]
+```
+
+Each pool object in the response includes the following fields:
+
+-	**pool_id:** ID for the pool.
+-	**pool_name:** Name of the pool.
+-	**base_asset_id:** ID for the base asset.
+-	**base_asset_decimals:** Number of decimals for the base asset.
+-	**base_asset_symbol:** Symbol for the base asset.
+-	**base_asset_name:** Name of the base asset.
+-	**quote_asset_id:** ID for the quote asset.
+-	**quote_asset_decimals:** Number of decimals for the quote asset.
+-	**quote_asset_symbol:** Symbol for the quote asset.
+-	**quote_asset_name:** Name of the quote asset.
+-	**min_size:** Minimum trade size for the pool, in smallest units of the base asset.
+-	**lot_size:** Minimum increment for trades in this pool, in smallest units of the base asset.
+-	**tick_size:** Minimum price increment for trades in this pool.
+
+#### Example
+
+A successful request to the following endpoint
+
+```http
+/get_pools
+```
+
+produces a response similar to
+
+```json
+[
+	{
+		"pool_id": "0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22",
+		"pool_name": "DEEP_SUI",
+		"base_asset_id": "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
+		"base_asset_decimals": 6,
+		"base_asset_symbol": "DEEP",
+		"base_asset_name": "DeepBook Token",
+		"quote_asset_id": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+		"quote_asset_decimals": 9,
+		"quote_asset_symbol": "SUI",
+		"quote_asset_name": "Sui",
+		"min_size": 100000000,
+		"lot_size": 10000000,
+		"tick_size": 10000000
+	},
+	{
+		"pool_id": "0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce",
+		"pool_name": "DEEP_USDC",
+		"base_asset_id": "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
+		"base_asset_decimals": 6,
+		"base_asset_symbol": "DEEP",
+		"base_asset_name": "DeepBook Token",
+		"quote_asset_id": "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+		"quote_asset_decimals": 6,
+		"quote_asset_symbol": "USDC",
+		"quote_asset_name": "USDC",
+		"min_size": 100000000,
+		"lot_size": 10000000,
+		"tick_size": 10000
+	}
+]
+```
+
+### Get historical volume for pool in a specific time range
+
+```http
+/historical_volume/:pool_names?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
+```
+
+Use this endpoint to get historical volume for pools for a specific time range. Delimit the	`pool_names` with commas, and use Unix timestamp seconds for `start_time` and `end_time` values. 
+
+By default, this endpoint retrieves the last 24-hour trading volume in the quote asset for specified pools. If you want to query the base asset instead, set `volume_in_base` to `true`.
+
+#### Response
+
+Returns the historical volume for each specified pool within the given time range.
+
+```json
+{
+	"pool_name_1": total_pool1_volume,
+	"pool_name_2": total_pool2_volume,
+	...
+}
+```
+
+#### Example
+
+A successful request to the following endpoint
+
+```http
+/historical_volume/DEEP_SUI,SUI_USDC?start_time=1731260703&end_time=1731692703&volume_in_base=true
+```
+
+produces a response similar to
+
+```json
+{
+	"DEEP_SUI": 22557460000000,
+	"SUI_USDC": 19430171000000000
+}
+```
+
+### Get historical volume for all pools
+
+```http
+/all_historical_volume?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
+```
+
+Use this endpoint to get historical volume for all pools. Include the optional `start_time` and `end_time` values as Unix timestamp seconds to retrieve the volume within that time range.
+
+By default, this endpoint retrieves the last 24-hour trading volume in the quote asset. If you want to query the base asset instead, set `volume_in_base` to `true`.
+
+#### Response
+
+Returns the historical volume for all available pools within the time range (if provided).
+
+```json
+{
+	"pool_name_1": total_pool1_volume,
+	"pool_name_2": total_pool2_volume
+}
+```
+
+#### Example
+
+A successful request to the following endpoint
+
+```http
+/all_historical_volume?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
+```
+
+produces a response similar to
+
+```json
+{
+	"DEEP_SUI": 22557460000000,
+	"WUSDT_USDC": 10265000000,
+	"NS_USDC": 4399650900000,
+	"NS_SUI": 6975475200000,
+	"SUI_USDC": 19430171000000000,
+	"WUSDC_USDC": 23349574900000,
+	"DEEP_USDC": 130000590000000
+}
+```
+
+### Get historical volume by balance manager
+
+```
+/historical_volume_by_balance_manager_id/:pool_names/:balance_manager_id?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
+```
+
+Get historical volume by balance manager for a specific time range. Delimit the	`pool_names` with commas, and use Unix timestamp seconds for the optional `start_time` and `end_time` values.
+
+By default, this endpoint retrieves the last 24-hour trading volume for the balance manager in the quote asset for specified pools. If you want to query the base asset instead, set `volume_in_base` to `true`.
+
+#### Response
+
+```json
+{
+	"pool_name_1": [maker_volume, taker_volume],
+	"pool_name_2": …
+}
+```
+
+#### Example
+
+A successful request to the following endpoint
+
+```http
+/historical_volume_by_balance_manager_id/SUI_USDC,DEEP_SUI/0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d?start_time=1731260703&end_time=1731692703&volume_in_base=true
+```
+
+produces a response similar to
+
+```json
+{
+	"DEEP_SUI": [
+		14207960000000,
+		3690000000
+	],
+	"SUI_USDC": [
+		2089300100000000,
+		17349400000000
+	]
+}
+```
+
+### Get historical volume by balance manager within a specific time range and intervals
+
+```
+/historical_volume_by_balance_manager_id_with_interval/:pool_names/:balance_manager_id?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&interval=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
+```
+
+Get historical volume by `BalanceManager` for a specific time range with intervals. Delimit `pool_names` with commas and use Unix timestamp seconds for the optional `start_time` and `end_time` values. Use number of seconds for the `interval` value. As a simplified interval example, if `start_time` is 5, `end_time` is 10, and `interval` is 2, then the response includes volume from 5 to 7 and 7 to 9, with start time of the periods as keys.
+
+By default, this endpoint retrieves the last 24-hour trading volume for the balance manager in the quote asset for specified pools. If you want to query the base asset instead, set `volume_in_base` to `true`.
+
+#### Response
+
+```json
+{
+	"[time_1_start, time_1_end]": {
+		"pool_name_1": [maker_volume, taker_volume],
+		"pool_name_2": …
+	},
+	"[time_2_start, time_2_end]": {
+		"pool_name_1": [maker_volume, taker_volume],
+		"pool_name_2": …
+	}
+}
+```
+
+#### Example
+
+A successful request to the following endpoint with an interval of 24 hours
+
+```http
+/historical_volume_by_balance_manager_id_with_interval/USDC_DEEP,SUI_USDC/0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d?start_time=1731460703&end_time=1731692703&interval=86400&volume_in_base=true
+```
+produces a response similar to
+
+```json
+{
+	"[1731460703, 1731547103]": {
+		"SUI_USDC": [
+			505887400000000,
+			2051300000000
+		]
+	},
+	"[1731547103, 1731633503]": {
+		"SUI_USDC": [
+			336777500000000,
+			470600000000
+		]
+	}
+}
+```
+
+### Get summary 
+
+```http
+/summary
+```
+
+Returns a summary in JSON for all trading pairs in DeepBook.
+
+#### Response
+
+Each summary object has the following form. The order of fields in the JSON object is not guaranteed.
+
+```json
+{
+	"trading_pairs": "string",
+	"quote_currency": "string",
+	"last_price": float,
+	"lowest_price_24h": float,
+	"highest_bid": float,
+	"base_volume": float,
+	"price_change_percent_24h": float,
+	"quote_volume": float,
+	"lowest_ask": float,
+	"highest_price_24h": float,
+	"base_currency": "string"
+}
+```
+
+#### Example
+
+A successful request to 
+
+```
+/summary
+```
+produces a response similar to
+```json
+[
+	{
+    "trading_pairs": "AUSD_USDC",
+    "quote_currency": "USDC",
+    "last_price": 1.0006,
+    "lowest_price_24h": 0.99905,
+    "highest_bid": 1.0006,
+    "base_volume": 1169.2,
+    "price_change_percent_24h": 0.07501125168773992,
+    "quote_volume": 1168.961637,
+    "lowest_ask": 1.0007,
+    "highest_price_24h": 1.00145,
+    "base_currency": "AUSD"
+  },
+  {
+    "quote_volume": 4063809.55231,
+    "lowest_price_24h": 0.9999,
+    "highest_price_24h": 1.009,
+    "base_volume": 4063883.6,
+    "quote_currency": "USDC",
+    "price_change_percent_24h": 0.0,
+    "base_currency": "WUSDC",
+    "trading_pairs": "WUSDC_USDC",
+    "last_price": 1.0,
+    "highest_bid": 1.0,
+    "lowest_ask": 1.0001
+  },
+  {
+		"price_change_percent_24h": 0.0,
+		"quote_currency": "USDC",
+		"lowest_price_24h": 0.0,
+		"quote_volume": 0.0,
+		"base_volume": 0.0,
+		"highest_price_24h": 0.0,
+		"lowest_ask": 1.04,
+		"last_price": 1.04,
+		"base_currency": "WUSDT",
+		"highest_bid": 0.90002,
+		"trading_pairs": "WUSDT_USDC"
+	},
+	...
+]
+```
+
+### Get ticker information
+
+```http
+/ticker
+```
+
+Returns all trading pairs volume (already scaled), last price, and `isFrozen` value. Possible values for `isFrozen` is either:
+- `0`: Pool is active
+- `1`: Pool is inactive
+
+#### Response
+
+```json
+{
+  "TRADING_PAIR": {
+    "base_volume": float,
+    "quote_volume": float,
+    "last_price": float,
+    "isFrozen": integer (0 | 1)
+  }
+}
+```
+
+#### Example
+
+A successful request to 
+
+```
+/ticker
+```
+produces a response similar to
+
+```json
+{
+	"DEEP_USDC": {
+		"last_price": 0.07055,
+		"base_volume": 43760440.0,
+		"quote_volume": 3096546.9161,
+		"isFrozen": 0
+	},
+	"NS_SUI": {
+		"last_price": 0.08323,
+		"base_volume": 280820.8,
+		"quote_volume": 23636.83837,
+		"isFrozen": 0
+	},
+	...
+}
+```
+
+### Get trades
+
+```http
+/trades/:pool_name
+```
+
+Returns the most recent trade in the pool. 
+
+#### Response
+
+```json
+[
+	{
+		"trade_id": "string",
+		"base_volume": integer,
+		"quote_volume": integer,
+		"price": integer,
+		"type": "string",
+		"timestamp": integer
+	}
+]
+```
+
+The `timestamp` value is in Unix milliseconds.
+
+#### Example
+
+A successful request to 
+
+```http
+/trades/DEEP_USDC
+```
+
+produces a response similar to
+
+```json
+[
+	{
+		"timestamp": 1733874285058,
+		"trade_id": "170141183461771756330731935155489889951",
+		"quote_volume": 9.8854,
+		"price": 0.07061,
+		"base_volume": 140.0,
+		"type": "buy"
+	}
+]
+```
+
+### Get order book information
+
+```http
+/orderbook/:pool_name?level={1|2}&depth={integer}
+```
+
+Returns the bids and asks for the relevant pool. The bids and asks returned are each sorted from best to worst. There are two optional query parameters in the endpoint:
+
+- **level**: The `level` value can be either 1 or 2. 
+	- `1`: Only the best bid and ask. 
+	- `2`: Arranged by best bids and asks. This is the default value.
+- **depth**: The `depth` value can be `0` or greater than `1`. A value of `0` returns the entire order book, and a value greater than `1` returns the specified number of both bids and asks. In other words, if you provide `depth=100`, then your response includes 50 bids and 50 asks. If the `depth` value is odd, it's treated as the next lowest even value. Consequently, `depth=101` also returns 50 bids and 50 asks. If you do not provide a `depth` parameter, the response defaults to all orders in the order book.
+
+#### Response
+
+```json
+{
+	"timestamp": "string",
+	"bids": [
+		[
+			"string",
+			"string"
+		],
+		[
+			"string",
+			"string"
+		]
+	],
+	"asks": [
+		[
+			"string",
+			"string"
+		],
+		[
+			"string",
+			"string"
+		]
+	]
+}
+```
+
+The timestamp returned is a string that represents a Unix timestamp in milliseconds.
+
+#### Example
+
+A successful request to 
+
+```json
+/orderbook/SUI_USDC?level=2&depth=4
+```
+
+produces a response similar to
+
+```json
+{
+	"timestamp": "1733874965431",
+	"bids": [
+		[
+			"3.715",
+			"2.7"
+		],
+		[
+			"3.713",
+			"2294.8"
+		]
+	],
+	"asks": [
+		[
+			"3.717",
+			"0.9"
+		],
+		[
+			"3.718",
+			"1000"
+		]
+	]
+}
+```
+
+### Get asset information
+
+```http
+/assets
+```
+
+Returns asset information for all coins being traded on DeepBook.
+
+#### Response
+
+Each asset object has the following form:
+
+```json
+"ASSET_NAME": {
+	"unified_cryptoasset_id": "string",
+	"name": "string",
+	"contractAddress": "string",
+	"contractAddressUrl": "string",
+	"can_deposit": "string (true | false)",
+	"can_withdraw": "string (true | false)"
+}
+```
+
+#### Example
+
+A successful request to 
+
+```json
+/assets
+```
+
+produces a response similar to
+
+```json
+{
+  "NS": {
+    "unified_cryptoasset_id": "32942",
+    "name": "Sui Name Service",
+    "contractAddress": "0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178",
+    "contractAddressUrl": "https://suiscan.xyz/mainnet/object/0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178",
+    "can_deposit": "true",
+    "can_withdraw": "true"
+  },
+  "AUSD": {
+    "unified_cryptoasset_id": "32864",
+    "name": "AUSD",
+    "contractAddress": "0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2",
+    "contractAddressUrl": "https://suiscan.xyz/mainnet/object/0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2",
+    "can_deposit": "true",
+    "can_withdraw": "true"
+  },
+	...
+}
+```

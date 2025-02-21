@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03019]: invalid pattern
+  ┌─ tests/move_2024/matching/invalid_repeat_binding.move:9:24
+  │
+9 │             Two::Tuple(x, x) => { let _y = x; },
+  │                        ^  - and repeated here
+  │                        │   
+  │                        binder 'x' is defined here
+  │
+  = A pattern variable must be unique, and must appear once in each or-pattern alternative.

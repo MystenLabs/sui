@@ -1,3 +1,7 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+pub mod google;
 pub mod node;
 pub mod types;
 
@@ -48,12 +52,6 @@ impl TryFromProtoError {
 
 impl From<std::num::TryFromIntError> for TryFromProtoError {
     fn from(value: std::num::TryFromIntError) -> Self {
-        Self::from_error(value)
-    }
-}
-
-impl From<std::str::Utf8Error> for TryFromProtoError {
-    fn from(value: std::str::Utf8Error) -> Self {
         Self::from_error(value)
     }
 }

@@ -1,0 +1,179 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-33:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6194000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 35:
+//# run Test::M1::create --args 2 @A
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 37:
+//# run Test::M1::create --args 3 @A
+created: object(3,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 39:
+//# run Test::M1::create --args 4 @A
+created: object(4,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 41:
+//# run Test::M1::create --args 5 @A
+created: object(5,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 43:
+//# run Test::M1::create --args 6 @A
+created: object(6,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 45-49:
+//# programmable --sender A --inputs object(2,0) object(3,0) object(4,0) object(5,0) object(6,0) @A
+//> 0: Test::M1::sum(Input(0), Input(1));
+//> 1: Test::M1::sum(Input(2), Input(3));
+//> 2: Test::M1::sum(Input(0), Input(4));
+//> 3: Test::M1::create(Result(2), Input(5));
+created: object(7,0)
+mutated: object(0,0), object(2,0), object(3,0), object(4,0), object(5,0), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 8876800,  storage_rebate: 6508260, non_refundable_storage_fee: 65740
+
+task 8, line 51:
+//# run Test::M1::increment --sender A --args object(7,0) 100
+mutated: object(0,0), object(7,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 9, line 53:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 10, lines 56-93:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "digest": "6c1VrCKixZoK9Pmhna8fGzeSnmuYFcd3DR3n7mk44iKm",
+          "effects": {
+            "dependencies": {
+              "pageInfo": {
+                "hasPreviousPage": false,
+                "hasNextPage": false,
+                "startCursor": "eyJpIjowLCJjIjoxfQ",
+                "endCursor": "eyJpIjoxLCJjIjoxfQ"
+              },
+              "edges": [
+                {
+                  "cursor": "eyJpIjowLCJjIjoxfQ",
+                  "node": {
+                    "digest": "TCVU1ZmKsviJsuhqvpS76f6X8qKoN2eH7VfrhQ2c4Gf",
+                    "kind": {
+                      "__typename": "ProgrammableTransactionBlock",
+                      "transactions": {
+                        "nodes": [
+                          {
+                            "module": "M1",
+                            "functionName": "sum"
+                          },
+                          {
+                            "module": "M1",
+                            "functionName": "sum"
+                          },
+                          {
+                            "module": "M1",
+                            "functionName": "sum"
+                          },
+                          {
+                            "module": "M1",
+                            "functionName": "create"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxLCJjIjoxfQ",
+                  "node": {
+                    "digest": "3S1Bm2ipnoGVsCTMfGrRMzgEFShwfS7huM3KWJ8MMf1P",
+                    "kind": {
+                      "__typename": "ProgrammableTransactionBlock",
+                      "transactions": {
+                        "nodes": [
+                          {},
+                          {
+                            "module": "package",
+                            "functionName": "make_immutable"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 11, lines 95-132:
+//# run-graphql --cursors {"i":0,"c":1}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "digest": "6c1VrCKixZoK9Pmhna8fGzeSnmuYFcd3DR3n7mk44iKm",
+          "effects": {
+            "dependencies": {
+              "pageInfo": {
+                "hasPreviousPage": true,
+                "hasNextPage": false,
+                "startCursor": "eyJpIjoxLCJjIjoxfQ",
+                "endCursor": "eyJpIjoxLCJjIjoxfQ"
+              },
+              "edges": [
+                {
+                  "cursor": "eyJpIjoxLCJjIjoxfQ",
+                  "node": {
+                    "digest": "3S1Bm2ipnoGVsCTMfGrRMzgEFShwfS7huM3KWJ8MMf1P",
+                    "kind": {
+                      "__typename": "ProgrammableTransactionBlock",
+                      "transactions": {
+                        "nodes": [
+                          {},
+                          {
+                            "module": "package",
+                            "functionName": "make_immutable"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

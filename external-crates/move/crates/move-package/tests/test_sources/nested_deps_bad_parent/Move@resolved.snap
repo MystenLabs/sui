@@ -1,0 +1,4 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+Failed to resolve dependencies for package 'NestedDeps': Parsing manifest for 'Nested': No such file or directory (os error 2)

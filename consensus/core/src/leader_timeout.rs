@@ -157,6 +157,13 @@ mod tests {
             todo!()
         }
 
+        async fn check_block_refs(
+            &self,
+            _block_refs: Vec<BlockRef>,
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
+            todo!()
+        }
+
         async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError> {
             self.new_block_calls
                 .lock()

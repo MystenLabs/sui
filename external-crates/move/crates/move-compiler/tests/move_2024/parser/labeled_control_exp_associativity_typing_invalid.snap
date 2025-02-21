@@ -1,0 +1,130 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:12:9
+   │
+ 7 │     fun bar(): u64 { 0 }
+   │                --- Given: 'u64'
+   ·
+12 │         if (cond) bar() + 1;
+   │         ^^^^^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid 'if'. The body of an 'if' without an 'else' must have type '()'
+   │         Expected: '()'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:15:9
+   │
+15 │         if (cond) 'a: { foo() } + 1;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid argument to '+'
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:15:33
+   │
+15 │         if (cond) 'a: { foo() } + 1;
+   │         ----------------------- ^ - Found: integer. It is not compatible with the other type.
+   │         │                       │  
+   │         │                       Incompatible arguments to '+'
+   │         Found: '()'. It is not compatible with the other type.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:15:35
+   │
+15 │         if (cond) 'a: { foo() } + 1;
+   │         -----------------------   ^ Invalid argument to '+'
+   │         │                          
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:19:26
+   │
+ 7 │     fun bar(): u64 { 0 }
+   │                --- Given: 'u64'
+   ·
+19 │         'a: while (cond) bar() + 2;
+   │                          ^^^^^^^^^
+   │                          │
+   │                          Invalid loop body
+   │                          Expected: '()'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:22:9
+   │
+22 │         'a: while (cond) { foo() } + 2;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid argument to '+'
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:22:36
+   │
+22 │         'a: while (cond) { foo() } + 2;
+   │         -------------------------- ^ - Found: integer. It is not compatible with the other type.
+   │         │                          │  
+   │         │                          Incompatible arguments to '+'
+   │         Found: '()'. It is not compatible with the other type.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:22:38
+   │
+22 │         'a: while (cond) { foo() } + 2;
+   │         --------------------------   ^ Invalid argument to '+'
+   │         │                             
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:23:9
+   │
+23 │         while (cond) 'a: { return 'a foo() } + 2;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid argument to '+'
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:23:46
+   │
+23 │         while (cond) 'a: { return 'a foo() } + 2;
+   │         ------------------------------------ ^ - Found: integer. It is not compatible with the other type.
+   │         │                                    │  
+   │         │                                    Incompatible arguments to '+'
+   │         Found: '()'. It is not compatible with the other type.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:23:48
+   │
+23 │         while (cond) 'a: { return 'a foo() } + 2;
+   │         ------------------------------------   ^ Invalid argument to '+'
+   │         │                                       
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:27:18
+   │
+ 7 │     fun bar(): u64 { 0 }
+   │                --- Given: 'u64'
+   ·
+27 │         'a: loop bar() + 2;
+   │                  ^^^^^^^^^
+   │                  │
+   │                  Invalid loop body
+   │                  Expected: '()'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_typing_invalid.move:32:27
+   │
+32 │         let _: u64 = loop 'a: { return 'a 0 } + 1;
+   │                           ^^^^^^^^^^^^^^^^^^^
+   │                           │
+   │                           Invalid loop body
+   │                           Expected: '()'
+   │                           Given: integer

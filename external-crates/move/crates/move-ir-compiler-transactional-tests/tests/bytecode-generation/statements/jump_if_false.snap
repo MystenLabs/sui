@@ -1,0 +1,94 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 1-20:
+//# print-bytecode
+// Move bytecode v6
+module 6.m {
+
+entry foo() {
+L0:	loc0: u64
+B0:
+	0: LdU64(0)
+	1: StLoc[0](loc0: u64)
+B1:
+	2: CopyLoc[0](loc0: u64)
+	3: LdU64(5)
+	4: Lt
+	5: BrFalse(11)
+B2:
+	6: CopyLoc[0](loc0: u64)
+	7: LdU64(1)
+	8: Add
+	9: StLoc[0](loc0: u64)
+	10: Branch(2)
+B3:
+	11: Ret
+}
+
+}
+
+
+task 1, lines 22-36:
+//# print-bytecode
+// Move bytecode v6
+module 7.m {
+
+entry foo() {
+L0:	loc0: u64
+B0:
+	0: LdU64(0)
+	1: StLoc[0](loc0: u64)
+B1:
+	2: LdTrue
+	3: BrFalse(6)
+B2:
+	4: Ret
+B3:
+	5: Branch(2)
+B4:
+	6: Ret
+}
+
+}
+
+
+task 2, lines 38-48:
+//# print-bytecode
+// Move bytecode v6
+module 8.m {
+
+entry foo() {
+B0:
+	0: LdTrue
+	1: BrFalse(3)
+B1:
+	2: Branch(3)
+B2:
+	3: Ret
+}
+
+}
+
+
+task 3, lines 50-63:
+//# print-bytecode
+// Move bytecode v6
+module 9.m {
+
+entry foo() {
+B0:
+	0: Branch(2)
+B1:
+	1: Branch(0)
+B2:
+	2: Branch(4)
+B3:
+	3: Branch(0)
+B4:
+	4: Ret
+}
+
+}

@@ -1,0 +1,8 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+Failed to resolve dependencies for package 'Root': When resolving dependencies for package A, conflicting versions of package F found:
+At B -> E -> F
+	F = { local = "deps_only/F-v1" }
+At C -> D -> F
+	F = { local = "deps_only/F-v2" }

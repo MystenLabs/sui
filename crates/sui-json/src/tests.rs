@@ -625,10 +625,10 @@ fn test_sui_call_arg_string_type() {
             name: STD_ASCII_STRUCT_NAME.into(),
             type_params: vec![],
         },
-        fields: Box::new(vec![MoveFieldLayout {
+        fields: vec![MoveFieldLayout {
             name: ident_str!("bytes").into(),
             layout: MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-        }]),
+        }],
     })));
     let v = SuiJsonValue::from_bcs_bytes(string_layout.as_ref(), &arg1).unwrap();
 
@@ -646,10 +646,10 @@ fn test_sui_call_arg_option_type() {
             name: STD_ASCII_STRUCT_NAME.into(),
             type_params: vec![],
         },
-        fields: Box::new(vec![MoveFieldLayout {
+        fields: vec![MoveFieldLayout {
             name: ident_str!("bytes").into(),
             layout: MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-        }]),
+        }],
     }));
 
     let option_layout = MoveTypeLayout::Struct(Box::new(MoveStructLayout {
@@ -659,10 +659,10 @@ fn test_sui_call_arg_option_type() {
             name: STD_OPTION_STRUCT_NAME.into(),
             type_params: vec![],
         },
-        fields: Box::new(vec![MoveFieldLayout {
+        fields: vec![MoveFieldLayout {
             name: ident_str!("vec").into(),
             layout: MoveTypeLayout::Vector(Box::new(string_layout.clone())),
-        }]),
+        }],
     }));
 
     let v = SuiJsonValue::from_bcs_bytes(Some(option_layout).as_ref(), &arg1).unwrap();
@@ -709,10 +709,10 @@ fn test_convert_string_vec() {
             name: STD_ASCII_STRUCT_NAME.into(),
             type_params: vec![],
         },
-        fields: Box::new(vec![MoveFieldLayout {
+        fields: vec![MoveFieldLayout {
             name: ident_str!("bytes").into(),
             layout: MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-        }]),
+        }],
     }));
 
     let layout = MoveTypeLayout::Vector(Box::new(string_layout));
@@ -744,10 +744,10 @@ fn test_string_vec_df_name_child_id_eq() {
             name: STD_ASCII_STRUCT_NAME.into(),
             type_params: vec![],
         },
-        fields: Box::new(vec![MoveFieldLayout {
+        fields: vec![MoveFieldLayout {
             name: ident_str!("bytes").into(),
             layout: MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-        }]),
+        }],
     }));
 
     let layout = MoveTypeLayout::Struct(Box::new(MoveStructLayout {
@@ -757,10 +757,10 @@ fn test_string_vec_df_name_child_id_eq() {
             name: STD_ASCII_STRUCT_NAME.into(),
             type_params: vec![],
         },
-        fields: Box::new(vec![MoveFieldLayout::new(
+        fields: vec![MoveFieldLayout::new(
             Identifier::from_str("labels").unwrap(),
             MoveTypeLayout::Vector(Box::new(string_layout)),
-        )]),
+        )],
     }));
 
     let sui_json = SuiJsonValue::new(name).unwrap();

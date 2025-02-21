@@ -1,0 +1,44 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 2, line 37:
+//# run 42::m::aborts0
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(0),
+    location: 0x2a::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 3, line 39:
+//# run 42::m::aborts1
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(1),
+    location: 0x2a::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(1), 1)],
+}
+
+task 4, line 41:
+//# run 42::m::aborts2_not_0
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(2),
+    location: 0x2a::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(4), 1)],
+}
+
+task 5, line 43:
+//# run 42::m::aborts2_not_1
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(2),
+    location: 0x2a::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(5), 1)],
+}

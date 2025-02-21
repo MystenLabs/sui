@@ -1,0 +1,15 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/check_bounds/too_few_type_actuals.mvir
+---
+processed 1 task
+
+task 0, lines 1-11:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: undefined,
+    indices: [],
+    offsets: [],
+}

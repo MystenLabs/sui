@@ -1,0 +1,45 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/stack_usage_verifier/vector_ops_pack_unpack.mvir
+---
+processed 4 tasks
+
+task 0, lines 1-11:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 1, lines 12-22:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000043::m'. Got VMError: {
+    major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
+    sub_status: None,
+    location: 0x43::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 2, lines 23-35:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000044::m'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x44::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 3, lines 36-48:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000045::m'. Got VMError: {
+    major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
+    sub_status: None,
+    location: 0x45::m,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}

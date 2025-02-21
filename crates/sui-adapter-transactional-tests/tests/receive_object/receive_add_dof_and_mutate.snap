@@ -1,0 +1,126 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-36:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7835600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 38:
+//# run tto::M1::start
+created: object(2,0), object(2,1)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3541600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 40:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 0u64,
+}
+
+task 4, line 42:
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    value: 0u64,
+}
+
+task 5, line 44:
+//# run tto::M1::receive --args object(2,0) receiving(2,1)
+created: object(5,0), object(5,1), object(5,2)
+mutated: object(0,1), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 9728000,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
+
+task 6, line 46:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 4
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 0u64,
+}
+
+task 7, line 48:
+//# view-object 2,1
+Owner: Object ID: ( fake(5,0) )
+Version: 4
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    value: 100u64,
+}
+
+task 8, line 50:
+//# view-object 5,0
+Owner: Object ID: ( fake(2,0) )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,1),
+    },
+}
+
+task 9, line 52:
+//# view-object 5,1
+Owner: Object ID: ( fake(2,1) )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,1),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(5,2),
+    },
+}
+
+task 10, line 54:
+//# view-object 5,2
+Owner: Object ID: ( fake(5,1) )
+Version: 4
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,2),
+        },
+    },
+    value: 100u64,
+}

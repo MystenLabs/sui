@@ -1,0 +1,64 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:5:13
+  │
+5 │         let x = Foo(0);
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:7:13
+  │
+2 │     public struct Foo(u64) has copy, drop;
+  │                   --- 'Foo' is declared here
+  ·
+7 │         let Foo { y: _ } = Foo(0);
+  │             ^^^^^^^^^^^^ Invalid struct deconstruction. Positional struct declarations require positional deconstructions
+
+error[E03010]: unbound field
+  ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:7:13
+  │
+7 │         let Foo { y: _ } = Foo(0);
+  │             ^^^^^^^^^^^^ Unbound field 'y' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:7:13
+  │
+7 │         let Foo { y: _ } = Foo(0);
+  │             ^^^^^^^^^^^^ Missing binding for field '0' in '0x42::M::Foo'
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:12:13
+   │
+12 │         let x = Foo(0);
+   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:14:9
+   │
+ 2 │     public struct Foo(u64) has copy, drop;
+   │                   --- 'Foo' is declared here
+   ·
+14 │         Foo { y: _ } = Foo(0);
+   │         ^^^^^^^^^^^^ Invalid struct deconstruction. Positional struct declarations require positional deconstructions
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:14:9
+   │
+14 │         Foo { y: _ } = Foo(0);
+   │         ^^^^^^^^^^^^ Unbound field 'y' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:14:9
+   │
+14 │         Foo { y: _ } = Foo(0);
+   │         ^^^^^^^^^^^^ Missing assignment for field '0' in '0x42::M::Foo'

@@ -8,7 +8,7 @@ The Sui CLI `validator` command provides command-level access to validator featu
 
 Typing `sui validator --help` into your terminal or console displays the following information on available commands.
 
-```shell
+```sh
 Usage: sui validator [OPTIONS] [COMMAND]
 
 Commands:
@@ -38,7 +38,7 @@ The following examples demonstrate some of the most often used commands.
 
 ### Update gas price for next epoch
 
-```shell
+```sh
 $ sui validator  update-gas-price 500
 ```
 
@@ -48,7 +48,7 @@ $ sui validator  update-gas-price 500
   Toggle output
   </summary>
 
-```shell
+```sh
 ----- Transaction Digest ----
 A8z83EqjmgwRNFV6sme6A5tTTTQPjiLgiW76neyvhLud
 
@@ -146,13 +146,13 @@ A8z83EqjmgwRNFV6sme6A5tTTTQPjiLgiW76neyvhLud
 
 {@include: ../../snippets/info-gas-budget.mdx}
 
-```shell
+```sh
 $ sui validator request_set_gas_price --args 0x5 \"42\" --gas-budget GAS-BUDGET-AMOUNT>
 ```
 
 ### Display the validator information
 
-```shell
+```sh
 $ sui validator display-metadata 0x3...de5
 ```
 
@@ -162,7 +162,7 @@ $ sui validator display-metadata 0x3...de5
   Toggle output
   </summary>
 
-```shell
+```sh
 0x3...de5's valdiator status: Active
 SuiValidatorSummary {
 	sui_address: 0x3...de5,
@@ -423,7 +423,7 @@ SuiValidatorSummary {
 
 ### Report a bad / non-performant validator
 
-```shell
+```sh
 $ sui validator report-validator  0xf...3d9
 ```
 
@@ -434,7 +434,7 @@ $ sui validator report-validator  0xf...3d9
   </summary>
 
 
-```shell
+```sh
 ----- Transaction Digest ----
 8jVYrpuRBmdSLP37MsQGRqUqE3kE2m8XiSS4TG4aJwXf
 
@@ -527,8 +527,10 @@ $ sui validator report-validator  0xf...3d9
 
 Each command has its own help section. For example `sui validator report-validator --help` will display the following prompt:
 
-```shell
+```sh
 $ sui validator report-validator --help
+```
+```sh
 Report or un-report a validator
 
 Usage: sui validator report-validator [OPTIONS] <reportee-address>

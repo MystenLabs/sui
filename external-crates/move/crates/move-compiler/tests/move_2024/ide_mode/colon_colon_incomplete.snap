@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:10:9
+   │
+10 │         A
+   │         ^ Expected a type, function, or constant in this position, not an address
+
+error[E01016]: invalid name
+   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:14:9
+   │
+14 │         a::
+   │         ^^^ Incomplete name in this position. Expected an identifier after '::'
+
+error[E01016]: invalid name
+   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:18:9
+   │
+18 │         a::m::
+   │         ^^^^^^ Incomplete name in this position. Expected an identifier after '::'
+
+error[E01016]: invalid name
+   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:22:9
+   │
+22 │         a::m::SomeEnum::
+   │         ^^^^^^^^^^^^^^^^ Incomplete name in this position. Expected an identifier after '::'

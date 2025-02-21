@@ -1,0 +1,88 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 0, lines 1-43:
+//# print-bytecode
+// Move bytecode v7
+module 6.Enums {
+
+enum EnumWithThreeVariants<Ty0> {
+	One {  },
+	Two { x: Ty0 },
+	Three {  }
+}
+
+public call_success<Ty0>(Arg0: Ty0): Ty0 {
+L1:	loc0: EnumWithThreeVariants<Ty0>
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: PackVariantGeneric(VariantInstantiationHandleIndex(0))
+	2: StLoc[1](loc0: EnumWithThreeVariants<Ty0>)
+	3: MoveLoc[1](loc0: EnumWithThreeVariants<Ty0>)
+	4: Call f<Ty0>(EnumWithThreeVariants<Ty0>): Ty0
+	5: Ret
+}
+
+public call_fail_1<Ty0>(): Ty0 {
+L0:	loc0: EnumWithThreeVariants<Ty0>
+B0:
+	0: PackVariantGeneric(VariantInstantiationHandleIndex(1))
+	1: StLoc[0](loc0: EnumWithThreeVariants<Ty0>)
+	2: MoveLoc[0](loc0: EnumWithThreeVariants<Ty0>)
+	3: Call f<Ty0>(EnumWithThreeVariants<Ty0>): Ty0
+	4: Ret
+}
+
+public call_fail_3<Ty0>(): Ty0 {
+L0:	loc0: EnumWithThreeVariants<Ty0>
+B0:
+	0: PackVariantGeneric(VariantInstantiationHandleIndex(2))
+	1: StLoc[0](loc0: EnumWithThreeVariants<Ty0>)
+	2: MoveLoc[0](loc0: EnumWithThreeVariants<Ty0>)
+	3: Call f<Ty0>(EnumWithThreeVariants<Ty0>): Ty0
+	4: Ret
+}
+
+f<Ty0>(Arg0: EnumWithThreeVariants<Ty0>): Ty0 {
+L1:	loc0: Ty0
+B0:
+	0: ImmBorrowLoc[0](Arg0: EnumWithThreeVariants<Ty0>)
+	1: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	2: MoveLoc[0](Arg0: EnumWithThreeVariants<Ty0>)
+	3: UnpackVariantGeneric(VariantInstantiationHandleIndex(0))
+	4: StLoc[1](loc0: Ty0)
+	5: MoveLoc[1](loc0: Ty0)
+	6: Ret
+Jump tables:
+[0]:	variant_switch EnumWithThreeVariants {
+		Variant0 => jump 2
+		Variant1 => jump 2
+		Variant2 => jump 2
+	}
+}
+
+}
+
+
+task 3, line 101:
+//# run 0x6::Enums::call_fail_1 --type-args u64
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(3), 3)],
+}
+
+task 4, line 103:
+//# run 0x6::Enums::call_fail_3 --type-args u64
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(3), 3)],
+}

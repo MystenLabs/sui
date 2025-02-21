@@ -1,0 +1,71 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/eq_ref_tvars.move:18:11
+   │
+15 │         let x: T<u64> = any();
+   │                  --- Found: 'u64'. It is not compatible with the other type.
+16 │         let y: &T<bool> = abort 0;
+   │                   ---- Found: 'bool'. It is not compatible with the other type.
+17 │         let z: &mut T<bool> = abort 0;
+18 │         x == y && x == z
+   │           ^^ Incompatible arguments to '=='
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/eq_ref_tvars.move:18:21
+   │
+15 │         let x: T<u64> = any();
+   │                  --- Found: 'u64'. It is not compatible with the other type.
+16 │         let y: &T<bool> = abort 0;
+17 │         let z: &mut T<bool> = abort 0;
+   │                       ---- Found: 'bool'. It is not compatible with the other type.
+18 │         x == y && x == z
+   │                     ^^ Incompatible arguments to '=='
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/eq_ref_tvars.move:48:31
+   │
+45 │         let a: &T<u64> = abort 0;
+   │                   --- Found: 'u64'. It is not compatible with the other type.
+46 │         let b: &mut T<u64> = abort 0;
+47 │         let (c, d): (&mut T<bool>, &T<bool>) = abort 0;
+   │                             ---- Found: 'bool'. It is not compatible with the other type.
+48 │         a == b && c == d && a == c && b == d
+   │                               ^^ Incompatible arguments to '=='
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/eq_ref_tvars.move:48:41
+   │
+46 │         let b: &mut T<u64> = abort 0;
+   │                       --- Found: 'u64'. It is not compatible with the other type.
+47 │         let (c, d): (&mut T<bool>, &T<bool>) = abort 0;
+   │                                       ---- Found: 'bool'. It is not compatible with the other type.
+48 │         a == b && c == d && a == c && b == d
+   │                                         ^^ Incompatible arguments to '=='
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/eq_ref_tvars.move:73:11
+   │
+72 │         let x: T<u64> = option_take(&mut c);
+   │                  --- Found: 'u64'. It is not compatible with the other type.
+73 │         x == &mut T { q: false };
+   │           ^^             ----- Found: 'bool'. It is not compatible with the other type.
+   │           │               
+   │           Incompatible arguments to '=='
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/eq_ref_tvars.move:74:9
+   │
+72 │         let x: T<u64> = option_take(&mut c);
+   │                  --- Expected: 'u64'
+73 │         x == &mut T { q: false };
+74 │         option_fill(&mut c, T { q: false });
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                          │
+   │         │                          Given: 'bool'
+   │         Invalid call of 'a::m::option_fill'. Invalid argument for parameter '_e'

@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09009]: unused struct field
+   ┌─ tests/move_check/typing/unused_struct_field.move:13:9
+   │
+13 │         field_unused: u8
+   │         ^^^^^^^^^^^^ The 'field_unused' field of the 'OneUnusedFieldStruct' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09009]: unused struct field
+   ┌─ tests/move_check/typing/unused_struct_field.move:27:9
+   │
+27 │         field1: u8,
+   │         ^^^^^^ The 'field1' field of the 'AllUnusedFieldsStruct' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09009]: unused struct field
+   ┌─ tests/move_check/typing/unused_struct_field.move:28:9
+   │
+28 │         field2: u8,
+   │         ^^^^^^ The 'field2' field of the 'AllUnusedFieldsStruct' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/unused_struct_field.move:63:57
+   │
+63 │     public fun flaky(x: 0x42::private_struct::S): u64 { x.f }
+   │                                                         ^^^ Invalid access of field 'f' on the struct '0x42::private_struct::S'. The field 'f' can only be accessed within the module '0x42::private_struct' since it defines 'S'

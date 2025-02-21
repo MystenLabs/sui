@@ -1,0 +1,39 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.migration
+  lint: false
+---
+--- tests/move_2024/migration/public_friend.move
++++ tests/move_2024/migration/public_friend.move
+@@ -3 +3 @@
+-    public( friend ) fun t0() {}
++    public(package) fun t0() {}
+@@ -5 +5 @@
+-    public(friend) fun t1() {}
++    public(package) fun t1() {}
+@@ -7,2 +7 @@
+-    public(
+-        friend) fun t2() {}
++    public(package) fun t2() {}
+@@ -10,3 +9 @@
+-    public(
+-        friend
+-        ) fun t3() {}
++    public(package) fun t3() {}
+@@ -14,4 +11 @@
+-    public(
+-        friend
+-        /* comment */
+-    ) fun t4() {}
++    public(package) fun t4() {}
+@@ -20,4 +14 @@
+-    public(
+-        friend
+-        /* deleted-comment */
+-    )/* stays-comment */ fun t5() {}
++    public(package)/* stays-comment */ fun t5() {}
+@@ -25 +16 @@
+-    /*stays*/public(/*deleted*/friend/*deleted*/)/*stays*/fun t6() {}
++    /*stays*/public(package)/*stays*/fun t6() {}

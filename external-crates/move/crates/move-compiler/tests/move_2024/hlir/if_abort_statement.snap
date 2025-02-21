@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_2024/hlir/if_abort_statement.move:4:18
+  │
+4 │     let x: u64 = if (true) abort 0 else abort 0;
+  │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

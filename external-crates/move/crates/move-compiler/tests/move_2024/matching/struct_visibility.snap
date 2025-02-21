@@ -1,0 +1,13 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/matching/struct_visibility.move:13:13
+   │
+13 │             m::S { t } => t,
+   │             ^^^^^^^^^^ Invalid pattern for '0x42::m::S'.
+ All struct can only be matched in the module in which they are declared

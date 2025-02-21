@@ -1,0 +1,98 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-19:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 21:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 23:
+//# run Test::M1::create --args 0 @A --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, line 25:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 5, lines 27-45:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": null,
+        "startCursor": null
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 6, lines 47-65:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": null,
+        "startCursor": null
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 7, lines 67-85:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "A scan limit must be specified for the given filter combination",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "transactionBlocks"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 8, lines 87-105:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjoyLCJ0IjoyLCJpIjp0cnVlfQ",
+        "startCursor": "eyJjIjoyLCJ0IjowLCJpIjp0cnVlfQ"
+      },
+      "nodes": []
+    }
+  }
+}

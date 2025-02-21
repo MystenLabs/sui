@@ -1,0 +1,59 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/typing/type_variable_join_single_pack.move:2:19
+  │
+2 │     struct Box<T> copy, drop { f1: T, f2: T }
+  │                   ^^^^ Unexpected 'copy'. Expected struct fields, 'has' to start abilities declaration, or ';' for a native struct
+
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/type_variable_join_single_pack.move:6:9
+  │
+2 │     struct Box<T> copy, drop { f1: T, f2: T }
+  │            --- To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+6 │         (*&b: Box<u64>);
+  │         ^^^^^^^^^^^^^^^
+  │         │     │
+  │         │     The type '0x42::M::Box<u64>' does not have the ability 'drop'
+  │         Cannot ignore values without the 'drop' ability. The value must be used
+
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/type_variable_join_single_pack.move:6:10
+  │
+2 │     struct Box<T> copy, drop { f1: T, f2: T }
+  │            --- To satisfy the constraint, the 'copy' ability would need to be added here
+  ·
+5 │         let b = Box { f1: 0, f2: 1 };
+  │                 -------------------- The type '0x42::M::Box<u64>' does not have the ability 'copy'
+6 │         (*&b: Box<u64>);
+  │          ^^^ Invalid dereference. Dereference requires the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/type_variable_join_single_pack.move:7:28
+  │
+2 │     struct Box<T> copy, drop { f1: T, f2: T }
+  │            --- To satisfy the constraint, the 'copy' ability would need to be added here
+  ·
+5 │         let b = Box { f1: 0, f2: 1 };
+  │                 -------------------- The type '0x42::M::Box<u64>' does not have the ability 'copy'
+6 │         (*&b: Box<u64>);
+7 │         let b2 = Box { f1: *&b, f2: b };
+  │                            ^^^ Invalid dereference. Dereference requires the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/type_variable_join_single_pack.move:8:9
+  │
+2 │     struct Box<T> copy, drop { f1: T, f2: T }
+  │            --- To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+8 │         (b2: Box<Box<u64>>);
+  │         ^^^^^^^^^^^^^^^^^^^
+  │         │    │
+  │         │    The type '0x42::M::Box<0x42::M::Box<u64>>' does not have the ability 'drop'
+  │         Cannot ignore values without the 'drop' ability. The value must be used

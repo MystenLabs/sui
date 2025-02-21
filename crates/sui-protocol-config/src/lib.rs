@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 70;
+const MAX_PROTOCOL_VERSION: u64 = 75;
 
 // Record history of protocol version allocations here:
 //
@@ -203,7 +203,21 @@ const MAX_PROTOCOL_VERSION: u64 = 70;
 //             Add new gas model version to update charging of native functions.
 //             Add std::uq64_64 module to Move stdlib.
 //             Improve gas/wall time efficiency of some Move stdlib vector functions
-
+// Version 71: [SIP-45] Enable consensus amplification.
+// Version 72: Fix issue where `convert_type_argument_error` wasn't being used in all cases.
+//             Max gas budget moved to 50_000 SUI
+//             Max gas price moved to 50 SUI
+//             Variants as type nodes.
+// Version 73: Enable new marker table version.
+//             Enable consensus garbage collection and new commit rule for devnet.
+//             Enable zstd compression for consensus tonic network in testnet.
+//             Enable smart ancestor selection in mainnet.
+//             Enable probing for accepted rounds in round prober in mainnet
+// Version 74: Enable load_nitro_attestation move function in sui framework in devnet.
+//             Enable all gas costs for load_nitro_attestation.
+//             Enable zstd compression for consensus tonic network in mainnet.
+//             Enable the new commit rule for devnet.
+// Version 75: Enable passkey auth in testnet.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -460,6 +474,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_group_ops_native_function_msm: bool,
 
+    // Enable nitro attestation.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation: bool,
+
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
     reject_mutable_random_on_entry_functions: bool,
@@ -505,8 +523,11 @@ struct FeatureFlags {
     // Controls whether consensus handler should record consensus determined shared object version
     // assignments in consensus commit prologue transaction.
     // The purpose of doing this is to enable replaying transaction without transaction effects.
+    // V2 also records initial shared versions for consensus objects.
     #[serde(skip_serializing_if = "is_false")]
     record_consensus_determined_version_assignments_in_prologue: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    record_consensus_determined_version_assignments_in_prologue_v2: bool,
 
     // Run verification of framework upgrades using a new/fresh VM.
     #[serde(skip_serializing_if = "is_false")]
@@ -584,6 +605,23 @@ struct FeatureFlags {
     // Enable v2 native charging for natives.
     #[serde(skip_serializing_if = "is_false")]
     native_charging_v2: bool,
+
+    // Enables the new logic for collecting the subdag in the consensus linearizer. The new logic does not stop the recursion at the highest
+    // committed round for each authority, but allows to commit uncommitted blocks up to gc round (excluded) for that authority.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_linearize_subdag_v2: bool,
+
+    // Properly convert certain type argument errors in the execution layer.
+    #[serde(skip_serializing_if = "is_false")]
+    convert_type_argument_error: bool,
+
+    // Variants count as nodes
+    #[serde(skip_serializing_if = "is_false")]
+    variant_nodes: bool,
+
+    // If true, enable zstd compression for consensus tonic network.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_zstd_compression: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -618,6 +656,7 @@ pub enum PerObjectCongestionControlMode {
     TotalGasBudget,        // Use txn gas budget as execution cost.
     TotalTxCount,          // Use total txn count as execution cost.
     TotalGasBudgetWithCap, // Use txn gas budget as execution cost with a cap.
+    ExecutionTimeEstimate, // Use execution time estimate as execution cost.
 }
 
 impl PerObjectCongestionControlMode {
@@ -1192,6 +1231,12 @@ pub struct ProtocolConfig {
     vdf_verify_vdf_cost: Option<u64>,
     vdf_hash_to_input_cost: Option<u64>,
 
+    // nitro_attestation::load_nitro_attestation
+    nitro_attestation_parse_base_cost: Option<u64>,
+    nitro_attestation_parse_cost_per_byte: Option<u64>,
+    nitro_attestation_verify_base_cost: Option<u64>,
+    nitro_attestation_verify_cost_per_cert: Option<u64>,
+
     // Stdlib costs
     bcs_per_byte_serialized_cost: Option<u64>,
     bcs_legacy_min_output_size_cost: Option<u64>,
@@ -1286,9 +1331,15 @@ pub struct ProtocolConfig {
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
 
-    /// If >0, congestion control will allow up to one transaction per object to exceed
-    /// the configured maximum accumulated cost by the given amount.
+    /// If >0, congestion control will allow the configured maximum accumulated cost per object
+    /// to be exceeded by at most the given amount. Only one limit-exceeding transaction per
+    /// object will be allowed, unless bursting is configured below.
     max_txn_cost_overage_per_object_in_commit: Option<u64>,
+
+    /// If >0, congestion control will allow transactions in total cost equaling the
+    /// configured amount to exceed the configured maximum accumulated cost per object.
+    /// As above, up to one transaction per object exceeding the burst limit will be allowed.
+    allowed_txn_cost_overage_burst_per_object_in_commit: Option<u64>,
 
     /// Minimum interval of commit timestamps between consecutive checkpoints.
     min_checkpoint_interval_ms: Option<u64>,
@@ -1327,6 +1378,13 @@ pub struct ProtocolConfig {
     /// Adds an absolute cap on the maximum transaction cost when using TotalGasBudgetWithCap at
     /// the given multiple of the per-commit budget.
     gas_budget_based_txn_cost_absolute_cap_commit_count: Option<u64>,
+
+    /// SIP-45: K in the formula `amplification_factor = max(0, gas_price / reference_gas_price - K)`.
+    /// This is the threshold for activating consensus amplification.
+    sip_45_consensus_amplification_threshold: Option<u64>,
+
+    /// Enables use of v2 of the object per-epoch marker table with FullObjectID keys.
+    use_object_per_epoch_marker_table_v2: Option<bool>,
 }
 
 // feature flags
@@ -1556,6 +1614,11 @@ impl ProtocolConfig {
             .record_consensus_determined_version_assignments_in_prologue
     }
 
+    pub fn record_consensus_determined_version_assignments_in_prologue_v2(&self) -> bool {
+        self.feature_flags
+            .record_consensus_determined_version_assignments_in_prologue_v2
+    }
+
     pub fn prepend_prologue_tx_in_consensus_commit_in_checkpoints(&self) -> bool {
         self.feature_flags
             .prepend_prologue_tx_in_consensus_commit_in_checkpoints
@@ -1678,7 +1741,12 @@ impl ProtocolConfig {
     }
 
     pub fn gc_depth(&self) -> u32 {
-        self.consensus_gc_depth.unwrap_or(0)
+        if cfg!(msim) {
+            // exercise a very low gc_depth
+            5
+        } else {
+            self.consensus_gc_depth.unwrap_or(0)
+        }
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {
@@ -1712,6 +1780,30 @@ impl ProtocolConfig {
 
     pub fn native_charging_v2(&self) -> bool {
         self.feature_flags.native_charging_v2
+    }
+
+    pub fn consensus_linearize_subdag_v2(&self) -> bool {
+        let res = self.feature_flags.consensus_linearize_subdag_v2;
+        assert!(
+            !res || self.gc_depth() > 0,
+            "The consensus linearize sub dag V2 requires GC to be enabled"
+        );
+        res
+    }
+
+    pub fn convert_type_argument_error(&self) -> bool {
+        self.feature_flags.convert_type_argument_error
+    }
+
+    pub fn variant_nodes(&self) -> bool {
+        self.feature_flags.variant_nodes
+    }
+
+    pub fn consensus_zstd_compression(&self) -> bool {
+        self.feature_flags.consensus_zstd_compression
+    }
+    pub fn enable_nitro_attestation(&self) -> bool {
+        self.feature_flags.enable_nitro_attestation
     }
 }
 
@@ -2147,6 +2239,12 @@ impl ProtocolConfig {
             vdf_verify_vdf_cost: None,
             vdf_hash_to_input_cost: None,
 
+            // nitro_attestation::verify_nitro_attestation
+            nitro_attestation_parse_base_cost: None,
+            nitro_attestation_parse_cost_per_byte: None,
+            nitro_attestation_verify_base_cost: None,
+            nitro_attestation_verify_cost_per_cert: None,
+
             bcs_per_byte_serialized_cost: None,
             bcs_legacy_min_output_size_cost: None,
             bcs_failure_cost: None,
@@ -2226,6 +2324,8 @@ impl ProtocolConfig {
 
             max_txn_cost_overage_per_object_in_commit: None,
 
+            allowed_txn_cost_overage_burst_per_object_in_commit: None,
+
             min_checkpoint_interval_ms: None,
 
             checkpoint_summary_version_specific_data: None,
@@ -2243,6 +2343,10 @@ impl ProtocolConfig {
             gas_budget_based_txn_cost_cap_factor: None,
 
             gas_budget_based_txn_cost_absolute_cap_commit_count: None,
+
+            sip_45_consensus_amplification_threshold: None,
+
+            use_object_per_epoch_marker_table_v2: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3076,6 +3180,77 @@ impl ProtocolConfig {
 
                     cfg.validator_validate_metadata_cost_base = Some(20000);
                 }
+                71 => {
+                    cfg.sip_45_consensus_amplification_threshold = Some(5);
+
+                    // Enable bursts for congestion control. (10x the per-commit budget)
+                    cfg.allowed_txn_cost_overage_burst_per_object_in_commit = Some(185_000_000);
+                }
+                72 => {
+                    cfg.feature_flags.convert_type_argument_error = true;
+
+                    // Invariant: max_gas_price * base_tx_cost_fixed <= max_tx_gas
+                    // max gas budget is in MIST and an absolute value 50_000 SUI
+                    cfg.max_tx_gas = Some(50_000_000_000_000);
+                    // max gas price is in MIST and an absolute value 50 SUI
+                    cfg.max_gas_price = Some(50_000_000_000);
+
+                    cfg.feature_flags.variant_nodes = true;
+                }
+                73 => {
+                    // Enable new marker table version.
+                    cfg.use_object_per_epoch_marker_table_v2 = Some(true);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Assuming a round rate of max 15/sec, then using a gc depth of 60 allow blocks within a window of ~4 seconds
+                        // to be included before be considered garbage collected.
+                        cfg.consensus_gc_depth = Some(60);
+                    }
+
+                    if chain != Chain::Mainnet {
+                        // Enable zstd compression for consensus in testnet
+                        cfg.feature_flags.consensus_zstd_compression = true;
+                    }
+
+                    // Enable smart ancestor selection for mainnet
+                    cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                    // Enable probing for accepted rounds in round prober for mainnet
+                    cfg.feature_flags
+                        .consensus_round_prober_probe_accepted_rounds = true;
+
+                    // Increase congestion control budget.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalGasBudgetWithCap;
+                    cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(37_000_000);
+                    cfg.max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit =
+                        Some(7_400_000); // 20% of above
+                    cfg.max_txn_cost_overage_per_object_in_commit = Some(u64::MAX);
+                    cfg.gas_budget_based_txn_cost_absolute_cap_commit_count = Some(50);
+                    cfg.allowed_txn_cost_overage_burst_per_object_in_commit = Some(370_000_000);
+                }
+                74 => {
+                    // Enable nitro attestation verify native move function for devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_nitro_attestation = true;
+                    }
+                    cfg.nitro_attestation_parse_base_cost = Some(53 * 50);
+                    cfg.nitro_attestation_parse_cost_per_byte = Some(50);
+                    cfg.nitro_attestation_verify_base_cost = Some(49632 * 50);
+                    cfg.nitro_attestation_verify_cost_per_cert = Some(52369 * 50);
+
+                    // Enable zstd compression for consensus in mainnet
+                    cfg.feature_flags.consensus_zstd_compression = true;
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
+                    }
+                }
+                75 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.passkey_auth = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -3246,6 +3421,14 @@ impl ProtocolConfig {
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {
         self.feature_flags
             .consensus_round_prober_probe_accepted_rounds = val;
+    }
+
+    pub fn set_consensus_linearize_subdag_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_linearize_subdag_v2 = val;
+    }
+
+    pub fn set_mysticeti_fastpath_for_testing(&mut self, val: bool) {
+        self.feature_flags.mysticeti_fastpath = val;
     }
 }
 

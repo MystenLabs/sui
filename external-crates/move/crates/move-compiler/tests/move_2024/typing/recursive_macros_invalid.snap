@@ -1,0 +1,54 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_invalid.move:4:13
+   │
+ 4 │         1 + self_cyle!()
+   │             ^^^^^^^^^^^^ Recursive macro expansion. 'a::m::self_cyle' cannot recursively expand itself
+   ·
+39 │         self_cyle!();
+   │         ------------ 'a::m::self_cyle' previously expanded here
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_invalid.move:17:9
+   │
+ 9 │         cycle2!()
+   │         --------- From this macro expansion
+   ·
+13 │         cycle3!()
+   │         --------- From this macro expansion
+   ·
+17 │         cycle1!()
+   │         ^^^^^^^^^ Recursive macro expansion. 'a::m::cycle1' cannot recursively expand itself
+   ·
+40 │         cycle1!();
+   │         --------- 'a::m::cycle1' previously expanded here
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_invalid.move:22:19
+   │
+22 │         apply!(|| cycle_app!(|| $f()))
+   │         ----------^^^^^^^^^^^^^^^^^^^-
+   │         │         │
+   │         │         Recursive macro expansion. 'a::m::cycle_app' cannot recursively expand itself
+   │         From this macro expansion
+   ·
+41 │         cycle_app!(|| 1);
+   │         ---------------- 'a::m::cycle_app' previously expanded here
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_invalid.move:31:18
+   │
+31 │         by_name!(cycle_by_name!($f))
+   │         ---------^^^^^^^^^^^^^^^^^^-
+   │         │        │
+   │         │        Recursive macro expansion. 'a::m::cycle_by_name' cannot recursively expand itself
+   │         From this macro expansion
+   ·
+42 │         cycle_by_name!(1);
+   │         ----------------- 'a::m::cycle_by_name' previously expanded here

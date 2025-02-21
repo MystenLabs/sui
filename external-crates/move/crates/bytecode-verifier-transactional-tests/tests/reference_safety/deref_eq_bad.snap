@@ -1,0 +1,15 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/reference_safety/deref_eq_bad.mvir
+---
+processed 1 task
+
+task 0, lines 1-18:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
+    major_status: READREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x1::M,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 5)],
+}

@@ -24,19 +24,29 @@ impl<'a> Display for Pretty<'a, DevInspectResults> {
         write!(f, "{}", response.events)?;
 
         if let Some(results) = &response.results {
+            if results.is_empty() {
+                writeln!(f, "No execution results")?;
+                return Ok(());
+            }
+
+            writeln!(f, "Execution Result")?;
             for result in results {
-                writeln!(f, "Execution Result")?;
-                writeln!(f, "  Mutable Reference Outputs")?;
-                for m in result.mutable_reference_outputs.iter() {
-                    writeln!(f, "    Sui Argument: {}", m.0)?;
-                    writeln!(f, "    Sui TypeTag: {:?}", m.2)?;
-                    writeln!(f, "    Bytes: {:?}", m.1)?;
+                if !result.mutable_reference_outputs.is_empty() {
+                    writeln!(f, "  Mutable Reference Outputs")?;
+                    for m in result.mutable_reference_outputs.iter() {
+                        writeln!(f, "    Sui Argument: {}", m.0)?;
+                        writeln!(f, "    Sui TypeTag: {:?}", m.2)?;
+                        writeln!(f, "    Bytes: {:?}", m.1)?;
+                    }
                 }
 
-                writeln!(f, "  Return values")?;
-                for val in result.return_values.iter() {
-                    writeln!(f, "    Sui TypeTag: {:?}", val.1)?;
-                    writeln!(f, "    Bytes: {:?}", val.0)?;
+                if !result.return_values.is_empty() {
+                    writeln!(f, "  Return values")?;
+
+                    for val in result.return_values.iter() {
+                        writeln!(f, "    Sui TypeTag: {:?}", val.1)?;
+                        writeln!(f, "    Bytes: {:?}", val.0)?;
+                    }
                 }
             }
         }

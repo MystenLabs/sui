@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02017]: invalid 'use fun' declaration
+  ┌─ tests/move_2024/naming/use_fun_with_type_parameter.move:3:9
+  │
+2 │     fun foo<T>(x: T) {
+  │             - But 'T' was declared as a type parameter here
+3 │         use fun foo as T.foo;
+  │         ^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun'. Cannot associate a method with a type parameter
+
+error[E04023]: invalid method call
+  ┌─ tests/move_2024/naming/use_fun_with_type_parameter.move:4:9
+  │
+2 │     fun foo<T>(x: T) {
+  │                   - Method calls are not supported on type parameters. Got an expression of type: 'T'
+3 │         use fun foo as T.foo;
+4 │         x.foo();
+  │         ^^^^^^^ Invalid method call

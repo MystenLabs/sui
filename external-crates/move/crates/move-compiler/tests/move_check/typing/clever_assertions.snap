@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/typing/clever_assertions.move:4:7
+  │
+4 │     #[error]
+  │       ^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/typing/clever_assertions.move:7:7
+  │
+7 │     #[error]
+  │       ^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/clever_assertions.move:23:9
+   │
+23 │         assert!(false);
+   │         ^^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.

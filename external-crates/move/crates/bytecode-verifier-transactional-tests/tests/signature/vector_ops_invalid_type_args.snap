@@ -1,0 +1,35 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/signature/vector_ops_invalid_type_args.mvir
+---
+processed 3 tasks
+
+task 0, lines 1-10:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 1, lines 11-20:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 2, lines 21-30:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionDefinition, 0)],
+    offsets: [],
+}

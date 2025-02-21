@@ -158,10 +158,6 @@ fn load_package_external_package_calls_no_types() {
     assert_eq!(l_pkg.runtime.loaded_modules.len(), 1);
     assert_eq!(l_pkg.runtime.storage_id, package2_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 1);
-
-    for fptr in l_pkg.runtime.vtable.functions.values() {
-        println!("{:#?}", fptr.to_ref().code());
-    }
 }
 
 #[test]

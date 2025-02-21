@@ -1,6 +1,0 @@
-{
-	"private": true,
-	"import": "../dist/esm/bcs/index.js",
-	"main": "../dist/cjs/bcs/index.js",
-	"sideEffects": false
-}

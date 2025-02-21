@@ -1,0 +1,49 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03007]: too many type arguments
+  ┌─ tests/move_check/naming/other_builtins_invalid.move:3:9
+  │
+3 │         freeze<u64, bool>(x);
+  │         ^^^^^^--------------
+  │         │
+  │         Expected 1 type argument(s) but got 2
+  │         Invalid call to builtin function: 'freeze'
+
+error[E03008]: too few type arguments
+  ┌─ tests/move_check/naming/other_builtins_invalid.move:4:9
+  │
+4 │         freeze<>(x);
+  │         ^^^^^^-----
+  │         │
+  │         Expected 1 type argument(s) but got 0
+  │         Invalid call to builtin function: 'freeze'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_check/naming/other_builtins_invalid.move:5:9
+  │
+5 │         assert!();
+  │         ^^^^^^^^^
+  │         │      │
+  │         │      Found 0 argument(s) here
+  │         Invalid call of 'assert'. The call expected 2 argument(s) but got 0
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/naming/other_builtins_invalid.move:6:9
+  │
+6 │         assert!(false);
+  │         ^^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/naming/other_builtins_invalid.move:7:9
+  │
+7 │         assert!(0 != 1);
+  │         ^^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.

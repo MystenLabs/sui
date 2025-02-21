@@ -1,0 +1,24 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-9:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5532800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 11-15:
+//# upgrade --package Test_V1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5646800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 17-20:
+//# upgrade --package Test_V2 --upgrade-capability 1,1 --sender A
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }

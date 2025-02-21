@@ -1,0 +1,140 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04014]: invalid loop control
+  ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:7:24
+  │  
+6 │           do!(|| {
+  │ ╭─────────────'
+7 │ │             if (false) break;
+  │ │                        ^^^^^ Invalid 'break'. This usage is not yet supported for lambdas or macros
+8 │ │             if (false) continue;
+9 │ │         });
+  │ ╰─────────' Inside this lambda
+
+error[E04014]: invalid loop control
+  ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:8:24
+  │  
+6 │           do!(|| {
+  │ ╭─────────────'
+7 │ │             if (false) break;
+8 │ │             if (false) continue;
+  │ │                        ^^^^^^^^ Invalid 'continue'. This usage is not yet supported for lambdas or macros
+9 │ │         });
+  │ ╰─────────' Inside this lambda
+
+error[E04014]: invalid loop control
+   ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:15:28
+   │    
+13 │   ╭         loop {
+14 │   │             do!(|| {
+   │ ╭─│─────────────────'
+15 │ │ │                 if (false) break;
+   │ │ │                            ^^^^^ Invalid 'break'. This usage is not yet supported for lambdas or macros
+16 │ │ │                 if (false) continue;
+17 │ │ │             });
+   │ ╰─│─────────────' Inside this lambda
+18 │   │         };
+   │   ╰─────────' To 'break' to this loop, add a label, e.g. `'label: loop` and `break 'label`
+
+error[E04014]: invalid loop control
+   ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:16:28
+   │    
+13 │   ╭         loop {
+14 │   │             do!(|| {
+   │ ╭─│─────────────────'
+15 │ │ │                 if (false) break;
+16 │ │ │                 if (false) continue;
+   │ │ │                            ^^^^^^^^ Invalid 'continue'. This usage is not yet supported for lambdas or macros
+17 │ │ │             });
+   │ ╰─│─────────────' Inside this lambda
+18 │   │         };
+   │   ╰─────────' To 'continue' to this loop, add a label, e.g. `'label: loop` and `continue 'label`
+
+error[E04014]: invalid loop control
+   ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:22:28
+   │    
+20 │   ╭         while (true) {
+21 │   │             do!(|| {
+   │ ╭─│─────────────────'
+22 │ │ │                 if (false) break;
+   │ │ │                            ^^^^^ Invalid 'break'. This usage is not yet supported for lambdas or macros
+23 │ │ │                 if (false) continue;
+24 │ │ │             });
+   │ ╰─│─────────────' Inside this lambda
+25 │   │         }
+   │   ╰─────────' To 'break' to this loop, add a label, e.g. `'label: while` and `break 'label`
+
+error[E04014]: invalid loop control
+   ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:23:28
+   │    
+20 │   ╭         while (true) {
+21 │   │             do!(|| {
+   │ ╭─│─────────────────'
+22 │ │ │                 if (false) break;
+23 │ │ │                 if (false) continue;
+   │ │ │                            ^^^^^^^^ Invalid 'continue'. This usage is not yet supported for lambdas or macros
+24 │ │ │             });
+   │ ╰─│─────────────' Inside this lambda
+25 │   │         }
+   │   ╰─────────' To 'continue' to this loop, add a label, e.g. `'label: while` and `continue 'label`
+
+error[E04014]: invalid loop control
+   ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:31:28
+   │    
+29 │   ╭         'a: loop {
+30 │   │             do!(|| {
+   │ ╭─│─────────────────'
+31 │ │ │                 if (false) break;
+   │ │ │                            ^^^^^ Invalid 'break'. This usage is not yet supported for lambdas or macros
+32 │ │ │                 if (false) continue;
+33 │ │ │             });
+   │ ╰─│─────────────' Inside this lambda
+34 │   │         };
+   │   ╰─────────' To 'break' to this loop, specify the label, e.g. `break 'a`
+
+error[E04014]: invalid loop control
+   ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:32:28
+   │    
+29 │   ╭         'a: loop {
+30 │   │             do!(|| {
+   │ ╭─│─────────────────'
+31 │ │ │                 if (false) break;
+32 │ │ │                 if (false) continue;
+   │ │ │                            ^^^^^^^^ Invalid 'continue'. This usage is not yet supported for lambdas or macros
+33 │ │ │             });
+   │ ╰─│─────────────' Inside this lambda
+34 │   │         };
+   │   ╰─────────' To 'continue' to this loop, specify the label, e.g. `continue 'a`
+
+error[E04014]: invalid loop control
+   ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:38:28
+   │    
+36 │   ╭         'b: while (true) {
+37 │   │             do!(|| {
+   │ ╭─│─────────────────'
+38 │ │ │                 if (false) break;
+   │ │ │                            ^^^^^ Invalid 'break'. This usage is not yet supported for lambdas or macros
+39 │ │ │                 if (false) continue;
+40 │ │ │             });
+   │ ╰─│─────────────' Inside this lambda
+41 │   │         }
+   │   ╰─────────' To 'break' to this loop, specify the label, e.g. `break 'b`
+
+error[E04014]: invalid loop control
+   ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:39:28
+   │    
+36 │   ╭         'b: while (true) {
+37 │   │             do!(|| {
+   │ ╭─│─────────────────'
+38 │ │ │                 if (false) break;
+39 │ │ │                 if (false) continue;
+   │ │ │                            ^^^^^^^^ Invalid 'continue'. This usage is not yet supported for lambdas or macros
+40 │ │ │             });
+   │ ╰─│─────────────' Inside this lambda
+41 │   │         }
+   │   ╰─────────' To 'continue' to this loop, specify the label, e.g. `continue 'b`

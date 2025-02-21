@@ -1,0 +1,25 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/naming/index_syntax_methods_mismatched_args.move:3:5
+  │
+3 │     struct S {}
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E04034]: 'syntax' method types differ
+  ┌─ tests/move_2024/naming/index_syntax_methods_mismatched_args.move:6:16
+  │
+6 │     public fun index_s(s: &S): &S { s }
+  │                ^^^^^^^ This index function expects 1 parameters
+  ·
+9 │     public fun index_mut_s(s: &mut S, _i: u64): &mut S { s }
+  │                ----------- This mutable index function expects 2 parameters 
+  │
+  = Index operations on the same type must take the name number of parameters

@@ -1,0 +1,45 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99002]: potentially unenforceable custom transfer/share/freeze policy
+   ┌─ tests/sui_mode/linter/custom_state_change.move:15:16
+   │
+15 │     public fun custom_transfer_bad(o: S1, ctx: &TxContext) {
+   │                ^^^^^^^^^^^^^^^^^^^ - An instance of a module-private type with a 'store' ability to be transferred coming from here
+   │                │                    
+   │                Potential unintended implementation of a custom transfer function.
+16 │         transfer::transfer(o, tx_context::sender(ctx))
+   │                   -------- Instances of a type with a 'store' ability can be transferred using the 'public_transfer' function which often negates the intent of enforcing a custom transfer policy
+   │
+   = A custom transfer policy for a given type is implemented through calling the private 'transfer' function variant in the module defining this type
+   = This warning can be suppressed with '#[allow(lint(custom_state_change))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99002]: potentially unenforceable custom transfer/share/freeze policy
+   ┌─ tests/sui_mode/linter/custom_state_change.move:20:16
+   │
+20 │     public fun custom_share_bad(o: S1) {
+   │                ^^^^^^^^^^^^^^^^ - An instance of a module-private type with a 'store' ability to be shared coming from here
+   │                │                 
+   │                Potential unintended implementation of a custom share function.
+21 │         transfer::share_object(o)
+   │                   ------------ Instances of a type with a 'store' ability can be shared using the 'public_share_object' function which often negates the intent of enforcing a custom share policy
+   │
+   = A custom share policy for a given type is implemented through calling the private 'share_object' function variant in the module defining this type
+   = This warning can be suppressed with '#[allow(lint(custom_state_change))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99002]: potentially unenforceable custom transfer/share/freeze policy
+   ┌─ tests/sui_mode/linter/custom_state_change.move:24:16
+   │
+24 │     public fun custom_freeze_bad(o: S1) {
+   │                ^^^^^^^^^^^^^^^^^ - An instance of a module-private type with a 'store' ability to be frozen coming from here
+   │                │                  
+   │                Potential unintended implementation of a custom freeze function.
+25 │         transfer::freeze_object(o)
+   │                   ------------- Instances of a type with a 'store' ability can be frozen using the 'public_freeze_object' function which often negates the intent of enforcing a custom freeze policy
+   │
+   = A custom freeze policy for a given type is implemented through calling the private 'freeze_object' function variant in the module defining this type
+   = This warning can be suppressed with '#[allow(lint(custom_state_change))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

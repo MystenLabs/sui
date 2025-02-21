@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_2024/parser/top_level_module_mixed_invalid_2.move:7:11
+  │
+1 │ module a::n {
+  │           - Previous definition here
+  ·
+7 │ module a::m;
+  │           ^ Cannot define a 'module' label form in a file with multiple modules
+  │
+  = Either move each 'module' label and definitions into its own file or define each as 'module <name> { contents }'

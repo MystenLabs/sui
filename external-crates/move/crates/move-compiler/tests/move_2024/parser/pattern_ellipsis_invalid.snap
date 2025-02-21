@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/parser/pattern_ellipsis_invalid.move:9:16
+  │
+9 │         match (x) {
+  │                ^ Pattern '_' not covered
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/pattern_ellipsis_invalid.move:10:13
+   │
+10 │             ..
+   │             ^ Unexpected '..'. Expected a call argument expression

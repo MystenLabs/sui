@@ -1,0 +1,39 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/public_use_fun_invalid_type.move:21:5
+   │
+ 3 │     public struct X {}
+   │                   - Type defined in another module here
+   ·
+21 │     public use fun std::utilities::x_ex as std::utilities::X.ex;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │     │
+   │     Invalid 'use fun'. Cannot publicly associate a function with a type defined in another module
+   │     Declared 'public' here. Consider removing to make a local 'use fun' instead
+
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/public_use_fun_invalid_type.move:25:5
+   │
+25 │     public use fun std::utilities::vec_ex as vector.ex;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │     │
+   │     Invalid 'use fun'. Cannot publicly associate a function with a type defined in another module
+   │     Declared 'public' here. Consider removing to make a local 'use fun' instead
+
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/public_use_fun_invalid_type.move:29:5
+   │
+ 2 │ module std::utilities {
+   │             --------- Type defined in another module here
+   ·
+29 │     public use fun std::utilities::u64_ex as u64.ex;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │     │
+   │     Invalid 'use fun'. Cannot publicly associate a function with a type defined in another module
+   │     Declared 'public' here. Consider removing to make a local 'use fun' instead

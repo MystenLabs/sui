@@ -1,0 +1,550 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 42 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 19-46:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 15663600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 48:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 50-52:
+//# programmable --sender A --inputs object(1,5) 100 object(1,1)
+//> 0: sui::coin::mint<P0::fake::FAKE>(Input(0), Input(1));
+//> MergeCoins(Input(2), [Result(0)]);
+mutated: object(0,0), object(1,1), object(1,5)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 3972672, non_refundable_storage_fee: 40128
+
+task 4, line 54:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 5, line 56:
+//# transfer-object 1,2 --sender A --recipient B
+mutated: object(0,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 6, line 58:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, line 60:
+//# transfer-object 1,3 --sender A --recipient B
+mutated: object(0,0), object(1,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 9, line 64:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 11, line 68:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 13, line 72:
+//# create-checkpoint
+Checkpoint created: 6
+
+task 15, line 76:
+//# create-checkpoint
+Checkpoint created: 7
+
+task 16, lines 78-99:
+//# run-graphql --cursors {"c":2,"t":1,"i":false}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "700"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999982296272"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "700"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 17, lines 101-122:
+//# run-graphql --cursors {"c":3,"t":1,"i":false}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "500"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "500"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 18, lines 124-145:
+//# run-graphql --cursors {"c":4,"t":1,"i":false}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "400"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 20, line 149:
+//# create-checkpoint
+Checkpoint created: 8
+
+task 21, lines 151-172:
+//# run-graphql --cursors {"c":2,"t":1,"i":false}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "700"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999982296272"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "700"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 22, lines 174-195:
+//# run-graphql --cursors {"c":3,"t":1,"i":false}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "500"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "500"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 23, lines 197-218:
+//# run-graphql --cursors {"c":4,"t":1,"i":false}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "400"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 25, line 222:
+//# create-checkpoint
+Checkpoint created: 9
+
+task 27, line 226:
+//# create-checkpoint
+Checkpoint created: 10
+
+task 28, lines 228-257:
+//# run-graphql --cursors {"c":2,"t":1,"i":false}
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 3
+      },
+      "last": {
+        "sequenceNumber": 10
+      }
+    },
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": null
+        }
+      ]
+    }
+  },
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 17,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        0,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 29, lines 259-280:
+//# run-graphql --cursors {"c":3,"t":1,"i":false}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "500"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "500"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 30, lines 282-303:
+//# run-graphql --cursors {"c":4,"t":1,"i":false}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "400"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 32, line 307:
+//# create-checkpoint
+Checkpoint created: 11
+
+task 34, line 311:
+//# create-checkpoint
+Checkpoint created: 12
+
+task 36, line 315:
+//# create-checkpoint
+Checkpoint created: 13
+
+task 38, line 319:
+//# create-checkpoint
+Checkpoint created: 14
+
+task 39, lines 321-350:
+//# run-graphql --cursors {"c":2,"t":1,"i":false}
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 7
+      },
+      "last": {
+        "sequenceNumber": 14
+      }
+    },
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": null
+        }
+      ]
+    }
+  },
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 17,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        0,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 40, lines 352-381:
+//# run-graphql --cursors {"c":3,"t":1,"i":false}
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 7
+      },
+      "last": {
+        "sequenceNumber": 14
+      }
+    },
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": null
+        }
+      ]
+    }
+  },
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 17,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        0,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 41, lines 383-412:
+//# run-graphql --cursors {"c":4,"t":1,"i":false}
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 7
+      },
+      "last": {
+        "sequenceNumber": 14
+      }
+    },
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": null
+        }
+      ]
+    }
+  },
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 17,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        0,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

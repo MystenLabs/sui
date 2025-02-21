@@ -1,0 +1,39 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 2, lines 16-36:
+//# print-bytecode 
+// Move bytecode v6
+module 1.M {
+use 0000000000000000000000000000000000000000000000000000000000000001::T;
+
+f(): address {
+B0:
+	0: Call T::f()
+	1: LdConst[0](address: 0x00..)
+	2: Ret
+}
+
+h(): address {
+B0:
+	0: LdConst[0](address: 0x00..)
+	1: Call T::g(address): address
+	2: Ret
+}
+
+l(): address {
+L0:	loc0: address
+B0:
+	0: LdConst[0](address: 0x00..)
+	1: StLoc[0](loc0: address)
+	2: MoveLoc[0](loc0: address)
+	3: Call T::g(address): address
+	4: Ret
+}
+
+Constants [
+	0 => address: 0x0000000000000000000000000000000000000000000000000000000000000001
+]
+}

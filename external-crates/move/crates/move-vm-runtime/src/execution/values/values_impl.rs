@@ -2198,7 +2198,7 @@ impl GlobalValueImpl {
             Self::Cached {
                 fingerprint,
                 container,
-            } => !fingerprint.same_value(&container),
+            } => !fingerprint.same_value(container),
         }
     }
 }

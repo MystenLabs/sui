@@ -1,0 +1,297 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+task 1, lines 6-15:
+//# run-graphql
+Response: {
+  "data": {
+    "type": {
+      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::priority_queue::PriorityQueue<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>",
+      "signature": {
+        "datatype": {
+          "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "module": "priority_queue",
+          "type": "PriorityQueue",
+          "typeParameters": [
+            {
+              "datatype": {
+                "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                "module": "coin",
+                "type": "Coin",
+                "typeParameters": [
+                  {
+                    "datatype": {
+                      "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                      "module": "sui",
+                      "type": "SUI",
+                      "typeParameters": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "layout": {
+        "struct": {
+          "type": "0x0000000000000000000000000000000000000000000000000000000000000002::priority_queue::PriorityQueue<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>",
+          "fields": [
+            {
+              "name": "entries",
+              "layout": {
+                "vector": {
+                  "struct": {
+                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::priority_queue::Entry<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>",
+                    "fields": [
+                      {
+                        "name": "priority",
+                        "layout": "u64"
+                      },
+                      {
+                        "name": "value",
+                        "layout": {
+                          "struct": {
+                            "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                            "fields": [
+                              {
+                                "name": "id",
+                                "layout": {
+                                  "struct": {
+                                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                                    "fields": [
+                                      {
+                                        "name": "id",
+                                        "layout": {
+                                          "struct": {
+                                            "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID",
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "layout": "address"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "name": "balance",
+                                "layout": {
+                                  "struct": {
+                                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                                    "fields": [
+                                      {
+                                        "name": "value",
+                                        "layout": "u64"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 2, lines 17-26:
+//# run-graphql
+Response: {
+  "data": {
+    "type": {
+      "repr": "u64",
+      "signature": "u64",
+      "layout": "u64"
+    }
+  }
+}
+
+task 3, lines 28-37:
+//# run-graphql
+Response: {
+  "data": {
+    "type": {
+      "repr": "vector<u64>",
+      "signature": {
+        "vector": "u64"
+      },
+      "layout": {
+        "vector": "u64"
+      }
+    }
+  }
+}
+
+task 4, lines 39-48:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Bad type: unexpected end of tokens",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "type"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 5, lines 50-60:
+//# run-graphql
+Response: {
+  "data": {
+    "type": {
+      "repr": "0x0000000000000000000000000000000000000000000000000000000000000042::not::Here",
+      "signature": {
+        "datatype": {
+          "package": "0x0000000000000000000000000000000000000000000000000000000000000042",
+          "module": "not",
+          "type": "Here",
+          "typeParameters": []
+        }
+      }
+    }
+  }
+}
+
+task 6, lines 62-77:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Internal error occurred while processing request: Error calculating layout for 0x0000000000000000000000000000000000000000000000000000000000000042::not::Here: Package not found: 0x0000000000000000000000000000000000000000000000000000000000000042",
+      "locations": [
+        {
+          "line": 12,
+          "column": 9
+        }
+      ],
+      "path": [
+        "type",
+        "layout"
+      ],
+      "extensions": {
+        "code": "INTERNAL_SERVER_ERROR"
+      }
+    }
+  ]
+}
+
+task 7, lines 79-102:
+//# run-graphql
+Response: {
+  "data": {
+    "token": {
+      "abilities": [
+        "KEY"
+      ]
+    },
+    "coin": {
+      "abilities": [
+        "STORE",
+        "KEY"
+      ]
+    },
+    "balance": {
+      "abilities": [
+        "STORE"
+      ]
+    },
+    "coin_vector": {
+      "abilities": [
+        "STORE"
+      ]
+    },
+    "prim_vector": {
+      "abilities": [
+        "COPY",
+        "DROP",
+        "STORE"
+      ]
+    }
+  }
+}
+
+task 8, lines 104-121:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Internal error occurred while processing request: Error calculating abilities for vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<u8>>>>>>>>>>>>>>>>>: Type parameter nesting exceeded limit of 16",
+      "locations": [
+        {
+          "line": 14,
+          "column": 13
+        }
+      ],
+      "path": [
+        "type",
+        "abilities"
+      ],
+      "extensions": {
+        "code": "INTERNAL_SERVER_ERROR"
+      }
+    }
+  ]
+}
+
+task 9, lines 123-140:
+//# publish
+created: object(9,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4461200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 10, line 142:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 11, lines 144-152:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Internal error occurred while processing request: Error calculating layout for 0xce4a112d19a8f3e6b79c995b88f08fba7526973082fa9e2b871fdc7ddefc9e45::m::S1<u32>: Type layout nesting exceeded limit of 128",
+      "locations": [
+        {
+          "line": 4,
+          "column": 9
+        }
+      ],
+      "path": [
+        "type",
+        "layout"
+      ],
+      "extensions": {
+        "code": "INTERNAL_SERVER_ERROR"
+      }
+    }
+  ]
+}

@@ -6,12 +6,11 @@ use crate::{
     diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     expansion::ast::{
         ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, Mutability,
-        TargetKind,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, DatatypeTypeParameter, TParam},
     parser::ast::{
-        self as P, BinOp, ConstantName, DatatypeName, Field, FunctionName, UnaryOp, VariantName,
-        ENTRY_MODIFIER,
+        self as P, BinOp, ConstantName, DatatypeName, Field, FunctionName, TargetKind, UnaryOp,
+        VariantName, ENTRY_MODIFIER,
     },
     shared::{
         ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name,
@@ -983,15 +982,7 @@ impl AstDebug for ModuleDefinition {
             w.writeln(format!("{}", n))
         }
         attributes.ast_debug(w);
-        w.writeln(match target_kind {
-            TargetKind::Source {
-                is_root_package: true,
-            } => "root module",
-            TargetKind::Source {
-                is_root_package: false,
-            } => "dependency module",
-            TargetKind::External => "external module",
-        });
+        target_kind.ast_debug(w);
         w.writeln(format!("dependency order #{}", dependency_order));
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(format!("friend {};", mident));

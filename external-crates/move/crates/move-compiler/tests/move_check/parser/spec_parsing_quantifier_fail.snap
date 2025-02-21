@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/parser/spec_parsing_quantifier_fail.move:2:5
+  │  
+2 │ ╭     spec module {
+3 │ │         invariant forall x: num y: num : x == y;
+4 │ │     }
+  │ ╰─────^ Specification blocks are deprecated and are no longer used

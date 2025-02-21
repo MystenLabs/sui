@@ -91,9 +91,9 @@ fn struct_def(context: &mut Context, sname: DatatypeName, sdef: &N::StructDefini
     context.current_datatype = Some(sname);
     match &sdef.fields {
         N::StructFields::Native(_) => (),
-        N::StructFields::Defined(_, fields) => {
-            fields.iter().for_each(|(_, _, (_, ty))| type_(context, ty))
-        }
+        N::StructFields::Defined(_, fields) => fields
+            .iter()
+            .for_each(|(_, _, (_, (_, ty)))| type_(context, ty)),
     };
     context.current_datatype = None;
 }
@@ -107,9 +107,9 @@ fn enum_def(context: &mut Context, ename: DatatypeName, edef: &N::EnumDefinition
     for (_, _, vdef) in &edef.variants {
         match &vdef.fields {
             N::VariantFields::Empty => (),
-            N::VariantFields::Defined(_, fields) => {
-                fields.iter().for_each(|(_, _, (_, ty))| type_(context, ty))
-            }
+            N::VariantFields::Defined(_, fields) => fields
+                .iter()
+                .for_each(|(_, _, (_, (_, ty)))| type_(context, ty)),
         }
     }
     context.current_datatype = None;

@@ -448,6 +448,7 @@ pub mod advance_epoch_result_injection {
     use crate::{
         committee::EpochId,
         error::{ExecutionError, ExecutionErrorKind},
+        execution::ResultWithTimings,
     };
     use std::cell::RefCell;
 
@@ -464,12 +465,28 @@ pub mod advance_epoch_result_injection {
     /// This function is used to modify the result of advance_epoch transaction for testing.
     /// If the override is set, the result will be an execution error, otherwise the original result will be returned.
     pub fn maybe_modify_result(
+        result: ResultWithTimings<(), ExecutionError>,
+        current_epoch: EpochId,
+    ) -> ResultWithTimings<(), ExecutionError> {
+        if let Some((start, end)) = OVERRIDE.with(|o| *o.borrow()) {
+            if current_epoch >= start && current_epoch < end {
+                return Err((
+                    ExecutionError::new(ExecutionErrorKind::FunctionNotFound, None),
+                    vec![],
+                ));
+            }
+        }
+        result
+    }
+
+    // For old execution versions that don't report timings
+    pub fn maybe_modify_result_legacy(
         result: Result<(), ExecutionError>,
         current_epoch: EpochId,
     ) -> Result<(), ExecutionError> {
         if let Some((start, end)) = OVERRIDE.with(|o| *o.borrow()) {
             if current_epoch >= start && current_epoch < end {
-                return Err::<(), ExecutionError>(ExecutionError::new(
+                return Err(ExecutionError::new(
                     ExecutionErrorKind::FunctionNotFound,
                     None,
                 ));

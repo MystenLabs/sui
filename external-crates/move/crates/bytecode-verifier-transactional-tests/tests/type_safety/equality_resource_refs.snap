@@ -1,0 +1,5 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/equality_resource_refs.mvir
+---
+processed 4 tasks

@@ -1,0 +1,57 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macro_duck_typing_specific_type_invalid.move:5:14
+   │
+ 5 │         ($x: X);
+   │              ^
+   │              │
+   │              Invalid type annotation
+   │              Expected: 'a::m::X'
+   ·
+17 │         is_x!(0);
+   │         -------- Given: integer
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macro_duck_typing_specific_type_invalid.move:8:37
+   │
+ 8 │     macro fun is_x_ret<$T>($x: $T): X {
+   │                                     ^
+   │                                     │
+   │                                     Invalid type annotation
+   │                                     Expected: 'a::m::X'
+   ·
+18 │         is_x_ret!(0);
+   │         ------------ Given: integer
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/typing/macro_duck_typing_specific_type_invalid.move:13:10
+   │
+13 │         ($x as $T);
+   │          ^^ Invalid argument to 'as'
+   ·
+19 │         is_num!(X());
+   │                 --- Found: 'a::m::X'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/typing/macro_duck_typing_specific_type_invalid.move:13:10
+   │
+13 │         ($x as $T);
+   │          ^^ Invalid argument to 'as'
+   ·
+20 │         is_num!(@0);
+   │                 -- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/typing/macro_duck_typing_specific_type_invalid.move:13:10
+   │
+13 │         ($x as $T);
+   │          ^^ Invalid argument to 'as'
+   ·
+21 │         is_num!(vector[0]);
+   │                 --------- Found: 'vector<u64>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'

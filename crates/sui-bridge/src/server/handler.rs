@@ -360,7 +360,7 @@ mod tests {
         types::{EmergencyAction, EmergencyActionType, LimitUpdateAction},
     };
     use ethers::types::{Address as EthAddress, TransactionReceipt};
-    use sui_json_rpc_types::SuiEvent;
+    use sui_json_rpc_types::{BcsEvent, SuiEvent};
     use sui_types::bridge::{BridgeChainId, TOKEN_ID_USDC};
     use sui_types::{base_types::SuiAddress, crypto::get_key_pair};
 
@@ -456,12 +456,12 @@ mod tests {
 
         let mut sui_event_1 = SuiEvent::random_for_testing();
         sui_event_1.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();
-        sui_event_1.bcs = bcs::to_bytes(&emitted_event_1).unwrap();
+        sui_event_1.bcs = BcsEvent::new(bcs::to_bytes(&emitted_event_1).unwrap());
         let sui_tx_digest = sui_event_1.id.tx_digest;
 
         let mut sui_event_2 = SuiEvent::random_for_testing();
         sui_event_2.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();
-        sui_event_2.bcs = bcs::to_bytes(&emitted_event_1).unwrap();
+        sui_event_2.bcs = BcsEvent::new(bcs::to_bytes(&emitted_event_1).unwrap());
         let sui_event_idx_2 = 1;
         sui_client_mock.add_events_by_tx_digest(sui_tx_digest, vec![sui_event_2.clone()]);
 
