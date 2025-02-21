@@ -40,7 +40,7 @@ public fun buy_sword_with_arbitrary_coin<CoinType>(
 ): Sword {
   let sword = create_sword(coin.value(), tx_context);
 
-  transfer::public_transfer(coin, @0x0); // Essentially burning the coin, would send to actual person in production
+  transfer::public_transfer(coin, @0x0); // Essentially burning the coin, would send to actual recipient in production
 
   sword
 }
