@@ -865,6 +865,12 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         let (commit_lagging, last_commit_index, quorum_commit_index) = self.is_commit_lagging();
         if commit_lagging {
+            // If gc is enabled and we are commit lagging, then we don't want to enable the scheduler. As the new logic of processing the certified commits
+            // takes place we are guaranteed that commits will happen for all the certified commits.
+            if dag_state.read().gc_enabled() {
+                return Ok(());
+            }
+
             // As node is commit lagging try to sync only the missing blocks that are within the acceptable round thresholds to sync. The rest we don't attempt to
             // sync yet.
             let highest_accepted_round = dag_state.read().highest_accepted_round();
@@ -1512,7 +1518,13 @@ mod tests {
     async fn synchronizer_periodic_task_when_commit_lagging_with_missing_blocks_in_acceptable_thresholds(
     ) {
         // GIVEN
-        let (context, _) = Context::new_for_test(4);
+        let (mut context, _) = Context::new_for_test(4);
+
+        // We want to run this test only when gc is disabled. Once gc gets enabled this logic won't execute any more.
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(0);
+
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
