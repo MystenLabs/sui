@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_synthetic_ingestion", 0, "Number of transactions in a checkpoint.\nReturns the argument unchanged.\nDirectory to write the ingestion data to.\nCalls <code>U::from(self)</code>.\nTotal number of synthetic checkpoints to generate.\nCustomize the first checkpoint sequence number in the …")

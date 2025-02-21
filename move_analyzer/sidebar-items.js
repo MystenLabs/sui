@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["GIT_REVISION","VERSION","_ASSERT_IS_BINARY"],"fn":["main"],"struct":["App"]};
