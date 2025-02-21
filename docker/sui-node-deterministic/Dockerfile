@@ -34,6 +34,5 @@ EOF
 FROM scratch AS package
 ARG PROFILE
 ARG GIT_REVISION
-LABEL build-date=${BUILD_DATE}
 LABEL git-revision=${GIT_REVISION}
 COPY --from=build /rootfs /

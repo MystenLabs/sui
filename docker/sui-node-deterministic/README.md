@@ -23,6 +23,10 @@ Build artifact is output in: `build/oci/sui-node`
 
 Load the image with the command: `(cd build/oci/sui-node && tar -c .) | docker load`
 
+### Get Image Digest
+
+`cat build/oci/sui-node/index.json | jq '.manifests[0].digest'`
+
 ## Extract sui-node Binary
 
 ### Find sui-node binary
