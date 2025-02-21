@@ -412,17 +412,11 @@ impl IndexStoreTables {
         owner: SuiAddress,
         cursor: Option<ObjectID>,
     ) -> Result<impl Iterator<Item = (OwnerIndexKey, OwnerIndexInfo)> + '_, TypedStoreError> {
-        let lower_bound = OwnerIndexKey::new(owner, ObjectID::ZERO);
+        let lower_bound = OwnerIndexKey::new(owner, cursor.unwrap_or(ObjectID::ZERO));
         let upper_bound = OwnerIndexKey::new(owner, ObjectID::MAX);
-        let mut iter = self
+        Ok(self
             .owner
-            .iter_with_bounds(Some(lower_bound), Some(upper_bound));
-
-        if let Some(cursor) = cursor {
-            iter = iter.skip_to(&OwnerIndexKey::new(owner, cursor))?;
-        }
-
-        Ok(iter)
+            .iter_with_bounds(Some(lower_bound), Some(upper_bound)))
     }
 
     fn dynamic_field_iter(
@@ -431,16 +425,11 @@ impl IndexStoreTables {
         cursor: Option<ObjectID>,
     ) -> Result<impl Iterator<Item = (DynamicFieldKey, DynamicFieldIndexInfo)> + '_, TypedStoreError>
     {
-        let lower_bound = DynamicFieldKey::new(parent, ObjectID::ZERO);
+        let lower_bound = DynamicFieldKey::new(parent, cursor.unwrap_or(ObjectID::ZERO));
         let upper_bound = DynamicFieldKey::new(parent, ObjectID::MAX);
-        let mut iter = self
+        let iter = self
             .dynamic_field
             .iter_with_bounds(Some(lower_bound), Some(upper_bound));
-
-        if let Some(cursor) = cursor {
-            iter = iter.skip_to(&DynamicFieldKey::new(parent, cursor))?;
-        }
-
         Ok(iter)
     }
 
