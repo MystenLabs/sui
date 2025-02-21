@@ -91,7 +91,7 @@ mod checked {
             &self,
             ids: &[AccountAddress],
         ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-            ids.into_iter().map(|id| self.fetch_package(*id)).collect()
+            ids.iter().map(|id| self.fetch_package(*id)).collect()
         }
     }
 

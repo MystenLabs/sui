@@ -11,6 +11,7 @@ exclude = [
     "external-crates/move/crates/enum-compat-util",
     "external-crates/move/crates/invalid-mutations",
     "external-crates/move/crates/language-benchmarks",
+    "external-crates/move/crates/legacy-move-vm-types",
     "external-crates/move/crates/module-generation",
     "external-crates/move/crates/move-abstract-interpreter",
     "external-crates/move/crates/move-abstract-stack",

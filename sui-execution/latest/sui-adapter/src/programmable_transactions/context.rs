@@ -214,7 +214,7 @@ mod checked {
                 error,
                 &self.linkage,
                 &SuiDataStore::new(&self.ctx.state_view, &self.ctx.new_packages),
-                &self.ctx.protocol_config,
+                self.ctx.protocol_config,
             )
         }
 
@@ -602,7 +602,7 @@ mod checked {
             make_object_value(
                 self.ctx.protocol_config,
                 self.ctx.linkage_analyzer,
-                &self.ctx.vm,
+                self.ctx.vm,
                 &state,
                 type_,
                 has_public_transfer,

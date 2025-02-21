@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::execution_value::SuiResolver;
-use crate::linkage_resolution::{LinkageAnalysis, UnifiedLinkage};
+use crate::linkage_resolution::UnifiedLinkage;
 use crate::programmable_transactions::context::vm_for_struct_tags;
 use crate::programmable_transactions::datastore::SuiDataStore;
 use move_core_types::annotated_value as A;

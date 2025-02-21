@@ -82,13 +82,13 @@ pub fn bls12381_min_sig_verify(
     let cost = context.gas_used();
 
     let Ok(signature) =
-        <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref)
+        <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(signature_bytes_ref)
     else {
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
     let public_key =
-        match <min_sig::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
+        match <min_sig::BLS12381PublicKey as ToFromBytes>::from_bytes(public_key_bytes_ref) {
             Ok(public_key) => match public_key.validate() {
                 Ok(_) => public_key,
                 Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
@@ -98,7 +98,7 @@ pub fn bls12381_min_sig_verify(
 
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::bool(public_key.verify(&msg_ref, &signature).is_ok())],
+        smallvec![Value::bool(public_key.verify(msg_ref, &signature).is_ok())],
     ))
 }
 
@@ -163,13 +163,13 @@ pub fn bls12381_min_pk_verify(
     let cost = context.gas_used();
 
     let signature =
-        match <min_pk::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
+        match <min_pk::BLS12381Signature as ToFromBytes>::from_bytes(signature_bytes_ref) {
             Ok(signature) => signature,
             Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
         };
 
     let public_key =
-        match <min_pk::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
+        match <min_pk::BLS12381PublicKey as ToFromBytes>::from_bytes(public_key_bytes_ref) {
             Ok(public_key) => match public_key.validate() {
                 Ok(_) => public_key,
                 Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
@@ -179,6 +179,6 @@ pub fn bls12381_min_pk_verify(
 
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::bool(public_key.verify(&msg_ref, &signature).is_ok())],
+        smallvec![Value::bool(public_key.verify(msg_ref, &signature).is_ok())],
     ))
 }

@@ -875,7 +875,6 @@ impl Function {
         self.name.to_string().unwrap()
     }
 
-    #[cfg(any(debug_assertions, feature = "tracing"))]
     pub fn pretty_short_string(&self) -> String {
         self.name.to_short_string().unwrap()
     }

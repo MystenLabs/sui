@@ -3,9 +3,8 @@
 
 use crate::{execution_mode::ExecutionMode, programmable_transactions::datastore::PackageStore};
 use move_binary_format::{binary_config::BinaryConfig, file_format::Visibility};
-use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 use move_vm_runtime::shared::linkage_context::LinkageContext;
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Entry, BTreeMap};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
@@ -14,7 +13,7 @@ use sui_types::{
     move_package::MovePackage,
     transaction::Command,
     type_input::TypeInput,
-    TypeTag, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+    MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
 };
 
 /// Max number of packages to cache in the PTBLinkageMetadata. If we have more than this, we'll
@@ -219,9 +218,9 @@ impl LinkageConfig {
         }
     }
 
-    fn resolution_table_with_native_packages<'a>(
+    fn resolution_table_with_native_packages(
         &self,
-        package_cache: &'a mut BTreeMap<ObjectID, MovePackage>,
+        package_cache: &mut BTreeMap<ObjectID, MovePackage>,
         type_origin_map: &mut TypeOriginMap,
         store: &dyn PackageStore,
     ) -> Result<ResolutionTable, ExecutionError> {
@@ -299,11 +298,11 @@ impl ResolutionTable {
 }
 
 impl ConflictResolution {
-    pub fn exact<'a>(pkg: &MovePackage) -> ConflictResolution {
+    pub fn exact(pkg: &MovePackage) -> ConflictResolution {
         ConflictResolution::Exact(pkg.version(), pkg.id())
     }
 
-    pub fn at_least<'a>(pkg: &MovePackage) -> ConflictResolution {
+    pub fn at_least(pkg: &MovePackage) -> ConflictResolution {
         ConflictResolution::AtLeast(pkg.version(), pkg.id())
     }
 
@@ -312,7 +311,7 @@ impl ConflictResolution {
             // If we have two exact resolutions, they must be the same.
             (ConflictResolution::Exact(sv, self_id), ConflictResolution::Exact(ov, other_id)) => {
                 if self_id != other_id || sv != ov {
-                    return Err(
+                    Err(
                         ExecutionError::new_with_source(
                             ExecutionErrorKind::InvalidLinkage,
                             format!(
@@ -320,8 +319,8 @@ impl ConflictResolution {
                                  at different versions. Linkage requires exactly {self_id} (version {sv}) and \
                                  {other_id} (version {ov}) to be used in the same transaction"
                             )
-                        ).into()
-                    );
+                        )
+                    )
                 } else {
                     Ok(ConflictResolution::Exact(*sv, *self_id))
                 }
@@ -362,7 +361,7 @@ impl ConflictResolution {
                                  version of the package {at_least_id} at version {at_least_version}. However \
                                  {exact_id} is at version {exact_version} which is less than {at_least_version}."
                             )
-                        ).into()
+                        )
                     );
                 }
 
@@ -550,10 +549,10 @@ impl PTBLinkageResolver {
                             e,
                         )
                     })?;
-                let Some(fdef) = m.function_defs().into_iter().find(|f| {
+                let Some(fdef) = m.function_defs().iter().find(|f| {
                     m.identifier_at(m.function_handle_at(f.function).name)
                         .as_str()
-                        == &programmable_move_call.function
+                        == programmable_move_call.function
                 }) else {
                     return Err(ExecutionError::new_with_source(
                         ExecutionErrorKind::FunctionNotFound,
@@ -563,8 +562,7 @@ impl PTBLinkageResolver {
                             programmable_move_call.package,
                             programmable_move_call.module
                         ),
-                    )
-                    .into());
+                    ));
                 };
 
                 for ty in &programmable_move_call.type_arguments {
@@ -621,7 +619,7 @@ impl PTBLinkageResolver {
                         &mut self.type_origin_cache,
                         store,
                     )?;
-                for id in deps.into_iter() {
+                for id in deps {
                     let pkg = Self::get_package(
                         &mut self.package_cache,
                         &mut self.type_origin_cache,
@@ -763,19 +761,13 @@ impl PTBLinkageResolver {
         let resolution = resolution_fn(package);
         let original_pkg_id = package.original_package_id();
 
-        if resolution_table
-            .resolution_table
-            .contains_key(&original_pkg_id)
-        {
-            let existing_unifier = resolution_table
-                .resolution_table
-                .get_mut(&original_pkg_id)
-                .expect("Guaranteed to exist");
-            *existing_unifier = existing_unifier.unify(&resolution)?;
-        } else {
-            resolution_table
-                .resolution_table
-                .insert(original_pkg_id, resolution);
+        match resolution_table.resolution_table.entry(original_pkg_id) {
+            Entry::Vacant(vacant_entry) => {
+                vacant_entry.insert(resolution);
+            }
+            Entry::Occupied(mut occupied_entry) => {
+                *occupied_entry.get_mut() = occupied_entry.get().unify(&resolution)?;
+            }
         }
 
         if !resolution_table

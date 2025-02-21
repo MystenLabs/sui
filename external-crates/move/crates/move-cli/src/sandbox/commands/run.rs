@@ -76,7 +76,7 @@ pub fn run(
             ));
         }
 
-        let mut linkage = state.generate_linkage_context(&module.address())?;
+        let mut linkage = state.generate_linkage_context(module.address())?;
         linkage.add_type_arg_addresses_reflexive(&vm_type_tags);
 
         let mut vm_instance = runtime.make_vm(state, linkage)?;
