@@ -353,7 +353,7 @@ impl Package {
     /// Associates addresses with named packages in the `resolving_table`.
     /// Addresses may be pulled in from two sources:
     /// - The [addresses] section `Move.toml`.
-    /// - Adresses (package IDs) in the `Move.lock` associated with published packages for `chain_id`.
+    /// - Addresses (package IDs) in the `Move.lock` associated with published packages for `chain_id`.
     ///
     /// Addresses are pulled from the `Move.lock` only when a package is published or upgraded on-chain.
     /// Local builds only consult the `Move.toml` manifest.
