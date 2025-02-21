@@ -10,7 +10,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
-use consensus_core::{CommitConsumerMonitor, TransactionIndex, VerifiedBlock};
+use consensus_core::{CommitConsumerMonitor, CommitIndex, TransactionIndex, VerifiedBlock};
 use lru::LruCache;
 use mysten_common::debug_fatal;
 use mysten_metrics::{
@@ -212,6 +212,15 @@ impl<C> ConsensusHandler<C> {
 }
 
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
+    /// Called during startup to allow us to observe commits we previously processed, for crash recovery.
+    /// Any state computed here must be a pure function of the commits observed, it cannot depend on any
+    /// state recorded in the epoch db.
+    fn handle_prior_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
+        // TODO: this will be used to recover state computed from previous commits at startup.
+        let round = consensus_commit.leader_round();
+        info!("Ignoring prior consensus commit for round {:?}", round);
+    }
+
     #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
         // This may block until one of two conditions happens:
@@ -507,6 +516,7 @@ pub(crate) struct MysticetiConsensusHandler {
 
 impl MysticetiConsensusHandler {
     pub(crate) fn new(
+        last_processed_commit_at_startup: CommitIndex,
         mut consensus_handler: ConsensusHandler<CheckpointService>,
         consensus_transaction_handler: ConsensusTransactionHandler,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
@@ -518,10 +528,14 @@ impl MysticetiConsensusHandler {
             // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
             while let Some(consensus_commit) = commit_receiver.recv().await {
                 let commit_index = consensus_commit.commit_ref.index;
-                consensus_handler
-                    .handle_consensus_commit(consensus_commit)
-                    .await;
-                commit_consumer_monitor.set_highest_handled_commit(commit_index);
+                if commit_index <= last_processed_commit_at_startup {
+                    consensus_handler.handle_prior_consensus_commit(consensus_commit);
+                } else {
+                    consensus_handler
+                        .handle_consensus_commit(consensus_commit)
+                        .await;
+                    commit_consumer_monitor.set_highest_handled_commit(commit_index);
+                }
             }
         }));
         if consensus_transaction_handler.enabled() {
