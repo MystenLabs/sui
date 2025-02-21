@@ -110,6 +110,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_proposal_leader_wait_count: IntCounterVec,
     pub(crate) block_timestamp_drift_wait_ms: IntCounterVec,
     pub(crate) blocks_per_commit_count: Histogram,
+    pub(crate) blocks_pruned_on_commit: IntCounterVec,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_check_block_refs_batch_size: Histogram,
@@ -279,6 +280,12 @@ impl NodeMetrics {
                 "blocks_per_commit_count",
                 "The number of blocks per commit.",
                 NUM_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            blocks_pruned_on_commit: register_int_counter_vec_with_registry!(
+                "blocks_pruned_on_commit",
+                "Number of blocks that got pruned due to garbage collection during a commit. This is not an accurate metric and measures the pruned blocks on the edge of the commit.",
+                &["authority"],
                 registry,
             ).unwrap(),
             broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(

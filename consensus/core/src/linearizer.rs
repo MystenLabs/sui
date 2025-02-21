@@ -4,6 +4,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use consensus_config::AuthorityIndex;
+use itertools::Itertools;
 use parking_lot::RwLock;
 
 use crate::{
@@ -279,6 +280,8 @@ impl Linearizer {
             let (sub_dag, commit) =
                 self.collect_sub_dag_and_commit(leader_block, reputation_scores_desc);
 
+            self.update_blocks_pruned_metric(&sub_dag);
+
             // Buffer commit in dag state for persistence later.
             // This also updates the last committed rounds.
             self.dag_state.write().add_commit(commit.clone());
@@ -294,6 +297,41 @@ impl Linearizer {
         self.dag_state.write().flush();
 
         committed_sub_dags
+    }
+
+    // Try to measure the number of blocks that get pruned due to GC. This is not very accurate, but it can give us a good enough idea.
+    // We consider a block as pruned when it is an ancestor of a block that has been committed as part of the provided `sub_dag`, but
+    // it has not been committed as part of previous commits. Right now we measure this via checking that highest committed round for the authority
+    // as we don't an efficient look up functionality to check if a block has been committed or not.
+    fn update_blocks_pruned_metric(&self, sub_dag: &CommittedSubDag) {
+        let (mut last_committed_rounds, gc_round) = {
+            let dag_state = self.dag_state.read();
+            (dag_state.last_committed_rounds(), dag_state.gc_round())
+        };
+
+        // Update the last committed rounds with the latest committed from the sub dag
+        for block in sub_dag.blocks.iter() {
+            last_committed_rounds[block.author()] =
+                last_committed_rounds[block.author()].max(block.round());
+        }
+
+        for block_ref in sub_dag
+            .blocks
+            .iter()
+            .flat_map(|block| block.ancestors())
+            .filter(|ancestor_ref| ancestor_ref.round <= gc_round)
+            .unique()
+        {
+            if last_committed_rounds[block_ref.author] < block_ref.round {
+                let hostname = &self.context.committee.authority(block_ref.author).hostname;
+                self.context
+                    .metrics
+                    .node_metrics
+                    .blocks_pruned_on_commit
+                    .with_label_values(&[hostname])
+                    .inc();
+            }
+        }
     }
 }
 
