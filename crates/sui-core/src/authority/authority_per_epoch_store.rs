@@ -46,7 +46,7 @@ use sui_types::committee::CommitteeTrait;
 use sui_types::crypto::{
     AuthorityPublicKeyBytes, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, RandomnessRound,
 };
-use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
+use sui_types::digests::{ChainIdentifier, Digest, TransactionEffectsDigest};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::TransactionEffects;
 use sui_types::error::{SuiError, SuiResult};
@@ -2826,6 +2826,7 @@ impl AuthorityPerEpochStore {
     >(
         &self,
         transactions: Vec<SequencedConsensusTransaction>,
+        additional_state_digest: Digest,
         consensus_stats: &ExecutionIndicesWithStats,
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ObjectCacheRead,
@@ -3008,6 +3009,9 @@ impl AuthorityPerEpochStore {
             .execution_time_estimator
             .try_lock()
             .expect("should only ever be called from the commit handler thread");
+        self.metrics
+            .execution_time_observations_received
+            .inc_by(execution_time_observations.len() as u64);
         for ExecutionTimeObservation {
             authority,
             generation,
@@ -3015,6 +3019,7 @@ impl AuthorityPerEpochStore {
         } in execution_time_observations
         {
             let authority_index = self.committee.authority_index(&authority).unwrap();
+
             execution_time_estimator.process_observations_from_consensus(
                 authority_index,
                 generation,
@@ -3063,6 +3068,7 @@ impl AuthorityPerEpochStore {
         ) = self
             .process_consensus_transactions(
                 &mut output,
+                additional_state_digest,
                 &consensus_transactions,
                 &end_of_publish_transactions,
                 checkpoint_service,
@@ -3228,6 +3234,7 @@ impl AuthorityPerEpochStore {
         transactions: &mut VecDeque<VerifiedExecutableTransaction>,
         consensus_commit_info: &ConsensusCommitInfo,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        additional_state_digest: Digest,
     ) -> SuiResult<Option<TransactionKey>> {
         {
             if consensus_commit_info.skip_consensus_commit_prologue_in_test() {
@@ -3266,6 +3273,7 @@ impl AuthorityPerEpochStore {
             self.epoch(),
             self.protocol_config(),
             version_assignment,
+            additional_state_digest,
         );
         let consensus_commit_prologue_root = match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
@@ -3394,6 +3402,7 @@ impl AuthorityPerEpochStore {
     pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
         &self,
         output: &mut ConsensusCommitOutput,
+        additional_state_digest: Digest,
         transactions: &[VerifiedSequencedConsensusTransaction],
         end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
@@ -3570,6 +3579,7 @@ impl AuthorityPerEpochStore {
             &mut verified_certificates,
             consensus_commit_info,
             &cancelled_txns,
+            additional_state_digest,
         )?;
 
         let verified_certificates: Vec<_> = verified_certificates.into();

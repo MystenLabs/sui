@@ -622,6 +622,10 @@ struct FeatureFlags {
     // If true, enable zstd compression for consensus tonic network.
     #[serde(skip_serializing_if = "is_false")]
     consensus_zstd_compression: bool,
+
+    // If true, record the additional state digest in the consensus commit prologue.
+    #[serde(skip_serializing_if = "is_false")]
+    record_additional_state_digest_in_prologue: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1385,6 +1389,9 @@ pub struct ProtocolConfig {
 
     /// Enables use of v2 of the object per-epoch marker table with FullObjectID keys.
     use_object_per_epoch_marker_table_v2: Option<bool>,
+
+    /// The number of commits to consider when computing a deterministic commit rate.
+    consensus_commit_rate_estimation_window_size: Option<u32>,
 }
 
 // feature flags
@@ -1614,6 +1621,11 @@ impl ProtocolConfig {
             .record_consensus_determined_version_assignments_in_prologue
     }
 
+    pub fn record_additional_state_digest_in_prologue(&self) -> bool {
+        self.feature_flags
+            .record_additional_state_digest_in_prologue
+    }
+
     pub fn record_consensus_determined_version_assignments_in_prologue_v2(&self) -> bool {
         self.feature_flags
             .record_consensus_determined_version_assignments_in_prologue_v2
@@ -1804,6 +1816,18 @@ impl ProtocolConfig {
     }
     pub fn enable_nitro_attestation(&self) -> bool {
         self.feature_flags.enable_nitro_attestation
+    }
+
+    pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
+        self.consensus_commit_rate_estimation_window_size
+            .unwrap_or(0)
+    }
+
+    pub fn consensus_num_requested_prior_commits(&self) -> u32 {
+        // Currently there is only one parameter driving this value. If there are multiple
+        // things computed from prior consensus commits, this function must return the max
+        // of all of them.
+        self.get_consensus_commit_rate_estimation_window_size()
     }
 }
 
@@ -2347,6 +2371,8 @@ impl ProtocolConfig {
             sip_45_consensus_amplification_threshold: None,
 
             use_object_per_epoch_marker_table_v2: None,
+
+            consensus_commit_rate_estimation_window_size: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3249,8 +3275,14 @@ impl ProtocolConfig {
                 75 => {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.passkey_auth = true;
+                        cfg.feature_flags.record_additional_state_digest_in_prologue = true;
+                        cfg.consensus_commit_rate_estimation_window_size = Some(10);
                     }
+
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate;
                 }
+
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

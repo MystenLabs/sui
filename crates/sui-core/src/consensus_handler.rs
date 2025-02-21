@@ -19,6 +19,7 @@ use mysten_metrics::{
     monitored_scope, spawn_monitored_task,
 };
 use serde::{Deserialize, Serialize};
+use simple_moving_average::SMA;
 use sui_macros::{fail_point, fail_point_if};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -26,7 +27,7 @@ use sui_types::{
     base_types::{
         AuthorityName, ConsensusObjectSequenceKey, EpochId, SequenceNumber, TransactionDigest,
     },
-    digests::ConsensusCommitDigest,
+    digests::{ConsensusCommitDigest, Digest},
     executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
     messages_consensus::{
         AuthorityIndex, ConsensusDeterminedVersionAssignments, ConsensusTransaction,
@@ -157,6 +158,8 @@ pub struct ConsensusHandler<C> {
     /// Using the throughput calculator to record the current consensus throughput
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
 
+    commit_rate_estimate: CommitRateObserver,
+
     backpressure_subscriber: BackpressureSubscriber,
 }
 
@@ -197,6 +200,11 @@ impl<C> ConsensusHandler<C> {
             processed_cache: LruCache::new(NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap()),
             transaction_manager_sender,
             throughput_calculator,
+            commit_rate_estimate: CommitRateObserver::new(
+                self.epoch_store
+                    .protocol_config()
+                    .get_consensus_commit_rate_estimation_window_size(),
+            ),
             backpressure_subscriber,
         }
     }
@@ -216,7 +224,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     /// Any state computed here must be a pure function of the commits observed, it cannot depend on any
     /// state recorded in the epoch db.
     fn handle_prior_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
-        todo!()
+        let commit_time = consensus_commit.commit_timestamp_ms();
+        self.commit_rate_estimate.add_commit_time(commit_time);
     }
 
     #[instrument(level = "debug", skip_all)]
@@ -232,6 +241,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
         let round = consensus_commit.leader_round();
+
+        let commit_time = consensus_commit.commit_timestamp_ms();
+        self.commit_rate_estimate.add_commit_time(commit_time);
 
         // TODO: Remove this once narwhal is deprecated. For now mysticeti will not return
         // more than one leader per round so we are not in danger of ignoring any commits.
@@ -889,6 +901,23 @@ impl ConsensusCommitInfo {
         VerifiedExecutableTransaction::new_system(transaction, epoch)
     }
 
+    fn consensus_commit_prologue_v4_transaction(
+        &self,
+        epoch: u64,
+        consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
+        additional_state_digest: Digest,
+    ) -> VerifiedExecutableTransaction {
+        let transaction = VerifiedTransaction::new_consensus_commit_prologue_v4(
+            epoch,
+            self.round,
+            self.timestamp,
+            self.consensus_commit_digest,
+            consensus_determined_version_assignments,
+            additional_state_digest,
+        );
+        VerifiedExecutableTransaction::new_system(transaction, epoch)
+    }
+
     pub fn create_consensus_commit_prologue_transaction(
         &self,
         epoch: u64,
@@ -897,8 +926,20 @@ impl ConsensusCommitInfo {
             TransactionDigest,
             Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
         )>,
+        additional_state_digest: Digest,
     ) -> VerifiedExecutableTransaction {
-        if protocol_config.record_consensus_determined_version_assignments_in_prologue_v2() {
+        if protocol_config.record_additional_state_digest_in_prologue() {
+            assert!(
+                protocol_config.record_consensus_determined_version_assignments_in_prologue_v2()
+            );
+            self.consensus_commit_prologue_v4_transaction(
+                epoch,
+                ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(
+                    cancelled_txn_version_assignment,
+                ),
+                additional_state_digest,
+            )
+        } else if protocol_config.record_consensus_determined_version_assignments_in_prologue_v2() {
             self.consensus_commit_prologue_v3_transaction(
                 epoch,
                 ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(

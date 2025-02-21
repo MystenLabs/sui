@@ -311,6 +311,37 @@ impl CongestionPerObjectDebt {
     }
 }
 
+struct CommitRateObserver {
+    ring_buffer: VecDeque<u64>,
+}
+
+impl CommitRateObserver {
+    pub fn new(window_size: u32) -> Self {
+        Self {
+            ring_buffer: VecDeque::with_capacity(window_size as usize),
+        }
+    }
+
+    pub fn add_commit_time(&mut self, commit_time: u64) {
+        if self.ring_buffer.len() == self.ring_buffer.capacity() {
+            self.ring_buffer.pop_front();
+        }
+        self.ring_buffer.push_back(commit_time);
+    }
+
+    pub fn commit_rate_estimate(&self) -> Option<Duration> {
+        if self.ring_buffer.len() <= 1 {
+            None
+        } else {
+            let first = self.ring_buffer.front().unwrap();
+            let last = self.ring_buffer.back().unwrap();
+            let duration = last.saturating_sub(*first);
+            let num_commits = self.ring_buffer.len() as u64;
+            Some(Duration::from_millis(duration.div_ceil(num_commits)))
+        }
+    }
+}
+
 #[cfg(test)]
 mod object_cost_tests {
     use super::*;

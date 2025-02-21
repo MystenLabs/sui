@@ -113,6 +113,9 @@ pub struct EpochMetrics {
 
     /// The number of shared object assignments in the quarantine.
     pub shared_object_assignments_size: IntGauge,
+
+    /// The number of execution time observations received from consensus.
+    pub execution_time_observations_received: IntCounter,
 }
 
 impl EpochMetrics {
@@ -252,6 +255,12 @@ impl EpochMetrics {
             shared_object_assignments_size: register_int_gauge_with_registry!(
                 "shared_object_assignments_size",
                 "The number of shared object assignments in the quarantine",
+                registry
+            )
+            .unwrap(),
+            execution_time_observations_received: register_int_counter_with_registry!(
+                "execution_time_observations_received",
+                "The number of execution time observations received from consensus",
                 registry
             )
             .unwrap(),

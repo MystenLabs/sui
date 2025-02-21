@@ -10,14 +10,14 @@ use crate::crypto::{
     AuthorityStrongQuorumSignInfo, DefaultHash, Ed25519SuiSignature, EmptySignInfo,
     RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
-use crate::digests::{CertificateDigest, SenderSignedDataDigest};
+use crate::digests::{CertificateDigest, Digest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{
     ConsensusCommitPrologue, ConsensusCommitPrologueV2, ConsensusCommitPrologueV3,
-    ConsensusDeterminedVersionAssignments,
+    ConsensusCommitPrologueV4, ConsensusDeterminedVersionAssignments,
 };
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -334,6 +334,7 @@ pub enum TransactionKind {
     ConsensusCommitPrologueV2(ConsensusCommitPrologueV2),
 
     ConsensusCommitPrologueV3(ConsensusCommitPrologueV3),
+    ConsensusCommitPrologueV4(ConsensusCommitPrologueV4),
     // .. more transaction types go here
 }
 
@@ -1264,6 +1265,7 @@ impl TransactionKind {
             | TransactionKind::ConsensusCommitPrologue(_)
             | TransactionKind::ConsensusCommitPrologueV2(_)
             | TransactionKind::ConsensusCommitPrologueV3(_)
+            | TransactionKind::ConsensusCommitPrologueV4(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_) => true,
@@ -1358,6 +1360,7 @@ impl TransactionKind {
             | TransactionKind::ConsensusCommitPrologue(_)
             | TransactionKind::ConsensusCommitPrologueV2(_)
             | TransactionKind::ConsensusCommitPrologueV3(_)
+            | TransactionKind::ConsensusCommitPrologueV4(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_) => vec![],
@@ -1383,7 +1386,8 @@ impl TransactionKind {
             }
             Self::ConsensusCommitPrologue(_)
             | Self::ConsensusCommitPrologueV2(_)
-            | Self::ConsensusCommitPrologueV3(_) => {
+            | Self::ConsensusCommitPrologueV3(_)
+            | Self::ConsensusCommitPrologueV4(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
@@ -1456,6 +1460,13 @@ impl TransactionKind {
                     ));
                 }
             }
+            TransactionKind::ConsensusCommitPrologueV4(_) => {
+                if !config.record_additional_state_digest_in_prologue() {
+                    return Err(UserInputError::Unsupported(
+                        "ConsensusCommitPrologueV4 is not supported".to_string(),
+                    ));
+                }
+            }
             TransactionKind::EndOfEpochTransaction(txns) => {
                 if !config.end_of_epoch_transaction_supported() {
                     return Err(UserInputError::Unsupported(
@@ -1516,6 +1527,7 @@ impl TransactionKind {
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ConsensusCommitPrologueV2(_) => "ConsensusCommitPrologueV2",
             Self::ConsensusCommitPrologueV3(_) => "ConsensusCommitPrologueV3",
+            Self::ConsensusCommitPrologueV4(_) => "ConsensusCommitPrologueV4",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
@@ -1556,6 +1568,21 @@ impl Display for TransactionKind {
                     writer,
                     "Consensus determined version assignment: {:?}",
                     p.consensus_determined_version_assignments
+                )?;
+            }
+            Self::ConsensusCommitPrologueV4(p) => {
+                writeln!(writer, "Transaction Kind : Consensus Commit Prologue V4")?;
+                writeln!(writer, "Timestamp : {}", p.commit_timestamp_ms)?;
+                writeln!(writer, "Consensus Digest: {}", p.consensus_commit_digest)?;
+                writeln!(
+                    writer,
+                    "Consensus determined version assignment: {:?}",
+                    p.consensus_determined_version_assignments
+                )?;
+                writeln!(
+                    writer,
+                    "Additional State Digest: {}",
+                    p.additional_state_digest
                 )?;
             }
             Self::ProgrammableTransaction(p) => {
@@ -2670,6 +2697,28 @@ impl VerifiedTransaction {
             consensus_determined_version_assignments,
         }
         .pipe(TransactionKind::ConsensusCommitPrologueV3)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_consensus_commit_prologue_v4(
+        epoch: u64,
+        round: u64,
+        commit_timestamp_ms: CheckpointTimestamp,
+        consensus_commit_digest: ConsensusCommitDigest,
+        consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
+        additional_state_digest: Digest,
+    ) -> Self {
+        ConsensusCommitPrologueV4 {
+            epoch,
+            round,
+            // sub_dag_index is reserved for when we have multi commits per round.
+            sub_dag_index: None,
+            commit_timestamp_ms,
+            consensus_commit_digest,
+            consensus_determined_version_assignments,
+            additional_state_digest,
+        }
+        .pipe(TransactionKind::ConsensusCommitPrologueV4)
         .pipe(Self::new_system_transaction)
     }
 
