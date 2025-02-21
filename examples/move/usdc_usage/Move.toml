@@ -1,0 +1,11 @@
+[package]
+name = "usdc_usage"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { override = true, local = "../../../crates/sui-framework/packages/sui-framework" }
+usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "master" }
+
+
+[addresses]
+usdc_usage = "0x0"
