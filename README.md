@@ -5,6 +5,8 @@
 # Welcome to Sui
 
 [![License](https://img.shields.io/github/license/MystenLabs/sui)](https://github.com/MystenLabs/sui/blob/main/LICENSE)
+[![Twitter](https://img.shields.io/twitter/follow/SuiNetwork)](https://x.com/SuiNetwork)
+[![Discord](https://img.shields.io/discord/916379725201563759)](https://discord.com/invite/sui)
 
 [Sui](https://sui.io) is a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the [Move programming language](https://github.com/MystenLabs/awesome-move).
 
