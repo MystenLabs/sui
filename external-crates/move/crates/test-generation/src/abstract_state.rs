@@ -408,7 +408,7 @@ impl InstantiableModule {
 /// An AbstractState represents an abstract view of the execution of the
 /// Move VM. Rather than considering values of items on the stack or in
 /// the locals, we only consider their type, represented by a `AbstractValue`
-/// and their availibility, represented by the `BorrowState`.
+/// and their availability, represented by the `BorrowState`.
 #[derive(Debug, Clone)]
 pub struct AbstractState {
     /// A Vector of `AbstractValue`s representing the VM value stack
