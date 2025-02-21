@@ -233,13 +233,5 @@ fun allocate_tokens(
 
 fun activate_validators(validators: &mut vector<Validator>) {
     // Activate all genesis validators
-    let count = validators.length();
-    let mut i = 0;
-    while (i < count) {
-        let validator = &mut validators[i];
-        validator.activate(0);
-
-        i = i + 1;
-    };
-
+    validators.do_mut!(|v| v.activate(0))
 }
