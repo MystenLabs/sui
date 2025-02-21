@@ -33,7 +33,7 @@ use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 use sui_types::multiaddr::Multiaddr;
-use tracing::info;
+use tracing::{error, info};
 
 // Default max number of concurrent requests served
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
@@ -207,6 +207,12 @@ pub struct NodeConfig {
     /// If unspecified, this will default to `128`.
     #[serde(default = "default_local_execution_time_channel_capacity")]
     pub local_execution_time_channel_capacity: usize,
+
+    /// Size of the LRU cache used for storing local execution time observations.
+    ///
+    /// If unspecified, this will default to `10000`.
+    #[serde(default = "default_local_execution_time_cache_size")]
+    pub local_execution_time_cache_size: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -551,6 +557,10 @@ pub fn default_local_execution_time_channel_capacity() -> usize {
     128
 }
 
+pub fn default_local_execution_time_cache_size() -> usize {
+    10000
+}
+
 pub fn bool_true() -> bool {
     true
 }
@@ -645,6 +655,13 @@ impl NodeConfig {
 
     pub fn rpc(&self) -> Option<&sui_rpc_api::Config> {
         self.rpc.as_ref()
+    }
+
+    pub fn local_execution_time_cache_size(&self) -> NonZeroUsize {
+        NonZeroUsize::new(self.local_execution_time_cache_size).unwrap_or_else(|| {
+            error!("local_execution_time_cache_size must be non-zero - defaulting to 10000");
+            NonZeroUsize::new(10000).unwrap()
+        })
     }
 }
 

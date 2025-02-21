@@ -11,8 +11,9 @@ use std::{
 use super::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::SubmitToConsensus;
 use itertools::Itertools;
+use lru::LruCache;
 use mysten_common::debug_fatal;
-use mysten_metrics::monitored_scope;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use simple_moving_average::{SingleSumSMA, SMA};
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::{
@@ -42,7 +43,7 @@ pub struct ExecutionTimeObserver {
     epoch_store: Weak<AuthorityPerEpochStore>,
     consensus_adapter: Box<dyn SubmitToConsensus>,
 
-    local_observations: HashMap<ExecutionTimeObservationKey, LocalObservations>,
+    local_observations: LruCache<ExecutionTimeObservationKey, LocalObservations>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,9 +55,10 @@ pub struct LocalObservations {
 // Tracks local execution time observations and shares them via consensus.
 impl ExecutionTimeObserver {
     pub fn spawn(
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Box<dyn SubmitToConsensus>,
         channel_size: usize,
+        lru_cache_size: NonZeroUsize,
     ) {
         if epoch_store
             .protocol_config()
@@ -72,18 +74,18 @@ impl ExecutionTimeObserver {
 
         // TODO: pre-populate local observations with stored data from prior epoch.
         let mut observer = Self {
-            epoch_store: Arc::downgrade(epoch_store),
+            epoch_store: Arc::downgrade(&epoch_store),
             consensus_adapter,
-            local_observations: HashMap::new(),
+            local_observations: LruCache::new(lru_cache_size),
         };
-        tokio::spawn(async move {
+        spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
             while let Some((tx, timings, total_duration)) = rx_local_execution_time.recv().await {
                 observer
                     .record_local_observations(&tx, &timings, total_duration)
                     .await;
             }
             info!("shutting down ExecutionTimeObserver");
-        });
+        }));
     }
 
     #[cfg(test)]
@@ -94,7 +96,7 @@ impl ExecutionTimeObserver {
         Self {
             epoch_store: Arc::downgrade(&epoch_store),
             consensus_adapter,
-            local_observations: HashMap::new(),
+            local_observations: LruCache::new(NonZeroUsize::new(10000).unwrap()),
         }
     }
 
@@ -138,8 +140,7 @@ impl ExecutionTimeObserver {
             let key = ExecutionTimeObservationKey::from_command(command);
             let local_observation =
                 self.local_observations
-                    .entry(key.clone())
-                    .or_insert_with(|| LocalObservations {
+                    .get_or_insert_mut(key.clone(), || LocalObservations {
                         moving_average: SingleSumSMA::from_zero(Duration::ZERO),
                         last_shared: None,
                     });
