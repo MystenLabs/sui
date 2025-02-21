@@ -3,7 +3,6 @@
 
 use anyhow::Context as _;
 use diesel::{
-    dsl::sql,
     expression::{
         is_aggregate::{Never, No},
         MixedAggregates, ValidGrouping,
@@ -20,6 +19,7 @@ use sui_indexer_alt_schema::schema::{
     tx_affected_addresses, tx_affected_objects, tx_calls, tx_digests,
 };
 use sui_json_rpc_types::{Page as PageResponse, SuiTransactionBlockResponseOptions};
+use sui_sql_macro::sql;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
@@ -335,8 +335,8 @@ where
     TX: ExpressionMethods + Expression<SqlType = SqlBigInt>,
     TX::IsAggregate: MixedAggregates<Never, Output = No>,
 {
-    query = query.filter(tx_sequence_number.ge(sql::<SqlBigInt>(&format!(
-        r#"COALESCE(
+    query = query.filter(tx_sequence_number.ge(sql!(as SqlBigInt,
+        "COALESCE(
             (
                 SELECT
                     MAX(tx_lo)
@@ -347,11 +347,12 @@ where
                 ON
                     w.reader_lo = c.cp_sequence_number
                 WHERE
-                    w.pipeline IN ('{pipeline}', 'tx_digests')
+                    w.pipeline IN ({Text}, 'tx_digests')
             ),
             0
-        )"#
-    ))));
+        )",
+        pipeline,
+    )));
 
     if let Some(JsonCursor(tx)) = page.cursor {
         if page.descending {

@@ -2,17 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use diesel::{
-    dsl::sql,
-    sql_types::{BigInt, Bool, Bytea},
-    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl,
-};
+use diesel::{sql_types::Bool, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl};
 use move_core_types::language_storage::StructTag;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sui_indexer_alt_schema::{objects::StoredOwnerKind, schema::obj_info};
 use sui_json_rpc_types::{Page as PageResponse, SuiObjectDataOptions};
+use sui_sql_macro::sql;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     sui_serde::SuiStructTag,
@@ -153,13 +150,11 @@ pub(super) async fn owned_objects(
         .into_boxed();
 
     if let Some(c) = page.cursor {
-        query = query.filter(
-            sql::<Bool>(r#"("candidates"."cp_sequence_number", "candidates"."object_id") < ("#)
-                .bind::<BigInt, _>(c.cp_sequence_number as i64)
-                .sql(", ")
-                .bind::<Bytea, _>(c.object_id.clone())
-                .sql(")"),
-        );
+        query = query.filter(sql!(as Bool,
+            "(candidates.cp_sequence_number, candidates.object_id) < ({BigInt}, {Bytea})",
+            c.cp_sequence_number as i64,
+            c.object_id.clone(),
+        ));
     }
 
     let filter = filter.as_ref();
