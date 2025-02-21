@@ -41,16 +41,16 @@ message GetCoinInfoResponse {
   // Required. The coin type.
   optional sui.types.TypeTag coin_type = 1;
 
-  // Optional. This field will be populated with information about this coin
+  // This field will be populated with information about this coin
   // type's `0x2::coin::CoinMetadata` if it exists and has not been wrapped.
   optional CoinMetadata metadata = 2;
 
-  // Optional. This field will be populated with information about this coin
+  // This field will be populated with information about this coin
   // type's `0x2::coin::TreasuryCap` if it exists and has not been wrapped.
   optional CoinTreasury treasury = 3;
 
   // TODO add support for tracking RegulatedCoinMetadata
-  // Optional. If this coin type is a regulated coin, this field will be
+  // If this coin type is a regulated coin, this field will be
   // populated with information about its `0x2::coin::RegulatedCoinMetadata`
   // object.
   // optional RegulatedCoinMetadata regulated_metadata = 4;
@@ -131,7 +131,7 @@ message DynamicField {
   // Required. The serialized move value of "name"
   optional bytes name_value = 4;
 
-  // Optional. The ObjectId of the child object when a child is a dynamic
+  // The ObjectId of the child object when a child is a dynamic
   // object field.
   //
   // The presence or absence of this field can be used to determine if a child

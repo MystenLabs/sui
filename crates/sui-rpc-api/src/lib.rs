@@ -13,6 +13,7 @@ use tap::Pipe;
 pub mod client;
 mod config;
 mod error;
+pub mod field_mask;
 mod grpc;
 mod metrics;
 pub mod proto;
