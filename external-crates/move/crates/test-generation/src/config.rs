@@ -21,7 +21,7 @@ pub const MAX_CFG_BLOCKS: u16 = 10;
 /// Default is `false`
 pub const NEGATE_PRECONDITIONS: bool = false;
 
-/// The probability that preconditions will be negated for a pariticular
+/// The probability that preconditions will be negated for a particular
 /// bytecode instruction.
 /// Default is `0.1`
 pub const NEGATION_PROBABILITY: f64 = 0.1;
@@ -67,7 +67,7 @@ pub fn module_generation_settings() -> ModuleGeneratorOptions {
         min_table_size: 10,
         // The more structs, and the larger the number of type parameters the more complex the
         // functions and bytecode sequences generated. Be careful about setting these parameters too
-        // large -- this can lead to expontial increases in the size and number of struct
+        // large -- this can lead to exponential increases in the size and number of struct
         // instantiations that can be generated.
         max_ty_params: 4,
         max_functions: 6,
