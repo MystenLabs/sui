@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
 use async_graphql::*;
 use sui_types::{
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
@@ -10,10 +12,11 @@ use sui_types::{
 };
 
 use super::{address::Address, big_int::BigInt, object::Object, sui_address::SuiAddress};
-use super::{
-    cursor::Page,
-    object::{self, ObjectFilter, ObjectKey},
-};
+use super::{cursor::Page, object::ObjectKey};
+use crate::consistency::ConsistentIndexCursor;
+use crate::types::cursor::JsonCursor;
+
+type CGasPayment = JsonCursor<ConsistentIndexCursor>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct GasInput {
@@ -58,9 +61,9 @@ impl GasInput {
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<object::Cursor>,
+        after: Option<CGasPayment>,
         last: Option<u64>,
-        before: Option<object::Cursor>,
+        before: Option<CGasPayment>,
     ) -> Result<Connection<String, Object>> {
         // A possible user error during dry run or execution would be to supply a gas payment that
         // is not a Move object (i.e a package). Even though the transaction would fail to run, this
@@ -68,21 +71,41 @@ impl GasInput {
         // is a `MoveObject`, then GraphQL will fail on the top-level with an internal error.
         // Instead, we return an `Object` here, so that the rest of the `TransactionBlock` will
         // still be viewable.
-        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
-        let filter = ObjectFilter {
-            object_keys: Some(self.payment_obj_keys.clone()),
-            ..Default::default()
+        let mut connection = Connection::new(false, false);
+        // Return empty connection if no payment objects
+        if self.payment_obj_keys.is_empty() {
+            return Ok(connection);
+        }
+
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let Some((prev, next, _, cs)) = page
+            .paginate_consistent_indices(self.payment_obj_keys.len(), self.checkpoint_viewed_at)?
+        else {
+            return Ok(connection);
         };
 
-        Object::paginate(
-            ctx.data_unchecked(),
-            page,
-            filter,
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
+
+        // Collect cursors since we need them twice
+        let cursors: Vec<_> = cs.collect();
+
+        let objects = Object::query_many(
+            ctx,
+            cursors
+                .iter()
+                .map(|c| self.payment_obj_keys[c.ix].clone())
+                .collect(),
             self.checkpoint_viewed_at,
         )
-        .await
-        .extend()
+        .await?;
+
+        for (c, obj) in cursors.into_iter().zip(objects) {
+            connection.edges.push(Edge::new(c.encode_cursor(), obj));
+        }
+
+        Ok(connection)
     }
 
     /// An unsigned integer specifying the number of native tokens per gas unit this transaction
