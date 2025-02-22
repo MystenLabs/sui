@@ -4,7 +4,6 @@
 use filter::SuiObjectResponseQuery;
 use futures::future;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::{
     Page, SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
 };
@@ -109,22 +108,9 @@ trait QueryObjectsApi {
     ) -> RpcResult<Page<SuiObjectResponse, String>>;
 }
 
-pub(crate) struct Objects(pub Context, pub ObjectsConfig);
+pub(crate) struct Objects(pub Context);
 
-pub(crate) struct QueryObjects(pub Context, pub ObjectsConfig);
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ObjectsConfig {
-    /// The maximum number of keys that can be queried in a single multi-get request.
-    pub max_multi_get_objects: usize,
-
-    /// The default page size limit when querying objects, if none is provided.
-    pub default_page_size: usize,
-
-    /// The largest acceptable page size when querying transactions. Requesting a page larger than
-    /// this is a user error.
-    pub max_page_size: usize,
-}
+pub(crate) struct QueryObjects(pub Context);
 
 #[async_trait::async_trait]
 impl ObjectsApiServer for Objects {
@@ -133,7 +119,7 @@ impl ObjectsApiServer for Objects {
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
-        let Self(ctx, _) = self;
+        let Self(ctx) = self;
         let options = options.unwrap_or_default();
         Ok(response::live_object(ctx, object_id, &options)
             .await
@@ -147,7 +133,8 @@ impl ObjectsApiServer for Objects {
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
-        let Self(ctx, config) = self;
+        let Self(ctx) = self;
+        let config = &ctx.config().objects;
         if object_ids.len() > config.max_multi_get_objects {
             return Err(invalid_params(Error::TooManyKeys {
                 requested: object_ids.len(),
@@ -178,7 +165,7 @@ impl ObjectsApiServer for Objects {
         version: SequenceNumber,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
-        let Self(ctx, _) = self;
+        let Self(ctx) = self;
         let options = options.unwrap_or_default();
         Ok(response::past_object(ctx, object_id, version, &options)
             .await
@@ -195,7 +182,8 @@ impl ObjectsApiServer for Objects {
         past_objects: Vec<SuiGetPastObjectRequest>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
-        let Self(ctx, config) = self;
+        let Self(ctx) = self;
+        let config = &ctx.config().objects;
         if past_objects.len() > config.max_multi_get_objects {
             return Err(invalid_params(Error::TooManyKeys {
                 requested: past_objects.len(),
@@ -232,7 +220,7 @@ impl QueryObjectsApiServer for QueryObjects {
         cursor: Option<String>,
         limit: Option<usize>,
     ) -> RpcResult<Page<SuiObjectResponse, String>> {
-        let Self(ctx, confige) = self;
+        let Self(ctx) = self;
 
         let query = query.unwrap_or_default();
 
@@ -240,7 +228,7 @@ impl QueryObjectsApiServer for QueryObjects {
             data: object_ids,
             next_cursor,
             has_next_page,
-        } = filter::owned_objects(ctx, confige, address, &query.filter, cursor, limit).await?;
+        } = filter::owned_objects(ctx, address, &query.filter, cursor, limit).await?;
 
         let options = query.options.unwrap_or_default();
 
@@ -282,15 +270,5 @@ impl RpcModule for QueryObjects {
 
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
-    }
-}
-
-impl Default for ObjectsConfig {
-    fn default() -> Self {
-        Self {
-            max_multi_get_objects: 50,
-            default_page_size: 50,
-            max_page_size: 100,
-        }
     }
 }

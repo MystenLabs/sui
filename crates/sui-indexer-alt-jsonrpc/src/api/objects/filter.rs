@@ -17,12 +17,12 @@ use sui_types::{
 };
 
 use crate::{
+    context::Context,
     error::RpcError,
     paginate::{BcsCursor, Cursor as _, Page},
-    Context,
 };
 
-use super::{error::Error, ObjectsConfig};
+use super::error::Error;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase", rename = "ObjectResponseQuery", default)]
@@ -104,7 +104,6 @@ impl SuiObjectDataFilter {
 /// any results).
 pub(super) async fn owned_objects(
     ctx: &Context,
-    config: &ObjectsConfig,
     owner: SuiAddress,
     filter: &Option<SuiObjectDataFilter>,
     cursor: Option<String>,
@@ -126,6 +125,7 @@ pub(super) async fn owned_objects(
         };
     }
 
+    let config = &ctx.config().objects;
     let page: Page<Cursor> = Page::from_params(
         config.default_page_size,
         config.max_page_size,

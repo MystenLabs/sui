@@ -11,8 +11,8 @@ use sui_package_resolver::{FunctionDef, OpenSignature, OpenSignatureBody, Refere
 use sui_types::{base_types::ObjectID, Identifier};
 
 use crate::{
+    context::Context,
     error::{invalid_params, RpcError},
-    Context,
 };
 
 use super::error::Error;

@@ -393,7 +393,7 @@ impl SuiNSCluster {
         };
 
         let rpc_config = RpcConfig {
-            name_service: config.clone().into(),
+            name_service: config.clone(),
             ..Default::default()
         };
 

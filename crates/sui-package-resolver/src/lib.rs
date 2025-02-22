@@ -55,7 +55,7 @@ pub struct Resolver<S> {
 
 /// Optional configuration that imposes limits on the work that the resolver can do for each
 /// request.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Limits {
     /// Maximum recursion depth through type parameters.
     pub max_type_argument_depth: usize,
