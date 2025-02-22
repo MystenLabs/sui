@@ -1125,7 +1125,6 @@ async fn find_gas_coins_and_address(
             })
             .collect();
 
-
         if !coins.is_empty() {
             return Ok((coins, address));
         }
