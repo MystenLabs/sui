@@ -311,7 +311,8 @@ impl IndexStoreTables {
         // If the new coin index hasn't already been initialized, populate it
         if metadata
             .column_families
-            .get(self.coin_index_2.cf_name()).is_none_or(|cf_info| cf_info.version != CURRENT_COIN_INDEX_VERSION)
+            .get(self.coin_index_2.cf_name())
+            .is_none_or(|cf_info| cf_info.version != CURRENT_COIN_INDEX_VERSION)
             || self.coin_index_2.is_empty()
         {
             info!("Initializing JSON-RPC coin index");

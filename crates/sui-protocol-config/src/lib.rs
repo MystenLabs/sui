@@ -996,7 +996,6 @@ pub struct ProtocolConfig {
     storage_gas_price: Option<u64>,
 
     // === Core Protocol ===
-
     /// Max number of transactions per checkpoint.
     /// Note that this is a protocol constant and not a config as validators must have this set to
     /// the same value, otherwise they *will* fork.

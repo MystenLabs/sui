@@ -207,7 +207,8 @@ impl Indexer {
     pub fn pipelines(&self) -> impl Iterator<Item = &'static str> + '_ {
         self.added_pipelines.iter().copied().filter(|p| {
             self.enabled_pipelines
-                .as_ref().is_none_or(|e| e.contains(*p))
+                .as_ref()
+                .is_none_or(|e| e.contains(*p))
         })
     }
 

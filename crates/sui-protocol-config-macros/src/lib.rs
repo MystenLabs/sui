@@ -301,7 +301,8 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
                         if type_path
                             .path
                             .segments
-                            .last().is_some_and(|segment| segment.ident == "bool") =>
+                            .last()
+                            .is_some_and(|segment| segment.ident == "bool") =>
                     {
                         Some((
                             quote! {

@@ -141,7 +141,7 @@ pub fn default_full_node_address() -> String {
     "0.0.0.0:9000".to_string()
 }
 
-    #[allow(clippy::result_large_err)]
+#[allow(clippy::result_large_err)]
 pub fn url_from_str(s: &str) -> Result<Uri, ReplayEngineError> {
     Uri::from_str(s).map_err(|e| ReplayEngineError::InvalidUrl {
         err: e.to_string(),

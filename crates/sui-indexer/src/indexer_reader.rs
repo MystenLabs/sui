@@ -279,7 +279,8 @@ impl IndexerReader {
             .await?
             .into_iter()
             .map(EpochInfo::try_from)
-            .collect::<Result<Vec<_>, _>>()}
+            .collect::<Result<Vec<_>, _>>()
+    }
 
     pub async fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary, IndexerError> {
         let object_store = ConnectionAsObjectStore::from_pool(&self.pool)
@@ -1524,7 +1525,8 @@ impl ConnectionAsObjectStore {
             .first::<StoredObjectSnapshot>(connection)
             .optional()?
             .map(|o| o.try_into())
-            .transpose()}
+            .transpose()
+    }
 
     fn get_object(
         &self,
@@ -1538,7 +1540,8 @@ impl ConnectionAsObjectStore {
             result = self.get_object_from_history(object_id, version)?;
         }
 
-        result.map(|o| o.try_into()).transpose()}
+        result.map(|o| o.try_into()).transpose()
+    }
 }
 
 impl sui_types::storage::ObjectStore for ConnectionAsObjectStore {

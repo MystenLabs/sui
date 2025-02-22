@@ -646,7 +646,7 @@ fn obj_from_sui_obj_data(o: &SuiObjectData) -> Result<Object, ReplayEngineError>
     }
 }
 
-    #[allow(clippy::result_large_err)]
+#[allow(clippy::result_large_err)]
 pub fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), ReplayEngineError> {
     if let serde_json::Value::Object(w) = ev.parsed_json {
         let epoch = u64::from_str(&w["epoch"].to_string().replace('\"', "")).unwrap();

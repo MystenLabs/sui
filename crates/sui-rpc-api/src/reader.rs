@@ -322,7 +322,7 @@ impl Iterator for CheckpointIter {
             .reader
             .inner()
             .get_checkpoint_by_sequence_number(current_checkpoint)?
-        .into_inner();
+            .into_inner();
         let contents = self
             .reader
             .inner()

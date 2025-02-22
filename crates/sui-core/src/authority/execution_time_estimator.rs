@@ -154,7 +154,8 @@ impl ExecutionTimeObserver {
             // TODO: Consider only sharing observations that disagree with consensus estimate.
             let new_average = local_observation.moving_average.get_average();
             if local_observation
-                .last_shared.is_none_or(|(last_shared, last_shared_timestamp)| {
+                .last_shared
+                .is_none_or(|(last_shared, last_shared_timestamp)| {
                     let diff = last_shared.abs_diff(new_average);
                     diff > new_average.mul_f64(OBSERVATION_SHARING_DIFF_THRESHOLD)
                         && last_shared_timestamp.elapsed() > OBSERVATION_SHARING_MIN_INTERVAL
