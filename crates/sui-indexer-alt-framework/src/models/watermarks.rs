@@ -198,7 +198,7 @@ impl PrunerWatermark<'static> {
 
 impl PrunerWatermark<'_> {
     #[cfg(test)]
-    pub(crate) fn new_for_testing(pipeline: &'p str, pruner_hi: u64) -> Self {
+    pub(crate) fn new_for_testing(pipeline: &'static str, pruner_hi: u64) -> Self {
         PrunerWatermark {
             pipeline: pipeline.into(),
             wait_for: 0,

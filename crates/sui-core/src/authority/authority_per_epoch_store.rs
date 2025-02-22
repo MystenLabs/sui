@@ -571,7 +571,7 @@ pub struct AuthorityEpochTables {
     #[allow(dead_code)]
     randomness_rounds_written: DBMap<(), ()>,
 
-    /// Tables for recording state for RandomnessManager.
+    // Tables for recording state for RandomnessManager.
 
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
     /// via consensus.

@@ -113,7 +113,6 @@ pub enum NumberCondition {
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
 #[allow(unused)]
-
 pub enum CheckboxCondition {
     Equals(bool),
     DoesNotEqual(bool),

@@ -221,7 +221,7 @@ impl CutPlan {
 
             // Check whether any parent directories need to be made as part of this iteration of the
             // cut.
-            let fresh_parent = shortest_new_prefix(&dst_path).map_or(false, |pfx| {
+            let fresh_parent = shortest_new_prefix(&dst_path).is_some_and(|pfx| {
                 walker.make_directories.insert(pfx);
                 true
             });

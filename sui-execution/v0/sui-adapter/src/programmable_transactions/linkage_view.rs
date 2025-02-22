@@ -325,7 +325,7 @@ impl LinkageResolver for LinkageView<'_> {
     }
 }
 
-/** Remaining implementations delegated to state_view *************************/
+// Remaining implementations delegated to state_view
 
 impl ResourceResolver for LinkageView<'_> {
     type Error = SuiError;

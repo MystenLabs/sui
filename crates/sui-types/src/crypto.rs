@@ -1376,7 +1376,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
     pub fn authorities<'a>(
         &'a self,
         committee: &'a Committee,
-    ) -> impl Iterator<Item = SuiResult<&AuthorityName>> {
+    ) -> impl Iterator<Item = SuiResult<&'a AuthorityName>> {
         self.signers_map.iter().map(|i| {
             committee
                 .authority_by_index(i)

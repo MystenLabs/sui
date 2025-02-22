@@ -83,6 +83,7 @@ pub struct ExecutionSandboxState {
 }
 
 impl ExecutionSandboxState {
+    #[allow(clippy::result_large_err)]
     pub fn check_effects(&self) -> Result<(), ReplayEngineError> {
         if self.transaction_info.effects != self.local_exec_effects {
             error!("Replay tool forked {}", self.transaction_info.tx_digest);
@@ -515,7 +516,7 @@ impl LocalExec {
     }
 
     // TODO: remove this after `futures::executor::block_on` is removed.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(clippy::disallowed_methods, clippy::result_large_err)]
     pub fn download_object(
         &self,
         object_id: &ObjectID,
@@ -560,7 +561,7 @@ impl LocalExec {
     }
 
     // TODO: remove this after `futures::executor::block_on` is removed.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(clippy::disallowed_methods, clippy::result_large_err)]
     pub fn download_latest_object(
         &self,
         object_id: &ObjectID,
@@ -594,7 +595,7 @@ impl LocalExec {
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[allow(clippy::disallowed_methods, clippy::result_large_err)]
     pub fn download_object_by_upper_bound(
         &self,
         object_id: &ObjectID,
@@ -875,6 +876,7 @@ impl LocalExec {
     }
 
     /// Must be called after `init_for_execution`
+    #[allow(clippy::result_large_err)]
     pub async fn execution_engine_execute_impl(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -904,6 +906,7 @@ impl LocalExec {
     /// Executes a transaction with the state specified in `pre_run_sandbox`
     /// This is useful for executing a transaction with a specific state
     /// However if the state in invalid, the behavior is undefined.
+    #[allow(clippy::result_large_err)]
     pub async fn certificate_execute_with_sandbox_state(
         pre_run_sandbox: &ExecutionSandboxState,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
@@ -970,6 +973,7 @@ impl LocalExec {
 
     /// Must be called after `init_for_execution`
     /// This executes from `sui_core::authority::AuthorityState::try_execute_immediately`
+    #[allow(clippy::result_large_err)]
     pub async fn certificate_execute(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -984,6 +988,7 @@ impl LocalExec {
 
     /// Must be called after `init_for_execution`
     /// This executes from `sui_adapter::execution_engine::execute_transaction_to_effects`
+    #[allow(clippy::result_large_err)]
     pub async fn execution_engine_execute(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -996,6 +1001,7 @@ impl LocalExec {
         Ok(sandbox_state)
     }
 
+    #[allow(clippy::result_large_err)]
     pub async fn execute_state_dump(
         &mut self,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
@@ -1014,6 +1020,7 @@ impl LocalExec {
         Ok((sandbox_state, d.node_state_dump))
     }
 
+    #[allow(clippy::result_large_err)]
     pub async fn execute_transaction(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -1046,6 +1053,7 @@ impl LocalExec {
     }
 
     /// This is the only function which accesses the network during execution
+    #[allow(clippy::result_large_err)]
     pub fn get_or_download_object(
         &self,
         obj_id: &ObjectID,
@@ -1107,6 +1115,7 @@ impl LocalExec {
     }
 
     /// Must be called after `populate_protocol_version_tables`
+    #[allow(clippy::result_large_err)]
     pub fn system_package_versions_for_protocol_version(
         &self,
         protocol_version: u64,

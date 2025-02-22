@@ -950,7 +950,8 @@ where
                             );
                             if state
                                 .latest_system_state
-                                .as_ref().is_none_or(|latest| system_state.epoch() > latest.epoch())
+                                .as_ref()
+                                .is_none_or(|latest| system_state.epoch() > latest.epoch())
                             {
                                 state.latest_system_state = Some(system_state);
                             }
@@ -1136,11 +1137,7 @@ where
         }
     }
 
-    fn record_rpc_error_maybe(
-        metrics: Arc<AuthAggMetrics>,
-        display_name: &String,
-        error: &SuiError,
-    ) {
+    fn record_rpc_error_maybe(metrics: Arc<AuthAggMetrics>, display_name: &str, error: &SuiError) {
         if let SuiError::RpcError(_message, code) = error {
             metrics
                 .total_rpc_err
