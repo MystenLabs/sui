@@ -11,6 +11,17 @@ const protocolInject = async function (source) {
   const createId = (name) => {
     return name.replace(/[\._]/g, "-").replace(/\//g, "_");
   };
+  const suiSorted = (array) => {
+    return array.sort((a, b) => {
+      const aStartsWithSui = a.name.startsWith("sui");
+      const bStartsWithSui = b.name.startsWith("sui");
+
+      if (aStartsWithSui && !bStartsWithSui) return -1;
+      if (!aStartsWithSui && bStartsWithSui) return 1;
+      return 0;
+    });
+  };
+
   for (const proto of spec.files) {
     let messages = [];
     let protoLink = createId(proto.name);
@@ -22,14 +33,33 @@ const protocolInject = async function (source) {
         });
       }
     }
-    let item = { name: proto.name, link: protoLink, messages: messages };
+    let services = [];
+    if (proto.services) {
+      for (const service of proto.services) {
+        services.push({
+          name: service.name,
+          link: createId(service.fullName),
+        });
+      }
+    }
+    let enums = [];
+    if (proto.enums) {
+      for (const num of proto.enums) {
+        enums.push({
+          name: num.name,
+          link: createId(num.fullName),
+        });
+      }
+    }
+    let item = { name: proto.name, link: protoLink, messages, services, enums };
     toc.push(item);
   }
   const types = [];
   for (const prototype of spec.scalarValueTypes) {
     types.push({ name: prototype.protoType, link: prototype.protoType });
   }
-  toc.push({
+  let tocSorted = suiSorted(toc);
+  tocSorted.push({
     name: "Scalar Value Types",
     link: "scalar-value-types",
     messages: types,
@@ -66,16 +96,24 @@ const protocolInject = async function (source) {
     return final.join("\n");
   };
 
-  let content = [`<Protocol toc={${JSON.stringify(toc)}}/>`];
+  let content = [`<Protocol toc={${JSON.stringify(tocSorted)}}/>`];
 
   let messageSort = (array) => {
     return array.sort((a, b) => a.name.localeCompare(b.name));
   };
-
-  for (const file of spec.files) {
+  const files = suiSorted(spec.files);
+  const leftArrowStyle =
+    "relative inline-flex items-center before:content-[''] before:border-t-transparent before:border-b-transparent before:border-solid before:border-y-5 before:border-r-0 before:border-l-8 before:border-l-sui-gray-65";
+  const borderStyle =
+    "border border-solid border-y-transparent border-r-transparent border-l-sui-gray-65";
+  const attrStyle =
+    "text-lg before:pr-2 before:mr-2 before:text-sm before:border before:border-solid before:border-transparent before:border-r-sui-gray-65";
+  const fieldStyle =
+    "p-2 font-medium text-lg rounded-lg bg-sui-ghost-white dark:bg-sui-ghost-dark";
+  for (const file of files) {
     content.push(`\n## ${file.name} {#${createId(file.name)}}`);
     content.push(
-      `<div class="text-lg">\n${handleCurlies(file.description).replace(
+      `<div className="text-lg">\n${handleCurlies(file.description).replace(
         /\n##? (.*)\n/,
         "### $1",
       )}\n</div>`,
@@ -94,27 +132,20 @@ const protocolInject = async function (source) {
       } else {
         fields = Object.values(message.fields);
       }
+
       const allFields = [...messageSort(fields), ...messageSort(oneofFields)];
       content.push(`\n### ${message.name} {#${createId(message.fullName)}}`);
       content.push(
-        `<div class="text-lg">\n${handleCurlies(message.description)
+        `<div className="text-lg">\n${handleCurlies(message.description)
           .replace(/</g, "&#lt;")
           .replace(/^(#{1,2})\s(?!#)/gm, "### ")}\n
         </div>`,
       );
 
       if (allFields.length > 0) {
-        const attrStyle =
-          "text-lg before:pr-2 before:mr-2 before:text-sm before:border before:border-solid before:border-transparent before:border-r-sui-gray-65";
-        const fieldStyle =
-          "p-2 font-medium text-lg rounded-lg bg-sui-ghost-white dark:bg-sui-ghost-dark";
-        const borderStyle =
-          "border border-solid border-y-transparent border-r-transparent border-l-sui-gray-65";
-        const leftArrowStyle =
-          "relative inline-flex items-center before:content-[''] before:border-t-transparent before:border-b-transparent before:border-solid before:border-y-5 before:border-r-0 before:border-l-8 before:border-l-sui-gray-65";
-        content.push(`<p class="ml-4 text-2xl">Fields</p>`);
-        content.push(`<div class="ml-4">`);
-        content.push(`<div class="grid grid-cols-12">`);
+        content.push(`<p className="ml-4 text-2xl">Fields</p>`);
+        content.push(`<div className="ml-4">`);
+        content.push(`<div className="grid grid-cols-12">`);
         let foundoneof = false;
         for (const [idx, field] of allFields.entries()) {
           const hasType = field.type && field.type !== "";
@@ -123,34 +154,36 @@ const protocolInject = async function (source) {
           if (field.isoneof) {
             if (!foundoneof) {
               content.push(
-                `<div class="col-span-3 ${leftArrowStyle} ${borderStyle}"><div class="${fieldStyle} py-2">One of</div></div>`,
+                `<div className="col-span-3 ${leftArrowStyle} ${borderStyle}"><div className="${fieldStyle} py-2">One of</div></div>`,
               );
               foundoneof = !foundoneof;
             }
           }
           content.push(
-            `<div class="${field.isoneof ? "col-start-2 col-end-12" : "col-span-12"} ${borderStyle} py-2">`,
+            `<div className="${field.isoneof ? "col-start-2 col-end-12" : "col-span-12"} ${borderStyle} py-2">`,
           );
-          content.push(`<div class="${leftArrowStyle}">`);
+          content.push(`<div className="${leftArrowStyle}">`);
           content.push(
-            `<div class="${fieldStyle} col-span-12">${field.name}</div>\n</div>`,
+            `<div className="${fieldStyle} col-span-12">${field.name}</div>\n</div>`,
           );
-          content.push(`<div class="flex flex-row ml-4 pt-2 items-center">`);
+          content.push(
+            `<div className="flex flex-row ml-4 pt-2 items-center">`,
+          );
           if (hasType) {
             content.push(
-              `<div class="${attrStyle} before:content-['Type']">[${field.type}](#${createId(field.fullType)})</div>`,
+              `<div className="${attrStyle} before:content-['Type']">[${field.type}](#${createId(field.fullType)})</div>`,
             );
           }
           if (hasLabel) {
             content.push(
-              `<div class="${attrStyle} before:content-['Label'] ml-4">${field.label}</div>`,
+              `<div className="${attrStyle} before:content-['Label'] ml-4">${field.label}</div>`,
             );
           }
           content.push("</div>");
           if (hasDesc) {
-            content.push(`<div class="ml-4 pt-2">`);
+            content.push(`<div className="ml-4 pt-2">`);
             content.push(
-              `<div class="${attrStyle} before:content-['Description'] indent-[-88px] pl-[88px]">${handleCurlies(
+              `<div className="${attrStyle} before:content-['Description'] indent-[-88px] pl-[88px]">${handleCurlies(
                 field.description,
               )
                 .replace(/\n\/?/g, " ")
@@ -162,6 +195,75 @@ const protocolInject = async function (source) {
         }
 
         content.push("</div>\n</div>");
+      }
+    }
+    if (file.services.length > 0) {
+      const proto = file.name.split("/").pop();
+      content.push(`### Services (${proto})`);
+      content.push("<div className='ml-4'>");
+      for (const service of file.services) {
+        content.push(`<div className="${borderStyle}">`);
+        content.push(
+          `<h4 className="${leftArrowStyle} before:mr-2" id="${createId(service.fullName)}">${service.name}</h4>`,
+        );
+        content.push(`<div className="ml-4">`);
+        content.push(
+          `<div>${handleCurlies(service.description)
+            .replace(/\n\/?/g, " ")
+            .replace(/<(http.*)>/g, "$1")}</div>`,
+        );
+        if (service.methods.length > 0) {
+          content.push(`<p className="text-xl mt-4">Methods</p>`);
+          for (const method of service.methods) {
+            content.push(`<div className="my-6">`);
+            content.push(
+              `<div className="${attrStyle} my-2 before:content-['Request']  before:inline-block before:w-20">[${method.requestType}](#${createId(method.requestFullType)})</div>`,
+            );
+            content.push(
+              `<div className="${attrStyle} my-2 before:content-['Response'] before:inline-block before:w-20">${method.responseType}</div>`,
+            );
+            content.push(
+              `<div className="${attrStyle} my-2 table relative left-2 before:table-cell before:content-['Description'] before:relative before:-left-2 before:w-20">${handleCurlies(
+                method.description,
+              )
+                .replace(/\n\/?/g, " ")
+                .replace(/<(http.*)>/g, "$1")}</div>`,
+            );
+            content.push(`</div>`);
+          }
+        }
+        content.push("</div></div>");
+        //content.push();
+        //content.push();
+      }
+      content.push("</div>");
+    }
+    if (file.enums.length > 0) {
+      content.push("<div className='ml-4'>");
+      content.push("### Enums");
+      for (const num of file.enums) {
+        content.push(`<div className="${borderStyle}">`);
+        content.push(
+          `<h4 className="${leftArrowStyle} before:mr-2" id="${createId(num.fullName)}">${num.name}</h4>`,
+        );
+        content.push(`<div className="ml-4">`);
+        content.push(
+          `<div className="${attrStyle} before:content-['Description'] indent-[-88px] pl-[88px]">${handleCurlies(
+            num.description,
+          )
+            .replace(/\n\/?/g, " ")
+            .replace(/<(http.*)>/g, "$1")}</div>`,
+        );
+        content.push(
+          `<div className="mt-4 flex flex-row ${attrStyle} before:!mr-0 before:content-['Values']">`,
+        );
+        content.push(`<div>`);
+        for (const val of num.values) {
+          content.push(
+            `<div class="flex flex-row my-2"><div className="${leftArrowStyle} before:mr-2"><code>${val.name}</code></div><div>${val.description ? ": " + handleCurlies(val.description) : ""}</div></div>`,
+          );
+        }
+        content.push(`</div></div></div></div></div>`);
       }
     }
   }
@@ -176,29 +278,29 @@ const protocolInject = async function (source) {
   for (const scalar of spec.scalarValueTypes) {
     content.push(`\n### ${scalar.protoType}`);
     content.push(
-      `<div class="text-lg">\n${handleCurlies(scalar.notes)}\n</div>`,
+      `<div className="text-lg">\n${handleCurlies(scalar.notes)}\n</div>`,
     );
-    content.push(`<div class="flex flex-wrap">`);
+    content.push(`<div className="flex flex-wrap">`);
     content.push(
-      `<div class="${cellStyle}"><div class="${titleStyle}">C++</div><div class="${valStyle}">${scalar.cppType}</div></div>`,
-    );
-    content.push(
-      `<div class="${cellStyle}"><div class="${titleStyle}">C#</div><div class="${valStyle}">${scalar.csType}</div></div>`,
+      `<div className="${cellStyle}"><div className="${titleStyle}">C++</div><div className="${valStyle}">${scalar.cppType}</div></div>`,
     );
     content.push(
-      `<div class="${cellStyle}"><div class="${titleStyle}">Go</div><div class="${valStyle}">${scalar.goType}</div></div>`,
+      `<div className="${cellStyle}"><div className="${titleStyle}">C#</div><div className="${valStyle}">${scalar.csType}</div></div>`,
     );
     content.push(
-      `<div class="${cellStyle}"><div class="${titleStyle}">Java</div><div class="${valStyle}">${scalar.javaType}</div></div>`,
+      `<div className="${cellStyle}"><div className="${titleStyle}">Go</div><div className="${valStyle}">${scalar.goType}</div></div>`,
     );
     content.push(
-      `<div class="${cellStyle}"><div class="${titleStyle}">PHP</div><div class="${valStyle}">${scalar.phpType}</div></div>`,
+      `<div className="${cellStyle}"><div className="${titleStyle}">Java</div><div className="${valStyle}">${scalar.javaType}</div></div>`,
     );
     content.push(
-      `<div class="${cellStyle}"><div class="${titleStyle}">Python</div><div class="${valStyle}">${scalar.pythonType}</div></div>`,
+      `<div className="${cellStyle}"><div className="${titleStyle}">PHP</div><div className="${valStyle}">${scalar.phpType}</div></div>`,
     );
     content.push(
-      `<div class="${cellStyle}"><div class="${titleStyle}">Ruby</div><div class="${valStyle}">${scalar.rubyType}</div></div>`,
+      `<div className="${cellStyle}"><div className="${titleStyle}">Python</div><div className="${valStyle}">${scalar.pythonType}</div></div>`,
+    );
+    content.push(
+      `<div className="${cellStyle}"><div className="${titleStyle}">Ruby</div><div className="${valStyle}">${scalar.rubyType}</div></div>`,
     );
     content.push(`</div>`);
   }
