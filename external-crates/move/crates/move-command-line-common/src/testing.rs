@@ -27,6 +27,12 @@ pub struct InstaOptions {
     test_name: Option<String>,
 }
 
+impl Default for InstaOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InstaOptions {
     /// See `insta_assert!` for documentation.
     pub fn new() -> Self {

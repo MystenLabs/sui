@@ -87,7 +87,7 @@ struct TypeWithLoader<'a, 'b> {
     loader: &'b Loader,
 }
 
-impl<'a, 'b> TypeView for TypeWithLoader<'a, 'b> {
+impl TypeView for TypeWithLoader<'_, '_> {
     fn to_type_tag(&self) -> TypeTag {
         self.loader.type_to_type_tag(self.ty).unwrap()
     }

@@ -86,7 +86,7 @@ where
     }
 }
 
-impl<'p, 'v, 'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'p, 'v, V> {
+impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V> {
     type Value = Option<V::Value>;
     type Error = V::Error;
 

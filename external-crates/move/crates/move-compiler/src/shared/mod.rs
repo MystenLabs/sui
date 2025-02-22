@@ -1044,7 +1044,6 @@ impl SaveHook {
 ///
 /// Examples of usage can be found in `expansion/`, `naming/`, `typing/`, and `hlir/`, in their
 /// respective `translation.rs` implementations.
-
 macro_rules! process_binops {
     ($optype:ty,
      $valtype:ty,

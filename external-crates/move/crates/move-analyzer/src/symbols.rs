@@ -179,6 +179,12 @@ pub struct SymbolsComputationData {
     mod_to_alias_lengths: BTreeMap<String, BTreeMap<Position, usize>>,
 }
 
+impl Default for SymbolsComputationData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SymbolsComputationData {
     pub fn new() -> Self {
         Self {
@@ -452,6 +458,12 @@ pub type VariantFieldOrderInfo = BTreeMap<Symbol, BTreeMap<Symbol, BTreeMap<Symb
 pub struct FieldOrderInfo {
     structs: BTreeMap<String, StructFieldOrderInfo>,
     variants: BTreeMap<String, VariantFieldOrderInfo>,
+}
+
+impl Default for FieldOrderInfo {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FieldOrderInfo {

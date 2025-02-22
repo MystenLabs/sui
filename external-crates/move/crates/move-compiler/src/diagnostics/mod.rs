@@ -869,12 +869,9 @@ macro_rules! ice_assert {
 pub fn print_stack_trace() {
     use std::backtrace::{Backtrace, BacktraceStatus};
     let stacktrace = Backtrace::capture();
-    match stacktrace.status() {
-        BacktraceStatus::Captured => {
-            eprintln!("stacktrace:");
-            eprintln!("{}", stacktrace);
-        }
-        BacktraceStatus::Unsupported | BacktraceStatus::Disabled | _ => (),
+    if stacktrace.status() == BacktraceStatus::Captured {
+        eprintln!("stacktrace:");
+        eprintln!("{}", stacktrace);
     }
 }
 

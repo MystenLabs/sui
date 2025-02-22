@@ -144,7 +144,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
     }
 }
 
-impl<'a> SimpleAbsInt for IDLeakVerifierAI<'a> {
+impl SimpleAbsInt for IDLeakVerifierAI<'_> {
     type State = State;
     type ExecutionContext = ExecutionContext;
 

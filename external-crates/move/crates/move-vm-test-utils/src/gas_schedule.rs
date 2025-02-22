@@ -261,7 +261,7 @@ fn get_simple_instruction_opcode(instr: SimpleInstruction) -> Opcodes {
     }
 }
 
-impl<'b> GasMeter for GasStatus<'b> {
+impl GasMeter for GasStatus<'_> {
     /// Charge an instruction and fail if not enough gas units are left.
     fn charge_simple_instr(&mut self, instr: SimpleInstruction) -> PartialVMResult<()> {
         self.charge_instr(get_simple_instruction_opcode(instr))
