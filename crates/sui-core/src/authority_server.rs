@@ -1100,7 +1100,7 @@ impl ValidatorService {
         let request = request.into_inner();
 
         let certificates = NonEmpty::from_vec(request.certificates)
-            .ok_or_else(|| SuiError::NoCertificateProvidedError)?;
+            .ok_or(SuiError::NoCertificateProvidedError)?;
         let mut total_size_bytes = 0;
         for certificate in &certificates {
             // We need to check this first because we haven't verified the cert signature.

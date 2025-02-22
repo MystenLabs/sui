@@ -80,7 +80,7 @@ pub(crate) enum ObjectResult<V> {
     Loaded(V),
 }
 
-impl<'a> Inner<'a> {
+impl Inner<'_> {
     fn get_or_fetch_object_from_store(
         &mut self,
         parent: ObjectID,

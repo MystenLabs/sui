@@ -309,7 +309,7 @@ impl HistogramReporter {
     }
 }
 
-impl<'a> Drop for HistogramTimerGuard<'a> {
+impl Drop for HistogramTimerGuard<'_> {
     fn drop(&mut self) {
         self.histogram
             .report(self.start.elapsed().as_millis() as u64);

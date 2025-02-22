@@ -60,8 +60,7 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
                         if type_path
                             .path
                             .segments
-                            .last()
-                            .map_or(false, |segment| segment.ident == "Option") =>
+                            .last().is_some_and(|segment| segment.ident == "Option") =>
                     {
                         // Extract inner type T from Option<T>
                         let inner_type = if let syn::PathArguments::AngleBracketed(
@@ -302,8 +301,7 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
                         if type_path
                             .path
                             .segments
-                            .last()
-                            .map_or(false, |segment| segment.ident == "bool") =>
+                            .last().is_some_and(|segment| segment.ident == "bool") =>
                     {
                         Some((
                             quote! {

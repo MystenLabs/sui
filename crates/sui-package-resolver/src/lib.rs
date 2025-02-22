@@ -1134,7 +1134,7 @@ impl OpenSignatureBody {
     }
 }
 
-impl<'m, 'n> DatatypeRef<'m, 'n> {
+impl DatatypeRef<'_, '_> {
     pub fn as_key(&self) -> DatatypeKey {
         DatatypeKey {
             package: self.package,

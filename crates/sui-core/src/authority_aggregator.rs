@@ -891,7 +891,7 @@ where
                         match result {
                             Ok(object_info) => {
                                 debug!("Received object info response from validator {:?} with version: {:?}", name.concise(), object_info.object.version());
-                                if state.latest_object_version.as_ref().map_or(true, |latest| {
+                                if state.latest_object_version.as_ref().is_none_or(|latest| {
                                     object_info.object.version() > latest.version()
                                 }) {
                                     state.latest_object_version = Some(object_info.object);
@@ -950,8 +950,7 @@ where
                             );
                             if state
                                 .latest_system_state
-                                .as_ref()
-                                .map_or(true, |latest| system_state.epoch() > latest.epoch())
+                                .as_ref().is_none_or(|latest| system_state.epoch() > latest.epoch())
                             {
                                 state.latest_system_state = Some(system_state);
                             }

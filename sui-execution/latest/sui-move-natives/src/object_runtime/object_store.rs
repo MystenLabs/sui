@@ -170,7 +170,7 @@ macro_rules! fetch_child_object_unbounded {
     }};
 }
 
-impl<'a> Inner<'a> {
+impl Inner<'_> {
     fn receive_object_from_store(
         &self,
         owner: ObjectID,

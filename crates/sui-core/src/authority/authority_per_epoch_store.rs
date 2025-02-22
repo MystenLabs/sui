@@ -1562,16 +1562,14 @@ impl AuthorityPerEpochStore {
         );
         match self
             .tables()?
-            .get_last_consensus_stats()
-            .map_err(SuiError::from)?
+            .get_last_consensus_stats()?
         {
             Some(stats) => Ok(stats),
             None => {
                 let indices = self
                     .tables()?
                     .get_last_consensus_index()
-                    .map(|x| x.unwrap_or_default())
-                    .map_err(SuiError::from)?;
+                    .map(|x| x.unwrap_or_default())?;
                 Ok(ExecutionIndicesWithStats {
                     index: indices,
                     hash: 0, // unused

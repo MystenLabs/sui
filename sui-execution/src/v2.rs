@@ -212,7 +212,7 @@ impl executor::Executor for Executor {
     }
 }
 
-impl<'m> verifier::Verifier for Verifier<'m> {
+impl verifier::Verifier for Verifier<'_> {
     fn meter(&self, config: MeterConfig) -> Box<dyn Meter> {
         Box::new(SuiVerifierMeter::new(config))
     }

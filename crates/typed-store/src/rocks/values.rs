@@ -22,7 +22,7 @@ impl<'a, V: DeserializeOwned> Values<'a, V> {
     }
 }
 
-impl<'a, V: DeserializeOwned> Iterator for Values<'a, V> {
+impl<V: DeserializeOwned> Iterator for Values<'_, V> {
     type Item = Result<V, TypedStoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {

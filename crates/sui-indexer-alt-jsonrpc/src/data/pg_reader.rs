@@ -62,7 +62,7 @@ impl PgReader {
     }
 }
 
-impl<'p> Connection<'p> {
+impl Connection<'_> {
     pub(crate) async fn first<'q, Q, ST, U>(&mut self, query: Q) -> Result<U, Error>
     where
         Q: LimitDsl,
