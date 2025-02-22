@@ -103,9 +103,8 @@ impl<C: NetworkClient> RoundProber<C> {
     }
 
     // Probes each peer for the latest rounds they received from others.
-    // Returns the quorum round for each authority, and the propagation delay
-    // of own blocks.
-    pub(crate) async fn probe(&self) {
+    // Returns the propagation delay of own blocks.
+    pub(crate) async fn probe(&self) -> Round {
         let _scope = monitored_scope("RoundProber");
 
         let node_metrics = &self.context.metrics.node_metrics;
@@ -200,8 +199,16 @@ impl<C: NetworkClient> RoundProber<C> {
         self.round_tracker
             .write()
             .update_from_probe(highest_accepted_rounds, highest_received_rounds);
+        let propagation_delay = self
+            .round_tracker
+            .read()
+            .calculate_propagation_delay(last_proposed_round);
 
-        let _ = self.core_thread_dispatcher.notify_rounds_probed();
+        let _ = self
+            .core_thread_dispatcher
+            .set_propagation_delay(propagation_delay);
+
+        propagation_delay
     }
 }
 
@@ -275,7 +282,7 @@ mod test {
             unimplemented!()
         }
 
-        fn notify_rounds_probed(&self) -> Result<(), CoreError> {
+        fn set_propagation_delay(&self, _propagation_delay: Round) -> Result<(), CoreError> {
             Ok(())
         }
 
@@ -403,10 +410,7 @@ mod test {
             ], // highest_accepted_rounds
         ));
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let prober = RoundProber::new(
             context.clone(),
             core_thread_dispatcher.clone(),
@@ -435,37 +439,7 @@ mod test {
         // 105, 115, 103, 0,   125, 126, 127,
         // 0,   0,   0,   0,   0,   0,   0,
 
-        prober.probe().await;
-
-        let (received_quorum_rounds, accepted_quorum_rounds, propagation_delay) = round_tracker
-            .read()
-            .calculate_quorum_rounds_and_propagation_delay();
-
-        assert_eq!(
-            received_quorum_rounds,
-            vec![
-                (100, 105),
-                (0, 115),
-                (103, 130),
-                (0, 0),
-                (105, 150),
-                (106, 160),
-                (107, 170)
-            ]
-        );
-
-        assert_eq!(
-            accepted_quorum_rounds,
-            vec![
-                (0, 1),
-                (0, 115),
-                (103, 130),
-                (0, 0),
-                (105, 150),
-                (106, 160),
-                (107, 170)
-            ]
-        );
+        let propagation_delay = prober.probe().await;
 
         assert_eq!(propagation_delay, 10);
     }

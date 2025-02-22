@@ -67,6 +67,13 @@ pub(crate) struct Core {
     /// Core stops proposing new blocks when there is no subscriber, because new proposed blocks
     /// will likely contain only stale info when they propagate to peers.
     subscriber_exists: bool,
+    /// Estimated delay by round for propagating blocks to a quorum.
+    /// Because of the nature of TCP and block streaming, propagation delay is expected to be
+    /// 0 in most cases, even when the actual latency of broadcasting blocks is high.
+    /// When this value is higher than the `propagation_delay_stop_proposal_threshold`,
+    /// most likely this validator cannot broadcast  blocks to the network at all.
+    /// Core stops proposing new blocks in this case.
+    propagation_delay: Round,
     /// Used to make commit decisions for leader blocks in the dag.
     committer: UniversalCommitter,
     /// The last new round for which core has sent out a signal.
@@ -106,10 +113,6 @@ pub(crate) struct Core {
     // quorum rounds periodically which is used across other components to make
     // decisions about block proposals.
     round_tracker: Arc<RwLock<PeerRoundTracker>>,
-    // Tracks the last checked proposal control state.
-    // We maintain this recent history so that if state changes from not proposing
-    // to proposing, we will attempt to create a new block.
-    is_proposing: bool,
 }
 
 impl Core {
@@ -181,6 +184,7 @@ impl Core {
             transaction_consumer,
             block_manager,
             subscriber_exists,
+            propagation_delay: 0,
             committer,
             commit_observer,
             signals,
@@ -189,7 +193,6 @@ impl Core {
             last_known_proposed_round: min_propose_round,
             ancestor_state_manager,
             round_tracker,
-            is_proposing: false,
         }
         .recover()
     }
@@ -906,6 +909,12 @@ impl Core {
         self.subscriber_exists = exists;
     }
 
+    /// Sets the delay by round for propagating blocks to a quorum.
+    pub(crate) fn set_propagation_delay(&mut self, delay: Round) {
+        info!("Propagation round delay set to: {delay}");
+        self.propagation_delay = delay;
+    }
+
     /// Sets the min propose round for the proposer allowing to propose blocks only for round numbers
     /// `> last_known_proposed_round`. At the moment is allowed to call the method only once leading to a panic
     /// if attempt to do multiple times.
@@ -917,67 +926,54 @@ impl Core {
         info!("Last known proposed round set to {round}");
     }
 
-    // Whether core is currently proposing new blocks.
-    pub(crate) fn is_proposing(&self) -> bool {
-        self.is_proposing
-    }
-
     /// Whether the core should propose new blocks.
     pub(crate) fn should_propose(&mut self) -> bool {
-        let (_, _, propagation_delay) = self
-            .round_tracker
-            .read()
-            .calculate_quorum_rounds_and_propagation_delay();
-
         let clock_round = self.dag_state.read().threshold_clock_round();
         let core_skipped_proposals = &self.context.metrics.node_metrics.core_skipped_proposals;
 
-        let should_propose = match () {
-            _ if !self.subscriber_exists => {
-                debug!("Skip proposing for round {clock_round}, no subscriber exists.");
-                core_skipped_proposals
-                    .with_label_values(&["no_subscriber"])
-                    .inc();
-                false
-            }
-            _ if propagation_delay
-                > self
-                    .context
+        if !self.subscriber_exists {
+            debug!("Skip proposing for round {clock_round}, no subscriber exists.");
+            core_skipped_proposals
+                .with_label_values(&["no_subscriber"])
+                .inc();
+            return false;
+        }
+
+        if self.propagation_delay
+            > self
+                .context
+                .parameters
+                .propagation_delay_stop_proposal_threshold
+        {
+            debug!(
+                "Skip proposing for round {clock_round}, high propagation delay {} > {}.",
+                self.propagation_delay,
+                self.context
                     .parameters
-                    .propagation_delay_stop_proposal_threshold =>
-            {
-                debug!(
-                    "Skip proposing for round {clock_round}, high propagation delay {} > {}.",
-                    propagation_delay,
-                    self.context
-                        .parameters
-                        .propagation_delay_stop_proposal_threshold
-                );
-                core_skipped_proposals
-                    .with_label_values(&["high_propagation_delay"])
-                    .inc();
-                false
-            }
-            _ => match self.last_known_proposed_round {
-                None => {
-                    debug!("Skip proposing for round {clock_round}, last known proposed round has not been synced yet.");
-                    core_skipped_proposals
-                        .with_label_values(&["no_last_known_proposed_round"])
-                        .inc();
-                    false
-                }
-                Some(last_known_proposed_round) if clock_round <= last_known_proposed_round => {
-                    debug!("Skip proposing for round {clock_round} as last known proposed round is {last_known_proposed_round}");
-                    core_skipped_proposals
-                        .with_label_values(&["higher_last_known_proposed_round"])
-                        .inc();
-                    false
-                }
-                Some(_) => true,
-            },
+                    .propagation_delay_stop_proposal_threshold
+            );
+            core_skipped_proposals
+                .with_label_values(&["high_propagation_delay"])
+                .inc();
+            return false;
+        }
+
+        let Some(last_known_proposed_round) = self.last_known_proposed_round else {
+            debug!("Skip proposing for round {clock_round}, last known proposed round has not been synced yet.");
+            core_skipped_proposals
+                .with_label_values(&["no_last_known_proposed_round"])
+                .inc();
+            return false;
         };
-        self.is_proposing = should_propose;
-        should_propose
+        if clock_round <= last_known_proposed_round {
+            debug!("Skip proposing for round {clock_round} as last known proposed round is {last_known_proposed_round}");
+            core_skipped_proposals
+                .with_label_values(&["higher_last_known_proposed_round"])
+                .inc();
+            return false;
+        }
+
+        true
     }
 
     // Try to decide which of the certified commits will have to be committed next respecting the `limit`. If provided `limit` is zero, it will panic.
@@ -1052,8 +1048,7 @@ impl Core {
 
         // Ensure ancestor state is up to date before selecting for proposal.
         let round_tracker = self.round_tracker.read();
-        let (_, accepted_quorum_rounds, _) =
-            round_tracker.calculate_quorum_rounds_and_propagation_delay();
+        let (_, accepted_quorum_rounds) = round_tracker.calculate_quorum_rounds();
         let round_prober_update_count = round_tracker.round_prober_update_count;
         let new_block_update_count = round_tracker.new_block_update_count;
         drop(round_tracker);
@@ -1429,10 +1424,7 @@ impl CoreTextFixture {
 
         let block_signer = signers.remove(own_index.value()).1;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let core = Core::new(
             context,
             leader_schedule,
@@ -1551,10 +1543,7 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1678,10 +1667,7 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1772,10 +1758,7 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1882,10 +1865,7 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2031,10 +2011,7 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2187,10 +2164,7 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2262,10 +2236,7 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2614,10 +2585,7 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2887,10 +2855,7 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2978,10 +2943,7 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -3048,10 +3010,7 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
