@@ -1112,7 +1112,7 @@ async fn find_gas_coins_and_address(
 
     for address in std::iter::once(active_address).chain(wallet.get_addresses().into_iter()) {
         let coins: Vec<_> = wallet
-            .gas_objects(active_address)
+            .gas_objects(address)
             .await
             .map_err(|e| FaucetError::Wallet(e.to_string()))?
             .iter()
@@ -1124,6 +1124,7 @@ async fn find_gas_coins_and_address(
                 }
             })
             .collect();
+
 
         if !coins.is_empty() {
             return Ok((coins, address));
