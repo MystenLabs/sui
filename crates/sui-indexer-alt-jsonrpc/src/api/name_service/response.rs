@@ -5,14 +5,14 @@ use anyhow::Context as _;
 use diesel::{ExpressionMethods, QueryDsl};
 use futures::future::OptionFuture;
 use sui_indexer_alt_schema::schema::watermarks;
-use sui_name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError};
+use sui_name_service::{Domain, NameRecord, NameServiceError};
 use sui_types::base_types::SuiAddress;
 use tokio::join;
 
 use crate::{
+    context::Context,
     data::objects::load_live,
     error::{invalid_params, RpcError},
-    Context,
 };
 
 use super::Error;
@@ -21,7 +21,6 @@ use super::Error;
 /// and it hasn't expired.
 pub(super) async fn resolved_address(
     ctx: &Context,
-    config: &NameServiceConfig,
     name: &str,
 ) -> Result<Option<SuiAddress>, RpcError<Error>> {
     use Error as E;
@@ -30,6 +29,7 @@ pub(super) async fn resolved_address(
         .parse()
         .map_err(|e| invalid_params(E::NameService(e)))?;
 
+    let config = &ctx.config().name_service;
     let domain_record_id = config.record_field_id(&domain);
     let parent_record_id = config.record_field_id(&domain.parent());
 

@@ -123,7 +123,7 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
         ..Default::default()
     });
 
-    let rpc_config = RpcConfig::example();
+    let rpc_config = RpcConfig::default();
 
     Arc::new(
         OffchainCluster::new(

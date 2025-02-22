@@ -28,12 +28,13 @@ use sui_types::{
 };
 
 use crate::{
+    context::Context,
     data::tx_digests::TxDigestKey,
     error::{invalid_params, RpcError},
     paginate::{Cursor as _, JsonCursor, Page},
 };
 
-use super::{error::Error, Context, TransactionsConfig};
+use super::error::Error;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(
@@ -81,12 +82,12 @@ type Digests = PageResponse<TransactionDigest, String>;
 /// results).
 pub(super) async fn transactions(
     ctx: &Context,
-    config: &TransactionsConfig,
     filter: &Option<TransactionFilter>,
     cursor: Option<String>,
     limit: Option<usize>,
     descending_order: Option<bool>,
 ) -> Result<Digests, RpcError<Error>> {
+    let config = &ctx.config().transactions;
     let page: Page<Cursor> = Page::from_params(
         config.default_page_size,
         config.max_page_size,

@@ -164,8 +164,8 @@ impl TypeLimitCluster {
                 ..IndexerConfig::for_test()
             },
             RpcConfig {
-                package_resolver,
-                ..RpcConfig::example()
+                package_resolver: package_resolver.finish(),
+                ..RpcConfig::default()
             },
             &prometheus::Registry::new(),
             CancellationToken::new(),

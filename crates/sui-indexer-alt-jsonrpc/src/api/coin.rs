@@ -58,17 +58,7 @@ trait CoinsApi {
     ) -> RpcResult<Vec<Balance>>;
 }
 
-pub(crate) struct Coins(pub Context, pub CoinsConfig);
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct CoinsConfig {
-    /// The default page size limit when querying coins, if none is provided.
-    pub default_page_size: usize,
-
-    /// The largest acceptable page size when querying coins. Requesting a page larger than
-    /// this is a user error.
-    pub max_page_size: usize,
-}
+pub(crate) struct Coins(pub Context);
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
@@ -105,7 +95,8 @@ impl CoinsApiServer for Coins {
             GAS::type_tag()
         };
 
-        let Self(ctx, config) = self;
+        let Self(ctx) = self;
+        let config = &ctx.config().coins;
 
         let page: Page<Cursor> = Page::from_params::<Error>(
             config.default_page_size,
@@ -135,7 +126,7 @@ impl CoinsApiServer for Coins {
     }
 
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        let Self(ctx, _) = self;
+        let Self(ctx) = self;
         let coin_ids = filter_coins(ctx, owner, None, None).await?;
         let coin_futures = coin_ids
             .data
@@ -179,15 +170,6 @@ impl RpcModule for Coins {
 
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
-    }
-}
-
-impl Default for CoinsConfig {
-    fn default() -> Self {
-        Self {
-            default_page_size: 50,
-            max_page_size: 100,
-        }
     }
 }
 

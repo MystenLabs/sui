@@ -9,7 +9,7 @@ use sui_package_resolver::Resolver;
 use sui_pg_db::DbArgs;
 
 use crate::{
-    config::BigtableConfig,
+    config::RpcConfig,
     data::{
         bigtable_reader::BigtableReader,
         error::Error,
@@ -38,21 +38,23 @@ pub(crate) struct Context {
     /// Access to the database for accessing information about types from their packages (again
     /// through the same connection pool as `reader`).
     package_resolver: PackageResolver,
+
+    /// Access to the RPC's configuration.
+    config: Arc<RpcConfig>,
 }
 
 impl Context {
     /// Set-up access to the database through all the interfaces available in the context.
     pub(crate) async fn new(
         db_args: DbArgs,
-        bigtable_config: Option<BigtableConfig>,
-        limits: sui_package_resolver::Limits,
+        config: RpcConfig,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
     ) -> Result<Self, Error> {
         let pg_reader = PgReader::new(db_args, metrics, registry).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-        let kv_loader = if let Some(config) = bigtable_config {
+        let kv_loader = if let Some(config) = config.bigtable.clone() {
             let bigtable_reader = BigtableReader::new(config.instance_id).await?;
             KvLoader::new_with_bigtable(Arc::new(bigtable_reader.as_data_loader()))
         } else {
@@ -60,13 +62,17 @@ impl Context {
         };
 
         let store = PackageCache::new(DbPackageStore::new(pg_loader.clone()));
-        let package_resolver = Arc::new(Resolver::new_with_limits(store, limits));
+        let package_resolver = Arc::new(Resolver::new_with_limits(
+            store,
+            config.package_resolver.clone(),
+        ));
 
         Ok(Self {
             pg_reader,
             pg_loader,
             kv_loader,
             package_resolver,
+            config: Arc::new(config),
         })
     }
 
@@ -90,5 +96,10 @@ impl Context {
     /// For querying type and function signature information.
     pub(crate) fn package_resolver(&self) -> &PackageResolver {
         &self.package_resolver
+    }
+
+    /// Access to the RPC configuration.
+    pub(crate) fn config(&self) -> &RpcConfig {
+        self.config.as_ref()
     }
 }

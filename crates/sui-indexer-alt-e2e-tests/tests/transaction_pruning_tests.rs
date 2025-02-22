@@ -219,7 +219,7 @@ async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
             pipeline,
             ..IndexerConfig::for_test()
         },
-        RpcConfig::example(),
+        RpcConfig::default(),
         &prometheus::Registry::new(),
         CancellationToken::new(),
     )
