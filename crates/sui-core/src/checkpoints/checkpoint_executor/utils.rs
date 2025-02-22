@@ -7,6 +7,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::execution_cache::TransactionCacheRead;
 use futures::{future::Either, Stream};
 use mysten_common::fatal;
+use parking_lot::{Condvar, Mutex};
 use std::time::Duration;
 use sui_types::{
     base_types::{TransactionDigest, TransactionEffectsDigest},
@@ -171,6 +172,66 @@ pub(super) fn assert_not_forked(
             expected_digest,
             actual_effects_digest,
         );
+    }
+}
+
+struct Watch {
+    ready: Mutex<CheckpointSequenceNumber>,
+    condvar: Condvar,
+}
+
+impl Watch {
+    fn new(starting_seq: CheckpointSequenceNumber) -> Self {
+        Self {
+            ready: Mutex::new(starting_seq),
+            condvar: Condvar::new(),
+        }
+    }
+
+    fn wait_for(&self, seq: CheckpointSequenceNumber) {
+        let mut ready_seq = self.ready.lock();
+        while *ready_seq < seq {
+            self.condvar.wait(&mut ready_seq);
+        }
+    }
+
+    fn signal(&self, new_ready: CheckpointSequenceNumber) {
+        let mut prev = self.ready.lock();
+        assert_eq!(*prev + 1, new_ready);
+        *prev = new_ready;
+        self.condvar.notify_all();
+    }
+}
+
+pub(super) struct PipelineStages {
+    stages: [Watch; 3],
+}
+
+impl PipelineStages {
+    pub const COMMIT_TRANSACTION_OUTPUTS: usize = 0;
+    pub const FINALIZE_CHECKPOINT: usize = 1;
+    pub const UPDATE_RPC_INDEX: usize = 2;
+
+    pub fn new(starting_seq: CheckpointSequenceNumber) -> Self {
+        Self {
+            stages: [
+                Watch::new(starting_seq),
+                Watch::new(starting_seq),
+                Watch::new(starting_seq),
+            ],
+        }
+    }
+
+    pub fn num_stages() -> usize {
+        Self::UPDATE_RPC_INDEX + 1
+    }
+
+    pub fn begin<const STAGE: usize>(&self, seq: CheckpointSequenceNumber) {
+        self.stages[STAGE].wait_for(seq);
+    }
+
+    pub fn end<const STAGE: usize>(&self, seq: CheckpointSequenceNumber) {
+        self.stages[STAGE].signal(seq + 1);
     }
 }
 

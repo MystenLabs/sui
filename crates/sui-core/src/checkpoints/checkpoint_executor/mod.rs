@@ -229,6 +229,8 @@ impl CheckpointExecutor {
             .and_then(|s| s.parse().ok())
             .unwrap_or(this.config.checkpoint_execution_max_concurrency);
 
+        let pipeline_stages = Arc::new(PipelineStages::new(next_to_schedule));
+
         let final_checkpoint_executed = stream_synced_checkpoints(
             this.checkpoint_store.clone(),
             next_to_schedule,
@@ -239,9 +241,13 @@ impl CheckpointExecutor {
         .buffered(concurrency)
         // Committing checkpoint contents must be done serially
         // Returns whether the checkpoint just executed was the final checkpoint of the epoch
-        .map(|ckpt_state| this.clone().commit_checkpoint(ckpt_state))
+        .map(|ckpt_state| {
+            this.clone()
+                .commit_checkpoint(ckpt_state, pipeline_stages.clone())
+        })
+        .buffered(PipelineStages::num_stages())
         // Take the last value from the stream to determine if we completed the epoch
-        .fold(false, |state, is_final_checkpoint| {
+        .fold(false, |state, is_final_checkpoint| async move {
             assert!(
                 !state,
                 "fold can't be called again after the final checkpoint"
@@ -261,8 +267,11 @@ impl CheckpointExecutor {
 impl CheckpointExecutor {
     /// Serially process checkpoints after all transactions have been executed, in consecutive order.
     #[instrument(level = "debug", skip_all, fields(seq = ?ckpt_state.data.checkpoint.sequence_number()))]
-    async fn commit_checkpoint(self: Arc<Self>, mut ckpt_state: CheckpointExecutionState) -> bool /* is final checkpoint */
-    {
+    async fn commit_checkpoint(
+        self: Arc<Self>,
+        mut ckpt_state: CheckpointExecutionState,
+        pipeline_stages: Arc<PipelineStages>,
+    ) -> bool /* is final checkpoint */ {
         tokio::task::spawn_blocking({
             move || {
                 let _sequential_step_guard =
@@ -281,6 +290,8 @@ impl CheckpointExecutor {
 
                 let seq = ckpt_state.data.checkpoint.sequence_number;
 
+                pipeline_stages.begin::<{PipelineStages::COMMIT_TRANSACTION_OUTPUTS}>(seq);
+
                 // Commit all transaction effects to disk
                 let cache_commit = self.state.get_cache_commit();
                 debug!(?seq, "committing checkpoint transactions to disk");
@@ -293,9 +304,15 @@ impl CheckpointExecutor {
                         .unwrap_or(false),
                 );
 
+                pipeline_stages.end::<{PipelineStages::COMMIT_TRANSACTION_OUTPUTS}>(seq);
+                pipeline_stages.begin::<{PipelineStages::FINALIZE_CHECKPOINT}>(seq);
+
                 self.epoch_store
                     .handle_finalized_checkpoint(&ckpt_state.data.checkpoint, &ckpt_state.data.tx_digests)
                     .expect("cannot fail");
+
+                pipeline_stages.end::<{PipelineStages::FINALIZE_CHECKPOINT}>(seq);
+                pipeline_stages.begin::<{PipelineStages::UPDATE_RPC_INDEX}>(seq);
 
                 // Once the checkpoint is finalized, we know that any randomness contained in this checkpoint has
                 // been successfully included in a checkpoint certified by quorum of validators.
@@ -339,9 +356,12 @@ impl CheckpointExecutor {
                         .ok();
                 }
 
+
                 fail_point!("crash");
 
                 self.bump_highest_executed_checkpoint(&ckpt_state.data.checkpoint);
+
+                pipeline_stages.end::<{PipelineStages::UPDATE_RPC_INDEX}>(seq);
 
                 ckpt_state.data.checkpoint.is_last_checkpoint_of_epoch()
             }
