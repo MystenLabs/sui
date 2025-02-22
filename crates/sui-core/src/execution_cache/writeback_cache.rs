@@ -56,7 +56,7 @@ use moka::sync::Cache as MokaCache;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use prometheus::Registry;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -218,7 +218,7 @@ struct UncommittedData {
     // we track all referers explicitly, but we can use a ref count when we are confident in
     // the correctness of the code.
     transaction_events:
-        DashMap<TransactionEventsDigest, (BTreeSet<TransactionDigest>, TransactionEvents)>,
+        DashMap<TransactionEventsDigest, (usize /* ref count */, TransactionEvents)>,
 
     executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
@@ -537,7 +537,12 @@ impl WritebackCache {
             // See the comment in `MonotonicCache::insert`.
             .ok();
 
-        entry.insert(version, object);
+        entry.insert(version, object.clone());
+
+        let cache_entry = self.cached.object_cache.entry(*object_id).or_default();
+        let mut cache_map = cache_entry.value().lock();
+        cache_map.insert(version, object);
+        cache_map.truncate_to(3);
     }
 
     fn write_marker_value(
@@ -554,6 +559,15 @@ impl WritebackCache {
             .or_default()
             .value_mut()
             .insert(object_key.version(), marker_value);
+
+        let cache_entry = self
+            .cached
+            .marker_cache
+            .entry((epoch_id, object_key.id()))
+            .or_default();
+        let mut cache_map = cache_entry.value().lock();
+        cache_map.insert(object_key.version(), marker_value);
+        cache_map.truncate_to(3);
     }
 
     // lock both the dirty and committed sides of the cache, and then pass the entries to
@@ -816,6 +830,43 @@ impl WritebackCache {
             ..
         } = &*tx_outputs;
 
+        let tx_digest = *transaction.digest();
+        let effects_digest = effects.digest();
+        let events_digest = events.digest();
+
+        self.cached
+            .transactions
+            .insert(
+                &tx_digest,
+                PointCacheItem::Some(transaction.clone()),
+                Ticket::Write,
+            )
+            .ok();
+        self.cached
+            .transaction_effects
+            .insert(
+                &effects_digest,
+                PointCacheItem::Some(effects.clone().into()),
+                Ticket::Write,
+            )
+            .ok();
+        self.cached
+            .executed_effects_digests
+            .insert(
+                &tx_digest,
+                PointCacheItem::Some(effects_digest),
+                Ticket::Write,
+            )
+            .ok();
+        self.cached
+            .transaction_events
+            .insert(
+                &events_digest,
+                PointCacheItem::Some(events.clone().into()),
+                Ticket::Write,
+            )
+            .ok();
+
         // Deletions and wraps must be written first. The reason is that one of the deletes
         // may be a child object, and if we write the parent object first, a reader may or may
         // not see the previous version of the child object, instead of the deleted/wrapped
@@ -872,12 +923,10 @@ impl WritebackCache {
         self.metrics.record_cache_write("transaction_events");
         match self.dirty.transaction_events.entry(events.digest()) {
             DashMapEntry::Occupied(mut occupied) => {
-                occupied.get_mut().0.insert(tx_digest);
+                occupied.get_mut().0 += 1;
             }
             DashMapEntry::Vacant(entry) => {
-                let mut txns = BTreeSet::new();
-                txns.insert(tx_digest);
-                entry.insert((txns, events.clone()));
+                entry.insert((1, events.clone()));
             }
         }
 
@@ -1003,7 +1052,6 @@ impl WritebackCache {
         // Now, remove each piece of committed data from the dirty state and insert it into the cache.
         // TODO: outputs should have a strong count of 1 so we should be able to move out of it
         let TransactionOutputs {
-            transaction,
             effects,
             markers,
             written,
@@ -1013,43 +1061,8 @@ impl WritebackCache {
             ..
         } = outputs;
 
+        // TODO: recomputing digest
         let effects_digest = effects.digest();
-        let events_digest = events.digest();
-
-        // Update cache before removing from self.dirty to avoid
-        // unnecessary cache misses
-        self.cached
-            .transactions
-            .insert(
-                &tx_digest,
-                PointCacheItem::Some(transaction.clone()),
-                Ticket::Write,
-            )
-            .ok();
-        self.cached
-            .transaction_effects
-            .insert(
-                &effects_digest,
-                PointCacheItem::Some(effects.clone().into()),
-                Ticket::Write,
-            )
-            .ok();
-        self.cached
-            .executed_effects_digests
-            .insert(
-                &tx_digest,
-                PointCacheItem::Some(effects_digest),
-                Ticket::Write,
-            )
-            .ok();
-        self.cached
-            .transaction_events
-            .insert(
-                &events_digest,
-                PointCacheItem::Some(events.clone().into()),
-                Ticket::Write,
-            )
-            .ok();
 
         self.dirty
             .transaction_effects
@@ -1058,9 +1071,10 @@ impl WritebackCache {
 
         match self.dirty.transaction_events.entry(events.digest()) {
             DashMapEntry::Occupied(mut occupied) => {
-                let txns = &mut occupied.get_mut().0;
-                assert!(txns.remove(&tx_digest), "transaction must exist");
-                if txns.is_empty() {
+                let ref_count = &mut occupied.get_mut().0;
+                assert!(*ref_count > 0, "ref count must be positive");
+                *ref_count -= 1;
+                if *ref_count == 0 {
                     occupied.remove();
                 }
             }
@@ -1076,9 +1090,8 @@ impl WritebackCache {
 
         // Move dirty markers to cache
         for (object_key, marker_value) in markers.iter() {
-            Self::move_version_from_dirty_to_cache(
+            Self::remove_version_from_dirty(
                 &self.dirty.markers,
-                &self.cached.marker_cache,
                 (epoch, object_key.id()),
                 object_key.version(),
                 marker_value,
@@ -1086,9 +1099,8 @@ impl WritebackCache {
         }
 
         for (object_id, object) in written.iter() {
-            Self::move_version_from_dirty_to_cache(
+            Self::remove_version_from_dirty(
                 &self.dirty.objects,
-                &self.cached.object_cache,
                 *object_id,
                 object.version(),
                 &ObjectEntry::Object(object.clone()),
@@ -1096,9 +1108,8 @@ impl WritebackCache {
         }
 
         for ObjectKey(object_id, version) in deleted.iter() {
-            Self::move_version_from_dirty_to_cache(
+            Self::remove_version_from_dirty(
                 &self.dirty.objects,
-                &self.cached.object_cache,
                 *object_id,
                 *version,
                 &ObjectEntry::Deleted,
@@ -1106,9 +1117,8 @@ impl WritebackCache {
         }
 
         for ObjectKey(object_id, version) in wrapped.iter() {
-            Self::move_version_from_dirty_to_cache(
+            Self::remove_version_from_dirty(
                 &self.dirty.objects,
-                &self.cached.object_cache,
                 *object_id,
                 *version,
                 &ObjectEntry::Wrapped,
@@ -1118,9 +1128,8 @@ impl WritebackCache {
 
     // Move the oldest/least entry from the dirty queue to the cache queue.
     // This is called after the entry is committed to the db.
-    fn move_version_from_dirty_to_cache<K, V>(
+    fn remove_version_from_dirty<K, V>(
         dirty: &DashMap<K, CachedVersionMap<V>>,
-        cache: &MokaCache<K, Arc<Mutex<CachedVersionMap<V>>>>,
         key: K,
         version: SequenceNumber,
         value: &V,
@@ -1128,18 +1137,7 @@ impl WritebackCache {
         K: Eq + std::hash::Hash + Clone + Send + Sync + Copy + 'static,
         V: Send + Sync + Clone + Eq + std::fmt::Debug + 'static,
     {
-        static MAX_VERSIONS: usize = 3;
-
-        // IMPORTANT: lock both the dirty set entry and the cache entry before modifying either.
-        // this ensures that readers cannot see a value temporarily disappear.
         let dirty_entry = dirty.entry(key);
-        let cache_entry = cache.entry(key).or_default();
-        let mut cache_map = cache_entry.value().lock();
-
-        // insert into cache and drop old versions.
-        cache_map.insert(version, value.clone());
-        // TODO: make this automatic by giving CachedVersionMap an optional max capacity
-        cache_map.truncate_to(MAX_VERSIONS);
 
         let DashMapEntry::Occupied(mut occupied_dirty_entry) = dirty_entry else {
             panic!("dirty map must exist");

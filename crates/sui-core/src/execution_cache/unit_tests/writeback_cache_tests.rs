@@ -4,11 +4,13 @@
 use prometheus::default_registry;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     future::Future,
     path::PathBuf,
-    sync::atomic::Ordering,
-    sync::{atomic::AtomicU32, Arc},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 use sui_framework::BuiltInFramework;
