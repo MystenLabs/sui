@@ -265,10 +265,7 @@ where
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
         let core = Core::new(
             context.clone(),

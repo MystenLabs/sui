@@ -12,13 +12,12 @@ use std::sync::Arc;
 
 use consensus_config::{AuthorityIndex, Committee};
 use itertools::Itertools;
-use parking_lot::RwLock;
+
 use tracing::debug;
 
 use crate::{
     block::{BlockAPI, ExtendedBlock},
     context::Context,
-    dag_state::DagState,
     Round,
 };
 
@@ -41,7 +40,6 @@ pub(crate) type QuorumRound = (Round, Round);
 
 pub(crate) struct PeerRoundTracker {
     context: Arc<Context>,
-    dag_state: Arc<RwLock<DagState>>,
     /// Highest accepted round per authority from received blocks (included/excluded ancestors)
     block_accepted_rounds: Vec<Vec<Round>>,
     /// Highest accepted round per authority from round prober
@@ -55,11 +53,10 @@ pub(crate) struct PeerRoundTracker {
 }
 
 impl PeerRoundTracker {
-    pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
+    pub(crate) fn new(context: Arc<Context>) -> Self {
         let size = context.committee.size();
         Self {
             context,
-            dag_state,
             block_accepted_rounds: vec![vec![0; size]; size],
             probed_accepted_rounds: vec![vec![0; size]; size],
             probed_received_rounds: vec![vec![0; size]; size],
@@ -105,14 +102,11 @@ impl PeerRoundTracker {
         self.round_prober_update_count += 1;
     }
 
-    // Returns received quorum rounds, accepted quorum rounds and propagation delay
-    pub(crate) fn calculate_quorum_rounds_and_propagation_delay(
-        &self,
-    ) -> (Vec<QuorumRound>, Vec<QuorumRound>, Round) {
+    // Returns the propagation delay of own blocks.
+    pub(crate) fn calculate_propagation_delay(&self, last_proposed_round: Round) -> Round {
         let own_index = self.context.own_index;
         let node_metrics = &self.context.metrics.node_metrics;
-        let last_proposed_round = self.last_proposed_round();
-        let received_quorum_rounds = self.compute_received_quorum_rounds();
+        let (received_quorum_rounds, accepted_quorum_rounds) = self.calculate_quorum_rounds();
         for ((low, high), (_, authority)) in received_quorum_rounds
             .iter()
             .zip(self.context.committee.authorities())
@@ -132,7 +126,6 @@ impl PeerRoundTracker {
                 .set(last_proposed_round as i64 - *low as i64);
         }
 
-        let accepted_quorum_rounds = self.compute_accepted_quorum_rounds();
         for ((low, high), (_, authority)) in accepted_quorum_rounds
             .iter()
             .zip(self.context.committee.authorities())
@@ -178,6 +171,19 @@ impl PeerRoundTracker {
             .set(propagation_delay as i64);
 
         debug!(
+            "Computed propagation delay of {propagation_delay} based on last proposed \
+                round ({last_proposed_round})."
+        );
+
+        propagation_delay
+    }
+
+    // Returns received quorum rounds & accepted quorum rounds
+    pub(crate) fn calculate_quorum_rounds(&self) -> (Vec<QuorumRound>, Vec<QuorumRound>) {
+        let received_quorum_rounds = self.compute_received_quorum_rounds();
+        let accepted_quorum_rounds = self.compute_accepted_quorum_rounds();
+
+        debug!(
             "Computed received quorum round per authority: {}",
             self.context
                 .committee
@@ -196,20 +202,7 @@ impl PeerRoundTracker {
                 .join(", ")
         );
 
-        debug!(
-            "Computed propagation delay of {propagation_delay} based on last proposed \
-            round ({last_proposed_round})."
-        );
-
-        (
-            received_quorum_rounds,
-            accepted_quorum_rounds,
-            propagation_delay,
-        )
-    }
-
-    fn last_proposed_round(&self) -> Round {
-        self.dag_state.read().get_last_proposed_block().round()
+        (received_quorum_rounds, accepted_quorum_rounds)
     }
 
     fn compute_received_quorum_rounds(&self) -> Vec<QuorumRound> {
@@ -289,14 +282,11 @@ mod test {
     use std::sync::Arc;
 
     use consensus_config::AuthorityIndex;
-    use parking_lot::RwLock;
 
     use crate::{
         block::{BlockDigest, ExtendedBlock},
         context::Context,
-        dag_state::DagState,
         round_tracker::{compute_quorum_round, PeerRoundTracker},
-        storage::mem_store::MemStore,
         BlockRef, TestBlock, VerifiedBlock,
     };
 
@@ -345,9 +335,7 @@ mod test {
     async fn test_compute_received_quorum_round() {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let mut round_tracker = PeerRoundTracker::new(context, dag_state);
+        let mut round_tracker = PeerRoundTracker::new(context);
 
         // Observe latest rounds from peers.
         let highest_received_rounds = vec![
@@ -372,9 +360,7 @@ mod test {
         let (context, _) = Context::new_for_test(NUM_AUTHORITIES);
         let context = Arc::new(context);
         let own_index = context.own_index.value() as u32;
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let mut round_tracker = PeerRoundTracker::new(context, dag_state);
+        let mut round_tracker = PeerRoundTracker::new(context);
 
         // Observe latest rounds from peers.
         let highest_accepted_rounds = vec![
@@ -440,8 +426,6 @@ mod test {
     async fn test_quorum_round_manager() {
         const NUM_AUTHORITIES: usize = 7;
         let context = Arc::new(Context::new_for_test(NUM_AUTHORITIES).0);
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let highest_received_rounds = vec![
             vec![110, 120, 130, 140, 150, 160, 170],
@@ -463,7 +447,7 @@ mod test {
             vec![0, 0, 0, 0, 0, 0, 0],
         ];
 
-        let mut round_tracker = PeerRoundTracker::new(context.clone(), dag_state.clone());
+        let mut round_tracker = PeerRoundTracker::new(context.clone());
 
         round_tracker.update_from_probe(highest_accepted_rounds, highest_received_rounds);
 
@@ -472,7 +456,6 @@ mod test {
             let round = 110 + (authority as u32 * 10);
             let block =
                 VerifiedBlock::new_for_test(TestBlock::new(round, authority as u32).build());
-            dag_state.write().accept_block(block.clone());
             round_tracker.update_from_block(&ExtendedBlock {
                 block,
                 excluded_ancestors: vec![],
@@ -489,8 +472,8 @@ mod test {
         // 105, 115, 103, 0,   125, 126, 127,
         // 0,   0,   0,   0,   0,   0,   0,
 
-        let (received_quorum_rounds, accepted_quorum_rounds, propagation_delay) =
-            round_tracker.calculate_quorum_rounds_and_propagation_delay();
+        let (received_quorum_rounds, accepted_quorum_rounds) =
+            round_tracker.calculate_quorum_rounds();
 
         assert_eq!(
             received_quorum_rounds,
@@ -504,9 +487,6 @@ mod test {
                 (107, 170)
             ]
         );
-
-        // 110 - 100 = 10
-        assert_eq!(propagation_delay, 10);
 
         // Compute quorum rounds based on highest accepted rounds (max from prober
         // or from blocks):
@@ -530,5 +510,10 @@ mod test {
                 (127, 170)
             ]
         );
+
+        let propagation_delay = round_tracker.calculate_propagation_delay(110);
+
+        // 110 - 100 = 10
+        assert_eq!(propagation_delay, 10);
     }
 }
