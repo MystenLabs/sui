@@ -63,12 +63,12 @@ pub(crate) struct AncestorStateManager {
 
 impl AncestorStateManager {
     // Number of new block updates for which an ancestor is locked in the EXCLUDE state
-    // Chose 500 rounds worth of updates at ~10 rounds per second conservatively
-    // is ~50 seconds of waiting which is similar to the round prober updates.
+    // Chose 750 rounds worth of updates at ~10 rounds per second conservatively
+    // is ~75 seconds of waiting which is similar to the round prober updates.
     // This number will be multiplied by the number of authorities in the committee
     // to get the total number of blocks that need to be accepted before we unlock.
     #[cfg(not(test))]
-    const STATE_LOCK_NEW_BLOCK_UPDATES_IN_ROUNDS: u32 = 500;
+    const STATE_LOCK_NEW_BLOCK_UPDATES_IN_ROUNDS: u32 = 750;
     #[cfg(test)]
     const STATE_LOCK_NEW_BLOCK_UPDATES_IN_ROUNDS: u32 = 1;
 
@@ -76,7 +76,7 @@ impl AncestorStateManager {
     // Chose 10 updates as that should be ~50 seconds of waiting with the current round tracker
     // interval of 5s
     #[cfg(not(test))]
-    const STATE_LOCK_ROUND_PROBER_UPDATES: u32 = 10;
+    const STATE_LOCK_ROUND_PROBER_UPDATES: u32 = 15;
     #[cfg(test)]
     const STATE_LOCK_ROUND_PROBER_UPDATES: u32 = 1;
 
@@ -89,7 +89,7 @@ impl AncestorStateManager {
     const STATE_LOCK_SCORE_UPDATES: u32 = 1;
 
     // Exclusion threshold is based on propagation (reputation) scores
-    const EXCLUSION_THRESHOLD_PERCENTAGE: u64 = 10;
+    const EXCLUSION_THRESHOLD_PERCENTAGE: u64 = 20;
 
     pub(crate) fn new(context: Arc<Context>) -> Self {
         let state_map = vec![AncestorInfo::new(); context.committee.size()];

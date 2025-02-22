@@ -186,7 +186,7 @@ mod tests {
             todo!()
         }
 
-        fn notify_rounds_probed(&self) -> Result<(), CoreError> {
+        fn set_propagation_delay(&self, _propagation_delay: Round) -> Result<(), CoreError> {
             todo!()
         }
 
