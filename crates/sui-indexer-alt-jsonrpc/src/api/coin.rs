@@ -12,7 +12,7 @@ use move_core_types::language_storage::TypeTag;
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_schema::objects::StoredCoinOwnerKind;
 use sui_indexer_alt_schema::schema::coin_balance_buckets;
-use sui_json_rpc_types::{Balance, Coin, Page as PageResponse};
+use sui_json_rpc_types::{Balance, Coin, Page as PageResponse, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_sql_macro::sql;
@@ -24,10 +24,11 @@ use sui_types::{
 
 use crate::{
     context::Context,
-    data::objects::load_latest,
-    error::{invalid_params, InternalContext, RpcError},
+    data::objects::{load_latest, load_live},
+    error::{internal_error, invalid_params, InternalContext, RpcError},
     paginate::{BcsCursor, Cursor as _, Page},
 };
+use super::objects::filter::{single_object, SuiObjectDataFilter};
 
 use super::rpc_module::RpcModule;
 
@@ -56,6 +57,16 @@ trait CoinsApi {
         /// the owner's Sui address
         owner: SuiAddress,
     ) -> RpcResult<Vec<Balance>>;
+
+    /// Return metadata (e.g., symbol, decimals) for a coin. Note that if the coin's metadata was
+    /// wrapped in the transaction that published its marker type, or the latest version of the
+    /// metadata object is wrapped or deleted, it will not be found.
+    #[method(name = "getCoinMetadata")]
+    async fn get_coin_metadata(
+        &self,
+        /// type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        coin_type: String,
+    ) -> RpcResult<Option<SuiCoinMetadata>>;
 }
 
 pub(crate) struct Coins(pub Context);
@@ -160,6 +171,35 @@ impl CoinsApiServer for Coins {
             })
             .collect();
         Ok(balances)
+    }
+
+    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
+        let Self(ctx, _) = self;
+
+        let coin_type_param = sui_types::parse_sui_struct_tag(&coin_type)
+            .map_err(|e| invalid_params(Error::BadType(coin_type.clone(), e)))?;
+        let full_coin_type = sui_types::coin::CoinMetadata::type_(coin_type_param);
+        let type_filter = SuiObjectDataFilter::StructType(full_coin_type);
+
+        let object_id = single_object(ctx, type_filter).await?;
+
+        let Some(object_id) = object_id else {
+            return Ok(None);
+        };
+
+        let object = load_live(ctx, object_id)
+            .await
+            .map_err::<RpcError<Error>, _>(|_| {
+                internal_error!("Failed to load live object for {object_id}")
+            })?;
+        let Some(object) = object else {
+            return Ok(None);
+        };
+
+        let coin_metadata = object.try_into().map_err::<RpcError<Error>, _>(|_| {
+            internal_error!("Failed to convert object to coin metadata for type {coin_type}")
+        })?;
+        Ok(Some(coin_metadata))
     }
 }
 

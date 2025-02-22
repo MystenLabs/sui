@@ -161,7 +161,7 @@ pub(crate) async fn load_live(
 
     // If the latest object info record has no owner, the object is not live (it is wrapped or
     // deleted).
-    if obj_info.owner_id.is_none() {
+    if obj_info.owner_kind.is_none() {
         return Ok(None);
     }
 

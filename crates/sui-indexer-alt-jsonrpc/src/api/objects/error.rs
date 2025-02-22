@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[derive(thiserror::Error, Debug)]
-pub(super) enum Error {
+pub(crate) enum Error {
     #[error("Pagination issue: {0}")]
     Pagination(#[from] crate::paginate::Error),
 
