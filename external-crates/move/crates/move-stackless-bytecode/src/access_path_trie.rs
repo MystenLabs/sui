@@ -139,7 +139,9 @@ impl<T: FootprintDomain> TrieNode<T> {
     where
         F: FnMut(&mut T, &[TempIndex], &[Type], &FunctionEnv, &dyn AccessPathMap<AbsAddr>) + Copy,
     {
-        if let Some(d) = &mut self.data { sub_data(d, actuals, type_actuals, func_env, sub_map) }
+        if let Some(d) = &mut self.data {
+            sub_data(d, actuals, type_actuals, func_env, sub_map)
+        }
         let mut acc = Self::new_opt(self.data);
         for (mut k, v) in self.children.into_iter() {
             k.substitute_footprint(type_actuals);

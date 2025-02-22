@@ -124,13 +124,9 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
 
         E::Freeze(e) | E::Dereference(e) | E::Borrow(_, e, _, _) => optimize_exp(e),
 
-        E::Pack(_, _, fields) => fields
-            .iter_mut()
-            .any(|(_, _, e)| optimize_exp(e)),
+        E::Pack(_, _, fields) => fields.iter_mut().any(|(_, _, e)| optimize_exp(e)),
 
-        E::PackVariant(_, _, _, fields) => fields
-            .iter_mut()
-            .any(|(_, _, e)| optimize_exp(e)),
+        E::PackVariant(_, _, _, fields) => fields.iter_mut().any(|(_, _, e)| optimize_exp(e)),
 
         E::Multiple(es) => es.iter_mut().any(optimize_exp),
 

@@ -3401,9 +3401,7 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveStructLayout, Vec<ValueImpl
     }
 }
 
-impl serde::Serialize
-    for AnnotatedValue<'_, '_, MoveEnumLayout, (VariantTag, Vec<ValueImpl>)>
-{
+impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout, (VariantTag, Vec<ValueImpl>)> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let (tag, values) = &self.val;
         let tag = if *tag as u64 > VARIANT_COUNT_MAX {
