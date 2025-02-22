@@ -52,6 +52,7 @@ sui-open-rpc-macros.workspace = true
 sui-package-resolver.workspace = true
 sui-pg-db.workspace = true
 sui-protocol-config.workspace = true
+sui-sql-macro.workspace = true
 sui-types.workspace = true
 
 [dev-dependencies]
