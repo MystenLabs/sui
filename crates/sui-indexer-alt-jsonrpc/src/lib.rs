@@ -219,7 +219,7 @@ pub async fn start_rpc(
         transactions,
         name_service,
         coins,
-        bigtable_config,
+        bigtable,
         package_resolver,
         extra: _,
     } = rpc_config.finish();
@@ -235,7 +235,7 @@ pub async fn start_rpc(
 
     let context = Context::new(
         db_args,
-        bigtable_config,
+        bigtable,
         package_resolver_limits,
         rpc.metrics(),
         registry,

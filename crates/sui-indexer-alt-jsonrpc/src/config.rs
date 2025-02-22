@@ -29,7 +29,7 @@ pub struct RpcConfig {
 
     /// Configuration for bigtable kv store, if it is used.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bigtable_config: Option<BigtableConfig>,
+    pub bigtable: Option<BigtableConfig>,
 
     /// Configuring limits for the package resolver.
     pub package_resolver: PackageResolverLayer,
@@ -108,7 +108,7 @@ impl RpcConfig {
             transactions: TransactionsConfig::default().into(),
             name_service: NameServiceConfig::default().into(),
             coins: CoinsConfig::default().into(),
-            bigtable_config: None,
+            bigtable: None,
             package_resolver: PackageResolverLayer::default(),
             extra: Default::default(),
         }
