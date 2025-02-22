@@ -22,8 +22,7 @@ use p256::pkcs8::DecodePublicKey;
 use passkey_authenticator::{Authenticator, UserCheck, UserValidationMethod};
 use passkey_client::Client;
 use passkey_types::{
-    ctap2::Aaguid,
-    ctap2::Ctap2Error,
+    ctap2::{Aaguid, Ctap2Error},
     rand::random_vec,
     webauthn::{
         AttestationConveyancePreference, CredentialCreationOptions, CredentialRequestOptions,
