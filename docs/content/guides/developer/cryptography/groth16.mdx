@@ -48,6 +48,7 @@ To generate a proof verifiable in Sui, you need to generate a witness. This exam
 use ark_bn254::Bn254;
 use ark_circom::CircomBuilder;
 use ark_circom::CircomConfig;
+use ark_circom::CircomReduction;
 use ark_groth16::{Groth16, prepare_verifying_key};
 use ark_serialize::CanonicalSerialize;
 use ark_snark::SNARK;
@@ -74,7 +75,7 @@ fn main() {
     let public_inputs = circuit.get_public_inputs().unwrap();
 
     // Create proof
-    let proof = Groth16::<Bn254>::prove(&pk, circuit, &mut rng).unwrap();
+    let proof = Groth16::<Bn254, CircomReduction>::prove(&pk, circuit, &mut rng).unwrap();
 
     // Verify proof
     let pvk = prepare_verifying_key(&pk.vk);
