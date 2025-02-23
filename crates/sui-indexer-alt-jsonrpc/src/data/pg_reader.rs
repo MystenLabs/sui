@@ -16,8 +16,8 @@ use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db as db;
 use tracing::debug;
 
-use crate::data::error::Error;
-use crate::metrics::RpcMetrics;
+use crate::{data::error::Error, metrics::RpcMetrics};
+
 /// This wrapper type exists to perform error conversion between the data fetching layer and the
 /// RPC layer, metrics collection, and debug logging of database queries.
 #[derive(Clone)]

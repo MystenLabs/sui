@@ -11,8 +11,9 @@ use diesel::{ExpressionMethods, QueryDsl};
 use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
 use sui_types::base_types::ObjectID;
 
-use super::pg_reader::PgReader;
 use crate::data::error::Error;
+
+use super::pg_reader::PgReader;
 
 /// Key for fetching the latest version of an object, not accounting for deletions or wraps. If the
 /// object has been deleted or wrapped, the version before the delete/wrap is returned.

@@ -12,8 +12,9 @@ use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransa
 use sui_kvstore::{KeyValueStoreReader, TransactionData as KVTransactionData};
 use sui_types::digests::TransactionDigest;
 
-use super::{bigtable_reader::BigtableReader, pg_reader::PgReader};
 use crate::data::error::Error;
+
+use super::{bigtable_reader::BigtableReader, pg_reader::PgReader};
 
 /// Key for fetching transaction contents (TransactionData, Effects, and Events) by digest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

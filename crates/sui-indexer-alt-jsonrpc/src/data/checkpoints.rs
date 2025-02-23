@@ -15,8 +15,7 @@ use sui_types::{
     messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber, CheckpointSummary},
 };
 
-use super::error::Error;
-use super::{bigtable_reader::BigtableReader, pg_reader::PgReader};
+use super::{bigtable_reader::BigtableReader, error::Error, pg_reader::PgReader};
 
 /// Key for fetching a checkpoint's content by its sequence number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data::error::Error;
 use async_graphql::dataloader::DataLoader;
 use sui_kvstore::BigTableClient;
+
+use crate::data::error::Error;
 
 /// A reader backed by Bigtable kv store.
 /// In order to use this reader, the environment variable `GOOGLE_APPLICATION_CREDENTIALS`
