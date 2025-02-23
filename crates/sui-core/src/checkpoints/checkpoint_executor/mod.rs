@@ -85,7 +85,7 @@ pub(crate) struct CheckpointExecutionState {
     executed_fx_digests: Vec<Option<TransactionEffectsDigest>>,
     accumulator: Option<Accumulator>,
     full_data: Option<CheckpointData>,
-    output_batch: Option<(Vec<Arc<TransactionOutputs>>, DBBatch)>,
+    output_batch: Mutex<Option<(Vec<Arc<TransactionOutputs>>, DBBatch)>>,
 }
 
 impl CheckpointExecutionState {
@@ -98,7 +98,7 @@ impl CheckpointExecutionState {
             executed_fx_digests,
             accumulator: None,
             full_data: None,
-            output_batch: None,
+            output_batch: Mutex::new(None),
         }
     }
 }
@@ -301,7 +301,7 @@ impl CheckpointExecutor {
                 debug!(?seq, "committing checkpoint transactions to disk");
                 cache_commit.commit_transaction_outputs(
                     self.epoch_store.epoch(),
-                    ckpt_state.output_batch.take().unwrap(),
+                    ckpt_state.output_batch.try_lock().unwrap().take().unwrap(),
                     &ckpt_state.data.tx_digests,
                 );
 
@@ -468,7 +468,7 @@ impl CheckpointExecutor {
                     .unwrap_or(false),
             );
 
-            ckpt_state.output_batch = Some(batch);
+            ckpt_state.output_batch.try_lock().unwrap().replace(batch);
             ckpt_state
         })
         .await
