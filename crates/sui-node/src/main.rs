@@ -42,6 +42,7 @@ struct Args {
     run_with_range_checkpoint: Option<CheckpointSequenceNumber>,
 }
 
+#[allow(unreachable_code)] // need this due to the panic! in tracing_feature_enabled! block
 fn main() {
     // Ensure that a validator never calls get_for_min_version/get_for_max_version_UNSAFE.
     // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
