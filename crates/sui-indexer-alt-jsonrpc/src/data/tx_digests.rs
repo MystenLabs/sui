@@ -10,8 +10,7 @@ use async_graphql::dataloader::Loader;
 use diesel::{ExpressionMethods, QueryDsl};
 use sui_indexer_alt_schema::{schema::tx_digests, transactions::StoredTxDigest};
 
-use super::error::Error;
-use super::pg_reader::PgReader;
+use super::{error::Error, pg_reader::PgReader};
 
 /// Key for fetching a transaction's digest by its sequence number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

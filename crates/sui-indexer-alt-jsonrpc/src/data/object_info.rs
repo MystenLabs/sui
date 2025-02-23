@@ -11,8 +11,9 @@ use diesel::{ExpressionMethods, QueryDsl};
 use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 use sui_types::base_types::ObjectID;
 
-use super::pg_reader::PgReader;
 use crate::data::error::Error;
+
+use super::pg_reader::PgReader;
 
 /// Key for fetching the latest object info record for an object. This record corresponds to the
 /// last time the object's ownership information changed.

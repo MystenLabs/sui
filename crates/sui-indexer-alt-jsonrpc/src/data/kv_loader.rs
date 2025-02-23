@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::error::Error;
-use super::objects::VersionedObjectKey;
-use super::pg_reader::PgReader;
-use super::transactions::TransactionKey;
-use super::{bigtable_reader::BigtableReader, checkpoints::CheckpointKey};
 use async_graphql::dataloader::DataLoader;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -21,6 +16,11 @@ use sui_types::{
     event::Event,
     messages_checkpoint::{CheckpointContents, CheckpointSummary},
     object::Object,
+};
+
+use super::{
+    bigtable_reader::BigtableReader, checkpoints::CheckpointKey, error::Error,
+    objects::VersionedObjectKey, pg_reader::PgReader, transactions::TransactionKey,
 };
 
 /// A loader for point lookups in kv stores backed by either Bigtable or Postgres.
