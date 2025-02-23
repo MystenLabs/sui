@@ -461,8 +461,8 @@ pub fn take_shared_by_id(
     })
 }
 
-// native fun most_recent_id_shared<T: key>(): Option<ID>;
-pub fn most_recent_id_shared(
+// native fun most_recent_shared_id<T: key>(): Option<ID>;
+pub fn most_recent_shared_id(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
