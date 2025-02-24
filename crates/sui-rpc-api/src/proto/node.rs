@@ -253,6 +253,8 @@ impl GetCheckpointRequest {
 //
 
 impl GetTransactionRequest {
+    pub const READ_MASK_DEFAULT: &str = "digest";
+
     pub fn new<T: Into<super::types::Digest>>(digest: T) -> Self {
         Self {
             digest: Some(digest.into()),
@@ -263,6 +265,27 @@ impl GetTransactionRequest {
     pub fn with_read_mask(mut self, read_mask: FieldMask) -> Self {
         self.read_mask = Some(read_mask);
         self
+    }
+}
+
+//
+// GetTransactionResponse
+//
+
+impl GetTransactionResponse {
+    pub fn validate_read_mask(read_mask: &FieldMask) -> Result<(), &str> {
+        for path in &read_mask.paths {
+            match path.as_str() {
+                "digest" | "transaction" | "transaction_bcs" | "signatures"
+                | "signatures_bytes" | "effects" | "effects_bcs" | "events" | "events_bcs"
+                | "checkpoint" | "timestamp" => {}
+                path => {
+                    return Err(path);
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -298,123 +321,6 @@ impl GetFullCheckpointRequest {
     pub fn with_read_mask(mut self, read_mask: FieldMask) -> Self {
         self.read_mask = Some(read_mask);
         self
-    }
-}
-
-//
-// TransactionResponse
-//
-
-impl From<crate::types::TransactionResponse> for GetTransactionResponse {
-    fn from(
-        crate::types::TransactionResponse {
-            digest,
-            transaction,
-            transaction_bcs,
-            signatures,
-            signatures_bytes,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            checkpoint,
-            timestamp_ms,
-        }: crate::types::TransactionResponse,
-    ) -> Self {
-        let signatures = signatures
-            .map(|signatures| signatures.into_iter().map(Into::into).collect())
-            .unwrap_or_default();
-
-        let signatures_bytes = signatures_bytes
-            .map(|signatures| signatures.into_iter().map(Into::into).collect())
-            .unwrap_or_default();
-
-        Self {
-            digest: Some(digest.into()),
-            transaction: transaction.map(Into::into),
-            transaction_bcs: transaction_bcs.map(Into::into),
-            signatures,
-            signatures_bytes,
-            effects: effects.map(Into::into),
-            effects_bcs: effects_bcs.map(Into::into),
-            events: events.map(Into::into),
-            events_bcs: events_bcs.map(Into::into),
-            checkpoint,
-            timestamp: timestamp_ms.map(timestamp_ms_to_proto),
-        }
-    }
-}
-
-impl TryFrom<&GetTransactionResponse> for crate::types::TransactionResponse {
-    type Error = TryFromProtoError;
-
-    fn try_from(
-        GetTransactionResponse {
-            digest,
-            transaction,
-            transaction_bcs,
-            signatures,
-            signatures_bytes,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            checkpoint,
-            timestamp,
-        }: &GetTransactionResponse,
-    ) -> Result<Self, Self::Error> {
-        let digest = digest
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("digest"))?
-            .pipe(TryInto::try_into)?;
-
-        let transaction = transaction.as_ref().map(TryInto::try_into).transpose()?;
-        let transaction_bcs = transaction_bcs.as_ref().map(Into::into);
-
-        let signatures = signatures
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let signatures = if signatures.is_empty() {
-            None
-        } else {
-            Some(signatures)
-        };
-
-        let signatures_bytes = signatures_bytes
-            .iter()
-            .map(|bytes| bytes.to_vec())
-            .collect::<Vec<_>>();
-
-        let signatures_bytes = if signatures_bytes.is_empty() {
-            None
-        } else {
-            Some(signatures_bytes)
-        };
-
-        let effects = effects.as_ref().map(TryInto::try_into).transpose()?;
-        let effects_bcs = effects_bcs.as_ref().map(Into::into);
-
-        let events = events.as_ref().map(TryInto::try_into).transpose()?;
-        let events_bcs = events_bcs.as_ref().map(Into::into);
-
-        let timestamp_ms = timestamp.map(proto_to_timestamp_ms).transpose()?;
-
-        Self {
-            digest,
-            transaction,
-            transaction_bcs,
-            signatures,
-            signatures_bytes,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            checkpoint: *checkpoint,
-            timestamp_ms,
-        }
-        .pipe(Ok)
     }
 }
 

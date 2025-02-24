@@ -57,8 +57,8 @@ pub struct GetTransactionRequest {
     /// Required. The digest of the requested transaction.
     #[prost(message, optional, tag = "1")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. Mask for specifying which parts of the `GetTransactionResponse`
-    /// should be returned.
+    /// Mask specifying which fields to read.
+    /// If no mask is specified, defaults to `digest`.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }

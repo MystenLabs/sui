@@ -173,9 +173,10 @@ async fn get_full_checkpoint() {
 
     // A Checkpoint that we know has a transaction that emitted an event
     let checkpoint = grpc_client
-        .get_transaction(sui_rpc_api::proto::node::v2::GetTransactionRequest::new(
-            transaction_digest,
-        ))
+        .get_transaction(
+            sui_rpc_api::proto::node::v2::GetTransactionRequest::new(transaction_digest)
+                .with_read_mask(FieldMask::from_paths(["checkpoint"])),
+        )
         .await
         .unwrap()
         .into_inner()
