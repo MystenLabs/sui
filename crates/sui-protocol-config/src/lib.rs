@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 75;
+const MAX_PROTOCOL_VERSION: u64 = 76;
 
 // Record history of protocol version allocations here:
 //
@@ -218,6 +218,7 @@ const MAX_PROTOCOL_VERSION: u64 = 75;
 //             Enable zstd compression for consensus tonic network in mainnet.
 //             Enable the new commit rule for devnet.
 // Version 75: Enable passkey auth in testnet.
+// Version 76: Deprecate Deepbook V2 order placement and deposit.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -3253,6 +3254,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.passkey_auth = true;
                     }
                 }
+                76 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
