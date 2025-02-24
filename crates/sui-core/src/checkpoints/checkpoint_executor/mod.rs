@@ -26,6 +26,7 @@ use sui_types::crypto::RandomnessRound;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+use typed_store::rocks::DBBatch;
 
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::fail_point;
@@ -47,6 +48,7 @@ use crate::authority::backpressure::BackpressureManager;
 use crate::authority::AuthorityState;
 use crate::state_accumulator::StateAccumulator;
 use crate::transaction_manager::TransactionManager;
+use crate::transaction_outputs::TransactionOutputs;
 use crate::{
     checkpoints::CheckpointStore,
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
@@ -83,6 +85,7 @@ pub(crate) struct CheckpointExecutionState {
     executed_fx_digests: Vec<Option<TransactionEffectsDigest>>,
     accumulator: Option<Accumulator>,
     full_data: Option<CheckpointData>,
+    output_batch: Mutex<Option<(Vec<Arc<TransactionOutputs>>, DBBatch)>>,
 }
 
 impl CheckpointExecutionState {
@@ -95,6 +98,7 @@ impl CheckpointExecutionState {
             executed_fx_digests,
             accumulator: None,
             full_data: None,
+            output_batch: Mutex::new(None),
         }
     }
 }
@@ -286,11 +290,8 @@ impl CheckpointExecutor {
                 debug!(?seq, "committing checkpoint transactions to disk");
                 cache_commit.commit_transaction_outputs(
                     self.epoch_store.epoch(),
+                    ckpt_state.output_batch.try_lock().unwrap().take().unwrap(),
                     &ckpt_state.data.tx_digests,
-                    self.epoch_store
-                        .protocol_config()
-                        .use_object_per_epoch_marker_table_v2_as_option()
-                        .unwrap_or(false),
                 );
 
                 self.epoch_store
@@ -436,6 +437,18 @@ impl CheckpointExecutor {
             );
 
             ckpt_state.full_data = self.process_checkpoint_data(&ckpt_state);
+
+            let cache_commit = self.state.get_cache_commit();
+            let batch = cache_commit.build_db_batch(
+                self.epoch_store.epoch(),
+                &ckpt_state.data.tx_digests,
+                self.epoch_store
+                    .protocol_config()
+                    .use_object_per_epoch_marker_table_v2_as_option()
+                    .unwrap_or(false),
+            );
+
+            ckpt_state.output_batch.try_lock().unwrap().replace(batch);
             ckpt_state
         })
         .await
