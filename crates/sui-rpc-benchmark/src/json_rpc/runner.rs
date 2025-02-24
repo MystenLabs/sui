@@ -6,9 +6,10 @@ use crate::config::BenchmarkConfig;
 /// This module implements the JSON RPC benchmark runner.
 /// The main function is `run_queries`, which runs the queries concurrently
 /// and records the overall and per-method stats.
-use anyhow::{bail, Context as _, Result};
+use anyhow::{Context as _, Result};
 use dashmap::DashMap;
 use phf::phf_map;
+use serde::Deserialize;
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -17,7 +18,7 @@ use std::{
 };
 use sui_indexer_alt_framework::task::TrySpawnStreamExt;
 use tokio::time::timeout;
-use tracing::info;
+use tracing::{debug, info};
 
 /// static map of method names to the index of their cursor parameter
 static METHOD_CURSOR_POSITIONS: phf::Map<&'static str, usize> = phf_map! {
@@ -47,11 +48,11 @@ pub struct JsonRpcStats {
 }
 
 /// Tracks pagination state for active pagination requests
-/// The key is the method name and the params serialized to a string, except the cursor parameter;
+/// The key is a tuple of method name and the params `Vec<Value>`, where the cursor parameter is set to `null`.
 /// The value is the cursor for the next page.
 #[derive(Default)]
 struct PaginationCursorState {
-    requests: DashMap<String, Value>,
+    requests: DashMap<(String, Vec<Value>), Value>,
 }
 
 impl JsonRpcStats {
@@ -88,22 +89,21 @@ impl PaginationCursorState {
         METHOD_CURSOR_POSITIONS.get(method).copied()
     }
 
-    fn get_method_key(method: &str, params: &[Value]) -> Result<String, anyhow::Error> {
+    fn get_method_key(
+        method: &str,
+        params: &[Value],
+    ) -> Result<(String, Vec<Value>), anyhow::Error> {
         let cursor_idx = METHOD_CURSOR_POSITIONS
             .get(method)
             .with_context(|| format!("method {} not found in cursor positions", method))?;
-        let key_param_len = params.len();
         let mut key_params = params.to_vec();
-        let param_to_modify = key_params.get_mut(*cursor_idx).with_context(|| {
-            format!(
-                "params length {} is less than cursor index {} for method {}",
-                key_param_len, cursor_idx, method
-            )
-        })?;
-        *param_to_modify = Value::Null;
-        serde_json::to_string(&key_params)
-            .map(|params_str| format!("{}-{}", method, params_str))
-            .with_context(|| format!("failed to generate key for method {}", method))
+        if let Some(param_to_modify) = key_params.get_mut(*cursor_idx) {
+            *param_to_modify = Value::Null;
+        } else {
+            // cursor parameter is omitted for this method, thus do nothing
+            debug!("cursor parameter is omitted for method {}", method);
+        }
+        Ok((method.to_string(), key_params))
     }
 
     fn update_params_cursor(
@@ -116,21 +116,18 @@ impl PaginationCursorState {
             .get_mut("params")
             .and_then(|v| v.as_array_mut())
             .with_context(|| format!("params not found or not an array for method {}", method))?;
-        if params_array.len() <= cursor_idx {
-            return Err(anyhow::anyhow!(
-                "cursor index {} is out of bounds for method {}",
-                cursor_idx,
-                method
-            ));
+        if let Some(param_to_modify) = params_array.get_mut(cursor_idx) {
+            *param_to_modify = match new_cursor {
+                Some(cursor) => cursor.clone(),
+                None => Value::Null,
+            };
+        } else {
+            debug!("cursor parameter is omitted for method {}", method);
         }
-        params_array[cursor_idx] = match new_cursor {
-            Some(cursor) => cursor.clone(),
-            None => Value::Null,
-        };
         Ok(())
     }
 
-    fn update(&self, key: String, cursor: Option<Value>) {
+    fn update(&self, key: (String, Vec<Value>), cursor: Option<Value>) {
         if let Some(cursor) = cursor {
             self.requests.insert(key, cursor);
         } else {
@@ -138,7 +135,7 @@ impl PaginationCursorState {
         }
     }
 
-    fn get(&self, key: &str) -> Option<Value> {
+    fn get(&self, key: &(String, Vec<Value>)) -> Option<Value> {
         self.requests.get(key).map(|entry| entry.clone())
     }
 }
@@ -162,133 +159,96 @@ pub async fn run_queries(
         .collect();
     let stats = shared_stats.clone();
 
-    let stream = futures::stream::iter(requests.into_iter().map(move |mut request_line| {
-        let task_stats = stats.clone();
-        let client = client.clone();
-        let endpoint = endpoint.clone();
-        let pagination_state = pagination_state.clone();
+    let tasks = futures::stream::iter(requests.into_iter()).try_for_each_spawned(
+        concurrency,
+        |mut request_line| {
+            let task_stats = stats.clone();
+            let client = client.clone();
+            let endpoint = endpoint.clone();
+            let pagination_state = pagination_state.clone();
 
-        // adapt pagination cursor to new cursor format if needed
-        async move {
-            let params = request_line
-                .body_json
-                .get("params")
-                .and_then(|v| v.as_array())
-                .map(|a| a.to_vec())
-                .with_context(|| {
-                    format!(
-                        "params not found or not an array for method: {}",
-                        request_line.method
-                    )
-                })?;
+            // adapt pagination cursor to new cursor format if needed
+            async move {
+                let params = request_line
+                    .body_json
+                    .get("params")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.to_vec())
+                    .with_context(|| {
+                        format!(
+                            "params not found or not an array for method: {}",
+                            request_line.method
+                        )
+                    })?;
 
-            if let Some(cursor_idx) =
-                PaginationCursorState::get_method_cursor_index(&request_line.method)
-            {
-                let method_key =
-                    PaginationCursorState::get_method_key(&request_line.method, &params)?;
+                if let Some(cursor_idx) =
+                    PaginationCursorState::get_method_cursor_index(&request_line.method)
+                {
+                    let method_key =
+                        PaginationCursorState::get_method_key(&request_line.method, &params)?;
+                    PaginationCursorState::update_params_cursor(
+                        &mut request_line.body_json,
+                        cursor_idx,
+                        pagination_state.get(&method_key).as_ref(),
+                        &request_line.method,
+                    )?;
+                }
 
-                if let Some(param_value) = params.get(cursor_idx) {
-                    // only update cursor if the original value is not Null, otherwise stick to the Null value,
-                    // which means JSON RPC server will return the first page of results.
-                    if *param_value != Value::Null {
-                        if let Some(cursor) = pagination_state.get(&method_key) {
-                            // use stored cursor if available, continue pagination
-                            PaginationCursorState::update_params_cursor(
-                                &mut request_line.body_json,
-                                cursor_idx,
-                                Some(&cursor),
+                let now = Instant::now();
+                let res = timeout(
+                    Duration::from_secs(10),
+                    client.post(&endpoint).json(&request_line.body_json).send(),
+                )
+                .await;
+                let elapsed_ms = now.elapsed().as_millis() as f64;
+
+                // update pagination cursor if the request is successful.
+                let mut is_error = true;
+                if let Ok(Ok(resp)) = res {
+                    if resp.status().is_success() {
+                        #[derive(Deserialize)]
+                        struct Body {
+                            result: Result,
+                        }
+                        #[derive(Deserialize)]
+                        #[serde(rename_all = "camelCase")]
+                        struct Result {
+                            has_next_page: bool,
+                            next_cursor: Option<Value>,
+                        }
+
+                        if let Ok(Body { result }) = resp.json::<Body>().await {
+                            let method_key = PaginationCursorState::get_method_key(
                                 &request_line.method,
+                                &params,
                             )?;
-                        } else {
-                            // otherwise, clear cursor to reset the pagination
-                            PaginationCursorState::update_params_cursor(
-                                &mut request_line.body_json,
-                                cursor_idx,
-                                None,
-                                &request_line.method,
-                            )?;
+                            pagination_state.update(
+                                method_key,
+                                if result.has_next_page {
+                                    result.next_cursor
+                                } else {
+                                    None
+                                },
+                            );
+                            is_error = false;
                         }
                     }
-                } else {
-                    bail!(
-                        "Could not read cursor index {} for method {} with params {:?}",
-                        cursor_idx,
-                        request_line.method,
-                        params
-                    );
                 }
+
+                // Record stats after all async operations to avoid error of sending future between threads
+                let mut stats = task_stats
+                    .lock()
+                    .map_err(|e| anyhow::anyhow!("Failed to acquire stats lock: {}", e))?;
+                stats.record_request(&request_line.method, elapsed_ms, is_error);
+                Ok::<(), anyhow::Error>(())
             }
+        },
+    );
 
-            let now = Instant::now();
-            let res = timeout(
-                Duration::from_secs(10),
-                client.post(&endpoint).json(&request_line.body_json).send(),
-            )
-            .await;
-            let elapsed_ms = now.elapsed().as_millis() as f64;
-            let is_error = !matches!(res, Ok(Ok(ref resp)) if resp.status().is_success());
-
-            // update pagination cursor if the request is successful.
-            if !is_error {
-                let method_key =
-                    PaginationCursorState::get_method_key(&request_line.method, &params)?;
-                if let Ok(Ok(resp)) = res {
-                    let body = resp.json::<Value>().await?;
-                    // check if there is a next page, if so, update the cursor with the nextCursor;
-                    // otherwise, remove the cursor so that next request will restart from the first page.
-                    let has_next_page = body
-                        .get("result")
-                        .ok_or_else(|| {
-                            anyhow::anyhow!("no result found for method {}", request_line.method)
-                        })?
-                        .get("hasNextPage")
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "no hasNextPage found for method {}",
-                                request_line.method
-                            )
-                        })?
-                        .as_bool()
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "hasNextPage is not a boolean for method {}",
-                                request_line.method
-                            )
-                        })?;
-                    if has_next_page {
-                        let cursor = body
-                            .get("result")
-                            .and_then(|r| r.get("nextCursor"))
-                            .cloned();
-                        pagination_state.update(method_key, cursor);
-                    } else {
-                        pagination_state.update(method_key, None);
-                    }
-                }
-            }
-
-            // Record stats after all async operations to avoid error of sending future between threads
-            let mut stats = task_stats
-                .lock()
-                .map_err(|e| anyhow::anyhow!("Failed to acquire stats lock: {}", e))?;
-            stats.record_request(&request_line.method, elapsed_ms, is_error);
-            drop(stats); // Explicitly drop the MutexGuard
-
-            Ok::<(), anyhow::Error>(())
-        }
-    }));
-
-    timeout(
-        config.duration,
-        stream.try_for_each_spawned(concurrency, |fut| fut),
-    )
-    .await
-    .unwrap_or(Ok(()))?;
-
+    timeout(config.duration, tasks).await.unwrap_or(Ok(()))?;
     let final_stats = shared_stats
         .lock()
-        .map_err(|e| anyhow::anyhow!("Failed to acquire stats lock for final results: {}", e))?
+        .expect("Thread holding stats lock panicked")
         .clone();
     Ok(final_stats)
 }

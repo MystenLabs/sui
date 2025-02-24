@@ -21,12 +21,11 @@ pub struct BenchmarkConfig {
 
 impl Default for BenchmarkConfig {
     fn default() -> Self {
-        let json_rpc_methods_to_skip = HashSet::from_iter(["suix_getAllCoins".to_string()]);
         Self {
             concurrency: 50,
             duration: Duration::from_secs(30),
             json_rpc_file_path: None,
-            json_rpc_methods_to_skip,
+            json_rpc_methods_to_skip: HashSet::new(),
         }
     }
 }

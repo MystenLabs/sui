@@ -55,8 +55,8 @@ pub enum Command {
         duration_secs: u64,
         #[clap(long, default_value = "requests.jsonl")]
         requests_file: String,
-        #[clap(long, value_delimiter = ',', default_value = "suix_getAllCoins")]
-        methods_to_skip: Vec<String>,
+        #[clap(long, value_delimiter = ',', value_parser = value_parser!(String))]
+        methods_to_skip: HashSet<String>,
     },
     /// Benchmark GraphQL queries
     #[clap(name = "graphql")]
