@@ -10,6 +10,7 @@ use move_core_types::parsing::{
 use move_core_types::runtime_value::MoveValue;
 use sui_types::{
     base_types::{ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
+    id::RESOLVED_SUI_ID,
     Identifier, TypeTag,
 };
 
@@ -201,6 +202,15 @@ impl Argument {
                 } =>
             {
                 MoveValue::Vector(s.bytes().map(MoveValue::U8).collect::<Vec<_>>())
+            }
+            (Argument::Address(a), TypeTag::Struct(stag))
+                if (
+                    &stag.address,
+                    stag.module.as_ident_str(),
+                    stag.name.as_ident_str(),
+                ) == RESOLVED_SUI_ID =>
+            {
+                MoveValue::Address(a.into_inner())
             }
             (Argument::Option(sp!(loc, o)), TypeTag::Vector(ty)) => {
                 if let Some(v) = o {
