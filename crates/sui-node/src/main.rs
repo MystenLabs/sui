@@ -42,16 +42,12 @@ struct Args {
     run_with_range_checkpoint: Option<CheckpointSequenceNumber>,
 }
 
-#[allow(unreachable_code)] // need this due to the panic! in tracing_feature_enabled! block
 fn main() {
+    move_vm_profiler::ensure_move_vm_profiler_disabled();
+
     // Ensure that a validator never calls get_for_min_version/get_for_max_version_UNSAFE.
     // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
     // ProtocolConfig::poison_get_for_min_version();
-
-    move_vm_profiler::tracing_feature_enabled! {
-        panic!("Cannot run the sui-node binary with tracing feature enabled");
-    }
-
     let args = Args::parse();
     let mut config = NodeConfig::load(&args.config_path).unwrap();
     assert!(
