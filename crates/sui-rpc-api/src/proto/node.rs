@@ -193,66 +193,6 @@ impl GetObjectRequest {
 }
 
 //
-// ObjectResponse
-//
-
-impl From<crate::types::ObjectResponse> for GetObjectResponse {
-    fn from(
-        crate::types::ObjectResponse {
-            object_id,
-            version,
-            digest,
-            object,
-            object_bcs,
-        }: crate::types::ObjectResponse,
-    ) -> Self {
-        Self {
-            object_id: Some(object_id.into()),
-            version: Some(version),
-            digest: Some(digest.into()),
-            object: object.map(Into::into),
-            object_bcs: object_bcs.map(Into::into),
-        }
-    }
-}
-
-impl TryFrom<&GetObjectResponse> for crate::types::ObjectResponse {
-    type Error = TryFromProtoError;
-
-    fn try_from(
-        GetObjectResponse {
-            object_id,
-            version,
-            digest,
-            object,
-            object_bcs,
-        }: &GetObjectResponse,
-    ) -> Result<Self, Self::Error> {
-        let object_id = object_id
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .pipe(TryInto::try_into)?;
-        let version = version.ok_or_else(|| TryFromProtoError::missing("version"))?;
-        let digest = digest
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("digest"))?
-            .pipe(TryInto::try_into)?;
-
-        let object = object.as_ref().map(TryInto::try_into).transpose()?;
-        let object_bcs = object_bcs.as_ref().map(Into::into);
-
-        Self {
-            object_id,
-            version,
-            digest,
-            object,
-            object_bcs,
-        }
-        .pipe(Ok)
-    }
-}
-
-//
 // GetCheckpointRequest
 //
 

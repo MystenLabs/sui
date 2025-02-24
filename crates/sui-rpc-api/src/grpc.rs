@@ -83,19 +83,7 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::GetObjectResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let object_id = request
-            .object_id
-            .as_ref()
-            .ok_or_else(|| tonic::Status::new(tonic::Code::InvalidArgument, "missing object_id"))?
-            .try_into()
-            .map_err(|_| tonic::Status::new(tonic::Code::InvalidArgument, "invalid object_id"))?;
-        let version = request.version;
-        let options =
-            crate::types::GetObjectOptions::from_read_mask(request.read_mask.unwrap_or_default());
-
-        self.get_object(object_id, version, options)
-            .map(Into::into)
+        self.get_object(request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
