@@ -62,4 +62,5 @@ anyhow.workspace = true
 tempfile.workspace = true
 once_cell.workspace = true
 sui-test-transaction-builder.workspace = true
+sui-simulator.workspace = true
 sui-macros.workspace = true
