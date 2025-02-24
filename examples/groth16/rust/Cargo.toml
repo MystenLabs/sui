@@ -1,0 +1,19 @@
+[package]
+name = "example"
+edition = "2021"
+version = "0.1.0"
+
+[dependencies]
+ark-bn254 = "0.5.0"
+ark-circom = { version = "0.5.0" }
+ark-crypto-primitives = "0.5.0"
+ark-ff = "0.5.0"
+ark-groth16 = "0.5.0"
+ark-serialize = "0.5.0"
+ark-snark = "0.5.1"
+ark-std = "0.5.0"
+hex = "0.4.3"
+tokio = { version = "1.42.0", features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

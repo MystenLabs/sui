@@ -192,7 +192,7 @@ members = [
     "crates/typed-store-derive",
     "crates/typed-store-error",
     "crates/typed-store-workspace-hack",
-    "crates/x",
+    "crates/x", "examples/groth16/rust",
     "sui-execution",
     "sui-execution/cut",
     "sui-execution/latest/sui-adapter",
