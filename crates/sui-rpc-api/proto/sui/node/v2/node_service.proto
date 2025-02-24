@@ -139,8 +139,8 @@ message GetTransactionRequest {
   // Required. The digest of the requested transaction.
   optional sui.types.Digest digest = 1;
 
-  // Optional. Mask for specifying which parts of the `GetTransactionResponse`
-  // should be returned.
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `digest`.
   optional google.protobuf.FieldMask read_mask = 4;
 }
 

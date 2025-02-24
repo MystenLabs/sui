@@ -95,24 +95,7 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::GetTransactionResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let transaction_digest = request
-            .digest
-            .as_ref()
-            .ok_or_else(|| {
-                tonic::Status::new(tonic::Code::InvalidArgument, "missing transaction_digest")
-            })?
-            .try_into()
-            .map_err(|_| {
-                tonic::Status::new(tonic::Code::InvalidArgument, "invalid transaction_digest")
-            })?;
-
-        let options = crate::types::GetTransactionOptions::from_read_mask(
-            request.read_mask.unwrap_or_default(),
-        );
-
-        self.get_transaction(transaction_digest, &options)
-            .map(Into::into)
+        self.get_transaction(request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }

@@ -19,7 +19,7 @@ async fn get_transaction() {
         .await
         .unwrap();
 
-    // Request default fields
+    // Request with no provided read_mask
     let GetTransactionResponse {
         digest,
         transaction,
@@ -38,7 +38,10 @@ async fn get_transaction() {
         .unwrap()
         .into_inner();
 
+    // These fields default to being read
     assert!(digest.is_some());
+
+    // while these fields default to not being read
     assert!(transaction.is_none());
     assert!(transaction_bcs.is_none());
     assert!(signatures.is_empty());
@@ -47,39 +50,8 @@ async fn get_transaction() {
     assert!(effects_bcs.is_none());
     assert!(events.is_none());
     assert!(events_bcs.is_none());
-    assert!(checkpoint.is_some());
-    assert!(timestamp.is_some());
-
-    // Request no fields
-    let GetTransactionResponse {
-        digest,
-        transaction,
-        transaction_bcs,
-        signatures,
-        signatures_bytes,
-        effects,
-        effects_bcs,
-        events,
-        events_bcs,
-        checkpoint,
-        timestamp,
-    } = grpc_client
-        .get_transaction(GetTransactionRequest::new(transaction_digest))
-        .await
-        .unwrap()
-        .into_inner();
-
-    assert!(digest.is_some());
-    assert!(transaction.is_none());
-    assert!(transaction_bcs.is_none());
-    assert!(signatures.is_empty());
-    assert!(signatures_bytes.is_empty());
-    assert!(effects.is_none());
-    assert!(effects_bcs.is_none());
-    assert!(events.is_none());
-    assert!(events_bcs.is_none());
-    assert!(checkpoint.is_some());
-    assert!(timestamp.is_some());
+    assert!(checkpoint.is_none());
+    assert!(timestamp.is_none());
 
     // Request all fields
     let response = grpc_client
@@ -127,7 +99,4 @@ async fn get_transaction() {
     assert!(events_bcs.is_some());
     assert!(checkpoint.is_some());
     assert!(timestamp.is_some());
-
-    // ensure we can convert proto GetTransactionResponse type to rust TransactionResponse
-    sui_rpc_api::types::TransactionResponse::try_from(&response).unwrap();
 }
