@@ -28,7 +28,6 @@ pub use config::Config;
 pub use error::{ErrorDetails, ErrorReason, Result, RpcError};
 pub use metrics::RpcMetrics;
 pub use types::CheckpointResponse;
-pub use types::ObjectResponse;
 
 #[derive(Clone)]
 pub struct RpcService {
