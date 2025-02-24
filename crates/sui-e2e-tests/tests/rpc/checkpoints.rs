@@ -3,6 +3,7 @@
 
 use sui_macros::sim_test;
 use sui_rpc_api::client::Client as CoreClient;
+use sui_rpc_api::field_mask::FieldMask;
 use sui_rpc_api::field_mask::FieldMaskUtil;
 use sui_rpc_api::proto::node::v2::node_service_client::NodeServiceClient;
 use sui_rpc_api::proto::node::v2::{
@@ -83,7 +84,7 @@ async fn get_checkpoint() {
     // Request all fields
     let response = grpc_client
         .get_checkpoint(
-            GetCheckpointRequest::latest().with_read_mask(FieldMaskUtil::from_paths([
+            GetCheckpointRequest::latest().with_read_mask(FieldMask::from_paths([
                 "sequence_number",
                 "digest",
                 "summary",
@@ -291,7 +292,7 @@ async fn get_full_checkpoint() {
     let response = grpc_client
         .get_full_checkpoint(
             GetFullCheckpointRequest::by_sequence_number(checkpoint).with_read_mask(
-                FieldMaskUtil::from_paths([
+                FieldMask::from_paths([
                     "sequence_number",
                     "digest",
                     "summary",

@@ -6,14 +6,18 @@ mod field_mask_util;
 
 pub use field_mask_tree::FieldMaskTree;
 pub use field_mask_util::FieldMaskUtil;
+pub use prost_types::FieldMask;
 
 /// Separator between field paths when a FieldMask is encoded as a string
-const FIELD_PATH_SEPARATOR: char = ',';
+pub const FIELD_PATH_SEPARATOR: char = ',';
+
 /// Separator between fields in a field path
 pub const FIELD_SEPARATOR: char = '.';
 
+pub const FIELD_PATH_WILDCARD: &str = "*";
+
 fn is_valid_path(path: &str) -> bool {
-    if path == "*" {
+    if path == FIELD_PATH_WILDCARD {
         return true;
     }
 

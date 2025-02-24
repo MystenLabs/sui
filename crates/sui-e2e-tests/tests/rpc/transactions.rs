@@ -3,6 +3,7 @@
 
 use crate::stake_with_validator;
 use sui_macros::sim_test;
+use sui_rpc_api::field_mask::FieldMask;
 use sui_rpc_api::field_mask::FieldMaskUtil;
 use sui_rpc_api::proto::node::v2::node_service_client::NodeServiceClient;
 use sui_rpc_api::proto::node::v2::{GetTransactionRequest, GetTransactionResponse};
@@ -83,21 +84,19 @@ async fn get_transaction() {
     // Request all fields
     let response = grpc_client
         .get_transaction(
-            GetTransactionRequest::new(transaction_digest).with_read_mask(
-                FieldMaskUtil::from_paths([
-                    "digest",
-                    "transaction",
-                    "transaction_bcs",
-                    "signatures",
-                    "signatures_bytes",
-                    "effects",
-                    "effects_bcs",
-                    "events",
-                    "events_bcs",
-                    "checkpoint",
-                    "timestamp",
-                ]),
-            ),
+            GetTransactionRequest::new(transaction_digest).with_read_mask(FieldMask::from_paths([
+                "digest",
+                "transaction",
+                "transaction_bcs",
+                "signatures",
+                "signatures_bytes",
+                "effects",
+                "effects_bcs",
+                "events",
+                "events_bcs",
+                "checkpoint",
+                "timestamp",
+            ])),
         )
         .await
         .unwrap()
