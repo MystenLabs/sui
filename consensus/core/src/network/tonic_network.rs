@@ -301,7 +301,7 @@ impl NetworkClient for TonicClient {
                             "fetch_blocks failed mid-stream: {e:?}"
                         )));
                     } else {
-                        warn!("fetch_blocks failed mid-stream: {e:?}");
+                        warn!("fetch_latest_blocks failed mid-stream: {e:?}");
                         break;
                     }
                 }
@@ -401,7 +401,7 @@ impl ChannelPool {
             match endpoint.connect().await {
                 Ok(channel) => break channel,
                 Err(e) => {
-                    warn!("Failed to connect to endpoint at {address}: {e:?}");
+                    debug!("Failed to connect to endpoint at {address}: {e:?}");
                     if tokio::time::Instant::now() >= deadline {
                         return Err(ConsensusError::NetworkClientConnection(format!(
                             "Timed out connecting to endpoint at {address}: {e:?}"
@@ -892,7 +892,7 @@ fn peer_info_from_certs(
 
 /// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into
 /// a host:port string.
-fn to_host_port_str(addr: &Multiaddr) -> Result<String, &'static str> {
+fn to_host_port_str(addr: &Multiaddr) -> Result<String, String> {
     let mut iter = addr.iter();
 
     match (iter.next(), iter.next()) {
@@ -906,16 +906,13 @@ fn to_host_port_str(addr: &Multiaddr) -> Result<String, &'static str> {
             Ok(format!("{}:{}", hostname, port))
         }
 
-        _ => {
-            tracing::warn!("unsupported multiaddr: '{addr}'");
-            Err("invalid address")
-        }
+        _ => Err(format!("unsupported multiaddr: {addr}")),
     }
 }
 
 /// Attempts to convert a multiaddr of the form `/[ip4,ip6]/{}/[udp,tcp]/{port}` into
 /// a SocketAddr value.
-pub fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
+pub fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, String> {
     let mut iter = addr.iter();
 
     match (iter.next(), iter.next()) {
@@ -929,10 +926,7 @@ pub fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
             Ok(SocketAddr::V6(SocketAddrV6::new(ipaddr, port, 0, 0)))
         }
 
-        _ => {
-            tracing::warn!("unsupported multiaddr: '{addr}'");
-            Err("invalid address")
-        }
+        _ => Err(format!("unsupported multiaddr: {addr}")),
     }
 }
 
