@@ -34,5 +34,5 @@ sui-package-resolver.workspace = true
 url.workspace = true
 reqwest.workspace = true
 object_store.workspace = true
-env_logger = "0.11.5"
-log = "0.4.22"
+env_logger = { workspace = true }
+log = { workspace = true }

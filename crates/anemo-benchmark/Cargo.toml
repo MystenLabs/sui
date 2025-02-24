@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 anemo.workspace = true
-clap = { version = "4.1.4", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 mysten-network.workspace = true
 rand.workspace= true
 telemetry-subscribers.workspace = true

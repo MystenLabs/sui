@@ -30,12 +30,12 @@ telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
 move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }
-sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+sui-move-natives = { workspace = true }
 
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
-better_any = "0.1.1"
+better_any = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true

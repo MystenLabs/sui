@@ -48,4 +48,4 @@ sui-macros.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 ed25519-consensus.workspace = true
-tempfile = "3.3.0"
+tempfile = { workspace = true }

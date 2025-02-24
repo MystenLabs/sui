@@ -51,7 +51,7 @@ sui-json-rpc-types.workspace = true
 sui-package-resolver.workspace = true
 simulacrum.workspace = true
 arrow.workspace = true
-gcp-bigquery-client = "0.25.0"
+gcp-bigquery-client = { workspace = true }
 snowflake-api.workspace = true
 tap.workspace = true
 

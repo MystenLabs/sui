@@ -22,7 +22,7 @@ consensus-core.workspace = true
 consensus-config.workspace = true
 count-min-sketch.workspace = true
 dashmap.workspace = true
-diffy = { version = "0.3", default-features = false }
+diffy = { workspace = true }
 either.workspace = true
 enum_dispatch.workspace = true
 eyre.workspace = true
@@ -99,7 +99,7 @@ pretty_assertions.workspace = true
 rstest.workspace = true
 serde-reflection.workspace = true
 serde_yaml.workspace = true
-num-bigint = "0.4.4"
+num-bigint = { workspace = true }
 
 move-symbol-pool.workspace = true
 

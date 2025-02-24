@@ -7,11 +7,11 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.71", features = ["backtrace"] }
-async-trait = "0.1.68"
-clap = { version = "4.3.0", features = ["derive", "env"] }
-futures = "0.3.28"
-tracing = "0.1.37"
+anyhow = { workspace = true, features = ["backtrace"] }
+async-trait = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+futures = { workspace = true }
+tracing = { workspace = true }
 
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }

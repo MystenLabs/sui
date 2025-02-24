@@ -13,7 +13,7 @@ fastcrypto.workspace = true
 tempfile.workspace = true
 
 move-bytecode-verifier = { path = "../../external-crates/move/crates/move-bytecode-verifier" }
-sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
+sui-verifier = { workspace = true }
 
 serde-reflection.workspace = true
 sui-types.workspace = true

@@ -39,7 +39,7 @@ move-symbol-pool.workspace = true
 move-transactional-test-runner.workspace = true
 telemetry-subscribers.workspace = true
 
-move-stdlib = { path = "../../external-crates/move/crates/move-stdlib" }
+move-stdlib = { workspace = true }
 move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }
 
 simulacrum.workspace = true

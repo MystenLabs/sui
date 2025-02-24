@@ -18,14 +18,14 @@ once_cell.workspace = true
 tap.workspace = true
 prometheus.workspace = true
 hdrhistogram.workspace = true
-rocksdb = { version = "0.21.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
+rocksdb = { workspace = true, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing.workspace = true
 typed-store-error.workspace = true
-typed-store-derive = { path = "../typed-store-derive" }
-typed-store-workspace-hack = { path = "../typed-store-workspace-hack" }
+typed-store-derive = { workspace = true }
+typed-store-workspace-hack = { workspace = true }
 sui-macros.workspace = true
 ouroboros.workspace = true
 rand.workspace = true

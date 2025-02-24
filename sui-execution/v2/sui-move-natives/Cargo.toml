@@ -20,7 +20,7 @@ move-core-types.workspace = true
 move-vm-types.workspace = true
 
 move-stdlib-natives = { path = "../../../external-crates/move/move-execution/v2/crates/move-stdlib-natives", package = "move-stdlib-natives-v2" }
-move-vm-runtime = { path = "../../../external-crates/move/move-execution/v2/crates/move-vm-runtime", package = "move-vm-runtime-v2" }
+move-vm-runtime = { workspace = true }
 
 sui-protocol-config.workspace = true
 sui-types.workspace = true

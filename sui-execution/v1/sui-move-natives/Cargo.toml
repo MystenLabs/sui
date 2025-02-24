@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 better_any.workspace = true
 bcs.workspace = true
-linked-hash-map = "0.5.6"
+linked-hash-map = { workspace = true }
 smallvec.workspace = true
 
 fastcrypto-zkp.workspace = true
@@ -20,7 +20,7 @@ move-core-types.workspace = true
 move-vm-types.workspace = true
 
 move-stdlib-natives = { path = "../../../external-crates/move/move-execution/v1/crates/move-stdlib-natives", package = "move-stdlib-natives-v1" }
-move-vm-runtime = { path = "../../../external-crates/move/move-execution/v1/crates/move-vm-runtime", package = "move-vm-runtime-v1" }
+move-vm-runtime = { workspace = true }
 
 sui-protocol-config.workspace = true
 sui-types.workspace = true

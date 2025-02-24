@@ -17,21 +17,21 @@ prometheus.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
-opentelemetry = { version = "0.27.1" }
-opentelemetry_sdk = { version = "0.27.1", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.27.0", features = ["grpc-tonic"] }
-tracing-opentelemetry = { version = "0.28.0" }
-opentelemetry-proto = { version = "0.27" }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["rt-tokio"] }
+opentelemetry-otlp = { workspace = true, features = ["grpc-tonic"] }
+tracing-opentelemetry = { workspace = true }
+opentelemetry-proto = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 futures.workspace = true
 clap.workspace = true
 bytes.workspace = true
-bytes-varint = { version = "1" }
+bytes-varint = { workspace = true }
 
 # must use same version as opentelemetry for tonic and prost, so we can't use from
 # workspace
-tonic = { version = "0.12.3" }
-prost = "0.13"
+tonic = { workspace = true }
+prost = { workspace = true }
 
 [dev-dependencies]
 camino.workspace = true

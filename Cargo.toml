@@ -736,5 +736,81 @@ field_names = "0.2.0"
 semver = "1.0.16"
 spinners = "4.1.0"
 include_dir = "0.7.3"
+bb8 = "0.8.5"
+bb8-postgres = "0.8.0"
+bigdecimal = "0.4.5"
+bytes-varint = "1"
+cargo_metadata = "0.15.4"
+cc = { version = "1", default-features = false }
+diffy = { version = "0.3", default-features = false }
+dotenvy = "0.15"
+downcast = "0.11.0"
+env_logger = "0.11.5"
+ethers = "2.0"
+futures-timer = "3.0.3"
+futures-util = "0.3.30"
+gcp-bigquery-client = "0.25.0"
+http-body-util = "0.1"
+jsonpath_lib = "0.3.0"
+k8s-openapi = "0.23.0"
+kube = "0.97.0"
+lazy_static = { version = "1", default-features = false }
+lexical-util = "1.0.6"
+libc = "0.2"
+log = "0.4.22"
+maplit = "1.0.2"
+memchr = "2"
+move-abstract-interpreter-latest = { path = "external-crates/move/crates/move-abstract-interpreter" }
+move-abstract-interpreter-v2 = { path = "external-crates/move/move-execution/v2/crates/move-abstract-interpreter" }
+move-bytecode-verifier-latest = { path = "external-crates/move/crates/move-bytecode-verifier" }
+move-bytecode-verifier-v0 = { path = "external-crates/move/move-execution/v0/crates/move-bytecode-verifier" }
+move-bytecode-verifier-v1 = { path = "external-crates/move/move-execution/v1/crates/move-bytecode-verifier" }
+move-bytecode-verifier-v2 = { path = "external-crates/move/move-execution/v2/crates/move-bytecode-verifier" }
+move-stdlib = { path = "external-crates/move/crates/move-stdlib" }
+move-vm-runtime-latest = { path = "external-crates/move/crates/move-vm-runtime" }
+move-vm-runtime-v0 = { path = "external-crates/move/move-execution/v0/crates/move-vm-runtime" }
+move-vm-runtime-v1 = { path = "external-crates/move/move-execution/v1/crates/move-vm-runtime" }
+move-vm-runtime-v2 = { path = "external-crates/move/move-execution/v2/crates/move-vm-runtime" }
+nom = "7.1.3"
+num-traits = "0.2.18"
+open = "5.1.2"
+opentelemetry = "0.27.1"
+opentelemetry-otlp = "0.27.0"
+opentelemetry-proto = "0.27"
+opentelemetry_sdk = "0.27.1"
+paste = "1.0.15"
+percent-encoding = "2.2.0"
+protox = "0.7"
+query-shell = "0.3.0"
+quick-js = "0.4.1"
+regex-syntax = "0.7"
+rocksdb = { version = "0.21.0", default-features = false }
+sha2 = "0.10.6"
+socket2 = "0.5"
+strsim = "0.11.1"
+sui-adapter = { path = "sui-execution/latest/sui-adapter" }
+sui-adapter-latest = { path = "sui-execution/latest/sui-adapter" }
+sui-adapter-v0 = { path = "sui-execution/v0/sui-adapter" }
+sui-adapter-v1 = { path = "sui-execution/v1/sui-adapter" }
+sui-adapter-v2 = { path = "sui-execution/v2/sui-adapter" }
+sui-move-natives-latest = { path = "sui-execution/latest/sui-move-natives" }
+sui-move-natives-v0 = { path = "sui-execution/v0/sui-move-natives" }
+sui-move-natives-v1 = { path = "sui-execution/v1/sui-move-natives" }
+sui-move-natives-v2 = { path = "sui-execution/v2/sui-move-natives" }
+sui-verifier-latest = { path = "sui-execution/latest/sui-verifier" }
+sui-verifier-v0 = { path = "sui-execution/v0/sui-verifier" }
+sui-verifier-v1 = { path = "sui-execution/v1/sui-verifier" }
+sui-verifier-v2 = { path = "sui-execution/v2/sui-verifier" }
+syn-f595c2ba2a3f28df = "2"
+test-strategy = "0.4.0"
+tokio-cron-scheduler = "0.10.0"
+tokio-postgres = "0.7.12"
+tokio-postgres-rustls = "0.12.0"
+tower_governor = "0.4.3"
+tracing-opentelemetry = "0.28.0"
+typed-store-derive = { path = "crates/typed-store-derive" }
+typed-store-workspace-hack = { path = "crates/typed-store-workspace-hack" }
+webpki-roots = "0.26.3"
+zstd-sys = "2"
 
 [patch.crates-io]

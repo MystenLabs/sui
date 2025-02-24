@@ -6,7 +6,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-mime = "0.3.17"
+mime = { workspace = true }
 anyhow.workspace = true
 axum = { workspace = true, features = ["matched-path"] }
 bcs.workspace = true
@@ -41,18 +41,18 @@ move-core-types.workspace = true
 roaring.workspace = true
 tonic.workspace = true
 prost.workspace = true
-prost-types = "0.13.3"
+prost-types = { workspace = true }
 bytes.workspace = true
 
 tonic-health.workspace = true
 tonic-reflection.workspace = true
 
 [dev-dependencies]
-diffy = "0.3"
-protox = "0.7"
-tonic-build = "0.12.3"
+diffy = { workspace = true }
+protox = { workspace = true }
+tonic-build = { workspace = true }
 sui-sdk-types = { workspace = true, features = ["proptest"] }
-test-strategy = "0.4.0"
+test-strategy = { workspace = true }
 proptest.workspace = true
-paste = "1.0.15"
+paste = { workspace = true }
 walkdir.workspace = true
