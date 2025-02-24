@@ -64,7 +64,7 @@ After importing the module, your Move package should look like the following:
 {@inject: examples/move/usdc_usage/Move.toml}
 
 :::warning
-The `usdc` package uses a specific version of the `sui` package. This will cause a version conflict with the `Sui` package in the Sui framework. You can override the version of the `Sui` package in your `Move.toml` file to use a different version. Add the `override = true` flag to the `Sui` package in your `Move.toml` file.
+The `usdc` package uses a specific version of the `sui` package, which causes a version conflict with the `Sui` package in the Sui framework. You can override the version of the `Sui` package in your `Move.toml` file to use a different version. Add the `override = true` flag to the `Sui` package in your `Move.toml` file.
 :::
 
 ### Using USDC in Move
