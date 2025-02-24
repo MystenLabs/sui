@@ -11,7 +11,7 @@ use prometheus::{
 use std::time::Duration;
 use tonic::Code;
 
-/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 
 /// Metrics relevant to the requests coming into the service
 #[derive(Clone, Debug)]

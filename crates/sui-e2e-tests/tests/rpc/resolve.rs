@@ -103,7 +103,7 @@ async fn resolve_transaction_simple_transfer() {
         .wallet
         .sign_transaction(&resolved.transaction.try_into().unwrap());
     let effects = client
-        .execute_transaction(&Default::default(), &signed_transaction)
+        .execute_transaction(&signed_transaction)
         .await
         .unwrap()
         .effects;
@@ -185,7 +185,7 @@ async fn resolve_transaction_transfer_with_sponsor() {
         vec![sender_sig, sponsor_sig],
     );
     let effects = client
-        .execute_transaction(&Default::default(), &signed_transaction)
+        .execute_transaction(&signed_transaction)
         .await
         .unwrap()
         .effects;
@@ -241,7 +241,7 @@ async fn resolve_transaction_borrowed_shared_object() {
         .wallet
         .sign_transaction(&resolved.transaction.try_into().unwrap());
     let effects = client
-        .execute_transaction(&Default::default(), &signed_transaction)
+        .execute_transaction(&signed_transaction)
         .await
         .unwrap()
         .effects;
@@ -307,7 +307,7 @@ async fn resolve_transaction_mutable_shared_object() {
         .wallet
         .sign_transaction(&resolved.transaction.try_into().unwrap());
     let effects = client
-        .execute_transaction(&Default::default(), &signed_transaction)
+        .execute_transaction(&signed_transaction)
         .await
         .unwrap()
         .effects;

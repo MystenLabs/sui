@@ -3,6 +3,11 @@
 use crate::key_identity::{get_identity_address_from_keystore, KeyIdentity};
 use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
 use anyhow::anyhow;
+use aws_sdk_kms::{
+    primitives::Blob,
+    types::{MessageType, SigningAlgorithmSpec},
+    Client as KmsClient,
+};
 use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
@@ -24,8 +29,6 @@ use num_bigint::BigUint;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
-use rusoto_core::Region;
-use rusoto_kms::{Kms, KmsClient, SignRequest};
 use serde::Serialize;
 use serde_json::json;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope, PersonalMessage};
@@ -878,27 +881,24 @@ impl KeyToolCommand {
                 info!("Digest to sign: {:?}", Base64::encode(digest));
 
                 // Set up the KMS client in default region.
-                let region: Region = Region::default();
-                let kms: KmsClient = KmsClient::new(region);
-
-                // Construct the signing request.
-                let request: SignRequest = SignRequest {
-                    key_id: keyid.to_string(),
-                    message: digest.to_vec().into(),
-                    message_type: Some("RAW".to_string()),
-                    signing_algorithm: "ECDSA_SHA_256".to_string(),
-                    ..Default::default()
-                };
+                let config = aws_config::load_from_env().await;
+                let kms = KmsClient::new(&config);
 
                 // Sign the message, normalize the signature and then compacts it
-                // serialize_compact is loaded as bytes for Secp256k1Sinaturere
-                let response = kms.sign(request).await?;
+                // serialize_compact is loaded as bytes for Secp256k1Signature
+                let response = kms
+                    .sign()
+                    .key_id(keyid)
+                    .message_type(MessageType::Raw)
+                    .message(Blob::new(digest))
+                    .signing_algorithm(SigningAlgorithmSpec::EcdsaSha256)
+                    .send()
+                    .await?;
                 let sig_bytes_der = response
                     .signature
-                    .map(|b| b.to_vec())
                     .expect("Requires Asymmetric Key Generated in KMS");
 
-                let mut external_sig = Secp256k1Sig::from_der(&sig_bytes_der)?;
+                let mut external_sig = Secp256k1Sig::from_der(sig_bytes_der.as_ref())?;
                 external_sig.normalize_s();
                 let sig_compact = external_sig.serialize_compact();
 

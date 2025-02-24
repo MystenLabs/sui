@@ -1983,12 +1983,8 @@ impl TransactionData {
         }
     }
 
-    pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, Vec<ObjectRef>) {
-        (
-            self.kind().clone(),
-            self.sender(),
-            self.gas_data().payment.clone(),
-        )
+    pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, GasData) {
+        (self.kind().clone(), self.sender(), self.gas_data().clone())
     }
 
     pub fn uses_randomness(&self) -> bool {

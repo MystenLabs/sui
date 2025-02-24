@@ -5,6 +5,7 @@ use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use consensus_config::{AuthorityIndex, Stake};
 use parking_lot::RwLock;
+use tracing::warn;
 
 use crate::{
     block::{BlockAPI, BlockRef, Round, Slot, VerifiedBlock},

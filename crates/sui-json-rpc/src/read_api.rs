@@ -282,7 +282,7 @@ impl ReadApi {
 
         let unique_checkpoint_numbers = temp_response
             .values()
-            .filter_map(|cache_entry| cache_entry.checkpoint_seq.map(<u64>::from))
+            .filter_map(|cache_entry| cache_entry.checkpoint_seq)
             // It's likely that many transactions have the same checkpoint, so we don't
             // need to over-fetch
             .unique()
@@ -311,13 +311,7 @@ impl ReadApi {
             if cache_entry.checkpoint_seq.is_some() {
                 // safe to unwrap because is_some is checked
                 cache_entry.timestamp = *checkpoint_to_timestamp
-                    .get(
-                        cache_entry
-                            .checkpoint_seq
-                            .map(<u64>::from)
-                            .as_ref()
-                            .unwrap(),
-                    )
+                    .get(cache_entry.checkpoint_seq.as_ref().unwrap())
                     // Safe to unwrap because checkpoint_seq is guaranteed to exist in checkpoint_to_timestamp
                     .unwrap();
             }

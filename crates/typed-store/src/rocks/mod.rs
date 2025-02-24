@@ -1740,7 +1740,7 @@ pub enum RocksDBRawIter<'a> {
     ),
 }
 
-impl<'a> RocksDBRawIter<'a> {
+impl RocksDBRawIter<'_> {
     pub fn valid(&self) -> bool {
         delegate_iter_call!(self.valid())
     }
@@ -1780,7 +1780,7 @@ pub enum RocksDBIter<'a> {
     ),
 }
 
-impl<'a> Iterator for RocksDBIter<'a> {
+impl Iterator for RocksDBIter<'_> {
     type Item = Result<(Box<[u8]>, Box<[u8]>), Error>;
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -2326,7 +2326,7 @@ impl Default for ReadWriteOptions {
     fn default() -> Self {
         Self {
             ignore_range_deletions: true,
-            sync_to_disk: std::env::var("SUI_DB_SYNC_TO_DISK").map_or(false, |v| v != "0"),
+            sync_to_disk: std::env::var("SUI_DB_SYNC_TO_DISK").is_ok_and(|v| v != "0"),
         }
     }
 }

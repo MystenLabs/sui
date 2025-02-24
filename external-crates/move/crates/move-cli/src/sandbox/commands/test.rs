@@ -27,11 +27,11 @@ use std::{
 };
 use tempfile::tempdir;
 
-/// Basic datatest testing framework for the CLI. The `run_one` entrypoint expects
-/// an `args.txt` file with arguments that the `move` binary understands (one set
-/// of arguments per line). The testing framework runs the commands, compares the
-/// result to the expected output, and runs `move clean` to discard resources,
-/// modules, and event data created by running the test.
+// Basic datatest testing framework for the CLI. The `run_one` entrypoint expects
+// an `args.txt` file with arguments that the `move` binary understands (one set
+// of arguments per line). The testing framework runs the commands, compares the
+// result to the expected output, and runs `move clean` to discard resources,
+// modules, and event data created by running the test.
 
 /// If this env var is set, `move clean` will not be run after each test.
 /// this is useful if you want to look at the `storage` or `move_events`
@@ -428,31 +428,16 @@ fn add_update_baseline_fix(s: impl AsRef<str>) -> String {
 }
 
 fn format_diff(expected: impl AsRef<str>, actual: impl AsRef<str>) -> String {
-    use difference::*;
+    use colored::Colorize;
+    use similar::ChangeTag;
+    let diff = similar::TextDiff::from_lines(expected.as_ref(), actual.as_ref());
 
-    let changeset = Changeset::new(expected.as_ref(), actual.as_ref(), "\n");
-
-    let mut ret = String::new();
-
-    for seq in changeset.diffs {
-        match &seq {
-            Difference::Same(x) => {
-                ret.push_str(x);
-                ret.push('\n');
-            }
-            Difference::Add(x) => {
-                ret.push_str("\x1B[92m");
-                ret.push_str(x);
-                ret.push_str("\x1B[0m");
-                ret.push('\n');
-            }
-            Difference::Rem(x) => {
-                ret.push_str("\x1B[91m");
-                ret.push_str(x);
-                ret.push_str("\x1B[0m");
-                ret.push('\n');
-            }
-        }
-    }
-    ret
+    diff.iter_all_changes()
+        .map(|change| match change.tag() {
+            ChangeTag::Delete => format!("{}{}", "-".bold(), change.value()).red(),
+            ChangeTag::Insert => format!("{}{}", "+".bold(), change.value()).green(),
+            ChangeTag::Equal => change.value().dimmed(),
+        })
+        .map(|s| s.to_string())
+        .collect()
 }

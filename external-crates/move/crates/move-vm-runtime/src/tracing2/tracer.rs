@@ -171,7 +171,7 @@ impl RootedType {
     }
 }
 
-impl<'a> VMTracer<'a> {
+impl VMTracer<'_> {
     /// Emit an error event to the trace if `true`
     fn emit_trace_error_if_err(&mut self, is_err: bool) {
         if is_err {
@@ -222,7 +222,7 @@ impl<'a> VMTracer<'a> {
         std::mem::take(&mut self.effects)
     }
 
-    /// Insert a local with a specifice runtime location into the current frame.
+    /// Insert a local with a specific runtime location into the current frame.
     fn insert_local(&mut self, local_index: usize, local: RootedType) -> Option<()> {
         *self
             .current_frame_mut()?

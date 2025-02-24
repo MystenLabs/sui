@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::metrics::SubscriptionMetrics;
-use crate::proto::node::v2::GetFullCheckpointOptions;
 use crate::proto::node::v2::GetFullCheckpointResponse;
 use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -125,7 +124,7 @@ impl SubscriptionService {
         let checkpoint =
             match crate::service::checkpoints::checkpoint_data_to_full_checkpoint_response(
                 checkpoint,
-                &GetFullCheckpointOptions::all().into(),
+                &crate::types::GetFullCheckpointOptions::all(),
             ) {
                 Ok(checkpoint) => GetFullCheckpointResponse::from(checkpoint).pipe(Arc::new),
                 Err(e) => {

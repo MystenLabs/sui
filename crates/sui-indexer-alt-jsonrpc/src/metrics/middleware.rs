@@ -107,7 +107,7 @@ where
     }
 }
 
-impl<'a, F> Future for MetricsFuture<'a, F>
+impl<F> Future for MetricsFuture<'_, F>
 where
     F: Future<Output = MethodResponse>,
 {

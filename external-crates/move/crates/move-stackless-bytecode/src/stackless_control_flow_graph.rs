@@ -280,7 +280,7 @@ struct DotCFGBlock<'env> {
     label_offsets: BTreeMap<Label, CodeOffset>,
 }
 
-impl<'env> std::fmt::Display for DotCFGBlock<'env> {
+impl std::fmt::Display for DotCFGBlock<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let code_range = match self.content {
             BlockContent::Basic { lower, upper } => format!("offset {}..={}", lower, upper),

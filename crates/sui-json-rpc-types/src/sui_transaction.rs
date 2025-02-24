@@ -323,17 +323,28 @@ impl Display for SuiTransactionBlockResponse {
         }
 
         if let Some(balance_changes) = &self.balance_changes {
-            let mut builder = TableBuilder::default();
-            for balance in balance_changes {
-                builder.push_record(vec![format!("{}", balance)]);
+            // Only build a table if the vector of balance changes is non-empty.
+            // Empty balance changes occur, for example, for system transactions
+            // like `ConsensusCommitPrologueV3`
+            if !balance_changes.is_empty() {
+                let mut builder = TableBuilder::default();
+
+                for balance in balance_changes {
+                    builder.push_record(vec![format!("{}", balance)]);
+                }
+
+                let mut table = builder.build();
+                table.with(TablePanel::header("Balance Changes"));
+                table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+                    1,
+                    TableStyle::modern().get_horizontal(),
+                )]));
+                writeln!(writer, "{}", table)?;
+            } else {
+                writeln!(writer, "╭────────────────────╮")?;
+                writeln!(writer, "│ No balance changes │")?;
+                writeln!(writer, "╰────────────────────╯")?;
             }
-            let mut table = builder.build();
-            table.with(TablePanel::header("Balance Changes"));
-            table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
-                1,
-                TableStyle::modern().get_horizontal(),
-            )]));
-            writeln!(writer, "{}", table)?;
         }
         Ok(())
     }

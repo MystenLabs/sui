@@ -4,6 +4,7 @@
 use super::types::proto_to_timestamp_ms;
 use super::types::timestamp_ms_to_proto;
 use super::TryFromProtoError;
+use prost_types::FieldMask;
 use tap::Pipe;
 
 pub mod v2 {
@@ -168,60 +169,6 @@ impl TryFrom<&GetNodeInfoResponse> for crate::types::NodeInfo {
 }
 
 //
-// GetObjectOptions
-//
-
-impl GetObjectOptions {
-    pub fn all() -> Self {
-        Self {
-            object: Some(true),
-            object_bcs: Some(true),
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            object: Some(false),
-            object_bcs: Some(false),
-        }
-    }
-
-    pub fn with_object(mut self) -> Self {
-        self.object = Some(true);
-        self
-    }
-
-    pub fn without_object(mut self) -> Self {
-        self.object = Some(false);
-        self
-    }
-
-    pub fn with_object_bcs(mut self) -> Self {
-        self.object_bcs = Some(true);
-        self
-    }
-
-    pub fn without_object_bcs(mut self) -> Self {
-        self.object = Some(false);
-        self
-    }
-}
-
-impl From<crate::types::GetObjectOptions> for GetObjectOptions {
-    fn from(
-        crate::types::GetObjectOptions { object, object_bcs }: crate::types::GetObjectOptions,
-    ) -> Self {
-        Self { object, object_bcs }
-    }
-}
-
-impl From<GetObjectOptions> for crate::types::GetObjectOptions {
-    fn from(GetObjectOptions { object, object_bcs }: GetObjectOptions) -> Self {
-        Self { object, object_bcs }
-    }
-}
-
-//
 // GetObjectRequest
 //
 
@@ -230,7 +177,6 @@ impl GetObjectRequest {
         Self {
             object_id: Some(object_id.into()),
             version: None,
-            options: None,
             read_mask: None,
         }
     }
@@ -240,185 +186,9 @@ impl GetObjectRequest {
         self
     }
 
-    pub fn with_options(mut self, options: GetObjectOptions) -> Self {
-        self.options = Some(options);
+    pub fn with_read_mask(mut self, read_mask: FieldMask) -> Self {
+        self.read_mask = Some(read_mask);
         self
-    }
-}
-
-//
-// ObjectResponse
-//
-
-impl From<crate::types::ObjectResponse> for GetObjectResponse {
-    fn from(
-        crate::types::ObjectResponse {
-            object_id,
-            version,
-            digest,
-            object,
-            object_bcs,
-        }: crate::types::ObjectResponse,
-    ) -> Self {
-        Self {
-            object_id: Some(object_id.into()),
-            version: Some(version),
-            digest: Some(digest.into()),
-            object: object.map(Into::into),
-            object_bcs: object_bcs.map(Into::into),
-        }
-    }
-}
-
-impl TryFrom<&GetObjectResponse> for crate::types::ObjectResponse {
-    type Error = TryFromProtoError;
-
-    fn try_from(
-        GetObjectResponse {
-            object_id,
-            version,
-            digest,
-            object,
-            object_bcs,
-        }: &GetObjectResponse,
-    ) -> Result<Self, Self::Error> {
-        let object_id = object_id
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .pipe(TryInto::try_into)?;
-        let version = version.ok_or_else(|| TryFromProtoError::missing("version"))?;
-        let digest = digest
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("digest"))?
-            .pipe(TryInto::try_into)?;
-
-        let object = object.as_ref().map(TryInto::try_into).transpose()?;
-        let object_bcs = object_bcs.as_ref().map(Into::into);
-
-        Self {
-            object_id,
-            version,
-            digest,
-            object,
-            object_bcs,
-        }
-        .pipe(Ok)
-    }
-}
-
-//
-// GetCheckpointOptions
-//
-
-impl GetCheckpointOptions {
-    pub fn all() -> Self {
-        Self {
-            summary: Some(true),
-            summary_bcs: Some(true),
-            signature: Some(true),
-            contents: Some(true),
-            contents_bcs: Some(true),
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            summary: Some(false),
-            summary_bcs: Some(false),
-            signature: Some(false),
-            contents: Some(false),
-            contents_bcs: Some(false),
-        }
-    }
-
-    pub fn with_summary(mut self) -> Self {
-        self.summary = Some(true);
-        self
-    }
-
-    pub fn without_summary(mut self) -> Self {
-        self.summary = Some(false);
-        self
-    }
-
-    pub fn with_summary_bcs(mut self) -> Self {
-        self.summary_bcs = Some(true);
-        self
-    }
-
-    pub fn without_summary_bcs(mut self) -> Self {
-        self.summary_bcs = Some(false);
-        self
-    }
-
-    pub fn with_signature(mut self) -> Self {
-        self.signature = Some(true);
-        self
-    }
-
-    pub fn without_signature(mut self) -> Self {
-        self.signature = Some(false);
-        self
-    }
-
-    pub fn with_contents(mut self) -> Self {
-        self.contents = Some(true);
-        self
-    }
-
-    pub fn without_contents(mut self) -> Self {
-        self.contents = Some(false);
-        self
-    }
-
-    pub fn with_contents_bcs(mut self) -> Self {
-        self.contents_bcs = Some(true);
-        self
-    }
-
-    pub fn without_contents_bcs(mut self) -> Self {
-        self.contents_bcs = Some(false);
-        self
-    }
-}
-
-impl From<crate::types::GetCheckpointOptions> for GetCheckpointOptions {
-    fn from(
-        crate::types::GetCheckpointOptions {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-        }: crate::types::GetCheckpointOptions,
-    ) -> Self {
-        Self {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-        }
-    }
-}
-
-impl From<GetCheckpointOptions> for crate::types::GetCheckpointOptions {
-    fn from(
-        GetCheckpointOptions {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-        }: GetCheckpointOptions,
-    ) -> Self {
-        Self {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-        }
     }
 }
 
@@ -431,7 +201,6 @@ impl GetCheckpointRequest {
         Self {
             sequence_number: None,
             digest: None,
-            options: None,
             read_mask: None,
         }
     }
@@ -440,7 +209,6 @@ impl GetCheckpointRequest {
         Self {
             sequence_number: None,
             digest: Some(digest.into()),
-            options: None,
             read_mask: None,
         }
     }
@@ -449,178 +217,13 @@ impl GetCheckpointRequest {
         Self {
             sequence_number: Some(sequence_number),
             digest: None,
-            options: None,
             read_mask: None,
         }
     }
 
-    pub fn with_options(mut self, options: GetCheckpointOptions) -> Self {
-        self.options = Some(options);
+    pub fn with_read_mask(mut self, read_mask: FieldMask) -> Self {
+        self.read_mask = Some(read_mask);
         self
-    }
-}
-
-//
-// GetTransactionOptions
-//
-
-impl GetTransactionOptions {
-    pub fn all() -> Self {
-        Self {
-            transaction: Some(true),
-            transaction_bcs: Some(true),
-            signatures: Some(true),
-            signatures_bytes: Some(true),
-            effects: Some(true),
-            effects_bcs: Some(true),
-            events: Some(true),
-            events_bcs: Some(true),
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            transaction: Some(false),
-            transaction_bcs: Some(false),
-            signatures: Some(false),
-            signatures_bytes: Some(false),
-            effects: Some(false),
-            effects_bcs: Some(false),
-            events: Some(false),
-            events_bcs: Some(false),
-        }
-    }
-
-    pub fn with_transaction(mut self) -> Self {
-        self.transaction = Some(true);
-        self
-    }
-
-    pub fn without_transaction(mut self) -> Self {
-        self.transaction = Some(false);
-        self
-    }
-
-    pub fn with_transaction_bcs(mut self) -> Self {
-        self.transaction_bcs = Some(true);
-        self
-    }
-
-    pub fn without_transaction_bcs(mut self) -> Self {
-        self.transaction_bcs = Some(false);
-        self
-    }
-
-    pub fn with_signatures(mut self) -> Self {
-        self.signatures = Some(true);
-        self
-    }
-
-    pub fn without_signatures(mut self) -> Self {
-        self.signatures = Some(false);
-        self
-    }
-
-    pub fn with_signatures_bytes(mut self) -> Self {
-        self.signatures_bytes = Some(true);
-        self
-    }
-
-    pub fn without_signatures_bytes(mut self) -> Self {
-        self.signatures_bytes = Some(false);
-        self
-    }
-
-    pub fn with_effects(mut self) -> Self {
-        self.effects = Some(true);
-        self
-    }
-
-    pub fn without_effects(mut self) -> Self {
-        self.effects = Some(false);
-        self
-    }
-
-    pub fn with_effects_bcs(mut self) -> Self {
-        self.effects_bcs = Some(true);
-        self
-    }
-
-    pub fn without_effects_bcs(mut self) -> Self {
-        self.effects_bcs = Some(false);
-        self
-    }
-
-    pub fn with_events(mut self) -> Self {
-        self.events = Some(true);
-        self
-    }
-
-    pub fn without_events(mut self) -> Self {
-        self.events = Some(false);
-        self
-    }
-
-    pub fn with_events_bcs(mut self) -> Self {
-        self.events_bcs = Some(true);
-        self
-    }
-
-    pub fn without_events_bcs(mut self) -> Self {
-        self.events_bcs = Some(false);
-        self
-    }
-}
-
-impl From<crate::types::GetTransactionOptions> for GetTransactionOptions {
-    fn from(
-        crate::types::GetTransactionOptions {
-            transaction,
-            transaction_bcs,
-            signatures,
-            signatures_bytes,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-        }: crate::types::GetTransactionOptions,
-    ) -> Self {
-        Self {
-            transaction,
-            transaction_bcs,
-            signatures,
-            signatures_bytes,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-        }
-    }
-}
-
-impl From<GetTransactionOptions> for crate::types::GetTransactionOptions {
-    fn from(
-        GetTransactionOptions {
-            transaction,
-            transaction_bcs,
-            signatures,
-            signatures_bytes,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-        }: GetTransactionOptions,
-    ) -> Self {
-        Self {
-            transaction,
-            transaction_bcs,
-            signatures,
-            signatures_bytes,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-        }
     }
 }
 
@@ -632,334 +235,13 @@ impl GetTransactionRequest {
     pub fn new<T: Into<super::types::Digest>>(digest: T) -> Self {
         Self {
             digest: Some(digest.into()),
-            options: None,
             read_mask: None,
         }
     }
 
-    pub fn with_options(mut self, options: GetTransactionOptions) -> Self {
-        self.options = Some(options);
+    pub fn with_read_mask(mut self, read_mask: FieldMask) -> Self {
+        self.read_mask = Some(read_mask);
         self
-    }
-}
-
-//
-// ExecuteTransactionOptions
-//
-
-impl From<crate::types::ExecuteTransactionOptions> for ExecuteTransactionOptions {
-    fn from(
-        crate::types::ExecuteTransactionOptions {
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            balance_changes,
-        }: crate::types::ExecuteTransactionOptions,
-    ) -> Self {
-        Self {
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            balance_changes,
-        }
-    }
-}
-
-impl From<ExecuteTransactionOptions> for crate::types::ExecuteTransactionOptions {
-    fn from(
-        ExecuteTransactionOptions {
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            balance_changes,
-        }: ExecuteTransactionOptions,
-    ) -> Self {
-        Self {
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            balance_changes,
-        }
-    }
-}
-
-//
-// GetFullCheckpointOptions
-//
-
-impl GetFullCheckpointOptions {
-    pub fn all() -> Self {
-        Self {
-            summary: Some(true),
-            summary_bcs: Some(true),
-            signature: Some(true),
-            contents: Some(true),
-            contents_bcs: Some(true),
-            transaction: Some(true),
-            transaction_bcs: Some(true),
-            effects: Some(true),
-            effects_bcs: Some(true),
-            events: Some(true),
-            events_bcs: Some(true),
-            input_objects: Some(true),
-            output_objects: Some(true),
-            object: Some(true),
-            object_bcs: Some(true),
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            summary: Some(false),
-            summary_bcs: Some(false),
-            signature: Some(false),
-            contents: Some(false),
-            contents_bcs: Some(false),
-            transaction: Some(false),
-            transaction_bcs: Some(false),
-            effects: Some(false),
-            effects_bcs: Some(false),
-            events: Some(false),
-            events_bcs: Some(false),
-            input_objects: Some(false),
-            output_objects: Some(false),
-            object: Some(false),
-            object_bcs: Some(false),
-        }
-    }
-
-    pub fn with_summary(mut self) -> Self {
-        self.summary = Some(true);
-        self
-    }
-
-    pub fn without_summary(mut self) -> Self {
-        self.summary = Some(false);
-        self
-    }
-
-    pub fn with_summary_bcs(mut self) -> Self {
-        self.summary_bcs = Some(true);
-        self
-    }
-
-    pub fn without_summary_bcs(mut self) -> Self {
-        self.summary_bcs = Some(false);
-        self
-    }
-
-    pub fn with_signature(mut self) -> Self {
-        self.signature = Some(true);
-        self
-    }
-
-    pub fn without_signature(mut self) -> Self {
-        self.signature = Some(false);
-        self
-    }
-
-    pub fn with_contents(mut self) -> Self {
-        self.contents = Some(true);
-        self
-    }
-
-    pub fn without_contents(mut self) -> Self {
-        self.contents = Some(false);
-        self
-    }
-
-    pub fn with_contents_bcs(mut self) -> Self {
-        self.contents_bcs = Some(true);
-        self
-    }
-
-    pub fn without_contents_bcs(mut self) -> Self {
-        self.contents_bcs = Some(false);
-        self
-    }
-
-    pub fn with_transaction(mut self) -> Self {
-        self.transaction = Some(true);
-        self
-    }
-
-    pub fn without_transaction(mut self) -> Self {
-        self.transaction = Some(false);
-        self
-    }
-
-    pub fn with_transaction_bcs(mut self) -> Self {
-        self.transaction_bcs = Some(true);
-        self
-    }
-
-    pub fn without_transaction_bcs(mut self) -> Self {
-        self.transaction_bcs = Some(false);
-        self
-    }
-
-    pub fn with_effects(mut self) -> Self {
-        self.effects = Some(true);
-        self
-    }
-
-    pub fn without_effects(mut self) -> Self {
-        self.effects = Some(false);
-        self
-    }
-
-    pub fn with_effects_bcs(mut self) -> Self {
-        self.effects_bcs = Some(true);
-        self
-    }
-
-    pub fn without_effects_bcs(mut self) -> Self {
-        self.effects_bcs = Some(false);
-        self
-    }
-
-    pub fn with_events(mut self) -> Self {
-        self.events = Some(true);
-        self
-    }
-
-    pub fn without_events(mut self) -> Self {
-        self.events = Some(false);
-        self
-    }
-
-    pub fn with_events_bcs(mut self) -> Self {
-        self.events_bcs = Some(true);
-        self
-    }
-
-    pub fn without_events_bcs(mut self) -> Self {
-        self.events_bcs = Some(false);
-        self
-    }
-
-    pub fn with_input_objects(mut self) -> Self {
-        self.input_objects = Some(true);
-        self
-    }
-
-    pub fn without_input_objects(mut self) -> Self {
-        self.input_objects = Some(false);
-        self
-    }
-
-    pub fn with_output_objects(mut self) -> Self {
-        self.output_objects = Some(true);
-        self
-    }
-
-    pub fn without_output_objects(mut self) -> Self {
-        self.output_objects = Some(false);
-        self
-    }
-
-    pub fn with_object(mut self) -> Self {
-        self.object = Some(true);
-        self
-    }
-
-    pub fn without_object(mut self) -> Self {
-        self.object = Some(false);
-        self
-    }
-
-    pub fn with_object_bcs(mut self) -> Self {
-        self.object_bcs = Some(true);
-        self
-    }
-
-    pub fn without_object_bcs(mut self) -> Self {
-        self.object = Some(false);
-        self
-    }
-}
-
-impl From<crate::types::GetFullCheckpointOptions> for GetFullCheckpointOptions {
-    fn from(
-        crate::types::GetFullCheckpointOptions {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-            transaction,
-            transaction_bcs,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            input_objects,
-            output_objects,
-            object,
-            object_bcs,
-        }: crate::types::GetFullCheckpointOptions,
-    ) -> Self {
-        Self {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-            transaction,
-            transaction_bcs,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            input_objects,
-            output_objects,
-            object,
-            object_bcs,
-        }
-    }
-}
-
-impl From<GetFullCheckpointOptions> for crate::types::GetFullCheckpointOptions {
-    fn from(
-        GetFullCheckpointOptions {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-            transaction,
-            transaction_bcs,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            input_objects,
-            output_objects,
-            object,
-            object_bcs,
-        }: GetFullCheckpointOptions,
-    ) -> Self {
-        Self {
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-            transaction,
-            transaction_bcs,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            input_objects,
-            output_objects,
-            object,
-            object_bcs,
-        }
     }
 }
 
@@ -972,7 +254,6 @@ impl GetFullCheckpointRequest {
         Self {
             sequence_number: None,
             digest: None,
-            options: None,
             read_mask: None,
         }
     }
@@ -981,7 +262,6 @@ impl GetFullCheckpointRequest {
         Self {
             sequence_number: None,
             digest: Some(digest.into()),
-            options: None,
             read_mask: None,
         }
     }
@@ -990,13 +270,12 @@ impl GetFullCheckpointRequest {
         Self {
             sequence_number: Some(sequence_number),
             digest: None,
-            options: None,
             read_mask: None,
         }
     }
 
-    pub fn with_options(mut self, options: GetFullCheckpointOptions) -> Self {
-        self.options = Some(options);
+    pub fn with_read_mask(mut self, read_mask: FieldMask) -> Self {
+        self.read_mask = Some(read_mask);
         self
     }
 }
@@ -1345,12 +624,6 @@ impl From<crate::types::FullCheckpointTransaction> for FullCheckpointTransaction
             output_objects,
         }: crate::types::FullCheckpointTransaction,
     ) -> Self {
-        let input_objects_old = input_objects.clone().map(|objects| FullCheckpointObjects {
-            objects: objects.into_iter().map(Into::into).collect(),
-        });
-        let output_objects_old = output_objects.clone().map(|objects| FullCheckpointObjects {
-            objects: objects.into_iter().map(Into::into).collect(),
-        });
         let input_objects = input_objects
             .map(|objects| objects.into_iter().map(Into::into).collect())
             .unwrap_or_default();
@@ -1367,8 +640,6 @@ impl From<crate::types::FullCheckpointTransaction> for FullCheckpointTransaction
             events_bcs: events_bcs.map(Into::into),
             input_objects,
             output_objects,
-            input_objects_old,
-            output_objects_old,
         }
     }
 }
@@ -1387,8 +658,6 @@ impl TryFrom<&FullCheckpointTransaction> for crate::types::FullCheckpointTransac
             events_bcs,
             input_objects,
             output_objects,
-            input_objects_old: _,
-            output_objects_old: _,
         }: &FullCheckpointTransaction,
     ) -> Result<Self, Self::Error> {
         let digest = digest

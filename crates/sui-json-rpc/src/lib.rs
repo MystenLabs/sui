@@ -1,15 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http;
-use hyper::header::HeaderName;
-use hyper::header::HeaderValue;
-use hyper::Method;
 use hyper::Request;
 use jsonrpsee::RpcModule;
 use metrics::Metrics;
@@ -22,17 +18,12 @@ use sui_types::traffic_control::RemoteFirewallConfig;
 use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
 use tower::ServiceBuilder;
-use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
 pub use balance_changes::*;
 pub use object_changes::*;
 pub use sui_config::node::ServerType;
-use sui_json_rpc_api::{
-    CLIENT_REQUEST_METHOD_HEADER, CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER,
-    CLIENT_TARGET_API_VERSION_HEADER,
-};
 use sui_open_rpc::{Module, Project};
 use traffic_control::TrafficControllerService;
 
@@ -100,35 +91,6 @@ impl JsonRpcServerBuilder {
         Ok(self.module.merge(module.rpc())?)
     }
 
-    fn cors() -> Result<CorsLayer, Error> {
-        let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
-            Ok(value) => {
-                let allow_hosts = value
-                    .split(',')
-                    .map(HeaderValue::from_str)
-                    .collect::<Result<Vec<_>, _>>()?;
-                AllowOrigin::list(allow_hosts)
-            }
-            _ => AllowOrigin::any(),
-        };
-        info!(?acl);
-
-        let cors = CorsLayer::new()
-            // Allow `POST` when accessing the resource
-            .allow_methods([Method::POST])
-            // Allow requests from any origin
-            .allow_origin(acl)
-            .allow_headers([
-                hyper::header::CONTENT_TYPE,
-                HeaderName::from_static(CLIENT_SDK_TYPE_HEADER),
-                HeaderName::from_static(CLIENT_SDK_VERSION_HEADER),
-                HeaderName::from_static(CLIENT_TARGET_API_VERSION_HEADER),
-                HeaderName::from_static(APP_NAME_HEADER),
-                HeaderName::from_static(CLIENT_REQUEST_METHOD_HEADER),
-            ]);
-        Ok(cors)
-    }
-
     fn trace_layer() -> TraceLayer<
         tower_http::classify::SharedClassifier<tower_http::classify::ServerErrorsAsFailures>,
         impl tower_http::trace::MakeSpan<Body> + Clone,
@@ -190,7 +152,6 @@ impl JsonRpcServerBuilder {
         let metrics_clone = metrics.clone();
         let middleware = ServiceBuilder::new()
             .layer(Self::trace_layer())
-            .layer(Self::cors()?)
             .map_request(move |mut request: http::Request<_>| {
                 metrics_clone.on_http_request(request.headers());
                 if let Some(client_id_source) = client_id_source.clone() {

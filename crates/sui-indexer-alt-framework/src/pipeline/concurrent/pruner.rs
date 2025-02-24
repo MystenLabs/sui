@@ -223,20 +223,21 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                 }));
             }
 
-            // (4) Wait for all tasks to finish.
-            // For each task, if it succeeds, remove the range from the pending_prune_ranges.
-            // Otherwise the range will remain in the map and will be retried in the next iteration.
+            // Track highest successful prune
+            let mut highest_pruned = db_watermark.pruner_hi;
+
+            // (4) Wait for all tasks to finish. For each task, if it succeeds, remove the range
+            // from the pending_prune_ranges. Otherwise the range will remain in the map and will be
+            // retried in the next iteration. Update the highest_pruned watermark if the task
+            // succeeds in metrics and in db, to minimize redundant pruner work if the pipeline is
+            // restarted.
             while let Some(r) = tasks.next().await {
                 let ((from, to_exclusive), result) = r.unwrap();
                 match result {
                     Ok(()) => {
                         pending_prune_ranges.remove(&from);
                         let pruner_hi = pending_prune_ranges.get_pruner_hi() as i64;
-                        db_watermark.pruner_hi = pruner_hi;
-                        metrics
-                            .watermark_pruner_hi
-                            .with_label_values(&[H::NAME])
-                            .set(db_watermark.pruner_hi);
+                        highest_pruned = highest_pruned.max(pruner_hi);
                     }
                     Err(e) => {
                         error!(
@@ -245,42 +246,48 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                         );
                     }
                 }
-            }
 
-            // (4) Update the pruner watermark
-            let guard = metrics
-                .watermark_pruner_write_latency
-                .with_label_values(&[H::NAME])
-                .start_timer();
-
-            let Ok(mut conn) = db.connect().await else {
-                warn!(
-                    pipeline = H::NAME,
-                    "Pruner failed to connect, while updating watermark"
-                );
-                continue;
-            };
-
-            match db_watermark.update(&mut conn).await {
-                Err(e) => {
-                    let elapsed = guard.stop_and_record();
-                    error!(
-                        pipeline = H::NAME,
-                        elapsed_ms = elapsed * 1000.0,
-                        "Failed to update pruner watermark: {e}"
-                    )
-                }
-
-                Ok(true) => {
-                    let elapsed = guard.stop_and_record();
-                    logger.log::<H>(&db_watermark, elapsed);
-
+                if highest_pruned > db_watermark.pruner_hi {
                     metrics
-                        .watermark_pruner_hi_in_db
+                        .watermark_pruner_hi
                         .with_label_values(&[H::NAME])
-                        .set(db_watermark.pruner_hi);
+                        .set(highest_pruned);
+
+                    let guard = metrics
+                        .watermark_pruner_write_latency
+                        .with_label_values(&[H::NAME])
+                        .start_timer();
+
+                    let Ok(mut conn) = db.connect().await else {
+                        warn!(
+                            pipeline = H::NAME,
+                            "Pruner failed to connect, while updating watermark"
+                        );
+                        continue;
+                    };
+
+                    db_watermark.pruner_hi = highest_pruned;
+                    match db_watermark.update(&mut conn).await {
+                        Err(e) => {
+                            let elapsed = guard.stop_and_record();
+                            error!(
+                                pipeline = H::NAME,
+                                elapsed_ms = elapsed * 1000.0,
+                                "Failed to update pruner watermark: {e}"
+                            )
+                        }
+                        Ok(true) => {
+                            let elapsed = guard.stop_and_record();
+                            logger.log::<H>(&db_watermark, elapsed);
+
+                            metrics
+                                .watermark_pruner_hi_in_db
+                                .with_label_values(&[H::NAME])
+                                .set(db_watermark.pruner_hi);
+                        }
+                        Ok(false) => {}
+                    }
                 }
-                Ok(false) => {}
             }
         }
 

@@ -1031,7 +1031,7 @@ mod checked {
         }
     }
 
-    impl<'vm, 'state, 'a> TypeTagResolver for ExecutionContext<'vm, 'state, 'a> {
+    impl TypeTagResolver for ExecutionContext<'_, '_, '_> {
         fn get_type_tag(&self, type_: &Type) -> Result<TypeTag, ExecutionError> {
             self.vm
                 .get_runtime()
@@ -1498,7 +1498,7 @@ mod checked {
 
     // TODO: `DataStore` will be reworked and this is likely to disappear.
     //       Leaving this comment around until then as testament to better days to come...
-    impl<'state, 'a> DataStore for SuiDataStore<'state, 'a> {
+    impl DataStore for SuiDataStore<'_, '_> {
         fn link_context(&self) -> AccountAddress {
             self.linkage_view.link_context()
         }

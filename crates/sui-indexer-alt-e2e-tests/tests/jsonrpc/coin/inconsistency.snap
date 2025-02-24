@@ -1,0 +1,127 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 13-15:
+//# programmable --sender A --inputs 12000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-19:
+//# programmable --sender A --inputs 3400 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 21:
+//# view-object 1,0
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 12000u64,
+    },
+}
+
+task 4, line 23:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 3400u64,
+    },
+}
+
+task 5, line 25:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 27-31:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": [
+      {
+        "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+        "coinObjectId": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+        "version": "3",
+        "digest": "D63GjQSUZQ6iuYP2hJfbAp9fTcjBramkoH4tDDmGFMCT",
+        "balance": "299999995010720",
+        "previousTransaction": "EK4m6HC3b7C2T7fZT9KjqugnkgPD7YsgBXGoG9WAFmQN"
+      },
+      {
+        "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+        "coinObjectId": "0xe4a7de8e2336a34d8a4a544546eecffad748156a8fb62dd4e6c030424d49e259",
+        "version": "2",
+        "digest": "gMNG9ZADuKXKq5PoHpFbspGzEv9kZ4ifgvXXswLjthf",
+        "balance": "12000",
+        "previousTransaction": "3tfDJdUhJPunyaRVaMnTiLzHdyryECfepHu6LfUXUsDN"
+      }
+    ],
+    "nextCursor": "IOSn3o4jNqNNikpURUbuz/rXSBVqj7Yt1ObAMEJNSeJZAQAAAAAAAAAEAAAAAAAAAA==",
+    "hasNextPage": true
+  }
+}
+
+task 7, lines 33-35:
+//# programmable --sender A --inputs object(2,0) 2000 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: TransferObjects([Result(0)], Input(2))
+created: object(7,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 8, line 37:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 9, lines 39-43:
+//# run-jsonrpc --cursors bcs(@{obj_1_0},1,4)
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "data": [
+      {
+        "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+        "coinObjectId": "0x8f30d8a369b4b9649bd1f018cb5c6fc84c19098aefb8d3d0cffb50aa1574251d",
+        "version": "4",
+        "digest": "AWvFXoUkm92HAZcAargDYsx68QS8arnJiqxjVUzXC7nk",
+        "balance": "2000",
+        "previousTransaction": "AXzgRv8bvNPQvMiETHqWkQ9oQhWb8QF2PUurfXeEFUyT"
+      },
+      {
+        "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+        "coinObjectId": "0xa9a2c06be125dfa73fab40fdcca74eb80251de59c95a4baf07e13e1435fe19cd",
+        "version": "4",
+        "digest": "9DPCe86YYAHDNXptQhoXyJ5jxjew9BSJwT51W9MuBAFf",
+        "balance": "1400",
+        "previousTransaction": "AXzgRv8bvNPQvMiETHqWkQ9oQhWb8QF2PUurfXeEFUyT"
+      }
+    ],
+    "nextCursor": "IKmiwGvhJd+nP6tA/cynTrgCUd5ZyVpLrwfhPhQ1/hnNAQAAAAAAAAADAAAAAAAAAA==",
+    "hasNextPage": false
+  }
+}

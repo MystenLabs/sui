@@ -11,16 +11,15 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
-colored.workspace = true
-difference.workspace = true
-serde_yaml.workspace = true
-clap.workspace = true
-tempfile.workspace = true
-walkdir.workspace = true
-codespan-reporting.workspace = true
-toml_edit.workspace = true
-
 bcs.workspace = true
+clap.workspace = true
+codespan-reporting.workspace = true
+colored.workspace = true
+serde_yaml.workspace = true
+similar.workspace = true
+tempfile.workspace = true
+toml_edit.workspace = true
+walkdir.workspace = true
 
 move-bytecode-source-map.workspace = true
 move-bytecode-verifier.workspace = true

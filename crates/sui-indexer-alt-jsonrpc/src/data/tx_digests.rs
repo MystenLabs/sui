@@ -10,16 +10,17 @@ use async_graphql::dataloader::Loader;
 use diesel::{ExpressionMethods, QueryDsl};
 use sui_indexer_alt_schema::{schema::tx_digests, transactions::StoredTxDigest};
 
-use super::reader::{ReadError, Reader};
+use super::error::Error;
+use super::pg_reader::PgReader;
 
 /// Key for fetching a transaction's digest by its sequence number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct TxDigestKey(pub u64);
 
 #[async_trait::async_trait]
-impl Loader<TxDigestKey> for Reader {
+impl Loader<TxDigestKey> for PgReader {
     type Value = StoredTxDigest;
-    type Error = Arc<ReadError>;
+    type Error = Arc<Error>;
 
     async fn load(
         &self,

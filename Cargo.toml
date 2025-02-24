@@ -165,6 +165,7 @@ members = [
     "crates/sui-snapshot",
     "crates/sui-source-validation",
     "crates/sui-source-validation-service",
+    "crates/sui-sql-macro",
     "crates/sui-storage",
     "crates/sui-surfer",
     "crates/sui-swarm",
@@ -262,8 +263,8 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 anyhow = "1.0.71"
-arrow = "52"
-arrow-array = "52"
+arrow = "54"
+arrow-array = "54"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
 async-graphql = "=7.0.1"
@@ -273,11 +274,13 @@ async-recursion = "1.0.4"
 async-stream = "0.3.6"
 async-trait = "0.1.61"
 atomic_float = "0.1"
-aws-config = "0.56"
-aws-sdk-ec2 = "0.29.0"
-aws-sdk-dynamodb = "0.29.0"
-aws-smithy-http = "0.56"
-aws-smithy-runtime-api = "0.56"
+aws-config = { version = "1.5.16", features = ["behavior-version-latest"] }
+aws-runtime = "1.5.5"
+aws-sdk-dynamodb = "1.65.0"
+aws-sdk-ec2 = "1.110.0"
+aws-sdk-kms = "1.60.0"
+aws-smithy-http = "0.60.12"
+aws-smithy-runtime-api = "1.7.3"
 axum = { version = "0.7", default-features = false, features = [
     "macros",
     "tokio",
@@ -410,11 +413,11 @@ ntest = "0.9.0"
 num-bigint = "0.4.4"
 num_cpus = "1.15.0"
 num_enum = "0.6.1"
-object_store = { version = "0.10", features = ["aws", "gcp", "azure", "http"] }
+object_store = { version = "0.11.2", features = ["aws", "gcp", "azure", "http"] }
 once_cell = "1.18.0"
 ouroboros = "0.17"
 parking_lot = { version = "0.12.3", features = ["arc_lock"] }
-parquet = "52"
+parquet = "54"
 pin-project-lite = "0.2.13"
 pkcs8 = { version = "0.9.0", features = ["std"] }
 pprof = { version = "0.14.0", features = ["cpp", "frame-pointer"] }
@@ -446,12 +449,6 @@ reqwest = { version = "0.12", default-features = false, features = [
 roaring = "0.10.6"
 ron = "0.8.0"
 rstest = "0.16.0"
-rusoto_core = { version = "0.48.0", default-features = false, features = [
-    "rustls",
-] }
-rusoto_kms = { version = "0.48.0", default-features = false, features = [
-    "rustls",
-] }
 russh = "0.38.0"
 russh-keys = "0.38.0"
 rust-version = "1.56.1"
@@ -485,7 +482,7 @@ simple-server-timing-header = "0.1.1"
 slip10_ed25519 = "0.1.3"
 smallvec = "1.10.0"
 snap = "1.1.0"
-snowflake-api = "0.9.0"
+snowflake-api = "0.11.0"
 static_assertions = "1.1.0"
 strum = { version = "0.24", features = ["derive"] }
 strum_macros = "0.24.3"
@@ -595,9 +592,9 @@ fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "69d4
 fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "69d496c71fb37e3d22fe85e5bbfd4256d61422b9", features = [
     "experimental",
 ] }
-passkey-types = { version = "0.2.0" }
-passkey-client = { version = "0.2.0" }
-passkey-authenticator = { version = "0.2.0" }
+passkey-types = { version = "0.4.0" }
+passkey-client = { version = "0.4.0" }
+passkey-authenticator = { version = "0.4.0" }
 coset = "0.3"
 p256 = { version = "0.13.2", features = ["ecdsa"] }
 
@@ -696,6 +693,7 @@ sui-simulator = { path = "crates/sui-simulator" }
 sui-snapshot = { path = "crates/sui-snapshot" }
 sui-source-validation = { path = "crates/sui-source-validation" }
 sui-source-validation-service = { path = "crates/sui-source-validation-service" }
+sui-sql-macro = { path = "crates/sui-sql-macro" }
 sui-storage = { path = "crates/sui-storage" }
 sui-surfer = { path = "crates/sui-surfer" }
 sui-swarm = { path = "crates/sui-swarm" }

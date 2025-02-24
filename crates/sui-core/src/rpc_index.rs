@@ -703,7 +703,7 @@ impl<'a> ParMakeLiveObjectIndexer for RpcParLiveObjectSetIndexer<'a> {
     }
 }
 
-impl<'a> LiveObjectIndexer for RpcLiveObjectIndexer<'a> {
+impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
     fn index_object(&mut self, object: Object) -> Result<(), StorageError> {
         match object.owner {
             // Owner Index

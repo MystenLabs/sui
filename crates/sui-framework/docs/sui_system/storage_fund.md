@@ -95,7 +95,7 @@ Called by <code><a href="../sui_system/sui_system.md#sui_system_sui_system">sui_
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/storage_fund.md#sui_system_storage_fund_new">new</a>(initial_fund: Balance&lt;SUI&gt;) : <a href="../sui_system/storage_fund.md#sui_system_storage_fund_StorageFund">StorageFund</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/storage_fund.md#sui_system_storage_fund_new">new</a>(initial_fund: Balance&lt;SUI&gt;): <a href="../sui_system/storage_fund.md#sui_system_storage_fund_StorageFund">StorageFund</a> {
     <a href="../sui_system/storage_fund.md#sui_system_storage_fund_StorageFund">StorageFund</a> {
         // At the beginning there's no object in the storage yet
         <a href="../sui_system/storage_fund.md#sui_system_storage_fund_total_object_storage_rebates">total_object_storage_rebates</a>: balance::zero(),
@@ -131,7 +131,7 @@ Called by <code><a href="../sui_system/sui_system.md#sui_system_sui_system">sui_
     leftover_staking_rewards: Balance&lt;SUI&gt;,
     storage_rebate_amount: u64,
     non_refundable_storage_fee_amount: u64,
-) : Balance&lt;SUI&gt; {
+): Balance&lt;SUI&gt; {
     // Both the reinvestment and leftover rewards are not to be refunded so they go to the non-refundable balance.
     self.non_refundable_balance.join(storage_fund_reinvestment);
     self.non_refundable_balance.join(leftover_staking_rewards);

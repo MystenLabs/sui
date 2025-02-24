@@ -1017,6 +1017,10 @@ pub struct TxContext {
     epoch_timestamp_ms: CheckpointTimestamp,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
+    // gas price passed to transaction as input
+    gas_price: u64,
+    // address of the sponsor if any
+    sponsor: Option<AccountAddress>,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -1030,12 +1034,20 @@ pub enum TxContextKind {
 }
 
 impl TxContext {
-    pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch_data: &EpochData) -> Self {
+    pub fn new(
+        sender: &SuiAddress,
+        digest: &TransactionDigest,
+        epoch_data: &EpochData,
+        gas_price: u64,
+        sponsor: Option<SuiAddress>,
+    ) -> Self {
         Self::new_from_components(
             sender,
             digest,
             &epoch_data.epoch_id(),
             epoch_data.epoch_start_timestamp(),
+            gas_price,
+            sponsor,
         )
     }
 
@@ -1044,6 +1056,8 @@ impl TxContext {
         digest: &TransactionDigest,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        gas_price: u64,
+        sponsor: Option<SuiAddress>,
     ) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
@@ -1051,6 +1065,8 @@ impl TxContext {
             epoch: *epoch_id,
             epoch_timestamp_ms,
             ids_created: 0,
+            gas_price,
+            sponsor: sponsor.map(|s| s.into()),
         }
     }
 
@@ -1125,20 +1141,6 @@ impl TxContext {
         }
         self.ids_created = other.ids_created;
         Ok(())
-    }
-
-    // Generate a random TxContext for testing.
-    pub fn random_for_testing_only() -> Self {
-        Self::new(
-            &SuiAddress::random_for_testing_only(),
-            &TransactionDigest::random(),
-            &EpochData::new_test(),
-        )
-    }
-
-    /// Generate a TxContext for testing with a specific sender.
-    pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
-        Self::new(sender, &TransactionDigest::random(), &EpochData::new_test())
     }
 }
 

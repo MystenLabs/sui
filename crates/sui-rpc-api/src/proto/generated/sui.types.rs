@@ -54,7 +54,7 @@ impl SignatureScheme {
 /// `0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331`.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Address {
-    /// Required. 32-byte address.
+    /// 32-byte address.
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub address: ::core::option::Option<::prost::bytes::Bytes>,
 }
@@ -64,14 +64,14 @@ pub struct Address {
 /// blockchain.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ObjectId {
-    /// Required. 32-byte object-id.
+    /// 32-byte object-id.
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub object_id: ::core::option::Option<::prost::bytes::Bytes>,
 }
 /// 32-byte output of hashing a Sui structure using the Blake2b256 hash function.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Digest {
-    /// Required. 32-byte hash.
+    /// 32-byte hash.
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub digest: ::core::option::Option<::prost::bytes::Bytes>,
 }
@@ -80,28 +80,28 @@ pub struct Digest {
 /// format.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Bcs {
-    /// Required. Bytes of a BCS encoded value.
+    /// Bytes of a BCS encoded value.
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub bcs: ::core::option::Option<::prost::bytes::Bytes>,
 }
 /// An unsigned 128-bit integer encoded in little-endian using 16-bytes.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct U128 {
-    /// Required. 16-byte little-endian bytes.
+    /// 16-byte little-endian bytes.
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub bytes: ::core::option::Option<::prost::bytes::Bytes>,
 }
 /// A signed 128-bit integer encoded in little-endian using 16-bytes.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct I128 {
-    /// Required. 16-byte little-endian bytes.
+    /// 16-byte little-endian bytes.
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub bytes: ::core::option::Option<::prost::bytes::Bytes>,
 }
 /// An unsigned 256-bit integer encoded in little-endian using 32-bytes.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct U256 {
-    /// Required. 16-byte little-endian bytes.
+    /// 16-byte little-endian bytes.
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub bytes: ::core::option::Option<::prost::bytes::Bytes>,
 }
@@ -1259,20 +1259,20 @@ pub struct TransactionEffectsV1 {
 /// An object reference with owner information.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ObjectReferenceWithOwner {
-    /// Required. `ObjectReference`.
+    /// `ObjectReference`.
     #[prost(message, optional, tag = "1")]
     pub reference: ::core::option::Option<ObjectReference>,
-    /// Required. `Owner`.
+    /// `Owner`.
     #[prost(message, optional, tag = "2")]
     pub owner: ::core::option::Option<Owner>,
 }
 /// Indicates that an object was modified at a specific version.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ModifiedAtVersion {
-    /// Required. `ObjectId` of the object.
+    /// `ObjectId` of the object.
     #[prost(message, optional, tag = "1")]
     pub object_id: ::core::option::Option<ObjectId>,
-    /// Required. Version of the object prior to this transaction.
+    /// Version of the object prior to this transaction.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
 }
@@ -1324,22 +1324,22 @@ pub struct TransactionEffectsV2 {
 /// / Input/output state of an object that was changed during execution.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ChangedObject {
-    /// Required. ID of the object.
+    /// ID of the object.
     #[prost(message, optional, tag = "1")]
     pub object_id: ::core::option::Option<ObjectId>,
-    /// Required. State of the object in the store prior to this transaction.
+    /// State of the object in the store prior to this transaction.
     #[prost(oneof = "changed_object::InputState", tags = "2, 3")]
     pub input_state: ::core::option::Option<changed_object::InputState>,
-    /// Required. State of the object in the store after this transaction.
+    /// State of the object in the store after this transaction.
     #[prost(oneof = "changed_object::OutputState", tags = "4, 5, 6")]
     pub output_state: ::core::option::Option<changed_object::OutputState>,
-    /// Required. What happened to an `ObjectId` during execution.
+    /// What happened to an `ObjectId` during execution.
     #[prost(oneof = "changed_object::IdOperation", tags = "7, 8, 9")]
     pub id_operation: ::core::option::Option<changed_object::IdOperation>,
 }
 /// Nested message and enum types in `ChangedObject`.
 pub mod changed_object {
-    /// Required. State of the object in the store prior to this transaction.
+    /// State of the object in the store prior to this transaction.
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum InputState {
         /// Object did not exist prior to this transaction.
@@ -1349,7 +1349,7 @@ pub mod changed_object {
         #[prost(message, tag = "3")]
         Exist(super::ObjectExist),
     }
-    /// Required. State of the object in the store after this transaction.
+    /// State of the object in the store after this transaction.
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum OutputState {
         /// Object was removed from the store due to this transaction.
@@ -1362,7 +1362,7 @@ pub mod changed_object {
         #[prost(message, tag = "6")]
         PackageWrite(super::PackageWrite),
     }
-    /// Required. What happened to an `ObjectId` during execution.
+    /// What happened to an `ObjectId` during execution.
     #[derive(Clone, Copy, PartialEq, ::prost::Oneof)]
     pub enum IdOperation {
         #[prost(message, tag = "7")]
@@ -1376,23 +1376,23 @@ pub mod changed_object {
 /// Information about the old version of the object.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ObjectExist {
-    /// Required. Version of the object.
+    /// Version of the object.
     #[prost(uint64, optional, tag = "1")]
     pub version: ::core::option::Option<u64>,
-    /// Required. Digest of the object.
+    /// Digest of the object.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<Digest>,
-    /// Required. Owner of the object.
+    /// Owner of the object.
     #[prost(message, optional, tag = "3")]
     pub owner: ::core::option::Option<Owner>,
 }
 /// Object write, including all of mutated, created, unwrapped.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ObjectWrite {
-    /// Required. Digest of the new version of the object.
+    /// Digest of the new version of the object.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<Digest>,
-    /// Required. Owner of the new version of the object.
+    /// Owner of the new version of the object.
     #[prost(message, optional, tag = "3")]
     pub owner: ::core::option::Option<Owner>,
 }
@@ -1402,14 +1402,14 @@ pub struct PackageWrite {
     /// Version of the new package.
     #[prost(uint64, optional, tag = "1")]
     pub version: ::core::option::Option<u64>,
-    /// Required. Digest of the new package.
+    /// Digest of the new package.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<Digest>,
 }
 /// A shared object that wasn't changed during execution.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UnchangedSharedObject {
-    /// Required. ObjectId of the shared object.
+    /// ObjectId of the shared object.
     #[prost(message, optional, tag = "1")]
     pub object_id: ::core::option::Option<ObjectId>,
     #[prost(oneof = "unchanged_shared_object::Kind", tags = "2, 3, 4, 5, 6")]
@@ -1440,30 +1440,30 @@ pub mod unchanged_shared_object {
 /// Read-only shared object from the input.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ReadOnlyRoot {
-    /// Required. Version of the shared object.
+    /// Version of the shared object.
     #[prost(uint64, optional, tag = "1")]
     pub version: ::core::option::Option<u64>,
-    /// Required. Digest of the shared object.
+    /// Digest of the shared object.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<Digest>,
 }
 /// / The status of an executed transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ExecutionStatus {
-    /// Required. Indicates if the transaction was successful or not.
+    /// Indicates if the transaction was successful or not.
     #[prost(bool, optional, tag = "1")]
     pub success: ::core::option::Option<bool>,
-    /// Optional. The error if `success` is false.
+    /// The error if `success` is false.
     #[prost(message, optional, tag = "2")]
     pub status: ::core::option::Option<FailureStatus>,
 }
 /// A size error.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct SizeError {
-    /// Required. The offending size.
+    /// The offending size.
     #[prost(uint64, optional, tag = "1")]
     pub size: ::core::option::Option<u64>,
-    /// Required. The maximum allowable size.
+    /// The maximum allowable size.
     #[prost(uint64, optional, tag = "2")]
     pub max_size: ::core::option::Option<u64>,
 }
@@ -1634,10 +1634,10 @@ pub mod failure_status {
 /// Address is denied for this coin type.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AddressDeniedForCoinError {
-    /// Required. Denied address.
+    /// Denied address.
     #[prost(message, optional, tag = "1")]
     pub address: ::core::option::Option<Address>,
-    /// Required. Coin type.
+    /// Coin type.
     #[prost(string, optional, tag = "2")]
     pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
 }
@@ -1651,26 +1651,26 @@ pub struct CongestedObjectsError {
 /// / Location in Move bytecode where an error occurred.s
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MoveLocation {
-    /// Required. The package ID.
+    /// The package ID.
     #[prost(message, optional, tag = "1")]
     pub package: ::core::option::Option<ObjectId>,
-    /// Required. The module name.
+    /// The module name.
     #[prost(message, optional, tag = "2")]
     pub module: ::core::option::Option<Identifier>,
-    /// Required. The function index.
+    /// The function index.
     #[prost(uint32, optional, tag = "3")]
     pub function: ::core::option::Option<u32>,
-    /// Required. Offset of the instruction where the error occurred.
+    /// Offset of the instruction where the error occurred.
     #[prost(uint32, optional, tag = "4")]
     pub instruction: ::core::option::Option<u32>,
-    /// Optional. The name of the function, if available.
+    /// The name of the function, if available.
     #[prost(message, optional, tag = "5")]
     pub function_name: ::core::option::Option<Identifier>,
 }
 /// An error with an argument to a command.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct CommandArgumentError {
-    /// Required. Position of the problematic argument.
+    /// Position of the problematic argument.
     #[prost(uint32, optional, tag = "1")]
     pub argument: ::core::option::Option<u32>,
     #[prost(
@@ -1761,17 +1761,17 @@ pub mod package_upgrade_error {
 /// Package ID does not match `PackageId` in upgrade ticket.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PackageIdDoesNotMatch {
-    /// Required. The package ID.
+    /// The package ID.
     #[prost(message, optional, tag = "1")]
     pub package_id: ::core::option::Option<ObjectId>,
-    /// Required. The ticket ID.
+    /// The ticket ID.
     #[prost(message, optional, tag = "2")]
     pub ticket_id: ::core::option::Option<ObjectId>,
 }
 /// Type argument error.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct TypeArgumentError {
-    /// Required. Index of the problematic type argument.
+    /// Index of the problematic type argument.
     #[prost(uint32, optional, tag = "1")]
     pub type_argument: ::core::option::Option<u32>,
     #[prost(oneof = "type_argument_error::Kind", tags = "2, 3")]
@@ -1829,10 +1829,8 @@ pub struct SimpleSignature {
 /// Public key equivalent for zklogin authenticators.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ZkLoginPublicIdentifier {
-    /// Required.
     #[prost(string, optional, tag = "1")]
     pub iss: ::core::option::Option<::prost::alloc::string::String>,
-    /// Required.
     #[prost(message, optional, tag = "2")]
     pub address_seed: ::core::option::Option<Bn254FieldElement>,
 }
@@ -1863,10 +1861,10 @@ pub mod multisig_member_public_key {
 /// A member in a multisig committee.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MultisigMember {
-    /// Required. The public key of the committee member.
+    /// The public key of the committee member.
     #[prost(message, optional, tag = "1")]
     pub public_key: ::core::option::Option<MultisigMemberPublicKey>,
-    /// Required. The weight of this member's signature.
+    /// The weight of this member's signature.
     #[prost(uint32, optional, tag = "2")]
     pub weight: ::core::option::Option<u32>,
 }
@@ -1876,7 +1874,7 @@ pub struct MultisigCommittee {
     /// A list of committee members and their corresponding weight.
     #[prost(message, repeated, tag = "1")]
     pub members: ::prost::alloc::vec::Vec<MultisigMember>,
-    /// Required. The threshold of signatures needed to validate a signature from
+    /// The threshold of signatures needed to validate a signature from
     /// this committee.
     #[prost(uint32, optional, tag = "2")]
     pub threshold: ::core::option::Option<u32>,
@@ -1889,15 +1887,15 @@ pub struct MultisigAggregatedSignature {
     /// The signatures must be in the same order as they are listed in the committee.
     #[prost(message, repeated, tag = "1")]
     pub signatures: ::prost::alloc::vec::Vec<MultisigMemberSignature>,
-    /// Required. Bitmap indicating which committee members contributed to the
+    /// Bitmap indicating which committee members contributed to the
     /// signature.
     #[prost(uint32, optional, tag = "2")]
     pub bitmap: ::core::option::Option<u32>,
-    /// Optional. If present, means this signature's on-chain format uses the old
+    /// If present, means this signature's on-chain format uses the old
     /// legacy multisig format.
     #[prost(message, optional, tag = "3")]
     pub legacy_bitmap: ::core::option::Option<RoaringBitmap>,
-    /// Required. The committee to use to validate this signature.
+    /// The committee to use to validate this signature.
     #[prost(message, optional, tag = "4")]
     pub committee: ::core::option::Option<MultisigCommittee>,
 }
@@ -1928,94 +1926,76 @@ pub mod multisig_member_signature {
 /// A zklogin authenticator.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ZkLoginAuthenticator {
-    /// Required. Zklogin proof and inputs required to perform proof verification.
+    /// Zklogin proof and inputs required to perform proof verification.
     #[prost(message, optional, tag = "1")]
     pub inputs: ::core::option::Option<ZkLoginInputs>,
-    /// Required. Maximum epoch for which the proof is valid.
+    /// Maximum epoch for which the proof is valid.
     #[prost(uint64, optional, tag = "2")]
     pub max_epoch: ::core::option::Option<u64>,
-    /// Required. User signature with the public key attested to by the provided proof.
+    /// User signature with the public key attested to by the provided proof.
     #[prost(message, optional, tag = "3")]
     pub signature: ::core::option::Option<SimpleSignature>,
 }
 /// A zklogin groth16 proof and the required inputs to perform proof verification.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ZkLoginInputs {
-    /// Required.
     #[prost(message, optional, tag = "1")]
     pub proof_points: ::core::option::Option<ZkLoginProof>,
-    /// Required.
     #[prost(message, optional, tag = "2")]
     pub iss_base64_details: ::core::option::Option<ZkLoginClaim>,
-    /// Required.
     #[prost(string, optional, tag = "3")]
     pub header_base64: ::core::option::Option<::prost::alloc::string::String>,
-    /// Required.
     #[prost(message, optional, tag = "4")]
     pub address_seed: ::core::option::Option<Bn254FieldElement>,
 }
 /// A zklogin groth16 proof.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ZkLoginProof {
-    /// Required.
     #[prost(message, optional, tag = "1")]
     pub a: ::core::option::Option<CircomG1>,
-    /// Required.
     #[prost(message, optional, tag = "2")]
     pub b: ::core::option::Option<CircomG2>,
-    /// Required.
     #[prost(message, optional, tag = "3")]
     pub c: ::core::option::Option<CircomG1>,
 }
 /// A claim of the iss in a zklogin proof.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ZkLoginClaim {
-    /// Required.
     #[prost(string, optional, tag = "1")]
     pub value: ::core::option::Option<::prost::alloc::string::String>,
-    /// Required.
     #[prost(uint32, optional, tag = "2")]
     pub index_mod_4: ::core::option::Option<u32>,
 }
 /// A G1 point.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CircomG1 {
-    /// Required.
     #[prost(message, optional, tag = "1")]
     pub e0: ::core::option::Option<Bn254FieldElement>,
-    /// Required.
     #[prost(message, optional, tag = "2")]
     pub e1: ::core::option::Option<Bn254FieldElement>,
-    /// Required.
     #[prost(message, optional, tag = "3")]
     pub e2: ::core::option::Option<Bn254FieldElement>,
 }
 /// A G2 point.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CircomG2 {
-    /// Required.
     #[prost(message, optional, tag = "1")]
     pub e00: ::core::option::Option<Bn254FieldElement>,
-    /// Required.
     #[prost(message, optional, tag = "2")]
     pub e01: ::core::option::Option<Bn254FieldElement>,
-    /// Required.
     #[prost(message, optional, tag = "3")]
     pub e10: ::core::option::Option<Bn254FieldElement>,
-    /// Required.
     #[prost(message, optional, tag = "4")]
     pub e11: ::core::option::Option<Bn254FieldElement>,
-    /// Required.
     #[prost(message, optional, tag = "5")]
     pub e20: ::core::option::Option<Bn254FieldElement>,
-    /// Required.
     #[prost(message, optional, tag = "6")]
     pub e21: ::core::option::Option<Bn254FieldElement>,
 }
 /// A point on the BN254 elliptic curve.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Bn254FieldElement {
-    /// Required. 32-byte big-endian field element.
+    /// 32-byte big-endian field element.
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub element: ::core::option::Option<::prost::bytes::Bytes>,
 }
@@ -2027,26 +2007,26 @@ pub struct Bn254FieldElement {
 /// `client_data_json` field.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PasskeyAuthenticator {
-    /// Required. Opaque authenticator data for this passkey signature.
+    /// Opaque authenticator data for this passkey signature.
     ///
     /// See [Authenticator Data](<https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data>) for
     /// more information on this field.
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub authenticator_data: ::core::option::Option<::prost::bytes::Bytes>,
-    /// Required. Structured, unparsed, JSON for this passkey signature.
+    /// Structured, unparsed, JSON for this passkey signature.
     ///
     /// See [CollectedClientData](<https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata>)
     /// for more information on this field.
     #[prost(string, optional, tag = "2")]
     pub client_data_json: ::core::option::Option<::prost::alloc::string::String>,
-    /// Required. A secp256r1 signature.
+    /// A secp256r1 signature.
     #[prost(message, optional, tag = "3")]
     pub signature: ::core::option::Option<SimpleSignature>,
 }
 /// The validator set for a particular epoch.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ValidatorCommittee {
-    /// Required. The epoch where this committee governs.
+    /// The epoch where this committee governs.
     #[prost(uint64, optional, tag = "1")]
     pub epoch: ::core::option::Option<u64>,
     /// The committee members.
@@ -2056,26 +2036,26 @@ pub struct ValidatorCommittee {
 /// A member of a validator committee.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ValidatorCommitteeMember {
-    /// Required. The 96-byte Bls12381 public key for this validator.
+    /// The 96-byte Bls12381 public key for this validator.
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub public_key: ::core::option::Option<::prost::bytes::Bytes>,
-    /// Required. Stake weight this validator possesses.
+    /// Stake weight this validator possesses.
     #[prost(uint64, optional, tag = "2")]
     pub stake: ::core::option::Option<u64>,
 }
 /// / An aggregated signature from multiple validators.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ValidatorAggregatedSignature {
-    /// Required. The epoch when this signature was produced.
+    /// The epoch when this signature was produced.
     ///
     /// This can be used to lookup the `ValidatorCommittee` from this epoch
     /// to verify this signature.
     #[prost(uint64, optional, tag = "1")]
     pub epoch: ::core::option::Option<u64>,
-    /// Required. The 48-byte Bls12381 aggregated signature.
+    /// The 48-byte Bls12381 aggregated signature.
     #[prost(bytes = "bytes", optional, tag = "2")]
     pub signature: ::core::option::Option<::prost::bytes::Bytes>,
-    /// Required. Bitmap indicating which members of the committee contributed to
+    /// Bitmap indicating which members of the committee contributed to
     /// this signature.
     #[prost(message, optional, tag = "3")]
     pub bitmap: ::core::option::Option<RoaringBitmap>,
@@ -2085,7 +2065,7 @@ pub struct ValidatorAggregatedSignature {
 /// specification for the serialized format of `RoaringBitmap`s.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RoaringBitmap {
-    /// Required. Serialized `RoaringBitmap`.
+    /// Serialized `RoaringBitmap`.
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub bitmap: ::core::option::Option<::prost::bytes::Bytes>,
 }

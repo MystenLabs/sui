@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::field_mask::FieldMaskTree;
+use crate::proto::google::rpc::bad_request::FieldViolation;
+use crate::proto::node::v2::GetObjectRequest;
+use crate::proto::node::v2::GetObjectResponse;
 use crate::proto::node::v2alpha::DynamicField;
 use crate::proto::node::v2alpha::ListDynamicFieldsRequest;
 use crate::proto::node::v2alpha::ListDynamicFieldsResponse;
-use crate::types::GetObjectOptions;
-use crate::types::ObjectResponse;
+use crate::ErrorReason;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
+use prost_types::FieldMask;
 use sui_sdk_types::ObjectId;
 use sui_sdk_types::TypeTag;
 use sui_sdk_types::Version;
@@ -19,13 +23,49 @@ use sui_types::{
 };
 use tap::Pipe;
 
+fn validate_get_object_read_mask(read_mask: &FieldMask) -> Result<(), &str> {
+    for path in &read_mask.paths {
+        match path.as_str() {
+            "object_id" | "version" | "digest" | "object" | "object_bcs" => {}
+            path => {
+                return Err(path);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 impl RpcService {
     pub fn get_object(
         &self,
-        object_id: ObjectId,
-        version: Option<Version>,
-        options: GetObjectOptions,
-    ) -> Result<ObjectResponse> {
+        GetObjectRequest {
+            object_id,
+            version,
+            read_mask,
+        }: GetObjectRequest,
+    ) -> Result<GetObjectResponse> {
+        let object_id = object_id
+            .ok_or_else(|| {
+                FieldViolation::new("object_id")
+                    .with_description("missing object_id")
+                    .with_reason(ErrorReason::FieldMissing)
+            })?
+            .pipe_ref(ObjectId::try_from)
+            .map_err(|e| {
+                FieldViolation::new("object_id")
+                    .with_description(format!("invalid object_id: {e}"))
+                    .with_reason(ErrorReason::FieldInvalid)
+            })?;
+
+        let read_mask = read_mask.unwrap_or_default();
+        validate_get_object_read_mask(&read_mask).map_err(|path| {
+            FieldViolation::new("read_mask")
+                .with_description(format!("invalid read_mask path: {path}"))
+                .with_reason(ErrorReason::FieldInvalid)
+        })?;
+        let read_mask = FieldMaskTree::from(read_mask);
+
         let object = if let Some(version) = version {
             self.reader
                 .get_object_with_version(object_id, version)?
@@ -36,16 +76,19 @@ impl RpcService {
                 .ok_or_else(|| ObjectNotFoundError::new(object_id))?
         };
 
-        let object_bcs = options
-            .include_object_bcs()
+        let object_bcs = read_mask
+            .contains("object_bcs")
             .then(|| bcs::to_bytes(&object))
-            .transpose()?;
+            .transpose()?
+            .map(Into::into);
 
-        ObjectResponse {
-            object_id: object.object_id(),
-            version: object.version(),
-            digest: object.digest(),
-            object: options.include_object().then_some(object),
+        GetObjectResponse {
+            object_id: read_mask
+                .contains("object_id")
+                .then(|| object.object_id().into()),
+            version: read_mask.contains("version").then_some(object.version()),
+            digest: read_mask.contains("digest").then(|| object.digest().into()),
+            object: read_mask.contains("object").then(|| object.into()),
             object_bcs,
         }
         .pipe(Ok)

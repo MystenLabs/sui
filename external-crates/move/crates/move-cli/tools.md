@@ -35,7 +35,7 @@ handled for the `move-bytecode-viewer` that's defined in the
 `move-bytecode-viewer` crate, and not the `move-cli` crate).
 
 Some of the crates mentioned above are also binaries at the moment, however
-they should all be able to be made libaries only, with the possible
+they should all be able to be made libraries only, with the possible
 exception of the `move-coverage` crate. The primary reason for this, is
 that this tool can collect and report test coverage statistics across
 multiple packages, and multiple runs over a package. This functionality is

@@ -39,15 +39,13 @@ clap = { version = "4", features = ["derive"] }
 codespan = "0.11.1"
 codespan-reporting = "0.11.1"
 colored = "2.0.0"
-criterion = { version = "0.3.4", features = ["html_reports"]}
-criterion-cpu-time = "0.1.0"
+criterion = { version = "0.5.1", features = ["html_reports"] }
 crossbeam = "0.8"
 crossbeam-channel = "0.5.0"
 crossterm = "0.25.0"
 curve25519-dalek = { version = "0.1.0", package = "curve25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
 datatest-stable = "0.1.1"
 derivative = "2.2.0"
-difference = "2.0.0"
 digest = "0.9.0"
 dir-diff = "0.3.2"
 dirs-next = "2.0.0"
@@ -88,8 +86,8 @@ pretty = "0.10.0"
 prettydiff = "0.4.0"
 primitive-types = { version = "0.10.1", features = ["impl-serde"]}
 proc-macro2 = "1.0.24"
-proptest = "1.0.0"
-proptest-derive = "0.3.0"
+proptest = "1.6.0"
+proptest-derive = "0.5"
 quote = "1.0.9"
 rand = "0.8.0"
 rayon = "1.10.0"

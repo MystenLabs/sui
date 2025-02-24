@@ -57,57 +57,10 @@ pub struct GetTransactionRequest {
     /// Required. The digest of the requested transaction.
     #[prost(message, optional, tag = "1")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "3")]
-    pub options: ::core::option::Option<GetTransactionOptions>,
     /// Optional. Mask for specifying which parts of the `GetTransactionResponse`
     /// should be returned.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
-}
-/// DEPRECATED To be removed in the next release
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct GetTransactionOptions {
-    /// Include the `sui.types.Transaction` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "1")]
-    pub transaction: ::core::option::Option<bool>,
-    /// Include the transaction formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "2")]
-    pub transaction_bcs: ::core::option::Option<bool>,
-    /// Include the set of `sui.types.UserSignature`s in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "3")]
-    pub signatures: ::core::option::Option<bool>,
-    /// Include the set of `UserSignature`s encoded as bytes in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "8")]
-    pub signatures_bytes: ::core::option::Option<bool>,
-    /// Include the `sui.types.TransactionEffects` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "4")]
-    pub effects: ::core::option::Option<bool>,
-    /// Include the `TransactionEffects` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "5")]
-    pub effects_bcs: ::core::option::Option<bool>,
-    /// Include the `sui.types.TransactionEvents` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "6")]
-    pub events: ::core::option::Option<bool>,
-    /// Include the `TransactionEvents` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "7")]
-    pub events_bcs: ::core::option::Option<bool>,
 }
 /// Response message for `NodeService.GetTransactio`n.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -115,32 +68,32 @@ pub struct GetTransactionResponse {
     /// The digest of this [Transaction](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html>).
     #[prost(message, optional, tag = "1")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The transaction itself.
+    /// The transaction itself.
     #[prost(message, optional, tag = "2")]
     pub transaction: ::core::option::Option<super::super::types::Transaction>,
-    /// Optional. The
+    /// The
     /// [Transaction](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html>)
     /// encoded as BCS bytes.
     #[prost(message, optional, tag = "3")]
     pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. List of user signatures that are used to authorize the
+    /// List of user signatures that are used to authorize the
     /// execution of this transaction.
     #[prost(message, repeated, tag = "4")]
     pub signatures: ::prost::alloc::vec::Vec<super::super::types::UserSignature>,
-    /// Optional. List of
+    /// List of
     /// [UserSignature](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.UserSignature.html>)s
     /// encoded as bytes.
     #[prost(bytes = "bytes", repeated, tag = "11")]
     pub signatures_bytes: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
-    /// Optional. The `TransactionEffects` for this transaction.
+    /// The `TransactionEffects` for this transaction.
     #[prost(message, optional, tag = "5")]
     pub effects: ::core::option::Option<super::super::types::TransactionEffects>,
-    /// Optional. The
+    /// The
     /// [TransactionEffects](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "6")]
     pub effects_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. The `TransactionEvents` for this transaction.
+    /// The `TransactionEvents` for this transaction.
     ///
     /// This field might be empty, even if it was explicitly requested, if the
     /// transaction didn't produce any events.
@@ -148,7 +101,7 @@ pub struct GetTransactionResponse {
     /// transaction produced any events.
     #[prost(message, optional, tag = "7")]
     pub events: ::core::option::Option<super::super::types::TransactionEvents>,
-    /// Optional. The
+    /// The
     /// [TransactionEvents](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "8")]
@@ -171,27 +124,10 @@ pub struct GetObjectRequest {
     /// the object is returned.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "3")]
-    pub options: ::core::option::Option<GetObjectOptions>,
     /// Optional. Mask for specifying which parts of the `GetObjectResponse`
     /// should be returned.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
-}
-/// DEPRECATED To be removed in the next release
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct GetObjectOptions {
-    /// Include the `sui.types.Object` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "1")]
-    pub object: ::core::option::Option<bool>,
-    /// Include the object formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "2")]
-    pub object_bcs: ::core::option::Option<bool>,
 }
 /// Response message for `NodeService.GetObject`.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -205,10 +141,10 @@ pub struct GetObjectResponse {
     /// The digest of this object.
     #[prost(message, optional, tag = "3")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The object itself.
+    /// The object itself.
     #[prost(message, optional, tag = "4")]
     pub object: ::core::option::Option<super::super::types::Object>,
-    /// Optional. The
+    /// The
     /// [Object](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Object.html>)
     /// encoded as BCS bytes.
     #[prost(message, optional, tag = "5")]
@@ -227,42 +163,10 @@ pub struct GetCheckpointRequest {
     /// Optional. The digest of the requested checkpoint.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "3")]
-    pub options: ::core::option::Option<GetCheckpointOptions>,
     /// Optional. Mask for specifying which parts of the `GetCheckpointResponse`
     /// should be returned.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
-}
-/// DEPRECATED To be removed in the next release
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct GetCheckpointOptions {
-    /// Include the `sui.types.CheckpointSummary` in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "3")]
-    pub summary: ::core::option::Option<bool>,
-    /// Include the `CheckpointSummary` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "4")]
-    pub summary_bcs: ::core::option::Option<bool>,
-    /// Include the `sui.types.ValidatorAggregatedSignature` in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "5")]
-    pub signature: ::core::option::Option<bool>,
-    /// Include the `sui.types.CheckpointContents` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "6")]
-    pub contents: ::core::option::Option<bool>,
-    /// Include the `CheckpointContents` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "7")]
-    pub contents_bcs: ::core::option::Option<bool>,
 }
 /// Response message for `NodeService.GetCheckpoint`.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -273,24 +177,24 @@ pub struct GetCheckpointResponse {
     /// The digest of this checkpoint's `CheckpointSummary`.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The `CheckpointSummary` for this checkpoint.
+    /// The `CheckpointSummary` for this checkpoint.
     #[prost(message, optional, tag = "3")]
     pub summary: ::core::option::Option<super::super::types::CheckpointSummary>,
-    /// Optional. The
+    /// The
     /// [CheckpointSummary](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointSummary.html>)
     /// for this checkpoint encoded as BCS bytes.
     #[prost(message, optional, tag = "4")]
     pub summary_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. An aggregated quorum signature from the validator committee that
+    /// An aggregated quorum signature from the validator committee that
     /// certifies this checkpoint.
     #[prost(message, optional, tag = "5")]
     pub signature: ::core::option::Option<
         super::super::types::ValidatorAggregatedSignature,
     >,
-    /// Optional. The `CheckpointContents` for this checkpoint.
+    /// The `CheckpointContents` for this checkpoint.
     #[prost(message, optional, tag = "6")]
     pub contents: ::core::option::Option<super::super::types::CheckpointContents>,
-    /// Optional. The
+    /// The
     /// [CheckpointContents](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointContents.html>)
     /// for this checkpoint encoded as BCS bytes.
     #[prost(message, optional, tag = "7")]
@@ -309,92 +213,10 @@ pub struct GetFullCheckpointRequest {
     /// Optional. The digest of the requested checkpoint.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "3")]
-    pub options: ::core::option::Option<GetFullCheckpointOptions>,
     /// Optional. Mask for specifying which parts of the `GetFullCheckpointResponse`
     /// should be returned.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
-}
-/// DEPRECATED To be removed in the next release
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct GetFullCheckpointOptions {
-    /// Include the `sui.types.CheckpointSummary` in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "3")]
-    pub summary: ::core::option::Option<bool>,
-    /// Include the `CheckpointSummary` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "4")]
-    pub summary_bcs: ::core::option::Option<bool>,
-    /// Include the `sui.types.ValidatorAggregatedSignature` in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "5")]
-    pub signature: ::core::option::Option<bool>,
-    /// Include the `sui.types.CheckpointContents` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "6")]
-    pub contents: ::core::option::Option<bool>,
-    /// Include the `CheckpointContents` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "7")]
-    pub contents_bcs: ::core::option::Option<bool>,
-    /// Include the `sui.types.Transaction` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "8")]
-    pub transaction: ::core::option::Option<bool>,
-    /// Include the transaction formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "9")]
-    pub transaction_bcs: ::core::option::Option<bool>,
-    /// Include the `sui.types.TransactionEffects` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "10")]
-    pub effects: ::core::option::Option<bool>,
-    /// Include the `TransactionEffects` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "11")]
-    pub effects_bcs: ::core::option::Option<bool>,
-    /// Include the `sui.types.TransactionEvents` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "12")]
-    pub events: ::core::option::Option<bool>,
-    /// Include the `TransactionEvents` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "13")]
-    pub events_bcs: ::core::option::Option<bool>,
-    /// Include the input objects for transactions in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "14")]
-    pub input_objects: ::core::option::Option<bool>,
-    /// Include the output objects for transactions in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "15")]
-    pub output_objects: ::core::option::Option<bool>,
-    /// Include the `sui.types.Object` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "16")]
-    pub object: ::core::option::Option<bool>,
-    /// Include the object formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "17")]
-    pub object_bcs: ::core::option::Option<bool>,
 }
 /// Response message for `NodeService.GetFullCheckpoint`.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -405,24 +227,24 @@ pub struct GetFullCheckpointResponse {
     /// The digest of this checkpoint's `CheckpointSummary`.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The `CheckpointSummary` for this checkpoint.
+    /// The `CheckpointSummary` for this checkpoint.
     #[prost(message, optional, tag = "3")]
     pub summary: ::core::option::Option<super::super::types::CheckpointSummary>,
-    /// Optional. The
+    /// The
     /// [CheckpointSummary](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointSummary.html>)
     /// for this checkpoint encoded as BCS bytes.
     #[prost(message, optional, tag = "4")]
     pub summary_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. An aggregated quorum signature from the validator committee that
+    /// An aggregated quorum signature from the validator committee that
     /// certifies this checkpoint.
     #[prost(message, optional, tag = "5")]
     pub signature: ::core::option::Option<
         super::super::types::ValidatorAggregatedSignature,
     >,
-    /// Optional. The `CheckpointContents` for this checkpoint.
+    /// The `CheckpointContents` for this checkpoint.
     #[prost(message, optional, tag = "6")]
     pub contents: ::core::option::Option<super::super::types::CheckpointContents>,
-    /// Optional. The
+    /// The
     /// [CheckpointContents](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.CheckpointContents.html>)
     /// for this checkpoint encoded as BCS bytes.
     #[prost(message, optional, tag = "7")]
@@ -437,23 +259,23 @@ pub struct FullCheckpointTransaction {
     /// The digest of this transaction.
     #[prost(message, optional, tag = "1")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The transaction itself.
+    /// The transaction itself.
     #[prost(message, optional, tag = "2")]
     pub transaction: ::core::option::Option<super::super::types::Transaction>,
-    /// Optional. The
+    /// The
     /// [Transaction](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html>)
     /// encoded as BCS bytes.
     #[prost(message, optional, tag = "3")]
     pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. The `TransactionEffects` for this transaction.
+    /// The `TransactionEffects` for this transaction.
     #[prost(message, optional, tag = "5")]
     pub effects: ::core::option::Option<super::super::types::TransactionEffects>,
-    /// Optional. The
+    /// The
     /// [TransactionEffects](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "6")]
     pub effects_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. The `TransactionEvents` for this transaction.
+    /// The `TransactionEvents` for this transaction.
     ///
     /// This field might be empty, even if it was explicitly requested, if the
     /// transaction didn't produce any events.
@@ -461,30 +283,17 @@ pub struct FullCheckpointTransaction {
     /// transaction produced any events.
     #[prost(message, optional, tag = "7")]
     pub events: ::core::option::Option<super::super::types::TransactionEvents>,
-    /// Optional. The
+    /// The
     /// [TransactionEvents](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "8")]
     pub events_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "11")]
-    pub input_objects_old: ::core::option::Option<FullCheckpointObjects>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "12")]
-    pub output_objects_old: ::core::option::Option<FullCheckpointObjects>,
-    /// Optional. Set of input objects used during the execution of this transaction.
+    /// Set of input objects used during the execution of this transaction.
     #[prost(message, repeated, tag = "13")]
     pub input_objects: ::prost::alloc::vec::Vec<FullCheckpointObject>,
-    /// Optional. Set of output objects produced from the execution of this transaction.
+    /// Set of output objects produced from the execution of this transaction.
     #[prost(message, repeated, tag = "14")]
     pub output_objects: ::prost::alloc::vec::Vec<FullCheckpointObject>,
-}
-/// Set of objects used by or produced from a transaction.
-/// TODO remove next release
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct FullCheckpointObjects {
-    #[prost(message, repeated, tag = "1")]
-    pub objects: ::prost::alloc::vec::Vec<FullCheckpointObject>,
 }
 /// An object used by or produced from a transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -498,10 +307,10 @@ pub struct FullCheckpointObject {
     /// The digest of this object.
     #[prost(message, optional, tag = "3")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. The object itself.
+    /// The object itself.
     #[prost(message, optional, tag = "4")]
     pub object: ::core::option::Option<super::super::types::Object>,
-    /// Optional. The
+    /// The
     /// [object](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Object.html>)
     /// encoded as BCS bytes.
     #[prost(message, optional, tag = "5")]
@@ -526,42 +335,10 @@ pub struct ExecuteTransactionRequest {
     /// transaction, encoded as bytes.
     #[prost(bytes = "bytes", repeated, tag = "4")]
     pub signatures_bytes: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
-    /// DEPRECATED To be removed in the next release
-    #[prost(message, optional, tag = "5")]
-    pub options: ::core::option::Option<ExecuteTransactionOptions>,
     /// Optional. Mask for specifying which parts of the
     /// `ExecuteTransactionResponse` should be returned.
     #[prost(message, optional, tag = "6")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
-}
-/// DEPRECATED To be removed in the next release
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct ExecuteTransactionOptions {
-    /// Include the `sui.types.TransactionEffects` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "4")]
-    pub effects: ::core::option::Option<bool>,
-    /// Include the `TransactionEffects` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "5")]
-    pub effects_bcs: ::core::option::Option<bool>,
-    /// Include the `sui.types.TransactionEvents` message in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "6")]
-    pub events: ::core::option::Option<bool>,
-    /// Include the `TransactionEvents` formatted as BCS in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "7")]
-    pub events_bcs: ::core::option::Option<bool>,
-    /// Include the `BalanceChange`s in the response.
-    ///
-    /// Defaults to `false` if not included.
-    #[prost(bool, optional, tag = "8")]
-    pub balance_changes: ::core::option::Option<bool>,
 }
 /// Response message for `NodeService.ExecuteTransaction`.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -569,15 +346,15 @@ pub struct ExecuteTransactionResponse {
     /// Indicates the finality of the executed transaction.
     #[prost(message, optional, tag = "1")]
     pub finality: ::core::option::Option<EffectsFinality>,
-    /// Optional. The `TransactionEffects` for this transaction.
+    /// The `TransactionEffects` for this transaction.
     #[prost(message, optional, tag = "2")]
     pub effects: ::core::option::Option<super::super::types::TransactionEffects>,
-    /// Optional. The
+    /// The
     /// [TransactionEffects](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "3")]
     pub effects_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. The `TransactionEvents` for this transaction.
+    /// The `TransactionEvents` for this transaction.
     ///
     /// This field might be empty, even if it was explicitly requested, if the
     /// transaction didn't produce any events.
@@ -585,12 +362,12 @@ pub struct ExecuteTransactionResponse {
     /// transaction produced any events.
     #[prost(message, optional, tag = "4")]
     pub events: ::core::option::Option<super::super::types::TransactionEvents>,
-    /// Optional. The
+    /// The
     /// [TransactionEvents](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEvents.html>)
     /// for this transaction encoded as BCS bytes.
     #[prost(message, optional, tag = "5")]
     pub events_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. Set of balance change events as a result of this transaction.
+    /// Set of balance change events as a result of this transaction.
     ///
     /// This set of events are calculated by analyzing all input and output `Coin`
     /// type objects.

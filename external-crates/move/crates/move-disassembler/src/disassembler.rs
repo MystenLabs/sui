@@ -94,7 +94,7 @@ struct BoundedBuffer<'a> {
     buf: &'a mut String,
 }
 
-impl<'a> Write for BoundedBuffer<'a> {
+impl Write for BoundedBuffer<'_> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         if self.budget < s.len() {
             return Err(fmt::Error);
@@ -109,7 +109,7 @@ trait ByteLength {
     fn byte_len(&self) -> u32;
 }
 
-impl<'a> ByteLength for BoundedBuffer<'a> {
+impl ByteLength for BoundedBuffer<'_> {
     fn byte_len(&self) -> u32 {
         self.buf.len() as u32
     }
@@ -272,7 +272,7 @@ impl<'a> Disassembler<'a> {
 // Note on naming:
 // * disassemble_* and print_* functions are functions that output to the buffer
 // * format_* functions return a string that can be used in the buffer
-impl<'a> Disassembler<'a> {
+impl Disassembler<'_> {
     fn print_module(
         &self,
         buffer: &mut (impl Write + ByteLength),
@@ -1643,7 +1643,7 @@ impl<'a> Disassembler<'a> {
     }
 }
 
-impl<'a> Disassembler<'a> {
+impl Disassembler<'_> {
     //***************************************************************************
     // Formatters (that produce formatted strings)
     //***************************************************************************

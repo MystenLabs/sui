@@ -49,7 +49,7 @@ impl NativeResult {
 
     /// Failed execution. The failure is a runtime failure in the function and not an invariant
     /// failure of the VM which would raise a `PartialVMError` error directly.
-    /// The only thing the funciton can specify is its abort code, as if it had invoked the `Abort`
+    /// The only thing the function can specify is its abort code, as if it had invoked the `Abort`
     /// bytecode instruction
     pub fn err(cost: InternalGas, abort_code: u64) -> Self {
         NativeResult {

@@ -50,7 +50,7 @@ pub struct AdapterInitArgs {
 }
 
 #[async_trait]
-impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
+impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
     type ExtraInitArgs = AdapterInitArgs;
     type ExtraPublishArgs = EmptyCommand;
     type ExtraValueArgs = ();

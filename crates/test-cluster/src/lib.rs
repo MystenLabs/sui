@@ -3,6 +3,7 @@
 
 use futures::{future::join_all, StreamExt};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use mysten_common::fatal;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -348,7 +349,12 @@ impl TestCluster {
             node.get_node_handle()
                 .unwrap()
                 .with_async(|node| async {
-                    node.close_epoch_for_testing().await.unwrap();
+                    node.close_epoch_for_testing().await.unwrap_or_else(|_| {
+                        fatal!(
+                            "Failed to close epoch for validator {:?}",
+                            node.state().name
+                        );
+                    });
                     cur_stake += cur_committee.weight(&node.state().name);
                 })
                 .await;

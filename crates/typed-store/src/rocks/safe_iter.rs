@@ -54,7 +54,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> SafeIter<'a, K, V> {
     }
 }
 
-impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeIter<'a, K, V> {
+impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeIter<'_, K, V> {
     type Item = Result<(K, V), TypedStoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -94,7 +94,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeIter<'a, K, 
     }
 }
 
-impl<'a, K, V> Drop for SafeIter<'a, K, V> {
+impl<K, V> Drop for SafeIter<'_, K, V> {
     fn drop(&mut self) {
         if let Some(bytes_scanned) = self.bytes_scanned.take() {
             bytes_scanned.observe(self.bytes_scanned_counter as f64);
@@ -159,7 +159,7 @@ impl<'a, K, V> SafeRevIter<'a, K, V> {
     }
 }
 
-impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeRevIter<'a, K, V> {
+impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeRevIter<'_, K, V> {
     type Item = Result<(K, V), TypedStoreError>;
 
     /// Will give the next item backwards

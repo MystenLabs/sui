@@ -947,14 +947,6 @@ impl<'a> PTBBuilder<'a> {
                 } else {
                     None
                 };
-                let compile_result = compile_package(
-                    self.reader,
-                    build_config.clone(),
-                    package_path,
-                    false, /* with_unpublished_dependencies */
-                    false, /* skip_dependency_verification */
-                )
-                .await;
                 // Restore original ID, then check result.
                 if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
                     let _ = sui_package_management::set_package_id(
@@ -965,12 +957,21 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .map_err(|e| err!(pkg_loc, "{e}"))?;
                 }
-                let (dependencies, compiled_modules, _, _) =
-                    compile_result.map_err(|e| err!(pkg_loc, "{e}"))?;
+                let compiled_package = compile_package(
+                    self.reader,
+                    build_config.clone(),
+                    package_path,
+                    false, /* with_unpublished_dependencies */
+                    false, /* skip_dependency_verification */
+                )
+                .await
+                .map_err(|e| err!(pkg_loc, "{e}"))?;
+
+                let compiled_modules = compiled_package.get_package_bytes(false);
 
                 let res = self.ptb.publish_upgradeable(
                     compiled_modules,
-                    dependencies.published.into_values().collect(),
+                    compiled_package.get_published_dependencies_ids(),
                 );
                 self.last_command = Some(res);
             }
@@ -1014,16 +1015,6 @@ impl<'a> PTBBuilder<'a> {
                 } else {
                     None
                 };
-                let upgrade_result = upgrade_package(
-                    self.reader,
-                    build_config.clone(),
-                    package_path,
-                    ObjectID::from_address(upgrade_cap_id.into_inner()),
-                    false, /* with_unpublished_dependencies */
-                    false, /* skip_dependency_verification */
-                    None,
-                )
-                .await;
                 // Restore original ID, then check result.
                 if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
                     let _ = sui_package_management::set_package_id(
@@ -1034,8 +1025,27 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .map_err(|e| err!(path_loc, "{e}"))?;
                 }
-                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
-                    upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
+
+                let (upgrade_policy, compiled_package) = upgrade_package(
+                    self.reader,
+                    build_config.clone(),
+                    package_path,
+                    ObjectID::from_address(upgrade_cap_id.into_inner()),
+                    false, /* with_unpublished_dependencies */
+                    false, /* skip_dependency_verification */
+                    None,
+                )
+                .await
+                .map_err(|e| err!(path_loc, "{e}"))?;
+
+                let package_digest = compiled_package.get_package_digest(false);
+                let package_id = compiled_package
+                    .published_at
+                    .as_ref()
+                    .map_err(|e| err!(path_loc, "{e}"))?;
+                let compiled_modules = compiled_package.get_package_bytes(false);
+                // let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
+                //     upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
 
                 let upgrade_arg = self
                     .ptb
@@ -1054,9 +1064,13 @@ impl<'a> PTBBuilder<'a> {
                     vec![upgrade_cap_arg, upgrade_arg, digest_arg],
                 ));
                 let upgrade_receipt = self.ptb.upgrade(
-                    package_id,
+                    *package_id,
                     upgrade_ticket,
-                    dependencies.published.into_values().collect(),
+                    compiled_package
+                        .dependency_ids
+                        .published
+                        .into_values()
+                        .collect(),
                     compiled_modules,
                 );
                 let res = self.ptb.command(Tx::Command::move_call(

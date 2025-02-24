@@ -26,7 +26,7 @@ enum TestIteratorWrapper<'a, K, V> {
 // Implement Iterator for TestIteratorWrapper that returns the same type result for different types of Iterator.
 // For non-safe Iterator, it returns the key value pair. For SafeIterator, it consumes the result (assuming no error),
 // and return they key value pairs.
-impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for TestIteratorWrapper<'a, K, V> {
+impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for TestIteratorWrapper<'_, K, V> {
     type Item = (K, V);
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -83,7 +83,7 @@ where
     }
 }
 
-impl<'a, K: Serialize, V> TestIteratorWrapper<'a, K, V> {
+impl<K: Serialize, V> TestIteratorWrapper<'_, K, V> {
     pub fn skip_to(self, key: &K) -> Result<Self, TypedStoreError> {
         match self {
             TestIteratorWrapper::Iter(iter) => Ok(TestIteratorWrapper::Iter(iter.skip_to(key)?)),

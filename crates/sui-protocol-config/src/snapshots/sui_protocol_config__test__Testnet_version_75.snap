@@ -1,6 +1,7 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
+snapshot_kind: text
 ---
 version: 75
 feature_flags:
@@ -59,6 +60,7 @@ feature_flags:
   mysticeti_num_leaders_per_round: 1
   soft_bundle: true
   enable_coin_deny_list_v2: true
+  passkey_auth: true
   rethrow_serialization_type_layout_errors: true
   consensus_distributed_vote_scoring_strategy: true
   consensus_round_prober: true

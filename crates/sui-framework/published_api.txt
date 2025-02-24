@@ -3514,20 +3514,8 @@ swap_exact_base_for_quote
 swap_exact_quote_for_base
 	public fun
 	0xdee9::clob
-match_bid_with_quote_quantity
-	fun
-	0xdee9::clob
-match_bid
-	fun
-	0xdee9::clob
-match_ask
-	fun
-	0xdee9::clob
 place_market_order
 	public fun
-	0xdee9::clob
-inject_limit_order
-	fun
 	0xdee9::clob
 place_limit_order
 	public fun
@@ -3536,9 +3524,6 @@ order_is_bid
 	fun
 	0xdee9::clob
 emit_order_canceled
-	fun
-	0xdee9::clob
-emit_order_filled
 	fun
 	0xdee9::clob
 cancel_order
@@ -3582,9 +3567,6 @@ AccountCap
 	0xdee9::custodian_v2
 Custodian
 	public struct
-	0xdee9::custodian_v2
-mint_account_cap
-	public(package) fun
 	0xdee9::custodian_v2
 create_child_account_cap
 	public fun
@@ -3691,17 +3673,11 @@ destroy_empty_level
 create_account
 	public fun
 	0xdee9::clob_v2
-create_pool_
-	fun
-	0xdee9::clob_v2
 create_pool
 	public fun
 	0xdee9::clob_v2
 create_customized_pool
 	public fun
-	0xdee9::clob_v2
-create_pool_with_return_
-	fun
 	0xdee9::clob_v2
 create_pool_with_return
 	public fun
@@ -3736,26 +3712,11 @@ swap_exact_quote_for_base
 swap_exact_quote_for_base_with_metadata
 	public fun
 	0xdee9::clob_v2
-match_bid_with_quote_quantity
-	fun
-	0xdee9::clob_v2
-match_bid
-	fun
-	0xdee9::clob_v2
-match_ask
-	fun
-	0xdee9::clob_v2
 place_market_order
 	public fun
 	0xdee9::clob_v2
 place_market_order_with_metadata
 	public fun
-	0xdee9::clob_v2
-place_market_order_int
-	fun
-	0xdee9::clob_v2
-inject_limit_order
-	fun
 	0xdee9::clob_v2
 place_limit_order
 	public fun
@@ -3763,16 +3724,10 @@ place_limit_order
 place_limit_order_with_metadata
 	public fun
 	0xdee9::clob_v2
-place_limit_order_int
-	fun
-	0xdee9::clob_v2
 order_is_bid
 	fun
 	0xdee9::clob_v2
 emit_order_canceled
-	fun
-	0xdee9::clob_v2
-emit_order_filled
 	fun
 	0xdee9::clob_v2
 cancel_order
@@ -3810,9 +3765,6 @@ get_level2_book_status
 	0xdee9::clob_v2
 get_order_status
 	public fun
-	0xdee9::clob_v2
-matched_order_metadata
-	fun
 	0xdee9::clob_v2
 matched_order_metadata_info
 	public fun

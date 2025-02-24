@@ -718,7 +718,7 @@ pub struct BytecodeDisplay<'env> {
     label_offsets: &'env BTreeMap<Label, CodeOffset>,
 }
 
-impl<'env> fmt::Display for BytecodeDisplay<'env> {
+impl fmt::Display for BytecodeDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         use Bytecode::*;
         match &self.bytecode {
@@ -787,7 +787,7 @@ impl<'env> fmt::Display for BytecodeDisplay<'env> {
     }
 }
 
-impl<'env> BytecodeDisplay<'env> {
+impl BytecodeDisplay<'_> {
     fn fmt_locals(
         &self,
         f: &mut Formatter<'_>,
@@ -840,7 +840,7 @@ pub struct OperationDisplay<'env> {
     func_target: &'env FunctionTarget<'env>,
 }
 
-impl<'env> fmt::Display for OperationDisplay<'env> {
+impl fmt::Display for OperationDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         use Operation::*;
         match self.oper {
@@ -1071,7 +1071,7 @@ impl<'env> fmt::Display for OperationDisplay<'env> {
     }
 }
 
-impl<'env> OperationDisplay<'env> {
+impl OperationDisplay<'_> {
     fn fmt_type_args(&self, f: &mut Formatter<'_>, targs: &[Type]) -> fmt::Result {
         if !targs.is_empty() {
             let tctx = TypeDisplayContext::WithEnv {
@@ -1145,7 +1145,7 @@ impl BorrowNode {
     }
 }
 
-impl<'env> fmt::Display for BorrowNodeDisplay<'env> {
+impl fmt::Display for BorrowNodeDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         use BorrowNode::*;
         match self.node {
@@ -1181,7 +1181,7 @@ pub struct BorrowEdgeDisplay<'a> {
     edge: &'a BorrowEdge,
 }
 
-impl<'a> std::fmt::Display for BorrowEdgeDisplay<'a> {
+impl std::fmt::Display for BorrowEdgeDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use BorrowEdge::*;
         let tctx = TypeDisplayContext::WithEnv {

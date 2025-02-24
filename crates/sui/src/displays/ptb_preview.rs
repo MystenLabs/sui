@@ -14,7 +14,7 @@ use tabled::{
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
 };
 
-impl<'a> Display for PTBPreview<'a> {
+impl Display for PTBPreview<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut builder = TableBuilder::default();
         let columns = vec!["command", "values"];

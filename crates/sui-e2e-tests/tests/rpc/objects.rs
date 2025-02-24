@@ -3,8 +3,8 @@
 
 use sui_macros::sim_test;
 use sui_rpc_api::client::Client as CoreClient;
+use sui_rpc_api::field_mask::FieldMaskUtil;
 use sui_rpc_api::proto::node::v2::node_service_client::NodeServiceClient;
-use sui_rpc_api::proto::node::v2::GetObjectOptions;
 use sui_rpc_api::proto::node::v2::GetObjectRequest;
 use sui_rpc_api::proto::node::v2::GetObjectResponse;
 use sui_sdk_types::ObjectId;
@@ -35,7 +35,13 @@ async fn get_object() {
         object,
         object_bcs,
     } = grpc_client
-        .get_object(GetObjectRequest::new(id))
+        .get_object(
+            GetObjectRequest::new(id).with_read_mask(FieldMaskUtil::from_paths([
+                "object_id",
+                "version",
+                "digest",
+            ])),
+        )
         .await
         .unwrap()
         .into_inner();
@@ -44,7 +50,7 @@ async fn get_object() {
     assert!(version.is_some());
     assert!(digest.is_some());
     assert!(object.is_none());
-    assert!(object_bcs.is_none()); // By default object_bcs isn't returned
+    assert!(object_bcs.is_none());
 
     let GetObjectResponse {
         object_id,
@@ -53,11 +59,9 @@ async fn get_object() {
         object,
         object_bcs,
     } = grpc_client
-        .get_object(
-            GetObjectRequest::new(id)
-                .with_version(1)
-                .with_options(GetObjectOptions::none()),
-        )
+        .get_object(GetObjectRequest::new(id).with_version(1).with_read_mask(
+            FieldMaskUtil::from_paths(["object_id", "version", "digest"]),
+        ))
         .await
         .unwrap()
         .into_inner();
@@ -71,7 +75,15 @@ async fn get_object() {
     assert!(object_bcs.is_none());
 
     let response = grpc_client
-        .get_object(GetObjectRequest::new(id).with_options(GetObjectOptions::all()))
+        .get_object(
+            GetObjectRequest::new(id).with_read_mask(FieldMaskUtil::from_paths([
+                "object_id",
+                "version",
+                "digest",
+                "object",
+                "object_bcs",
+            ])),
+        )
         .await
         .unwrap()
         .into_inner();
@@ -89,7 +101,4 @@ async fn get_object() {
     assert!(digest.is_some());
     assert!(object.is_some());
     assert!(object_bcs.is_some());
-
-    // ensure we can convert proto ObjectResponse type to rust ObjectResponse
-    sui_rpc_api::types::ObjectResponse::try_from(&response).unwrap();
 }

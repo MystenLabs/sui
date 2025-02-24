@@ -73,60 +73,6 @@ pub struct NodeInfo {
 
 #[serde_with::serde_as]
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct ObjectResponse {
-    pub object_id: sui_sdk_types::ObjectId,
-    #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    pub version: sui_sdk_types::Version,
-    pub digest: sui_sdk_types::ObjectDigest,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub object: Option<sui_sdk_types::Object>,
-
-    #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub object_bcs: Option<Vec<u8>>,
-}
-
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
-pub struct GetObjectOptions {
-    /// Request that `Object` be included in the response
-    ///
-    /// Defaults to `false` if not provided.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub object: Option<bool>,
-    /// Request that `Object` formated as BCS be included in the response
-    ///
-    /// Defaults to `false` if not provided.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub object_bcs: Option<bool>,
-}
-
-impl GetObjectOptions {
-    pub fn include_object(&self) -> bool {
-        self.object.unwrap_or(false)
-    }
-
-    pub fn include_object_bcs(&self) -> bool {
-        self.object_bcs.unwrap_or(false)
-    }
-
-    pub fn from_read_mask(read_mask: FieldMask) -> Self {
-        let mut options = Self::default();
-
-        for path in read_mask.paths {
-            match path.as_str() {
-                "object" => options.object = Some(true),
-                "object_bcs" => options.object_bcs = Some(true),
-                _ => {}
-            }
-        }
-
-        options
-    }
-}
-
-#[serde_with::serde_as]
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CheckpointResponse {
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
     pub sequence_number: sui_sdk_types::CheckpointSequenceNumber,
@@ -671,6 +617,18 @@ impl GetFullCheckpointOptions {
                 "signature" => options.signature = Some(true),
                 "contents" => options.contents = Some(true),
                 "contents_bcs" => options.contents_bcs = Some(true),
+                "transactions" => {
+                    options.transaction = Some(true);
+                    options.transaction_bcs = Some(true);
+                    options.effects = Some(true);
+                    options.effects_bcs = Some(true);
+                    options.events = Some(true);
+                    options.events_bcs = Some(true);
+                    options.input_objects = Some(true);
+                    options.output_objects = Some(true);
+                    options.object = Some(true);
+                    options.object_bcs = Some(true);
+                }
                 "transactions.transaction" => options.transaction = Some(true),
                 "transactions.transaction_bcs" => options.transaction_bcs = Some(true),
                 "transactions.effects" => options.effects = Some(true),
@@ -698,6 +656,26 @@ impl GetFullCheckpointOptions {
         }
 
         options
+    }
+
+    pub fn all() -> Self {
+        Self {
+            summary: Some(true),
+            summary_bcs: Some(true),
+            signature: Some(true),
+            contents: Some(true),
+            contents_bcs: Some(true),
+            transaction: Some(true),
+            transaction_bcs: Some(true),
+            effects: Some(true),
+            effects_bcs: Some(true),
+            events: Some(true),
+            events_bcs: Some(true),
+            input_objects: Some(true),
+            output_objects: Some(true),
+            object: Some(true),
+            object_bcs: Some(true),
+        }
     }
 }
 

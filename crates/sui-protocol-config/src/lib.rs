@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 75;
+const MAX_PROTOCOL_VERSION: u64 = 76;
 
 // Record history of protocol version allocations here:
 //
@@ -217,8 +217,9 @@ const MAX_PROTOCOL_VERSION: u64 = 75;
 //             Enable all gas costs for load_nitro_attestation.
 //             Enable zstd compression for consensus tonic network in mainnet.
 //             Enable the new commit rule for devnet.
-// Version 75: Removes unnecessary child object mutations
-
+// Version 75: Enable passkey auth in testnet.
+// Version 76: Deprecate Deepbook V2 order placement and deposit.
+//             Removes unnecessary child object mutations
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -969,13 +970,11 @@ pub struct ProtocolConfig {
     // Maximal nodes which are allowed when converting to a type layout.
     max_type_to_layout_nodes: Option<u64>,
 
-    /// === Gas version. gas model ===
-
+    // === Gas version. gas model ===
     /// Gas model version, what code we are using to charge gas
     gas_model_version: Option<u64>,
 
-    /// === Storage gas costs ===
-
+    // === Storage gas costs ===
     /// Per-byte cost of storing an object in the Sui global object store. Some of this cost may be refundable if the object is later freed
     obj_data_cost_refundable: Option<u64>,
 
@@ -984,7 +983,7 @@ pub struct ProtocolConfig {
     // TODO: Option<I don't fully understand this^ and more details would be useful
     obj_metadata_cost_non_refundable: Option<u64>,
 
-    /// === Tokenomics ===
+    // === Tokenomics ===
 
     // TODO: Option<this should be changed to u64.
     /// Sender of a txn that touches an object will get this percent of the storage rebate back.
@@ -1002,8 +1001,7 @@ pub struct ProtocolConfig {
     /// Unit gas price, Mist per internal gas unit.
     storage_gas_price: Option<u64>,
 
-    /// === Core Protocol ===
-
+    // === Core Protocol ===
     /// Max number of transactions per checkpoint.
     /// Note that this is a protocol constant and not a config as validators must have this set to
     /// the same value, otherwise they *will* fork.
@@ -1297,8 +1295,7 @@ pub struct ProtocolConfig {
     // will cause the new epoch to start with JWKs from the previous epoch still valid.
     max_age_of_jwk_in_epochs: Option<u64>,
 
-    /// === random beacon ===
-
+    // === random beacon ===
     /// Maximum allowed precision loss when reducing voting weights for the random beacon
     /// protocol.
     random_beacon_reduction_allowed_delta: Option<u16>,
@@ -1809,6 +1806,12 @@ impl ProtocolConfig {
     }
     pub fn enable_nitro_attestation(&self) -> bool {
         self.feature_flags.enable_nitro_attestation
+    }
+
+    pub fn consensus_num_requested_prior_commits_at_startup(&self) -> u32 {
+        // TODO: this will eventually be the max of some number of other
+        // parameters.
+        0
     }
 
     pub fn minimize_child_object_mutations(&self) -> bool {
@@ -3256,6 +3259,11 @@ impl ProtocolConfig {
                     }
                 }
                 75 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.passkey_auth = true;
+                    }
+                }
+                76 => {
                     cfg.feature_flags.minimize_child_object_mutations = true;
                 }
                 // Use this template when making changes:

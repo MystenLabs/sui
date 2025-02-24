@@ -40,8 +40,7 @@ impl CongestionInfo {
         }
     }
 
-    fn update_for_cancellation(&mut self, now: CheckpointTimestamp, gas_price: u64) {
-        self.last_cancellation_time = now;
+    fn update_cancellation_gas_price(&mut self, gas_price: u64) {
         self.highest_cancelled_gas_price =
             std::cmp::max(self.highest_cancelled_gas_price, gas_price);
     }
@@ -185,7 +184,7 @@ impl CongestionTracker {
             for object in objects {
                 match congestion_info_map.entry(*object) {
                     Entry::Occupied(entry) => {
-                        entry.into_mut().update_for_cancellation(now, *gas_price);
+                        entry.into_mut().update_cancellation_gas_price(*gas_price);
                     }
                     Entry::Vacant(entry) => {
                         let info = CongestionInfo {

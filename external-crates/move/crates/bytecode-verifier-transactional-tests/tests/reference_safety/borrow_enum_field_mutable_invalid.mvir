@@ -13,7 +13,7 @@ module 0x1.M {
     label f:
         // Borrow mut ref
         &mut E.V { f0: x } = copy(in);
-        // fill y with a diffrent immut ref
+        // fill y with a different immut ref
         y = &other;
         jump end;
     label t:
