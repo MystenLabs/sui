@@ -352,9 +352,7 @@ macro_rules! profile_dump_file {
 #[macro_export]
 macro_rules! tracing_feature_enabled {
     ($($tt:tt)*) => {
-        if cfg!(feature = "tracing") {
-            $($tt)*
-        }
+        $($tt)*
     };
 }
 

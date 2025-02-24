@@ -110,7 +110,7 @@ impl Context<'_> {
     }
 }
 
-impl<'a> TypingVisitorContext for Context<'a> {
+impl TypingVisitorContext for Context<'_> {
     fn visit_module_custom(&mut self, _ident: E::ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
         // skips if true
         mdef.attributes.is_test_or_test_only()
@@ -161,7 +161,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
     }
 }
 
-impl<'a> Context<'a> {
+impl Context<'_> {
     /// Checks if a given field (identified by ftype and fname) wraps other objects and, if so,
     /// returns its location and information on whether wrapping is direct or indirect.
     fn wraps_object(

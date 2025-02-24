@@ -84,7 +84,7 @@ pub(crate) enum ObjectResult<V> {
 
 type LoadedWithMetadataResult<V> = Option<(V, DynamicallyLoadedObjectMetadata)>;
 
-impl<'a> Inner<'a> {
+impl Inner<'_> {
     fn receive_object_from_store(
         &self,
         owner: ObjectID,

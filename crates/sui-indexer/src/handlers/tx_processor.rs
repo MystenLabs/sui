@@ -195,7 +195,7 @@ impl<'a> EpochEndIndexingObjectStore<'a> {
     }
 }
 
-impl<'a> sui_types::storage::ObjectStore for EpochEndIndexingObjectStore<'a> {
+impl sui_types::storage::ObjectStore for EpochEndIndexingObjectStore<'_> {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.objects
             .iter()

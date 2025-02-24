@@ -380,7 +380,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveTypeLayout {
 
 struct VectorElementVisitor<'a>(&'a MoveTypeLayout);
 
-impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
+impl<'d> serde::de::Visitor<'d> for VectorElementVisitor<'_> {
     type Value = Vec<MoveValue>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -401,7 +401,7 @@ impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
 
 struct DecoratedStructFieldVisitor<'a>(&'a [MoveFieldLayout]);
 
-impl<'d, 'a> serde::de::Visitor<'d> for DecoratedStructFieldVisitor<'a> {
+impl<'d> serde::de::Visitor<'d> for DecoratedStructFieldVisitor<'_> {
     type Value = Vec<(Identifier, MoveValue)>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -469,7 +469,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveEnumLayout {
 
 struct DecoratedEnumFieldVisitor<'a>(&'a BTreeMap<(Identifier, u16), Vec<MoveFieldLayout>>);
 
-impl<'d, 'a> serde::de::Visitor<'d> for DecoratedEnumFieldVisitor<'a> {
+impl<'d> serde::de::Visitor<'d> for DecoratedEnumFieldVisitor<'_> {
     type Value = (Identifier, u16, Vec<(Identifier, MoveValue)>);
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -509,7 +509,7 @@ impl<'d, 'a> serde::de::Visitor<'d> for DecoratedEnumFieldVisitor<'a> {
 
 struct DecoratedVariantFieldLayout<'a>(&'a Vec<MoveFieldLayout>);
 
-impl<'d, 'a> serde::de::DeserializeSeed<'d> for &DecoratedVariantFieldLayout<'a> {
+impl<'d> serde::de::DeserializeSeed<'d> for &DecoratedVariantFieldLayout<'_> {
     type Value = Vec<(Identifier, MoveValue)>;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
@@ -547,7 +547,7 @@ impl serde::Serialize for MoveValue {
 
 struct MoveFields<'a>(&'a [(Identifier, MoveValue)]);
 
-impl<'a> serde::Serialize for MoveFields<'a> {
+impl serde::Serialize for MoveFields<'_> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut t = serializer.serialize_map(Some(self.0.len()))?;
         for (f, v) in self.0.iter() {
@@ -612,7 +612,7 @@ impl fmt::Display for MoveTypeLayout {
 /// other `Display` implementations in this module to take advantage of the structured formatting
 /// helpers that Rust uses for its own debug types.
 struct DebugAsDisplay<'a, T>(&'a T);
-impl<'a, T: fmt::Display> fmt::Debug for DebugAsDisplay<'a, T> {
+impl<T: fmt::Display> fmt::Debug for DebugAsDisplay<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             write!(f, "{:#}", self.0)
@@ -649,7 +649,7 @@ impl fmt::Display for MoveEnumLayout {
 
 struct MoveVariantDisplay<'a>(&'a str, &'a [MoveFieldLayout]);
 
-impl<'a> fmt::Display for MoveVariantDisplay<'a> {
+impl fmt::Display for MoveVariantDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         use DebugAsDisplay as DD;
         let mut map = f.debug_struct(self.0);

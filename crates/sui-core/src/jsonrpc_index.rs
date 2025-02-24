@@ -309,10 +309,10 @@ impl IndexStoreTables {
         };
 
         // If the new coin index hasn't already been initialized, populate it
-        if !metadata
+        if metadata
             .column_families
             .get(self.coin_index_2.cf_name())
-            .is_some_and(|cf_info| cf_info.version == CURRENT_COIN_INDEX_VERSION)
+            .is_none_or(|cf_info| cf_info.version != CURRENT_COIN_INDEX_VERSION)
             || self.coin_index_2.is_empty()
         {
             info!("Initializing JSON-RPC coin index");
@@ -1721,7 +1721,7 @@ impl<'a> ParMakeLiveObjectIndexer for CoinParLiveObjectSetIndexer<'a> {
     }
 }
 
-impl<'a> LiveObjectIndexer for CoinLiveObjectIndexer<'a> {
+impl LiveObjectIndexer for CoinLiveObjectIndexer<'_> {
     fn index_object(&mut self, object: Object) -> Result<(), StorageError> {
         let Owner::AddressOwner(owner) = object.owner() else {
             return Ok(());

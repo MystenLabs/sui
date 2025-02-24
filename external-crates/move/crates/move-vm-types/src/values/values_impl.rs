@@ -3293,7 +3293,7 @@ fn invariant_violation<S: serde::Serializer>(message: String) -> S::Error {
     )
 }
 
-impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, ValueImpl> {
+impl serde::Serialize for AnnotatedValue<'_, '_, MoveTypeLayout, ValueImpl> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match (self.layout, self.val) {
             (MoveTypeLayout::U8, ValueImpl::U8(x)) => serializer.serialize_u8(*x),
@@ -3380,7 +3380,7 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, ValueIm
     }
 }
 
-impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveStructLayout, Vec<ValueImpl>> {
+impl serde::Serialize for AnnotatedValue<'_, '_, MoveStructLayout, Vec<ValueImpl>> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let values = &self.val;
         let fields = self.layout.fields();
@@ -3401,9 +3401,7 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveStructLayout, Vec<V
     }
 }
 
-impl<'a, 'b> serde::Serialize
-    for AnnotatedValue<'a, 'b, MoveEnumLayout, (VariantTag, Vec<ValueImpl>)>
-{
+impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout, (VariantTag, Vec<ValueImpl>)> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let (tag, values) = &self.val;
         let tag = if *tag as u64 > VARIANT_COUNT_MAX {
@@ -3437,7 +3435,7 @@ impl<'a, 'b> serde::Serialize
 
 struct VariantFields<'a>(&'a [MoveTypeLayout]);
 
-impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, VariantFields<'a>, Vec<ValueImpl>> {
+impl<'a> serde::Serialize for AnnotatedValue<'a, '_, VariantFields<'a>, Vec<ValueImpl>> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let values = self.val;
         let types = self.layout.0;
@@ -3558,7 +3556,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveEnumLayout> {
 
 struct VectorElementVisitor<'a>(SeedWrapper<&'a MoveTypeLayout>);
 
-impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
+impl<'d> serde::de::Visitor<'d> for VectorElementVisitor<'_> {
     type Value = Vec<ValueImpl>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -3579,7 +3577,7 @@ impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
 
 struct StructFieldVisitor<'a>(&'a [MoveTypeLayout]);
 
-impl<'d, 'a> serde::de::Visitor<'d> for StructFieldVisitor<'a> {
+impl<'d> serde::de::Visitor<'d> for StructFieldVisitor<'_> {
     type Value = Vec<Value>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -3606,7 +3604,7 @@ impl<'d, 'a> serde::de::Visitor<'d> for StructFieldVisitor<'a> {
 
 struct EnumFieldVisitor<'a>(&'a Vec<Vec<MoveTypeLayout>>);
 
-impl<'d, 'a> serde::de::Visitor<'d> for EnumFieldVisitor<'a> {
+impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
     type Value = Variant;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -3644,7 +3642,7 @@ impl<'d, 'a> serde::de::Visitor<'d> for EnumFieldVisitor<'a> {
 
 struct MoveRuntimeVariantFieldLayout<'a>(&'a Vec<MoveTypeLayout>);
 
-impl<'d, 'a> serde::de::DeserializeSeed<'d> for &MoveRuntimeVariantFieldLayout<'a> {
+impl<'d> serde::de::DeserializeSeed<'d> for &MoveRuntimeVariantFieldLayout<'_> {
     type Value = Vec<Value>;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(

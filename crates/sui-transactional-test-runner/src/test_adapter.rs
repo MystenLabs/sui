@@ -285,7 +285,7 @@ impl AdapterInitConfig {
 }
 
 #[async_trait]
-impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
+impl MoveTestAdapter<'_> for SuiTestAdapter {
     type ExtraPublishArgs = SuiPublishArgs;
     type ExtraRunArgs = SuiRunArgs;
     type ExtraInitArgs = SuiInitArgs;

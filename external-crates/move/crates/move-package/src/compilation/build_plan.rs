@@ -47,7 +47,7 @@ pub struct CompilationDependencies<'a> {
     transitive_dependencies: Vec<DependencyInfo<'a>>,
 }
 
-impl<'a> CompilationDependencies<'a> {
+impl CompilationDependencies<'_> {
     pub fn remove_deps(&mut self, names: BTreeSet<Symbol>) {
         self.transitive_dependencies
             .retain(|d| !names.contains(&d.name));

@@ -5,7 +5,7 @@ use crate::displays::Pretty;
 use std::fmt::{Display, Formatter};
 use sui_json_rpc_types::{DevInspectResults, SuiTransactionBlockEffectsAPI};
 
-impl<'a> Display for Pretty<'a, DevInspectResults> {
+impl Display for Pretty<'_, DevInspectResults> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let Pretty(response) = self;
 

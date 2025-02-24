@@ -1602,7 +1602,7 @@ impl fmt::Display for Package {
     }
 }
 
-impl<'a> fmt::Display for PackageTOML<'a> {
+impl fmt::Display for PackageTOML<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("{ ")?;
         write!(f, "{}", self.0)?;
@@ -1611,7 +1611,7 @@ impl<'a> fmt::Display for PackageTOML<'a> {
     }
 }
 
-impl<'a> fmt::Display for PackageWithResolverTOML<'a> {
+impl fmt::Display for PackageWithResolverTOML<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         PackageTOML(self.0).fmt(f)?;
 
@@ -1623,7 +1623,7 @@ impl<'a> fmt::Display for PackageWithResolverTOML<'a> {
     }
 }
 
-impl<'a> fmt::Display for DependencyTOML<'a> {
+impl fmt::Display for DependencyTOML<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let DependencyTOML(
             id,
@@ -1658,7 +1658,7 @@ impl<'a> fmt::Display for DependencyTOML<'a> {
     }
 }
 
-impl<'a> fmt::Display for SubstTOML<'a> {
+impl fmt::Display for SubstTOML<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         /// Write an individual key value pair in the substitution.
         fn write_subst(

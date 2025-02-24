@@ -448,7 +448,7 @@ impl fmt::Display for ParsedPTBCommand {
 
 struct TyDisplay<'a>(&'a ParsedType);
 
-impl<'a> fmt::Display for TyDisplay<'a> {
+impl fmt::Display for TyDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use ParsedType::*;
         match self.0 {

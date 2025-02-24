@@ -142,7 +142,7 @@ pub struct Registration<'a, K: Eq + Hash + Clone, V: Clone> {
     registration: Option<(K, oneshot::Receiver<V>)>,
 }
 
-impl<'a, K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> Future for Registration<'a, K, V> {
+impl<K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> Future for Registration<'_, K, V> {
     type Output = V;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -160,7 +160,7 @@ impl<'a, K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> Future for Registration
     }
 }
 
-impl<'a, K: Eq + Hash + Clone, V: Clone> Drop for Registration<'a, K, V> {
+impl<K: Eq + Hash + Clone, V: Clone> Drop for Registration<'_, K, V> {
     fn drop(&mut self) {
         if let Some((key, receiver)) = self.registration.take() {
             mem::drop(receiver);

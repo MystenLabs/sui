@@ -67,7 +67,7 @@ pub fn migrate<W: Write, R: BufRead>(
     mcontext.prompt_for_migration()
 }
 
-impl<'a, W: Write, R: BufRead> MigrationContext<'a, W, R> {
+impl<W: Write, R: BufRead> MigrationContext<'_, W, R> {
     pub fn new<'new>(
         build_plan: &'new BuildPlan,
         writer: &'new mut W,

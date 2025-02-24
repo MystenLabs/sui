@@ -171,7 +171,7 @@ impl RootedType {
     }
 }
 
-impl<'a> VMTracer<'a> {
+impl VMTracer<'_> {
     /// Emit an error event to the trace if `true`
     fn emit_trace_error_if_err(&mut self, is_err: bool) {
         if is_err {

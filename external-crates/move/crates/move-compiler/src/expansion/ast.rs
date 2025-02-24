@@ -817,7 +817,7 @@ impl Visibility {
 
 pub struct AbilitySetIter<'a>(unique_set::Iter<'a, Ability>);
 
-impl<'a> Iterator for AbilitySetIter<'a> {
+impl Iterator for AbilitySetIter<'_> {
     type Item = Ability;
 
     fn next(&mut self) -> Option<Self::Item> {

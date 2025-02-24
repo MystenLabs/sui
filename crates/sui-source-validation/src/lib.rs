@@ -105,6 +105,7 @@ impl ValidationMode {
     }
 
     /// If the root package needs to be verified, what address should it be fetched from?
+    #[allow(clippy::result_large_err)]
     fn root_address(&self, package: &CompiledPackage) -> Result<Option<AccountAddress>, Error> {
         match self {
             Self::Root { at: Some(addr), .. } => Ok(Some(*addr)),
@@ -114,6 +115,7 @@ impl ValidationMode {
     }
 
     /// All the on-chain addresses that we need to fetch to build on-chain addresses.
+    #[allow(clippy::result_large_err)]
     fn on_chain_addresses(&self, package: &CompiledPackage) -> Result<Vec<AccountAddress>, Error> {
         let mut addrs = vec![];
 
@@ -216,6 +218,7 @@ impl ValidationMode {
     /// If the validation mode requires verifying the root package at a specific address, then the
     /// modules from the root package will be expected at address `0x0` and this address will be
     /// substituted with the specified address.
+    #[allow(clippy::result_large_err)]
     fn local(&self, package: &CompiledPackage) -> Result<LocalModules, Error> {
         let sui_package = package;
         let package = &package.package;
@@ -422,6 +425,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn substitute_root_address(
     named_module: &NamedCompiledModule,
     root: AccountAddress,

@@ -303,7 +303,7 @@ impl ModuleId {
             with_prefix: bool,
         }
 
-        impl<'a> Display for IdDisplay<'a> {
+        impl Display for IdDisplay<'_> {
             fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
                 write!(
                     f,

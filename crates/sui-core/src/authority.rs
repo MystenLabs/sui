@@ -4425,8 +4425,7 @@ impl AuthorityState {
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         let lock_info = self
             .get_object_cache_reader()
-            .get_lock(*object_ref, epoch_store)
-            .map_err(SuiError::from)?;
+            .get_lock(*object_ref, epoch_store)?;
         let lock_info = match lock_info {
             ObjectLockStatus::LockedAtDifferentVersion { locked_ref } => {
                 return Err(UserInputError::ObjectVersionUnavailableForConsumption {

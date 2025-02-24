@@ -124,12 +124,12 @@ pub fn verify_proof_of_possession(
     )
 }
 ///////////////////////////////////////////////
-/// Account Keys
-///
-/// * The following section defines the keypairs that are used by
-/// * accounts to interact with Sui.
-/// * Currently we support eddsa and ecdsa on Sui.
-///
+// Account Keys
+//
+// * The following section defines the keypairs that are used by
+// * accounts to interact with Sui.
+// * Currently we support eddsa and ecdsa on Sui.
+//
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, From, PartialEq, Eq)]
@@ -1376,7 +1376,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
     pub fn authorities<'a>(
         &'a self,
         committee: &'a Committee,
-    ) -> impl Iterator<Item = SuiResult<&AuthorityName>> {
+    ) -> impl Iterator<Item = SuiResult<&'a AuthorityName>> {
         self.signers_map.iter().map(|i| {
             committee
                 .authority_by_index(i)

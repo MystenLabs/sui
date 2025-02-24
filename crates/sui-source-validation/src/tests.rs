@@ -785,7 +785,7 @@ async fn publish_package_and_deps(context: &WalletContext, package: PathBuf) -> 
 
 /// Copy `package` from fixtures into `directory`, setting its named address in the copied package's
 /// `Move.toml` to `address`. (A fixture's self-address is assumed to match its package name).
-async fn copy_published_package<'s>(
+async fn copy_published_package(
     directory: impl AsRef<Path>,
     package: &str,
     address: SuiAddress,
@@ -793,7 +793,7 @@ async fn copy_published_package<'s>(
     copy_upgraded_package(directory, package, address, address).await
 }
 
-async fn copy_upgraded_package<'s>(
+async fn copy_upgraded_package(
     directory: impl AsRef<Path>,
     package: &str,
     storage_id: SuiAddress,

@@ -571,8 +571,7 @@ pub struct AuthorityEpochTables {
     #[allow(dead_code)]
     randomness_rounds_written: DBMap<(), ()>,
 
-    /// Tables for recording state for RandomnessManager.
-
+    // Tables for recording state for RandomnessManager.
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
     /// via consensus.
     pub(crate) dkg_processed_messages_v2: DBMap<PartyId, VersionedProcessedMessage>,
@@ -1560,18 +1559,13 @@ impl AuthorityPerEpochStore {
             self.consensus_quarantine.read().is_empty(),
             "get_last_consensus_stats should only be called at startup"
         );
-        match self
-            .tables()?
-            .get_last_consensus_stats()
-            .map_err(SuiError::from)?
-        {
+        match self.tables()?.get_last_consensus_stats()? {
             Some(stats) => Ok(stats),
             None => {
                 let indices = self
                     .tables()?
                     .get_last_consensus_index()
-                    .map(|x| x.unwrap_or_default())
-                    .map_err(SuiError::from)?;
+                    .map(|x| x.unwrap_or_default())?;
                 Ok(ExecutionIndicesWithStats {
                     index: indices,
                     hash: 0, // unused
