@@ -1876,9 +1876,9 @@ pub(crate) async fn compile_package(
     skip_dependency_verification: bool,
 ) -> Result<CompiledPackage, anyhow::Error> {
     let protocol_config = read_api.get_protocol_config(None).await?;
-    let protocol_version = protocol_config.protocol_version;
 
-    build_config.implicit_dependencies = implicit_deps_for_protocol_version(protocol_version)?;
+    build_config.implicit_dependencies =
+        implicit_deps_for_protocol_version(protocol_config.protocol_version)?;
     let config = resolve_lock_file_path(build_config, Some(package_path))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;
@@ -2020,9 +2020,11 @@ pub(crate) async fn compile_package(
 fn implicit_deps_for_protocol_version(version: ProtocolVersion) -> anyhow::Result<Dependencies> {
     if version > ProtocolVersion::MAX + 2 {
         eprintln!(
-            "[{}]: The network is using protocol version {:?}, which is newer than this binary; \
-            the system packages used for compilation (e.g. MoveStdlib) may be out of date.",
+            "[{}]: The network is using protocol version {:?}, but this binary only recognizes protocol version {:?}; \
+            the system packages used for compilation (e.g. MoveStdlib) may be out of date. If you have errors related to \
+            system packages, you may need to update your CLI.",
             "warning".bold().yellow(),
+            ProtocolVersion::MAX,
             version
         )
     }

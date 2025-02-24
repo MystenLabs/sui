@@ -1,14 +1,13 @@
 ---
 source: crates/sui/tests/shell_tests.rs
-description: tests/shell_tests/new_tests/new_then_test.sh
+description: tests/shell_tests/implicits/test_dev.sh
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-# check that sui move new followed by sui move test succeeds
-sui move new example
-cd example && sui move test
+# checks that testing a package with `--dev` that implicitly depends on `Bridge` works
+sui move test -p example --dev 2> /dev/null
 
 ----- results -----
 success: true

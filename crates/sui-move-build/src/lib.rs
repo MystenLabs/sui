@@ -125,7 +125,7 @@ impl BuildConfig {
             install_dir: Some(install_dir),
             silence_warnings: true,
             lint_flag: move_package::LintFlag::LEVEL_NONE,
-            // TODO: in the future this should probably be changed to a set of local deps:
+            // TODO[DVX-793]: in the future, we may want to provide local implicit dependencies to tests
             implicit_dependencies: Dependencies::new(),
             ..MoveBuildConfig::default()
         };
@@ -304,7 +304,7 @@ pub fn build_from_resolution_graph(
     })
 }
 
-/// Returns the deps from `resolution_graph` that have no source code
+/// Returns the bytecode deps from `resolution_graph` that have no source code
 fn collect_bytecode_deps(
     resolution_graph: &ResolvedGraph,
 ) -> SuiResult<Vec<(Symbol, CompiledModule)>> {
