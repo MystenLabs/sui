@@ -6,10 +6,9 @@
 
 // cp | object_id | owner
 // ----------------------
-// 1  | obj_2_0   | A
 // 1  | obj_3_0   | A
+// 2  | obj_5_0   | A
 // 2  | obj_6_0   | A
-// 2  | obj_7_0   | A
 // All owned by B after checkpoint 3.
 
 //# publish
@@ -33,36 +32,6 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql --cursors bcs(@{obj_2_0},@{highest_checkpoint}) bcs(@{obj_3_0},@{highest_checkpoint})
-{
-  one_of_these_will_yield_an_object: address(address: "@{A}") {
-    objects(filter: {type: "@{Test}"}, after: "@{cursor_0}") {
-      nodes {
-        version
-        contents {
-          type {
-            repr
-          }
-          json
-        }
-      }
-    }
-  }
-  if_the_other_does_not: objects(filter: {type: "@{Test}"}, after: "@{cursor_1}") {
-    nodes {
-      version
-      asMoveObject {
-        contents {
-          type {
-            repr
-          }
-          json
-        }
-      }
-    }
-  }
-}
-
 //# run Test::M1::create --args 2 @A
 
 //# run Test::M1::create --args 3 @A
@@ -75,8 +44,8 @@ module Test::M1 {
   objects_at_version: multiGetObjects(keys: [
             {objectId: "@{obj_2_0}", version: 3},
             {objectId: "@{obj_3_0}", version: 4},
-            {objectId: "@{obj_6_0}", version: 5},
-            {objectId: "@{obj_7_0}", version: 6}
+            {objectId: "@{obj_5_0}", version: 5},
+            {objectId: "@{obj_6_0}", version: 6}
   ]) {
         version
         asMoveObject {
@@ -90,44 +59,10 @@ module Test::M1 {
       }
 }
 
-//# programmable --sender A --inputs object(2,0) object(3,0) object(6,0) object(7,0) @B
+//# programmable --sender A --inputs object(2,0) object(3,0) object(5,0) object(6,0) @B
 //> TransferObjects([Input(0), Input(1), Input(2), Input(3)], Input(4))
 
 //# create-checkpoint
-
-//# advance-clock --duration-ns 1
-
-//# create-checkpoint
-
-//# advance-clock --duration-ns 1
-
-//# create-checkpoint
-
-//# advance-clock --duration-ns 1
-
-//# create-checkpoint
-
-//# advance-clock --duration-ns 1
-
-//# create-checkpoint
-
-//# run-graphql
-# Should have all the objects
-{
-  owned_by_address_b_latest: address(address: "@{B}") {
-    objects(filter: {type: "@{Test}"}) {
-      nodes {
-        version
-        contents {
-          type {
-            repr
-          }
-          json
-        }
-      }
-    }
-  }
-}
 
 //# run-graphql
 # Fetch specific versions of objects.
@@ -135,8 +70,8 @@ module Test::M1 {
   objects_at_version: multiGetObjects(keys: [
       {objectId: "@{obj_2_0}", version: 3},
       {objectId: "@{obj_3_0}", version: 4},
-      {objectId: "@{obj_6_0}", version: 5},
-      {objectId: "@{obj_7_0}", version: 6}
+      {objectId: "@{obj_5_0}", version: 5},
+      {objectId: "@{obj_6_0}", version: 6}
   ]) {
         version
         asMoveObject {

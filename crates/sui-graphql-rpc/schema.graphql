@@ -3323,7 +3323,7 @@ type Query {
 	"""
 	Fetch a list of objects by their IDs and versions.
 	"""
-	multiGetObjects(keys: [ObjectKey!]!): [Object!]!
+	multiGetObjects(keys: [ObjectKey!]!): [Object]!
 	"""
 	The coin objects that exist in the network.
 	

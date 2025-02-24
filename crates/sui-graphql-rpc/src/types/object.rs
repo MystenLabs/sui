@@ -804,7 +804,7 @@ impl Object {
         ctx: &Context<'_>,
         keys: Vec<ObjectKey>,
         checkpoint_viewed_at: u64,
-    ) -> Result<Vec<Self>, Error> {
+    ) -> Result<Vec<Option<Self>>, Error> {
         let DataLoader(loader) = &ctx.data_unchecked();
 
         let keys: Vec<_> = keys
@@ -818,12 +818,11 @@ impl Object {
         let data = loader.load_many(keys.clone()).await?;
         Ok(keys
             .into_iter()
-            .filter_map(|k| {
+            .flat_map(|k| {
                 data.get(&k).cloned().map(|bcs| {
                     Object::new_serialized(k.id, k.version, bcs, checkpoint_viewed_at, k.version)
                 })
             })
-            .flatten()
             .collect())
     }
 
@@ -1072,26 +1071,13 @@ impl ObjectFilter {
             };
         }
 
-        let object_ids = {
-            match (self.object_ids, other.object_ids) {
-                (Some(obj_ids), Some(other_obj_ids)) => {
-                    let set_a: BTreeSet<_> = obj_ids.iter().cloned().collect();
-                    let set_b: BTreeSet<_> = other_obj_ids.iter().cloned().collect();
-                    let intersection: Vec<_> = set_a.intersection(&set_b).cloned().collect();
+        let object_ids = intersect::field(self.object_ids, other.object_ids, |a, b| {
+            let a = BTreeSet::from_iter(a);
+            let b = BTreeSet::from_iter(b);
 
-                    if intersection.is_empty() {
-                        return None;
-                    }
-
-                    Some(intersection)
-                }
-                (Some(obj_ids), None) => intersect::field(Some(obj_ids), None, intersect::by_eq)?,
-                (None, Some(other_obj_ids)) => {
-                    intersect::field(Some(other_obj_ids), None, intersect::by_eq)?
-                }
-                _ => None,
-            }
-        };
+            let intersection: Vec<_> = a.intersection(&b).cloned().collect();
+            (!intersection.is_empty()).then_some(intersection)
+        })?;
 
         Some(Self {
             type_: intersect!(type_, TypeFilter::intersect)?,
@@ -1660,18 +1646,39 @@ mod tests {
         };
 
         let f2 = ObjectFilter {
-            object_ids: Some(vec![i1, i3]),
             ..Default::default()
         };
 
         let f3 = ObjectFilter {
+            object_ids: Some(vec![i3]),
             ..Default::default()
         };
 
         let f4 = ObjectFilter {
-            object_ids: Some(vec![i3]),
-            ..Default::default()
+            owner: Some(i1),
+            object_ids: Some(vec![i2]),
+            type_: None,
         };
+
+        let f5 = ObjectFilter {
+            owner: None,
+            object_ids: Some(vec![i1]),
+            type_: Some(TypeFilter::ByModule(
+                crate::types::type_filter::ModuleFilter::ByPackage(i3),
+            )),
+        };
+
+        let f6 = ObjectFilter {
+            owner: None,
+            object_ids: Some(vec![i1]),
+            type_: Some(TypeFilter::ByModule(
+                crate::types::type_filter::ModuleFilter::ByPackage(i1),
+            )),
+        };
+
+        assert_eq!(f0.clone().intersect(f4.clone()), None);
+        assert_eq!(f0.clone().intersect(f5.clone()), Some(f5.clone()));
+        assert_eq!(f5.clone().intersect(f6.clone()), None);
 
         assert_eq!(
             f0.clone().intersect(f1.clone()),
@@ -1682,28 +1689,11 @@ mod tests {
         );
 
         assert_eq!(
-            f1.clone().intersect(f2.clone()),
-            Some(ObjectFilter {
-                object_ids: Some(vec![i1]),
-                ..Default::default()
-            })
-        );
-
-        assert_eq!(f1.clone().intersect(f3.clone()), Some(f1.clone()));
-
-        assert_eq!(
-            f0.clone().intersect(f2.clone()),
-            Some(ObjectFilter {
-                object_ids: Some(vec![i1, i3]),
-                ..Default::default()
-            })
-        );
-
-        assert_eq!(
-            f3.clone().intersect(f3.clone()),
+            f2.clone().intersect(f2.clone()),
             Some(ObjectFilter::default())
         );
 
-        assert_eq!(f1.clone().intersect(f4.clone()), None);
+        assert_eq!(f1.clone().intersect(f2.clone()), Some(f1.clone()));
+        assert_eq!(f1.clone().intersect(f3.clone()), None);
     }
 }
