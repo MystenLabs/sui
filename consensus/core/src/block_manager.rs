@@ -279,10 +279,34 @@ impl BlockManager {
         missing_blocks
     }
 
+    fn verify_block_timestamps_and_accept(
+        &mut self,
+        unsuspended_blocks: impl IntoIterator<Item = VerifiedBlock>,
+    ) -> Vec<VerifiedBlock> {
+        // If the median based timestamp is enabled, then we skip all the timestamp verification and we go straight and accept the blocks.
+        let blocks_to_accept = if self
+            .context
+            .protocol_config
+            .consensus_median_based_timestamp()
+        {
+            unsuspended_blocks.into_iter().collect::<Vec<_>>()
+        } else {
+            self.verify_block_timestamps(unsuspended_blocks)
+        };
+
+        // Insert the accepted blocks into DAG state so future blocks including them as
+        // ancestors do not get suspended.
+        self.dag_state
+            .write()
+            .accept_blocks(blocks_to_accept.clone());
+
+        blocks_to_accept
+    }
+
     // TODO: remove once timestamping is refactored to the new approach.
     // Verifies each block's timestamp based on its ancestors, and persists in store all the valid blocks that should be accepted. Method
     // returns the accepted and persisted blocks.
-    fn verify_block_timestamps_and_accept(
+    fn verify_block_timestamps(
         &mut self,
         unsuspended_blocks: impl IntoIterator<Item = VerifiedBlock>,
     ) -> Vec<VerifiedBlock> {
@@ -290,6 +314,7 @@ impl BlockManager {
             let dag_state = self.dag_state.read();
             (dag_state.gc_enabled(), dag_state.gc_round())
         };
+
         // Try to verify the block and its children for timestamp, with ancestor blocks.
         let mut blocks_to_accept: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
         let mut blocks_to_reject: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();

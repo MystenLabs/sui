@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashSet},
+    sync::Arc,
+};
 
 use consensus_config::AuthorityIndex;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockAPI, BlockRef, VerifiedBlock},
+    block::{BlockAPI, BlockRef, BlockTimestampMs, VerifiedBlock},
     commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
     context::Context,
     dag_state::DagState,
@@ -97,7 +100,6 @@ impl Linearizer {
         let last_commit_digest = dag_state.last_commit_digest();
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
         let last_committed_rounds = dag_state.last_committed_rounds();
-        let timestamp_ms = leader_block.timestamp_ms().max(last_commit_timestamp_ms);
 
         // Now linearize the sub-dag starting from the leader block
         let (to_commit, rejected_transactions) = Self::linearize_sub_dag(
@@ -108,6 +110,9 @@ impl Linearizer {
         );
 
         drop(dag_state);
+
+        let timestamp_ms =
+            self.calculate_commit_timestamp(&leader_block, last_commit_timestamp_ms, &to_commit);
 
         // Create the Commit.
         let commit = Commit::new(
@@ -136,6 +141,52 @@ impl Linearizer {
         );
 
         (sub_dag, commit)
+    }
+
+    /// Calculates the commit's timestamp. If the median based timestamp calculation is enabled, then the timestamp will be calculated as the median of
+    /// leader's committed strong ancestors (leader.round - 1). Otherwise, the leader's timestamp will be used. To ensure that commit timestamp monotonicity is
+    /// respected it is compared against the `last_commit_timestamp_ms` and the maximum of the two is returned.
+    fn calculate_commit_timestamp(
+        &mut self,
+        leader_block: &VerifiedBlock,
+        last_commit_timestamp_ms: BlockTimestampMs,
+        to_commit: &[VerifiedBlock],
+    ) -> BlockTimestampMs {
+        let timestamp_ms = if self
+            .context
+            .protocol_config
+            .consensus_median_based_timestamp()
+        {
+            let leader_ancestors = leader_block
+                .ancestors()
+                .iter()
+                .filter(|ancestor| ancestor.round == leader_block.round() - 1)
+                .collect::<BTreeSet<_>>();
+
+            // Attention should be paid that we are calculating the timestamp only using the leader's committed ancestors.
+            let timestamps = to_commit
+                .iter()
+                .filter_map(|block| {
+                    if leader_ancestors.contains(&block.reference()) {
+                        Some(block.timestamp_ms())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            median(timestamps).unwrap_or_else(|| {
+                panic!(
+                    "Failed to calculate median timestamp for linearized DAG: {:?}",
+                    to_commit
+                )
+            })
+        } else {
+            leader_block.timestamp_ms()
+        };
+
+        // Always make sure that commit timestamps are monotonic, so override if necessary.
+        timestamp_ms.max(last_commit_timestamp_ms)
     }
 
     pub(crate) fn linearize_sub_dag(
@@ -340,6 +391,21 @@ impl Linearizer {
                 .inc();
         }
     }
+}
+
+fn median(mut numbers: Vec<BlockTimestampMs>) -> Option<BlockTimestampMs> {
+    let len = numbers.len();
+    if len == 0 {
+        return None;
+    }
+
+    numbers.sort_unstable();
+
+    Some(if len % 2 == 1 {
+        numbers[len / 2]
+    } else {
+        (numbers[len / 2 - 1] + numbers[len / 2]) / 2
+    })
 }
 
 #[cfg(test)]
