@@ -348,7 +348,7 @@ impl Inner<'_> {
         };
         // save a fingerprint
         let fingerprint =
-            ObjectFingerprint::original(protocol_config, &parent, child_move_type, &v).map_err(
+            ObjectFingerprint::preexisting(protocol_config, &parent, child_move_type, &v).map_err(
                 |e| {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                         format!("Failed to fingerprint value for object {child}. Error: {e}"),

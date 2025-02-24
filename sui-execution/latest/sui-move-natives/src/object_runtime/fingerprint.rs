@@ -14,8 +14,10 @@ use sui_types::base_types::{MoveObjectType, ObjectID};
 pub struct ObjectFingerprint(Option<ObjectFingerprint_>);
 
 enum ObjectFingerprint_ {
+    /// The object did not exist (as a child object) in storage at the start of the transaction.
     Empty,
-    Original {
+    // The object was loaded as a child object from storage.
+    Preexisting {
         owner: ObjectID,
         ty: MoveObjectType,
         value: Value,
@@ -40,19 +42,19 @@ impl ObjectFingerprint {
 
     /// Creates a new object fingerprint for a child found in storage.
     /// Will be internally disabled if the feature is not enabled in the protocol config.
-    pub fn original(
+    pub fn preexisting(
         protocol_config: &ProtocolConfig,
-        original_owner: &ObjectID,
-        original_type: &MoveObjectType,
-        original_value: &Value,
+        preexisting_owner: &ObjectID,
+        preexisting_type: &MoveObjectType,
+        preexisting_value: &Value,
     ) -> PartialVMResult<Self> {
         Ok(if !protocol_config.minimize_child_object_mutations() {
             Self(None)
         } else {
-            Self(Some(ObjectFingerprint_::Original {
-                owner: *original_owner,
-                ty: original_type.clone(),
-                value: original_value.copy_value()?,
+            Self(Some(ObjectFingerprint_::Preexisting {
+                owner: *preexisting_owner,
+                ty: preexisting_type.clone(),
+                value: preexisting_value.copy_value()?,
             }))
         })
     }
@@ -77,21 +79,21 @@ impl ObjectFingerprint {
         };
         Ok(match (inner, final_value) {
             (F::Empty, None) => false,
-            (F::Empty, Some(_)) | (F::Original { .. }, None) => true,
+            (F::Empty, Some(_)) | (F::Preexisting { .. }, None) => true,
             (
-                F::Original {
-                    owner: original_owner,
-                    ty: original_type,
-                    value: original_value,
+                F::Preexisting {
+                    owner: preexisting_owner,
+                    ty: preexisting_type,
+                    value: preexisting_value,
                 },
                 Some(final_value),
             ) => {
                 // owner changed or value changed.
                 // For the value, we must first check if the types are the same before comparing the
                 // values
-                !(original_owner == final_owner
-                    && original_type == final_type
-                    && original_value.equals(final_value)?)
+                !(preexisting_owner == final_owner
+                    && preexisting_type == final_type
+                    && preexisting_value.equals(final_value)?)
             }
         })
     }
