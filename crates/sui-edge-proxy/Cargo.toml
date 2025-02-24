@@ -8,7 +8,6 @@ publish = false
 
 [dependencies]
 axum.workspace = true
-axum-extra.workspace = true
 axum-server.workspace = true
 anyhow.workspace = true
 bytes.workspace = true
@@ -21,7 +20,6 @@ serde.workspace = true
 serde_with.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
-bin-version.workspace = true
 reqwest.workspace = true
 mysten-metrics.workspace = true
 prometheus.workspace = true

@@ -26,20 +26,15 @@ clap.workspace = true
 colored.workspace = true
 crossterm = { workspace = true, features = ["event-stream"] }
 dirs.workspace = true
-docker-api.workspace = true
-field_names.workspace = true
 include_dir.workspace = true
 inquire.workspace = true
-itertools.workspace = true
 open = "5.1.2"
-prettytable-rs.workspace = true
 rand.workspace = true
 regex.workspace = true
 reqwest = { workspace = true, features = [
   "rustls-tls",
   "json",
 ], default-features = false }
-semver.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_yaml.workspace = true

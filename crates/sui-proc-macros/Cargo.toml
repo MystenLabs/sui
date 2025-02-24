@@ -16,7 +16,6 @@ proc-macro = true
 quote.workspace = true
 syn = { version = "2", features = ["full", "fold", "extra-traits"] }
 proc-macro2.workspace = true
-sui-enum-compat-util.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim-macros.workspace = true
