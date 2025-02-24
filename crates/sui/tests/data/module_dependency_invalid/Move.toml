@@ -4,5 +4,8 @@ version = "0.0.1"
 published-at = "mystery"
 edition = "2024.beta"
 
+[dependencies]
+MoveStdlib = { local = "../../../../sui-framework/packages/move-stdlib" }
+
 [addresses]
 invalid = "0x0"
