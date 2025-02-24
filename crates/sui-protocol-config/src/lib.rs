@@ -3284,7 +3284,7 @@ impl ProtocolConfig {
                     }
                 }
                 76 => {
-                    cfg.feature_flags.move_native_context = false;
+                    cfg.feature_flags.move_native_context = true;
 
                     cfg.tx_context_fresh_id_cost_base = Some(30);
                     cfg.tx_context_sender_cost_base = Some(30);
