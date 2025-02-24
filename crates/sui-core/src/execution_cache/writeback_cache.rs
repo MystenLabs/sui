@@ -830,43 +830,6 @@ impl WritebackCache {
             ..
         } = &*tx_outputs;
 
-        let tx_digest = *transaction.digest();
-        let effects_digest = effects.digest();
-        let events_digest = events.digest();
-
-        self.cached
-            .transactions
-            .insert(
-                &tx_digest,
-                PointCacheItem::Some(transaction.clone()),
-                Ticket::Write,
-            )
-            .ok();
-        self.cached
-            .transaction_effects
-            .insert(
-                &effects_digest,
-                PointCacheItem::Some(effects.clone().into()),
-                Ticket::Write,
-            )
-            .ok();
-        self.cached
-            .executed_effects_digests
-            .insert(
-                &tx_digest,
-                PointCacheItem::Some(effects_digest),
-                Ticket::Write,
-            )
-            .ok();
-        self.cached
-            .transaction_events
-            .insert(
-                &events_digest,
-                PointCacheItem::Some(events.clone().into()),
-                Ticket::Write,
-            )
-            .ok();
-
         // Deletions and wraps must be written first. The reason is that one of the deletes
         // may be a child object, and if we write the parent object first, a reader may or may
         // not see the previous version of the child object, instead of the deleted/wrapped
@@ -904,6 +867,7 @@ impl WritebackCache {
 
         let tx_digest = *transaction.digest();
         let effects_digest = effects.digest();
+        let events_digest = events.digest();
 
         self.metrics.record_cache_write("transaction_block");
         self.dirty
@@ -937,6 +901,39 @@ impl WritebackCache {
 
         self.executed_effects_digests_notify_read
             .notify(&tx_digest, &effects_digest);
+
+        self.cached
+            .transactions
+            .insert(
+                &tx_digest,
+                PointCacheItem::Some(transaction.clone()),
+                Ticket::Write,
+            )
+            .ok();
+        self.cached
+            .transaction_effects
+            .insert(
+                &effects_digest,
+                PointCacheItem::Some(effects.clone().into()),
+                Ticket::Write,
+            )
+            .ok();
+        self.cached
+            .executed_effects_digests
+            .insert(
+                &tx_digest,
+                PointCacheItem::Some(effects_digest),
+                Ticket::Write,
+            )
+            .ok();
+        self.cached
+            .transaction_events
+            .insert(
+                &events_digest,
+                PointCacheItem::Some(events.clone().into()),
+                Ticket::Write,
+            )
+            .ok();
 
         self.metrics
             .pending_notify_read
