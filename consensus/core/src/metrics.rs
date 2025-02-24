@@ -285,7 +285,7 @@ impl NodeMetrics {
             blocks_pruned_on_commit: register_int_counter_vec_with_registry!(
                 "blocks_pruned_on_commit",
                 "Number of blocks that got pruned due to garbage collection during a commit. This is not an accurate metric and measures the pruned blocks on the edge of the commit.",
-                &["authority"],
+                &["authority", "commit_status"],
                 registry,
             ).unwrap(),
             broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(

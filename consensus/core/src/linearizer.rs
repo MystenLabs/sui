@@ -304,33 +304,40 @@ impl Linearizer {
     // it has not been committed as part of previous commits. Right now we measure this via checking that highest committed round for the authority
     // as we don't an efficient look up functionality to check if a block has been committed or not.
     fn update_blocks_pruned_metric(&self, sub_dag: &CommittedSubDag) {
-        let (mut last_committed_rounds, gc_round) = {
+        let (last_committed_rounds, gc_round) = {
             let dag_state = self.dag_state.read();
             (dag_state.last_committed_rounds(), dag_state.gc_round())
         };
-
-        // Update the last committed rounds with the latest committed from the sub dag
-        for block in sub_dag.blocks.iter() {
-            last_committed_rounds[block.author()] =
-                last_committed_rounds[block.author()].max(block.round());
-        }
 
         for block_ref in sub_dag
             .blocks
             .iter()
             .flat_map(|block| block.ancestors())
-            .filter(|ancestor_ref| ancestor_ref.round <= gc_round)
+            .filter(
+                |ancestor_ref| {
+                    ancestor_ref.round <= gc_round
+                        && last_committed_rounds[ancestor_ref.author] != ancestor_ref.round
+                }, // If the last committed round is the same as the pruned block's round, then we know for sure that it has been committed and it doesn't count here
+                   // as pruned block.
+            )
             .unique()
         {
-            if last_committed_rounds[block_ref.author] < block_ref.round {
-                let hostname = &self.context.committee.authority(block_ref.author).hostname;
-                self.context
-                    .metrics
-                    .node_metrics
-                    .blocks_pruned_on_commit
-                    .with_label_values(&[hostname])
-                    .inc();
-            }
+            let hostname = &self.context.committee.authority(block_ref.author).hostname;
+
+            // If the last committed round from this authority is lower than the pruned ancestor in question, then we know for sure that it has not been committed.
+            let label_values = if last_committed_rounds[block_ref.author] < block_ref.round {
+                &[hostname, "uncommitted"]
+            } else {
+                // If last committed round is higher for this authority, then we don't really know it's status, but we know that there is a higher committed block from this authority.
+                &[hostname, "higher_committed"]
+            };
+
+            self.context
+                .metrics
+                .node_metrics
+                .blocks_pruned_on_commit
+                .with_label_values(label_values)
+                .inc();
         }
     }
 }
