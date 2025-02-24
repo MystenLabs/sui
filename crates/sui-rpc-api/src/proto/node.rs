@@ -173,6 +173,8 @@ impl TryFrom<&GetNodeInfoResponse> for crate::types::NodeInfo {
 //
 
 impl GetObjectRequest {
+    pub const READ_MASK_DEFAULT: &str = "object_id,version,digest";
+
     pub fn new<T: Into<super::types::ObjectId>>(object_id: T) -> Self {
         Self {
             object_id: Some(object_id.into()),
@@ -189,6 +191,25 @@ impl GetObjectRequest {
     pub fn with_read_mask(mut self, read_mask: FieldMask) -> Self {
         self.read_mask = Some(read_mask);
         self
+    }
+}
+
+//
+// GetObjectResponse
+//
+
+impl GetObjectResponse {
+    pub fn validate_read_mask(read_mask: &FieldMask) -> Result<(), &str> {
+        for path in &read_mask.paths {
+            match path.as_str() {
+                "object_id" | "version" | "digest" | "object" | "object_bcs" => {}
+                path => {
+                    return Err(path);
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
