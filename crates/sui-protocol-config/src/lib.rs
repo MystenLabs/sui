@@ -3204,7 +3204,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         // Assuming a round rate of max 15/sec, then using a gc depth of 60 allow blocks within a window of ~4 seconds
                         // to be included before be considered garbage collected.
-                        cfg.consensus_gc_depth = Some(60);
+                        cfg.consensus_gc_depth = Some(0);
                     }
 
                     if chain != Chain::Mainnet {
@@ -3243,7 +3243,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.consensus_zstd_compression = true;
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
+                        cfg.feature_flags.consensus_linearize_subdag_v2 = false;
                     }
                 }
                 75 => {
