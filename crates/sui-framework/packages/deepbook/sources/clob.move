@@ -160,7 +160,7 @@ module deepbook::clob {
         linked_table::destroy_empty(orders);
     }
 
-    #[deprecated(note = b"Creating account is deprecated")]
+    #[deprecated(note = b"Creating account is deprecated. Please use Deepbook V3.")]
     public fun create_account(_ctx: &mut TxContext): AccountCap {
         abort DEPRECATED
     }
@@ -175,7 +175,7 @@ module deepbook::clob {
         abort DEPRECATED
     }
 
-    #[deprecated(note = b"Depositing is deprecated")]
+    #[deprecated(note = b"Depositing is deprecated. Please use Deepbook V3.")]
     public fun deposit_base<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
         _coin: Coin<BaseAsset>,
@@ -185,7 +185,7 @@ module deepbook::clob {
         abort 1337
     }
 
-    #[deprecated(note = b"Depositing is deprecated")]
+    #[deprecated(note = b"Depositing is deprecated. Please use Deepbook V3.")]
     public fun deposit_quote<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
         _coin: Coin<QuoteAsset>,
@@ -215,7 +215,7 @@ module deepbook::clob {
         custodian::withdraw_asset(&mut pool.quote_custodian, quantity, account_cap, ctx)
     }
 
-    #[deprecated(note = b"Swapping is deprecated")]
+    #[deprecated(note = b"Swapping is deprecated. Please use Deepbook V3.")]
     // for smart routing
     public fun swap_exact_base_for_quote<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
@@ -229,7 +229,7 @@ module deepbook::clob {
         abort 1337
     }
 
-    #[deprecated(note = b"Swapping is deprecated")]
+    #[deprecated(note = b"Swapping is deprecated. Please use Deepbook V3.")]
     // for smart routing
     public fun swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
@@ -242,7 +242,7 @@ module deepbook::clob {
         abort 1337
     }
 
-    #[deprecated(note = b"Placing market order is deprecated")]
+    #[deprecated(note = b"Placing market order is deprecated. Please use Deepbook V3.")]
     /// Place a market order to the order book.
     public fun place_market_order<BaseAsset, QuoteAsset>(
         _pool: &mut Pool<BaseAsset, QuoteAsset>,
@@ -257,7 +257,7 @@ module deepbook::clob {
         abort 1337
     }
 
-    #[deprecated(note = b"Placing limit order is deprecated")]
+    #[deprecated(note = b"Placing limit order is deprecated. Please use Deepbook V3.")]
     /// Place a limit order to the order book.
     /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
     /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.

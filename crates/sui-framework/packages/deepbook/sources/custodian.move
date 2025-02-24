@@ -22,7 +22,7 @@ module deepbook::custodian {
         account_balances: Table<ID, Account<T>>,
     }
 
-    #[deprecated(note = b"Minting account cap is deprecated")]
+    #[deprecated(note = b"Minting account cap is deprecated. Please use Deepbook V3.")]
     /// Create an `AccountCap` that can be used across all DeepBook pool
     public fun mint_account_cap(_ctx: &mut TxContext): AccountCap {
         
