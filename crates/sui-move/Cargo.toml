@@ -45,16 +45,12 @@ jsonrpsee.workspace = true
 rand.workspace = true
 tempfile.workspace = true
 walkdir.workspace = true
-insta-cmd.workspace = true
 insta.workspace = true
 
 move-package.workspace = true
 
 mysten-metrics.workspace = true
-sui-core.workspace = true
 sui-macros.workspace = true
-sui-node.workspace = true
-sui-simulator.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]

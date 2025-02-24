@@ -13,6 +13,7 @@ backoff.workspace = true
 bcs.workspace = true
 futures.workspace = true
 mysten-metrics.workspace = true
+notify.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 object_store.workspace = true
