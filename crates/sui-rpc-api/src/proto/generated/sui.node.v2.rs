@@ -119,13 +119,13 @@ pub struct GetObjectRequest {
     /// Required. The `ObjectId` of the requested object.
     #[prost(message, optional, tag = "1")]
     pub object_id: ::core::option::Option<super::super::types::ObjectId>,
-    /// Optional. Request that a specific version of the requested object is
-    /// returned. If no version is provided, then then the latest version for
-    /// the object is returned.
+    /// Request a specific version of the object.
+    /// If no version is specified, and the object is live, then the latest
+    /// version of the object is returned.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
-    /// Optional. Mask for specifying which parts of the `GetObjectResponse`
-    /// should be returned.
+    /// Mask specifying which fields to read.
+    /// If no mask is specified, defaults to `object_id,version,digest`.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }

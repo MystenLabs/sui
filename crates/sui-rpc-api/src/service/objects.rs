@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::field_mask::FieldMaskTree;
+use crate::field_mask::FieldMaskUtil;
 use crate::proto::google::rpc::bad_request::FieldViolation;
 use crate::proto::node::v2::GetObjectRequest;
 use crate::proto::node::v2::GetObjectResponse;
@@ -22,19 +23,6 @@ use sui_types::{
     sui_sdk_types_conversions::SdkTypeConversionError,
 };
 use tap::Pipe;
-
-fn validate_get_object_read_mask(read_mask: &FieldMask) -> Result<(), &str> {
-    for path in &read_mask.paths {
-        match path.as_str() {
-            "object_id" | "version" | "digest" | "object" | "object_bcs" => {}
-            path => {
-                return Err(path);
-            }
-        }
-    }
-
-    Ok(())
-}
 
 impl RpcService {
     pub fn get_object(
@@ -58,8 +46,9 @@ impl RpcService {
                     .with_reason(ErrorReason::FieldInvalid)
             })?;
 
-        let read_mask = read_mask.unwrap_or_default();
-        validate_get_object_read_mask(&read_mask).map_err(|path| {
+        let read_mask =
+            read_mask.unwrap_or_else(|| FieldMask::from_str(GetObjectRequest::READ_MASK_DEFAULT));
+        GetObjectResponse::validate_read_mask(&read_mask).map_err(|path| {
             FieldViolation::new("read_mask")
                 .with_description(format!("invalid read_mask path: {path}"))
                 .with_reason(ErrorReason::FieldInvalid)
