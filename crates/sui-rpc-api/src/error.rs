@@ -3,6 +3,8 @@
 
 use tonic::Code;
 
+use crate::proto::google::rpc::{BadRequest, ErrorInfo, RetryInfo};
+
 pub type Result<T, E = RpcError> = std::result::Result<T, E>;
 
 /// An error encountered while serving an RPC request.
@@ -14,6 +16,7 @@ pub type Result<T, E = RpcError> = std::result::Result<T, E>;
 pub struct RpcError {
     code: Code,
     message: Option<String>,
+    details: Option<Box<ErrorDetails>>,
 }
 
 impl RpcError {
@@ -21,6 +24,7 @@ impl RpcError {
         Self {
             code,
             message: Some(message.into()),
+            details: None,
         }
     }
 
@@ -28,6 +32,7 @@ impl RpcError {
         Self {
             code: Code::NotFound,
             message: None,
+            details: None,
         }
     }
 }
@@ -39,7 +44,10 @@ impl From<RpcError> for tonic::Status {
         let status = crate::proto::google::rpc::Status {
             code: value.code.into(),
             message: value.message.unwrap_or_default(),
-            details: Default::default(),
+            details: value
+                .details
+                .map(ErrorDetails::into_status_details)
+                .unwrap_or_default(),
         };
 
         let code = value.code;
@@ -55,6 +63,7 @@ impl From<sui_types::storage::error::Error> for RpcError {
         Self {
             code: Code::Internal,
             message: Some(value.to_string()),
+            details: None,
         }
     }
 }
@@ -64,6 +73,7 @@ impl From<anyhow::Error> for RpcError {
         Self {
             code: Code::Internal,
             message: Some(value.to_string()),
+            details: None,
         }
     }
 }
@@ -73,6 +83,7 @@ impl From<sui_types::sui_sdk_types_conversions::SdkTypeConversionError> for RpcE
         Self {
             code: Code::Internal,
             message: Some(value.to_string()),
+            details: None,
         }
     }
 }
@@ -82,6 +93,7 @@ impl From<bcs::Error> for RpcError {
         Self {
             code: Code::Internal,
             message: Some(value.to_string()),
+            details: None,
         }
     }
 }
@@ -177,5 +189,112 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                 RpcError::new(Code::Unavailable, "system is overloaded")
             }
         }
+    }
+}
+
+//TODO define proto for this
+pub enum ErrorReason {
+    FieldInvalid,
+    FieldMissing,
+}
+
+impl ErrorReason {
+    fn as_str(&self) -> &'static str {
+        match self {
+            ErrorReason::FieldInvalid => "FIELD_INVALID",
+            ErrorReason::FieldMissing => "FIELD_MISSING",
+        }
+    }
+}
+
+impl AsRef<str> for ErrorReason {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl From<ErrorReason> for String {
+    fn from(value: ErrorReason) -> Self {
+        value.as_ref().into()
+    }
+}
+
+impl From<crate::proto::google::rpc::bad_request::FieldViolation> for RpcError {
+    fn from(value: crate::proto::google::rpc::bad_request::FieldViolation) -> Self {
+        BadRequest::from(value).into()
+    }
+}
+
+impl From<BadRequest> for RpcError {
+    fn from(value: BadRequest) -> Self {
+        let message = value
+            .field_violations
+            .first()
+            .map(|violation| violation.description.clone());
+        let details = ErrorDetails::new().with_bad_request(value);
+
+        RpcError {
+            code: Code::InvalidArgument,
+            message,
+            details: Some(Box::new(details)),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ErrorDetails {
+    error_info: Option<ErrorInfo>,
+    bad_request: Option<BadRequest>,
+    retry_info: Option<RetryInfo>,
+}
+
+impl ErrorDetails {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn error_info(&self) -> Option<&ErrorInfo> {
+        self.error_info.as_ref()
+    }
+
+    pub fn bad_request(&self) -> Option<&BadRequest> {
+        self.bad_request.as_ref()
+    }
+
+    pub fn retry_info(&self) -> Option<&RetryInfo> {
+        self.retry_info.as_ref()
+    }
+
+    pub fn details(&self) -> &[prost_types::Any] {
+        &[]
+    }
+
+    pub fn with_bad_request(mut self, bad_request: BadRequest) -> Self {
+        self.bad_request = Some(bad_request);
+        self
+    }
+
+    #[allow(clippy::boxed_local)]
+    fn into_status_details(self: Box<Self>) -> Vec<prost_types::Any> {
+        let mut details = Vec::new();
+
+        if let Some(error_info) = &self.error_info {
+            details.push(
+                prost_types::Any::from_msg(error_info).expect("Message encoding cannot fail"),
+            );
+        }
+
+        if let Some(bad_request) = &self.bad_request {
+            details.push(
+                prost_types::Any::from_msg(bad_request).expect("Message encoding cannot fail"),
+            );
+        }
+
+        if let Some(retry_info) = &self.retry_info {
+            details.push(
+                prost_types::Any::from_msg(retry_info).expect("Message encoding cannot fail"),
+            );
+        }
+        details
     }
 }

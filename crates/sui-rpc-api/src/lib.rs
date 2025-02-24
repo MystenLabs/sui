@@ -25,7 +25,7 @@ pub mod types;
 
 pub use client::Client;
 pub use config::Config;
-pub use error::{Result, RpcError};
+pub use error::{ErrorDetails, ErrorReason, Result, RpcError};
 pub use metrics::RpcMetrics;
 pub use types::CheckpointResponse;
 pub use types::ObjectResponse;
