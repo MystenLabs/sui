@@ -639,6 +639,11 @@ struct FeatureFlags {
     // If true, record the additional state digest in the consensus commit prologue.
     #[serde(skip_serializing_if = "is_false")]
     record_additional_state_digest_in_prologue: bool,
+
+    // If true, then it (1) will not enforce monotonicity checks for a block's ancestors and (2) calculates the commit's timestamp based on the 
+    // median timestamp of the leader's ancestors.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_median_based_timestamp: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1812,6 +1817,15 @@ impl ProtocolConfig {
         assert!(
             !res || self.gc_depth() > 0,
             "The consensus linearize sub dag V2 requires GC to be enabled"
+        );
+        res
+    }
+
+    pub fn consensus_median_based_timestamp(&self) -> bool {
+        let res = self.feature_flags.consensus_median_based_timestamp;
+        assert!(
+            !res || self.gc_depth() > 0,
+            "The consensus median based timestamp requires GC to be enabled"
         );
         res
     }
@@ -3492,8 +3506,13 @@ impl ProtocolConfig {
         self.feature_flags.mysticeti_fastpath = val;
     }
 
+<<<<<<< HEAD
     pub fn set_accept_passkey_in_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.accept_passkey_in_multisig = val;
+=======
+    pub fn set_consensus_median_based_timestamp(&mut self, val: bool) {
+        self.feature_flags.consensus_median_based_timestamp = val;
+>>>>>>> 1be946f1e3 ([feat] calculate the commit's timestamp based on the leader's immediate ancestors. Do not enforce timestamp monotonicity checks on the blocks ancestors.)
     }
 }
 
