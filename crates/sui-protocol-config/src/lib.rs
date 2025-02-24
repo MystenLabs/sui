@@ -1801,6 +1801,12 @@ impl ProtocolConfig {
     pub fn enable_nitro_attestation(&self) -> bool {
         self.feature_flags.enable_nitro_attestation
     }
+
+    pub fn consensus_num_requested_prior_commits_at_startup(&self) -> u32 {
+        // TODO: this will eventually be the max of some number of other
+        // parameters.
+        0
+    }
 }
 
 #[cfg(not(msim))]
