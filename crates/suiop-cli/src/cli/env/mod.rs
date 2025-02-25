@@ -4,6 +4,7 @@
 use crate::{command::CommandOptions, run_cmd};
 use anyhow::Result;
 use clap::Parser;
+use colored::Colorize;
 use inquire::Select;
 use query_shell::get_shell_name;
 
@@ -32,6 +33,8 @@ pub fn load_environment(args: &LoadEnvironmentArgs) -> Result<()> {
             .expect("Failed to select environment")
             .to_owned()
     });
+
+    println!("{}", "Starting a subshell with the environment set... exit the shell (usually ctrl-d) to exit the env".bright_green());
 
     // get the user's shell
     let shell = get_shell_name()?;
