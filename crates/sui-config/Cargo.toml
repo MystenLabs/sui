@@ -36,5 +36,4 @@ sui-rpc-api.workspace = true
 mysten-common.workspace = true
 
 [dev-dependencies]
-insta.workspace = true
 tempfile.workspace = true

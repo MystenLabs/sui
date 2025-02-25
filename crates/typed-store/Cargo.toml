@@ -27,7 +27,6 @@ typed-store-error.workspace = true
 typed-store-derive = { path = "../typed-store-derive" }
 typed-store-workspace-hack = { path = "../typed-store-workspace-hack" }
 sui-macros.workspace = true
-ouroboros.workspace = true
 rand.workspace = true
 async-trait.workspace = true
 itertools.workspace = true
@@ -35,11 +34,8 @@ itertools.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 once_cell.workspace = true
-proc-macro2.workspace = true
-quote.workspace = true
 rstest.workspace = true
 rand.workspace = true
-syn.workspace = true
 uint.workspace = true
 
 # Most packages should depend on sui-simulator instead of directly on msim, but for typed-store

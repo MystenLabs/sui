@@ -59,11 +59,8 @@ move-bytecode-utils.workspace = true
 [dev-dependencies]
 axum.workspace = true
 anyhow.workspace = true
-criterion.workspace = true
 tempfile.workspace = true
-num_cpus.workspace = true
-pretty_assertions.workspace = true
 once_cell.workspace = true
 sui-test-transaction-builder.workspace = true
-sui-macros.workspace = true
 sui-simulator.workspace = true
+sui-macros.workspace = true
