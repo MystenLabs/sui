@@ -22,9 +22,9 @@ telemetry-subscribers.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, features = ["full"] }
 url.workspace = true
-tokio-postgres = "0.7.12"
-bb8 = "0.8.5"
-bb8-postgres = "0.8.0"
+tokio-postgres = { workspace = true }
+bb8 = { workspace = true }
+bb8-postgres = { workspace = true }
 
 [[bin]]
 name = "sui-rpc-benchmark"

@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.1.4", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
 
 bin-version.workspace = true

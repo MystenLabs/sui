@@ -13,7 +13,7 @@ prometheus.workspace = true
 async-trait.workspace = true
 jsonrpsee.workspace = true
 async-recursion.workspace = true
-clap = { version = "4.1.4", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -13,25 +13,25 @@ edition = "2021"
 publish = false
 
 [dependencies]
-libc = { version = "0.2", features = ["extra_traits"] }
-zstd-sys = { version = "2", features = ["std"] }
-nom = { version = "7" }
-memchr = { version = "2" }
-lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
-proc-macro2 = { version = "1", features = ["span-locations"] }
-quote = { version = "1" }
-regex = { version = "1" }
-regex-syntax = { version = "0.7" }
+libc = { workspace = true, features = ["extra_traits"] }
+zstd-sys = { workspace = true, features = ["std"] }
+nom = { workspace = true }
+memchr = { workspace = true }
+lazy_static = { workspace = true, features = ["spin_no_std"] }
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+quote = { workspace = true }
+regex = { workspace = true }
+regex-syntax = { workspace = true }
 
 [build-dependencies]
-memchr = { version = "2" }
-nom = { version = "7" }
-libc = { version = "0.2", features = ["extra_traits"] }
-cc = { version = "1", default-features = false, features = ["parallel"] }
-zstd-sys = { version = "2", features = ["std"] }
-lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
-proc-macro2 = { version = "1", features = ["span-locations"] }
+memchr = { workspace = true }
+nom = { workspace = true }
+libc = { workspace = true, features = ["extra_traits"] }
+cc = { workspace = true, features = ["parallel"] }
+zstd-sys = { workspace = true, features = ["std"] }
+lazy_static = { workspace = true, features = ["spin_no_std"] }
+proc-macro2 = { workspace = true, features = ["span-locations"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
-quote = { version = "1" }
-regex = { version = "1" }
-regex-syntax = { version = "0.7" }
+quote = { workspace = true }
+regex = { workspace = true }
+regex-syntax = { workspace = true }

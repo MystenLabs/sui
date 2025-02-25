@@ -11,8 +11,8 @@ serde.workspace = true
 tap.workspace = true
 diesel = { workspace = true, features = ["serde_json"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres"] }
-ethers = { version = "2.0", features = ["rustls", "ws"] }
-rayon = "1.10.0"
+ethers = { workspace = true, features = ["rustls", "ws"] }
+rayon = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 anyhow.workspace = true
 futures.workspace = true
@@ -41,9 +41,9 @@ sui-indexer-builder.workspace = true
 [dev-dependencies]
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
-hex-literal = "0.3.4"
+hex-literal = { workspace = true }
 sui-indexer.workspace = true
-diesel_migrations = "2.2.0"
+diesel_migrations = { workspace = true }
 sui-indexer-builder = { workspace = true, features = ["test-utils"] }
 sui-bridge = { workspace = true, features = ["test-utils"] }
 

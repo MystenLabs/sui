@@ -10,7 +10,7 @@ edition = "2021"
 anyhow.workspace = true
 num_cpus.workspace = true
 bcs.workspace = true
-clap = { version = "4.1.4", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 colored.workspace = true
 comfy-table.workspace = true
 eyre.workspace = true

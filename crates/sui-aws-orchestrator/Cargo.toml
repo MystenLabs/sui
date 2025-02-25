@@ -34,7 +34,7 @@ sui-types.workspace = true
 sui-swarm-config.workspace = true
 
 [dev-dependencies]
-tempfile = "3.6.0"
+tempfile = { workspace = true }
 
 [[bin]]
 name = "sui-aws-orchestrator"

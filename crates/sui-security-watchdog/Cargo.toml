@@ -16,12 +16,12 @@ tracing.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
 snowflake-api.workspace = true
-tokio-cron-scheduler = "0.10.0"
+tokio-cron-scheduler = { workspace = true }
 clap.workspace = true
 prometheus.workspace = true
 telemetry-subscribers.workspace = true
 async-trait.workspace = true
 uuid.workspace = true
-lexical-util = "1.0.6"
+lexical-util = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
-env_logger = "0.11.3"
+env_logger = { workspace = true }

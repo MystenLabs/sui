@@ -23,7 +23,7 @@ sui-types.workspace = true
 sui-storage.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 tokio = { workspace = true, features = ["full"] }
-serde_json = "1.0.95"
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tempfile.workspace = true

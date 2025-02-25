@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-ethers = "2.0"
+ethers = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 sui-types.workspace = true
 sui-authority-aggregation.workspace = true
@@ -49,13 +49,13 @@ mysten-common.workspace = true
 enum_dispatch.workspace = true
 sui-json-rpc-api.workspace = true
 sui-test-transaction-builder.workspace = true
-hex-literal = { version = "0.3.4", optional = true }
+hex-literal = { workspace = true, optional = true }
 test-cluster = { workspace = true, optional = true }
 
 [dev-dependencies]
 sui-config.workspace = true
 sui-test-transaction-builder.workspace = true
-maplit = "1.0.2"
+maplit = { workspace = true }
 
 [features]
 test-utils = ["hex-literal", "test-cluster"]

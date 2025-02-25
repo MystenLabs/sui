@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-ethers = "2.0"
+ethers = { workspace = true }
 sui-bridge.workspace = true
 sui-sdk.workspace = true
 sui-types.workspace = true

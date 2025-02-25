@@ -8,11 +8,11 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
-rand = "0.8.5"
+rand = { workspace = true }
 async-trait.workspace = true
 axum.workspace = true
 backoff.workspace = true
-bb8 = "0.8.5"
+bb8 = { workspace = true }
 bcs.workspace = true
 bytes.workspace = true
 chrono.workspace = true

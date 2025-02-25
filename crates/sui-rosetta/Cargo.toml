@@ -51,4 +51,4 @@ tempfile.workspace = true
 rand.workspace = true
 reqwest.workspace = true
 move-cli.workspace = true
-quick-js = "0.4.1"
+quick-js = { workspace = true }
