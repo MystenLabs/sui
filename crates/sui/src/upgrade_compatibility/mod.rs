@@ -45,7 +45,7 @@ use move_package::compilation::compiled_package::CompiledUnitWithSource;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move_build::CompiledPackage;
 use sui_protocol_config::ProtocolConfig;
-use sui_sdk::SuiClient;
+use sui_sdk::apis::ReadApi;
 use sui_types::move_package::UpgradePolicy;
 use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
 
@@ -654,15 +654,14 @@ upgrade_codes!(
 
 /// Check the upgrade compatibility of a new package with an existing on-chain package.
 pub(crate) async fn check_compatibility(
-    client: &SuiClient,
+    read_api: &ReadApi,
     package_id: ObjectID,
     new_package: CompiledPackage,
     package_path: PathBuf,
     upgrade_policy: u8,
     protocol_config: ProtocolConfig,
 ) -> Result<(), Error> {
-    let existing_obj_read = client
-        .read_api()
+    let existing_obj_read = read_api
         .get_object_with_options(package_id, SuiObjectDataOptions::new().with_bcs())
         .await
         .context("Unable to get existing package")?;
