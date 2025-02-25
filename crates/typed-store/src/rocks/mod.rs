@@ -24,8 +24,8 @@ use rocksdb::{
 };
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
-    ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
-    WriteBatch, WriteBatchWithTransaction, WriteOptions,
+    ErrorKind, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction, WriteBatch,
+    WriteBatchWithTransaction, WriteOptions,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::ops::Bound;
@@ -451,22 +451,6 @@ impl RocksDB {
         }
     }
 
-    pub fn iterator_cf<'a: 'b, 'b>(
-        &'a self,
-        cf_handle: &impl AsColumnFamilyRef,
-        readopts: ReadOptions,
-        mode: IteratorMode<'_>,
-    ) -> RocksDBIter<'b> {
-        match self {
-            Self::DBWithThreadMode(db) => {
-                RocksDBIter::DB(db.underlying.iterator_cf_opt(cf_handle, readopts, mode))
-            }
-            Self::OptimisticTransactionDB(db) => RocksDBIter::OptimisticTransactionDB(
-                db.underlying.iterator_cf_opt(cf_handle, readopts, mode),
-            ),
-        }
-    }
-
     pub fn compact_range_cf<K: AsRef<[u8]>>(
         &self,
         cf: &impl AsColumnFamilyRef,
@@ -886,11 +870,6 @@ impl<K, V> DBMap<K, V> {
             .expect("Map-keying column family should have been checked at DB creation")
     }
 
-    pub fn iterator_cf(&self) -> RocksDBIter<'_> {
-        self.rocksdb
-            .iterator_cf(&self.cf(), self.opts.readopts(), IteratorMode::Start)
-    }
-
     pub fn flush(&self) -> Result<(), TypedStoreError> {
         self.rocksdb
             .flush_cf(&self.cf())
@@ -1191,19 +1170,25 @@ impl<K, V> DBMap<K, V> {
         Ok(self.rocksdb.snapshot())
     }
 
-    pub fn table_summary(&self) -> eyre::Result<TableSummary> {
+    pub fn table_summary(&self) -> eyre::Result<TableSummary>
+    where
+        K: Serialize + DeserializeOwned,
+        V: Serialize + DeserializeOwned,
+    {
         let mut num_keys = 0;
         let mut key_bytes_total = 0;
         let mut value_bytes_total = 0;
         let mut key_hist = hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap();
         let mut value_hist = hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap();
-        let iter = self.iterator_cf().map(Result::unwrap);
-        for (key, value) in iter {
+        for item in self.safe_iter() {
+            let (key, value) = item?;
             num_keys += 1;
-            key_bytes_total += key.len();
-            value_bytes_total += value.len();
-            key_hist.record(key.len() as u64)?;
-            value_hist.record(value.len() as u64)?;
+            let key_len = be_fix_int_ser(key.borrow())?.len();
+            let value_len = bcs::to_bytes(value.borrow())?.len();
+            key_bytes_total += key_len;
+            value_bytes_total += value_len;
+            key_hist.record(key_len as u64)?;
+            value_hist.record(value_len as u64)?;
         }
         Ok(TableSummary {
             num_keys,
@@ -1976,7 +1961,7 @@ where
     /// overriden in the config), so please use this function with caution
     #[instrument(level = "trace", skip_all, err)]
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError> {
-        let first_key = self.unbounded_iter().next().map(|(k, _v)| k);
+        let first_key = self.safe_iter().next().transpose()?.map(|(k, _v)| k);
         let last_key = self
             .reversed_safe_iter_with_bounds(None, None)?
             .next()
@@ -1994,24 +1979,6 @@ where
         self.safe_iter().next().is_none()
     }
 
-    /// Returns an unbounded iterator visiting each key-value pair in the map.
-    /// This is potentially unsafe as it can perform a full table scan
-    fn unbounded_iter(&'a self) -> Self::Iterator {
-        let db_iter = self
-            .rocksdb
-            .raw_iterator_cf(&self.cf(), self.opts.readopts());
-        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
-        Iter::new(
-            self.cf.clone(),
-            db_iter,
-            _timer,
-            _perf_ctx,
-            bytes_scanned,
-            keys_scanned,
-            Some(self.db_metrics.clone()),
-        )
-    }
-
     /// Returns an iterator visiting each key-value pair in the map. By proving bounds of the
     /// scan range, RocksDB scan avoid unnecessary scans.
     /// Lower bound is inclusive, while upper bound is exclusive.
@@ -2021,23 +1988,6 @@ where
         upper_bound: Option<K>,
     ) -> Self::Iterator {
         let readopts = self.create_read_options_with_bounds(lower_bound, upper_bound);
-        let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
-        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
-        Iter::new(
-            self.cf.clone(),
-            db_iter,
-            _timer,
-            _perf_ctx,
-            bytes_scanned,
-            keys_scanned,
-            Some(self.db_metrics.clone()),
-        )
-    }
-
-    /// Similar to `iter_with_bounds` but allows specifying inclusivity/exclusivity of ranges explicitly.
-    /// TODO: find better name
-    fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator {
-        let readopts = self.create_read_options_with_range(range);
         let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
         let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
         Iter::new(
