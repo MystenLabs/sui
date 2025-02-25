@@ -102,14 +102,14 @@ const protocolInject = async function (source) {
     return array.sort((a, b) => a.name.localeCompare(b.name));
   };
   const files = suiSorted(spec.files);
-  const leftArrowStyle =
-    "relative inline-flex items-center before:content-[''] before:border-t-transparent before:border-b-transparent before:border-solid before:border-y-5 before:border-r-0 before:border-l-8 before:border-l-sui-gray-65";
-  const borderStyle =
-    "border border-solid border-y-transparent border-r-transparent border-l-sui-gray-65";
-  const attrStyle =
-    "text-lg before:pr-2 before:mr-2 before:text-sm before:border before:border-solid before:border-transparent before:border-r-sui-gray-65";
-  const fieldStyle =
-    "p-2 font-medium text-lg rounded-lg bg-sui-ghost-white dark:bg-sui-ghost-dark";
+  const bordercolor = "border-sui-blue-dark dark:border-sui-blue";
+
+  const tabStyle = `grid grid-cols-6 border border-solid border-b-0 border-sui-blue-dark ${bordercolor}`;
+  const tabRowStyle = `p-4 border-0 border-b border-solid ${bordercolor} col-span-full`;
+  const tabHeaderStyle = `${tabRowStyle} bg-sui-gray-50 dark:bg-sui-ghost-dark`;
+  const tabAltHeaderStyle = `${tabRowStyle} bg-sui-ghost-white dark:bg-sui-gray-95`;
+  const colHeaderStyle = `p-2 border-0 border-r border-b border-solid col-span-2 flex items-center ${bordercolor} overflow-x-auto`;
+  const colCellStyle = `p-2 col-span-4 border-0 border-b border-solid ${bordercolor}`;
   for (const file of files) {
     content.push(`\n## ${file.name} {#${createId(file.name)}}`);
     content.push(
@@ -118,13 +118,18 @@ const protocolInject = async function (source) {
         "### $1",
       )}\n</div>`,
     );
+    content.push("<div className='ml-4'>");
     for (const message of file.messages) {
       let fields = [];
       let oneofFields = [];
+      let declarations = [];
       if (message.hasOneofs) {
         for (const field of message.fields) {
-          if (field.isoneof === true) {
+          if (field.isoneof === true && !field.oneofdecl.match(/^_/)) {
             oneofFields.push(field);
+            if (!declarations.includes(field.oneofdecl)) {
+              declarations.push(field.oneofdecl);
+            }
           } else {
             fields.push(field);
           }
@@ -132,8 +137,9 @@ const protocolInject = async function (source) {
       } else {
         fields = Object.values(message.fields);
       }
-
-      const allFields = [...messageSort(fields), ...messageSort(oneofFields)];
+      fields = messageSort(fields);
+      oneofFields = messageSort(oneofFields);
+      content.push(`<div className="pt-8"></div>`);
       content.push(`\n### ${message.name} {#${createId(message.fullName)}}`);
       content.push(
         `<div className="text-lg">\n${handleCurlies(message.description)
@@ -142,137 +148,148 @@ const protocolInject = async function (source) {
         </div>`,
       );
 
-      if (allFields.length > 0) {
-        content.push(`<p className="ml-4 text-2xl">Fields</p>`);
-        content.push(`<div className="ml-4">`);
-        content.push(`<div className="grid grid-cols-12">`);
-        let foundoneof = false;
-        for (const [idx, field] of allFields.entries()) {
-          const hasType = field.type && field.type !== "";
-          const hasLabel = field.label && field.label !== "";
-          const hasDesc = field.description && field.description !== "";
-          if (field.isoneof) {
-            if (!foundoneof) {
-              content.push(
-                `<div className="col-span-3 ${leftArrowStyle} ${borderStyle}"><div className="${fieldStyle} py-2">One of</div></div>`,
-              );
-              foundoneof = !foundoneof;
-            }
-          }
+      if (fields.length > 0 || oneofFields.length > 0) {
+        content.push(`<div className='${tabStyle}'>`);
+        content.push(`<div className='${tabHeaderStyle}'>Fields</div>`);
+      }
+
+      if (fields.length > 0) {
+        for (const field of fields.entries()) {
+          //console.log(field)
+          const hasType = field[1].type && field[1].type !== "";
+          const hasLabel = field[1].label && field[1].label !== "";
+          const hasDesc = field[1].description && field[1].description !== "";
           content.push(
-            `<div className="${field.isoneof ? "col-start-2 col-end-12" : "col-span-12"} ${borderStyle} py-2">`,
+            `<div className="${colHeaderStyle}">${field[1].name}</div>`,
           );
-          content.push(`<div className="${leftArrowStyle}">`);
-          content.push(
-            `<div className="${fieldStyle} col-span-12">${field.name}</div>\n</div>`,
-          );
-          content.push(
-            `<div className="flex flex-row ml-4 pt-2 items-center">`,
-          );
+          content.push(`<div className="${colCellStyle}">`);
           if (hasType) {
             content.push(
-              `<div className="${attrStyle} before:content-['Type']">[${field.type}](#${createId(field.fullType)})</div>`,
+              `<div className="">[${field[1].type}](#${createId(field[1].fullType)})</div>`,
             );
           }
           if (hasLabel) {
-            content.push(
-              `<div className="${attrStyle} before:content-['Label'] ml-4">${field.label}</div>`,
-            );
+            content.push(`<div className="">${field[1].label}</div>`);
           }
-          content.push("</div>");
           if (hasDesc) {
-            content.push(`<div className="ml-4 pt-2">`);
             content.push(
-              `<div className="${attrStyle} before:content-['Description'] indent-[-88px] pl-[88px]">${handleCurlies(
-                field.description,
-              )
+              `<div className="">${handleCurlies(field[1].description)
                 .replace(/\n\/?/g, " ")
                 .replace(/<(http.*)>/g, "$1")}</div>`,
             );
-            content.push(`</div>`);
           }
           content.push("</div>");
         }
+      }
 
-        content.push("</div>\n</div>");
+      if (declarations.length > 0) {
+        for (const declaration of declarations) {
+          content.push(
+            `<div className='${tabAltHeaderStyle}'>Union field <b>${declaration}</b> can be only one of the following.</div>`,
+          );
+          for (const field of oneofFields.entries()) {
+            if (field[1].oneofdecl === declaration) {
+              const hasType = field[1].type && field[1].type !== "";
+              const hasLabel = field[1].label && field[1].label !== "";
+              const hasDesc =
+                field[1].description && field[1].description !== "";
+              content.push(
+                `<div className="${colHeaderStyle}">${field[1].name}</div>`,
+              );
+              content.push(`<div className="${colCellStyle}">`);
+              if (hasType) {
+                content.push(
+                  `<div className="">[${field[1].type}](#${createId(field[1].fullType)})</div>`,
+                );
+              }
+              if (hasLabel) {
+                content.push(`<div className="">${field[1].label}</div>`);
+              }
+              if (hasDesc) {
+                content.push(
+                  `<div className="">${handleCurlies(field[1].description)
+                    .replace(/\n\/?/g, " ")
+                    .replace(/<(http.*)>/g, "$1")}</div>`,
+                );
+              }
+              content.push("</div>");
+            }
+          }
+        }
+      }
+      if (fields.length > 0 || oneofFields.length > 0) {
+        content.push(`</div>`);
       }
     }
     if (file.services.length > 0) {
       const proto = file.name.split("/").pop();
+      content.push(`<div className="pt-8"></div>`);
       content.push(`### Services (${proto})`);
-      content.push("<div className='ml-4'>");
+      //content.push("<div className='ml-4'>");
       for (const service of file.services) {
-        content.push(`<div className="${borderStyle}">`);
         content.push(
-          `<h4 className="${leftArrowStyle} before:mr-2" id="${createId(service.fullName)}">${service.name}</h4>`,
+          `<h4 className="" id="${createId(service.fullName)}">${service.name}</h4>`,
         );
-        content.push(`<div className="ml-4">`);
         content.push(
           `<div>${handleCurlies(service.description)
             .replace(/\n\/?/g, " ")
             .replace(/<(http.*)>/g, "$1")}</div>`,
         );
         if (service.methods.length > 0) {
-          content.push(`<p className="text-xl mt-4">Methods</p>`);
+          content.push(`<div className='${tabStyle} mt-4'>`);
+          content.push(`<div className='${tabHeaderStyle}'>Methods</div>`);
           for (const method of service.methods) {
-            content.push(`<div className="my-6">`);
             content.push(
-              `<div className="${attrStyle} my-2 before:content-['Request']  before:inline-block before:w-20">[${method.requestType}](#${createId(method.requestFullType)})</div>`,
+              `<div className="${tabAltHeaderStyle}">[${method.requestType}](#${createId(method.requestFullType)}) -> ${method.responseType}</div>`,
             );
             content.push(
-              `<div className="${attrStyle} my-2 before:content-['Response'] before:inline-block before:w-20">${method.responseType}</div>`,
-            );
-            content.push(
-              `<div className="${attrStyle} my-2 table relative left-2 before:table-cell before:content-['Description'] before:relative before:-left-2 before:w-20">${handleCurlies(
+              `<div className="${tabRowStyle}">${handleCurlies(
                 method.description,
               )
                 .replace(/\n\/?/g, " ")
                 .replace(/<(http.*)>/g, "$1")}</div>`,
             );
-            content.push(`</div>`);
           }
+          content.push(`</div>`);
         }
-        content.push("</div></div>");
-        //content.push();
-        //content.push();
       }
-      content.push("</div>");
+      //content.push("</div>");
     }
     if (file.enums.length > 0) {
-      content.push("<div className='ml-4'>");
-      content.push("### Enums");
+      const cellDesc = "mt-4";
+
       for (const num of file.enums) {
-        content.push(`<div className="${borderStyle}">`);
         content.push(
-          `<h4 className="${leftArrowStyle} before:mr-2" id="${createId(num.fullName)}">${num.name}</h4>`,
+          `<h4 className="" id="${createId(num.fullName)}">${num.name}</h4>`,
         );
-        content.push(`<div className="ml-4">`);
         content.push(
-          `<div className="${attrStyle} before:content-['Description'] indent-[-88px] pl-[88px]">${handleCurlies(
-            num.description,
-          )
+          `<div class="${cellDesc}">${handleCurlies(num.description)
             .replace(/\n\/?/g, " ")
             .replace(/<(http.*)>/g, "$1")}</div>`,
         );
-        content.push(
-          `<div className="mt-4 flex flex-row ${attrStyle} before:!mr-0 before:content-['Values']">`,
-        );
-        content.push(`<div>`);
+        content.push(`<div className='${tabStyle} mt-4'>`);
+        content.push(`<div className='${tabHeaderStyle}'>Enums</div>`);
+
+        //content.push(`<div>`);
         for (const val of num.values) {
           content.push(
-            `<div class="flex flex-row my-2"><div className="${leftArrowStyle} before:mr-2"><code>${val.name}</code></div><div>${val.description ? ": " + handleCurlies(val.description) : ""}</div></div>`,
+            `<div className="${colHeaderStyle}"><code>${val.name}</code></div>`,
+          );
+          content.push(``);
+          content.push(
+            `<div className="${colCellStyle}">${val.description}</div>`,
           );
         }
-        content.push(`</div></div></div></div></div>`);
+        content.push(`</div>`);
       }
     }
+    content.push("</div>");
   }
-
   content.push("\n## Scalar Value Types");
   const cellStyle =
     "m-2 min-w-24 max-w-[13rem] rounded-lg border border-solid align-center text-center relative border-sui-gray-65";
   const titleStyle =
-    "p-4 pb-2 font-bold text-sui-ghost-dark dark:text-sui-ghost-white bg-sui-ghost-white dark:bg-sui-ghost-dark border border-solid border-transparent rounded-t-lg";
+    "p-4 pb-2 font-bold text-sui-ghost-dark dark:text-sui-ghost-white bg-sui-gray-50 dark:bg-sui-ghost-dark border border-solid border-transparent rounded-t-lg";
   const valStyle =
     "p-4 pt-2 border border-solid border-transparent border-t-sui-gray-65 whitespace-break-spaces";
   for (const scalar of spec.scalarValueTypes) {

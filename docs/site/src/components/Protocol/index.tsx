@@ -6,9 +6,6 @@ import React, { useState, useEffect } from "react";
 export default function Protocol(props) {
   const { toc } = props;
   const [proto, setProto] = useState(toc[0]);
-  //const [messages, setMessages] = useState(toc[0].messages);
-  //const [services, setServices] = useState(toc[0].services);
-  //const [enums, setEnums] = useState(toc[0].enums);
   const [belowFold, setBelowFold] = useState(false);
   const triggerY = 140;
 
@@ -30,17 +27,14 @@ export default function Protocol(props) {
   }
 
   const handleProtoChange = (e) => {
-    console.log(toc);
     const selected = e.target.value;
     const selectedProto = toc[selected]; // Get the selected protocol
     setProto(selectedProto);
-    //setMessages(selectedProto.messages);
-    //setServices(selectedProto.services);
-    //setEnums(selectedProto.enums);
     window.location.hash = `#${selectedProto.link}`;
   };
   const handleMessageChange = (e) => {
     const selected = e.target.value;
+    if (selected === "") return;
     const message = proto.messages.filter((item) => {
       return item.name === selected;
     });
@@ -49,6 +43,7 @@ export default function Protocol(props) {
   };
   const handleServicesChange = (e) => {
     const selected = e.target.value;
+    if (selected === "") return;
     const service = proto.services.filter((item) => {
       return item.name === selected;
     });
@@ -57,6 +52,7 @@ export default function Protocol(props) {
   };
   const handleEnumsChange = (e) => {
     const selected = e.target.value;
+    if (selected === "") return;
     const num = proto.enums.filter((item) => {
       return item.name === selected;
     });
@@ -70,7 +66,7 @@ export default function Protocol(props) {
     >
       <style>
         {`
-          h2, h3 {
+          h2, h3, h4 {
             scroll-margin:126px !important;
           }
         `}
@@ -100,6 +96,7 @@ export default function Protocol(props) {
             className="p-2 w-[200px]"
             onChange={handleMessageChange}
           >
+            <option value="">Jump to...</option>
             {proto.messages.map((message) => {
               return (
                 <option key={message.name} value={message.name}>
@@ -120,6 +117,7 @@ export default function Protocol(props) {
             className="p-2 w-[200px]"
             onChange={handleServicesChange}
           >
+            <option value="">Jump to...</option>
             {proto.services.map((service) => {
               return (
                 <option key={service.name} value={service.name}>
@@ -140,6 +138,7 @@ export default function Protocol(props) {
             className="p-2 w-[200px]"
             onChange={handleEnumsChange}
           >
+            <option value="">Jump to...</option>
             {proto.enums.map((num) => {
               return (
                 <option key={num.name} value={num.name}>
