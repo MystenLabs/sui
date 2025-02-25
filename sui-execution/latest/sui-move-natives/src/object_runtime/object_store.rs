@@ -774,6 +774,7 @@ impl<'a> ChildObjectStore<'a> {
                     // This means that if the object changed, the dirty flag must have been marked.
                     // However, we can't guarantee the opposite.
                     // object changed ==> dirty flag mutated
+                    #[cfg(debug_assertions)]
                     debug_assert!(!object_changed || dirty_flag_mutated);
                     let child_effect = ChildObjectEffectV1 {
                         owner,
@@ -798,6 +799,7 @@ impl<'a> ChildObjectStore<'a> {
                     } = child_object;
                     let effect = value.into_effect()?;
                     // should be disabled if the feature is disabled
+                    #[cfg(debug_assertions)]
                     debug_assert!(_fingerprint.is_disabled());
                     let child_effect = ChildObjectEffectV0 { owner, ty, effect };
                     Some((id, child_effect))
