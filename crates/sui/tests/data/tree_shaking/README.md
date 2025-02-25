@@ -38,3 +38,10 @@ Tests projects are established as following
     - linkage table should be empty
 - I_depends_on_D_depends_on_A_v1_but_no_code_references_A_and_on_A_v2
     - linkage table should be empty
+- K is a normal package
+- K_v2 is a package upgrade of K
+- L_depends_on_K a package that has a code dependency on K
+    - linkage table should contain package K's ID
+- M_depends_on_L_and_K_v2_no_code_references_K_v2 has a code dependency on L_depends_on K package, and a dependency on K_v2 but no code
+references K_v2
+    - linkage table should contain package K's ID and L's ID
