@@ -218,6 +218,8 @@ impl GetObjectResponse {
 //
 
 impl GetCheckpointRequest {
+    pub const READ_MASK_DEFAULT: &str = "sequence_number,digest";
+
     pub fn latest() -> Self {
         Self {
             sequence_number: None,
@@ -328,69 +330,19 @@ impl GetFullCheckpointRequest {
 // CheckpointResponse
 //
 
-impl From<crate::types::CheckpointResponse> for GetCheckpointResponse {
-    fn from(
-        crate::types::CheckpointResponse {
-            sequence_number,
-            digest,
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-        }: crate::types::CheckpointResponse,
-    ) -> Self {
-        Self {
-            sequence_number: Some(sequence_number),
-            digest: Some(digest.into()),
-            summary: summary.map(Into::into),
-            summary_bcs: summary_bcs.map(Into::into),
-            signature: signature.map(Into::into),
-            contents: contents.map(Into::into),
-            contents_bcs: contents_bcs.map(Into::into),
+impl GetCheckpointResponse {
+    pub fn validate_read_mask(read_mask: &FieldMask) -> Result<(), &str> {
+        for path in &read_mask.paths {
+            match path.as_str() {
+                "sequence_number" | "digest" | "summary" | "summary_bcs" | "signature"
+                | "contents" | "contents_bcs" => {}
+                path => {
+                    return Err(path);
+                }
+            }
         }
-    }
-}
 
-impl TryFrom<&GetCheckpointResponse> for crate::types::CheckpointResponse {
-    type Error = TryFromProtoError;
-
-    fn try_from(
-        GetCheckpointResponse {
-            sequence_number,
-            digest,
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-        }: &GetCheckpointResponse,
-    ) -> Result<Self, Self::Error> {
-        let sequence_number =
-            sequence_number.ok_or_else(|| TryFromProtoError::missing("sequence_number"))?;
-        let digest = digest
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("digest"))?
-            .pipe(TryInto::try_into)?;
-
-        let summary = summary.as_ref().map(TryInto::try_into).transpose()?;
-        let summary_bcs = summary_bcs.as_ref().map(Into::into);
-
-        let signature = signature.as_ref().map(TryInto::try_into).transpose()?;
-
-        let contents = contents.as_ref().map(TryInto::try_into).transpose()?;
-        let contents_bcs = contents_bcs.as_ref().map(Into::into);
-
-        Self {
-            sequence_number,
-            digest,
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-        }
-        .pipe(Ok)
+        Ok(())
     }
 }
 

@@ -35,30 +35,7 @@ async fn get_checkpoint() {
         .await
         .unwrap();
 
-    // Request default fields
-    let GetCheckpointResponse {
-        sequence_number,
-        digest,
-        summary,
-        summary_bcs,
-        signature,
-        contents,
-        contents_bcs,
-    } = grpc_client
-        .get_checkpoint(GetCheckpointRequest::latest())
-        .await
-        .unwrap()
-        .into_inner();
-
-    assert!(sequence_number.is_some());
-    assert!(digest.is_some());
-    assert!(summary.is_none());
-    assert!(summary_bcs.is_none());
-    assert!(signature.is_none());
-    assert!(contents.is_none());
-    assert!(contents_bcs.is_none());
-
-    // Request no fields
+    // Request with no provided read_mask
     let GetCheckpointResponse {
         sequence_number,
         digest,
@@ -115,9 +92,6 @@ async fn get_checkpoint() {
     assert!(signature.is_some());
     assert!(contents.is_some());
     assert!(contents_bcs.is_some());
-
-    // ensure we can convert proto GetCheckpointResponse type to rust CheckpointResponse
-    sui_rpc_api::types::CheckpointResponse::try_from(&response).unwrap();
 
     // Request by digest
     let response = grpc_client

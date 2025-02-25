@@ -1,14 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::CheckpointResponse;
+use crate::field_mask::FieldMaskTree;
+use crate::field_mask::FieldMaskUtil;
+use crate::proto::google::rpc::bad_request::FieldViolation;
+use crate::proto::google::rpc::BadRequest;
+use crate::proto::node::v2::GetCheckpointRequest;
+use crate::proto::node::v2::GetCheckpointResponse;
 use crate::types::FullCheckpointObject;
 use crate::types::FullCheckpointResponse;
 use crate::types::FullCheckpointTransaction;
-use crate::types::GetCheckpointOptions;
 use crate::types::GetFullCheckpointOptions;
+use crate::ErrorReason;
 use crate::Result;
 use crate::RpcService;
+use prost_types::FieldMask;
 use sui_sdk_types::CheckpointContents;
 use sui_sdk_types::CheckpointDigest;
 use sui_sdk_types::CheckpointSequenceNumber;
@@ -16,29 +22,53 @@ use sui_sdk_types::SignedCheckpointSummary;
 use tap::Pipe;
 
 impl RpcService {
-    pub fn get_checkpoint(
-        &self,
-        checkpoint: Option<CheckpointId>,
-        options: GetCheckpointOptions,
-    ) -> Result<CheckpointResponse> {
+    pub fn get_checkpoint(&self, request: GetCheckpointRequest) -> Result<GetCheckpointResponse> {
+        let checkpoint_id = match (request.sequence_number, request.digest) {
+            (Some(_), Some(_)) => {
+                let description = "only one of `sequence_number` or `digest` can be provided";
+                let bad_request = BadRequest {
+                    field_violations: vec![
+                        FieldViolation::new("sequence_number")
+                            .with_description(description)
+                            .with_reason(ErrorReason::FieldInvalid),
+                        FieldViolation::new("digest")
+                            .with_description(description)
+                            .with_reason(ErrorReason::FieldInvalid),
+                    ],
+                };
+                return Err(bad_request.into());
+            }
+            (Some(sequence_number), None) => Some(CheckpointId::SequenceNumber(sequence_number)),
+            (None, Some(digest)) => {
+                let digest = CheckpointDigest::try_from(&digest).map_err(|e| {
+                    FieldViolation::new("digest")
+                        .with_description(format!("invalid digest: {e}"))
+                        .with_reason(ErrorReason::FieldInvalid)
+                })?;
+                Some(CheckpointId::Digest(digest))
+            }
+            (None, None) => None,
+        };
+
+        let read_mask = request
+            .read_mask
+            .unwrap_or_else(|| FieldMask::from_str(GetCheckpointRequest::READ_MASK_DEFAULT));
+        GetCheckpointResponse::validate_read_mask(&read_mask).map_err(|path| {
+            FieldViolation::new("read_mask")
+                .with_description(format!("invalid read_mask path: {path}"))
+                .with_reason(ErrorReason::FieldInvalid)
+        })?;
+        let read_mask = FieldMaskTree::from(read_mask);
+
         let SignedCheckpointSummary {
             checkpoint,
             signature,
-        } = match checkpoint {
-            Some(checkpoint_id @ CheckpointId::SequenceNumber(s)) => {
-                let oldest_checkpoint = self.reader.inner().get_lowest_available_checkpoint()?;
-                if s < oldest_checkpoint {
-                    return Err(crate::RpcError::new(
-                        tonic::Code::NotFound,
-                        "Old checkpoints have been pruned",
-                    ));
-                }
-
-                self.reader
-                    .inner()
-                    .get_checkpoint_by_sequence_number(s)
-                    .ok_or(CheckpointNotFoundError(checkpoint_id))?
-            }
+        } = match checkpoint_id {
+            Some(checkpoint_id @ CheckpointId::SequenceNumber(s)) => self
+                .reader
+                .inner()
+                .get_checkpoint_by_sequence_number(s)
+                .ok_or(CheckpointNotFoundError(checkpoint_id))?,
             Some(checkpoint_id @ CheckpointId::Digest(d)) => self
                 .reader
                 .inner()
@@ -50,7 +80,7 @@ impl RpcService {
         .try_into()?;
 
         let (contents, contents_bcs) =
-            if options.include_contents() || options.include_contents_bcs() {
+            if read_mask.contains("contents") || read_mask.contains("contents_bcs") {
                 let contents: CheckpointContents = self
                     .reader
                     .inner()
@@ -60,27 +90,36 @@ impl RpcService {
                     )))?
                     .try_into()?;
 
-                let contents_bcs = options
-                    .include_contents_bcs()
+                let contents_bcs = read_mask
+                    .contains("contents_bcs")
                     .then(|| bcs::to_bytes(&contents))
-                    .transpose()?;
+                    .transpose()?
+                    .map(Into::into);
 
-                (options.include_contents().then_some(contents), contents_bcs)
+                (
+                    read_mask.contains("contents").then(|| contents.into()),
+                    contents_bcs,
+                )
             } else {
                 (None, None)
             };
 
-        let summary_bcs = options
-            .include_summary_bcs()
+        let summary_bcs = read_mask
+            .contains("summary_bcs")
             .then(|| bcs::to_bytes(&checkpoint))
-            .transpose()?;
+            .transpose()?
+            .map(Into::into);
 
-        CheckpointResponse {
-            sequence_number: checkpoint.sequence_number,
-            digest: checkpoint.digest(),
-            summary: options.include_summary().then_some(checkpoint),
+        GetCheckpointResponse {
+            sequence_number: read_mask
+                .contains("sequence_number")
+                .then_some(checkpoint.sequence_number),
+            digest: read_mask
+                .contains("digest")
+                .then(|| checkpoint.digest().into()),
+            summary: read_mask.contains("summary").then(|| checkpoint.into()),
             summary_bcs,
-            signature: options.include_signature().then_some(signature),
+            signature: read_mask.contains("signature").then(|| signature.into()),
             contents,
             contents_bcs,
         }
@@ -278,41 +317,8 @@ fn object_to_object_response(
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CheckpointId {
-    /// Sequence number or height of a Checkpoint
     SequenceNumber(CheckpointSequenceNumber),
-    /// Base58 encoded 32-byte digest of a Checkpoint
     Digest(CheckpointDigest),
-}
-
-impl<'de> serde::Deserialize<'de> for CheckpointId {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let raw = String::deserialize(deserializer)?;
-
-        if let Ok(s) = raw.parse::<CheckpointSequenceNumber>() {
-            Ok(Self::SequenceNumber(s))
-        } else if let Ok(d) = raw.parse::<CheckpointDigest>() {
-            Ok(Self::Digest(d))
-        } else {
-            Err(serde::de::Error::custom(format!(
-                "unrecognized checkpoint-id {raw}"
-            )))
-        }
-    }
-}
-
-impl serde::Serialize for CheckpointId {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match self {
-            CheckpointId::SequenceNumber(s) => serializer.serialize_str(&s.to_string()),
-            CheckpointId::Digest(d) => serializer.serialize_str(&d.to_string()),
-        }
-    }
 }
 
 #[derive(Debug)]
