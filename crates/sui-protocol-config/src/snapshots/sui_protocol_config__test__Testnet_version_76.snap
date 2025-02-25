@@ -1,7 +1,6 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
-snapshot_kind: text
 ---
 version: 76
 feature_flags:
@@ -74,6 +73,7 @@ feature_flags:
   convert_type_argument_error: true
   variant_nodes: true
   consensus_zstd_compression: true
+  minimize_child_object_mutations: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

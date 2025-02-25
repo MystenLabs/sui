@@ -2873,6 +2873,15 @@ impl GlobalValueImpl {
             },
         }
     }
+
+    fn into_value(self) -> Option<ValueImpl> {
+        match self {
+            Self::None | Self::Deleted => None,
+            Self::Fresh { fields } | Self::Cached { fields, .. } => {
+                Some(ValueImpl::Container(Container::Struct(fields)))
+            }
+        }
+    }
 }
 
 impl GlobalValue {
@@ -2910,6 +2919,10 @@ impl GlobalValue {
 
     pub fn is_mutated(&self) -> bool {
         self.0.is_mutated()
+    }
+
+    pub fn into_value(self) -> Option<Value> {
+        self.0.into_value().map(Value)
     }
 }
 

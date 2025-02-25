@@ -219,6 +219,7 @@ const MAX_PROTOCOL_VERSION: u64 = 76;
 //             Enable the new commit rule for devnet.
 // Version 75: Enable passkey auth in testnet.
 // Version 76: Deprecate Deepbook V2 order placement and deposit.
+//             Removes unnecessary child object mutations
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -623,6 +624,10 @@ struct FeatureFlags {
     // If true, enable zstd compression for consensus tonic network.
     #[serde(skip_serializing_if = "is_false")]
     consensus_zstd_compression: bool,
+
+    // If true, enables the optimizations for child object mutations, removing unnecessary mutations
+    #[serde(skip_serializing_if = "is_false")]
+    minimize_child_object_mutations: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1807,6 +1812,10 @@ impl ProtocolConfig {
         // TODO: this will eventually be the max of some number of other
         // parameters.
         0
+    }
+
+    pub fn minimize_child_object_mutations(&self) -> bool {
+        self.feature_flags.minimize_child_object_mutations
     }
 }
 
@@ -3254,7 +3263,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.passkey_auth = true;
                     }
                 }
-                76 => {}
+                76 => {
+                    cfg.feature_flags.minimize_child_object_mutations = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
