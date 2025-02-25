@@ -286,7 +286,10 @@ impl SimulatorStore for PersistedStore {
 
     fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
         Box::new(self.read_write.live_objects
-            .unbounded_iter()
+            .safe_iter()
+            .collect::<Result::<Vec<_>, _>>()
+            .expect("failed to read owned objects for simulator")
+            .into_iter()
             .flat_map(|(id, version)| self.get_object_at_version(&id, version))
             .filter(
                 move |object| matches!(object.owner, Owner::AddressOwner(addr) if addr == owner),

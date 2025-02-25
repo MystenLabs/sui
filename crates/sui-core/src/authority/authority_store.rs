@@ -1768,18 +1768,6 @@ impl AuthorityStore {
         Ok(())
     }
 
-    #[cfg(msim)]
-    pub fn remove_all_versions_of_object(&self, object_id: ObjectID) {
-        let entries: Vec<_> = self
-            .perpetual_tables
-            .objects
-            .unbounded_iter()
-            .filter_map(|(key, _)| if key.0 == object_id { Some(key) } else { None })
-            .collect();
-        info!("Removing all versions of object: {:?}", entries);
-        self.perpetual_tables.objects.multi_remove(entries).unwrap();
-    }
-
     // Counts the number of versions exist in object store for `object_id`. This includes tombstone.
     #[cfg(msim)]
     pub fn count_object_versions(&self, object_id: ObjectID) -> usize {

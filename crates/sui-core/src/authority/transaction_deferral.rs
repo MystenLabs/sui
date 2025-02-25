@@ -135,8 +135,8 @@ mod object_cost_tests {
         }
 
         let mut previous_future_round = 0;
-        for (key, _) in db.deferred_certs.unbounded_iter() {
-            match key {
+        for item in db.deferred_certs.safe_iter() {
+            match item.unwrap().0 {
                 DeferralKey::Randomness { .. } => (),
                 DeferralKey::ConsensusRound { future_round, .. } => {
                     assert!(previous_future_round <= future_round);
