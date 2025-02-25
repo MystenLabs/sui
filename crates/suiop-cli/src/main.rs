@@ -13,7 +13,7 @@ use suioplib::{
     },
     DEBUG_MODE,
 };
-use tracing::{debug, info, warn};
+use tracing::info;
 use tracing_subscriber::{
     filter::{EnvFilter, LevelFilter},
     FmtSubscriber,
