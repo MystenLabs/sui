@@ -25,6 +25,7 @@ use tempfile::tempdir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
+use url::Url;
 
 pub mod handlers;
 pub mod ingestion;
@@ -101,8 +102,9 @@ pub struct Indexer {
 }
 
 impl Indexer {
-    /// Create a new instance of the indexer framework. `db_args`, `indexer_args,`, `client_args`,
-    /// and `ingestion_config` contain configurations for the following, respectively:
+    /// Create a new instance of the indexer framework. `database_url`, `db_args`, `indexer_args,`,
+    /// `client_args`, and `ingestion_config` contain configurations for the following,
+    /// respectively:
     ///
     /// - Connecting to the database,
     /// - What is indexed (which checkpoints, which pipelines, whether to update the watermarks
@@ -117,6 +119,7 @@ impl Indexer {
     /// After initialization, at least one pipeline must be added using [Self::concurrent_pipeline]
     /// or [Self::sequential_pipeline], before the indexer is started using [Self::run].
     pub async fn new(
+        database_url: Url,
         db_args: DbArgs,
         indexer_args: IndexerArgs,
         client_args: ClientArgs,
@@ -132,7 +135,7 @@ impl Indexer {
             skip_watermark,
         } = indexer_args;
 
-        let db = Db::for_write(db_args)
+        let db = Db::for_write(database_url, db_args)
             .await
             .context("Failed to connect to database")?;
 
@@ -175,9 +178,9 @@ impl Indexer {
 
     pub async fn new_for_testing(migrations: &'static EmbeddedMigrations) -> (Self, TempDb) {
         let temp_db = TempDb::new().unwrap();
-        let db_args = DbArgs::new_for_testing(temp_db.database().url().clone());
         let indexer = Indexer::new(
-            db_args,
+            temp_db.database().url().clone(),
+            DbArgs::default(),
             IndexerArgs::default(),
             ClientArgs {
                 remote_store_url: None,

@@ -32,6 +32,8 @@ async fn main() -> Result<()> {
 
     match args.command {
         Command::Indexer {
+            database_url,
+            db_args,
             client_args,
             indexer_args,
             metrics_args,
@@ -48,7 +50,8 @@ async fn main() -> Result<()> {
             let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
 
             let h_indexer = setup_indexer(
-                args.db_args,
+                database_url,
+                db_args,
                 indexer_args,
                 client_args,
                 indexer_config,
@@ -99,9 +102,14 @@ async fn main() -> Result<()> {
             println!("{config_toml}");
         }
 
-        Command::ResetDatabase { skip_migrations } => {
+        Command::ResetDatabase {
+            database_url,
+            db_args,
+            skip_migrations,
+        } => {
             reset_database(
-                args.db_args,
+                database_url,
+                db_args,
                 (!skip_migrations).then(|| Indexer::migrations(Some(&MIGRATIONS))),
             )
             .await?;
@@ -109,12 +117,19 @@ async fn main() -> Result<()> {
 
         #[cfg(feature = "benchmark")]
         Command::Benchmark {
+            database_url,
+            db_args,
             benchmark_args,
             config,
         } => {
             let indexer_config = read_config(&config).await?;
-            sui_indexer_alt::benchmark::run_benchmark(args.db_args, benchmark_args, indexer_config)
-                .await?;
+            sui_indexer_alt::benchmark::run_benchmark(
+                database_url,
+                db_args,
+                benchmark_args,
+                indexer_config,
+            )
+            .await?;
         }
     }
 

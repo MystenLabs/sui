@@ -7,6 +7,7 @@ use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_package_resolver::Resolver;
 use sui_pg_db::DbArgs;
+use url::Url;
 
 use crate::{
     config::RpcConfig,
@@ -46,12 +47,13 @@ pub(crate) struct Context {
 impl Context {
     /// Set-up access to the database through all the interfaces available in the context.
     pub(crate) async fn new(
+        database_url: Url,
         db_args: DbArgs,
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
     ) -> Result<Self, Error> {
-        let pg_reader = PgReader::new(db_args, metrics, registry).await?;
+        let pg_reader = PgReader::new(database_url, db_args, metrics, registry).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(config) = config.bigtable.clone() {

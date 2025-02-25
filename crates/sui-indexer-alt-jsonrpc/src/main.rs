@@ -24,6 +24,8 @@ async fn main() -> anyhow::Result<()> {
 
     match args.command {
         Command::Rpc {
+            database_url,
+            db_args,
             rpc_args,
             system_package_task_args,
             metrics_args,
@@ -48,7 +50,8 @@ async fn main() -> anyhow::Result<()> {
             let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
 
             let h_rpc = start_rpc(
-                args.db_args,
+                database_url,
+                db_args,
                 rpc_args,
                 system_package_task_args,
                 rpc_config,
