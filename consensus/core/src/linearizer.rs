@@ -111,8 +111,12 @@ impl Linearizer {
 
         drop(dag_state);
 
-        let timestamp_ms =
-            self.calculate_commit_timestamp(&leader_block, last_commit_timestamp_ms, &to_commit);
+        let timestamp_ms = Self::calculate_commit_timestamp(
+            &self.context,
+            &leader_block,
+            last_commit_timestamp_ms,
+            &to_commit,
+        );
 
         // Create the Commit.
         let commit = Commit::new(
@@ -146,17 +150,13 @@ impl Linearizer {
     /// Calculates the commit's timestamp. If the median based timestamp calculation is enabled, then the timestamp will be calculated as the median of
     /// leader's committed strong ancestors (leader.round - 1). Otherwise, the leader's timestamp will be used. To ensure that commit timestamp monotonicity is
     /// respected it is compared against the `last_commit_timestamp_ms` and the maximum of the two is returned.
-    fn calculate_commit_timestamp(
-        &mut self,
+    pub(crate) fn calculate_commit_timestamp(
+        context: &Context,
         leader_block: &VerifiedBlock,
         last_commit_timestamp_ms: BlockTimestampMs,
         to_commit: &[VerifiedBlock],
     ) -> BlockTimestampMs {
-        let timestamp_ms = if self
-            .context
-            .protocol_config
-            .consensus_median_based_timestamp()
-        {
+        let timestamp_ms = if context.protocol_config.consensus_median_based_timestamp() {
             let leader_ancestors = leader_block
                 .ancestors()
                 .iter()
