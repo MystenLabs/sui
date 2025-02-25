@@ -6,6 +6,7 @@
 #![allow(clippy::redundant_clone)]
 
 use crate::{
+    cache::identifier_interner::intern_ident_str,
     dev_utils::{
         compilation_utils::{compile_packages_in_file, expect_modules},
         in_memory_test_adapter::InMemoryTestAdapter,
@@ -22,7 +23,6 @@ use crate::{
         serialization::SerializedReturnValues,
         types::{PackageStorageId, RuntimePackageId},
     },
-    string_interner,
 };
 use move_binary_format::{
     errors::VMResult,
@@ -211,12 +211,8 @@ impl Adapter {
             .calculate_depth_of_type(&VirtualTableKey {
                 package_key: *module_id.address(),
                 inner_pkg_key: IntraPackageKey {
-                    module_name: string_interner()
-                        .get_or_intern_ident_str(module_id.name())
-                        .unwrap(),
-                    member_name: string_interner()
-                        .get_or_intern_ident_str(struct_name)
-                        .unwrap(),
+                    module_name: intern_ident_str(module_id.name()).unwrap(),
+                    member_name: intern_ident_str(struct_name).unwrap(),
                 },
             })
             .expect("computing depth of datatype should succeed")

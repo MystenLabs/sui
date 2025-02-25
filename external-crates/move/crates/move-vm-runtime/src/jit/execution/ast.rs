@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::arena::{Arena, ArenaBox, ArenaVec},
+    cache::{
+        arena::{Arena, ArenaBox, ArenaVec},
+        identifier_interner::{resolve_interned, IdentifierKey},
+    },
     execution::{
         dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
         values::ConstantValue,
@@ -13,7 +16,6 @@ use crate::{
         types::{PackageStorageId, RuntimePackageId},
         vm_pointer::VMPointer,
     },
-    string_interner,
 };
 
 use move_binary_format::{
@@ -25,8 +27,8 @@ use move_binary_format::{
     file_format_common::Opcodes,
 };
 use move_core_types::{
-    gas_algebra::AbstractMemorySize, identifier::Identifier, language_storage::ModuleId,
-    vm_status::StatusCode,
+    account_address::AccountAddress, gas_algebra::AbstractMemorySize, identifier::Identifier,
+    language_storage::ModuleId, vm_status::StatusCode,
 };
 use std::collections::BTreeMap;
 
@@ -140,9 +142,7 @@ pub struct Function {
     // TODO(vm-rewrite): This field probably leaks
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
-    pub module: ModuleId,
-    // TODO(vm-rewrite): IdentifierKey
-    pub name: Identifier,
+    pub name: VirtualTableKey,
     pub locals_len: usize,
     pub jump_tables: ArenaVec<VariantJumpTable>,
 }
@@ -178,7 +178,7 @@ pub struct StructDef {
     pub abilities: AbilitySet,
     pub type_parameters: ArenaVec<DatatypeTyParameter>,
     pub fields: ArenaVec<ArenaType>,
-    pub field_names: ArenaVec<Identifier>,
+    pub field_names: ArenaVec<IdentifierKey>,
 }
 
 #[derive(Debug)]
@@ -194,10 +194,9 @@ pub struct EnumDef {
 #[derive(Debug)]
 pub struct VariantDef {
     pub variant_tag: VariantTag,
-    // TODO(vm-rewrite): IdentifierKey
-    pub variant_name: Identifier,
+    pub variant_name: IdentifierKey,
     pub fields: ArenaVec<ArenaType>,
-    pub field_names: ArenaVec<Identifier>,
+    pub field_names: ArenaVec<IdentifierKey>,
     pub enum_def: VMPointer<EnumDef>,
 }
 
@@ -277,10 +276,9 @@ pub enum ArenaType {
 
 #[derive(Debug)]
 pub struct DatatypeDescriptor {
-    // TODO(vm-rewrite): IdentifierKey
-    pub name: Identifier,
-    pub defining_id: ModuleId,
-    pub runtime_id: ModuleId,
+    pub name: IdentifierKey,
+    pub defining_id: ModuleIdKey,
+    pub runtime_id: ModuleIdKey,
     pub datatype_info: ArenaBox<Datatype>,
 }
 
@@ -290,11 +288,17 @@ pub enum Datatype {
     Struct(VMPointer<StructDef>),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ModuleIdKey {
+    address: AccountAddress,
+    name: IdentifierKey,
+}
+
 // -------------------------------------------------------------------------------------------------
 // Runtime Type representation
 // -------------------------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub enum Type {
     Bool,
     U8,
@@ -827,8 +831,8 @@ impl Function {
         self.file_format_version
     }
 
-    pub fn module_id(&self) -> &ModuleId {
-        &self.module
+    pub fn module_id(&self) -> ModuleId {
+        self.name.module_id().unwrap()
     }
 
     pub fn index(&self) -> FunctionDefinitionIndex {
@@ -847,8 +851,12 @@ impl Function {
         self.return_.len()
     }
 
-    pub fn name(&self) -> &str {
-        self.name.as_str()
+    pub fn name_str(&self) -> String {
+        self.name().to_string()
+    }
+
+    pub fn name(&self) -> Identifier {
+        self.name.member_name().unwrap()
     }
 
     pub fn code(&self) -> &[Bytecode] {
@@ -864,24 +872,12 @@ impl Function {
     }
 
     pub fn pretty_string(&self) -> String {
-        let id = &self.module;
-        format!(
-            "0x{}::{}::{}",
-            id.address(),
-            id.name().as_str(),
-            self.name.as_str()
-        )
+        self.name.to_string().unwrap()
     }
 
     #[cfg(any(debug_assertions, feature = "tracing"))]
     pub fn pretty_short_string(&self) -> String {
-        let id = &self.module;
-        format!(
-            "0x{}::{}::{}",
-            id.address().short_str_lossless(),
-            id.name().as_str(),
-            self.name.as_str()
-        )
+        self.name.to_short_string().unwrap()
     }
 
     pub fn is_native(&self) -> bool {
@@ -893,8 +889,10 @@ impl Function {
             // If lazy_natives is configured, this is a MISSING_DEPENDENCY error, as we skip
             // checking those at module loading time.
             self.native.as_deref().ok_or_else(|| {
-                PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                    .with_message(format!("Missing Native Function `{}`", self.name))
+                PartialVMError::new(StatusCode::MISSING_DEPENDENCY).with_message(format!(
+                    "Missing Native Function `{}`",
+                    self.name.member_name().unwrap()
+                ))
             })
         } else {
             // Otherwise this error should not happen, hence UNREACHABLE
@@ -974,11 +972,30 @@ impl ArenaType {
     }
 }
 
+impl ModuleIdKey {
+    pub fn from_parts(address: AccountAddress, name: IdentifierKey) -> Self {
+        Self { address, name }
+    }
+
+    pub fn as_id(&self) -> PartialVMResult<ModuleId> {
+        let name = resolve_interned(&self.name, "module id")?;
+        Ok(ModuleId::new(self.address, name))
+    }
+
+    pub fn address(&self) -> &AccountAddress {
+        &self.address
+    }
+
+    pub fn name(&self) -> Identifier {
+        resolve_interned(&self.name, "module name").expect("Uninterned key")
+    }
+}
+
 impl DatatypeDescriptor {
     pub fn new(
-        name: Identifier,
-        defining_id: ModuleId,
-        runtime_id: ModuleId,
+        name: IdentifierKey,
+        defining_id: ModuleIdKey,
+        runtime_id: ModuleIdKey,
         datatype_info: ArenaBox<Datatype>,
     ) -> Self {
         Self {
@@ -1367,7 +1384,7 @@ impl From<&Bytecode> for Opcodes {
 
 impl ::std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}#{}", self.name, self.index)
+        write!(f, "{}#{}", self.name.to_short_string().unwrap(), self.index)
     }
 }
 
@@ -1502,20 +1519,9 @@ impl ::std::fmt::Debug for Bytecode {
 impl std::fmt::Debug for CallType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CallType::Direct(fun) => write!(f, "Known({})", fun.to_ref().name),
+            CallType::Direct(fun) => write!(f, "Known({})", fun.pretty_short_string()),
             CallType::Virtual(vtable_key) => {
-                let string_interner = string_interner();
-                let module_name = string_interner
-                    .resolve_ident(&vtable_key.inner_pkg_key.module_name, "module name")
-                    .expect("Failed to find interned string");
-                let member_name = string_interner
-                    .resolve_ident(&vtable_key.inner_pkg_key.member_name, "member name")
-                    .expect("Failed to find interned string");
-                write!(
-                    f,
-                    "Virtual({}::{}::{})",
-                    vtable_key.package_key, module_name, member_name
-                )
+                write!(f, "Virtual({})", vtable_key.to_short_string().unwrap())
             }
         }
     }
