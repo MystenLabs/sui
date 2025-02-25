@@ -10,7 +10,8 @@ use tonic::metadata::MetadataMap;
 use crate::field_mask::FieldMaskUtil;
 use crate::proto::node::v2::node_service_client::NodeServiceClient;
 use crate::proto::node::v2::{
-    ExecuteTransactionResponse, GetCheckpointResponse, GetFullCheckpointResponse, GetObjectResponse,
+    EffectsFinality, ExecuteTransactionResponse, GetCheckpointResponse, GetFullCheckpointResponse,
+    GetObjectResponse,
 };
 use crate::proto::types::Bcs;
 use crate::proto::TryFromProtoError;
@@ -194,8 +195,13 @@ impl Client {
             ),
             signatures: Vec::new(),
             signatures_bytes: signatures,
-            read_mask: FieldMask::from_paths(["effects_bcs", "events_bcs", "balance_changes"])
-                .pipe(Some),
+            read_mask: FieldMask::from_paths([
+                "finality",
+                "effects_bcs",
+                "events_bcs",
+                "balance_changes",
+            ])
+            .pipe(Some),
         };
 
         let (metadata, response, _extentions) = self
@@ -211,7 +217,7 @@ impl Client {
 
 #[derive(Debug)]
 pub struct TransactionExecutionResponse {
-    pub finality: crate::types::EffectsFinality,
+    pub finality: EffectsFinality,
 
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
@@ -341,10 +347,7 @@ fn execute_transaction_response_try_from_proto(
         ..
     }: ExecuteTransactionResponse,
 ) -> Result<TransactionExecutionResponse, TryFromProtoError> {
-    let finality = finality
-        .as_ref()
-        .ok_or_else(|| TryFromProtoError::missing("finality"))?
-        .try_into()?;
+    let finality = finality.ok_or_else(|| TryFromProtoError::missing("finality"))?;
 
     let effects = effects_bcs
         .ok_or_else(|| TryFromProtoError::missing("effects_bcs"))?

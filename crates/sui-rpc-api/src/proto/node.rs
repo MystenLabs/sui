@@ -589,120 +589,29 @@ impl TryFrom<&FullCheckpointTransaction> for crate::types::FullCheckpointTransac
 }
 
 //
+// ExecuteTransactionRequest
+//
+
+impl ExecuteTransactionRequest {
+    pub const READ_MASK_DEFAULT: &str = "effects,events,finality";
+}
+
+//
 // ExecuteTransactionResponse
 //
 
-impl From<crate::types::ExecuteTransactionResponse> for ExecuteTransactionResponse {
-    fn from(
-        crate::types::ExecuteTransactionResponse {
-            finality,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            balance_changes,
-        }: crate::types::ExecuteTransactionResponse,
-    ) -> Self {
-        let balance_changes = balance_changes
-            .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
-            .unwrap_or_default();
-        Self {
-            finality: Some(finality.into()),
-            effects: effects.map(Into::into),
-            effects_bcs: effects_bcs.map(Into::into),
-            events: events.map(Into::into),
-            events_bcs: events_bcs.map(Into::into),
-            balance_changes,
+impl ExecuteTransactionResponse {
+    pub fn validate_read_mask(read_mask: &FieldMask) -> Result<(), &str> {
+        for path in &read_mask.paths {
+            match path.as_str() {
+                "finality" | "effects" | "effects_bcs" | "events" | "events_bcs"
+                | "balance_changes" => {}
+                path => {
+                    return Err(path);
+                }
+            }
         }
-    }
-}
 
-impl TryFrom<&ExecuteTransactionResponse> for crate::types::ExecuteTransactionResponse {
-    type Error = TryFromProtoError;
-
-    fn try_from(
-        ExecuteTransactionResponse {
-            finality,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            balance_changes,
-        }: &ExecuteTransactionResponse,
-    ) -> Result<Self, Self::Error> {
-        let finality = finality
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("finality"))?
-            .pipe(TryInto::try_into)?;
-
-        let effects = effects.as_ref().map(TryInto::try_into).transpose()?;
-        let effects_bcs = effects_bcs.as_ref().map(Into::into);
-
-        let events = events.as_ref().map(TryInto::try_into).transpose()?;
-        let events_bcs = events_bcs.as_ref().map(Into::into);
-
-        let balance_changes = balance_changes
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<Vec<_>, _>>()?;
-        let balance_changes = if balance_changes.is_empty() {
-            None
-        } else {
-            Some(balance_changes)
-        };
-
-        Self {
-            finality,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            balance_changes,
-        }
-        .pipe(Ok)
-    }
-}
-
-//
-// EffectsFinality
-//
-
-impl From<crate::types::EffectsFinality> for crate::proto::node::v2::EffectsFinality {
-    fn from(value: crate::types::EffectsFinality) -> Self {
-        use crate::proto::node::v2::effects_finality::Finality;
-        use crate::types::EffectsFinality::*;
-
-        let finality = match value {
-            Certified { signature } => Finality::Certified(signature.into()),
-            Checkpointed { checkpoint } => Finality::Checkpointed(checkpoint),
-            QuorumExecuted => Finality::QuorumExecuted(()),
-        };
-
-        Self {
-            finality: Some(finality),
-        }
-    }
-}
-
-impl TryFrom<&crate::proto::node::v2::EffectsFinality> for crate::types::EffectsFinality {
-    type Error = crate::proto::TryFromProtoError;
-
-    fn try_from(value: &crate::proto::node::v2::EffectsFinality) -> Result<Self, Self::Error> {
-        use crate::proto::node::v2::effects_finality::Finality;
-
-        match value
-            .finality
-            .as_ref()
-            .ok_or_else(|| crate::proto::TryFromProtoError::missing("finality"))?
-        {
-            Finality::Certified(signature) => Self::Certified {
-                signature: signature.try_into()?,
-            },
-            Finality::Checkpointed(checkpoint) => Self::Checkpointed {
-                checkpoint: *checkpoint,
-            },
-            Finality::QuorumExecuted(()) => Self::QuorumExecuted,
-        }
-        .pipe(Ok)
+        Ok(())
     }
 }
